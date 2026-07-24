@@ -1,0 +1,406 @@
+{
+  "schema": "aragorn/phase0-standards-gate/v1",
+  "purpose": "standards_coverage_and_evidence_mapping_only",
+  "scope": "agent_skill_and_mcp_acquisition_admission",
+  "as_of": "2026-07-24",
+  "gate": {
+    "required_packs": [
+      "owasp-agentic-skills",
+      "mitre-atlas",
+      "nist-ai-rmf-genai"
+    ],
+    "summary": {
+      "pack_count": 3,
+      "item_count": 26,
+      "evidence_mapped": 22,
+      "roadmap_mapped": 4,
+      "unresolved": 0
+    },
+    "result": "pass"
+  },
+  "packs": [
+    {
+      "pack_id": "owasp-agentic-skills",
+      "framework": "OWASP Agentic Skills Top 10 with OWASP Agentic Applications 2026 related taxonomy",
+      "coverage_claim": "selected_scope_only",
+      "mapping_basis": "direct_taxonomy_crosswalk",
+      "item_label_basis": "source_title",
+      "selection_scope": "All ten skill-layer risks are dispositioned; the broader ASI release is pinned only as stable related context.",
+      "sources": [
+        {
+          "source_id": "owasp-agentic-skills-top-10",
+          "title": "OWASP Agentic Skills Top 10",
+          "version": "1.0 2026 Edition",
+          "status": "active_development_pinned",
+          "url": "https://github.com/OWASP/www-project-agentic-skills-top-10/tree/0e5a4c0601e41f1f6eda14da1017034c0bd9cbfb",
+          "retrieved_at": "2026-07-24",
+          "pin": {
+            "kind": "git_commit",
+            "value": "0e5a4c0601e41f1f6eda14da1017034c0bd9cbfb",
+            "git_commit": "0e5a4c0601e41f1f6eda14da1017034c0bd9cbfb"
+          },
+          "artifact_path": "README.md",
+          "artifact_sha256": "sha256:11ead4fa7692b88b5bc1eaa167429157b976575748072c1a0cafc0c5218630ec",
+          "artifact_size_bytes": 41522
+        },
+        {
+          "source_id": "owasp-agentic-applications-top-10-2026",
+          "title": "OWASP Top 10 for Agentic Applications 2026",
+          "version": "2026",
+          "status": "stable_release",
+          "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/",
+          "retrieved_at": "2026-07-24",
+          "pin": {
+            "kind": "publication_id",
+            "value": "OWASP download ID 52117"
+          },
+          "artifact_path": "OWASP-Top-10-for-Agentic-Applications-2026-12.6-1.pdf",
+          "artifact_sha256": "sha256:a2db94cd00b08e0b3a5e5b619afe024bdbcd74503111085705e4f3dd886fcb5c",
+          "artifact_size_bytes": 1274186
+        }
+      ],
+      "items": [
+        {
+          "id": "AST01",
+          "label": "Malicious Skills",
+          "disposition": "evidence_mapped",
+          "claim": "The checked-in inert pilot exercises malicious-skill instruction patterns as infrastructure validation; it is not hidden-corpus efficacy evidence or a safety finding.",
+          "evidence_refs": [
+            "benchmark/phase0-oci-pilot-v1.json",
+            "benchmark/oci-fixtures/hidden-comment-role-override/SKILL.md"
+          ]
+        },
+        {
+          "id": "AST02",
+          "label": "Supply Chain Compromise",
+          "disposition": "evidence_mapped",
+          "claim": "The evaluation candidate binds an exact GitHub commit, retained bytes, and a bounded source-reference graph.",
+          "evidence_refs": [
+            "src/aragorn/github_acquire.py",
+            "src/aragorn/github_expand.py"
+          ]
+        },
+        {
+          "id": "AST03",
+          "label": "Over-Privileged Skills",
+          "disposition": "roadmap_mapped",
+          "claim": "Declared-versus-observed permissions require the deep-analysis and runtime-policy phases; Phase 0 makes no enforcement claim.",
+          "evidence_refs": [
+            "ARCHITECTURE.md"
+          ],
+          "target_phase": 2
+        },
+        {
+          "id": "AST04",
+          "label": "Insecure Metadata",
+          "disposition": "evidence_mapped",
+          "claim": "Current ingestion is bounded, schema validated, and fail closed on malformed machine contracts.",
+          "evidence_refs": [
+            "schema/manifest-v1.schema.json",
+            "src/aragorn/acquire.py"
+          ]
+        },
+        {
+          "id": "AST05",
+          "label": "Untrusted External Instructions",
+          "disposition": "evidence_mapped",
+          "claim": "The Phase 0 candidate inventories literal external references and preserves unresolved references without treating them as approved.",
+          "evidence_refs": [
+            "src/aragorn/artifact_closure.py",
+            "src/aragorn/github_expand.py"
+          ]
+        },
+        {
+          "id": "AST06",
+          "label": "Weak Isolation",
+          "disposition": "roadmap_mapped",
+          "claim": "One isolated benchmark smoke validates handoff plumbing, but supported analyzer isolation is not earned until the deep-analysis phase.",
+          "evidence_refs": [
+            "ARCHITECTURE.md",
+            "benchmark/receipts/phase0-isolated-protocol-v2-smoke-2026-07-23.json"
+          ],
+          "target_phase": 2
+        },
+        {
+          "id": "AST07",
+          "label": "Update Drift",
+          "disposition": "evidence_mapped",
+          "claim": "Evaluation acquisition and baseline identities are immutable and digest bound; install and update enforcement remain Phase 1.",
+          "evidence_refs": [
+            "benchmark/baselines.lock.json",
+            "src/aragorn/github_acquire.py"
+          ]
+        },
+        {
+          "id": "AST08",
+          "label": "Poor Scanning",
+          "disposition": "evidence_mapped",
+          "claim": "The burden-constrained benchmark compares pinned scanners and Aragorn under one evidence-verifying contract; efficacy remains unproven until the hidden run passes.",
+          "evidence_refs": [
+            "src/aragorn/benchmark.py",
+            "src/aragorn/vendor_reports.py"
+          ]
+        },
+        {
+          "id": "AST09",
+          "label": "No Governance",
+          "disposition": "evidence_mapped",
+          "claim": "Decisions, policy identity, source identity, and evidence are retained as machine-readable records; this is not organizational governance certification.",
+          "evidence_refs": [
+            "src/aragorn/policy.py",
+            "schema/decision-v1.schema.json"
+          ]
+        },
+        {
+          "id": "AST10",
+          "label": "Cross-Platform Reuse",
+          "disposition": "roadmap_mapped",
+          "claim": "Phase 0 is intentionally bounded to GitHub Agent Skills; cross-platform adapters require later upstream-integration evidence.",
+          "evidence_refs": [
+            "ARCHITECTURE.md"
+          ],
+          "target_phase": 4
+        }
+      ]
+    },
+    {
+      "pack_id": "mitre-atlas",
+      "framework": "MITRE ATLAS",
+      "coverage_claim": "selected_scope_only",
+      "mapping_basis": "direct_taxonomy_crosswalk",
+      "item_label_basis": "source_title",
+      "selection_scope": "Nine ATLAS techniques selected for agent-skill and MCP acquisition, instruction manipulation, credential access, unsafe invocation, and exfiltration; not the full ATLAS matrix.",
+      "sources": [
+        {
+          "source_id": "mitre-atlas-2026.06",
+          "title": "MITRE ATLAS Data",
+          "version": "content 2026.06, format 6.0.0",
+          "status": "stable_release",
+          "url": "https://github.com/mitre-atlas/atlas-data/releases/tag/v2026.06",
+          "retrieved_at": "2026-07-24",
+          "pin": {
+            "kind": "release_tag",
+            "value": "v2026.06",
+            "git_commit": "651dad90d3c007e797c89356fa1f4d8732f90c8d",
+            "git_tag_object": "e698823a1d68cafcec2fd338900dfb97e555d0ff"
+          },
+          "artifact_path": "ATLAS-2026.06.yaml",
+          "artifact_sha256": "sha256:b771de8b1489564b2838a709c7429849a9575dbd94073928817fe1a21661e70a",
+          "artifact_size_bytes": 625790
+        }
+      ],
+      "items": [
+        {
+          "id": "AML.T0104",
+          "label": "Publish Poisoned AI Agent Tool",
+          "disposition": "evidence_mapped",
+          "claim": "The threat is included in the acquisition threat model; Aragorn evaluates post-publication acquisition and does not claim registry prevention or hidden-corpus coverage from this mapping.",
+          "evidence_refs": [
+            "ARCHITECTURE.md"
+          ]
+        },
+        {
+          "id": "AML.T0010.005",
+          "label": "AI Agent Tool",
+          "disposition": "evidence_mapped",
+          "claim": "Exact source and analyzer component identities are retained for the bounded acquisition evaluation.",
+          "evidence_refs": [
+            "src/aragorn/github_acquire.py",
+            "benchmark/baselines.lock.json"
+          ]
+        },
+        {
+          "id": "AML.T0011.002",
+          "label": "Poisoned AI Agent Tool",
+          "disposition": "evidence_mapped",
+          "claim": "Inert poisoned-tool content can be evaluated without activating it as an agent capability.",
+          "evidence_refs": [
+            "benchmark/README.md",
+            "src/aragorn/benchmark.py"
+          ]
+        },
+        {
+          "id": "AML.T0051.001",
+          "label": "Indirect",
+          "disposition": "evidence_mapped",
+          "claim": "The checked-in inert pilot includes an indirect hidden-instruction pattern; this validates fixture and protocol handling only. The parent is AML.T0051 LLM Prompt Injection.",
+          "evidence_refs": [
+            "benchmark/phase0-oci-pilot-v1.json",
+            "benchmark/oci-fixtures/hidden-comment-role-override/SKILL.md"
+          ]
+        },
+        {
+          "id": "AML.T0068",
+          "label": "LLM Prompt Obfuscation",
+          "disposition": "evidence_mapped",
+          "claim": "The checked-in pilot declares an obfuscated zero-width pattern and the protocol can carry it into the future burden-constrained run; no hidden result exists yet.",
+          "evidence_refs": [
+            "benchmark/phase0-oci-pilot-v1.json",
+            "benchmark/oci-fixtures/zero-width-policy-bypass/SKILL.md"
+          ]
+        },
+        {
+          "id": "AML.T0110",
+          "label": "AI Agent Tool Poisoning",
+          "disposition": "evidence_mapped",
+          "claim": "Aragorn inventories acquired content and referenced artifacts before activation; complete recursive closure remains a Phase 1 gate.",
+          "evidence_refs": [
+            "src/aragorn/artifact_closure.py",
+            "src/aragorn/github_expand.py"
+          ]
+        },
+        {
+          "id": "AML.T0053",
+          "label": "AI Agent Tool Invocation",
+          "disposition": "roadmap_mapped",
+          "claim": "Pre-install analysis cannot establish live least-privilege invocation; enforcement and containment are runtime Phase 3 properties.",
+          "evidence_refs": [
+            "ARCHITECTURE.md"
+          ],
+          "target_phase": 3
+        },
+        {
+          "id": "AML.T0098",
+          "label": "AI Agent Tool Credential Harvesting",
+          "disposition": "evidence_mapped",
+          "claim": "Checked-in inert fixtures exercise credential-harvesting intent detection without containing live credentials.",
+          "evidence_refs": [
+            "benchmark/oci-fixtures/tool-description-env-harvest/SKILL.md",
+            "benchmark/oci-fixtures/inert-credential-exfiltration/SKILL.md"
+          ]
+        },
+        {
+          "id": "AML.T0086",
+          "label": "Exfiltration via AI Agent Tool Invocation",
+          "disposition": "evidence_mapped",
+          "claim": "Checked-in inert fixtures exercise exfiltration intent detection; blocking a protected sink is reserved for the runtime exit gate.",
+          "evidence_refs": [
+            "benchmark/oci-fixtures/split-file-dns-exfil/SKILL.md",
+            "benchmark/oci-fixtures/tool-description-env-harvest/SKILL.md"
+          ]
+        }
+      ]
+    },
+    {
+      "pack_id": "nist-ai-rmf-genai",
+      "framework": "NIST AI RMF 1.0 and Generative AI Profile",
+      "coverage_claim": "selected_scope_only",
+      "mapping_basis": "framework_informed_process_crosswalk",
+      "item_label_basis": "local_summary",
+      "selection_scope": "Seven fixed GenAI Profile actions spanning GOVERN, MAP, MEASURE, and MANAGE for acquisition due diligence and Phase 0 evaluation.",
+      "sources": [
+        {
+          "source_id": "nist-ai-100-1",
+          "title": "Artificial Intelligence Risk Management Framework AI RMF 1.0",
+          "version": "NIST AI 100-1, January 2023",
+          "status": "stable_release",
+          "url": "https://doi.org/10.6028/NIST.AI.100-1",
+          "retrieved_at": "2026-07-24",
+          "pin": {
+            "kind": "publication_id",
+            "value": "NIST.AI.100-1"
+          },
+          "artifact_path": "NIST.AI.100-1.pdf",
+          "artifact_sha256": "sha256:7576edb531d9848825814ee88e28b1795d3a84b435b4b797d3670eafdc4a89f1",
+          "artifact_size_bytes": 1946127
+        },
+        {
+          "source_id": "nist-ai-600-1",
+          "title": "Artificial Intelligence Risk Management Framework Generative Artificial Intelligence Profile",
+          "version": "NIST AI 600-1, July 2024",
+          "status": "stable_release",
+          "url": "https://doi.org/10.6028/NIST.AI.600-1",
+          "retrieved_at": "2026-07-24",
+          "pin": {
+            "kind": "publication_id",
+            "value": "NIST.AI.600-1"
+          },
+          "artifact_path": "NIST.AI.600-1.pdf",
+          "artifact_sha256": "sha256:6e73620ab6b64e90ef2c04bf0e0d6246185a2f4b1b13cab0df494496cff89b6a",
+          "artifact_size_bytes": 1174643
+        }
+      ],
+      "items": [
+        {
+          "id": "GV-1.3-002",
+          "label": "Minimum assurance thresholds and go or no-go approval",
+          "disposition": "evidence_mapped",
+          "claim": "Phase 0 predeclares held-out recall improvement and benign-intervention thresholds before the hidden run.",
+          "evidence_refs": [
+            "ARCHITECTURE.md",
+            "schema/benchmark-phase0-gate-report-v1.schema.json"
+          ]
+        },
+        {
+          "id": "GV-6.1-009",
+          "label": "Acquisition due diligence for third-party GAI tools",
+          "disposition": "evidence_mapped",
+          "claim": "The design treats public skills and scanner dependencies as third-party supply-chain inputs with pinned identity and bounded acquisition.",
+          "evidence_refs": [
+            "benchmark/baselines.lock.json",
+            "src/aragorn/github_acquire.py"
+          ]
+        },
+        {
+          "id": "MP-5.1-006",
+          "label": "Profile threats, negative impacts, vulnerabilities, and likelihood",
+          "disposition": "evidence_mapped",
+          "claim": "The architecture records the trust boundary, principal failure modes, and residual limitations for the acquisition use case.",
+          "evidence_refs": [
+            "ARCHITECTURE.md",
+            "SECURITY.md"
+          ]
+        },
+        {
+          "id": "MS-2.3-002",
+          "label": "Evaluate capability claims with empirically validated methods",
+          "disposition": "evidence_mapped",
+          "claim": "As a framework-informed analogy to model capability claims, Aragorn separates infrastructure smoke from its tool-efficacy claim and requires retained evidence for both.",
+          "evidence_refs": [
+            "src/aragorn/benchmark.py",
+            "README.md"
+          ]
+        },
+        {
+          "id": "MS-2.7-001",
+          "label": "Assess baseline security concerns including compromised dependencies and autonomous agents",
+          "disposition": "evidence_mapped",
+          "claim": "The threat model and acquisition candidate address compromised third-party dependencies and autonomous-agent inputs; this mapping does not establish complete security or resilience.",
+          "evidence_refs": [
+            "ARCHITECTURE.md",
+            "src/aragorn/github_expand.py"
+          ]
+        },
+        {
+          "id": "MS-2.7-007",
+          "label": "Adversarial security and prompt-injection testing",
+          "disposition": "evidence_mapped",
+          "claim": "The checked-in inert pilot and label-blind protocol support adversarial instruction testing; the full frozen hidden comparison has not run.",
+          "evidence_refs": [
+            "benchmark/phase0-oci-pilot-v1.json",
+            "src/aragorn/label_blind_prepare.py"
+          ]
+        },
+        {
+          "id": "MG-1.3-001",
+          "label": "Document release trade-offs and disposition risks above tolerance",
+          "disposition": "evidence_mapped",
+          "claim": "The roadmap keeps Aragorn private, defines kill criteria, and does not permit Phase 0 evidence to authorize installation.",
+          "evidence_refs": [
+            "ARCHITECTURE.md",
+            "README.md"
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "This gate is a scoped standards crosswalk, not certification, compliance, or exhaustive framework coverage.",
+    "A mapped item means a claim has a repository evidence or roadmap reference; it does not mean the risk is fully mitigated.",
+    "The gate does not demonstrate independent human authorship, design-partner adoption, usability, or external product review.",
+    "The gate does not replace the burden-constrained hidden-corpus efficacy thresholds.",
+    "The gate does not establish production isolation, runtime containment, exact-digest installation, or agent-capability EDR status.",
+    "The OWASP Agentic Skills source is an active-development draft pinned to one exact commit.",
+    "Independent human security review remains a Phase 5 release requirement."
+  ]
+}

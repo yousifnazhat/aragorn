@@ -48,6 +48,11 @@ Current status: **private Phase 0 implementation with bounded exact-commit GitHu
   attestation claim.
 - A protocol-v2 foundation that separates host-independent requested policy
   from worker/runtime measurement and binds a fresh verifier challenge.
+- A protocol-v2 batch preparer that binds each declared system configuration
+  to its portable-policy digest, issues one verifier-owned challenge per
+  case/system/run cell, exports the exact semantic input closure, and publishes
+  only a label-free worklist beside the worker bundles. Private case and run
+  bindings remain in the control-plane dispatch.
 - A bounded protocol-v2 CAS handoff format and importer. Export produces a
   private `0700` bundle containing only a declared closure. After an
   operator-controlled byte-preserving copy creates a receiver-readable
@@ -103,6 +108,21 @@ Current status: **private Phase 0 implementation with bounded exact-commit GitHu
   path and control-plane acceptance. This remains infrastructure evidence for
   one public benign fixture; Docker self-reports and a software signing key
   are not hardware attestation or efficacy evidence.
+- An accepted private 448-case corpus (336 benign and 112 adversarial) passed
+  internal integrity, archive-safety, signature, and hidden-label binding
+  checks. [`benchmark/phase0-corpus.lock.json`](./benchmark/phase0-corpus.lock.json)
+  pins its exact worker archive, signed Git freeze, and signing identity without
+  checking labels into this repository. Its assurance is technical Codex
+  authorship, not proof of an independent human identity, external custody, or
+  redistribution permission.
+- A machine-validated Phase 0 standards gate freezes three scoped evidence
+  packs: OWASP Agentic Skills with the stable related Agentic Applications
+  taxonomy, MITRE ATLAS, and NIST AI RMF/GenAI Profile. The checked-in
+  [`benchmark/phase0-standards-gate.json`](./benchmark/phase0-standards-gate.json)
+  accounts for 26 selected items with no unresolved disposition. Passing this
+  gate means the selected risks have repository evidence or an explicit later
+  phase; it is not certification, full mitigation, usability, or adoption
+  evidence.
 
 Local and evaluation-only GitHub acquisition establish only `source_tree`
 closure. `resolve-artifacts` can additionally produce a
@@ -260,8 +280,8 @@ PYTHONPATH=src python3.12 -m aragorn.benchmark \
   benchmark/suite.json benchmark/outcomes.jsonl
 ```
 
-Invoke the existing private Phase 0 comparative gate with its independently
-authored accounting sidecar and retained expansion evidence:
+Invoke the existing private Phase 0 comparative gate with its digest-bound
+accounting sidecar and retained expansion evidence:
 
 ```console
 PYTHONPATH=src python3.12 -m aragorn.benchmark \
@@ -412,7 +432,15 @@ worker reporting that exact identity. A cross-principal or VM gate requires a
 new protocol/suite version that separates portable requested policy from the
 measured worker/runtime identity; v1 must not be reinterpreted in place.
 
-Both image entries deliberately remain `oci_closure_candidate_runner_attestation_pending`. Aragorn measures the Docker CLI bytes and now binds the selected context, Unix endpoint, engine build, and daemon/worker claims with pre/post continuity checks. Those fields are still reported by Docker and can be forged by a compromised daemon; they are attribution evidence, not hardware-backed worker attestation. The one isolated signed smoke validates composition only; `efficacy` remains unsupported until the independently authored hidden corpus and comparative gates pass through that boundary.
+Both image entries deliberately remain
+`oci_closure_candidate_runner_attestation_pending`. Aragorn measures the Docker
+CLI bytes and now binds the selected context, Unix endpoint, engine build, and
+daemon/worker claims with pre/post continuity checks. Those fields are still
+reported by Docker and can be forged by a compromised daemon; they are
+attribution evidence, not hardware-backed worker attestation. The one isolated
+signed smoke validates composition only; `efficacy` remains unsupported until
+the frozen hidden corpus, with its exact authorship assurance disclosed, and the
+comparative gates pass through that boundary.
 
 Protocol v2 now has one internal worker invocation:
 `python -m aragorn.worker_supervisor_v2 run ...`. It imports the verifier's
@@ -445,24 +473,36 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete roadmap and [SECURITY.
 
 ## Next production gate
 
-Use the bounded GitHub expansion candidate to score source-reference capture
-and unresolved burden against an independently authored private oracle, then
-feed only complete comparator subjects to the pinned comparators. Repeat the
-implemented authenticated protocol-v2 path in a fresh mount-free worker for
-the hidden evaluation matrix; protect labels, dispatch, challenges,
-expectations, trust store, and consumption ledger. Keep declared-byte test
-transport outside every acceptance path. Build the independently authored
-hidden corpus to at least 300 benign and 100 adversarial cases, run the
-burden-constrained held-out comparison, and recruit three recurring design
-partners.
+Freeze and implement the evidence-bound Aragorn candidate composer before any
+hidden outcomes are viewed. Its deterministic policy must bind Aragorn's
+acquisition/reference result and the two accepted comparator results without
+receiving class, family, split, or expected-result fields. Then generate the
+private suite from the separately encrypted ledger and repeat the authenticated
+protocol-v2 path in fresh mount-free workers for all 448 cases. Protect labels,
+dispatch, challenges, expectations, trust store, and consumption ledger; keep
+declared-byte test transport outside every acceptance path.
 
-Phase 0 remains in progress until the isolated evaluation boundary and hidden
-corpus exist, Aragorn exceeds the best burden-compliant comparator by at least
-10 percentage points of held-out attack flag rate while keeping combined benign
-intervention at or below 5%, and three design partners use it repeatedly. The
+The accepted corpus measures inert natural-language skill and adversarial
+instruction risk. It does not by itself demonstrate recursive artifact
+acquisition or install binding, so the bounded GitHub expansion/reference
+stratum remains a separate required Phase 0 differentiation test. After both
+results are frozen, run the burden-constrained comparison. The former
+three-design-partner discovery requirement is replaced in Phase 0 by the
+checked-in OWASP, MITRE, and NIST standards coverage gate. This removes an
+unavailable external dependency from early technical validation without
+claiming product adoption.
+
+Phase 0 remains in progress until the full hidden matrix has crossed the
+isolated evaluation boundary, the separate acquisition/reference stratum has a
+frozen oracle and measured result, Aragorn exceeds the best burden-compliant
+comparator by at least 10 percentage points of held-out attack flag rate while
+keeping combined benign intervention at or below 5%, and the three-pack
+standards gate continues to validate with zero unresolved selected items. The
 18-case pilot, local and isolated worker receipts, and source-reference graph
-validate infrastructure only. Hardware- or platform-backed attestation,
-hidden-set breadth, and a dedicated credential-free fetch gateway remain open.
+validate infrastructure only. Hardware- or platform-backed attestation and a
+dedicated credential-free fetch gateway remain open. Independent human security
+review remains mandatory at the Phase 5 release gate, but is not represented by
+the Phase 0 standards crosswalk.
 
 After the Phase 0 exit gate passes, Phase 1 turns acquisition into a supported
 quarantine, recursive artifact-closure, and exact-digest installation boundary.

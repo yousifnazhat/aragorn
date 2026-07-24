@@ -33,6 +33,7 @@ from aragorn.benchmark_protocol_v2 import (  # noqa: E402
 )
 from aragorn.corpus_audit import audit_suite  # noqa: E402
 from aragorn.oci_worker_protocol import canonical_digest  # noqa: E402
+from aragorn.standards_gate import validate_standards_gate  # noqa: E402
 from aragorn.benchmark_worker_measurement import (  # noqa: E402
     build_worker_measurement,
     build_worker_trust_store,
@@ -67,6 +68,12 @@ def main() -> int:
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)
+    validators["benchmark-corpus-provenance-lock-v1.schema.json"].validate(
+        load(ROOT / "benchmark" / "phase0-corpus.lock.json")
+    )
+    standards_gate = load(ROOT / "benchmark" / "phase0-standards-gate.json")
+    validators["phase0-standards-gate-v1.schema.json"].validate(standards_gate)
+    validate_standards_gate(standards_gate, repository_root=ROOT)
     validators["benchmark-suite-v1.schema.json"].validate(
         load(ROOT / "benchmark" / "suite.json")
     )

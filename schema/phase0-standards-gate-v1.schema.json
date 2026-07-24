@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/phase0-standards-gate-v1.schema.json",
+  "title": "Aragorn Phase 0 standards coverage and evidence gate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "purpose",
+    "scope",
+    "as_of",
+    "gate",
+    "packs",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/phase0-standards-gate/v1"},
+    "purpose": {
+      "const": "standards_coverage_and_evidence_mapping_only"
+    },
+    "scope": {
+      "const": "agent_skill_and_mcp_acquisition_admission"
+    },
+    "as_of": {"type": "string", "format": "date"},
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_packs", "summary", "result"],
+      "properties": {
+        "required_packs": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "mitre-atlas",
+              "nist-ai-rmf-genai",
+              "owasp-agentic-skills"
+            ]
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pack_count",
+            "item_count",
+            "evidence_mapped",
+            "roadmap_mapped",
+            "unresolved"
+          ],
+          "properties": {
+            "pack_count": {"const": 3},
+            "item_count": {"type": "integer", "minimum": 1},
+            "evidence_mapped": {"type": "integer", "minimum": 0},
+            "roadmap_mapped": {"type": "integer", "minimum": 0},
+            "unresolved": {"const": 0}
+          }
+        },
+        "result": {"const": "pass"}
+      }
+    },
+    "packs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/pack"}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/nonempty"}
+    }
+  },
+  "$defs": {
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pack_id",
+        "framework",
+        "coverage_claim",
+        "mapping_basis",
+        "item_label_basis",
+        "selection_scope",
+        "sources",
+        "items"
+      ],
+      "properties": {
+        "pack_id": {
+          "enum": [
+            "mitre-atlas",
+            "nist-ai-rmf-genai",
+            "owasp-agentic-skills"
+          ]
+        },
+        "framework": {"$ref": "#/$defs/nonempty"},
+        "coverage_claim": {"const": "selected_scope_only"},
+        "mapping_basis": {
+          "enum": [
+            "direct_taxonomy_crosswalk",
+            "framework_informed_process_crosswalk"
+          ]
+        },
+        "item_label_basis": {
+          "enum": ["source_title", "local_summary"]
+        },
+        "selection_scope": {"$ref": "#/$defs/nonempty"},
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/source"}
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/item"}
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "title",
+        "version",
+        "status",
+        "url",
+        "retrieved_at",
+        "pin",
+        "artifact_path",
+        "artifact_sha256",
+        "artifact_size_bytes"
+      ],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/id"},
+        "title": {"$ref": "#/$defs/nonempty"},
+        "version": {"$ref": "#/$defs/nonempty"},
+        "status": {
+          "enum": ["stable_release", "active_development_pinned"]
+        },
+        "url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "retrieved_at": {"type": "string", "format": "date"},
+        "pin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {
+              "enum": ["git_commit", "publication_id", "release_tag"]
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "git_commit": {"$ref": "#/$defs/git_object"},
+            "git_tag_object": {"$ref": "#/$defs/git_object"}
+          }
+        },
+        "artifact_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "artifact_sha256": {"$ref": "#/$defs/digest"},
+        "artifact_size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "disposition",
+        "claim",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{1,63}$"
+        },
+        "label": {"$ref": "#/$defs/nonempty"},
+        "disposition": {
+          "enum": ["evidence_mapped", "roadmap_mapped"]
+        },
+        "claim": {"$ref": "#/$defs/nonempty"},
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$"
+          }
+        },
+        "target_phase": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {"const": "roadmap_mapped"}
+            },
+            "required": ["disposition"]
+          },
+          "then": {"required": ["target_phase"]},
+          "else": {"not": {"required": ["target_phase"]}}
+        }
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_object": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "nonempty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    }
+  }
+}

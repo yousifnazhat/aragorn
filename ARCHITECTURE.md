@@ -627,22 +627,35 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 
 | Phase | Time | Deliverable | Security property earned | Exit gate |
 |---|---:|---|---|---|
-| 0. Validate | 2–3 weeks | Threat model, versioned corpus, private evaluation-only immutable-commit acquisition and literal source-reference candidate, strongest current scanners as baselines | Demonstrates a real gap rather than a product category | At least +10 percentage points held-out attack flag rate over the best comparator satisfying the same burden ceiling; no more than 5% benign intervention (`REVIEW + DENY + ERROR`); three design partners |
+| 0. Validate | 2–3 weeks | Threat model, versioned corpus, private evaluation-only immutable-commit acquisition and literal source-reference candidate, strongest current scanners as baselines | Demonstrates a real gap rather than a product category | At least +10 percentage points held-out attack flag rate over the best comparator satisfying the same burden ceiling; no more than 5% benign intervention (`REVIEW + DENY + ERROR`); machine-validated OWASP, MITRE, and NIST evidence packs with zero unresolved selected items |
 | 1. Acquisition Lock | 4–6 weeks | Supported GitHub Agent Skills acquisition, quarantine, redirect/release resolution, recursive closure, decision receipt, exact-digest install, update diff | Reviewed bytes equal installed bytes | Zero digest mismatches installed; at least 95% of statically resolvable artifacts captured; all unresolved required artifacts return `REVIEW` or `ERROR` |
 | 2. Deep Analysis | 8–10 weeks | Bounded normalization, canaries, one existing isolated detonation backend, declared-versus-observed behavior | Effects reached in exercised profiles are observable and attributable; unexercised paths remain unknown | At least 90% held-out attack flag rate and 80% in every attack family; no more than 5% benign intervention; at least 95% verdict agreement across five runs |
 | 3. Runtime Detect and Respond | 10–12 weeks | One real runtime, out-of-process sensor, digest attribution, process/file/network/tool events, block/kill/quarantine/revoke | Known skill digest can be contained before protected impact | At least 99% event attribution; benchmark exfiltration and destructive actions blocked before protected sink; p95 synchronous decision under 500 ms; task overhead under 10% |
-| 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× design-partner peak without dropped evidence |
+| 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× the frozen reference workload without dropped evidence |
 | 5. OSS 1.0 | Ongoing | Signed releases, SBOM, reproducible builds, parser fuzzing, disclosure process, compatibility policy | The security tool's own supply chain is defensible | Independent review; no unresolved critical/high findings; 72-hour parser fuzz run; clean supported install and upgrade tests |
 
 Phase 0 remains in progress until all of the following evidence exists:
 protocol-v2 portable policy and cross-owner-capable snapshot handoff; an isolated,
 label-blind worker with protected labels and nonce state, a verifier challenge,
-and an explicitly scoped signed measurement; an independently authored hidden
-corpus at the declared minimum size; the burden-constrained held-out comparison
-meeting the stated thresholds; and three recurring design partners. The
-checked-in 18-case pilot, local worker smoke, and evaluation-only
-`source_reference_graph` are infrastructure validation only and cannot satisfy
-the exit gate.
+and an explicitly scoped signed measurement; a frozen hidden corpus at the
+declared minimum size with its exact authorship assurance and label custody
+recorded; a separately frozen acquisition/reference oracle and measured
+differentiation result; the burden-constrained held-out comparison meeting the
+stated thresholds; and the three-pack standards gate passing with zero
+unresolved selected items. The checked-in 18-case pilot, local worker smoke, and
+evaluation-only `source_reference_graph` are infrastructure validation only and
+cannot satisfy the comparative exit gate.
+
+`benchmark/phase0-standards-gate.json` replaces the unavailable three-design-
+partner Phase 0 discovery gate. It freezes OWASP Agentic Skills plus the stable
+related Agentic Applications taxonomy, MITRE ATLAS, and NIST AI RMF/GenAI
+Profile source identities; maps 26 selected items to repository evidence or a named later
+phase; and is checked for exact pack membership, derived counts, and resolvable
+evidence paths. Its current result is `pass`: 22 evidence-mapped items, four
+roadmap-mapped items, and zero unresolved items. This is standards coverage and
+evidence accounting only. It does not demonstrate certification, complete
+mitigation, independent human authorship, user adoption, or external review.
+Independent human security review remains a Phase 5 release blocker.
 
 Phase 0 baseline selection is burden-constrained. A comparator that sends every
 benign case to review cannot win by reporting perfect attack flag rate. If no
@@ -756,13 +769,31 @@ distinct UID connected to the control plane's shared rootful Docker daemon is
 not isolated; use a disposable VM or a dedicated rootless/scoped daemon whose
 socket and host filesystem cannot reach control-plane state.
 
+The control plane can now prepare the complete protocol-v2 matrix without
+launching a worker. For every case/system/run cell it requires the suite
+configuration identity to equal the canonical portable-policy digest, issues a
+verifier-owned challenge, retains the private dispatch, and exports only the
+request's exact semantic input closure plus a label-free worklist. This closes
+the batch-preparation gap, not the result-composition gap: accepted Cisco and
+NVIDIA results still require a separately evidence-bound, frozen Aragorn
+candidate derivation before hidden evaluation.
+
 ### Corpus
 
 - Keep the 18-case pilot frozen as a runner/corpus plumbing test. Its checked-in
   held-out split is provisional and must never be treated as the hidden release
   set.
 
-- Initially target at least 300 benign skills and 100 malicious or harmless adversarial fixtures.
+- The private `independent-v1.0.0` corpus supplies 448 unique single-file inert
+  fixtures: 336 benign and 112 adversarial. Its exact worker archive, signed Git
+  freeze, and signer are pinned by `benchmark/phase0-corpus.lock.json`; labels
+  remain separately encrypted. The recorded assurance is technical Codex
+  authorship, not independent-human identity, external custody, or a public
+  redistribution license.
+- The accepted corpus covers natural-language skill and adversarial
+  instruction risk. Keep a distinct acquisition/reference stratum for the
+  artifact-closure differentiation claim; one stratum must not be presented as
+  evidence for the other.
 - Keep live samples in controlled storage; publish hashes, metadata, and inert behavioral replays, not malware binaries.
 - Separate training/development/test data by attack family, author, and time. Never randomly split variants of the same attack across sets.
 - Maintain a frozen hidden release set.
@@ -804,7 +835,8 @@ Stop the standalone project or contribute the useful component upstream when any
 - Runtime events cannot be reliably attributed to a capability digest.
 - Detonation verdict reproducibility remains below 90%.
 - Normal latency makes developers bypass the gate.
-- Fewer than three design partners use it repeatedly after a 60-day pilot.
+- The two Phase 4 upstream integrations cannot invoke the gate automatically at
+  their acquisition or update chokepoints.
 
 Any sandbox escape, install-time digest mismatch, or agent-controlled enforcement bypass is a release blocker.
 

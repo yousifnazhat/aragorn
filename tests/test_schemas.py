@@ -14,6 +14,7 @@ EXPECTED_CONTRACTS = {
     "benchmark-cas-handoff-v1.schema.json": "aragorn/benchmark-cas-handoff/v1",
     "benchmark-collection-v1.schema.json": "aragorn/benchmark-collection/v1",
     "benchmark-collection-result-v1.schema.json": "aragorn/benchmark-collection-result/v1",
+    "benchmark-corpus-provenance-lock-v1.schema.json": "aragorn/benchmark-corpus-provenance-lock/v1",
     "benchmark-e2e-smoke-receipt-v1.schema.json": "aragorn/benchmark-e2e-smoke-receipt/v1",
     "benchmark-evidence-v1.schema.json": "aragorn/benchmark-evidence/v1",
     "benchmark-evidence-v2.schema.json": "aragorn/benchmark-evidence/v2",
@@ -56,6 +57,7 @@ EXPECTED_CONTRACTS = {
     "inventory-result-v1.schema.json": "aragorn/inventory-result/v1",
     "manifest-v1.schema.json": "aragorn/manifest/v1",
     "observation-v1.schema.json": "aragorn/observation/v1",
+    "phase0-standards-gate-v1.schema.json": "aragorn/phase0-standards-gate/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",
 }

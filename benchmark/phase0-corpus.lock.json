@@ -1,0 +1,19 @@
+{
+  "schema": "aragorn/benchmark-corpus-provenance-lock/v1",
+  "corpus_id": "independent-v1.0.0",
+  "assurance": "technical_codex_authorship_not_independent_human_identity",
+  "worker_archive": {
+    "name": "skill-scan-corpus-worker-independent-v1.0.0.tar.gz",
+    "sha256": "sha256:f7cc194a95775afdaaddd09ab98dbaba131c28c9f0ba72c425f43532e965465f"
+  },
+  "freeze": {
+    "commit": "5ff11440d544a09c1e35e7938368cb0fde428b48",
+    "tag": "independent-corpus-v1.0.0",
+    "tag_object": "f56e0e695321a647dfffb6168b8bd1d57a78e12f"
+  },
+  "signing": {
+    "format": "ssh-ed25519",
+    "principal": "codex-independent-corpus@local.invalid",
+    "fingerprint": "SHA256:ZEvALtqmkjf1dRDeiSmgl9Og/n+AEUMEypoMFezoWAo"
+  }
+}

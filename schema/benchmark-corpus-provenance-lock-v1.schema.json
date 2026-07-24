@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-corpus-provenance-lock-v1.schema.json",
+  "title": "Aragorn benchmark corpus provenance lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "corpus_id",
+    "assurance",
+    "worker_archive",
+    "freeze",
+    "signing"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-corpus-provenance-lock/v1"},
+    "corpus_id": {"$ref": "#/$defs/id"},
+    "assurance": {
+      "const": "technical_codex_authorship_not_independent_human_identity"
+    },
+    "worker_archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$"
+        },
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "freeze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tag", "tag_object"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git_object"},
+        "tag": {"$ref": "#/$defs/id"},
+        "tag_object": {"$ref": "#/$defs/git_object"}
+      }
+    },
+    "signing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "principal", "fingerprint"],
+      "properties": {
+        "format": {"const": "ssh-ed25519"},
+        "principal": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+$",
+          "maxLength": 254
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^SHA256:[a-zA-Z0-9+/]{43}$"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_object": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

@@ -17,6 +17,19 @@ from typing import Any, Sequence
 import unicodedata
 
 from .benchmark import BenchmarkError, load_suite_for_run
+from .benchmark_authenticated_handoff_v2 import (
+    issue_worker_measurement_challenge,
+)
+from .benchmark_handoff_v2 import (
+    build_worker_input_handoff_manifest,
+    export_handoff,
+)
+from .benchmark_protocol_v2 import (
+    build_portable_policy,
+    build_worker_request_v2,
+    canonical_request_digest_v2,
+    portable_policy_digest,
+)
 from .cas import CAS, CASError
 from .oci_runtime import LOCK, VerificationError, load_baseline_lock
 from .oci_worker_protocol import (
@@ -59,6 +72,214 @@ _WORKLIST_JOB_KEYS = {"job_id", "request_digest"}
 
 class PrepareError(ValueError):
     """A label-blind filesystem bundle could not be prepared safely."""
+
+
+def prepare_files_v2(
+    suite_path: str | os.PathLike[str],
+    *,
+    portable_policies: Sequence[object],
+    trust_domain: str,
+    worker_id: str,
+    challenge_ledger: str | os.PathLike[str],
+    control_state: str | os.PathLike[str],
+    jobs_root: str | os.PathLike[str],
+    lock_path: str | os.PathLike[str] = LOCK,
+) -> dict[str, Any]:
+    """Prepare one cross-owner-capable protocol-v2 benchmark batch."""
+
+    suite_file = _input_file(suite_path, "benchmark suite")
+    lock_file = _input_file(lock_path, "baseline lock")
+    control_root = _output_path(control_state, "control CAS")
+    job_root = _output_path(jobs_root, "jobs root")
+    ledger_root = _output_path(challenge_ledger, "challenge ledger")
+    _validate_v2_path_separation(
+        suite_file=suite_file,
+        lock_file=lock_file,
+        control_root=control_root,
+        jobs_root=job_root,
+        ledger_root=ledger_root,
+    )
+    for path, label in (
+        (job_root, "jobs root"),
+        (ledger_root, "challenge ledger"),
+    ):
+        if os.path.lexists(path):
+            raise PrepareError(f"{label} already exists: {path}")
+        _require_real_directory(path.parent, f"{label} parent")
+
+    control_cas = CAS(control_root)
+    loaded = load_suite_for_run(
+        suite_file,
+        control_cas,
+        required_purpose="evidence_smoke",
+    )
+    raw_lock, baselines = load_baseline_lock(lock_file)
+    lock_digest = _put_bytes(control_cas, raw_lock)
+    baseline_digests = {
+        baseline["name"]: _put_json(control_cas, baseline)
+        for baseline in baselines
+    }
+    policies = _bind_portable_policies(
+        loaded["systems"],
+        portable_policies,
+        baselines=baselines,
+        lock_digest=lock_digest,
+        baseline_digests=baseline_digests,
+    )
+    policy_digests = {
+        name: _put_json(control_cas, policy)
+        for name, policy in policies.items()
+    }
+
+    suite_digest = _put_json(control_cas, loaded["canonical"])
+    if suite_digest != loaded["digest"]:
+        raise PrepareError("canonical suite digest changed during retention")
+    private_manifest_digests = {
+        case_id: _put_json(control_cas, manifest)
+        for case_id, manifest in loaded["manifests"].items()
+    }
+    sanitized_manifests = {
+        case_id: sanitize_subject_manifest(manifest)
+        for case_id, manifest in loaded["manifests"].items()
+    }
+    for subject in sanitized_manifests.values():
+        _copy_subject_closure(control_cas, control_cas, subject)
+
+    identities = {
+        "schema": "aragorn/benchmark-system-identities/v1",
+        "systems": [
+            dict(loaded["systems"][key])
+            for key in sorted(loaded["systems"])
+        ],
+    }
+    identities_digest = _put_json(control_cas, identities)
+
+    _create_private_directory(job_root, "jobs root")
+    completed = False
+    ledger_owned = False
+    try:
+        _create_private_directory(ledger_root, "challenge ledger")
+        ledger_owned = True
+        entries: list[dict[str, Any]] = []
+        job_ids: set[str] = set()
+        challenges: set[str] = set()
+        for system_key in sorted(loaded["systems"]):
+            system = loaded["systems"][system_key]
+            policy = policies[system["name"]]
+            if policy_digests[system["name"]] != _put_json(control_cas, policy):
+                raise PrepareError("portable policy changed during retention")
+            for case_id in sorted(loaded["cases"]):
+                manifest = loaded["manifests"][case_id]
+                subject = sanitized_manifests[case_id]
+                for run_id in range(1, loaded["runs_per_case"] + 1):
+                    challenge = _token_hex(32)
+                    request = build_worker_request_v2(
+                        subject,
+                        policy,
+                        verifier_challenge=challenge,
+                        token_hex=_token_hex,
+                    )
+                    job_id = request["job_id"]
+                    if job_id in job_ids or challenge in challenges:
+                        raise PrepareError("duplicate cryptographic job randomness")
+                    job_ids.add(job_id)
+                    challenges.add(challenge)
+                    request_digest = _put_json(control_cas, request)
+                    if request_digest != canonical_request_digest_v2(request):
+                        raise PrepareError("canonical worker request changed")
+
+                    job_directory = job_root / job_id
+                    _create_private_directory(job_directory, "job directory")
+                    input_manifest = build_worker_input_handoff_manifest(
+                        control_cas,
+                        request_digest,
+                        expected_verifier_challenge=challenge,
+                    )
+                    input_manifest_digest = export_handoff(
+                        control_cas,
+                        input_manifest,
+                        job_directory / "input-bundle",
+                        expected_verifier_challenge=challenge,
+                    )
+                    _write_canonical_request(
+                        job_directory,
+                        canonical_json(request),
+                    )
+                    _write_read_only_file(
+                        job_directory,
+                        "input-manifest-digest.txt",
+                        input_manifest_digest.encode("ascii") + b"\n",
+                        "worker input manifest digest",
+                    )
+                    issue_worker_measurement_challenge(
+                        ledger_root,
+                        trust_domain=trust_domain,
+                        worker_id=worker_id,
+                        job_id=job_id,
+                        request_digest=request_digest,
+                        verifier_challenge=challenge,
+                    )
+                    entries.append(
+                        {
+                            "job_id": job_id,
+                            "request_digest": request_digest,
+                            "suite_digest": loaded["digest"],
+                            "case_id": case_id,
+                            "run_id": run_id,
+                            "system": dict(system),
+                            "tree_digest": manifest["tree_digest"],
+                            "private_manifest_digest": private_manifest_digests[
+                                case_id
+                            ],
+                        }
+                    )
+
+        expected_jobs = (
+            len(loaded["systems"])
+            * len(loaded["cases"])
+            * loaded["runs_per_case"]
+        )
+        if len(entries) != expected_jobs:
+            raise PrepareError("prepared job matrix is incomplete")
+        dispatch = {
+            "schema": "aragorn/benchmark-private-dispatch/v1",
+            "jobs": sorted(entries, key=lambda entry: entry["job_id"]),
+        }
+        validate_private_dispatch(dispatch)
+        dispatch_digest = _put_json(control_cas, dispatch)
+        worklist = {
+            "schema": "aragorn/benchmark-worker-worklist/v1",
+            "jobs": [
+                {
+                    "job_id": entry["job_id"],
+                    "request_digest": entry["request_digest"],
+                }
+                for entry in dispatch["jobs"]
+            ],
+        }
+        validate_worker_worklist(worklist)
+        worklist_raw = canonical_json(worklist)
+        worklist_digest = _put_bytes(control_cas, worklist_raw)
+        _write_read_only_file(
+            job_root,
+            "worklist.json",
+            worklist_raw,
+            "worker worklist",
+        )
+        completed = True
+        return {
+            "schema": "aragorn/benchmark-prepare-result/v1",
+            "suite_digest": loaded["digest"],
+            "dispatch_digest": dispatch_digest,
+            "worker_identities_digest": identities_digest,
+            "worklist_digest": worklist_digest,
+            "job_count": len(entries),
+        }
+    finally:
+        if not completed:
+            shutil.rmtree(job_root, ignore_errors=True)
+            if ledger_owned:
+                shutil.rmtree(ledger_root, ignore_errors=True)
 
 
 def prepare_files(
@@ -347,6 +568,97 @@ def _bind_locked_systems(
     if set(selected) != set(locked) or set(selected) != set(workers):
         raise PrepareError("suite system set does not match the baseline lock")
     return tuple(selected[name] for name in sorted(selected))
+
+
+def _bind_portable_policies(
+    systems: dict[tuple[str, str, str, str], dict[str, str]],
+    portable_policies: Sequence[object],
+    *,
+    baselines: tuple[dict[str, Any], ...],
+    lock_digest: str,
+    baseline_digests: dict[str, str],
+) -> dict[str, dict[str, Any]]:
+    if isinstance(portable_policies, (str, bytes)) or not isinstance(
+        portable_policies, Sequence
+    ):
+        raise PrepareError("portable policies must be a bounded sequence")
+    if not 1 <= len(portable_policies) <= 32:
+        raise PrepareError("portable policies must be a bounded sequence")
+    policies: dict[str, dict[str, Any]] = {}
+    for raw_policy in portable_policies:
+        policy = build_portable_policy(raw_policy)
+        name = policy["system"]["name"]
+        if name in policies:
+            raise PrepareError("portable policies repeat a system")
+        policies[name] = policy
+
+    locked = {baseline["name"]: baseline for baseline in baselines}
+    selected = {system["name"]: system for system in systems.values()}
+    if (
+        len(selected) != len(systems)
+        or set(selected) != set(locked)
+        or set(selected) != set(policies)
+    ):
+        raise PrepareError(
+            "suite, portable policy, and baseline system sets do not match"
+        )
+    for name, system in selected.items():
+        baseline = locked[name]
+        policy = policies[name]
+        expected_identity = {
+            "name": baseline["name"],
+            "version": baseline["version"],
+            "implementation_digest": baseline["image"][
+                "platform_manifest_digest"
+            ],
+        }
+        if policy["system"] != expected_identity or {
+            field: system[field]
+            for field in ("name", "version", "implementation_digest")
+        } != expected_identity:
+            raise PrepareError(
+                f"portable policy identity does not match suite and lock: {name}"
+            )
+        if system["config_digest"] != portable_policy_digest(policy):
+            raise PrepareError(
+                f"suite config identity does not match portable policy: {name}"
+            )
+        if policy["baseline"] != {
+            "lock_digest": lock_digest,
+            "entry_digest": baseline_digests[name],
+        }:
+            raise PrepareError(
+                f"portable policy baseline binding does not match lock: {name}"
+            )
+        expected_image = {
+            field: baseline["image"][field]
+            for field in (
+                "index_digest",
+                "platform_manifest_digest",
+                "config_digest",
+                "build_provenance_manifest_digest",
+                "os",
+                "architecture",
+                "size_bytes",
+            )
+        }
+        if policy["image"] != expected_image:
+            raise PrepareError(
+                f"portable policy image binding does not match lock: {name}"
+            )
+        expected_arguments = [
+            "/workspace" if value == "{workspace}" else value
+            for value in baseline["profile"]["arguments"]
+        ]
+        if (
+            policy["arguments"] != expected_arguments
+            or policy["environment"] != baseline["profile"]["environment"]
+            or policy["runtime_profile"] != baseline["runtime_profile"]
+        ):
+            raise PrepareError(
+                f"portable policy execution profile does not match lock: {name}"
+            )
+    return {name: policies[name] for name in sorted(policies)}
 
 
 def _load_worker_identities(path: Path) -> dict[str, Any]:
@@ -660,6 +972,36 @@ def _validate_path_separation(
         if _paths_overlap(output, identities_file):
             raise PrepareError(
                 f"{output_label} and worker identities must not overlap"
+            )
+
+
+def _validate_v2_path_separation(
+    *,
+    suite_file: Path,
+    lock_file: Path,
+    control_root: Path,
+    jobs_root: Path,
+    ledger_root: Path,
+) -> None:
+    outputs = (
+        ("control CAS", control_root),
+        ("jobs root", jobs_root),
+        ("challenge ledger", ledger_root),
+    )
+    for index, (first_label, first) in enumerate(outputs):
+        for second_label, second in outputs[index + 1 :]:
+            if _paths_overlap(first, second):
+                raise PrepareError(
+                    f"{first_label} and {second_label} must not overlap"
+                )
+    for output_label, output in outputs:
+        if _paths_overlap(output, suite_file.parent):
+            raise PrepareError(
+                f"{output_label} and benchmark suite must not overlap"
+            )
+        if _paths_overlap(output, lock_file):
+            raise PrepareError(
+                f"{output_label} and baseline lock must not overlap"
             )
 
 

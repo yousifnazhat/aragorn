@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn retained benchmark evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "suite_digest",
+    "case_id",
+    "tree_digest",
+    "run_id",
+    "system",
+    "manifest_digest",
+    "operator_config_digest",
+    "effective_config_digest",
+    "executable_digest",
+    "stdout_digest",
+    "stderr_digest",
+    "observation_digests",
+    "execution",
+    "normalization",
+    "verdict",
+    "reason_codes"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-evidence/v1"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "case_id": {"$ref": "#/$defs/id"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "run_id": {"type": "integer", "minimum": 1, "maximum": 10},
+    "system": {"$ref": "#/$defs/system"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "operator_config_digest": {"$ref": "#/$defs/digest"},
+    "effective_config_digest": {"$ref": "#/$defs/digest"},
+    "executable_digest": {"$ref": "#/$defs/digest"},
+    "stdout_digest": {"$ref": "#/$defs/digest"},
+    "stderr_digest": {"$ref": "#/$defs/digest"},
+    "observation_digests": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "error_code", "returncode"],
+      "properties": {
+        "status": {"enum": ["ok", "error"]},
+        "error_code": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$"},
+            {"type": "null"}
+          ]
+        },
+        "returncode": {
+          "anyOf": [{"type": "integer"}, {"type": "null"}]
+        }
+      }
+    },
+    "normalization": {"const": "aragorn-observation-severity/v1"},
+    "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "canonicalString": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$"
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {
+          "allOf": [
+            {"$ref": "#/$defs/canonicalString"},
+            {"maxLength": 256}
+          ]
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

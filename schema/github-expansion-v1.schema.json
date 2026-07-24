@@ -1,0 +1,418 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/github-expansion-v1.schema.json",
+  "title": "Aragorn evaluation-only exact GitHub blob expansion v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "profile",
+    "assurance",
+    "source",
+    "root_manifest_digest",
+    "root_tree_digest",
+    "comparator_subject_manifest_digest",
+    "comparator_subject_tree_digest",
+    "references",
+    "objects",
+    "accounting",
+    "closure"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/github-expansion/v1"},
+    "profile": {"const": "phase0-exact-github-blob-expansion/v1"},
+    "assurance": {
+      "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
+    },
+    "source": {"$ref": "#/$defs/source"},
+    "root_manifest_digest": {"$ref": "#/$defs/digest"},
+    "root_tree_digest": {"$ref": "#/$defs/digest"},
+    "comparator_subject_manifest_digest": {
+      "oneOf": [
+        {"$ref": "#/$defs/digest"},
+        {"type": "null"}
+      ]
+    },
+    "comparator_subject_tree_digest": {
+      "oneOf": [
+        {"$ref": "#/$defs/digest"},
+        {"type": "null"}
+      ]
+    },
+    "references": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/occurrence"}
+    },
+    "objects": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/object"}
+    },
+    "accounting": {"$ref": "#/$defs/accounting"},
+    "closure": {"$ref": "#/$defs/closure"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "closure": {
+            "properties": {"status": {"const": "complete"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["closure"]
+      },
+      "then": {
+        "properties": {
+          "comparator_subject_manifest_digest": {"$ref": "#/$defs/digest"},
+          "comparator_subject_tree_digest": {"$ref": "#/$defs/digest"},
+          "accounting": {
+            "properties": {
+              "references": {
+                "properties": {
+                  "scan_complete": {"const": true},
+                  "occurrences_complete": {"const": true},
+                  "occurrences_omitted": {"const": 0}
+                },
+                "required": [
+                  "scan_complete",
+                  "occurrences_complete",
+                  "occurrences_omitted"
+                ]
+              }
+            },
+            "required": ["references"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "comparator_subject_manifest_digest": {"type": "null"},
+          "comparator_subject_tree_digest": {"type": "null"},
+          "objects": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "owner",
+        "repository",
+        "commit",
+        "commit_tree",
+        "skill_path",
+        "api_version"
+      ],
+      "properties": {
+        "host": {"const": "github.com"},
+        "owner": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,38}$"},
+        "repository": {"type": "string", "pattern": "^[a-z0-9_.-]{1,100}$"},
+        "commit": {"$ref": "#/$defs/git_sha1"},
+        "commit_tree": {"$ref": "#/$defs/git_sha1"},
+        "skill_path": {
+          "anyOf": [
+            {"const": "."},
+            {"$ref": "#/$defs/path"}
+          ]
+        },
+        "api_version": {"const": "2026-03-10"}
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_repository_path",
+        "source_blob_digest",
+        "byte_offset",
+        "literal_digest"
+      ],
+      "properties": {
+        "source_repository_path": {"$ref": "#/$defs/path"},
+        "source_blob_digest": {"$ref": "#/$defs/digest"},
+        "byte_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        },
+        "literal_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_repository_path",
+        "source_blob_digest",
+        "byte_offset",
+        "literal_digest",
+        "target_repository_path",
+        "status",
+        "reason_code"
+      ],
+      "properties": {
+        "source_repository_path": {"$ref": "#/$defs/path"},
+        "source_blob_digest": {"$ref": "#/$defs/digest"},
+        "byte_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        },
+        "literal_digest": {"$ref": "#/$defs/digest"},
+        "target_repository_path": {
+          "oneOf": [
+            {"$ref": "#/$defs/path"},
+            {"type": "null"}
+          ]
+        },
+        "status": {"enum": ["root_resolved", "expanded", "unresolved"]},
+        "reason_code": {
+          "oneOf": [
+            {"$ref": "#/$defs/reason"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "unresolved"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {"reason_code": {"$ref": "#/$defs/reason"}}
+          },
+          "else": {
+            "properties": {
+              "target_repository_path": {"$ref": "#/$defs/path"},
+              "reason_code": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+    },
+    "object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_path",
+        "materialized_path",
+        "depth",
+        "size",
+        "digest",
+        "git_blob_sha1",
+        "executable",
+        "references"
+      ],
+      "properties": {
+        "repository_path": {"$ref": "#/$defs/path"},
+        "materialized_path": {
+          "type": "string",
+          "pattern": "^__aragorn_expanded__/[^/]+(?:/[^/]+)*$",
+          "maxLength": 4096
+        },
+        "depth": {"type": "integer", "minimum": 1, "maximum": 4},
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        },
+        "digest": {"$ref": "#/$defs/digest"},
+        "git_blob_sha1": {"$ref": "#/$defs/git_sha1"},
+        "executable": {"type": "boolean"},
+        "references": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reference"}
+        }
+      }
+    },
+    "counter": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_edges",
+        "artifact_references",
+        "resolved_in_root",
+        "expanded",
+        "deduplicated",
+        "non_artifact",
+        "unresolved",
+        "opaque_carriers",
+        "scan_complete",
+        "occurrences_complete",
+        "occurrences_omitted"
+      ],
+      "properties": {
+        "total_edges": {"$ref": "#/$defs/counter"},
+        "artifact_references": {"$ref": "#/$defs/counter"},
+        "resolved_in_root": {"$ref": "#/$defs/counter"},
+        "expanded": {"$ref": "#/$defs/counter"},
+        "deduplicated": {"$ref": "#/$defs/counter"},
+        "non_artifact": {"$ref": "#/$defs/counter"},
+        "unresolved": {"$ref": "#/$defs/counter"},
+        "opaque_carriers": {"$ref": "#/$defs/counter"},
+        "scan_complete": {
+          "type": "boolean",
+          "description": "True only when every retained source carrier represented by this receipt was scanned without an opaque-carrier or reference-budget truncation."
+        },
+        "occurrences_complete": {
+          "type": "boolean",
+          "description": "True only when the references array retains every occurrence found by the completed scan."
+        },
+        "occurrences_omitted": {
+          "description": "Exact omitted occurrence count when known, zero for a complete occurrence list, or null when scan truncation makes the count unknowable.",
+          "oneOf": [
+            {"$ref": "#/$defs/counter"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"scan_complete": {"const": false}},
+            "required": ["scan_complete"]
+          },
+          "then": {
+            "properties": {"occurrences_complete": {"const": false}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"occurrences_complete": {"const": true}},
+            "required": ["occurrences_complete"]
+          },
+          "then": {
+            "properties": {"occurrences_omitted": {"const": 0}}
+          },
+          "else": {
+            "properties": {
+              "occurrences_omitted": {
+                "oneOf": [
+                  {"type": "integer", "minimum": 1},
+                  {"type": "null"}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scan_complete": {"const": true},
+              "occurrences_complete": {"const": false}
+            },
+            "required": ["scan_complete", "occurrences_complete"]
+          },
+          "then": {
+            "properties": {
+              "occurrences_omitted": {"type": "integer", "minimum": 1}
+            }
+          }
+        }
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit", "used"],
+      "properties": {
+        "limit": {"type": "integer", "minimum": 0},
+        "used": {"type": "integer", "minimum": 0}
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api_requests",
+        "api_bytes",
+        "retained_bytes",
+        "expanded_objects",
+        "expansion_depth",
+        "references"
+      ],
+      "properties": {
+        "api_requests": {"$ref": "#/$defs/budget"},
+        "api_bytes": {"$ref": "#/$defs/budget"},
+        "retained_bytes": {"$ref": "#/$defs/budget"},
+        "expanded_objects": {"$ref": "#/$defs/budget"},
+        "expansion_depth": {"$ref": "#/$defs/budget"},
+        "references": {"$ref": "#/$defs/budget"}
+      }
+    },
+    "accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["references", "budgets"],
+      "properties": {
+        "references": {"$ref": "#/$defs/references"},
+        "budgets": {"$ref": "#/$defs/budgets"}
+      }
+    },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "status", "unresolved"],
+      "properties": {
+        "scope": {"const": "phase0_exact_github_blob_expansion"},
+        "status": {"enum": ["complete", "incomplete"]},
+        "unresolved": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reason_code", "subject"],
+            "properties": {
+              "reason_code": {"$ref": "#/$defs/reason"},
+              "subject": {"type": "string", "minLength": 1, "maxLength": 4096}
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "complete"}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"unresolved": {"maxItems": 0}}},
+          "else": {"properties": {"unresolved": {"minItems": 1}}}
+        }
+      ]
+    }
+  }
+}

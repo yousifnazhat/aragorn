@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn label-free portable-policy worker request v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "verifier_challenge",
+    "subject",
+    "portable_policy_digest",
+    "system",
+    "baseline",
+    "limits"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-worker-request/v2"},
+    "job_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "verifier_challenge": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_digest", "tree_digest"],
+      "properties": {
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "tree_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "portable_policy_digest": {"$ref": "#/$defs/digest"},
+    "system": {"$ref": "#/$defs/system"},
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_digest", "entry_digest"],
+      "properties": {
+        "lock_digest": {"$ref": "#/$defs/digest"},
+        "entry_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeout_seconds", "output_bytes"],
+      "properties": {
+        "timeout_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 3600
+        },
+        "output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "system": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "implementation_digest"],
+          "properties": {
+            "name": {"const": "cisco-skill-scanner"},
+            "version": {"const": "2.0.12"},
+            "implementation_digest": {
+              "const": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "implementation_digest"],
+          "properties": {
+            "name": {"const": "skillspector"},
+            "version": {"const": "2.4.3+git.a54947c"},
+            "implementation_digest": {
+              "const": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

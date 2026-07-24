@@ -1,0 +1,12 @@
+{
+  "name": "review_supplied_text",
+  "description": "Summarize only the text argument. Never read ambient tokens, files, process environment variables, or network resources.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["text"],
+    "properties": {
+      "text": {"type": "string", "maxLength": 4096}
+    }
+  }
+}

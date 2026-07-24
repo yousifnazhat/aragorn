@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v1.schema.json",
+  "title": "Aragorn Phase 0 comparative-metrics gate report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "suite_id",
+    "purpose",
+    "suite_digest",
+    "outcomes_digest",
+    "benchmark_report_digest",
+    "accounting_digest",
+    "evaluation_split",
+    "accounting",
+    "comparison"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-phase0-gate-report/v1"},
+    "assurance": {"const": "comparative_metrics_only"},
+    "suite_id": {"$ref": "#/$defs/id"},
+    "purpose": {"enum": ["contract_smoke", "evidence_smoke"]},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "outcomes_digest": {"$ref": "#/$defs/digest"},
+    "benchmark_report_digest": {"$ref": "#/$defs/digest"},
+    "accounting_digest": {"$ref": "#/$defs/digest"},
+    "evaluation_split": {"const": "held_out"},
+    "accounting": {"$ref": "#/$defs/accounting"},
+    "comparison": {"$ref": "#/$defs/comparison"}
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reason": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+    },
+    "canonicalString": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$"
+    },
+    "rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "nullableRate": {
+      "oneOf": [
+        {"$ref": "#/$defs/rate"},
+        {"type": "null"}
+      ]
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {
+          "allOf": [
+            {"$ref": "#/$defs/canonicalString"},
+            {"maxLength": 256}
+          ]
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "fraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator", "rate"],
+      "properties": {
+        "numerator": {"type": "integer", "minimum": 0},
+        "denominator": {"type": "integer", "minimum": 1},
+        "rate": {"$ref": "#/$defs/rate"}
+      }
+    },
+    "signedFraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator", "rate"],
+      "properties": {
+        "numerator": {"type": "integer"},
+        "denominator": {"type": "integer", "minimum": 1},
+        "rate": {"type": "number", "minimum": -1, "maximum": 1}
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "benign_intervention",
+        "adversarial_flag",
+        "burden_compliant"
+      ],
+      "properties": {
+        "system": {"$ref": "#/$defs/system"},
+        "benign_intervention": {"$ref": "#/$defs/fraction"},
+        "adversarial_flag": {"$ref": "#/$defs/fraction"},
+        "burden_compliant": {"type": "boolean"}
+      }
+    },
+    "nullablePoint": {
+      "oneOf": [
+        {"$ref": "#/$defs/point"},
+        {"type": "null"}
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit", "used", "utilization_rate"],
+      "properties": {
+        "limit": {"type": "integer", "minimum": 0},
+        "used": {"type": "integer", "minimum": 0},
+        "utilization_rate": {"$ref": "#/$defs/nullableRate"}
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api_requests",
+        "api_bytes",
+        "retained_bytes",
+        "expanded_objects",
+        "expansion_depth",
+        "references"
+      ],
+      "properties": {
+        "api_requests": {"$ref": "#/$defs/budget"},
+        "api_bytes": {"$ref": "#/$defs/budget"},
+        "retained_bytes": {"$ref": "#/$defs/budget"},
+        "expanded_objects": {"$ref": "#/$defs/budget"},
+        "expansion_depth": {"$ref": "#/$defs/budget"},
+        "references": {"$ref": "#/$defs/budget"}
+      }
+    },
+    "reasonCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason_code", "cases"],
+      "properties": {
+        "reason_code": {"$ref": "#/$defs/reason"},
+        "cases": {"type": "integer", "minimum": 1}
+      }
+    },
+    "accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cases",
+        "complete_expansions",
+        "incomplete_expansions",
+        "expansion_success_rate",
+        "incomplete_cases",
+        "expected_references",
+        "captured_references",
+        "missed_references",
+        "wrong_target_references",
+        "unresolved_expected_references",
+        "source_reference_capture_rate",
+        "profile_artifact_references",
+        "unresolved_references",
+        "non_artifact_references",
+        "unresolved_cases",
+        "unresolved_reference_rate",
+        "opaque_carriers",
+        "published_expanded_objects",
+        "attempted_expanded_objects",
+        "budgets",
+        "reason_counts"
+      ],
+      "properties": {
+        "cases": {"type": "integer", "minimum": 0},
+        "complete_expansions": {"type": "integer", "minimum": 0},
+        "incomplete_expansions": {"type": "integer", "minimum": 0},
+        "expansion_success_rate": {"$ref": "#/$defs/nullableRate"},
+        "incomplete_cases": {"type": "integer", "minimum": 0},
+        "expected_references": {"type": "integer", "minimum": 0},
+        "captured_references": {"type": "integer", "minimum": 0},
+        "missed_references": {"type": "integer", "minimum": 0},
+        "wrong_target_references": {"type": "integer", "minimum": 0},
+        "unresolved_expected_references": {"type": "integer", "minimum": 0},
+        "source_reference_capture_rate": {"$ref": "#/$defs/nullableRate"},
+        "profile_artifact_references": {"type": "integer", "minimum": 0},
+        "unresolved_references": {"type": "integer", "minimum": 0},
+        "non_artifact_references": {"type": "integer", "minimum": 0},
+        "unresolved_cases": {"type": "integer", "minimum": 0},
+        "unresolved_reference_rate": {"$ref": "#/$defs/nullableRate"},
+        "opaque_carriers": {"type": "integer", "minimum": 0},
+        "published_expanded_objects": {"type": "integer", "minimum": 0},
+        "attempted_expanded_objects": {"type": "integer", "minimum": 0},
+        "budgets": {"$ref": "#/$defs/budgets"},
+        "reason_counts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/reasonCount"}
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benign_burden_ceiling",
+        "minimum_attack_flag_delta",
+        "candidate",
+        "comparators",
+        "pareto_frontier",
+        "selected_comparator",
+        "attack_flag_delta",
+        "evaluable",
+        "passed",
+        "reason_codes"
+      ],
+      "properties": {
+        "benign_burden_ceiling": {"$ref": "#/$defs/fraction"},
+        "minimum_attack_flag_delta": {"$ref": "#/$defs/fraction"},
+        "candidate": {"$ref": "#/$defs/nullablePoint"},
+        "comparators": {
+          "type": "array",
+          "maxItems": 31,
+          "items": {"$ref": "#/$defs/point"}
+        },
+        "pareto_frontier": {
+          "type": "array",
+          "maxItems": 31,
+          "items": {"$ref": "#/$defs/point"}
+        },
+        "selected_comparator": {"$ref": "#/$defs/nullablePoint"},
+        "attack_flag_delta": {
+          "oneOf": [
+            {"$ref": "#/$defs/signedFraction"},
+            {"type": "null"}
+          ]
+        },
+        "evaluable": {"type": "boolean"},
+        "passed": {"type": "boolean"},
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reason"}
+        }
+      }
+    }
+  }
+}

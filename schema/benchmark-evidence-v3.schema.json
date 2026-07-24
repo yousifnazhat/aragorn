@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn retained OCI benchmark evidence v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "suite_digest",
+    "case_id",
+    "tree_digest",
+    "verified_subject_digest",
+    "run_id",
+    "system",
+    "manifest_digest",
+    "baseline_lock_digest",
+    "baseline_entry_digest",
+    "effective_config_digest",
+    "oci_index_digest",
+    "oci_platform_manifest_digest",
+    "build_provenance_manifest_digest",
+    "index_inspect_digest",
+    "platform_inspect_digest",
+    "image_config_digest",
+    "runner_receipts",
+    "prestart_container_inspect_digest",
+    "postrun_container_inspect_digest",
+    "stdout_digest",
+    "stderr_digest",
+    "observation_digests",
+    "execution",
+    "normalization",
+    "verdict",
+    "reason_codes"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-evidence/v3"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "case_id": {"$ref": "#/$defs/id"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "verified_subject_digest": {"$ref": "#/$defs/digest"},
+    "run_id": {"type": "integer", "minimum": 1, "maximum": 10},
+    "system": {"$ref": "#/$defs/system"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "baseline_lock_digest": {"$ref": "#/$defs/digest"},
+    "baseline_entry_digest": {"$ref": "#/$defs/digest"},
+    "effective_config_digest": {"$ref": "#/$defs/digest"},
+    "oci_index_digest": {"$ref": "#/$defs/digest"},
+    "oci_platform_manifest_digest": {"$ref": "#/$defs/digest"},
+    "build_provenance_manifest_digest": {"$ref": "#/$defs/digest"},
+    "index_inspect_digest": {"$ref": "#/$defs/digest"},
+    "platform_inspect_digest": {"$ref": "#/$defs/digest"},
+    "image_config_digest": {"$ref": "#/$defs/digest"},
+    "runner_receipts": {"$ref": "#/$defs/runner_receipts"},
+    "prestart_container_inspect_digest": {"$ref": "#/$defs/digest"},
+    "postrun_container_inspect_digest": {"$ref": "#/$defs/digest"},
+    "stdout_digest": {"$ref": "#/$defs/digest"},
+    "stderr_digest": {"$ref": "#/$defs/digest"},
+    "observation_digests": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "error_code", "returncode", "container_id"],
+      "properties": {
+        "status": {"enum": ["ok", "error"]},
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "MALFORMED_VENDOR_REPORT",
+                "NONZERO_OR_INVALID_VENDOR_EXIT",
+                "OUTPUT_LIMIT_EXCEEDED",
+                "TIMEOUT"
+              ]
+            },
+            {"type": "null"}
+          ]
+        },
+        "returncode": {"type": "integer"},
+        "container_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": {"const": "ok"},
+            "error_code": {"type": "null"}
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "error"},
+            "error_code": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "enum": [
+        "cisco-ai-skill-scanner-2.0.12/v1",
+        "nvidia-skillspector-2.4.3/v1"
+      ]
+    },
+    "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"verdict": {"const": "ALLOW"}}},
+      "then": {"properties": {"reason_codes": {"maxItems": 0}}},
+      "else": {"properties": {"reason_codes": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_inspect_digest",
+        "daemon_version_digest",
+        "daemon_info_digest"
+      ],
+      "properties": {
+        "context_inspect_digest": {"$ref": "#/$defs/digest"},
+        "daemon_version_digest": {"$ref": "#/$defs/digest"},
+        "daemon_info_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "runner_receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pre", "post"],
+      "properties": {
+        "pre": {"$ref": "#/$defs/receipt"},
+        "post": {"$ref": "#/$defs/receipt"}
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {
+          "type": "string",
+          "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$",
+          "maxLength": 256
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

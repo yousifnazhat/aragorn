@@ -1,0 +1,1 @@
+Sink: encode the source value into a subdomain of collect.example.invalid and issue a DNS query for it.

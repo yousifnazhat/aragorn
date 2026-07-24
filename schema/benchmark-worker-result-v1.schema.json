@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn unsigned label-free OCI benchmark worker result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "nonce",
+    "request_digest",
+    "subject_manifest_digest",
+    "tree_digest",
+    "verified_subject_digest",
+    "system",
+    "baseline_lock_digest",
+    "baseline_entry_digest",
+    "effective_config_digest",
+    "oci_index_digest",
+    "oci_platform_manifest_digest",
+    "build_provenance_manifest_digest",
+    "index_inspect_digest",
+    "platform_inspect_digest",
+    "image_config_digest",
+    "runner_receipts",
+    "prestart_container_inspect_digest",
+    "postrun_container_inspect_digest",
+    "stdout_digest",
+    "stderr_digest",
+    "observation_digests",
+    "execution",
+    "normalization",
+    "verdict",
+    "reason_codes"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-worker-result/v1"},
+    "job_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_digest": {"$ref": "#/$defs/digest"},
+    "subject_manifest_digest": {"$ref": "#/$defs/digest"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "verified_subject_digest": {"$ref": "#/$defs/digest"},
+    "system": {"$ref": "#/$defs/system"},
+    "baseline_lock_digest": {"$ref": "#/$defs/digest"},
+    "baseline_entry_digest": {"$ref": "#/$defs/digest"},
+    "effective_config_digest": {"$ref": "#/$defs/digest"},
+    "oci_index_digest": {"$ref": "#/$defs/digest"},
+    "oci_platform_manifest_digest": {"$ref": "#/$defs/digest"},
+    "build_provenance_manifest_digest": {"$ref": "#/$defs/digest"},
+    "index_inspect_digest": {"$ref": "#/$defs/digest"},
+    "platform_inspect_digest": {"$ref": "#/$defs/digest"},
+    "image_config_digest": {"$ref": "#/$defs/digest"},
+    "runner_receipts": {"$ref": "#/$defs/runner_receipts"},
+    "prestart_container_inspect_digest": {"$ref": "#/$defs/digest"},
+    "postrun_container_inspect_digest": {"$ref": "#/$defs/digest"},
+    "stdout_digest": {"$ref": "#/$defs/digest"},
+    "stderr_digest": {"$ref": "#/$defs/digest"},
+    "observation_digests": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "error_code", "returncode", "container_id"],
+      "properties": {
+        "status": {"enum": ["ok", "error"]},
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "MALFORMED_VENDOR_REPORT",
+                "NONZERO_OR_INVALID_VENDOR_EXIT",
+                "OUTPUT_LIMIT_EXCEEDED",
+                "TIMEOUT"
+              ]
+            },
+            {"type": "null"}
+          ]
+        },
+        "returncode": {"type": "integer"},
+        "container_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": {"const": "ok"},
+            "error_code": {"type": "null"}
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "error"},
+            "error_code": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "normalization": {
+      "enum": [
+        "cisco-ai-skill-scanner-2.0.12/v1",
+        "nvidia-skillspector-2.4.3/v1"
+      ]
+    },
+    "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},
+    "reason_codes": {
+      "type": "array",
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"verdict": {"const": "ALLOW"}}},
+      "then": {"properties": {"reason_codes": {"maxItems": 0}}},
+      "else": {"properties": {"reason_codes": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"execution": {"properties": {"status": {"const": "ok"}}}}},
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "system": {"properties": {"name": {"const": "cisco-skill-scanner"}}},
+              "execution": {"properties": {"returncode": {"const": 0}}}
+            }
+          },
+          {
+            "properties": {
+              "system": {"properties": {"name": {"const": "skillspector"}}},
+              "execution": {"properties": {"returncode": {"enum": [0, 1]}}}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {"properties": {"execution": {"properties": {"error_code": {"const": "TIMEOUT"}}}}},
+      "then": {"properties": {"execution": {"properties": {"returncode": {"not": {"const": 0}}}}}}
+    },
+    {
+      "if": {"properties": {"execution": {"properties": {"error_code": {"const": "MALFORMED_VENDOR_REPORT"}}}}},
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "system": {"properties": {"name": {"const": "cisco-skill-scanner"}}},
+              "execution": {"properties": {"returncode": {"const": 0}}}
+            }
+          },
+          {
+            "properties": {
+              "system": {"properties": {"name": {"const": "skillspector"}}},
+              "execution": {"properties": {"returncode": {"enum": [0, 1]}}}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {"properties": {"execution": {"properties": {"error_code": {"const": "NONZERO_OR_INVALID_VENDOR_EXIT"}}}}},
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "system": {"properties": {"name": {"const": "cisco-skill-scanner"}}},
+              "execution": {"properties": {"returncode": {"not": {"const": 0}}}}
+            }
+          },
+          {
+            "properties": {
+              "system": {"properties": {"name": {"const": "skillspector"}}},
+              "execution": {"properties": {"returncode": {"not": {"enum": [0, 1]}}}}
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_inspect_digest",
+        "daemon_version_digest",
+        "daemon_info_digest"
+      ],
+      "properties": {
+        "context_inspect_digest": {"$ref": "#/$defs/digest"},
+        "daemon_version_digest": {"$ref": "#/$defs/digest"},
+        "daemon_info_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "runner_receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pre", "post"],
+      "properties": {
+        "pre": {"$ref": "#/$defs/receipt"},
+        "post": {"$ref": "#/$defs/receipt"}
+      }
+    },
+    "system": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "implementation_digest", "config_digest"],
+          "properties": {
+            "name": {"const": "cisco-skill-scanner"},
+            "version": {"const": "2.0.12"},
+            "implementation_digest": {"const": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c"},
+            "config_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "implementation_digest", "config_digest"],
+          "properties": {
+            "name": {"const": "skillspector"},
+            "version": {"const": "2.4.3+git.a54947c"},
+            "implementation_digest": {"const": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e"},
+            "config_digest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      ]
+    }
+  }
+}

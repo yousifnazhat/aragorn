@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn local label-free end-to-end smoke receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_on",
+    "assurance",
+    "implementation_state",
+    "suite_digest",
+    "worker_identities_digest",
+    "worklist_digest",
+    "dispatch_digest",
+    "ledger_id",
+    "collection_digest",
+    "outcomes_digest",
+    "report_digest",
+    "job_count",
+    "exact_retry_idempotent"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-e2e-smoke-receipt/v1"},
+    "recorded_on": {"type": "string", "format": "date"},
+    "assurance": {
+      "const": "unsigned_label_free_protocol_not_isolated_or_attested"
+    },
+    "implementation_state": {
+      "const": "private_uncommitted_worktree_not_source_attested"
+    },
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "worker_identities_digest": {"$ref": "#/$defs/digest"},
+    "worklist_digest": {"$ref": "#/$defs/digest"},
+    "dispatch_digest": {"$ref": "#/$defs/digest"},
+    "ledger_id": {"$ref": "#/$defs/digest"},
+    "collection_digest": {"$ref": "#/$defs/digest"},
+    "outcomes_digest": {"$ref": "#/$defs/digest"},
+    "report_digest": {"$ref": "#/$defs/digest"},
+    "job_count": {"type": "integer", "minimum": 1, "maximum": 200000},
+    "exact_retry_idempotent": {"const": true}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

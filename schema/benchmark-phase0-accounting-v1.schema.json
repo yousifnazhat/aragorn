@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-accounting-v1.schema.json",
+  "title": "Aragorn Phase 0 comparative-accounting plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "suite_digest", "candidate_system", "cases"],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-phase0-accounting/v1"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "candidate_system": {"$ref": "#/$defs/system"},
+    "cases": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    },
+    "canonicalString": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$"
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"const": "aragorn"},
+        "version": {
+          "allOf": [
+            {"$ref": "#/$defs/canonicalString"},
+            {"maxLength": 256}
+          ]
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "expectedReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_repository_path",
+        "source_blob_digest",
+        "byte_offset",
+        "literal_digest",
+        "target_repository_path",
+        "target_digest"
+      ],
+      "properties": {
+        "source_repository_path": {"$ref": "#/$defs/path"},
+        "source_blob_digest": {"$ref": "#/$defs/digest"},
+        "byte_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        },
+        "literal_digest": {"$ref": "#/$defs/digest"},
+        "target_repository_path": {"$ref": "#/$defs/path"},
+        "target_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "expansion_digest", "expected_references"],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/id"},
+        "expansion_digest": {"$ref": "#/$defs/digest"},
+        "expected_references": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {"$ref": "#/$defs/expectedReference"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn verifier-owned worker trust store v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "trust_domain", "keys"],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-worker-trust-store/v1"},
+    "trust_domain": {"$ref": "#/$defs/identifier"},
+    "keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/key"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key_id",
+        "algorithm",
+        "public_key",
+        "worker_id",
+        "scopes",
+        "status"
+      ],
+      "properties": {
+        "key_id": {"$ref": "#/$defs/digest"},
+        "algorithm": {"const": "Ed25519"},
+        "public_key": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "worker_id": {"$ref": "#/$defs/identifier"},
+        "scopes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"const": "aragorn/benchmark-worker-output/v2"}
+        },
+        "status": {"enum": ["active", "revoked"]}
+      }
+    }
+  }
+}

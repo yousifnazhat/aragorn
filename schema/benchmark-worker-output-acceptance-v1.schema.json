@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn authenticated worker output acceptance receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "issuance_digest",
+    "trust_store_digest",
+    "envelope_digest",
+    "key_id",
+    "trust_domain",
+    "worker_id",
+    "job_id",
+    "verifier_challenge",
+    "request_digest",
+    "result_digest",
+    "handoff_manifest_digest"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-worker-output-acceptance/v1"},
+    "assurance": {
+      "const": "software_key_signature_not_hardware_attested"
+    },
+    "issuance_digest": {"$ref": "#/$defs/digest"},
+    "trust_store_digest": {"$ref": "#/$defs/digest"},
+    "envelope_digest": {"$ref": "#/$defs/digest"},
+    "key_id": {"$ref": "#/$defs/digest"},
+    "trust_domain": {"$ref": "#/$defs/identifier"},
+    "worker_id": {"$ref": "#/$defs/identifier"},
+    "job_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "verifier_challenge": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_digest": {"$ref": "#/$defs/digest"},
+    "result_digest": {"$ref": "#/$defs/digest"},
+    "handoff_manifest_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn acquisition manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "source", "tree_digest", "files", "closure"],
+  "properties": {
+    "schema": {"const": "aragorn/manifest/v1"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": {"const": "local"},
+        "path": {"type": "string", "minLength": 1}
+      }
+    },
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "size", "digest", "executable"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "size": {"type": "integer", "minimum": 0},
+          "digest": {"$ref": "#/$defs/digest"},
+          "executable": {"type": "boolean"}
+        }
+      }
+    },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "status"],
+      "properties": {
+        "scope": {"enum": ["source_tree", "artifact_graph"]},
+        "status": {"enum": ["complete", "incomplete"]},
+        "unresolved": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "schema": "aragorn/baseline-lock/v1",
+  "observed_at": "2026-07-22",
+  "baselines": [
+    {
+      "name": "cisco-skill-scanner",
+      "version": "2.0.12",
+      "repository": "https://github.com/cisco-ai-defense/skill-scanner",
+      "commit": "605afdc5c7ea887c07e2afeb0fadc1452c07bfa7",
+      "release": "2.0.12",
+      "license": "Apache-2.0",
+      "distribution": {
+        "kind": "pypi-wheel",
+        "package": "cisco-ai-skill-scanner==2.0.12",
+        "sha256": "e49f979e97b7842549b1f531dc5f426c9780d798a0b21f0125044e3b5ae4a1f7"
+      },
+      "profile": {
+        "mode": "local-static",
+        "network": "deny",
+        "arguments": [
+          "scan",
+          "{workspace}",
+          "--use-behavioral",
+          "--policy",
+          "strict",
+          "--format",
+          "json",
+          "--compact"
+        ],
+        "environment": {},
+        "disabled_features": [
+          "aidefense",
+          "llm",
+          "meta-analysis",
+          "virustotal"
+        ]
+      },
+      "build": {
+        "dockerfile_sha256": "e169381308a65bad9ec03932fbb3d2d638103fcf2b166c944acbed408f77c796",
+        "build_input_sha256": "1e421a8597cd5eea40ad02da598ae9c4ee491ddb2a7bd7582c8226e21db5e73b",
+        "dependency_lock_sha256": "59fac955bd7537b4e17692d34592ce28922347004d39d7ead2b550e1c3a62f00",
+        "frontend_digest": "sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+        "python_image_digest": "sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b",
+        "uv_image_digest": "sha256:eb2843a1e56fd9e30c7276ce1a52cba86e64c7b385f5e3279a0e08e02dd058fc",
+        "artifacts": [
+          {
+            "name": "cisco-ai-skill-scanner-wheel",
+            "sha256": "e49f979e97b7842549b1f531dc5f426c9780d798a0b21f0125044e3b5ae4a1f7"
+          }
+        ]
+      },
+      "image": {
+        "local_tag": "aragorn/cisco-skill-scanner:2.0.12",
+        "index_digest": "sha256:f06e307a2765d2ecd389fc8c706bd991f2ab5a47be6cb88caf69f48971a8b72b",
+        "platform_manifest_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+        "config_digest": "sha256:643fae7d757deff706e26252ad167cdecadb8ee314358aaa10861182f4eed3c6",
+        "build_provenance_manifest_digest": "sha256:9d673d3657c7848fe4472e077f1cac9ae76cb4c4721803f1240f07882a1889cd",
+        "os": "linux",
+        "architecture": "arm64",
+        "size_bytes": 138894369
+      },
+      "runtime_profile": {
+        "engine": "docker",
+        "pull": "never",
+        "network": "none",
+        "read_only_rootfs": true,
+        "cap_drop": ["ALL"],
+        "no_new_privileges": true,
+        "user": "65532:65532",
+        "workdir": "/opt/aragorn-control",
+        "pids_limit": 256,
+        "memory_bytes": 2147483648,
+        "memory_swap_bytes": 2147483648,
+        "cpus": 2,
+        "nofile_soft": 1024,
+        "nofile_hard": 1024,
+        "tmpfs": {
+          "destination": "/tmp",
+          "size_bytes": 536870912,
+          "options": ["rw", "noexec", "nosuid", "nodev", "mode=1777"]
+        },
+        "workspace": {"destination": "/workspace", "read_only": true}
+      },
+      "attestation_status": "oci_closure_candidate_runner_attestation_pending"
+    },
+    {
+      "name": "skillspector",
+      "version": "2.4.3+git.a54947c",
+      "repository": "https://github.com/NVIDIA/SkillSpector",
+      "commit": "a54947c307fe19a24a43db55f6148e181a987a67",
+      "release": null,
+      "license": "Apache-2.0",
+      "distribution": {"kind": "git-source", "package": null, "sha256": null},
+      "profile": {
+        "mode": "local-static",
+        "network": "deny",
+        "arguments": [
+          "scan",
+          "{workspace}",
+          "--no-llm",
+          "--format",
+          "json"
+        ],
+        "environment": {"SKILLSPECTOR_OSV_TIMEOUT": "0.2"},
+        "disabled_features": ["llm"]
+      },
+      "build": {
+        "dockerfile_sha256": "647d7c8b67d009f2358384ede94bad4d194510566c47e18a1be740ab8aa607cb",
+        "build_input_sha256": "450b8a5cc1f3ff2a518b3f063601074ccc8673909cf7770af9c8842a2d5a7f8d",
+        "dependency_lock_sha256": "c45e6ff70bb1eddebb028b4e5ea25845ee2ea2ae6643881d0f1a1a9a251d5fea",
+        "frontend_digest": "sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+        "python_image_digest": "sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b",
+        "uv_image_digest": "sha256:eb2843a1e56fd9e30c7276ce1a52cba86e64c7b385f5e3279a0e08e02dd058fc",
+        "artifacts": [
+          {
+            "name": "forbiddenfruit-sdist",
+            "sha256": "e3f7e66561a29ae129aac139a85d610dbf3dd896128187ed5454b6421f624253"
+          },
+          {
+            "name": "setuptools-build-wheel",
+            "sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+          },
+          {
+            "name": "forbiddenfruit-derived-wheel",
+            "sha256": "9170567169d955c62922e64a366f072e1ff0dbafc5f401bb1f351280dbe297fe"
+          },
+          {
+            "name": "skillspector-dist-info",
+            "sha256": "0968c78a54eb94f3dfb037eefc56fd12d893f457bcf1ebe4631a3057a0bf566a"
+          }
+        ]
+      },
+      "image": {
+        "local_tag": "aragorn/skillspector:2.4.3-a54947c",
+        "index_digest": "sha256:21de7549ea44da85465c854e26f776f87454a6fca6a92e817bbceb58b25d4468",
+        "platform_manifest_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+        "config_digest": "sha256:263ce9ccdd9c0b9708fb17f2a4f671ecc34b61f2e8a22f1f2cb5ea101182b70c",
+        "build_provenance_manifest_digest": "sha256:19aa6243d53a78ae1a72077c998c0417ad5195685d329faab8e92967af628012",
+        "os": "linux",
+        "architecture": "arm64",
+        "size_bytes": 122129009
+      },
+      "runtime_profile": {
+        "engine": "docker",
+        "pull": "never",
+        "network": "none",
+        "read_only_rootfs": true,
+        "cap_drop": ["ALL"],
+        "no_new_privileges": true,
+        "user": "65532:65532",
+        "workdir": "/opt/aragorn-control",
+        "pids_limit": 256,
+        "memory_bytes": 2147483648,
+        "memory_swap_bytes": 2147483648,
+        "cpus": 2,
+        "nofile_soft": 1024,
+        "nofile_hard": 1024,
+        "tmpfs": {
+          "destination": "/tmp",
+          "size_bytes": 536870912,
+          "options": ["rw", "noexec", "nosuid", "nodev", "mode=1777"]
+        },
+        "workspace": {"destination": "/workspace", "read_only": true}
+      },
+      "attestation_status": "oci_closure_candidate_runner_attestation_pending"
+    }
+  ]
+}

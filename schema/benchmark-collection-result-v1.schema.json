@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn label-free benchmark collection result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "suite_digest",
+    "dispatch_digest",
+    "ledger_id",
+    "collection_digest",
+    "outcomes_digest",
+    "report_digest",
+    "job_count"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-collection-result/v1"},
+    "assurance": {
+      "const": "unsigned_label_free_protocol_not_isolated_or_attested"
+    },
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "dispatch_digest": {"$ref": "#/$defs/digest"},
+    "ledger_id": {"$ref": "#/$defs/digest"},
+    "collection_digest": {"$ref": "#/$defs/digest"},
+    "outcomes_digest": {"$ref": "#/$defs/digest"},
+    "report_digest": {"$ref": "#/$defs/digest"},
+    "job_count": {"type": "integer", "minimum": 1, "maximum": 200000}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

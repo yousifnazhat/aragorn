@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn local baseline image verification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "images"],
+  "properties": {
+    "schema": {"const": "aragorn/baseline-image-verification/v1"},
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "index_digest",
+          "platform_manifest_digest",
+          "config_digest",
+          "build_provenance_manifest_digest",
+          "attestation_status"
+        ],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+          "index_digest": {"$ref": "#/$defs/digest"},
+          "platform_manifest_digest": {"$ref": "#/$defs/digest"},
+          "config_digest": {"$ref": "#/$defs/digest"},
+          "build_provenance_manifest_digest": {"$ref": "#/$defs/digest"},
+          "attestation_status": {
+            "const": "oci_closure_candidate_runner_attestation_pending"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

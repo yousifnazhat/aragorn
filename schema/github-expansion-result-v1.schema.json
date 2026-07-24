@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/github-expansion-result-v1.schema.json",
+  "title": "Aragorn exact GitHub blob expansion result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "expansion_digest",
+    "root_manifest_digest",
+    "root_tree_digest",
+    "comparator_subject_manifest_digest",
+    "comparator_subject_tree_digest",
+    "expanded_object_count",
+    "accounting",
+    "closure"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/github-expansion-result/v1"},
+    "expansion_digest": {"$ref": "#/$defs/digest"},
+    "root_manifest_digest": {"$ref": "#/$defs/digest"},
+    "root_tree_digest": {"$ref": "#/$defs/digest"},
+    "comparator_subject_manifest_digest": {
+      "oneOf": [
+        {"$ref": "#/$defs/digest"},
+        {"type": "null"}
+      ]
+    },
+    "comparator_subject_tree_digest": {
+      "oneOf": [
+        {"$ref": "#/$defs/digest"},
+        {"type": "null"}
+      ]
+    },
+    "expanded_object_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 256
+    },
+    "accounting": {
+      "$ref": "https://aragorn.dev/schema/github-expansion-v1.schema.json#/$defs/accounting"
+    },
+    "closure": {
+      "$ref": "https://aragorn.dev/schema/github-expansion-v1.schema.json#/$defs/closure"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "closure": {
+            "properties": {"status": {"const": "complete"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["closure"]
+      },
+      "then": {
+        "properties": {
+          "comparator_subject_manifest_digest": {"$ref": "#/$defs/digest"},
+          "comparator_subject_tree_digest": {"$ref": "#/$defs/digest"},
+          "accounting": {
+            "properties": {
+              "references": {
+                "properties": {
+                  "scan_complete": {"const": true},
+                  "occurrences_complete": {"const": true},
+                  "occurrences_omitted": {"const": 0}
+                },
+                "required": [
+                  "scan_complete",
+                  "occurrences_complete",
+                  "occurrences_omitted"
+                ]
+              }
+            },
+            "required": ["references"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "comparator_subject_manifest_digest": {"type": "null"},
+          "comparator_subject_tree_digest": {"type": "null"},
+          "expanded_object_count": {"const": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

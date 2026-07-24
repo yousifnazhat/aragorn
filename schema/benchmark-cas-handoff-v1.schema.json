@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-cas-handoff-v1.schema.json",
+  "title": "Aragorn protocol-v2 cross-owner CAS handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "kind", "root_digest", "blobs", "total_bytes"],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-cas-handoff/v1"},
+    "kind": {"enum": ["worker_input", "worker_output"]},
+    "root_digest": {"$ref": "#/$defs/digest"},
+    "blobs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 25000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["digest", "size"],
+        "properties": {
+          "digest": {"$ref": "#/$defs/digest"},
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 134217728
+          }
+        }
+      }
+    },
+    "total_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 536870912
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"kind": {"const": "worker_input"}},
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "blobs": {"maxItems": 10016},
+          "total_bytes": {"maximum": 301989888}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

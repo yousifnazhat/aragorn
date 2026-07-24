@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn normalized benchmark outcome v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "suite_digest",
+    "case_id",
+    "tree_digest",
+    "run_id",
+    "system",
+    "evidence_digest",
+    "verdict",
+    "reason_codes"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-outcome/v1"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "case_id": {"$ref": "#/$defs/id"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "run_id": {"type": "integer", "minimum": 1, "maximum": 10},
+    "system": {"$ref": "#/$defs/system"},
+    "evidence_digest": {"$ref": "#/$defs/digest"},
+    "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"verdict": {"const": "ALLOW"}}},
+      "then": {"properties": {"reason_codes": {"maxItems": 0}}},
+      "else": {"properties": {"reason_codes": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "canonicalString": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$"
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {
+          "allOf": [
+            {"$ref": "#/$defs/canonicalString"},
+            {"maxLength": 256}
+          ]
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn unsigned one-time worker nonce consumption receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ledger_id",
+    "dispatch_digest",
+    "job_id",
+    "nonce",
+    "request_digest",
+    "result_digest"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-worker-nonce-consumption/v1"},
+    "ledger_id": {"$ref": "#/$defs/digest"},
+    "dispatch_digest": {"$ref": "#/$defs/digest"},
+    "job_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "nonce": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "request_digest": {"$ref": "#/$defs/digest"},
+    "result_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

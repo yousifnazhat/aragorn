@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn isolated protocol-v2 smoke receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "date",
+    "purpose",
+    "assurance",
+    "source",
+    "isolation",
+    "environment",
+    "transport",
+    "acceptance",
+    "result",
+    "replay",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-isolated-smoke-receipt/v1"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "purpose": {
+      "const": "infrastructure_validation_only_not_efficacy"
+    },
+    "assurance": {
+      "const": "software_key_signature_not_hardware_attested"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "worker_source_tree_manifest_digest"],
+      "properties": {
+        "status": {
+          "const": "private_uncommitted_source_not_attested"
+        },
+        "worker_source_tree_manifest_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "instance",
+        "vm_type",
+        "architecture",
+        "guest_os",
+        "kernel",
+        "host_filesystem_mount_count",
+        "docker_mode",
+        "docker_version",
+        "signing_key_mode",
+        "signing_key_mounted_into_analyzer"
+      ],
+      "properties": {
+        "provider": {"const": "lima"},
+        "instance": {"const": "aragorn-phase0-xowner"},
+        "vm_type": {"const": "vz"},
+        "architecture": {"const": "aarch64"},
+        "guest_os": {"const": "Ubuntu 26.04 LTS"},
+        "kernel": {"$ref": "#/$defs/nonempty"},
+        "host_filesystem_mount_count": {"const": 0},
+        "docker_mode": {"const": "guest_local_rootless"},
+        "docker_version": {"$ref": "#/$defs/nonempty"},
+        "signing_key_mode": {"const": "0600"},
+        "signing_key_mounted_into_analyzer": {"const": false}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vm_image_digest",
+        "python_version",
+        "python_executable_digest",
+        "uv_version",
+        "uv_executable_digest",
+        "uv_image_digest",
+        "worker_dependency_lock_digest",
+        "docker_executable_digest",
+        "baseline_lock_digest",
+        "effective_config_digest"
+      ],
+      "properties": {
+        "vm_image_digest": {"$ref": "#/$defs/digest"},
+        "python_version": {"const": "3.12.13"},
+        "python_executable_digest": {"$ref": "#/$defs/digest"},
+        "uv_version": {"const": "0.11.29"},
+        "uv_executable_digest": {"$ref": "#/$defs/digest"},
+        "uv_image_digest": {"$ref": "#/$defs/digest"},
+        "worker_dependency_lock_digest": {"$ref": "#/$defs/digest"},
+        "docker_executable_digest": {"$ref": "#/$defs/digest"},
+        "baseline_lock_digest": {"$ref": "#/$defs/digest"},
+        "effective_config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output"],
+      "properties": {
+        "input": {"$ref": "#/$defs/transport"},
+        "output": {"$ref": "#/$defs/transport"}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "assurance",
+        "issuance_digest",
+        "trust_store_digest",
+        "envelope_digest",
+        "key_id",
+        "trust_domain",
+        "worker_id",
+        "job_id",
+        "verifier_challenge",
+        "request_digest",
+        "result_digest",
+        "handoff_manifest_digest"
+      ],
+      "properties": {
+        "schema": {
+          "const": "aragorn/benchmark-worker-output-acceptance/v1"
+        },
+        "assurance": {
+          "const": "software_key_signature_not_hardware_attested"
+        },
+        "issuance_digest": {"$ref": "#/$defs/digest"},
+        "trust_store_digest": {"$ref": "#/$defs/digest"},
+        "envelope_digest": {"$ref": "#/$defs/digest"},
+        "key_id": {"$ref": "#/$defs/digest"},
+        "trust_domain": {"$ref": "#/$defs/identifier"},
+        "worker_id": {"$ref": "#/$defs/identifier"},
+        "job_id": {"$ref": "#/$defs/job_id"},
+        "verifier_challenge": {"$ref": "#/$defs/challenge"},
+        "request_digest": {"$ref": "#/$defs/digest"},
+        "result_digest": {"$ref": "#/$defs/digest"},
+        "handoff_manifest_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "system",
+        "execution_status",
+        "returncode",
+        "verdict",
+        "reason_codes",
+        "observation_count"
+      ],
+      "properties": {
+        "schema": {"const": "aragorn/benchmark-worker-result/v2"},
+        "system": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "implementation_digest"],
+          "properties": {
+            "name": {"const": "cisco-skill-scanner"},
+            "version": {"const": "2.0.12"},
+            "implementation_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "execution_status": {"const": "ok"},
+        "returncode": {"const": 0},
+        "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+          }
+        },
+        "observation_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_retry_idempotent", "receipt_count"],
+      "properties": {
+        "exact_retry_idempotent": {"const": true},
+        "receipt_count": {"const": 1}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/nonempty"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "challenge": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "nonempty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root_digest",
+        "manifest_digest",
+        "blob_count",
+        "total_bytes"
+      ],
+      "properties": {
+        "root_digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "blob_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25000
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 536870912
+        }
+      }
+    }
+  }
+}

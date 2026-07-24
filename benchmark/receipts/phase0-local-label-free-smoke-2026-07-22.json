@@ -1,0 +1,16 @@
+{
+  "schema": "aragorn/benchmark-e2e-smoke-receipt/v1",
+  "recorded_on": "2026-07-22",
+  "assurance": "unsigned_label_free_protocol_not_isolated_or_attested",
+  "implementation_state": "private_uncommitted_worktree_not_source_attested",
+  "suite_digest": "sha256:20322146acc4683e93eacb0a154767a4f86df992979ac504cd06c9ed981feb4b",
+  "worker_identities_digest": "sha256:d0c9748d40c9dafd2d8b7e3de25ae7e5600eb99c17799613b6a658e40a2c0205",
+  "worklist_digest": "sha256:09e71c73160454c1c313fe2b449ff3efd254b5c6867780e1c800c1d1e743b659",
+  "dispatch_digest": "sha256:ba387a4cb4e227b521b2138e28a662c1140f44e396c761659d444ca5a6e79b11",
+  "ledger_id": "sha256:823db4dd9f097110b007b0b21e21094483ada16589bd34fed88b8ef5359219c1",
+  "collection_digest": "sha256:2f2c5d8ee211b92573f22c503911d89437f5a0374783723d9a93ea88db60a921",
+  "outcomes_digest": "sha256:b2a195c508324db586d36b3e6af240a0f9429fa16575fabeeb8f0cdacfcda7e1",
+  "report_digest": "sha256:701551a6a7451abcafc77e3ddc05f590e4a796749430cbf2cb1ae345fb878285",
+  "job_count": 4,
+  "exact_retry_idempotent": true
+}

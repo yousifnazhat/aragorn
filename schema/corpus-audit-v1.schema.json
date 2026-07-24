@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn frozen corpus audit v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "suite_digest",
+    "cases",
+    "source_references_lineage_bound",
+    "splits",
+    "shingle_size",
+    "near_duplicate_threshold",
+    "cross_split_near_duplicates"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/corpus-audit/v1"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "cases": {"type": "integer", "minimum": 2},
+    "source_references_lineage_bound": {"const": true},
+    "splits": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["split", "cases", "benign", "adversarial"],
+        "properties": {
+          "split": {"enum": ["development", "held_out", "hidden"]},
+          "cases": {"type": "integer", "minimum": 2},
+          "benign": {"type": "integer", "minimum": 1},
+          "adversarial": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "shingle_size": {"type": "integer", "minimum": 2, "maximum": 20},
+    "near_duplicate_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "cross_split_near_duplicates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["first_case_id", "second_case_id", "similarity"],
+        "properties": {
+          "first_case_id": {"$ref": "#/$defs/id"},
+          "second_case_id": {"$ref": "#/$defs/id"},
+          "similarity": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

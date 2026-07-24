@@ -1,0 +1,88 @@
+{
+  "schema": "aragorn/benchmark-isolated-smoke-receipt/v1",
+  "date": "2026-07-23",
+  "purpose": "infrastructure_validation_only_not_efficacy",
+  "assurance": "software_key_signature_not_hardware_attested",
+  "source": {
+    "status": "private_uncommitted_source_not_attested",
+    "worker_source_tree_manifest_digest": "sha256:eef0faec0571bdff4a60e2f4996e873757f6534647b117a1bc69f1357613bdbc"
+  },
+  "isolation": {
+    "provider": "lima",
+    "instance": "aragorn-phase0-xowner",
+    "vm_type": "vz",
+    "architecture": "aarch64",
+    "guest_os": "Ubuntu 26.04 LTS",
+    "kernel": "7.0.0-27-generic",
+    "host_filesystem_mount_count": 0,
+    "docker_mode": "guest_local_rootless",
+    "docker_version": "29.6.2",
+    "signing_key_mode": "0600",
+    "signing_key_mounted_into_analyzer": false
+  },
+  "environment": {
+    "vm_image_digest": "sha256:3d8db37fa9a8a0c8676dfc0ee3eb41fd0049d66cb055a792bddc8f4123443ae1",
+    "python_version": "3.12.13",
+    "python_executable_digest": "sha256:001718d5edf61e6fbc3642c9668def38d2bf28cc320e75196e6a95d49614cca8",
+    "uv_version": "0.11.29",
+    "uv_executable_digest": "sha256:f32f61ced7feb20342032cdac4d0825cebbda61911554f5de5231ec72821812e",
+    "uv_image_digest": "sha256:eb2843a1e56fd9e30c7276ce1a52cba86e64c7b385f5e3279a0e08e02dd058fc",
+    "worker_dependency_lock_digest": "sha256:945fd7620689d38962297a61f5e888f3156b90780e7ea8d3bf62a1459d75d0f4",
+    "docker_executable_digest": "sha256:242d23ba3267159f5eca1a2d89db77ddbf86dc552827e1059bcb878e2ecb005d",
+    "baseline_lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+    "effective_config_digest": "sha256:27205303f60cdfe7df1ad7aa60908fdc3e67a118794ff9d3ef3a62bcc92a1705"
+  },
+  "transport": {
+    "input": {
+      "root_digest": "sha256:df860da15299543a916672040d6fc1c66ad2c6aebb5e6844972e4f0adad99dc2",
+      "manifest_digest": "sha256:cf93775fdfb91d7a281f145f2f002813164310786cd851acb2a0f6beb1284c6d",
+      "blob_count": 4,
+      "total_bytes": 3326
+    },
+    "output": {
+      "root_digest": "sha256:31fca79c6a36f303f5940721b1464d618689b67fa00e908d9df147bad5dcb6db",
+      "manifest_digest": "sha256:f22dca51b5e99260a4e4dce43a46a2f45ba6b385c7767c6594bc7e8de8374855",
+      "blob_count": 23,
+      "total_bytes": 43006325
+    }
+  },
+  "acceptance": {
+    "schema": "aragorn/benchmark-worker-output-acceptance/v1",
+    "assurance": "software_key_signature_not_hardware_attested",
+    "issuance_digest": "sha256:d5973cd8eff74ff1a2678fcdb8dd6317416b43b7893bc5d72b08e5651e93169a",
+    "trust_store_digest": "sha256:a14adb93afd8dc807597d8c15c9a48cbadd66a7f28f36e41b8b7f3c342829e58",
+    "envelope_digest": "sha256:8d8dcb68075265347de4d9b03df671fd995b468082af88337792c41589e1fe74",
+    "key_id": "sha256:f775b4d9285f69aeaf710be1e69976867666c8c28d241efbd23dd494aa942cb6",
+    "trust_domain": "phase0.local",
+    "worker_id": "isolated-worker-01",
+    "job_id": "4abae5a14cf44ea358a6ee54c71174ee",
+    "verifier_challenge": "be0e599a95be3f29a046777e56661be26bbec3d6f687c77f94130b2dcfc79f7d",
+    "request_digest": "sha256:df860da15299543a916672040d6fc1c66ad2c6aebb5e6844972e4f0adad99dc2",
+    "result_digest": "sha256:31fca79c6a36f303f5940721b1464d618689b67fa00e908d9df147bad5dcb6db",
+    "handoff_manifest_digest": "sha256:f22dca51b5e99260a4e4dce43a46a2f45ba6b385c7767c6594bc7e8de8374855"
+  },
+  "result": {
+    "schema": "aragorn/benchmark-worker-result/v2",
+    "system": {
+      "name": "cisco-skill-scanner",
+      "version": "2.0.12",
+      "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c"
+    },
+    "execution_status": "ok",
+    "returncode": 0,
+    "verdict": "ALLOW",
+    "reason_codes": [],
+    "observation_count": 1
+  },
+  "replay": {
+    "exact_retry_idempotent": true,
+    "receipt_count": 1
+  },
+  "limitations": [
+    "One public benign fixture validates infrastructure only.",
+    "The worker signature proves software-key possession, not hardware or VM attestation.",
+    "Docker daemon identity remains self-reported evidence.",
+    "The source snapshot was private and uncommitted, so authorship is not attested.",
+    "This receipt does not satisfy the hidden-corpus, comparative-efficacy, or design-partner gates."
+  ]
+}

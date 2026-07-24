@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: skillspector
+Version: 2.4.3
+Summary: SkillSpector security scanner for AI agent skills
+License-Expression: Apache-2.0
+Requires-Python: >=3.12,<3.15

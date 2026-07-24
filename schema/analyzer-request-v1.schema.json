@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn analyzer request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "workspace", "subject_digest", "analyzer", "limits"],
+  "properties": {
+    "schema": {"const": "aragorn/analyzer-request/v1"},
+    "workspace": {"type": "string", "minLength": 1},
+    "subject_digest": {"$ref": "#/$defs/digest"},
+    "analyzer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "config_digest", "executable_digest"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 256},
+        "version": {"type": "string", "minLength": 1, "maxLength": 256},
+        "config_digest": {"$ref": "#/$defs/digest"},
+        "executable_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeout_seconds", "output_bytes"],
+      "properties": {
+        "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "output_bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

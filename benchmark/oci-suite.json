@@ -1,0 +1,54 @@
+{
+  "schema": "aragorn/benchmark-suite/v1",
+  "id": "phase0-oci-evidence-smoke",
+  "purpose": "evidence_smoke",
+  "runs_per_case": 1,
+  "systems": [
+    {
+      "name": "cisco-skill-scanner",
+      "version": "2.0.12",
+      "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+      "config_digest": "sha256:cbcbb94b12d7f835654fd262cefe3165da7b0d61fcccb86797cf9d0d16894445"
+    },
+    {
+      "name": "skillspector",
+      "version": "2.4.3+git.a54947c",
+      "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+      "config_digest": "sha256:281a3741ecc727b102196e1df68a37092f11f4abd4711693f32fd82c534609a9"
+    }
+  ],
+  "cases": [
+    {
+      "schema": "aragorn/benchmark-case/v1",
+      "id": "benign-basic",
+      "class": "benign",
+      "family": "benign",
+      "lineage": "synthetic-oci-benign-basic",
+      "split": "development",
+      "path": "oci-fixtures/benign-basic",
+      "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+      "inert": true,
+      "source": {
+        "kind": "synthetic",
+        "reference": "aragorn-phase0-oci-evidence-smoke",
+        "license": "CC0-1.0"
+      }
+    },
+    {
+      "schema": "aragorn/benchmark-case/v1",
+      "id": "inert-credential-exfiltration",
+      "class": "adversarial",
+      "family": "credential-exfiltration",
+      "lineage": "synthetic-oci-credential-exfiltration",
+      "split": "development",
+      "path": "oci-fixtures/inert-credential-exfiltration",
+      "tree_digest": "sha256:d76175543745656add7931a6a2d6bbdf4070d1bf7693bee0d38a146a984271cd",
+      "inert": true,
+      "source": {
+        "kind": "synthetic",
+        "reference": "aragorn-phase0-oci-evidence-smoke",
+        "license": "CC0-1.0"
+      }
+    }
+  ]
+}

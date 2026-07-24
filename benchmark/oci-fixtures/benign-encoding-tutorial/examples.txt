@@ -1,0 +1,2 @@
+Plain text: hello-agent
+Base64 text: aGVsbG8tYWdlbnQ=

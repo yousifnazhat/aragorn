@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/source-artifact-graph-v1.schema.json",
+  "title": "Aragorn evaluation-only literal source-reference graph v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "profile",
+    "assurance",
+    "source_assurance",
+    "root_manifest_digest",
+    "tree_digest",
+    "nodes",
+    "edges",
+    "closure"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/source-artifact-graph/v1"},
+    "profile": {"const": "phase0-literal-source-refs/v1"},
+    "assurance": {"const": "evaluation_only_literal_reference_profile"},
+    "source_assurance": {
+      "enum": [
+        "local_manifest_reverified",
+        "github_api_membership_asserted_blob_identity_reverified"
+      ]
+    },
+    "root_manifest_digest": {"$ref": "#/$defs/digest"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/node"}
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/edge"}
+    },
+    "closure": {"$ref": "#/$defs/closure"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "closure": {
+            "properties": {"status": {"const": "complete"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["closure"]
+      },
+      "then": {
+        "properties": {
+          "nodes": {
+            "not": {
+              "contains": {
+                "properties": {"scan_status": {"const": "opaque"}},
+                "required": ["scan_status"]
+              }
+            }
+          },
+          "edges": {
+            "not": {
+              "contains": {
+                "properties": {"status": {"const": "unresolved"}},
+                "required": ["status"]
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "anyOf": [
+          {
+            "properties": {
+              "nodes": {
+                "contains": {
+                  "properties": {"scan_status": {"const": "opaque"}},
+                  "required": ["scan_status"]
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "edges": {
+                "contains": {
+                  "properties": {"status": {"const": "unresolved"}},
+                  "required": ["status"]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    },
+    "reason": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "size",
+        "digest",
+        "executable",
+        "scan_status",
+        "opaque_reason"
+      ],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        },
+        "digest": {"$ref": "#/$defs/digest"},
+        "executable": {"type": "boolean"},
+        "scan_status": {"enum": ["scanned", "opaque"]},
+        "opaque_reason": {
+          "type": ["string", "null"],
+          "enum": [
+            null,
+            "NON_UTF8_CARRIER",
+            "NUL_CONTAINING_CARRIER",
+            "UNSUPPORTED_OR_OVERSIZED_CARRIER"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"scan_status": {"const": "scanned"}},
+            "required": ["scan_status"]
+          },
+          "then": {"properties": {"opaque_reason": {"type": "null"}}},
+          "else": {"properties": {"opaque_reason": {"type": "string"}}}
+        }
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_path",
+        "source_blob_digest",
+        "byte_offset",
+        "literal_digest",
+        "reference_kind",
+        "status",
+        "literal",
+        "target",
+        "reason_code"
+      ],
+      "properties": {
+        "source_path": {"$ref": "#/$defs/path"},
+        "source_blob_digest": {"$ref": "#/$defs/digest"},
+        "byte_offset": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "literal_digest": {"$ref": "#/$defs/digest"},
+        "reference_kind": {
+          "enum": [
+            "dynamic_command",
+            "encoded",
+            "external",
+            "external_artifact",
+            "git_lfs",
+            "git_submodule",
+            "github_immutable",
+            "github_mutable",
+            "local",
+            "malformed",
+            "non_artifact",
+            "normalized"
+          ]
+        },
+        "status": {"enum": ["resolved", "unresolved", "non_artifact"]},
+        "literal": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "target": {
+          "oneOf": [
+            {"$ref": "#/$defs/target"},
+            {"type": "null"}
+          ]
+        },
+        "reason_code": {
+          "oneOf": [
+            {"$ref": "#/$defs/reason"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "resolved"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "target": {"$ref": "#/$defs/target"},
+              "reason_code": {"type": "null"},
+              "reference_kind": {
+                "enum": ["local", "github_immutable"]
+              },
+              "literal": {"type": "string"}
+            }
+          },
+          "else": {
+            "properties": {
+              "target": {"type": "null"},
+              "reason_code": {"$ref": "#/$defs/reason"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "non_artifact"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "reference_kind": {"const": "non_artifact"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"reference_kind": {"const": "non_artifact"}},
+            "required": ["reference_kind"]
+          },
+          "then": {
+            "properties": {
+              "status": {"const": "non_artifact"}
+            }
+          }
+        }
+      ]
+    },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "profile", "status", "unresolved"],
+      "properties": {
+        "scope": {"const": "source_reference_graph"},
+        "profile": {"const": "phase0-literal-source-refs/v1"},
+        "status": {"enum": ["complete", "incomplete"]},
+        "unresolved": {
+          "type": "array",
+          "maxItems": 20000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4352
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "complete"}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"unresolved": {"maxItems": 0}}},
+          "else": {"properties": {"unresolved": {"minItems": 1}}}
+        }
+      ]
+    }
+  }
+}

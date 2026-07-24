@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn atomic local worker nonce batch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ledger_id",
+    "suite_digest",
+    "dispatch_digest",
+    "collection_digest",
+    "receipts"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-worker-nonce-batch/v1"},
+    "ledger_id": {"$ref": "#/$defs/digest"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "dispatch_digest": {"$ref": "#/$defs/digest"},
+    "collection_digest": {"$ref": "#/$defs/digest"},
+    "receipts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/receipt"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "ledger_id",
+        "dispatch_digest",
+        "job_id",
+        "nonce",
+        "request_digest",
+        "result_digest"
+      ],
+      "properties": {
+        "schema": {"const": "aragorn/benchmark-worker-nonce-consumption/v1"},
+        "ledger_id": {"$ref": "#/$defs/digest"},
+        "dispatch_digest": {"$ref": "#/$defs/digest"},
+        "job_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "nonce": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "request_digest": {"$ref": "#/$defs/digest"},
+        "result_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

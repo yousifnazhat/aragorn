@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/resolve-artifacts-result-v1.schema.json",
+  "title": "Aragorn evaluation-only artifact resolution result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "root_manifest_digest",
+    "graph_digest",
+    "closure"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/resolve-artifacts-result/v1"},
+    "assurance": {"const": "evaluation_only_literal_reference_profile"},
+    "root_manifest_digest": {"$ref": "#/$defs/digest"},
+    "graph_digest": {"$ref": "#/$defs/digest"},
+    "closure": {
+      "$ref": "https://aragorn.dev/schema/source-artifact-graph-v1.schema.json#/$defs/closure"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

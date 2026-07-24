@@ -1,0 +1,48 @@
+{
+  "schema": "aragorn/benchmark-suite/v1",
+  "id": "phase0-smoke",
+  "purpose": "contract_smoke",
+  "runs_per_case": 1,
+  "systems": [
+    {
+      "name": "synthetic-smoke",
+      "version": "1",
+      "implementation_digest": "sha256:f8a1f008d3df936aa41169e67dfdae2a6681c80e66bf31b85c0d5ba573898dfc",
+      "config_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "cases": [
+    {
+      "schema": "aragorn/benchmark-case/v1",
+      "id": "benign-basic",
+      "class": "benign",
+      "family": "benign",
+      "lineage": "synthetic-benign-basic",
+      "split": "development",
+      "path": "fixtures/benign-basic",
+      "tree_digest": "sha256:ff73b4a828121a4983f69e2b305113c936adcea0f21b58e6c24a869ffd67eb47",
+      "inert": true,
+      "source": {
+        "kind": "synthetic",
+        "reference": "aragorn-phase0-smoke",
+        "license": "CC0-1.0"
+      }
+    },
+    {
+      "schema": "aragorn/benchmark-case/v1",
+      "id": "inert-credential-exfiltration",
+      "class": "adversarial",
+      "family": "credential-exfiltration",
+      "lineage": "synthetic-credential-exfiltration",
+      "split": "development",
+      "path": "fixtures/inert-credential-exfiltration",
+      "tree_digest": "sha256:b1f2eeb6b395cd0253fcf1041cd06674f0d45cf957c228803430899210eeb583",
+      "inert": true,
+      "source": {
+        "kind": "synthetic",
+        "reference": "aragorn-phase0-smoke",
+        "license": "CC0-1.0"
+      }
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn inert benchmark suite v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "purpose", "runs_per_case", "systems", "cases"],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-suite/v1"},
+    "id": {"$ref": "#/$defs/id"},
+    "purpose": {"enum": ["contract_smoke", "evidence_smoke"]},
+    "runs_per_case": {"type": "integer", "minimum": 1, "maximum": 10},
+    "systems": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/system"}
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "canonicalString": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {
+          "allOf": [
+            {"$ref": "#/$defs/canonicalString"},
+            {"maxLength": 256}
+          ]
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "id",
+        "class",
+        "family",
+        "lineage",
+        "split",
+        "path",
+        "tree_digest",
+        "inert",
+        "source"
+      ],
+      "properties": {
+        "schema": {"const": "aragorn/benchmark-case/v1"},
+        "id": {"$ref": "#/$defs/id"},
+        "class": {"enum": ["benign", "adversarial"]},
+        "family": {"$ref": "#/$defs/id"},
+        "lineage": {"$ref": "#/$defs/id"},
+        "split": {"enum": ["development", "held_out", "hidden"]},
+        "path": {"$ref": "#/$defs/path"},
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "inert": {"const": true},
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "reference", "license"],
+          "properties": {
+            "kind": {"const": "synthetic"},
+            "reference": {
+              "allOf": [
+                {"$ref": "#/$defs/canonicalString"},
+                {"maxLength": 2048}
+              ]
+            },
+            "license": {
+              "allOf": [
+                {"$ref": "#/$defs/canonicalString"},
+                {"maxLength": 128}
+              ]
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"class": {"const": "benign"}}},
+          "then": {"properties": {"family": {"const": "benign"}}},
+          "else": {"properties": {"family": {"not": {"const": "benign"}}}}
+        }
+      ]
+    }
+  }
+}

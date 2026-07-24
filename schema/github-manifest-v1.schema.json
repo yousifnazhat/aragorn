@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn evaluation-only GitHub source manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "source", "tree_digest", "files", "closure"],
+  "properties": {
+    "schema": {"const": "aragorn/github-manifest/v1"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "host",
+        "owner",
+        "repository",
+        "commit",
+        "repository_hash_algorithm",
+        "commit_tree",
+        "skill_path",
+        "skill_tree",
+        "api_version"
+      ],
+      "properties": {
+        "kind": {"const": "github_commit"},
+        "host": {"const": "github.com"},
+        "owner": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,38}$"},
+        "repository": {"type": "string", "pattern": "^[a-z0-9_.-]{1,100}$"},
+        "commit": {"$ref": "#/$defs/git_sha1"},
+        "repository_hash_algorithm": {"const": "sha1"},
+        "commit_tree": {"$ref": "#/$defs/git_sha1"},
+        "skill_path": {"type": "string", "minLength": 1},
+        "skill_tree": {"$ref": "#/$defs/git_sha1"},
+        "api_version": {"const": "2026-03-10"}
+      }
+    },
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "files": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "size", "digest", "git_blob_sha1", "executable"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "size": {"type": "integer", "minimum": 0},
+          "digest": {"$ref": "#/$defs/digest"},
+          "git_blob_sha1": {"$ref": "#/$defs/git_sha1"},
+          "executable": {"type": "boolean"}
+        }
+      }
+    },
+    "closure": {
+      "const": {"scope": "source_tree", "status": "complete"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

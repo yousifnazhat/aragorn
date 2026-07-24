@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn private label-free benchmark dispatch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "jobs"],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-private-dispatch/v1"},
+    "jobs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/job"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "implementation_digest",
+        "config_digest"
+      ],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {
+          "type": "string",
+          "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$",
+          "maxLength": 256
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "request_digest",
+        "suite_digest",
+        "case_id",
+        "run_id",
+        "system",
+        "tree_digest",
+        "private_manifest_digest"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "request_digest": {"$ref": "#/$defs/digest"},
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "case_id": {"$ref": "#/$defs/id"},
+        "run_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "system": {"$ref": "#/$defs/system"},
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "private_manifest_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

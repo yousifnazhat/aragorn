@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn protocol-v2 worker supervisor result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "request_digest",
+    "result_digest",
+    "handoff_manifest_digest",
+    "envelope_digest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-worker-supervisor-result/v1"
+    },
+    "assurance": {
+      "const": "software_key_signature_not_hardware_attested"
+    },
+    "request_digest": {"$ref": "#/$defs/digest"},
+    "result_digest": {"$ref": "#/$defs/digest"},
+    "handoff_manifest_digest": {"$ref": "#/$defs/digest"},
+    "envelope_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

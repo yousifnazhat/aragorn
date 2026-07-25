@@ -83,9 +83,6 @@ _IMAGE_IDS = {
 _PYTHON_EXECUTABLE_DIGEST = (
     "001718d5edf61e6fbc3642c9668def38d2bf28cc320e75196e6a95d49614cca8"
 )
-_SYSTEM_PYTHON_EXECUTABLE_DIGEST = (
-    "d7dc1ef6da10929a8bb44e1e3f1d666b83fa746f92db9c50f889e4c747c6dc26"
-)
 _DOCKER_EXECUTABLE_DIGEST = (
     "242d23ba3267159f5eca1a2d89db77ddbf86dc552827e1059bcb878e2ecb005d"
 )
@@ -537,18 +534,15 @@ python_digest=$6
 runtime_distributions=$7
 docker_digest=$8
 baseline_digest=$9
-system_python_digest=${10}
-runtime_digest=${11}
+runtime_digest=${10}
 runtime_root=${python%/venv/bin/python}
-system_python=/usr/bin/python3
 test -z "$(findmnt -rn -t virtiofs,9p,fuse.sshfs || true)"
 test "$(docker context show)" = rootless
 docker info --format '{{json .SecurityOptions}}' | grep -q rootless
 docker=$(command -v docker)
 test "$(sha256sum "$docker" | cut -d ' ' -f1)" = "$docker_digest"
-test "$(sha256sum "$system_python" | cut -d ' ' -f1)" = "$system_python_digest"
-test "$(docker image inspect "${12}" --format '{{.Id}}')" = "${13}"
-test "$(docker image inspect "${14}" --format '{{.Id}}')" = "${15}"
+test "$(docker image inspect "${11}" --format '{{.Id}}')" = "${12}"
+test "$(docker image inspect "${13}" --format '{{.Id}}')" = "${14}"
 test -d "$source_root"
 test ! -L "$source_root"
 test "$(readlink -f "$source_root")" = "$source_root"
@@ -579,7 +573,7 @@ test "$(sha256sum "$(readlink -f "$python")" | cut -d ' ' -f1)" = "$python_diges
 test "$(PYTHONDONTWRITEBYTECODE=1 "$python" -c \
   'import importlib.metadata as m,json; print(json.dumps(sorted((d.metadata["Name"].lower(),d.version) for d in m.distributions()),separators=(",",":")))')" = "$runtime_distributions"
 test "$(sha256sum "$source_root/benchmark/baselines.lock.json" | cut -d ' ' -f1)" = "$baseline_digest"
-actual_source=$("$system_python" -I -S - "$source_root" <<'PY'
+actual_source=$("$python" -I -S -B - "$source_root" <<'PY'
 import hashlib
 from pathlib import Path
 import stat
@@ -639,7 +633,7 @@ print("sha256:" + digest.hexdigest())
 PY
 )
 test "$actual_source" = "$source_digest"
-actual_runtime=$("$system_python" -I -S - "$runtime_root" <<'PY'
+actual_runtime=$("$python" -I -S -B - "$runtime_root" <<'PY'
 import hashlib
 import os
 from pathlib import Path
@@ -705,7 +699,6 @@ printf 'ok\n'
             _RUNTIME_DISTRIBUTIONS,
             _DOCKER_EXECUTABLE_DIGEST,
             _BASELINE_LOCK_DIGEST,
-            _SYSTEM_PYTHON_EXECUTABLE_DIGEST,
             _RUNTIME_CLOSURE_DIGEST,
             _CISCO_IMAGE,
             _IMAGE_IDS[_CISCO_IMAGE],

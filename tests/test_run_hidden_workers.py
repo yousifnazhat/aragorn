@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import stat
 import sys
@@ -25,6 +26,7 @@ from scripts.run_hidden_workers import (
     _run_worker,
     _validate_acceptance,
     _validate_run_receipt,
+    _vm_preflight,
     _write_outcomes,
 )
 
@@ -412,6 +414,46 @@ class HiddenWorkerControllerTests(unittest.TestCase):
                 ],
             ),
         )
+
+    def test_vm_preflight_uses_only_the_pinned_runtime_python(self) -> None:
+        instance = {
+            "name": "worker-vm",
+            "status": "Running",
+            "protected": True,
+            "arch": "aarch64",
+            "config": {
+                "mounts": None,
+                "ssh": {
+                    "forwardAgent": False,
+                    "loadDotSSHPubKeys": False,
+                },
+            },
+        }
+        with (
+            patch(
+                "scripts.run_hidden_workers._limactl",
+                return_value=json.dumps(instance).encode(),
+            ),
+            patch(
+                "scripts.run_hidden_workers._guest_command",
+                return_value=b"ok\n",
+            ) as guest_command,
+        ):
+            _vm_preflight(
+                limactl=Path("/limactl"),
+                vm="worker-vm",
+                guest_source="/source",
+                guest_python="/runtime/venv/bin/python",
+                guest_signing_key="/key",
+                guest_execution_root="/execution",
+                expected_source_digest="sha256:" + "1" * 64,
+            )
+        script = guest_command.call_args.args[2]
+        arguments = guest_command.call_args.args[3]
+        self.assertNotIn("/usr/bin/python3", script)
+        self.assertNotIn("system_python", script)
+        self.assertEqual(script.count('"$python" -I -S -B'), 2)
+        self.assertEqual(len(arguments), 14)
 
     def test_cli_error_record_redacts_private_context(self) -> None:
         record = _error_record(

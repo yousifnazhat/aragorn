@@ -365,6 +365,7 @@ def scan_retained_text_references(
     source: dict[str, Any],
     source_by_path: dict[str, dict[str, Any]],
     redact_dynamic_literals: bool = True,
+    include_literal_size: bool = False,
 ) -> tuple[dict[str, Any], ...]:
     """Return deterministic reference edges using the v1 retained-text parser."""
 
@@ -391,6 +392,7 @@ def scan_retained_text_references(
             reason_code=reason_code,
             target=target,
             redact_dynamic_literals=redact_dynamic_literals,
+            include_literal_size=include_literal_size,
         )
         edges[_reference_edge_key(edge)] = edge
 
@@ -535,7 +537,7 @@ def _scan_retained_text_into(
         add_edge(
             source_entry=source_entry,
             byte_offset=0,
-            literal=".gitmodules",
+            literal=text,
             reference_kind="git_submodule",
             status="unresolved",
             reason_code="GIT_SUBMODULE_UNSUPPORTED",
@@ -544,7 +546,7 @@ def _scan_retained_text_into(
         add_edge(
             source_entry=source_entry,
             byte_offset=0,
-            literal="git-lfs-pointer",
+            literal=text.splitlines()[0],
             reference_kind="git_lfs",
             status="unresolved",
             reason_code="GIT_LFS_OBJECT_UNRESOLVED",
@@ -561,8 +563,9 @@ def _reference_edge(
     reason_code: str | None,
     target: dict[str, str] | None,
     redact_dynamic_literals: bool = True,
+    include_literal_size: bool = False,
 ) -> dict[str, Any]:
-    return {
+    edge = {
         "source_path": source_entry["path"],
         "source_blob_digest": source_entry["digest"],
         "byte_offset": byte_offset,
@@ -577,6 +580,9 @@ def _reference_edge(
         "target": target,
         "reason_code": reason_code,
     }
+    if include_literal_size:
+        edge["literal_size"] = len(literal.encode("utf-8"))
+    return edge
 
 
 def _reference_edge_key(edge: dict[str, Any]) -> tuple[Any, ...]:

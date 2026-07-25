@@ -316,6 +316,7 @@ class GitHubExpansionTests(unittest.TestCase):
             and item["literal_digest"] == local_literal_digest
         )
         self.assertEqual(local["status"], "expanded")
+        self.assertEqual(local["literal_size"], len(b"two.txt"))
         second_object = next(
             item
             for item in expansion["objects"]

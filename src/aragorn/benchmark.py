@@ -1818,6 +1818,9 @@ def _verify_candidate_evidence(
         "aragorn/benchmark-candidate-policy/v2": (
             "aragorn/benchmark-candidate-evidence/v2"
         ),
+        "aragorn/benchmark-candidate-policy/v3": (
+            "aragorn/benchmark-candidate-evidence/v2"
+        ),
     }[policy["schema"]]
     if evidence_schema != expected_evidence_schema:
         raise BenchmarkError(
@@ -5257,11 +5260,14 @@ def _validate_phase0_case_record(value: object, label: str) -> dict[str, Any]:
     }
 
 
-def _phase0_reference_key(value: dict[str, Any]) -> tuple[str, str, int, str]:
+def _phase0_reference_key(
+    value: dict[str, Any],
+) -> tuple[str, str, int, int, str]:
     return (
         value["source_repository_path"],
         value["source_blob_digest"],
         value["byte_offset"],
+        value["literal_size"],
         value["literal_digest"],
     )
 
@@ -5278,12 +5284,19 @@ def _validate_phase0_reference_identity(
     byte_offset = _phase0_count(
         value["byte_offset"], f"{label}.byte_offset", maximum=_MAX_FIXTURE_BYTES
     )
+    literal_size = _phase0_count(
+        value["literal_size"],
+        f"{label}.literal_size",
+        minimum=1,
+        maximum=_MAX_FIXTURE_BYTES,
+    )
     return {
         "source_repository_path": source_path,
         "source_blob_digest": _digest(
             value["source_blob_digest"], f"{label}.source_blob_digest"
         ),
         "byte_offset": byte_offset,
+        "literal_size": literal_size,
         "literal_digest": _digest(value["literal_digest"], f"{label}.literal_digest"),
     }
 
@@ -5294,7 +5307,7 @@ def _validate_phase0_expected_references(
     if not isinstance(value, list) or len(value) > 10_000:
         raise BenchmarkError(f"{label} must be an array with at most 10000 entries")
     normalized = []
-    seen: set[tuple[str, str, int, str]] = set()
+    seen: set[tuple[str, str, int, int, str]] = set()
     for index, raw in enumerate(value):
         item_label = f"{label}[{index}]"
         item = _validate_phase0_reference_identity(
@@ -5304,6 +5317,7 @@ def _validate_phase0_expected_references(
                 "source_repository_path",
                 "source_blob_digest",
                 "byte_offset",
+                "literal_size",
                 "literal_digest",
                 "target_repository_path",
                 "target_digest",
@@ -5330,6 +5344,7 @@ def _phase0_reference_sort_key(value: dict[str, Any]) -> tuple[Any, ...]:
         value["source_repository_path"],
         value["source_blob_digest"],
         value["byte_offset"],
+        value["literal_size"],
         value["literal_digest"],
     )
 
@@ -5490,11 +5505,34 @@ def _load_phase0_expansion(
         if item["repository_path"] in target_digests:
             raise BenchmarkError(f"{label} expansion target duplicates a root path")
         target_digests[item["repository_path"]] = item["digest"]
+    source_content: dict[str, bytes] = {}
     for reference in references:
         source_path = reference["source_repository_path"]
-        if target_digests.get(source_path) != reference["source_blob_digest"]:
+        source_digest = reference["source_blob_digest"]
+        if target_digests.get(source_path) != source_digest:
             raise BenchmarkError(
                 f"{label} reference source is not bound to retained bytes"
+            )
+        if source_digest not in source_content:
+            try:
+                source_content[source_digest] = cas.read(
+                    source_digest,
+                    max_bytes=_MAX_FIXTURE_BYTES,
+                )
+            except CASError as exc:
+                raise BenchmarkError(
+                    f"{label} reference source bytes are unavailable"
+                ) from exc
+        start = reference["byte_offset"]
+        end = start + reference["literal_size"]
+        retained = source_content[source_digest]
+        if end > len(retained):
+            raise BenchmarkError(
+                f"{label} reference literal span exceeds retained source bytes"
+            )
+        if _digest_bytes(retained[start:end]) != reference["literal_digest"]:
+            raise BenchmarkError(
+                f"{label} reference literal digest does not match retained source bytes"
             )
         if reference["status"] == "unresolved":
             continue
@@ -5527,6 +5565,7 @@ def _load_phase0_expansion(
                             "source_repository_path",
                             "source_blob_digest",
                             "byte_offset",
+                            "literal_size",
                             "literal_digest",
                         )
                     }
@@ -5629,6 +5668,17 @@ def _validate_phase0_expansion_source(value: object, label: str) -> dict[str, An
             raise BenchmarkError(f"{label}.{field} must be a lowercase Git SHA-1")
     owner = _canonical_string(value["owner"], f"{label}.owner", 39)
     repository = _canonical_string(value["repository"], f"{label}.repository", 100)
+    if (
+        re.fullmatch(r"[a-z0-9][a-z0-9-]{0,38}", owner) is None
+        or owner.endswith("-")
+    ):
+        raise BenchmarkError(f"{label}.owner is not canonical")
+    if (
+        re.fullmatch(r"[a-z0-9_.-]{1,100}", repository) is None
+        or repository in {".", ".."}
+        or repository.endswith(".git")
+    ):
+        raise BenchmarkError(f"{label}.repository is not canonical")
     skill_path = value["skill_path"]
     if skill_path != ".":
         skill_path = _relative_path(skill_path, f"{label}.skill_path").as_posix()
@@ -5841,7 +5891,7 @@ def _validate_phase0_expansion_references(
     if not isinstance(value, list) or len(value) > 10_000:
         raise BenchmarkError(f"{label} must contain at most 10000 references")
     normalized = []
-    seen: set[tuple[str, str, int, str]] = set()
+    seen: set[tuple[str, str, int, int, str]] = set()
     for index, raw in enumerate(value):
         item_label = f"{label}[{index}]"
         item = _validate_phase0_reference_identity(
@@ -5851,6 +5901,7 @@ def _validate_phase0_expansion_references(
                 "source_repository_path",
                 "source_blob_digest",
                 "byte_offset",
+                "literal_size",
                 "literal_digest",
                 "target_repository_path",
                 "status",
@@ -5950,7 +6001,7 @@ def _validate_phase0_expansion_objects(
         ):
             raise BenchmarkError(f"{item_label}.references must not be empty")
         references: list[dict[str, Any]] = []
-        seen_references: set[tuple[str, str, int, str]] = set()
+        seen_references: set[tuple[str, str, int, int, str]] = set()
         for reference_index, reference in enumerate(raw_references):
             reference_label = f"{item_label}.references[{reference_index}]"
             normalized_reference = _validate_phase0_reference_identity(
@@ -5960,6 +6011,7 @@ def _validate_phase0_expansion_objects(
                     "source_repository_path",
                     "source_blob_digest",
                     "byte_offset",
+                    "literal_size",
                     "literal_digest",
                 },
             )

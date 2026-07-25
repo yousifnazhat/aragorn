@@ -646,6 +646,20 @@ unresolved selected items. The checked-in 18-case pilot, local worker smoke, and
 evaluation-only `source_reference_graph` are infrastructure validation only and
 cannot satisfy the comparative exit gate.
 
+The paired acquisition/reference contract is now implemented separately from
+the hidden instruction-risk gate. It freezes digest-bound root and expanded
+arms, exact immutable-GitHub source and reference targets, expansion budgets,
+and the candidate/comparator policy before outcomes. Its exit-scale matrix is
+fixed at 448 unique source/lineage pairs, with 336 benign and 112 adversarial
+cases and one run per case. Evaluation requires authenticated acceptance
+ledgers for both arms, independently re-hashes every declared literal
+occurrence from retained source bytes, and compares expanded-arm Aragorn
+against root-arm comparators. The lock records only
+operator-asserted pre-outcome binding, not independent authorship, trusted
+timestamping, or wall-clock ordering. No private oracle, signed lock, paired
+outcomes, or passing result is checked in, so this implementation does not
+close the acquisition/reference exit criterion.
+
 `benchmark/phase0-standards-gate.json` replaces the unavailable three-design-
 partner Phase 0 discovery gate. It freezes OWASP Agentic Skills plus the stable
 related Agentic Applications taxonomy, MITRE ATLAS, and NIST AI RMF/GenAI
@@ -802,7 +816,10 @@ digest is retained for the subsequent prepare/collect path. The commit
 containing the lock must be signature-verified before any hidden dispatch.
 This software boundary trusts the operator UID and does not claim same-UID or
 hardware-backed resistance. The GitHub acquisition/reference oracle remains a
-separate Phase 0 stratum.
+separate Phase 0 stratum. Its paired contract binds an original-root comparator
+arm to a matched expanded-subject arm and rejects arm, oracle, reference,
+source, literal-span, budget, suite, authentication, and retained-evidence
+drift. This repository does not retain the private oracle or a measured result.
 
 The opt-in Phase 0 gate report v2 scores only the `hidden` split and accepts
 only a complete authenticated candidate-composition `evidence_smoke` matrix;

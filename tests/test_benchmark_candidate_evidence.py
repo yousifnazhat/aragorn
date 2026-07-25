@@ -8,6 +8,7 @@ from unittest import mock
 
 import aragorn.benchmark_authenticated_handoff_v2 as authenticated_handoff
 from aragorn import benchmark
+from aragorn.analyze import Observation
 from aragorn.benchmark import BenchmarkError, _verify_candidate_batch_bindings
 from aragorn.phase0_candidate import (
     candidate_policy_digest,
@@ -15,15 +16,21 @@ from aragorn.phase0_candidate import (
 )
 
 _ROOT = Path(__file__).parents[1]
+_V2_IMPLEMENTATION_DIGEST = (
+    "sha256:150bbcd3690737c7acc77e6bf0737240"
+    "c631e07c3a86a27c90bd1928a2661dca"
+)
 
 
 def _digest(character: str) -> str:
     return "sha256:" + character * 64
 
 
-def _bindings() -> list[dict]:
+def _bindings(
+    policy_name: str = "phase0-candidate-policy-v2.json",
+) -> list[dict]:
     policy = json.loads(
-        (_ROOT / "benchmark" / "phase0-candidate-policy-v2.json").read_bytes()
+        (_ROOT / "benchmark" / policy_name).read_bytes()
     )
     policy_digest = candidate_policy_digest(policy)
     candidate_system = candidate_system_identity(policy)
@@ -133,70 +140,95 @@ def _bindings() -> list[dict]:
     ]
 
 
+def _verify_candidate(
+    candidate: dict,
+    envelope: dict,
+    *,
+    first_party_observations: tuple[Observation, ...] = (),
+) -> dict:
+    envelope = deepcopy(envelope)
+    envelope["source_graph_digest"] = benchmark._digest_json(
+        candidate["source_graph"]
+    )
+    outcome = {
+        "evidence_digest": candidate["evidence_digest"],
+        **{
+            field: envelope[field]
+            for field in (
+                "suite_digest",
+                "case_id",
+                "tree_digest",
+                "run_id",
+                "system",
+                "verdict",
+                "reason_codes",
+            )
+        },
+    }
+    observation_bytes = {
+        benchmark._digest_bytes(observation.document_json.encode("ascii")): (
+            observation.document_json.encode("ascii")
+        )
+        for observation in first_party_observations
+    }
+    cas = mock.Mock()
+    cas.read.side_effect = lambda digest, **_kwargs: observation_bytes[digest]
+    with (
+        mock.patch.object(
+            benchmark,
+            "_verify_composed_evidence_common",
+            return_value=envelope["private_manifest_digest"],
+        ),
+        mock.patch.object(
+            benchmark,
+            "_load_candidate_dispatch",
+            return_value=(
+                candidate["dispatch_digest"],
+                candidate["dispatch"],
+            ),
+        ),
+        mock.patch.object(
+            benchmark,
+            "_read_canonical_document",
+            side_effect=(
+                candidate["policy"],
+                candidate["source_graph"],
+            ),
+        ),
+        mock.patch.object(
+            benchmark,
+            "resolve_source_graph",
+            return_value=candidate["source_graph"],
+        ),
+        mock.patch(
+            "aragorn.phase0_candidate.detect_first_party_observations",
+            return_value=first_party_observations,
+        ),
+    ):
+        return benchmark._verify_candidate_evidence(
+            cas,
+            outcome,
+            expected_manifest={},
+            label="outcome",
+            envelope=envelope,
+        )
+
+
 class BenchmarkCandidateEvidenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        historical_identity = mock.patch(
+            "aragorn.phase0_candidate.candidate_implementation_digest",
+            return_value=_V2_IMPLEMENTATION_DIGEST,
+        )
+        historical_identity.start()
+        self.addCleanup(historical_identity.stop)
+
     def _verify_candidate(
         self,
         envelope: dict,
     ) -> dict:
         candidate = _bindings()[2]
-        envelope = deepcopy(envelope)
-        envelope["source_graph_digest"] = benchmark._digest_json(
-            candidate["source_graph"]
-        )
-        outcome = {
-            "evidence_digest": candidate["evidence_digest"],
-            **{
-                field: envelope[field]
-                for field in (
-                    "suite_digest",
-                    "case_id",
-                    "tree_digest",
-                    "run_id",
-                    "system",
-                    "verdict",
-                    "reason_codes",
-                )
-            },
-        }
-        with (
-            mock.patch.object(
-                benchmark,
-                "_verify_composed_evidence_common",
-                return_value=envelope["private_manifest_digest"],
-            ),
-            mock.patch.object(
-                benchmark,
-                "_load_candidate_dispatch",
-                return_value=(
-                    candidate["dispatch_digest"],
-                    candidate["dispatch"],
-                ),
-            ),
-            mock.patch.object(
-                benchmark,
-                "_read_canonical_document",
-                side_effect=(
-                    candidate["policy"],
-                    candidate["source_graph"],
-                ),
-            ),
-            mock.patch.object(
-                benchmark,
-                "resolve_source_graph",
-                return_value=candidate["source_graph"],
-            ),
-            mock.patch(
-                "aragorn.phase0_candidate.detect_first_party_observations",
-                return_value=(),
-            ),
-        ):
-            return benchmark._verify_candidate_evidence(
-                object(),
-                outcome,
-                expected_manifest={},
-                label="outcome",
-                envelope=envelope,
-            )
+        return _verify_candidate(candidate, envelope)
 
     def test_exact_cell_closure_and_component_tampering(self) -> None:
         bindings = _bindings()
@@ -334,6 +366,38 @@ class BenchmarkCandidateEvidenceTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(BenchmarkError, "is invalid"):
             self._verify_candidate(oversized)
+
+
+class BenchmarkCandidateEvidenceV3Tests(unittest.TestCase):
+    def test_v3_policy_accepts_v2_evidence_and_rederives_composed_review(
+        self,
+    ) -> None:
+        bindings = _bindings("phase0-candidate-policy-v3.json")
+        candidate = bindings[2]
+        observation = Observation(
+            schema="aragorn/observation/v1",
+            subject_digest=candidate["envelope"]["tree_digest"],
+            reason_code="ARAGORN_PROMPT_OVERRIDE",
+            severity="high",
+            document_json="{}",
+        )
+        envelope = deepcopy(candidate["envelope"])
+        envelope["verdict"] = "REVIEW"
+        envelope["reason_codes"] = ["ARAGORN_PROMPT_OVERRIDE"]
+        envelope["first_party_observation_digests"] = [
+            benchmark._digest_bytes(observation.document_json.encode("ascii"))
+        ]
+        bindings[2] = _verify_candidate(
+            candidate,
+            envelope,
+            first_party_observations=(observation,),
+        )
+
+        _verify_candidate_batch_bindings(
+            bindings,
+            expected_count=3,
+            suite_digest=_digest("1"),
+        )
 
 
 if __name__ == "__main__":

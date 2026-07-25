@@ -57,6 +57,7 @@
         "source_repository_path",
         "source_blob_digest",
         "byte_offset",
+        "literal_size",
         "literal_digest",
         "target_repository_path",
         "target_digest"
@@ -67,6 +68,11 @@
         "byte_offset": {
           "type": "integer",
           "minimum": 0,
+          "maximum": 16777216
+        },
+        "literal_size": {
+          "type": "integer",
+          "minimum": 1,
           "maximum": 16777216
         },
         "literal_digest": {"$ref": "#/$defs/digest"},

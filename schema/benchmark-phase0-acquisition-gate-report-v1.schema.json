@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-acquisition-gate-report-v1.schema.json",
+  "title": "Aragorn Phase 0 paired acquisition/reference gate report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "oracle_lock_digest",
+    "oracle_digest",
+    "candidate_policy_digest",
+    "root_arm",
+    "expanded_arm",
+    "evaluation_split",
+    "accounting",
+    "comparison"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-phase0-acquisition-gate-report/v1"},
+    "assurance": {"const": "paired_evidence_metrics_only"},
+    "oracle_lock_digest": {"$ref": "#/$defs/digest"},
+    "oracle_digest": {"$ref": "#/$defs/digest"},
+    "candidate_policy_digest": {"$ref": "#/$defs/digest"},
+    "root_arm": {"$ref": "#/$defs/rootArm"},
+    "expanded_arm": {"$ref": "#/$defs/expandedArm"},
+    "evaluation_split": {"const": "held_out"},
+    "accounting": {
+      "allOf": [
+        {
+          "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v1.schema.json#/$defs/accounting"
+        },
+        {
+          "properties": {
+            "cases": {"const": 448}
+          }
+        }
+      ]
+    },
+    "comparison": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v1.schema.json#/$defs/comparison"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "rootArm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_digest",
+        "outcomes_digest",
+        "benchmark_report_digest"
+      ],
+      "properties": {
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "outcomes_digest": {"$ref": "#/$defs/digest"},
+        "benchmark_report_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "expandedArm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_digest",
+        "outcomes_digest",
+        "benchmark_report_digest",
+        "accounting_digest"
+      ],
+      "properties": {
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "outcomes_digest": {"$ref": "#/$defs/digest"},
+        "benchmark_report_digest": {"$ref": "#/$defs/digest"},
+        "accounting_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

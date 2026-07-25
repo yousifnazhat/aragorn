@@ -124,8 +124,14 @@
       ],
       "properties": {
         "host": {"const": "github.com"},
-        "owner": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,38}$"},
-        "repository": {"type": "string", "pattern": "^[a-z0-9_.-]{1,100}$"},
+        "owner": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)(?!.*\\.git$)[a-z0-9_.-]{1,100}$"
+        },
         "commit": {"$ref": "#/$defs/git_sha1"},
         "commit_tree": {"$ref": "#/$defs/git_sha1"},
         "skill_path": {
@@ -144,6 +150,7 @@
         "source_repository_path",
         "source_blob_digest",
         "byte_offset",
+        "literal_size",
         "literal_digest"
       ],
       "properties": {
@@ -152,6 +159,11 @@
         "byte_offset": {
           "type": "integer",
           "minimum": 0,
+          "maximum": 16777216
+        },
+        "literal_size": {
+          "type": "integer",
+          "minimum": 1,
           "maximum": 16777216
         },
         "literal_digest": {"$ref": "#/$defs/digest"}
@@ -164,6 +176,7 @@
         "source_repository_path",
         "source_blob_digest",
         "byte_offset",
+        "literal_size",
         "literal_digest",
         "target_repository_path",
         "status",
@@ -175,6 +188,11 @@
         "byte_offset": {
           "type": "integer",
           "minimum": 0,
+          "maximum": 16777216
+        },
+        "literal_size": {
+          "type": "integer",
+          "minimum": 1,
           "maximum": 16777216
         },
         "literal_digest": {"$ref": "#/$defs/digest"},

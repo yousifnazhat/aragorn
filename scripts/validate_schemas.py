@@ -48,6 +48,7 @@ from aragorn.cas import CAS
 from aragorn.corpus_audit import audit_suite
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.phase0_candidate import build_candidate_policy
 from aragorn.standards_gate import validate_standards_gate
 
 
@@ -803,6 +804,14 @@ def main() -> int:
     validators["benchmark-candidate-policy-v2.schema.json"].validate(
         phase0_candidate_policy_v2
     )
+    phase0_candidate_policy_v3 = load(
+        ROOT / "benchmark" / "phase0-candidate-policy-v3.json"
+    )
+    validators["benchmark-candidate-policy-v3.schema.json"].validate(
+        phase0_candidate_policy_v3
+    )
+    if build_candidate_policy(phase0_candidate_policy_v3) != phase0_candidate_policy_v3:
+        raise AssertionError("checked v3 candidate policy is not canonical")
     portable_identities = []
     for filename in (
         "phase0-cisco-portable-policy.json",
@@ -836,6 +845,10 @@ def main() -> int:
     if portable_identities_v2 != phase0_candidate_policy_v2["required_comparators"]:
         raise AssertionError(
             "checked portable-policy identities do not match v2 candidate policy"
+        )
+    if portable_identities_v2 != phase0_candidate_policy_v3["required_comparators"]:
+        raise AssertionError(
+            "checked portable-policy identities do not match v3 candidate policy"
         )
     validators["benchmark-e2e-smoke-receipt-v1.schema.json"].validate(
         load(
@@ -953,6 +966,240 @@ def main() -> int:
                 "reason_codes": ["NO_HIDDEN_SPLIT"],
             },
         }
+    )
+    acquisition_candidate = {
+        **phase0_candidate_policy_v3["candidate"],
+        "config_digest": canonical_digest(phase0_candidate_policy_v3),
+    }
+    acquisition_budgets = {
+        "api_requests": 20_050,
+        "api_bytes": 402_653_184,
+        "retained_bytes": 134_217_728,
+        "expanded_objects": 256,
+        "expansion_depth": 4,
+        "references": 10_000,
+    }
+    acquisition_cases = []
+    acquisition_definitions = [
+        (
+            f"acquisition-adversarial-{index:03d}",
+            "adversarial",
+            f"acquisition-path-{index % 8:02d}",
+        )
+        for index in range(112)
+    ]
+    acquisition_definitions.extend(
+        (f"acquisition-benign-{index:03d}", "benign", "benign")
+        for index in range(336)
+    )
+    for index, (case_id, case_class, family) in enumerate(
+        acquisition_definitions
+    ):
+        literal = f"payloads/{case_id}.txt"
+        acquisition_cases.append(
+            {
+                "case_id": case_id,
+                "class": case_class,
+                "family": family,
+                "lineage": f"{case_id}-lineage",
+                "root_tree_digest": (
+                    "sha256:"
+                    + hashlib.sha256(f"{case_id}:root".encode()).hexdigest()
+                ),
+                "expanded_tree_digest": (
+                    "sha256:"
+                    + hashlib.sha256(f"{case_id}:expanded".encode()).hexdigest()
+                ),
+                "source": {
+                    "host": "github.com",
+                    "owner": "example",
+                    "repository": "project",
+                    "commit": hashlib.sha1(
+                        f"{case_id}:commit".encode()
+                    ).hexdigest(),
+                    "commit_tree": hashlib.sha1(
+                        f"{case_id}:tree".encode()
+                    ).hexdigest(),
+                    "skill_path": f"skills/{case_id}",
+                    "api_version": "2026-03-10",
+                },
+                "expected_references": [
+                    {
+                        "source_repository_path": (
+                            f"skills/{case_id}/SKILL.md"
+                        ),
+                        "source_blob_digest": (
+                            "sha256:"
+                            + hashlib.sha256(
+                                f"{case_id}:source".encode()
+                            ).hexdigest()
+                        ),
+                        "byte_offset": 0,
+                        "literal_size": len(literal.encode()),
+                        "literal_digest": (
+                            "sha256:"
+                            + hashlib.sha256(literal.encode()).hexdigest()
+                        ),
+                        "target_repository_path": literal,
+                        "target_digest": (
+                            "sha256:"
+                            + hashlib.sha256(
+                                f"{case_id}:target".encode()
+                            ).hexdigest()
+                        ),
+                    }
+                ],
+            }
+        )
+    acquisition_oracle = {
+        "schema": "aragorn/benchmark-phase0-acquisition-oracle/v1",
+        "root_suite_digest": digest,
+        "expanded_suite_digest": second_digest,
+        "split": "held_out",
+        "runs_per_case": 1,
+        "candidate_system": acquisition_candidate,
+        "comparators": phase0_candidate_policy_v3["required_comparators"],
+        "expansion_profile": "phase0-exact-github-blob-expansion/v1",
+        "budgets": acquisition_budgets,
+        "cases": acquisition_cases,
+    }
+    validators["benchmark-phase0-acquisition-oracle-v1.schema.json"].validate(
+        acquisition_oracle
+    )
+    acquisition_lock = {
+        "schema": "aragorn/benchmark-phase0-acquisition-oracle-lock/v1",
+        "assurance": (
+            "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+        ),
+        "oracle_digest": canonical_digest(acquisition_oracle),
+        "candidate_policy_digest": canonical_digest(phase0_candidate_policy_v3),
+        "root_suite_digest": digest,
+        "expanded_suite_digest": second_digest,
+        "split": "held_out",
+        "case_count": 448,
+        "class_counts": {"adversarial": 112, "benign": 336},
+        "family_counts": {
+            "acquisition-path-00": 14,
+            "acquisition-path-01": 14,
+            "acquisition-path-02": 14,
+            "acquisition-path-03": 14,
+            "acquisition-path-04": 14,
+            "acquisition-path-05": 14,
+            "acquisition-path-06": 14,
+            "acquisition-path-07": 14,
+            "benign": 336,
+        },
+        "lineage_count": 448,
+        "runs_per_case": 1,
+        "candidate_system": acquisition_candidate,
+        "comparators": phase0_candidate_policy_v3["required_comparators"],
+        "expansion_profile": "phase0-exact-github-blob-expansion/v1",
+        "budgets": acquisition_budgets,
+    }
+    validators[
+        "benchmark-phase0-acquisition-oracle-lock-v1.schema.json"
+    ].validate(acquisition_lock)
+    zero_fraction = {"numerator": 0, "denominator": 10, "rate": 0.0}
+    candidate_point = {
+        "system": acquisition_candidate,
+        "benign_intervention": zero_fraction,
+        "adversarial_flag": {"numerator": 8, "denominator": 10, "rate": 0.8},
+        "burden_compliant": True,
+    }
+    comparator_point = {
+        "system": phase0_candidate_policy_v3["required_comparators"][1],
+        "benign_intervention": zero_fraction,
+        "adversarial_flag": {"numerator": 6, "denominator": 10, "rate": 0.6},
+        "burden_compliant": True,
+    }
+    acquisition_accounting = {
+        "cases": 448,
+        "complete_expansions": 448,
+        "incomplete_expansions": 0,
+        "expansion_success_rate": 1.0,
+        "incomplete_cases": 0,
+        "expected_references": 448,
+        "captured_references": 448,
+        "missed_references": 0,
+        "wrong_target_references": 0,
+        "unresolved_expected_references": 0,
+        "source_reference_capture_rate": 1.0,
+        "profile_artifact_references": 448,
+        "unresolved_references": 0,
+        "non_artifact_references": 0,
+        "unresolved_cases": 0,
+        "unresolved_reference_rate": 0.0,
+        "opaque_carriers": 0,
+        "published_expanded_objects": 448,
+        "attempted_expanded_objects": 448,
+        "budgets": {
+            name: {
+                "limit": limit,
+                "used": 0,
+                "utilization_rate": 0.0,
+            }
+            for name, limit in acquisition_budgets.items()
+        },
+        "reason_counts": [],
+    }
+    validators[
+        "benchmark-phase0-acquisition-gate-report-v1.schema.json"
+    ].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-acquisition-gate-report/v1",
+            "assurance": "paired_evidence_metrics_only",
+            "oracle_lock_digest": canonical_digest(acquisition_lock),
+            "oracle_digest": canonical_digest(acquisition_oracle),
+            "candidate_policy_digest": canonical_digest(
+                phase0_candidate_policy_v3
+            ),
+            "root_arm": {
+                "suite_digest": digest,
+                "outcomes_digest": second_digest,
+                "benchmark_report_digest": third_digest,
+            },
+            "expanded_arm": {
+                "suite_digest": second_digest,
+                "outcomes_digest": third_digest,
+                "benchmark_report_digest": digest,
+                "accounting_digest": second_digest,
+            },
+            "evaluation_split": "held_out",
+            "accounting": acquisition_accounting,
+            "comparison": {
+                "benign_burden_ceiling": {
+                    "numerator": 1,
+                    "denominator": 20,
+                    "rate": 0.05,
+                },
+                "minimum_attack_flag_delta": {
+                    "numerator": 1,
+                    "denominator": 10,
+                    "rate": 0.1,
+                },
+                "candidate": candidate_point,
+                "comparators": [comparator_point],
+                "pareto_frontier": [comparator_point],
+                "selected_comparator": comparator_point,
+                "attack_flag_delta": {
+                    "numerator": 1,
+                    "denominator": 5,
+                    "rate": 0.2,
+                },
+                "evaluable": True,
+                "passed": True,
+                "reason_codes": [],
+            },
+        }
+    )
+    validators[
+        "benchmark-phase0-acquisition-gate-report-v1.schema.json"
+    ].validate(
+        load(
+            ROOT
+            / "benchmark"
+            / "phase0-acquisition-gate-report-v1.example.json"
+        )
     )
     hidden_lock_path = ROOT / "benchmark" / "phase0-hidden-suite.lock.json"
     hidden_lock_raw = hidden_lock_path.read_bytes()

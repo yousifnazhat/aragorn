@@ -377,7 +377,7 @@ class Phase0GateTests(unittest.TestCase):
         self.assertEqual(report["evaluation_split"], "held_out")
         self.assertEqual(
             _digest_json(report),
-            "sha256:16d6d1bf1f19f5b5505960820eaccc5e9f1ab7533b444e30cc028ec421d586d7",
+            "sha256:4b1d2ae97332da6c4341db956a31843a7a189554febd7eea222fd0f7769a687b",
         )
         self.assertEqual(
             set(report),
@@ -808,6 +808,39 @@ class Phase0GateTests(unittest.TestCase):
                     expansion = self._expansion(cas, bad_accounting)
                     mutate(expansion)
                     self._replace_expansion(cas, bad_accounting, expansion)
+                    with self.assertRaisesRegex(BenchmarkError, message):
+                        evaluate_phase0(
+                            suite,
+                            outcomes,
+                            bad_accounting,
+                            root,
+                            evidence_state=state,
+                        )
+
+    def test_reference_occurrences_are_rederived_from_retained_source_bytes(
+        self,
+    ) -> None:
+        mutations = (
+            ("literal_digest", "sha256:" + "0" * 64, "literal digest"),
+            ("literal_size", 1, "literal digest"),
+            ("byte_offset", 0, "literal digest"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, accounting, root, state = self._harness(Path(temporary))
+            cas = CAS(state)
+            for field, value, message in mutations:
+                with self.subTest(field=field):
+                    bad_accounting = copy.deepcopy(accounting)
+                    expansion = self._expansion(cas, bad_accounting)
+                    identities = (
+                        expansion["references"][0],
+                        expansion["objects"][0]["references"][0],
+                        bad_accounting["cases"][0]["expected_references"][0],
+                    )
+                    for identity in identities:
+                        identity[field] = value
+                    self._replace_expansion(cas, bad_accounting, expansion)
+
                     with self.assertRaisesRegex(BenchmarkError, message):
                         evaluate_phase0(
                             suite,
@@ -1329,7 +1362,10 @@ class Phase0GateTests(unittest.TestCase):
         incomplete: bool,
         split: str,
     ) -> tuple[dict[str, object], str, dict[str, object]]:
-        source_content = f"# {case_id}\nfetch exact payload\n".encode()
+        source_repository_path = f"skills/{case_id}/SKILL.md"
+        target_repository_path = f"payloads/{case_id}.txt"
+        literal = target_repository_path.encode()
+        source_content = b"# " + case_id.encode() + b"\nfetch exact " + literal + b"\n"
         payload_content = f"payload for {case_id}\n".encode()
         source_digest = self._put_bytes(cas, source_content)
         payload_digest = (
@@ -1337,15 +1373,14 @@ class Phase0GateTests(unittest.TestCase):
             if incomplete
             else self._put_bytes(cas, payload_content)
         )
-        source_repository_path = f"skills/{case_id}/SKILL.md"
-        target_repository_path = f"payloads/{case_id}.txt"
         literal_digest = (
-            "sha256:" + hashlib.sha256(target_repository_path.encode()).hexdigest()
+            "sha256:" + hashlib.sha256(literal).hexdigest()
         )
         reference_identity = {
             "source_repository_path": source_repository_path,
             "source_blob_digest": source_digest,
-            "byte_offset": 0,
+            "byte_offset": source_content.index(literal),
+            "literal_size": len(literal),
             "literal_digest": literal_digest,
         }
         root_files = [

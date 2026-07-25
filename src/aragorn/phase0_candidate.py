@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from html import unescape
 import json
 import os
 import re
@@ -42,9 +43,11 @@ from .oci_worker_protocol import (
     sanitize_subject_manifest,
 )
 
-POLICY_SCHEMA = "aragorn/benchmark-candidate-policy/v2"
+POLICY_SCHEMA_V2 = "aragorn/benchmark-candidate-policy/v2"
+POLICY_SCHEMA = "aragorn/benchmark-candidate-policy/v3"
 POLICY_ASSURANCE = "comparative_candidate_only_not_admission"
-POLICY_ALGORITHM = "source-graph-fail-closed-vendor-union/v2"
+POLICY_ALGORITHM_V2 = "source-graph-fail-closed-vendor-union/v2"
+POLICY_ALGORITHM = "source-graph-fail-closed-correlated-evidence/v3"
 COMPOSITION_ASSURANCE = (
     "derived_from_authenticated_comparator_evidence_not_hardware_attested"
 )
@@ -94,9 +97,81 @@ _FIRST_PARTY_ALGORITHM = "imperative-source-sink-clusters/v1"
 _FIRST_PARTY_TEXT_LIMIT = 8 * 1024 * 1024
 _FIRST_PARTY_SEGMENT_LIMIT = 4096
 _BASE64_TEXT_LIMIT = 64 * 1024
+_BASE64_TOKEN_LIMIT = 4 * ((_BASE64_TEXT_LIMIT + 2) // 3)
+_BASE64_MAX_DEPTH = 2
 _BASE64_TOKEN = re.compile(
-    r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{32,}={0,2}(?![A-Za-z0-9+/=])"
+    r"(?<![A-Za-z0-9+/_-])[A-Za-z0-9+/_-]{32,}={0,2}"
+    r"(?![A-Za-z0-9+/_=-])"
 )
+_BASE64_LINE = re.compile(r"[A-Za-z0-9+/_-]{4,}={0,2}\Z")
+_BASE64_SPACED = re.compile(
+    r"(?<![A-Za-z0-9+/_-])"
+    r"(?:[A-Za-z0-9+/_-]{4,}={0,2}[ \t]+){1,}"
+    r"[A-Za-z0-9+/_-]{4,}={0,2}"
+    r"(?![A-Za-z0-9+/_=-])"
+)
+_HTML_COMMENT = re.compile(
+    r"<!--[\s\S]{0,4096}?-->"
+)
+_HTML_TAG = re.compile(
+    r"</?[A-Za-z][^<>\r\n]{0,256}>"
+)
+_MARKDOWN_LINK = re.compile(
+    r"\[([^\]\r\n]{1,256})\]\([^)\r\n]{0,512}\)"
+)
+_HTML_ENTITY = re.compile(
+    r"&(?:#[0-9]{1,7}|#x[0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});"
+)
+_INTRAWORD_MARKUP = re.compile(
+    r"(?<=[A-Za-z0-9+/_-])(?:\*{1,3}|_{1,3}|~{1,2}|`{1,3})"
+    r"(?=[A-Za-z0-9+/_-])"
+)
+_UNICODE_WORD = re.compile(r"[^\W\d_]+")
+_MIXED_SCRIPT_CONFUSABLES = {
+    "Α": "A",
+    "Β": "B",
+    "Ε": "E",
+    "Η": "H",
+    "Ι": "I",
+    "Κ": "K",
+    "Μ": "M",
+    "Ν": "N",
+    "Ο": "O",
+    "Ρ": "P",
+    "Τ": "T",
+    "Υ": "Y",
+    "Χ": "X",
+    "А": "A",
+    "В": "B",
+    "Е": "E",
+    "К": "K",
+    "М": "M",
+    "Н": "H",
+    "О": "O",
+    "Р": "P",
+    "С": "C",
+    "Т": "T",
+    "У": "Y",
+    "Х": "X",
+    "а": "a",
+    "е": "e",
+    "і": "i",
+    "ј": "j",
+    "о": "o",
+    "р": "p",
+    "с": "c",
+    "у": "y",
+    "х": "x",
+    "α": "a",
+    "ε": "e",
+    "ι": "i",
+    "κ": "k",
+    "ο": "o",
+    "ρ": "p",
+    "τ": "t",
+    "υ": "y",
+    "χ": "x",
+}
 _DEFENSIVE_CONTEXT = re.compile(
     r"\b(?:never|do not|must not|cannot|can't)\s+"
     r"(?:read|fetch|download|execute|run|launch|invoke|inspect|contact|grant|"
@@ -112,10 +187,22 @@ _ANALYSIS_CONTEXT = re.compile(
     r"untrusted content|indicators? to discuss|review .* as data)\b",
     re.IGNORECASE | re.DOTALL,
 )
-_CROSS_SEGMENT_BRIDGE = re.compile(
-    r"\b(?:combine|merge)\b.{0,120}\b(?:instruction|instructions|source|sink|"
-    r"files?)\b.{0,120}\b(?:perform|apply|execute|run|issue)\b",
-    re.IGNORECASE | re.DOTALL,
+_ANALYSIS_DIRECTIVE = re.compile(
+    r"\A\s*(?:explain|discuss|identify|flag|detect|classify|review|analyze)\b",
+    re.IGNORECASE,
+)
+_QUOTED_DATA_SPAN = re.compile(
+    r'"[^"]{0,1024}"|'
+    r"'[^']{0,1024}'|"
+    r"“[^”]{0,1024}”|"
+    r"‘[^’]{0,1024}’|"
+    r"`[^`]{0,1024}`"
+)
+_EXPLANATION_GOVERNOR = re.compile(
+    r"\b(?:agents?|developers?|users?|operators?|systems?|you|they)\s+"
+    r"(?:must|should|can|cannot|can't|need\s+to|are\s+required\s+to)\s+"
+    r"(?:never\s+|not\s+)?\Z",
+    re.IGNORECASE,
 )
 _DECODE_BRIDGE = re.compile(
     r"\b(?:decode|base64)\b.{0,160}\b(?:follow|perform|apply|execute|run|"
@@ -123,9 +210,10 @@ _DECODE_BRIDGE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _PROMPT_OVERRIDE = re.compile(
-    r"\b(?:ignore|bypass|override|disregard|supersede)\b.{0,100}"
-    r"\b(?:higher[- ]priority|previous|system|policy|policies|instruction|"
-    r"instructions|guardrail|guardrails)\b",
+    r"\b(?:ignore|bypass|override|disregard|supersede|forget|set\s+aside)\b"
+    r".{0,100}\b(?:higher[- ]priority|prior|previous|earlier|system|policy|"
+    r"policies|direction|directions|instruction|instructions|guardrail|"
+    r"guardrails)\b",
     re.IGNORECASE | re.DOTALL,
 )
 _PROMPT_DISCLOSURE = re.compile(
@@ -141,29 +229,39 @@ _CONCEALMENT = re.compile(
     r"\breport only\b|\bclaim\b.{0,80}\bapproved\b",
     re.IGNORECASE | re.DOTALL,
 )
-_SENSITIVE_SOURCE = re.compile(
-    r"\b(?:credential|credentials|secret|secrets|api[_\s-]?token|"
+_SENSITIVE_ACCESS = re.compile(
+    r"\b(?:read|collect|obtain|access|extract|export|reveal|disclose|expose|"
+    r"print|return)\b.{0,100}"
+    r"(?:credential|credentials|secret|secrets|api[_\s-]?token|"
     r"session[_\s-]?key|private\s+key|id_rsa|environment\s+variable|"
-    r"process\s+environment|system\s+prompt|hidden\s+(?:agent\s+)?memory)\b|"
-    r"~/\.(?:ssh|aws)",
-    re.IGNORECASE,
+    r"process\s+environment|system\s+prompt|hidden\s+(?:agent\s+)?memory|"
+    r"~/\.(?:ssh|aws))\b",
+    re.IGNORECASE | re.DOTALL,
 )
-_EXTERNAL_SINK = re.compile(
+_TRANSFER_SINK = re.compile(
     r"\b(?:post|send|upload|transmit|exfiltrate|exfiltrates|exfiltrated|"
-    r"exfiltrating|telemetry|dns\s+query|"
-    r"webhook)\b|https?://",
-    re.IGNORECASE,
+    r"exfiltrating|forward|dns\s+query|issue\s+(?:a\s+)?dns)\b|"
+    r"\b(?:reveal|disclose|expose|return)\b.{0,100}"
+    r"(?:https?://|\bwebhook\b|\bremote\b|\bendpoint\b)",
+    re.IGNORECASE | re.DOTALL,
 )
 _FETCH_OR_DECODE = re.compile(
-    r"\b(?:download|fetch|retrieve|curl|wget|decode(?:d|s|ing)?|base64)\b",
+    r"\b(?:download(?:ed|ing|s)?|fetch|retrieve|curl|wget|"
+    r"decode(?:d|s|ing)?|base64)\b",
     re.IGNORECASE,
 )
 _EXECUTION_SINK = re.compile(
-    r"\b(?:execute|launch|run|shell|source|perform)\b",
-    re.IGNORECASE,
+    r"\b(?:execute|launch|source|shell|bash|zsh|powershell|cmd\.exe)\b|"
+    r"(?<![A-Za-z0-9_])sh(?![A-Za-z0-9_])|"
+    r"\brun\b.{0,60}\b(?:downloaded|decoded|payload|script|binary|installer|"
+    r"command|it)\b",
+    re.IGNORECASE | re.DOTALL,
 )
 _DESTRUCTIVE_ACTION = re.compile(
     r"\b(?:recursively delete|delete|remove|erase|wipe)\b.{0,120}"
+    r"\b(?:workspace|project|repository|version history|history|backup|"
+    r"recovery)\b|"
+    r"\brm\s+(?:-[A-Za-z]*r[A-Za-z]*f|-rf|-fr)\b.{0,120}"
     r"\b(?:workspace|project|repository|version history|history|backup|"
     r"recovery)\b",
     re.IGNORECASE | re.DOTALL,
@@ -187,15 +285,29 @@ _SIGNAL_NAMES = {
     _PROMPT_OVERRIDE: "prompt_override",
     _PROMPT_DISCLOSURE: "prompt_disclosure",
     _CONCEALMENT: "concealment",
-    _SENSITIVE_SOURCE: "sensitive_source",
-    _EXTERNAL_SINK: "external_sink",
+    _SENSITIVE_ACCESS: "sensitive_access",
+    _TRANSFER_SINK: "transfer_sink",
     _FETCH_OR_DECODE: "fetch_or_decode",
     _EXECUTION_SINK: "execution_sink",
     _DESTRUCTIVE_ACTION: "destructive_action",
     _PERSISTENCE_ACTION: "persistence_action",
     _AGENT_PROPAGATION: "agent_propagation",
-    _CROSS_SEGMENT_BRIDGE: "cross_segment_bridge",
 }
+_FIRST_PARTY_ACTIONABLE = {
+    "ARAGORN_CREDENTIAL_EXFILTRATION",
+    "ARAGORN_PROMPT_OVERRIDE",
+    "ARAGORN_UNSAFE_EXECUTION_CHAIN",
+}
+_Segment = tuple[
+    str,
+    str,
+    str,
+    int,
+    str,
+    tuple[int, int],
+    tuple[int, ...] | None,
+]
+_Window = tuple[_Segment, ...]
 
 
 class CandidateError(ValueError):
@@ -249,12 +361,16 @@ def build_candidate_policy(document: object) -> dict[str, Any]:
 
     policy = _exact_object(document, _POLICY_KEYS, "candidate policy")
     schema = policy["schema"]
-    if schema != POLICY_SCHEMA:
+    algorithms = {
+        POLICY_SCHEMA_V2: POLICY_ALGORITHM_V2,
+        POLICY_SCHEMA: POLICY_ALGORITHM,
+    }
+    if schema not in algorithms:
         raise CandidateError("candidate policy schema is unsupported")
     if policy["assurance"] != POLICY_ASSURANCE:
         raise CandidateError("candidate policy assurance is unsupported")
     algorithm = policy["algorithm"]
-    if algorithm != POLICY_ALGORITHM:
+    if algorithm != algorithms[schema]:
         raise CandidateError("candidate policy algorithm is unsupported")
     candidate = _partial_system(policy["candidate"], "candidate policy candidate")
     if (
@@ -319,7 +435,7 @@ def detect_first_party_observations(
     if not isinstance(files, list) or not files:
         raise CandidateError("candidate manifest files must be a non-empty array")
 
-    segments: list[tuple[str, str, str, int, str]] = []
+    segments: list[_Segment] = []
     text_carriers: list[tuple[str, str, str]] = []
     incomplete: list[dict[str, Any]] = []
     total = 0
@@ -370,6 +486,15 @@ def detect_first_party_observations(
                 }
             )
             continue
+        incomplete.extend(
+            {
+                "path": path,
+                "blob_digest": digest,
+                "line": line,
+                "signal": signal,
+            }
+            for line, signal in _text_incomplete_signals(text)
+        )
         text_carriers.append((text, path, digest))
         for segment in _active_text_segments(text, path=path, digest=digest):
             if len(segments) >= _FIRST_PARTY_SEGMENT_LIMIT:
@@ -397,6 +522,16 @@ def detect_first_party_observations(
                 path=path,
                 digest=digest,
             ):
+                if segment[4].startswith("analysis_incomplete:"):
+                    incomplete.append(
+                        {
+                            "path": path,
+                            "blob_digest": digest,
+                            "line": segment[3],
+                            "signal": segment[4].split(":", 1)[1],
+                        }
+                    )
+                    continue
                 if len(segments) >= _FIRST_PARTY_SEGMENT_LIMIT:
                     incomplete.append(
                         {
@@ -416,65 +551,56 @@ def detect_first_party_observations(
     if incomplete:
         findings["ARAGORN_ANALYSIS_INCOMPLETE"] = incomplete
 
-    prompt_segments = [
-        segment
-        for segment in segments
-        if _PROMPT_OVERRIDE.search(segment[0])
+    windows = tuple(_relation_windows(segments))
+    prompt_windows = [
+        window
+        for window in windows
+        if _PROMPT_OVERRIDE.search(_window_text(window))
         or (
-            _PROMPT_DISCLOSURE.search(segment[0])
+            _PROMPT_DISCLOSURE.search(_window_text(window))
             and (
-                _CONCEALMENT.search(segment[0])
-                or _EXTERNAL_SINK.search(segment[0])
+                _CONCEALMENT.search(_window_text(window))
+                or _TRANSFER_SINK.search(_window_text(window))
             )
         )
     ]
-    if prompt_segments:
+    if prompt_windows:
         findings["ARAGORN_PROMPT_OVERRIDE"] = _matching_locations(
-            prompt_segments,
+            prompt_windows,
             (
                 _PROMPT_OVERRIDE,
                 _PROMPT_DISCLOSURE,
                 _CONCEALMENT,
-                _EXTERNAL_SINK,
+                _TRANSFER_SINK,
             ),
         )
 
-    exfil_segments = [
-        segment
-        for segment in segments
-        if _SENSITIVE_SOURCE.search(segment[0])
-        and _EXTERNAL_SINK.search(segment[0])
+    exfil_windows = [
+        window
+        for window in windows
+        if _SENSITIVE_ACCESS.search(_window_text(window))
+        and _TRANSFER_SINK.search(_window_text(window))
     ]
-    bridge_segments = [
-        segment for segment in segments if _CROSS_SEGMENT_BRIDGE.search(segment[0])
-    ]
-    if (
-        not exfil_segments
-        and bridge_segments
-        and any(_SENSITIVE_SOURCE.search(segment[0]) for segment in segments)
-        and any(_EXTERNAL_SINK.search(segment[0]) for segment in segments)
-    ):
-        exfil_segments = segments
-    if exfil_segments:
+    if exfil_windows:
         findings["ARAGORN_CREDENTIAL_EXFILTRATION"] = _matching_locations(
-            exfil_segments,
-            (_CROSS_SEGMENT_BRIDGE, _SENSITIVE_SOURCE, _EXTERNAL_SINK),
+            exfil_windows,
+            (_SENSITIVE_ACCESS, _TRANSFER_SINK),
         )
 
-    unsafe_segments = [
-        segment
-        for segment in segments
+    unsafe_windows = [
+        window
+        for window in windows
         if (
-            _FETCH_OR_DECODE.search(segment[0])
-            and _EXECUTION_SINK.search(segment[0])
+            _FETCH_OR_DECODE.search(_window_text(window))
+            and _EXECUTION_SINK.search(_window_text(window))
         )
-        or _DESTRUCTIVE_ACTION.search(segment[0])
-        or _PERSISTENCE_ACTION.search(segment[0])
-        or _AGENT_PROPAGATION.search(segment[0])
+        or _DESTRUCTIVE_ACTION.search(_window_text(window))
+        or _PERSISTENCE_ACTION.search(_window_text(window))
+        or _AGENT_PROPAGATION.search(_window_text(window))
     ]
-    if unsafe_segments:
+    if unsafe_windows:
         findings["ARAGORN_UNSAFE_EXECUTION_CHAIN"] = _matching_locations(
-            unsafe_segments,
+            unsafe_windows,
             (
                 _FETCH_OR_DECODE,
                 _EXECUTION_SINK,
@@ -527,14 +653,25 @@ def _active_text_segments(
     *,
     path: str,
     digest: str,
-) -> Iterable[tuple[str, str, str, int, str]]:
+) -> Iterable[_Segment]:
     normalized = _normalize_text(text)
     yield from _active_segments_from_normalized(
         normalized,
         path=path,
         digest=digest,
         carrier="text",
+        scope_base=0,
     )
+    rendered, line_map = _rendered_text(normalized)
+    if rendered != normalized:
+        yield from _active_segments_from_normalized(
+            rendered,
+            path=path,
+            digest=digest,
+            carrier="rendered_text",
+            scope_base=0,
+            line_map=line_map,
+        )
 
 
 def _decoded_text_segments(
@@ -542,40 +679,356 @@ def _decoded_text_segments(
     *,
     path: str,
     digest: str,
-) -> Iterable[tuple[str, str, str, int, str]]:
+) -> Iterable[_Segment]:
     normalized = _normalize_text(text)
-    for match in _BASE64_TOKEN.finditer(normalized):
-        token = match.group(0)
-        if len(token) % 4:
-            continue
-        try:
-            decoded = base64.b64decode(token, validate=True)
-            if not decoded or len(decoded) > _BASE64_TEXT_LIMIT:
-                continue
-            decoded_text = decoded.decode("utf-8")
-        except (UnicodeDecodeError, ValueError):
-            continue
-        printable = sum(
-            character.isprintable() or character.isspace()
-            for character in decoded_text
+    carriers: list[
+        tuple[str, int | None, int | None, tuple[int, ...] | None]
+    ] = [
+        (normalized, None, None, None)
+    ]
+    rendered, rendered_lines = _rendered_text(normalized)
+    if rendered != normalized:
+        carriers.append((rendered, None, None, rendered_lines))
+    seen: set[str] = set()
+    for _depth in range(_BASE64_MAX_DEPTH):
+        nested: list[
+            tuple[str, int, int, tuple[int, ...] | None]
+        ] = []
+        for (
+            carrier_text,
+            inherited_line,
+            inherited_scope,
+            carrier_lines,
+        ) in carriers:
+            for token, start in _base64_candidates(carrier_text):
+                remainder = len(token) % 4
+                if token in seen:
+                    continue
+                if remainder == 1 or len(token) > _BASE64_TOKEN_LIMIT:
+                    line = (
+                        inherited_line
+                        if inherited_line is not None
+                        else carrier_lines[start]
+                        if carrier_lines is not None
+                        else carrier_text.count("\n", 0, start) + 1
+                    )
+                    scope = (
+                        inherited_scope
+                        if inherited_scope is not None
+                        else start + 1
+                    )
+                    yield (
+                        "",
+                        path,
+                        digest,
+                        line,
+                        "analysis_incomplete:base64_token_limit",
+                        (scope, 0),
+                        None,
+                    )
+                    continue
+                seen.add(token)
+                try:
+                    decoded = base64.b64decode(
+                        token + "=" * ((4 - remainder) % 4),
+                        altchars=b"-_",
+                        validate=True,
+                    )
+                    if not decoded:
+                        continue
+                    if len(decoded) > _BASE64_TEXT_LIMIT:
+                        yield (
+                            "",
+                            path,
+                            digest,
+                            inherited_line or 1,
+                            "analysis_incomplete:base64_text_limit",
+                            (inherited_scope or start + 1, 0),
+                            None,
+                        )
+                        continue
+                    decoded_text = decoded.decode("utf-8")
+                except (UnicodeDecodeError, ValueError):
+                    continue
+                printable = sum(
+                    character.isprintable() or character.isspace()
+                    for character in decoded_text
+                )
+                if printable / len(decoded_text) < 0.95:
+                    continue
+                decoded_text = _normalize_text(decoded_text)
+                line = (
+                    inherited_line
+                    if inherited_line is not None
+                    else carrier_lines[start]
+                    if carrier_lines is not None
+                    else carrier_text.count("\n", 0, start) + 1
+                )
+                scope = (
+                    inherited_scope
+                    if inherited_scope is not None
+                    else start + 1
+                )
+                yield from _active_segments_from_normalized(
+                    decoded_text,
+                    path=path,
+                    digest=digest,
+                    carrier="base64_decoded",
+                    fixed_line=line,
+                    scope_base=scope,
+                )
+                rendered, _line_map = _rendered_text(decoded_text)
+                if rendered != decoded_text:
+                    yield from _active_segments_from_normalized(
+                        rendered,
+                        path=path,
+                        digest=digest,
+                        carrier="base64_rendered",
+                        fixed_line=line,
+                        scope_base=scope,
+                    )
+                if _depth == _BASE64_MAX_DEPTH - 1 and any(
+                    next(_base64_candidates(view), None) is not None
+                    for view in {decoded_text, rendered}
+                ):
+                    yield (
+                        "",
+                        path,
+                        digest,
+                        line,
+                        "analysis_incomplete:base64_depth_limit",
+                        (scope, 0),
+                        None,
+                    )
+                nested.append((decoded_text, line, scope, None))
+                if rendered != decoded_text:
+                    nested.append((rendered, line, scope, _line_map))
+        carriers = nested
+
+
+def _base64_candidates(text: str) -> Iterable[tuple[str, int]]:
+    seen: set[tuple[str, int]] = set()
+    for match in _BASE64_TOKEN.finditer(text):
+        candidate = (match.group(0), match.start())
+        seen.add(candidate)
+        yield candidate
+
+    for match in _BASE64_SPACED.finditer(text):
+        candidate = (
+            re.sub(r"[ \t]+", "", match.group(0)),
+            match.start(),
         )
-        if printable / len(decoded_text) < 0.95:
-            continue
-        yield from _active_segments_from_normalized(
-            _normalize_text(decoded_text),
-            path=path,
-            digest=digest,
-            carrier="base64_decoded",
-            fixed_line=normalized.count("\n", 0, match.start()) + 1,
-        )
+        if len(candidate[0]) >= 32 and candidate not in seen:
+            seen.add(candidate)
+            yield candidate
+
+    chunks: list[str] = []
+    start = 0
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip(" \t\r\n")
+        if _BASE64_LINE.fullmatch(stripped) is not None:
+            if not chunks:
+                start = offset + len(line) - len(line.lstrip(" \t"))
+            chunks.append(stripped)
+        else:
+            if len(chunks) >= 2:
+                candidate = ("".join(chunks), start)
+                if len(candidate[0]) >= 32 and candidate not in seen:
+                    yield candidate
+            chunks = []
+            suffix = re.search(
+                r"(?<![A-Za-z0-9+/_-])"
+                r"([A-Za-z0-9+/_-]{4,}={0,2})[ \t\r\n]*\Z",
+                line,
+            )
+            if suffix is not None:
+                chunks = [suffix.group(1)]
+                start = offset + suffix.start(1)
+        offset += len(line)
+    if len(chunks) >= 2:
+        candidate = ("".join(chunks), start)
+        if len(candidate[0]) >= 32 and candidate not in seen:
+            yield candidate
 
 
 def _normalize_text(text: str) -> str:
-    return "".join(
+    normalized = "".join(
         character
         for character in unicodedata.normalize("NFKC", text)
         if unicodedata.category(character) != "Cf"
     )
+
+    def fold_confusables(match: re.Match[str]) -> str:
+        word = match.group(0)
+        if not re.search(r"[A-Za-z]", word) or not any(
+            character in _MIXED_SCRIPT_CONFUSABLES for character in word
+        ):
+            return word
+        return "".join(
+            _MIXED_SCRIPT_CONFUSABLES.get(character, character)
+            for character in word
+        )
+
+    return _UNICODE_WORD.sub(fold_confusables, normalized)
+
+
+def _rendered_text(text: str) -> tuple[str, tuple[int, ...]]:
+    lines: list[int] = []
+    line = 1
+    for character in text:
+        lines.append(line)
+        if character == "\n":
+            line += 1
+
+    def drop(pattern: re.Pattern[str]) -> None:
+        nonlocal text, lines
+        parts: list[str] = []
+        mapped: list[int] = []
+        cursor = 0
+        for match in pattern.finditer(text):
+            parts.append(text[cursor : match.start()])
+            mapped.extend(lines[cursor : match.start()])
+            cursor = match.end()
+        parts.append(text[cursor:])
+        mapped.extend(lines[cursor:])
+        text = "".join(parts)
+        lines = mapped
+
+    drop(_HTML_COMMENT)
+    drop(_HTML_TAG)
+
+    parts: list[str] = []
+    mapped: list[int] = []
+    cursor = 0
+    for match in _MARKDOWN_LINK.finditer(text):
+        parts.append(text[cursor : match.start()])
+        mapped.extend(lines[cursor : match.start()])
+        parts.append(match.group(1))
+        mapped.extend(lines[match.start(1) : match.end(1)])
+        cursor = match.end()
+    parts.append(text[cursor:])
+    mapped.extend(lines[cursor:])
+    text = "".join(parts)
+    lines = mapped
+
+    for _depth in range(4):
+        parts = []
+        mapped = []
+        cursor = 0
+        changed = False
+        for match in _HTML_ENTITY.finditer(text):
+            replacement = unescape(match.group(0))
+            if replacement == match.group(0):
+                continue
+            changed = True
+            parts.append(text[cursor : match.start()])
+            mapped.extend(lines[cursor : match.start()])
+            parts.append(replacement)
+            mapped.extend([lines[match.start()]] * len(replacement))
+            cursor = match.end()
+        if not changed:
+            break
+        parts.append(text[cursor:])
+        mapped.extend(lines[cursor:])
+        text = "".join(parts)
+        lines = mapped
+
+    drop(_INTRAWORD_MARKUP)
+    return text, tuple(lines)
+
+
+def _text_incomplete_signals(text: str) -> Iterable[tuple[int, str]]:
+    def line_at(index: int) -> int:
+        return text.count("\n", 0, index) + 1
+
+    def active_context(index: int, end: int | None = None) -> bool:
+        context = text[max(0, index - 256) : index + 768]
+        if end is not None and end > index:
+            context += text[max(index, end - 256) : end + 768]
+        return any(
+            pattern.search(context)
+            for pattern in (
+                _PROMPT_DISCLOSURE,
+                _SENSITIVE_ACCESS,
+                _TRANSFER_SINK,
+                _EXECUTION_SINK,
+                _DESTRUCTIVE_ACTION,
+                _PERSISTENCE_ACTION,
+                _AGENT_PROPAGATION,
+            )
+        ) or re.search(
+            r"\b(?:previous|prior|earlier)\s+(?:instruction|instructions|"
+            r"direction|directions|policy|policies)\b",
+            context,
+            re.IGNORECASE,
+        ) is not None
+
+    cursor = 0
+    while (start := text.find("<!--", cursor)) >= 0:
+        end = text.find("-->", start + 4)
+        if end < 0 or end + 3 - start > 4103:
+            yield line_at(start), "opaque_html_comment"
+        if end < 0:
+            break
+        cursor = end + 3
+
+    for match in re.finditer(r"</?[A-Za-z]", text):
+        line_end = text.find("\n", match.start())
+        if line_end < 0:
+            line_end = len(text)
+        if (
+            match.start() > 0
+            and text[match.start() - 1].isalpha()
+            and ">" in text[match.start() : line_end]
+        ):
+            tag = _HTML_TAG.match(text, match.start())
+            if tag is None:
+                yield line_at(match.start()), "opaque_html_tag"
+
+    for match in re.finditer(r"(?<=[^\W\d_])\[", text):
+        link = _MARKDOWN_LINK.match(text, match.start())
+        if (
+            link is None
+            and text.find("](", match.start(), match.start() + 1024) >= 0
+        ):
+            yield line_at(match.start()), "opaque_markdown_link"
+
+    rendered = text
+    for _depth in range(4):
+        decoded = unescape(rendered)
+        if decoded == rendered:
+            break
+        rendered = decoded
+    if unescape(rendered) != rendered:
+        start = text.find("&")
+        yield line_at(max(0, start)), "html_entity_depth"
+
+    token_start: int | None = None
+    for index, character in enumerate(text + " "):
+        if character.isalpha() or unicodedata.category(character).startswith("M"):
+            if token_start is None:
+                token_start = index
+            continue
+        if token_start is None:
+            continue
+        token = text[token_start:index]
+        if (
+            any(item.isascii() and item.isalpha() for item in token)
+            and any(
+                (
+                    not item.isascii()
+                    and (
+                        item not in _MIXED_SCRIPT_CONFUSABLES
+                        or unicodedata.category(item).startswith("M")
+                    )
+                )
+                for item in token
+            )
+            and active_context(token_start, index)
+        ):
+            yield line_at(token_start), "mixed_script_or_combining_token"
+        token_start = None
 
 
 def _active_segments_from_normalized(
@@ -584,8 +1037,10 @@ def _active_segments_from_normalized(
     path: str,
     digest: str,
     carrier: str,
+    scope_base: int,
     fixed_line: int | None = None,
-) -> Iterable[tuple[str, str, str, int, str]]:
+    line_map: tuple[int, ...] | None = None,
+) -> Iterable[_Segment]:
     quote_is_data = False
     for paragraph in re.finditer(
         r"(?:\A|\n\s*\n)(.*?)(?=\n\s*\n|\Z)",
@@ -604,26 +1059,69 @@ def _active_segments_from_normalized(
             if line.strip()
         )
         analysis_context = _ANALYSIS_CONTEXT.search(content) is not None
-        if analysis_context or (quoted and quote_is_data):
-            quote_is_data = analysis_context
+        if quoted and quote_is_data:
+            quote_is_data = False
             continue
-        quote_is_data = False
+        quote_is_data = analysis_context and content.rstrip().endswith(":")
         for clause, clause_offset in _clauses(content):
-            if _DEFENSIVE_CONTEXT.search(clause):
+            if _analysis_only(clause):
                 continue
+            defensive = _DEFENSIVE_CONTEXT.search(clause)
+            if defensive is not None:
+                active = _DEFENSIVE_CONTEXT.sub(
+                    lambda match: " " * len(match.group(0)),
+                    clause,
+                )
+                leading = len(active) - len(active.lstrip())
+                clause_offset += leading
+                clause = active.strip()
+                if not clause:
+                    continue
             line = (
                 fixed_line
                 if fixed_line is not None
+                else line_map[offset + clause_offset]
+                if line_map is not None
                 else text.count("\n", 0, offset + clause_offset) + 1
             )
-            yield (clause, path, digest, line, carrier)
+            clause_lines = (
+                line_map[
+                    offset
+                    + clause_offset : offset
+                    + clause_offset
+                    + len(clause)
+                ]
+                if line_map is not None
+                else None
+            )
+            yield (
+                clause,
+                path,
+                digest,
+                line,
+                carrier,
+                (scope_base, paragraph.start(1)),
+                clause_lines,
+            )
 
 
 def _clauses(text: str) -> Iterable[tuple[str, int]]:
     start = 0
     boundary = re.compile(
-        r"(?:[.!?;](?=\s|$)|,\s*(?=(?:but|instead|however)\b)|"
-        r"\s+(?=(?:but|instead|however)\b))",
+        r"(?:[.!?;](?=\s|$)|(?:[,:\u2013\u2014]\s*|\s+-\s+)"
+        r"(?=(?:(?:but|instead|however|then|yet)\s+)?"
+        r"(?:read|collect|obtain|access|extract|export|reveal|disclose|expose|"
+        r"post|send|upload|transmit|download|fetch|retrieve|curl|wget|decode|"
+        r"execute|run|launch|source|delete|remove|erase|wipe|copy|install)\b)|"
+        r"\s+(?=(?:but|instead|however|then|yet|and\s+then)\b)|"
+        r"\s+(?=(?:while|after|before|once)\s+(?:you\s+)?"
+        r"(?:read|collect|obtain|access|extract|export|reveal|disclose|expose|"
+        r"post|send|upload|transmit|download|fetch|retrieve|curl|wget|decode|"
+        r"execute|run|launch|source|delete|remove|erase|wipe|copy|install)\b)|"
+        r"\s+(?=and\s+(?:read|collect|obtain|access|extract|export|reveal|"
+        r"disclose|expose|post|send|upload|transmit|download|fetch|retrieve|"
+        r"curl|wget|decode|execute|run|launch|source|delete|remove|erase|wipe|"
+        r"copy|install)\b))",
         re.IGNORECASE,
     )
     for match in boundary.finditer(text):
@@ -637,23 +1135,89 @@ def _clauses(text: str) -> Iterable[tuple[str, int]]:
         yield clause, start + len(text[start:]) - len(text[start:].lstrip())
 
 
+def _analysis_only(text: str) -> bool:
+    directive = _ANALYSIS_DIRECTIVE.search(text)
+    if directive is None or not (
+        _ANALYSIS_CONTEXT.search(text)
+        or re.match(
+            r"\s*(?:explain|discuss)\s+(?:why|how)\b",
+            text,
+            re.IGNORECASE,
+        )
+    ):
+        return False
+    matches = [
+        match
+        for pattern in (
+            _PROMPT_OVERRIDE,
+            _PROMPT_DISCLOSURE,
+            _SENSITIVE_ACCESS,
+            _TRANSFER_SINK,
+            _FETCH_OR_DECODE,
+            _EXECUTION_SINK,
+            _DESTRUCTIVE_ACTION,
+            _PERSISTENCE_ACTION,
+            _AGENT_PROPAGATION,
+        )
+        if (match := pattern.search(text, directive.end())) is not None
+    ]
+    quoted = tuple(_QUOTED_DATA_SPAN.finditer(text))
+    return not matches or all(
+        any(span.start() <= match.start() < span.end() for span in quoted)
+        or _EXPLANATION_GOVERNOR.search(
+            text[directive.end() : match.start()]
+        ) is not None
+        for match in matches
+    )
+
+
+def _relation_windows(segments: Iterable[_Segment]) -> Iterable[_Window]:
+    retained = tuple(segments)
+    for index, first in enumerate(retained):
+        yield (first,)
+        for width in (2, 3):
+            window = retained[index : index + width]
+            if len(window) != width:
+                continue
+            if all(
+                first[1] == segment[1]
+                and first[2] == segment[2]
+                and first[4] == segment[4]
+                and first[5] == segment[5]
+                for segment in window[1:]
+            ):
+                yield window
+
+
+def _window_text(window: _Window) -> str:
+    return "\n".join(segment[0] for segment in window)
+
+
 def _matching_locations(
-    segments: Iterable[tuple[str, str, str, int, str]],
+    windows: Iterable[_Window],
     patterns: Iterable[re.Pattern[str]],
 ) -> list[dict[str, Any]]:
     locations: list[dict[str, Any]] = []
     seen: set[tuple[str, str, int, str]] = set()
-    for text, path, digest, line, carrier in segments:
+    for window in windows:
+        window_text = _window_text(window)
         for pattern in patterns:
-            match = pattern.search(text)
+            match = pattern.search(window_text)
             if match is None:
                 continue
+            offset = 0
+            for text, path, digest, line, carrier, _scope, line_map in window:
+                if match.start() <= offset + len(text):
+                    break
+                offset += len(text) + 1
             signal = f"{carrier}:{_SIGNAL_NAMES[pattern]}"
-            match_line = (
-                line
-                if carrier == "base64_decoded"
-                else line + text.count("\n", 0, match.start())
-            )
+            relative = max(0, match.start() - offset)
+            if line_map:
+                match_line = line_map[min(relative, len(line_map) - 1)]
+            elif carrier.startswith("base64_"):
+                match_line = line
+            else:
+                match_line = line + text.count("\n", 0, relative)
             key = (path, digest, match_line, signal)
             if key in seen:
                 continue
@@ -678,7 +1242,7 @@ def compose_candidate_decision(
     *,
     first_party_observations: Iterable[Observation] = (),
 ) -> tuple[str, list[str]]:
-    """Apply the frozen label-free vendor-union policy."""
+    """Apply one supported frozen, label-free candidate policy."""
 
     canonical_policy = build_candidate_policy(policy)
     graph = _source_graph(source_graph)
@@ -726,16 +1290,42 @@ def compose_candidate_decision(
     if errors:
         return "ERROR", sorted(errors)
 
-    denied = [
-        component
-        for component in normalized
-        if component["verdict"] == "DENY"
-    ]
-    if denied:
-        reasons = _actionable_reasons(denied)
-        return "DENY", reasons or ["COMPARATOR_DENY"]
-
     first_party = tuple(first_party_observations)
+    if canonical_policy["algorithm"] == POLICY_ALGORITHM_V2:
+        denied = [
+            component
+            for component in normalized
+            if component["verdict"] == "DENY"
+        ]
+        if denied:
+            reasons = _actionable_reasons(denied)
+            return "DENY", reasons or ["COMPARATOR_DENY"]
+        if any(
+            not isinstance(observation, Observation)
+            or observation.schema != OBSERVATION_SCHEMA
+            or observation.subject_digest != graph["tree_digest"]
+            for observation in first_party
+        ):
+            raise CandidateError(
+                "first-party observations do not bind the source graph"
+            )
+        review_reasons = {
+            observation.reason_code for observation in first_party
+        }
+        cisco = by_name["cisco-skill-scanner"]
+        if cisco["verdict"] == "REVIEW":
+            review_reasons.update(cisco["reason_codes"])
+        nvidia = by_name["skillspector"]
+        if nvidia["verdict"] == "REVIEW":
+            review_reasons.update(
+                reason
+                for reason in nvidia["reason_codes"]
+                if reason != _NVIDIA_INCOMPLETE
+            )
+        if review_reasons:
+            return "REVIEW", sorted(review_reasons)
+        return "ALLOW", []
+
     if any(
         not isinstance(observation, Observation)
         or observation.schema != OBSERVATION_SCHEMA
@@ -743,19 +1333,46 @@ def compose_candidate_decision(
         for observation in first_party
     ):
         raise CandidateError("first-party observations do not bind the source graph")
-    review_reasons = {observation.reason_code for observation in first_party}
-    cisco = by_name["cisco-skill-scanner"]
-    if cisco["verdict"] == "REVIEW":
-        review_reasons.update(cisco["reason_codes"])
-    nvidia = by_name["skillspector"]
-    if nvidia["verdict"] == "REVIEW":
-        review_reasons.update(
+    incomplete = [
+        observation
+        for observation in first_party
+        if observation.reason_code == "ARAGORN_ANALYSIS_INCOMPLETE"
+    ]
+    if incomplete:
+        if any(observation.severity != "medium" for observation in incomplete):
+            raise CandidateError("first-party incomplete analysis is malformed")
+        return "ERROR", ["ARAGORN_ANALYSIS_INCOMPLETE"]
+    actionable = [
+        observation
+        for observation in first_party
+        if observation.reason_code in _FIRST_PARTY_ACTIONABLE
+        and observation.severity == "high"
+    ]
+    if len(actionable) != len(first_party):
+        raise CandidateError("first-party observation is unsupported")
+
+    intervened = [
+        component
+        for component in normalized
+        if component["verdict"] in {"REVIEW", "DENY"}
+        and _actionable_reasons((component,))
+    ]
+    if len(intervened) == 2:
+        reasons = {
             reason
-            for reason in nvidia["reason_codes"]
-            if reason != _NVIDIA_INCOMPLETE
+            for reason in _actionable_reasons(intervened)
+        }
+        reasons.update(observation.reason_code for observation in actionable)
+        verdict = (
+            "DENY"
+            if all(component["verdict"] == "DENY" for component in intervened)
+            else "REVIEW"
         )
-    if review_reasons:
-        return "REVIEW", sorted(review_reasons)
+        return verdict, sorted(reasons)
+    if actionable:
+        return "REVIEW", sorted(
+            {observation.reason_code for observation in actionable}
+        )
     return "ALLOW", []
 
 
@@ -794,6 +1411,13 @@ def compose_candidate_batch(
             "candidate policy",
         )
     )
+    if (
+        policy["candidate"]["implementation_digest"]
+        != candidate_implementation_digest()
+    ):
+        raise CandidateError(
+            "candidate policy implementation digest does not match composer bytes"
+        )
     policy_digest = canonical_digest(policy)
     if policy_digest != dispatch["candidate_policy_digest"]:
         raise CandidateError("candidate policy digest changed")

@@ -132,10 +132,15 @@ def _portable_policies() -> list[dict]:
     ]
 
 
-def _v2_suite(root: Path, policies: list[dict]) -> Path:
+def _v2_suite(
+    root: Path,
+    policies: list[dict],
+    *,
+    suite_name: str = "oci-suite.json",
+) -> Path:
     root.mkdir(mode=0o700)
     shutil.copytree(BENCHMARK / "oci-fixtures", root / "oci-fixtures")
-    suite = json.loads((BENCHMARK / "oci-suite.json").read_text(encoding="utf-8"))
+    suite = json.loads((BENCHMARK / suite_name).read_text(encoding="utf-8"))
     policy_by_name = {policy["system"]["name"]: policy for policy in policies}
     for system in suite["systems"]:
         system["config_digest"] = portable_policy_digest(
@@ -474,7 +479,7 @@ class LabelBlindPrepareTests(unittest.TestCase):
 
 
 class LabelBlindPrepareV2Tests(unittest.TestCase):
-    def test_composes_one_exact_candidate_from_each_comparator_pair(self) -> None:
+    def test_composes_public_first_party_positive_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             os.chmod(root, 0o700)
@@ -482,7 +487,11 @@ class LabelBlindPrepareV2Tests(unittest.TestCase):
             ledger = root / "ledger"
             policies = _portable_policies()
             policy = _candidate_policy(policies)
-            suite = _v2_suite(root / "suite-input", policies)
+            suite = _v2_suite(
+                root / "suite-input",
+                policies,
+                suite_name="phase0-oci-pilot-v1.json",
+            )
             suite_document = json.loads(suite.read_bytes())
             suite_document["systems"].append(candidate_system_identity(policy))
             suite.write_bytes(canonical_json(suite_document))
@@ -556,6 +565,7 @@ class LabelBlindPrepareV2Tests(unittest.TestCase):
                 len(composition["outcomes"]),
                 len(dispatch["cases"]) * dispatch["runs_per_case"] * 3,
             )
+            candidate_outcomes = {}
             for case in dispatch["cases"]:
                 self.assertTrue(
                     {"class", "family", "split"}.isdisjoint(case)
@@ -583,6 +593,7 @@ class LabelBlindPrepareV2Tests(unittest.TestCase):
                     evidence = json.loads(
                         cas.read(candidate["evidence_digest"])
                     )
+                    candidate_outcomes[case["case_id"]] = (candidate, evidence)
                     self.assertEqual(
                         evidence["schema"],
                         "aragorn/benchmark-candidate-evidence/v2",
@@ -599,6 +610,19 @@ class LabelBlindPrepareV2Tests(unittest.TestCase):
                             if outcome["system"]["name"] != "aragorn"
                         ),
                     )
+            positive, positive_evidence = candidate_outcomes[
+                "destructive-workspace-cleanup"
+            ]
+            self.assertEqual(positive["verdict"], "REVIEW")
+            self.assertTrue(
+                positive_evidence["first_party_observation_digests"]
+            )
+            benign, benign_evidence = candidate_outcomes["benign-basic"]
+            self.assertEqual(benign["verdict"], "ALLOW")
+            self.assertEqual(
+                benign_evidence["first_party_observation_digests"],
+                [],
+            )
 
     def test_candidate_policy_dispatches_only_comparators(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

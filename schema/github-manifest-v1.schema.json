@@ -24,8 +24,14 @@
       "properties": {
         "kind": {"const": "github_commit"},
         "host": {"const": "github.com"},
-        "owner": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,38}$"},
-        "repository": {"type": "string", "pattern": "^[a-z0-9_.-]{1,100}$"},
+        "owner": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)(?!.*\\.git$)[a-z0-9_.-]{1,100}$"
+        },
         "commit": {"$ref": "#/$defs/git_sha1"},
         "repository_hash_algorithm": {"const": "sha1"},
         "commit_tree": {"$ref": "#/$defs/git_sha1"},

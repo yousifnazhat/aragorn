@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-acquisition-oracle-lock-v1.schema.json",
+  "title": "Aragorn Phase 0 acquisition/reference oracle lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "oracle_digest",
+    "candidate_policy_digest",
+    "root_suite_digest",
+    "expanded_suite_digest",
+    "split",
+    "case_count",
+    "class_counts",
+    "family_counts",
+    "lineage_count",
+    "runs_per_case",
+    "candidate_system",
+    "comparators",
+    "expansion_profile",
+    "budgets"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-phase0-acquisition-oracle-lock/v1"},
+    "assurance": {
+      "const": "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    },
+    "oracle_digest": {"$ref": "#/$defs/digest"},
+    "candidate_policy_digest": {"$ref": "#/$defs/digest"},
+    "root_suite_digest": {"$ref": "#/$defs/digest"},
+    "expanded_suite_digest": {"$ref": "#/$defs/digest"},
+    "split": {"const": "held_out"},
+    "case_count": {"const": 448},
+    "class_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adversarial", "benign"],
+      "properties": {
+        "adversarial": {"const": 112},
+        "benign": {"const": 336}
+      }
+    },
+    "family_counts": {
+      "type": "object",
+      "minProperties": 2,
+      "maxProperties": 448,
+      "required": ["benign"],
+      "properties": {
+        "benign": {"const": 336}
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 112
+      },
+      "propertyNames": {"$ref": "#/$defs/id"}
+    },
+    "lineage_count": {"const": 448},
+    "runs_per_case": {"const": 1},
+    "candidate_system": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v1.schema.json#/$defs/system"
+    },
+    "comparators": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v1.schema.json#/$defs/system"
+      }
+    },
+    "expansion_profile": {"const": "phase0-exact-github-blob-expansion/v1"},
+    "budgets": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-acquisition-oracle-v1.schema.json#/$defs/budgets"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

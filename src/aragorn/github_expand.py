@@ -288,6 +288,7 @@ def acquire_github_expansion(
                         "source_repository_path": source_repository_path,
                         "source_blob_digest": edge["source_blob_digest"],
                         "byte_offset": edge["byte_offset"],
+                        "literal_size": edge["literal_size"],
                         "literal_digest": edge["literal_digest"],
                     }
                     target_references = references_by_target.setdefault(
@@ -401,6 +402,7 @@ def acquire_github_expansion(
                 "source_repository_path": source_repository_path,
                 "source_blob_digest": edge["source_blob_digest"],
                 "byte_offset": edge["byte_offset"],
+                "literal_size": edge["literal_size"],
                 "literal_digest": edge["literal_digest"],
             }
             target_references = references_by_target.setdefault(target_path, [])
@@ -639,6 +641,7 @@ def acquire_github_expansion(
                 "source_repository_path": deferred["source_repository_path"],
                 "source_blob_digest": deferred["edge"]["source_blob_digest"],
                 "byte_offset": deferred["edge"]["byte_offset"],
+                "literal_size": deferred["edge"]["literal_size"],
                 "literal_digest": deferred["edge"]["literal_digest"],
             }
             target_references = references_by_target.setdefault(target_path, [])
@@ -693,6 +696,7 @@ def acquire_github_expansion(
                         key=lambda reference: (
                             reference["source_repository_path"],
                             reference["byte_offset"],
+                            reference["literal_size"],
                             reference["literal_digest"],
                         ),
                     ),
@@ -709,6 +713,7 @@ def acquire_github_expansion(
         key=lambda occurrence: (
             occurrence["source_repository_path"],
             occurrence["byte_offset"],
+            occurrence["literal_size"],
             occurrence["literal_digest"],
             occurrence["target_repository_path"] or "",
             occurrence["status"],
@@ -1019,6 +1024,7 @@ def _scan_entry(
             source=source,
             source_by_path=source_by_path,
             redact_dynamic_literals=False,
+            include_literal_size=True,
         )
     except ReferenceBudgetExceeded as exc:
         raise _IncompleteExpansion(
@@ -1086,6 +1092,7 @@ def _occurrence(
         "source_repository_path": source_repository_path,
         "source_blob_digest": edge["source_blob_digest"],
         "byte_offset": edge["byte_offset"],
+        "literal_size": edge["literal_size"],
         "literal_digest": edge["literal_digest"],
         "target_repository_path": target_repository_path,
         "status": status,

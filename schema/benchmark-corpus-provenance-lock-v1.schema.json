@@ -8,7 +8,11 @@
     "schema",
     "corpus_id",
     "assurance",
+    "case_count",
+    "runs_per_case",
     "worker_archive",
+    "public_manifest",
+    "evaluator_archive",
     "freeze",
     "signing"
   ],
@@ -18,6 +22,8 @@
     "assurance": {
       "const": "technical_codex_authorship_not_independent_human_identity"
     },
+    "case_count": {"const": 448},
+    "runs_per_case": {"const": 1},
     "worker_archive": {
       "type": "object",
       "additionalProperties": false,
@@ -27,6 +33,22 @@
           "type": "string",
           "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$"
         },
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "public_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "evaluator_archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
         "sha256": {"$ref": "#/$defs/digest"}
       }
     },

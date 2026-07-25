@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import argparse
-from io import BytesIO
 import json
 import math
 import os
-from pathlib import Path
 import re
-from secrets import token_hex as _token_hex
 import shutil
 import stat
 import sys
-from typing import Any, Sequence
 import unicodedata
+from collections.abc import Sequence
+from io import BytesIO
+from pathlib import Path
+from secrets import token_hex as _token_hex
+from typing import Any
 
 from .benchmark import BenchmarkError, load_suite_for_run
 from .benchmark_authenticated_handoff_v2 import (
@@ -43,7 +44,6 @@ from .oci_worker_protocol import (
     validate_worker_request,
 )
 
-
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IDENTIFIER = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
 _JOB_ID = re.compile(r"[0-9a-f]{32}\Z")
@@ -68,6 +68,11 @@ _SYSTEM_KEYS = {
     "config_digest",
 }
 _WORKLIST_JOB_KEYS = {"job_id", "request_digest"}
+_DISPATCH_CASE_KEYS = {
+    "case_id",
+    "tree_digest",
+    "private_manifest_digest",
+}
 
 
 class PrepareError(ValueError):
@@ -78,6 +83,7 @@ def prepare_files_v2(
     suite_path: str | os.PathLike[str],
     *,
     portable_policies: Sequence[object],
+    candidate_policy: object | None = None,
     trust_domain: str,
     worker_id: str,
     challenge_ledger: str | os.PathLike[str],
@@ -99,6 +105,12 @@ def prepare_files_v2(
         jobs_root=job_root,
         ledger_root=ledger_root,
     )
+    if candidate_policy is not None:
+        if os.path.lexists(control_root):
+            raise PrepareError(
+                "candidate composition requires a fresh control CAS"
+            )
+        _require_real_directory(control_root.parent, "control CAS parent")
     for path, label in (
         (job_root, "jobs root"),
         (ledger_root, "challenge ledger"),
@@ -113,6 +125,52 @@ def prepare_files_v2(
         control_cas,
         required_purpose="evidence_smoke",
     )
+    worker_systems = loaded["systems"]
+    candidate_system: dict[str, str] | None = None
+    candidate_policy_digest: str | None = None
+    canonical_candidate_policy: dict[str, Any] | None = None
+    if candidate_policy is not None:
+        from .phase0_candidate import (
+            build_candidate_policy,
+            candidate_system_identity,
+        )
+        from .phase0_candidate import (
+            candidate_policy_digest as digest_candidate_policy,
+        )
+
+        canonical_candidate_policy = build_candidate_policy(candidate_policy)
+        candidate_policy_digest = digest_candidate_policy(
+            canonical_candidate_policy
+        )
+        candidate_system = candidate_system_identity(
+            canonical_candidate_policy
+        )
+        matches = [
+            key
+            for key, system in loaded["systems"].items()
+            if system["name"] == "aragorn"
+        ]
+        if len(matches) != 1 or loaded["systems"][matches[0]] != candidate_system:
+            raise PrepareError(
+                "suite Aragorn identity does not match the candidate policy"
+            )
+        worker_systems = {
+            key: system
+            for key, system in loaded["systems"].items()
+            if system["name"] != "aragorn"
+        }
+        if sorted(
+            worker_systems.values(),
+            key=lambda system: system["name"],
+        ) != canonical_candidate_policy["required_comparators"]:
+            raise PrepareError(
+                "suite comparator identities do not match the candidate policy"
+            )
+    elif any(
+        system["name"] == "aragorn" for system in loaded["systems"].values()
+    ):
+        raise PrepareError("suite Aragorn identity requires a candidate policy")
+
     raw_lock, baselines = load_baseline_lock(lock_file)
     lock_digest = _put_bytes(control_cas, raw_lock)
     baseline_digests = {
@@ -120,7 +178,7 @@ def prepare_files_v2(
         for baseline in baselines
     }
     policies = _bind_portable_policies(
-        loaded["systems"],
+        worker_systems,
         portable_policies,
         baselines=baselines,
         lock_digest=lock_digest,
@@ -130,10 +188,14 @@ def prepare_files_v2(
         name: _put_json(control_cas, policy)
         for name, policy in policies.items()
     }
+    if canonical_candidate_policy is not None:
+        retained_candidate_policy_digest = _put_json(
+            control_cas,
+            canonical_candidate_policy,
+        )
+        if retained_candidate_policy_digest != candidate_policy_digest:
+            raise PrepareError("candidate policy changed during retention")
 
-    suite_digest = _put_json(control_cas, loaded["canonical"])
-    if suite_digest != loaded["digest"]:
-        raise PrepareError("canonical suite digest changed during retention")
     private_manifest_digests = {
         case_id: _put_json(control_cas, manifest)
         for case_id, manifest in loaded["manifests"].items()
@@ -148,8 +210,8 @@ def prepare_files_v2(
     identities = {
         "schema": "aragorn/benchmark-system-identities/v1",
         "systems": [
-            dict(loaded["systems"][key])
-            for key in sorted(loaded["systems"])
+            dict(worker_systems[key])
+            for key in sorted(worker_systems)
         ],
     }
     identities_digest = _put_json(control_cas, identities)
@@ -163,8 +225,8 @@ def prepare_files_v2(
         entries: list[dict[str, Any]] = []
         job_ids: set[str] = set()
         challenges: set[str] = set()
-        for system_key in sorted(loaded["systems"]):
-            system = loaded["systems"][system_key]
+        for system_key in sorted(worker_systems):
+            system = worker_systems[system_key]
             policy = policies[system["name"]]
             if policy_digests[system["name"]] != _put_json(control_cas, policy):
                 raise PrepareError("portable policy changed during retention")
@@ -235,17 +297,37 @@ def prepare_files_v2(
                     )
 
         expected_jobs = (
-            len(loaded["systems"])
+            len(worker_systems)
             * len(loaded["cases"])
             * loaded["runs_per_case"]
         )
         if len(entries) != expected_jobs:
             raise PrepareError("prepared job matrix is incomplete")
-        dispatch = {
-            "schema": "aragorn/benchmark-private-dispatch/v1",
-            "jobs": sorted(entries, key=lambda entry: entry["job_id"]),
-        }
-        validate_private_dispatch(dispatch)
+        if candidate_system is None:
+            dispatch = {
+                "schema": "aragorn/benchmark-private-dispatch/v1",
+                "jobs": sorted(entries, key=lambda entry: entry["job_id"]),
+            }
+            validate_private_dispatch(dispatch)
+        else:
+            assert candidate_policy_digest is not None
+            dispatch = {
+                "schema": "aragorn/benchmark-private-dispatch/v2",
+                "suite_digest": loaded["digest"],
+                "candidate_system": candidate_system,
+                "candidate_policy_digest": candidate_policy_digest,
+                "runs_per_case": loaded["runs_per_case"],
+                "cases": [
+                    {
+                        "case_id": case_id,
+                        "tree_digest": loaded["cases"][case_id]["tree_digest"],
+                        "private_manifest_digest": private_manifest_digests[case_id],
+                    }
+                    for case_id in sorted(loaded["cases"])
+                ],
+                "jobs": sorted(entries, key=lambda entry: entry["job_id"]),
+            }
+            validate_private_dispatch_v2(dispatch)
         dispatch_digest = _put_json(control_cas, dispatch)
         worklist = {
             "schema": "aragorn/benchmark-worker-worklist/v1",
@@ -267,14 +349,21 @@ def prepare_files_v2(
             "worker worklist",
         )
         completed = True
-        return {
-            "schema": "aragorn/benchmark-prepare-result/v1",
+        result = {
+            "schema": (
+                "aragorn/benchmark-prepare-result/v1"
+                if candidate_system is None
+                else "aragorn/benchmark-prepare-result/v2"
+            ),
             "suite_digest": loaded["digest"],
             "dispatch_digest": dispatch_digest,
             "worker_identities_digest": identities_digest,
             "worklist_digest": worklist_digest,
             "job_count": len(entries),
         }
+        if candidate_policy_digest is not None:
+            result["candidate_policy_digest"] = candidate_policy_digest
+        return result
     finally:
         if not completed:
             shutil.rmtree(job_root, ignore_errors=True)
@@ -501,6 +590,134 @@ def validate_private_dispatch(document: object) -> None:
         raise PrepareError("private dispatch spans multiple suites")
     if normalized_ids != sorted(normalized_ids):
         raise PrepareError("private dispatch jobs must be sorted by job_id")
+
+
+def validate_private_dispatch_v2(document: object) -> None:
+    """Validate a comparator-only dispatch with one derived Aragorn identity."""
+
+    dispatch = _exact_object(
+        document,
+        {
+            "schema",
+            "suite_digest",
+            "candidate_system",
+            "candidate_policy_digest",
+            "runs_per_case",
+            "cases",
+            "jobs",
+        },
+        "private dispatch v2",
+    )
+    if dispatch["schema"] != "aragorn/benchmark-private-dispatch/v2":
+        raise PrepareError("private dispatch v2 schema is unsupported")
+    suite_digest = _digest(
+        dispatch["suite_digest"],
+        "private dispatch v2 suite_digest",
+    )
+    policy_digest = _digest(
+        dispatch["candidate_policy_digest"],
+        "private dispatch v2 candidate_policy_digest",
+    )
+    candidate = _system(
+        dispatch["candidate_system"],
+        "private dispatch v2 candidate_system",
+    )
+    if candidate["name"] != "aragorn":
+        raise PrepareError("private dispatch v2 candidate must be Aragorn")
+    if candidate["config_digest"] != policy_digest:
+        raise PrepareError(
+            "private dispatch v2 candidate config does not match its policy"
+        )
+    runs_per_case = dispatch["runs_per_case"]
+    if (
+        isinstance(runs_per_case, bool)
+        or not isinstance(runs_per_case, int)
+        or not 1 <= runs_per_case <= 10
+    ):
+        raise PrepareError("private dispatch v2 runs_per_case is invalid")
+    raw_cases = dispatch["cases"]
+    if not isinstance(raw_cases, list) or not 1 <= len(raw_cases) <= 10_000:
+        raise PrepareError("private dispatch v2 cases must be a bounded array")
+    cases: dict[str, dict[str, str]] = {}
+    ordered_case_ids: list[str] = []
+    for index, raw_case in enumerate(raw_cases):
+        label = f"private dispatch v2 cases[{index}]"
+        case = _exact_object(raw_case, _DISPATCH_CASE_KEYS, label)
+        case_id = _identifier(case["case_id"], f"{label}.case_id")
+        if case_id in cases:
+            raise PrepareError("private dispatch v2 repeats a case")
+        cases[case_id] = {
+            "tree_digest": _digest(case["tree_digest"], f"{label}.tree_digest"),
+            "private_manifest_digest": _digest(
+                case["private_manifest_digest"],
+                f"{label}.private_manifest_digest",
+            ),
+        }
+        ordered_case_ids.append(case_id)
+    if ordered_case_ids != sorted(ordered_case_ids):
+        raise PrepareError("private dispatch v2 cases must be sorted by case_id")
+    validate_private_dispatch(
+        {
+            "schema": "aragorn/benchmark-private-dispatch/v1",
+            "jobs": dispatch["jobs"],
+        }
+    )
+    if any(
+        entry["suite_digest"] != suite_digest
+        for entry in dispatch["jobs"]
+    ):
+        raise PrepareError("private dispatch v2 job suite digest does not match")
+    if any(
+        entry["system"]["name"] == "aragorn"
+        for entry in dispatch["jobs"]
+    ):
+        raise PrepareError("private dispatch v2 cannot dispatch Aragorn to a worker")
+    systems = {
+        (
+            entry["system"]["name"],
+            entry["system"]["version"],
+            entry["system"]["implementation_digest"],
+            entry["system"]["config_digest"],
+        )
+        for entry in dispatch["jobs"]
+    }
+    if {system[0] for system in systems} != {
+        "cisco-skill-scanner",
+        "skillspector",
+    } or len(systems) != 2:
+        raise PrepareError(
+            "private dispatch v2 requires the exact two comparator systems"
+        )
+    actual_matrix = set()
+    for entry in dispatch["jobs"]:
+        case = cases.get(entry["case_id"])
+        if case is None or any(
+            entry[field] != case[field]
+            for field in ("tree_digest", "private_manifest_digest")
+        ):
+            raise PrepareError(
+                "private dispatch v2 job does not match its declared case"
+            )
+        actual_matrix.add(
+            (
+                (
+                    entry["system"]["name"],
+                    entry["system"]["version"],
+                    entry["system"]["implementation_digest"],
+                    entry["system"]["config_digest"],
+                ),
+                entry["case_id"],
+                entry["run_id"],
+            )
+        )
+    expected_matrix = {
+        (system, case_id, run_id)
+        for system in systems
+        for case_id in cases
+        for run_id in range(1, runs_per_case + 1)
+    }
+    if actual_matrix != expected_matrix:
+        raise PrepareError("private dispatch v2 job matrix is incomplete")
 
 
 def validate_worker_worklist(document: object) -> None:

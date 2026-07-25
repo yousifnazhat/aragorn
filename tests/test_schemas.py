@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
 EXPECTED_CONTRACTS = {
@@ -12,6 +11,10 @@ EXPECTED_CONTRACTS = {
     "baseline-image-verification-v1.schema.json": "aragorn/baseline-image-verification/v1",
     "baseline-lock-v1.schema.json": "aragorn/baseline-lock/v1",
     "benchmark-cas-handoff-v1.schema.json": "aragorn/benchmark-cas-handoff/v1",
+    "benchmark-authenticated-worker-evidence-v1.schema.json": "aragorn/benchmark-authenticated-worker-evidence/v1",
+    "benchmark-candidate-composition-v1.schema.json": "aragorn/benchmark-candidate-composition/v1",
+    "benchmark-candidate-evidence-v1.schema.json": "aragorn/benchmark-candidate-evidence/v1",
+    "benchmark-candidate-policy-v1.schema.json": "aragorn/benchmark-candidate-policy/v1",
     "benchmark-collection-v1.schema.json": "aragorn/benchmark-collection/v1",
     "benchmark-collection-result-v1.schema.json": "aragorn/benchmark-collection-result/v1",
     "benchmark-corpus-provenance-lock-v1.schema.json": "aragorn/benchmark-corpus-provenance-lock/v1",
@@ -26,9 +29,13 @@ EXPECTED_CONTRACTS = {
     "benchmark-outcome-v1.schema.json": "aragorn/benchmark-outcome/v1",
     "benchmark-phase0-accounting-v1.schema.json": "aragorn/benchmark-phase0-accounting/v1",
     "benchmark-phase0-gate-report-v1.schema.json": "aragorn/benchmark-phase0-gate-report/v1",
+    "benchmark-phase0-gate-report-v2.schema.json": "aragorn/benchmark-phase0-gate-report/v2",
+    "benchmark-phase0-hidden-suite-lock-v1.schema.json": "aragorn/benchmark-phase0-hidden-suite-lock/v1",
     "benchmark-portable-policy-v1.schema.json": "aragorn/benchmark-portable-policy/v1",
     "benchmark-private-dispatch-v1.schema.json": "aragorn/benchmark-private-dispatch/v1",
+    "benchmark-private-dispatch-v2.schema.json": "aragorn/benchmark-private-dispatch/v2",
     "benchmark-prepare-result-v1.schema.json": "aragorn/benchmark-prepare-result/v1",
+    "benchmark-prepare-result-v2.schema.json": "aragorn/benchmark-prepare-result/v2",
     "benchmark-report-v1.schema.json": "aragorn/benchmark-report/v1",
     "benchmark-subject-manifest-v1.schema.json": "aragorn/benchmark-subject-manifest/v1",
     "benchmark-suite-v1.schema.json": "aragorn/benchmark-suite/v1",

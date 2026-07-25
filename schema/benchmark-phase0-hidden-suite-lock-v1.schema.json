@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-lock-v1.schema.json",
+  "title": "Aragorn Phase 0 hidden suite pre-outcome lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "corpus_lock_digest",
+    "worker_archive_digest",
+    "public_manifest_digest",
+    "evaluator_archive_digest",
+    "label_ledger_digest",
+    "candidate_policy_digest",
+    "suite_digest",
+    "case_count",
+    "class_counts",
+    "runs_per_case",
+    "split",
+    "systems"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-phase0-hidden-suite-lock/v1"},
+    "assurance": {
+      "const": "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    },
+    "corpus_lock_digest": {"$ref": "#/$defs/digest"},
+    "worker_archive_digest": {"$ref": "#/$defs/digest"},
+    "public_manifest_digest": {"$ref": "#/$defs/digest"},
+    "evaluator_archive_digest": {"$ref": "#/$defs/digest"},
+    "label_ledger_digest": {"$ref": "#/$defs/digest"},
+    "candidate_policy_digest": {"$ref": "#/$defs/digest"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "case_count": {"const": 448},
+    "class_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["benign", "adversarial"],
+      "properties": {
+        "benign": {"const": 336},
+        "adversarial": {"const": 112}
+      }
+    },
+    "runs_per_case": {"const": 1},
+    "split": {"const": "hidden"},
+    "systems": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/system"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "canonicalString": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$"
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {
+          "allOf": [
+            {"$ref": "#/$defs/canonicalString"},
+            {"maxLength": 256}
+          ]
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

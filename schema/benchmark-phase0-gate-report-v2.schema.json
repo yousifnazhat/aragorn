@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v2.schema.json",
+  "title": "Aragorn Phase 0 hidden efficacy gate report v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "suite_id",
+    "purpose",
+    "suite_digest",
+    "outcomes_digest",
+    "benchmark_report_digest",
+    "corpus_lock_digest",
+    "public_manifest_digest",
+    "hidden_suite_lock_digest",
+    "candidate_policy_digest",
+    "label_ledger_digest",
+    "evaluation_split",
+    "comparison"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-phase0-gate-report/v2"},
+    "assurance": {"const": "comparative_metrics_only"},
+    "suite_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "purpose": {"const": "evidence_smoke"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "outcomes_digest": {"$ref": "#/$defs/digest"},
+    "benchmark_report_digest": {"$ref": "#/$defs/digest"},
+    "corpus_lock_digest": {"$ref": "#/$defs/digest"},
+    "public_manifest_digest": {"$ref": "#/$defs/digest"},
+    "hidden_suite_lock_digest": {"$ref": "#/$defs/digest"},
+    "candidate_policy_digest": {"$ref": "#/$defs/digest"},
+    "label_ledger_digest": {"$ref": "#/$defs/digest"},
+    "evaluation_split": {"const": "hidden"},
+    "comparison": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v1.schema.json#/$defs/comparison"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

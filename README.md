@@ -294,6 +294,29 @@ This opt-in path emits `aragorn/benchmark-phase0-gate-report/v1`. It makes the
 file evaluator callable; it does not create the private oracle, expansion
 receipts, comparator outcomes, isolated worker, or signed measurement.
 
+After the authenticated candidate-composition matrix is complete, score only
+the frozen hidden split without mixing in GitHub acquisition accounting:
+
+```console
+PYTHONPATH=src python3.12 -m aragorn.benchmark \
+  ./private-suite.json ./private-outcomes.jsonl \
+  --phase0-hidden-gate --state ./private-evidence-state \
+  --acceptance-ledger ./private-acceptance-ledger \
+  --phase0-corpus-lock benchmark/phase0-corpus.lock.json \
+  --phase0-public-manifest ./private-worker/manifest.json \
+  --phase0-hidden-suite-lock ./private-hidden-suite-lock.json \
+  --phase0-candidate-policy benchmark/phase0-candidate-policy.json \
+  --phase0-label-ledger-digest sha256:...
+```
+
+This evidence-only path emits `aragorn/benchmark-phase0-gate-report/v2`;
+acquisition/reference accounting remains in the separate v1 gate. The
+operator-asserted hidden-suite lock must be canonical JSON and signed-committed
+before dispatch or results. The gate checks its byte, corpus, policy, label
+ledger, exact 448-case public-manifest projection, suite, and three system
+bindings, but cannot prove wall-clock ordering, independent authorship, or
+timestamping.
+
 Benchmark v1 accepts only synthetic UTF-8 text fixtures explicitly declared inert. It rejects changed digests, executable files, links, special files, non-UTF-8 or NUL-bearing content, duplicate or overlapping cases, lineage changes in split, class, family, or provenance, undeclared systems, and incomplete system-by-case-by-run matrices. Evaluator-only `contract_smoke` validation uses a bounded temporary CAS. The `evidence_smoke` runner instead retains exact fixture bytes in its protected evidence CAS so later evaluation can reconstruct the workspace; neither path imports or executes fixture code.
 
 The adversarial fixtures are scanner inputs, not agent instructions. Their
@@ -473,14 +496,20 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete roadmap and [SECURITY.
 
 ## Next production gate
 
-Freeze and implement the evidence-bound Aragorn candidate composer before any
-hidden outcomes are viewed. Its deterministic policy must bind Aragorn's
-acquisition/reference result and the two accepted comparator results without
-receiving class, family, split, or expected-result fields. Then generate the
-private suite from the separately encrypted ledger and repeat the authenticated
-protocol-v2 path in fresh mount-free workers for all 448 cases. Protect labels,
-dispatch, challenges, expectations, trust store, and consumption ledger; keep
-declared-byte test transport outside every acceptance path.
+Run one public, unmocked two-comparator composition smoke through the frozen
+authenticated candidate path before any hidden outcomes are viewed. The
+implemented deterministic policy binds Aragorn's locally re-derived
+source-reference graph and both authenticated comparator results without
+receiving class, family, split, or expected-result fields. The checked Cisco
+and SkillSpector portable-policy files are the exact `prepare_files_v2`
+comparator inputs. The candidate `implementation_digest` binds all
+`src/aragorn` Python sources plus `requirements-worker.lock`; it is not runtime
+or hardware attestation, and the policy remains comparative-only. After that
+smoke passes, verify the encrypted evaluator package, generate and
+signed-commit the canonical hidden-suite lock before dispatch, then repeat the
+authenticated protocol-v2 path in fresh mount-free workers for all 448 cases.
+Protect labels, dispatch, challenges, expectations, trust store, and consumption
+ledger; keep declared-byte test transport outside every acceptance path.
 
 The accepted corpus measures inert natural-language skill and adversarial
 instruction risk. It does not by itself demonstrate recursive artifact
@@ -495,7 +524,7 @@ claiming product adoption.
 Phase 0 remains in progress until the full hidden matrix has crossed the
 isolated evaluation boundary, the separate acquisition/reference stratum has a
 frozen oracle and measured result, Aragorn exceeds the best burden-compliant
-comparator by at least 10 percentage points of held-out attack flag rate while
+comparator by at least 10 percentage points of hidden attack flag rate while
 keeping combined benign intervention at or below 5%, and the three-pack
 standards gate continues to validate with zero unresolved selected items. The
 18-case pilot, local and isolated worker receipts, and source-reference graph

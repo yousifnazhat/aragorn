@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from io import BytesIO
 import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import secrets
 import stat
 import tempfile
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from .benchmark_handoff_v2 import HandoffError, import_handoff
@@ -32,7 +32,6 @@ from .oci_worker_protocol import (
     canonical_digest,
     canonical_json,
 )
-
 
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _JOB_ID = re.compile(r"[0-9a-f]{32}\Z")
@@ -268,6 +267,114 @@ def collect_signed_worker_output(
         return receipt
 
 
+def load_verified_worker_output_acceptance(
+    destination_cas: CAS,
+    ledger_root: str | os.PathLike[str],
+    verifier_challenge: str,
+) -> dict[str, dict[str, Any]]:
+    """Load and replay-verify one accepted result from a protected ledger."""
+
+    _hex(verifier_challenge, _CHALLENGE, "verifier challenge")
+    root = _prepare_ledger(ledger_root)
+    with _ledger_lock(root):
+        issuance = _load_record(
+            root / "issuances" / f"{verifier_challenge}.json",
+            "worker measurement issuance",
+        )
+        receipt = _load_record(
+            root / "receipts" / f"{verifier_challenge}.json",
+            "worker output acceptance receipt",
+        )
+        if (
+            issuance.get("verifier_challenge") != verifier_challenge
+            or receipt.get("verifier_challenge") != verifier_challenge
+        ):
+            raise AuthenticatedHandoffError(
+                "worker acceptance challenge filename is unbound"
+            )
+        verify_retained_worker_output_acceptance(
+            destination_cas,
+            issuance,
+            receipt,
+        )
+        return {"issuance": issuance, "receipt": receipt}
+
+
+def verify_retained_worker_output_acceptance(
+    destination_cas: CAS,
+    issuance: object,
+    receipt: object,
+) -> dict[str, Any]:
+    """Replay one retained issuance, signature, result, and acceptance receipt."""
+
+    _validate_issuance(issuance)
+    _validate_receipt(receipt)
+    assert isinstance(issuance, dict)
+    assert isinstance(receipt, dict)
+    if receipt["issuance_digest"] != canonical_digest(issuance):
+        raise AuthenticatedHandoffError(
+            "worker output acceptance issuance digest does not match"
+        )
+    for field in (
+        "trust_domain",
+        "worker_id",
+        "job_id",
+        "verifier_challenge",
+        "request_digest",
+    ):
+        if receipt[field] != issuance[field]:
+            raise AuthenticatedHandoffError(
+                f"worker output acceptance {field} does not match issuance"
+            )
+    try:
+        retained_envelope = destination_cas.read(
+            receipt["envelope_digest"],
+            max_bytes=_MAX_RECORD_BYTES,
+        )
+        retained_trust_store = destination_cas.read(
+            receipt["trust_store_digest"],
+            max_bytes=_MAX_RECORD_BYTES,
+        )
+        trust_store = _decode_canonical_object(
+            retained_trust_store,
+            "retained worker trust store",
+        )
+        validate_worker_trust_store(trust_store)
+        verified = verify_worker_measurement(
+            retained_envelope,
+            trust_store,
+            expected_worker_id=issuance["worker_id"],
+            expected_job_id=issuance["job_id"],
+            expected_request_digest=issuance["request_digest"],
+            expected_challenge=issuance["verifier_challenge"],
+        )
+        if receipt != _build_receipt(issuance, verified):
+            raise AuthenticatedHandoffError(
+                "worker output acceptance receipt does not re-derive"
+            )
+        verify_worker_output_evidence_cas_v2(
+            destination_cas,
+            receipt["result_digest"],
+            expected_request_digest=issuance["request_digest"],
+            expected_challenge=issuance["verifier_challenge"],
+        )
+        _require_signed_job_matches_result(
+            destination_cas,
+            verified.statement,
+        )
+        return dict(receipt)
+    except AuthenticatedHandoffError:
+        raise
+    except (
+        CASError,
+        SemanticClosureError,
+        WorkerMeasurementError,
+    ) as exc:
+        raise AuthenticatedHandoffError(
+            f"retained worker output acceptance cannot be verified: {exc}"
+        ) from exc
+
+
 def _build_receipt(
     issuance: dict[str, str],
     verified: Any,
@@ -305,37 +412,10 @@ def _verify_replay_receipt(
             raise AuthenticatedHandoffError(
                 "retained worker measurement envelope changed"
             )
-        retained_trust_store = destination_cas.read(
-            receipt["trust_store_digest"],
-            max_bytes=_MAX_RECORD_BYTES,
-        )
-        trust_store = _decode_canonical_object(
-            retained_trust_store,
-            "retained worker trust store",
-        )
-        validate_worker_trust_store(trust_store)
-        verified = verify_worker_measurement(
-            retained_envelope,
-            trust_store,
-            expected_worker_id=issuance["worker_id"],
-            expected_job_id=issuance["job_id"],
-            expected_request_digest=issuance["request_digest"],
-            expected_challenge=issuance["verifier_challenge"],
-        )
-        expected_receipt = _build_receipt(issuance, verified)
-        if receipt != expected_receipt:
-            raise AuthenticatedHandoffError(
-                "worker output acceptance receipt does not re-derive"
-            )
-        verify_worker_output_evidence_cas_v2(
+        verify_retained_worker_output_acceptance(
             destination_cas,
-            receipt["result_digest"],
-            expected_request_digest=issuance["request_digest"],
-            expected_challenge=issuance["verifier_challenge"],
-        )
-        _require_signed_job_matches_result(
-            destination_cas,
-            verified.statement,
+            issuance,
+            receipt,
         )
         return receipt
     except AuthenticatedHandoffError:

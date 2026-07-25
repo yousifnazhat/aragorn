@@ -1,34 +1,45 @@
 from __future__ import annotations
 
-from contextlib import redirect_stderr, redirect_stdout
 import copy
 import hashlib
-from io import BytesIO, StringIO
 import json
-from pathlib import Path
+import os
+import sys
 import tempfile
 import unittest
-
-
-import sys
+from contextlib import redirect_stderr, redirect_stdout
+from io import BytesIO, StringIO
+from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
+import aragorn.benchmark as benchmark_module
 from aragorn.acquire import inventory_local
 from aragorn.benchmark import (
     BenchmarkError,
+    _canonical_suite_document,
     _digest_json,
     _load_phase0_expansion,
+    _open_directory_path,
+    _phase0_hidden_gate_report,
+    _validate_outcomes,
+    _validate_phase0_hidden_binding,
+    _validate_suite,
+    evaluate,
     evaluate_phase0,
+    evaluate_phase0_hidden,
+)
+from aragorn.benchmark import (
     main as benchmark_main,
 )
 from aragorn.cas import CAS
 from aragorn.oci_worker_protocol import canonical_digest
 
-
 COMMIT = "a" * 40
 COMMIT_TREE = "b" * 40
 SKILL_TREE = "c" * 40
+REPOSITORY_ROOT = Path(__file__).parents[1]
 
 
 def _git_blob_sha1(content: bytes) -> str:
@@ -37,6 +48,377 @@ def _git_blob_sha1(content: bytes) -> str:
 
 
 class Phase0GateTests(unittest.TestCase):
+    def test_hidden_gate_scores_hidden_and_uses_v2_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, _accounting, root, _state = self._harness(
+                Path(temporary),
+                split="hidden",
+            )
+            report = self._hidden_report(suite, outcomes, root)
+
+        self.assertEqual(report["schema"], "aragorn/benchmark-phase0-gate-report/v2")
+        self.assertEqual(report["evaluation_split"], "hidden")
+        self.assertNotIn("accounting", report)
+        self.assertNotIn("accounting_digest", report)
+        self.assertEqual(report["corpus_lock_digest"], "sha256:" + "0" * 64)
+        self.assertEqual(report["public_manifest_digest"], "sha256:" + "1" * 64)
+        self.assertEqual(report["hidden_suite_lock_digest"], "sha256:" + "2" * 64)
+        self.assertEqual(report["candidate_policy_digest"], "sha256:" + "3" * 64)
+        self.assertEqual(report["label_ledger_digest"], "sha256:" + "4" * 64)
+        self.assertTrue(report["comparison"]["passed"])
+        self.assertEqual(
+            report["comparison"]["candidate"]["benign_intervention"],
+            {"numerator": 1, "denominator": 20, "rate": 0.05},
+        )
+        self.assertEqual(
+            report["comparison"]["attack_flag_delta"],
+            {"numerator": 1, "denominator": 10, "rate": 0.1},
+        )
+
+    def test_hidden_gate_without_hidden_split_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, _accounting, root, _state = self._harness(
+                Path(temporary)
+            )
+            report = self._hidden_report(suite, outcomes, root)
+
+        self.assertFalse(report["comparison"]["evaluable"])
+        self.assertFalse(report["comparison"]["passed"])
+        self.assertEqual(report["comparison"]["reason_codes"], ["NO_HIDDEN_SPLIT"])
+
+    def test_hidden_gate_rejects_contract_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, accounting, root, _state = self._harness(
+                Path(temporary),
+                split="hidden",
+            )
+            unused = root / "unused.json"
+            with self.assertRaisesRegex(BenchmarkError, "requires evidence_smoke"):
+                evaluate_phase0_hidden(
+                    suite,
+                    outcomes,
+                    root,
+                    corpus_lock=unused,
+                    public_manifest=unused,
+                    hidden_suite_lock=unused,
+                    candidate_policy=unused,
+                    label_ledger_digest="sha256:" + "4" * 64,
+                )
+            suite_path, outcomes_path, _accounting_path = self._write_cli_inputs(
+                root,
+                suite,
+                outcomes,
+                accounting,
+            )
+            status, stdout, stderr = self._run_cli(
+                (
+                    str(suite_path),
+                    str(outcomes_path),
+                    "--phase0-hidden-gate",
+                    "--phase0-corpus-lock",
+                    str(unused),
+                    "--phase0-public-manifest",
+                    str(unused),
+                    "--phase0-hidden-suite-lock",
+                    str(unused),
+                    "--phase0-candidate-policy",
+                    str(unused),
+                    "--phase0-label-ledger-digest",
+                    "sha256:" + "4" * 64,
+                )
+            )
+
+        self.assertEqual(status, 4)
+        self.assertEqual(stdout, "")
+        self.assertIn("requires evidence_smoke", json.loads(stderr)["message"])
+
+    def test_hidden_gate_rejects_legacy_and_v4_evidence(self) -> None:
+        legacy_bindings = (
+            None,
+            {
+                "dispatch_digest": "sha256:" + "0" * 64,
+                "ledger_id": "sha256:" + "1" * 64,
+                "job_id": "legacy-job",
+                "nonce": "legacy-nonce",
+                "request_digest": "sha256:" + "2" * 64,
+                "result_digest": "sha256:" + "3" * 64,
+            },
+        )
+        for binding in legacy_bindings:
+            with (
+                self.subTest(evidence="v4" if binding else "legacy"),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                    suite, outcomes, _accounting, root, state = self._harness(
+                        Path(temporary),
+                        purpose="evidence_smoke",
+                        split="hidden",
+                    )
+                    with patch(
+                        "aragorn.benchmark._verify_evidence",
+                        return_value=binding,
+                    ):
+                        canonical_root = root.resolve(strict=True)
+                        root_fd = _open_directory_path(canonical_root)
+                        try:
+                            (
+                                _suite_id,
+                                purpose,
+                                runs_per_case,
+                                cases,
+                                normalized_cases,
+                                systems,
+                                manifests,
+                            ) = _validate_suite(suite, canonical_root, root_fd)
+                        finally:
+                            os.close(root_fd)
+                        suite_digest = _digest_json(
+                            _canonical_suite_document(
+                                suite["id"],
+                                purpose,
+                                runs_per_case,
+                                normalized_cases,
+                                systems,
+                            )
+                        )
+                        with self.assertRaisesRegex(
+                            BenchmarkError,
+                            "requires candidate-composition evidence",
+                        ):
+                            _validate_outcomes(
+                                tuple(outcomes),
+                                cases,
+                                systems,
+                                runs_per_case,
+                                suite_digest,
+                                purpose=purpose,
+                                manifests=manifests,
+                                evidence_cas=CAS(state, read_only=True),
+                                acceptance_ledger=None,
+                                require_candidate_composition=True,
+                                expected_candidate_policy_digest=(
+                                    "sha256:" + "4" * 64
+                                ),
+                            )
+
+    def test_hidden_binding_closes_exact_448_case_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = self._hidden_binding_fixture(Path(temporary))
+            binding = self._validate_hidden_binding_fixture(fixture)
+
+        self.assertEqual(
+            binding,
+            {
+                "corpus_lock_digest": fixture["corpus_lock_digest"],
+                "public_manifest_digest": fixture["public_manifest_digest"],
+                "hidden_suite_lock_digest": fixture["hidden_suite_lock_digest"],
+                "candidate_policy_digest": fixture["candidate_policy_digest"],
+                "label_ledger_digest": fixture["label_ledger_digest"],
+            },
+        )
+
+    def test_hidden_binding_rejects_lock_and_matrix_substitution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            fixture = self._hidden_binding_fixture(base)
+
+            stale_lock = base / "stale-corpus-lock.json"
+            corpus_lock = json.loads(fixture["corpus_lock_path"].read_text())
+            corpus_lock["case_count"] = 447
+            stale_lock.write_text(json.dumps(corpus_lock), encoding="utf-8")
+            with self.assertRaisesRegex(BenchmarkError, "corpus lock identity"):
+                self._validate_hidden_binding_fixture(
+                    fixture,
+                    corpus_lock_path=stale_lock,
+                )
+
+            for field in (
+                "suite_digest",
+                "corpus_lock_digest",
+                "evaluator_archive_digest",
+            ):
+                with self.subTest(lock_field=field):
+                    lock = copy.deepcopy(fixture["hidden_suite_lock"])
+                    lock[field] = "sha256:" + "f" * 64
+                    self._write_canonical_json(fixture["hidden_suite_lock_path"], lock)
+                    with self.assertRaisesRegex(BenchmarkError, "frozen inputs"):
+                        self._validate_hidden_binding_fixture(fixture)
+                    self._write_canonical_json(
+                        fixture["hidden_suite_lock_path"],
+                        fixture["hidden_suite_lock"],
+                    )
+
+            with self.assertRaisesRegex(BenchmarkError, "frozen inputs"):
+                self._validate_hidden_binding_fixture(
+                    fixture,
+                    label_ledger_digest="sha256:" + "e" * 64,
+                )
+            with self.assertRaisesRegex(BenchmarkError, "public case matrix"):
+                self._validate_hidden_binding_fixture(
+                    fixture,
+                    cases=dict(list(fixture["cases"].items())[:3]),
+                )
+            mixed = copy.deepcopy(fixture["cases"])
+            mixed[next(iter(mixed))]["split"] = "held_out"
+            with self.assertRaisesRegex(BenchmarkError, "public case matrix"):
+                self._validate_hidden_binding_fixture(fixture, cases=mixed)
+            with self.assertRaisesRegex(BenchmarkError, "public case matrix"):
+                self._validate_hidden_binding_fixture(fixture, runs_per_case=2)
+            wrong_classes = copy.deepcopy(fixture["cases"])
+            wrong_classes[next(iter(wrong_classes))]["class"] = "adversarial"
+            with self.assertRaisesRegex(BenchmarkError, "class accounting"):
+                self._validate_hidden_binding_fixture(
+                    fixture,
+                    cases=wrong_classes,
+                )
+
+            lock = copy.deepcopy(fixture["hidden_suite_lock"])
+            lock["systems"][0]["config_digest"] = "sha256:" + "f" * 64
+            self._write_canonical_json(fixture["hidden_suite_lock_path"], lock)
+            with self.assertRaisesRegex(BenchmarkError, "system identities"):
+                self._validate_hidden_binding_fixture(fixture)
+            fixture["hidden_suite_lock_path"].write_text(
+                json.dumps(fixture["hidden_suite_lock"], indent=2),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(BenchmarkError, "canonical JSON"):
+                self._validate_hidden_binding_fixture(fixture)
+            with self.assertRaises(OSError):
+                self._validate_hidden_binding_fixture(
+                    fixture,
+                    hidden_suite_lock_path=base / "missing-lock.json",
+                )
+
+    def test_hidden_binding_rejects_public_manifest_and_fixture_drift(self) -> None:
+        mutations = {
+            "missing": lambda manifest: manifest["entries"].pop(),
+            "extra": lambda manifest: manifest["entries"].append(
+                {
+                    "id": "case-ffffffffffffffff",
+                    "path": "cases/case-ffffffffffffffff/SKILL.md",
+                    "sha256": "f" * 64,
+                    "size": 1,
+                }
+            ),
+            "duplicate": lambda manifest: manifest["entries"].__setitem__(
+                -1,
+                copy.deepcopy(manifest["entries"][0]),
+            ),
+            "path": lambda manifest: manifest["entries"][0].__setitem__(
+                "path",
+                "cases/wrong/SKILL.md",
+            ),
+            "size": lambda manifest: manifest["entries"][0].__setitem__(
+                "size",
+                manifest["entries"][0]["size"] + 1,
+            ),
+            "digest": lambda manifest: manifest["entries"][0].__setitem__(
+                "sha256",
+                "f" * 64,
+            ),
+        }
+        for name, mutate in mutations.items():
+            with (
+                self.subTest(name=name),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                    fixture = self._hidden_binding_fixture(Path(temporary))
+                    manifest = copy.deepcopy(fixture["public_manifest"])
+                    mutate(manifest)
+                    fixture["public_manifest_path"].write_text(
+                        json.dumps(manifest, sort_keys=True),
+                        encoding="utf-8",
+                    )
+                    with self.assertRaises(BenchmarkError):
+                        self._validate_hidden_binding_fixture(fixture)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = self._hidden_binding_fixture(Path(temporary))
+            manifests = copy.deepcopy(fixture["manifests"])
+            manifests[next(iter(manifests))]["files"].append(
+                {
+                    "path": "extra.txt",
+                    "digest": "sha256:" + "f" * 64,
+                    "size": 1,
+                    "executable": False,
+                }
+            )
+            with self.assertRaisesRegex(BenchmarkError, "does not match public"):
+                self._validate_hidden_binding_fixture(
+                    fixture,
+                    manifests=manifests,
+                )
+
+    def test_v1_rejects_hidden_accounting_and_keeps_v1_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, accounting, root, state = self._harness(Path(temporary))
+            report = evaluate_phase0(
+                suite,
+                outcomes,
+                accounting,
+                root,
+                evidence_state=state,
+            )
+            hidden_base = Path(temporary) / "hidden"
+            hidden_base.mkdir()
+            hidden_suite, hidden_outcomes, hidden_accounting, hidden_root, hidden_state = (
+                self._harness(hidden_base, split="hidden")
+            )
+            with self.assertRaisesRegex(BenchmarkError, "non-held-out case"):
+                evaluate_phase0(
+                    hidden_suite,
+                    hidden_outcomes,
+                    hidden_accounting,
+                    hidden_root,
+                    evidence_state=hidden_state,
+                )
+
+        self.assertEqual(report["schema"], "aragorn/benchmark-phase0-gate-report/v1")
+        self.assertEqual(report["evaluation_split"], "held_out")
+        self.assertEqual(
+            _digest_json(report),
+            "sha256:16d6d1bf1f19f5b5505960820eaccc5e9f1ab7533b444e30cc028ec421d586d7",
+        )
+        self.assertEqual(
+            set(report),
+            {
+                "schema",
+                "assurance",
+                "suite_id",
+                "purpose",
+                "suite_digest",
+                "outcomes_digest",
+                "benchmark_report_digest",
+                "accounting_digest",
+                "evaluation_split",
+                "accounting",
+                "comparison",
+            },
+        )
+
+    def test_cli_phase0_gate_modes_are_mutually_exclusive(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, accounting, root, _state = self._harness(Path(temporary))
+            suite_path, outcomes_path, accounting_path = self._write_cli_inputs(
+                root,
+                suite,
+                outcomes,
+                accounting,
+            )
+            status, stdout, stderr = self._run_cli(
+                (
+                    str(suite_path),
+                    str(outcomes_path),
+                    "--phase0-accounting",
+                    str(accounting_path),
+                    "--phase0-hidden-gate",
+                )
+            )
+
+        self.assertEqual(status, 4)
+        self.assertEqual(stdout, "")
+        self.assertIn("mutually exclusive", json.loads(stderr)["message"])
+
     def test_cli_runs_opt_in_phase0_gate_and_signals_pass_or_fail(self) -> None:
         for incomplete_case, expected_status in ((None, 0), ("benign-a", 2)):
             with self.subTest(incomplete_case=incomplete_case):
@@ -304,8 +686,10 @@ class Phase0GateTests(unittest.TestCase):
 
     def test_false_root_and_expanded_git_blob_identities_are_rejected(self) -> None:
         for target in ("root", "expanded"):
-            with self.subTest(target=target):
-                with tempfile.TemporaryDirectory() as temporary:
+            with (
+                self.subTest(target=target),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                     suite, outcomes, accounting, root, state = self._harness(
                         Path(temporary)
                     )
@@ -606,6 +990,8 @@ class Phase0GateTests(unittest.TestCase):
         *,
         incomplete_case: str | None = None,
         system_names: tuple[str, ...] = ("aragorn", "compliant", "noisy"),
+        split: str = "held_out",
+        purpose: str = "contract_smoke",
     ) -> tuple[
         dict[str, object], list[dict[str, object]], dict[str, object], Path, Path
     ]:
@@ -628,6 +1014,7 @@ class Phase0GateTests(unittest.TestCase):
                 case_class,
                 family,
                 incomplete=case_id == incomplete_case,
+                split=split,
             )
             cases.append(case)
             accounting_cases.append(
@@ -640,7 +1027,7 @@ class Phase0GateTests(unittest.TestCase):
         suite: dict[str, object] = {
             "schema": "aragorn/benchmark-suite/v1",
             "id": "phase0-test",
-            "purpose": "contract_smoke",
+            "purpose": purpose,
             "runs_per_case": 10,
             "systems": systems,
             "cases": cases,
@@ -672,6 +1059,232 @@ class Phase0GateTests(unittest.TestCase):
             "cases": accounting_cases,
         }
         return suite, outcomes, accounting, root, state
+
+    @staticmethod
+    def _hidden_binding_fixture(base: Path) -> dict[str, object]:
+        corpus_lock_path = REPOSITORY_ROOT / "benchmark" / "phase0-corpus.lock.json"
+        corpus_lock = json.loads(corpus_lock_path.read_text(encoding="utf-8"))
+        public_manifest_digest = corpus_lock["public_manifest"]["sha256"]
+        corpus_lock_digest = (
+            "sha256:"
+            + hashlib.sha256(corpus_lock_path.read_bytes()).hexdigest()
+        )
+        suite_digest = "sha256:" + "a" * 64
+        candidate_policy_digest = "sha256:" + "9" * 64
+        label_ledger_digest = "sha256:" + "8" * 64
+        systems = [
+            {
+                "name": "aragorn",
+                "version": "0.1.0-phase0",
+                "implementation_digest": "sha256:" + "1" * 64,
+                "config_digest": candidate_policy_digest,
+            },
+            {
+                "name": "cisco-skill-scanner",
+                "version": "2.0.12",
+                "implementation_digest": "sha256:" + "2" * 64,
+                "config_digest": "sha256:" + "3" * 64,
+            },
+            {
+                "name": "skillspector",
+                "version": "2.4.3+git.a54947c",
+                "implementation_digest": "sha256:" + "4" * 64,
+                "config_digest": "sha256:" + "5" * 64,
+            },
+        ]
+        entries = []
+        cases = {}
+        manifests = {}
+        for index in range(448):
+            case_id = f"case-{index:016x}"
+            content = f"# inert case {case_id}\n".encode()
+            digest = hashlib.sha256(content).hexdigest()
+            entries.append(
+                {
+                    "id": case_id,
+                    "path": f"cases/{case_id}/SKILL.md",
+                    "sha256": digest,
+                    "size": len(content),
+                }
+            )
+            cases[case_id] = {
+                "class": "benign" if index < 336 else "adversarial",
+                "split": "hidden",
+            }
+            manifests[case_id] = {
+                "files": [
+                    {
+                        "path": "SKILL.md",
+                        "digest": f"sha256:{digest}",
+                        "size": len(content),
+                        "executable": False,
+                    }
+                ]
+            }
+        public_manifest = {
+            "schema_version": "1.0",
+            "corpus_version": "independent-v1.0.0",
+            "hash_algorithm": "sha256",
+            "case_count": 448,
+            "entries": entries,
+        }
+        public_manifest_path = base / "manifest.json"
+        public_manifest_path.write_text(
+            json.dumps(public_manifest, sort_keys=True),
+            encoding="utf-8",
+        )
+        candidate_policy_path = base / "candidate-policy.json"
+        candidate_policy_path.write_text("{}", encoding="utf-8")
+        hidden_suite_lock = {
+            "schema": "aragorn/benchmark-phase0-hidden-suite-lock/v1",
+            "assurance": (
+                "operator_asserted_pre_outcome_binding_"
+                "not_independent_or_timestamped"
+            ),
+            "corpus_lock_digest": corpus_lock_digest,
+            "worker_archive_digest": corpus_lock["worker_archive"]["sha256"],
+            "public_manifest_digest": public_manifest_digest,
+            "evaluator_archive_digest": corpus_lock["evaluator_archive"]["sha256"],
+            "label_ledger_digest": label_ledger_digest,
+            "candidate_policy_digest": candidate_policy_digest,
+            "suite_digest": suite_digest,
+            "case_count": 448,
+            "class_counts": {"benign": 336, "adversarial": 112},
+            "runs_per_case": 1,
+            "split": "hidden",
+            "systems": systems,
+        }
+        hidden_suite_lock_path = base / "hidden-suite-lock.json"
+        Phase0GateTests._write_canonical_json(
+            hidden_suite_lock_path,
+            hidden_suite_lock,
+        )
+        return {
+            "corpus_lock_path": corpus_lock_path,
+            "public_manifest_path": public_manifest_path,
+            "hidden_suite_lock_path": hidden_suite_lock_path,
+            "candidate_policy_path": candidate_policy_path,
+            "suite_digest": suite_digest,
+            "runs_per_case": 1,
+            "cases": cases,
+            "systems": {
+                (
+                    system["name"],
+                    system["version"],
+                    system["implementation_digest"],
+                    system["config_digest"],
+                ): system
+                for system in systems
+            },
+            "manifests": manifests,
+            "public_manifest": public_manifest,
+            "hidden_suite_lock": hidden_suite_lock,
+            "candidate_policy": {
+                "required_comparators": systems[1:],
+            },
+            "candidate_system": systems[0],
+            "corpus_lock_digest": corpus_lock_digest,
+            "public_manifest_digest": public_manifest_digest,
+            "hidden_suite_lock_digest": (
+                "sha256:"
+                + hashlib.sha256(hidden_suite_lock_path.read_bytes()).hexdigest()
+            ),
+            "candidate_policy_digest": candidate_policy_digest,
+            "label_ledger_digest": label_ledger_digest,
+        }
+
+    @staticmethod
+    def _validate_hidden_binding_fixture(
+        fixture: dict[str, object],
+        **overrides: object,
+    ) -> dict[str, str]:
+        arguments = {
+            key: fixture[key]
+            for key in (
+                "corpus_lock_path",
+                "public_manifest_path",
+                "hidden_suite_lock_path",
+                "candidate_policy_path",
+                "suite_digest",
+                "runs_per_case",
+                "cases",
+                "systems",
+                "manifests",
+                "label_ledger_digest",
+            )
+        }
+        arguments.update(overrides)
+        real_digest_bytes = benchmark_module._digest_bytes
+
+        def pinned_digest(content: bytes) -> str:
+            try:
+                document = json.loads(content)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return real_digest_bytes(content)
+            if isinstance(document, dict) and document.get("schema_version") == "1.0":
+                return fixture["public_manifest_digest"]
+            return real_digest_bytes(content)
+
+        with (
+            patch(
+                "aragorn.benchmark._digest_bytes",
+                side_effect=pinned_digest,
+            ),
+            patch(
+                "aragorn.phase0_candidate.build_candidate_policy",
+                return_value=fixture["candidate_policy"],
+            ),
+            patch(
+                "aragorn.phase0_candidate.candidate_policy_digest",
+                return_value=fixture["candidate_policy_digest"],
+            ),
+            patch(
+                "aragorn.phase0_candidate.candidate_system_identity",
+                return_value=fixture["candidate_system"],
+            ),
+        ):
+            return _validate_phase0_hidden_binding(**arguments)
+
+    @staticmethod
+    def _write_canonical_json(path: Path, document: object) -> None:
+        path.write_bytes(
+            json.dumps(
+                document,
+                allow_nan=False,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+        )
+
+    @staticmethod
+    def _hidden_report(
+        suite: dict[str, object],
+        outcomes: list[dict[str, object]],
+        root: Path,
+    ) -> dict[str, object]:
+        benchmark_report = evaluate(suite, outcomes, root)
+        benchmark_report["purpose"] = "evidence_smoke"
+        systems = {
+            (
+                system["name"],
+                system["version"],
+                system["implementation_digest"],
+                system["config_digest"],
+            ): system
+            for system in suite["systems"]
+        }
+        return _phase0_hidden_gate_report(
+            benchmark_report=benchmark_report,
+            systems=systems,
+            binding={
+                "corpus_lock_digest": "sha256:" + "0" * 64,
+                "public_manifest_digest": "sha256:" + "1" * 64,
+                "hidden_suite_lock_digest": "sha256:" + "2" * 64,
+                "candidate_policy_digest": "sha256:" + "3" * 64,
+                "label_ledger_digest": "sha256:" + "4" * 64,
+            },
+        )
 
     @staticmethod
     def _write_cli_inputs(
@@ -714,6 +1327,7 @@ class Phase0GateTests(unittest.TestCase):
         family: str,
         *,
         incomplete: bool,
+        split: str,
     ) -> tuple[dict[str, object], str, dict[str, object]]:
         source_content = f"# {case_id}\nfetch exact payload\n".encode()
         payload_content = f"payload for {case_id}\n".encode()
@@ -909,7 +1523,7 @@ class Phase0GateTests(unittest.TestCase):
             "class": case_class,
             "family": family,
             "lineage": f"{case_id}-lineage",
-            "split": "held_out",
+            "split": split,
             "path": case_id,
             "tree_digest": tree_digest,
             "inert": True,

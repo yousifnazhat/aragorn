@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+from pathlib import Path
 from unittest import mock
 
 import aragorn.benchmark_authenticated_handoff_v2 as authenticated_handoff
@@ -29,7 +29,6 @@ from aragorn.benchmark_worker_measurement import (
 from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_json
 from tests import test_benchmark_semantic_closure_v2 as semantic_support
-
 
 try:
     import cryptography  # noqa: F401
@@ -145,6 +144,37 @@ class AuthenticatedWorkerHandoffV2Tests(unittest.TestCase):
         committed = list((self.ledger / "receipts").glob("*.json"))
         self.assertEqual(len(committed), 1)
         self.assertEqual(json.loads(committed[0].read_bytes()), receipt)
+
+    def test_retained_acceptance_inventory_replay_and_tamper_rejection(
+        self,
+    ) -> None:
+        receipt = self._collect()
+        retained = authenticated_handoff.load_verified_worker_output_acceptance(
+            self.destination,
+            self.ledger,
+            self.challenge,
+        )
+        self.assertEqual(retained["receipt"], receipt)
+        self.assertEqual(
+            authenticated_handoff.verify_retained_worker_output_acceptance(
+                self.destination,
+                retained["issuance"],
+                retained["receipt"],
+            ),
+            receipt,
+        )
+
+        changed_issuance = deepcopy(retained["issuance"])
+        changed_issuance["request_digest"] = "sha256:" + "0" * 64
+        with self.assertRaisesRegex(
+            AuthenticatedHandoffError,
+            "issuance digest does not match",
+        ):
+            authenticated_handoff.verify_retained_worker_output_acceptance(
+                self.destination,
+                changed_issuance,
+                retained["receipt"],
+            )
 
     def test_signature_or_semantic_failure_consumes_nothing(self) -> None:
         changed = bytearray(self.envelope)
@@ -306,12 +336,11 @@ class AuthenticatedWorkerHandoffV2Tests(unittest.TestCase):
             authenticated_handoff,
             "_publish_record",
             side_effect=fail_receipt,
+        ), self.assertRaisesRegex(
+            AuthenticatedHandoffError,
+            "simulated receipt failure",
         ):
-            with self.assertRaisesRegex(
-                AuthenticatedHandoffError,
-                "simulated receipt failure",
-            ):
-                self._collect()
+            self._collect()
         self.assertEqual(list((self.ledger / "receipts").glob("*.json")), [])
 
         receipt = self._collect()

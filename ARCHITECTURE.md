@@ -627,7 +627,7 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 
 | Phase | Time | Deliverable | Security property earned | Exit gate |
 |---|---:|---|---|---|
-| 0. Validate | 2–3 weeks | Threat model, versioned corpus, private evaluation-only immutable-commit acquisition and literal source-reference candidate, strongest current scanners as baselines | Demonstrates a real gap rather than a product category | At least +10 percentage points held-out attack flag rate over the best comparator satisfying the same burden ceiling; no more than 5% benign intervention (`REVIEW + DENY + ERROR`); machine-validated OWASP, MITRE, and NIST evidence packs with zero unresolved selected items |
+| 0. Validate | 2–3 weeks | Threat model, versioned corpus, private evaluation-only immutable-commit acquisition and literal source-reference candidate, strongest current scanners as baselines | Demonstrates a real gap rather than a product category | At least +10 percentage points hidden attack flag rate over the best comparator satisfying the same burden ceiling; no more than 5% benign intervention (`REVIEW + DENY + ERROR`); machine-validated OWASP, MITRE, and NIST evidence packs with zero unresolved selected items |
 | 1. Acquisition Lock | 4–6 weeks | Supported GitHub Agent Skills acquisition, quarantine, redirect/release resolution, recursive closure, decision receipt, exact-digest install, update diff | Reviewed bytes equal installed bytes | Zero digest mismatches installed; at least 95% of statically resolvable artifacts captured; all unresolved required artifacts return `REVIEW` or `ERROR` |
 | 2. Deep Analysis | 8–10 weeks | Bounded normalization, canaries, one existing isolated detonation backend, declared-versus-observed behavior | Effects reached in exercised profiles are observable and attributable; unexercised paths remain unknown | At least 90% held-out attack flag rate and 80% in every attack family; no more than 5% benign intervention; at least 95% verdict agreement across five runs |
 | 3. Runtime Detect and Respond | 10–12 weeks | One real runtime, out-of-process sensor, digest attribution, process/file/network/tool events, block/kill/quarantine/revoke | Known skill digest can be contained before protected impact | At least 99% event attribution; benchmark exfiltration and destructive actions blocked before protected sink; p95 synchronous decision under 500 ms; task overhead under 10% |
@@ -776,7 +776,19 @@ verifier-owned challenge, retains the private dispatch, and exports only the
 request's exact semantic input closure plus a label-free worklist. This closes
 the batch-preparation gap, not the result-composition gap: accepted Cisco and
 NVIDIA results still require a separately evidence-bound, frozen Aragorn
-candidate derivation before hidden evaluation.
+candidate derivation before hidden evaluation. That derivation binds the
+locally re-derived source-reference graph and both authenticated comparator
+results; the GitHub acquisition/reference oracle remains a separate Phase 0
+stratum.
+
+The opt-in Phase 0 gate report v2 scores only the `hidden` split and accepts
+only a complete authenticated candidate-composition `evidence_smoke` matrix;
+the acquisition/reference sidecar remains isolated in report v1. Before any
+dispatch or result exists, the operator must derive the label-ledger digest
+from the signature-verified evaluator package, generate the canonical hidden
+suite lock, and place it in a verified signed Git commit. The evaluator checks
+the resulting bindings but does not independently prove wall-clock ordering,
+corpus-author approval, or timestamped custody.
 
 ### Corpus
 

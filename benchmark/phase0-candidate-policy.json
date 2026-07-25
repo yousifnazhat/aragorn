@@ -1,0 +1,24 @@
+{
+  "schema": "aragorn/benchmark-candidate-policy/v1",
+  "assurance": "comparative_candidate_only_not_admission",
+  "algorithm": "source-graph-fail-closed-vendor-union/v1",
+  "candidate": {
+    "name": "aragorn",
+    "version": "0.1.0-phase0",
+    "implementation_digest": "sha256:f555ff03ede5f9e8055e232d98cbaee2352cc665ac2f1fa7a075644c110f082d"
+  },
+  "required_comparators": [
+    {
+      "name": "cisco-skill-scanner",
+      "version": "2.0.12",
+      "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+      "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c"
+    },
+    {
+      "name": "skillspector",
+      "version": "2.4.3+git.a54947c",
+      "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+      "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec"
+    }
+  ]
+}

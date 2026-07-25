@@ -2,9 +2,17 @@
   "schema": "aragorn/benchmark-corpus-provenance-lock/v1",
   "corpus_id": "independent-v1.0.0",
   "assurance": "technical_codex_authorship_not_independent_human_identity",
+  "case_count": 448,
+  "runs_per_case": 1,
   "worker_archive": {
     "name": "skill-scan-corpus-worker-independent-v1.0.0.tar.gz",
     "sha256": "sha256:f7cc194a95775afdaaddd09ab98dbaba131c28c9f0ba72c425f43532e965465f"
+  },
+  "public_manifest": {
+    "sha256": "sha256:72105d56773353634d56d74029757dc027780bc00f13781f74c3adaa7c94562d"
+  },
+  "evaluator_archive": {
+    "sha256": "sha256:51d2c19922a9a75347457dff1a782ff26002b61815b56bdf9b7fa56d7e4cf840"
   },
   "freeze": {
     "commit": "5ff11440d544a09c1e35e7938368cb0fde428b48",

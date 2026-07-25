@@ -3,27 +3,35 @@
 from __future__ import annotations
 
 import argparse
-from fractions import Fraction
 import hashlib
 import json
 import math
 import os
-from pathlib import Path, PurePosixPath
 import posixpath
 import re
 import stat
 import sys
 import tempfile
-from typing import Any, Iterable, Sequence
 import unicodedata
+from collections.abc import Iterable, Sequence
+from fractions import Fraction
+from pathlib import Path, PurePosixPath
+from typing import Any
 from urllib.parse import urlsplit
 
 from .acquire import InventoryError, ingest_open_directory
 from .analyze import AnalyzerResult, _parse_observations
+from .artifact_closure import ArtifactClosureError, resolve_source_graph
+from .benchmark_protocol_v2 import (
+    canonical_request_digest_v2,
+    validate_worker_request_v2,
+    validate_worker_result_v2,
+)
 from .cas import CAS, CASError
 from .oci_worker_protocol import (
     WorkerProtocolError,
     canonical_digest,
+    sanitize_subject_manifest,
     validate_subject_manifest,
     validate_worker_request,
     validate_worker_result,
@@ -35,7 +43,6 @@ from .vendor_reports import (
     normalize_cisco_report,
     normalize_nvidia_report,
 )
-
 
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IDENTIFIER = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
@@ -62,6 +69,10 @@ _REQUIRED_DOCKER_COMPONENTS = frozenset({"Engine", "containerd", "runc"})
 _UNREPORTED_COMPONENT_DETAILS_PREFIX = "unreported-details-sha256:"
 _PHASE0_BENIGN_BURDEN_CEILING = Fraction(1, 20)
 _PHASE0_MINIMUM_ATTACK_FLAG_DELTA = Fraction(1, 10)
+_PHASE0_CORPUS_LOCK_DIGEST = (
+    "sha256:bbd4c584fa06d2ef7ee9d69011bf756432bb0f6f06c16b6f9dfd0cde87267fb8"
+)
+_PHASE0_OPAQUE_CASE_ID = re.compile(r"case-[0-9a-f]{16}\Z")
 _CONTAINER_ID = re.compile(r"[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -246,6 +257,7 @@ def evaluate_files(
     outcome_path: str | os.PathLike[str],
     *,
     evidence_state: str | os.PathLike[str] | None = None,
+    acceptance_ledger: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Verify an inert corpus and return deterministic aggregate metrics."""
 
@@ -261,12 +273,18 @@ def evaluate_files(
             raise BenchmarkError("benchmark suite must be a JSON object")
         outcomes = _decode_json_lines(_read_bounded(Path(outcome_path)))
         evidence_cas = _open_evidence_cas(evidence_state, suite_root)
+        trusted_ledger = _open_acceptance_ledger(
+            acceptance_ledger,
+            suite_root,
+            evidence_cas,
+        )
         return _evaluate(
             suite,
             outcomes,
             suite_root,
             suite_root_fd,
             evidence_cas=evidence_cas,
+            acceptance_ledger=trusted_ledger,
         )
     finally:
         os.close(suite_root_fd)
@@ -278,6 +296,7 @@ def evaluate(
     suite_root: Path,
     *,
     evidence_state: str | os.PathLike[str] | None = None,
+    acceptance_ledger: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Evaluate already-decoded documents after strict contract validation."""
 
@@ -285,12 +304,18 @@ def evaluate(
     suite_root_fd = _open_directory_path(canonical_root)
     try:
         evidence_cas = _open_evidence_cas(evidence_state, canonical_root)
+        trusted_ledger = _open_acceptance_ledger(
+            acceptance_ledger,
+            canonical_root,
+            evidence_cas,
+        )
         return _evaluate(
             suite,
             tuple(outcomes),
             canonical_root,
             suite_root_fd,
             evidence_cas=evidence_cas,
+            acceptance_ledger=trusted_ledger,
         )
     finally:
         os.close(suite_root_fd)
@@ -302,6 +327,7 @@ def evaluate_phase0_files(
     accounting_path: str | os.PathLike[str],
     *,
     evidence_state: str | os.PathLike[str] | None = None,
+    acceptance_ledger: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Evaluate the opt-in Phase 0 comparative accounting contract.
 
@@ -325,12 +351,18 @@ def evaluate_phase0_files(
             _read_bounded(Path(accounting_path)), "Phase 0 accounting sidecar"
         )
         evidence_cas = _open_evidence_cas(evidence_state, suite_root)
+        trusted_ledger = _open_acceptance_ledger(
+            acceptance_ledger,
+            suite_root,
+            evidence_cas,
+        )
         return _evaluate(
             suite,
             outcomes,
             suite_root,
             suite_root_fd,
             evidence_cas=evidence_cas,
+            acceptance_ledger=trusted_ledger,
             phase0_accounting=accounting,
         )
     finally:
@@ -344,6 +376,7 @@ def evaluate_phase0(
     suite_root: Path,
     *,
     evidence_state: str | os.PathLike[str] | None = None,
+    acceptance_ledger: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Evaluate decoded Phase 0 accounting without changing benchmark v1."""
 
@@ -351,13 +384,110 @@ def evaluate_phase0(
     suite_root_fd = _open_directory_path(canonical_root)
     try:
         evidence_cas = _open_evidence_cas(evidence_state, canonical_root)
+        trusted_ledger = _open_acceptance_ledger(
+            acceptance_ledger,
+            canonical_root,
+            evidence_cas,
+        )
         return _evaluate(
             suite,
             tuple(outcomes),
             canonical_root,
             suite_root_fd,
             evidence_cas=evidence_cas,
+            acceptance_ledger=trusted_ledger,
             phase0_accounting=accounting,
+        )
+    finally:
+        os.close(suite_root_fd)
+
+
+def evaluate_phase0_hidden_files(
+    suite_path: str | os.PathLike[str],
+    outcome_path: str | os.PathLike[str],
+    *,
+    corpus_lock: str | os.PathLike[str],
+    public_manifest: str | os.PathLike[str],
+    hidden_suite_lock: str | os.PathLike[str],
+    candidate_policy: str | os.PathLike[str],
+    label_ledger_digest: str,
+    evidence_state: str | os.PathLike[str] | None = None,
+    acceptance_ledger: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    """Evaluate the opt-in hidden efficacy gate without acquisition accounting."""
+
+    suite_file = Path(suite_path)
+    suite_root = suite_file.parent.resolve(strict=True)
+    suite_root_fd = _open_directory_path(suite_root)
+    try:
+        suite = _decode_json(
+            _read_bounded_at(suite_root_fd, suite_file.name, "benchmark suite"),
+            "benchmark suite",
+        )
+        if not isinstance(suite, dict):
+            raise BenchmarkError("benchmark suite must be a JSON object")
+        outcomes = _decode_json_lines(_read_bounded(Path(outcome_path)))
+        evidence_cas = _open_evidence_cas(evidence_state, suite_root)
+        trusted_ledger = _open_acceptance_ledger(
+            acceptance_ledger,
+            suite_root,
+            evidence_cas,
+        )
+        return _evaluate(
+            suite,
+            outcomes,
+            suite_root,
+            suite_root_fd,
+            evidence_cas=evidence_cas,
+            acceptance_ledger=trusted_ledger,
+            phase0_hidden_gate=True,
+            phase0_corpus_lock=Path(corpus_lock),
+            phase0_public_manifest=Path(public_manifest),
+            phase0_hidden_suite_lock=Path(hidden_suite_lock),
+            phase0_candidate_policy=Path(candidate_policy),
+            phase0_label_ledger_digest=label_ledger_digest,
+        )
+    finally:
+        os.close(suite_root_fd)
+
+
+def evaluate_phase0_hidden(
+    suite: dict[str, Any],
+    outcomes: Iterable[object],
+    suite_root: Path,
+    *,
+    corpus_lock: str | os.PathLike[str],
+    public_manifest: str | os.PathLike[str],
+    hidden_suite_lock: str | os.PathLike[str],
+    candidate_policy: str | os.PathLike[str],
+    label_ledger_digest: str,
+    evidence_state: str | os.PathLike[str] | None = None,
+    acceptance_ledger: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    """Evaluate decoded hidden outcomes without acquisition accounting."""
+
+    canonical_root = Path(suite_root).resolve(strict=True)
+    suite_root_fd = _open_directory_path(canonical_root)
+    try:
+        evidence_cas = _open_evidence_cas(evidence_state, canonical_root)
+        trusted_ledger = _open_acceptance_ledger(
+            acceptance_ledger,
+            canonical_root,
+            evidence_cas,
+        )
+        return _evaluate(
+            suite,
+            tuple(outcomes),
+            canonical_root,
+            suite_root_fd,
+            evidence_cas=evidence_cas,
+            acceptance_ledger=trusted_ledger,
+            phase0_hidden_gate=True,
+            phase0_corpus_lock=Path(corpus_lock),
+            phase0_public_manifest=Path(public_manifest),
+            phase0_hidden_suite_lock=Path(hidden_suite_lock),
+            phase0_candidate_policy=Path(candidate_policy),
+            phase0_label_ledger_digest=label_ledger_digest,
         )
     finally:
         os.close(suite_root_fd)
@@ -370,8 +500,19 @@ def _evaluate(
     suite_root_fd: int,
     *,
     evidence_cas: CAS | None = None,
+    acceptance_ledger: Path | None = None,
     phase0_accounting: object | None = None,
+    phase0_hidden_gate: bool = False,
+    phase0_corpus_lock: Path | None = None,
+    phase0_public_manifest: Path | None = None,
+    phase0_hidden_suite_lock: Path | None = None,
+    phase0_candidate_policy: Path | None = None,
+    phase0_label_ledger_digest: str | None = None,
 ) -> dict[str, Any]:
+    if phase0_accounting is not None and phase0_hidden_gate:
+        raise BenchmarkError(
+            "Phase 0 accounting and hidden efficacy gates are mutually exclusive"
+        )
     (
         suite_id,
         purpose,
@@ -385,6 +526,41 @@ def _evaluate(
         suite_id, purpose, runs_per_case, normalized_cases, systems
     )
     suite_digest = _digest_json(canonical_suite)
+    hidden_binding = None
+    if phase0_hidden_gate:
+        if purpose != "evidence_smoke":
+            raise BenchmarkError("Phase 0 hidden gate requires evidence_smoke")
+        if any(
+            path is None
+            for path in (
+                phase0_corpus_lock,
+                phase0_public_manifest,
+                phase0_hidden_suite_lock,
+                phase0_candidate_policy,
+                phase0_label_ledger_digest,
+            )
+        ):
+            raise BenchmarkError(
+                "Phase 0 hidden gate requires corpus, public manifest, "
+                "candidate policy, and pre-outcome suite locks"
+            )
+        assert phase0_corpus_lock is not None
+        assert phase0_public_manifest is not None
+        assert phase0_hidden_suite_lock is not None
+        assert phase0_candidate_policy is not None
+        assert phase0_label_ledger_digest is not None
+        hidden_binding = _validate_phase0_hidden_binding(
+            corpus_lock_path=phase0_corpus_lock,
+            public_manifest_path=phase0_public_manifest,
+            hidden_suite_lock_path=phase0_hidden_suite_lock,
+            candidate_policy_path=phase0_candidate_policy,
+            label_ledger_digest=phase0_label_ledger_digest,
+            suite_digest=suite_digest,
+            runs_per_case=runs_per_case,
+            cases=cases,
+            systems=systems,
+            manifests=manifests,
+        )
     normalized_outcomes = _validate_outcomes(
         tuple(outcomes),
         cases,
@@ -394,6 +570,13 @@ def _evaluate(
         purpose=purpose,
         manifests=manifests,
         evidence_cas=evidence_cas,
+        acceptance_ledger=acceptance_ledger,
+        require_candidate_composition=phase0_hidden_gate,
+        expected_candidate_policy_digest=(
+            hidden_binding["candidate_policy_digest"]
+            if hidden_binding is not None
+            else None
+        ),
     )
     canonical_outcomes = sorted(
         normalized_outcomes,
@@ -451,8 +634,15 @@ def _evaluate(
         "outcomes_digest": _digest_json(canonical_outcomes),
         "systems": reports,
     }
-    if phase0_accounting is None:
+    if phase0_accounting is None and not phase0_hidden_gate:
         return report
+    if phase0_hidden_gate:
+        assert hidden_binding is not None
+        return _phase0_hidden_gate_report(
+            benchmark_report=report,
+            systems=systems,
+            binding=hidden_binding,
+        )
     return _phase0_gate_report(
         phase0_accounting,
         benchmark_report=report,
@@ -476,17 +666,94 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="read-only evidence CAS required for evidence_smoke suites",
     )
     parser.add_argument(
+        "--acceptance-ledger",
+        type=Path,
+        help="protected worker-acceptance ledger required for candidate evidence",
+    )
+    parser.add_argument(
         "--phase0-accounting",
         type=Path,
         help="opt-in comparative accounting sidecar for the private Phase 0 gate",
     )
+    parser.add_argument(
+        "--phase0-hidden-gate",
+        action="store_true",
+        help="opt-in hidden efficacy gate without acquisition accounting",
+    )
+    parser.add_argument(
+        "--phase0-corpus-lock",
+        type=Path,
+        help="exact checked corpus provenance lock required by the hidden gate",
+    )
+    parser.add_argument(
+        "--phase0-public-manifest",
+        type=Path,
+        help="extracted label-free corpus manifest required by the hidden gate",
+    )
+    parser.add_argument(
+        "--phase0-hidden-suite-lock",
+        type=Path,
+        help="operator-frozen pre-outcome suite binding required by the hidden gate",
+    )
+    parser.add_argument(
+        "--phase0-candidate-policy",
+        type=Path,
+        help="checked candidate policy required by the hidden gate",
+    )
+    parser.add_argument(
+        "--phase0-label-ledger-digest",
+        help="digest derived from the verified evaluator label ledger",
+    )
     try:
         arguments = parser.parse_args(argv)
-        if arguments.phase0_accounting is None:
+        if arguments.phase0_accounting is not None and arguments.phase0_hidden_gate:
+            raise BenchmarkError(
+                "--phase0-accounting and --phase0-hidden-gate are mutually exclusive"
+            )
+        hidden_inputs = (
+            arguments.phase0_corpus_lock,
+            arguments.phase0_public_manifest,
+            arguments.phase0_hidden_suite_lock,
+            arguments.phase0_candidate_policy,
+            arguments.phase0_label_ledger_digest,
+        )
+        if arguments.phase0_hidden_gate and any(
+            path is None for path in hidden_inputs
+        ):
+            raise BenchmarkError(
+                "--phase0-hidden-gate requires --phase0-corpus-lock, "
+                "--phase0-public-manifest, --phase0-hidden-suite-lock, and "
+                "--phase0-candidate-policy plus --phase0-label-ledger-digest"
+            )
+        if not arguments.phase0_hidden_gate and any(
+            path is not None for path in hidden_inputs
+        ):
+            raise BenchmarkError(
+                "Phase 0 hidden binding inputs require --phase0-hidden-gate"
+            )
+        if arguments.phase0_hidden_gate:
+            assert arguments.phase0_corpus_lock is not None
+            assert arguments.phase0_public_manifest is not None
+            assert arguments.phase0_hidden_suite_lock is not None
+            assert arguments.phase0_candidate_policy is not None
+            assert arguments.phase0_label_ledger_digest is not None
+            report = evaluate_phase0_hidden_files(
+                arguments.suite,
+                arguments.outcomes,
+                corpus_lock=arguments.phase0_corpus_lock,
+                public_manifest=arguments.phase0_public_manifest,
+                hidden_suite_lock=arguments.phase0_hidden_suite_lock,
+                candidate_policy=arguments.phase0_candidate_policy,
+                label_ledger_digest=arguments.phase0_label_ledger_digest,
+                evidence_state=arguments.state,
+                acceptance_ledger=arguments.acceptance_ledger,
+            )
+        elif arguments.phase0_accounting is None:
             report = evaluate_files(
                 arguments.suite,
                 arguments.outcomes,
                 evidence_state=arguments.state,
+                acceptance_ledger=arguments.acceptance_ledger,
             )
         else:
             report = evaluate_phase0_files(
@@ -494,6 +761,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arguments.outcomes,
                 arguments.phase0_accounting,
                 evidence_state=arguments.state,
+                acceptance_ledger=arguments.acceptance_ledger,
             )
     except (
         BenchmarkError,
@@ -516,7 +784,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 4
     print(json.dumps(report, sort_keys=True))
-    if arguments.phase0_accounting is not None:
+    if arguments.phase0_accounting is not None or arguments.phase0_hidden_gate:
         return 0 if report["comparison"]["passed"] else 2
     return 0
 
@@ -755,6 +1023,31 @@ def _open_evidence_cas(
     return CAS(state_path, read_only=True)
 
 
+def _open_acceptance_ledger(
+    acceptance_ledger: str | os.PathLike[str] | None,
+    suite_root: Path,
+    evidence_cas: CAS | None,
+) -> Path | None:
+    if acceptance_ledger is None:
+        return None
+    ledger = Path(acceptance_ledger).expanduser().resolve(strict=True)
+    if not ledger.is_dir():
+        raise BenchmarkError("worker acceptance ledger must be a directory")
+    boundaries = [suite_root]
+    if evidence_cas is not None:
+        boundaries.append(evidence_cas.root.resolve(strict=True))
+    if any(
+        ledger == boundary
+        or ledger in boundary.parents
+        or boundary in ledger.parents
+        for boundary in boundaries
+    ):
+        raise BenchmarkError(
+            "worker acceptance ledger must not overlap suite or evidence state"
+        )
+    return ledger
+
+
 def _validate_fixture_content(case_id: str, manifest: dict[str, Any], cas: CAS) -> None:
     root_skill_found = False
     for entry in manifest["files"]:
@@ -824,7 +1117,12 @@ def _validate_outcomes(
     purpose: str,
     manifests: dict[str, dict[str, Any]],
     evidence_cas: CAS | None,
+    acceptance_ledger: Path | None,
+    require_candidate_composition: bool = False,
+    expected_candidate_policy_digest: str | None = None,
 ) -> list[dict[str, Any]]:
+    if require_candidate_composition and purpose != "evidence_smoke":
+        raise BenchmarkError("Phase 0 hidden gate requires evidence_smoke")
     if purpose == "evidence_smoke" and evidence_cas is None:
         raise BenchmarkError("evidence_smoke requires a retained evidence state")
     if not raw_outcomes:
@@ -847,6 +1145,7 @@ def _validate_outcomes(
     }
     normalized = []
     v4_bindings: list[dict[str, str]] = []
+    candidate_bindings: list[dict[str, Any]] = []
     seen: set[tuple[tuple[str, str, str, str], str, int]] = set()
     for index, raw_outcome in enumerate(raw_outcomes):
         label = f"outcomes[{index}]"
@@ -926,15 +1225,19 @@ def _validate_outcomes(
         }
         if purpose == "evidence_smoke":
             assert evidence_cas is not None
-            v4_binding = _verify_evidence(
+            evidence_binding = _verify_evidence(
                 evidence_cas,
                 normalized_outcome,
                 expected_manifest=manifests[case_id],
                 label=label,
                 expected_dispatch_matrix=expected_dispatch_matrix,
+                acceptance_ledger=acceptance_ledger,
             )
-            if v4_binding is not None:
-                v4_bindings.append(v4_binding)
+            if evidence_binding is not None:
+                if "evidence_kind" in evidence_binding:
+                    candidate_bindings.append(evidence_binding)
+                else:
+                    v4_bindings.append(evidence_binding)
         normalized.append(normalized_outcome)
 
     expected_count = len(systems) * len(cases) * runs_per_case
@@ -957,10 +1260,25 @@ def _validate_outcomes(
         raise BenchmarkError(
             "outcome matrix is incomplete; missing: " + ", ".join(missing) + suffix
         )
+    if v4_bindings and candidate_bindings:
+        raise BenchmarkError(
+            "evidence v4 cannot be mixed with candidate-composition evidence"
+        )
+    if require_candidate_composition and len(candidate_bindings) != expected_count:
+        raise BenchmarkError(
+            "Phase 0 hidden gate requires candidate-composition evidence "
+            "for the entire outcome matrix"
+        )
     _verify_v4_batch_bindings(
         v4_bindings,
         expected_count=expected_count,
         suite_digest=suite_digest,
+    )
+    _verify_candidate_batch_bindings(
+        candidate_bindings,
+        expected_count=expected_count,
+        suite_digest=suite_digest,
+        expected_policy_digest=expected_candidate_policy_digest,
     )
     return normalized
 
@@ -1007,6 +1325,539 @@ def _verify_v4_batch_bindings(
         raise BenchmarkError("evidence v4 nonce binding digest does not re-derive")
 
 
+def _verify_candidate_batch_bindings(
+    bindings: list[dict[str, Any]],
+    *,
+    expected_count: int,
+    suite_digest: str,
+    expected_policy_digest: str | None = None,
+) -> None:
+    if not bindings:
+        return
+    from .phase0_candidate import compose_candidate_decision
+
+    if len(bindings) != expected_count:
+        raise BenchmarkError(
+            "candidate-composition evidence cannot be mixed with older evidence versions"
+        )
+    if len({item["dispatch_digest"] for item in bindings}) != 1:
+        raise BenchmarkError(
+            "candidate-composition outcomes do not share one dispatch"
+        )
+    if len({item["policy_digest"] for item in bindings}) != 1:
+        raise BenchmarkError("candidate-composition outcomes do not share one policy")
+    if (
+        expected_policy_digest is not None
+        and bindings[0]["policy_digest"] != expected_policy_digest
+    ):
+        raise BenchmarkError(
+            "candidate-composition evidence does not match the frozen candidate policy"
+        )
+
+    candidate_bindings = [
+        item for item in bindings if item["evidence_kind"] == "candidate"
+    ]
+    worker_bindings = [
+        item
+        for item in bindings
+        if item["evidence_kind"] == "authenticated_worker"
+    ]
+    if len(candidate_bindings) * 3 != expected_count:
+        raise BenchmarkError(
+            "candidate-composition evidence requires one candidate per matrix cell"
+        )
+    if len(worker_bindings) != len(candidate_bindings) * 2:
+        raise BenchmarkError(
+            "candidate-composition evidence requires two comparators per matrix cell"
+        )
+
+    policy = candidate_bindings[0]["policy"]
+    dispatch = candidate_bindings[0]["dispatch"]
+    required_comparators = {
+        system["name"]: system for system in policy["required_comparators"]
+    }
+    expected_candidate = candidate_bindings[0]["candidate_system"]
+    if (
+        dispatch["suite_digest"] != suite_digest
+        or dispatch["candidate_system"] != expected_candidate
+        or dispatch["candidate_policy_digest"] != bindings[0]["policy_digest"]
+    ):
+        raise BenchmarkError(
+            "candidate-composition dispatch does not bind the suite and policy"
+        )
+    if any(
+        item["policy_digest"] != dispatch["candidate_policy_digest"]
+        for item in bindings
+    ):
+        raise BenchmarkError("candidate-composition evidence changed policy binding")
+
+    dispatch_jobs = {entry["job_id"]: entry for entry in dispatch["jobs"]}
+    bound_jobs = {item["job"]["job_id"]: item["job"] for item in worker_bindings}
+    if dispatch_jobs != bound_jobs:
+        raise BenchmarkError(
+            "authenticated comparator evidence does not close the exact dispatch"
+        )
+
+    cells: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for item in bindings:
+        envelope = item["envelope"]
+        cells.setdefault(
+            (envelope["case_id"], envelope["run_id"]),
+            [],
+        ).append(item)
+    for cell, items in cells.items():
+        candidates = [
+            item for item in items if item["evidence_kind"] == "candidate"
+        ]
+        components = [
+            item
+            for item in items
+            if item["evidence_kind"] == "authenticated_worker"
+        ]
+        if len(candidates) != 1 or len(components) != 2 or len(items) != 3:
+            raise BenchmarkError(
+                f"candidate-composition cell {cell[0]}:run-{cell[1]} is incomplete"
+            )
+        candidate = candidates[0]
+        component_by_name = {
+            item["envelope"]["system"]["name"]: item for item in components
+        }
+        if (
+            set(component_by_name) != set(required_comparators)
+            or any(
+                component_by_name[name]["envelope"]["system"]
+                != required_comparators[name]
+                for name in required_comparators
+            )
+        ):
+            raise BenchmarkError(
+                f"candidate-composition cell {cell[0]}:run-{cell[1]} "
+                "does not contain the frozen comparator pair"
+            )
+        if candidate["envelope"]["system"] != expected_candidate:
+            raise BenchmarkError(
+                f"candidate-composition cell {cell[0]}:run-{cell[1]} "
+                "changed the Aragorn identity"
+            )
+
+        envelope_set = [item["envelope"] for item in items]
+        for field in (
+            "suite_digest",
+            "case_id",
+            "tree_digest",
+            "run_id",
+            "private_manifest_digest",
+            "dispatch_digest",
+        ):
+            if len({item[field] for item in envelope_set}) != 1:
+                raise BenchmarkError(
+                    f"candidate-composition cell {cell[0]}:run-{cell[1]} "
+                    f"does not share one {field}"
+                )
+        expected_component_digests = sorted(
+            item["evidence_digest"] for item in components
+        )
+        if (
+            candidate["envelope"]["component_evidence_digests"]
+            != expected_component_digests
+        ):
+            raise BenchmarkError(
+                f"candidate-composition cell {cell[0]}:run-{cell[1]} "
+                "does not bind the exact comparator evidence"
+            )
+        try:
+            expected_verdict, expected_reasons = compose_candidate_decision(
+                policy,
+                candidate["source_graph"],
+                (item["envelope"] for item in components),
+            )
+        except ValueError as exc:
+            raise BenchmarkError(
+                f"candidate-composition decision cannot be derived: {exc}"
+            ) from exc
+        if (
+            candidate["envelope"]["verdict"] != expected_verdict
+            or candidate["envelope"]["reason_codes"] != expected_reasons
+        ):
+            raise BenchmarkError(
+                f"candidate-composition cell {cell[0]}:run-{cell[1]} "
+                "decision does not re-derive"
+            )
+
+
+def _verify_composed_evidence_common(
+    cas: CAS,
+    outcome: dict[str, Any],
+    *,
+    expected_manifest: dict[str, Any],
+    label: str,
+    envelope: dict[str, Any],
+) -> str:
+    for field in (
+        "suite_digest",
+        "case_id",
+        "tree_digest",
+        "run_id",
+        "system",
+        "verdict",
+        "reason_codes",
+    ):
+        if envelope[field] != outcome[field]:
+            raise BenchmarkError(f"{label}.evidence.{field} does not match outcome")
+    manifest_digest = _digest(
+        envelope["private_manifest_digest"],
+        f"{label}.evidence.private_manifest_digest",
+    )
+    if manifest_digest != _digest_json(expected_manifest):
+        raise BenchmarkError(
+            f"{label}.evidence private manifest does not match the suite case"
+        )
+    manifest = _read_canonical_document(
+        cas,
+        manifest_digest,
+        f"{label}.evidence.private_manifest",
+        max_bytes=_MAX_SUITE_BYTES,
+    )
+    if manifest != expected_manifest:
+        raise BenchmarkError(
+            f"{label}.evidence private manifest bytes do not match the suite"
+        )
+    return manifest_digest
+
+
+def _load_candidate_dispatch(
+    cas: CAS,
+    digest: object,
+    *,
+    suite_digest: str,
+    label: str,
+) -> tuple[str, dict[str, Any]]:
+    dispatch_digest = _digest(digest, f"{label}.dispatch_digest")
+    dispatch = _read_canonical_document(
+        cas,
+        dispatch_digest,
+        f"{label}.dispatch",
+        max_bytes=_MAX_SUITE_BYTES,
+    )
+    from .label_blind_prepare import validate_private_dispatch_v2
+
+    try:
+        validate_private_dispatch_v2(dispatch)
+    except ValueError as exc:
+        raise BenchmarkError(f"{label}.dispatch is invalid: {exc}") from exc
+    if (
+        _digest_json(dispatch) != dispatch_digest
+        or dispatch["suite_digest"] != suite_digest
+    ):
+        raise BenchmarkError(f"{label}.dispatch is not bound to the suite")
+    return dispatch_digest, dispatch
+
+
+def _verify_authenticated_worker_evidence(
+    cas: CAS,
+    outcome: dict[str, Any],
+    *,
+    expected_manifest: dict[str, Any],
+    label: str,
+    envelope: dict[str, Any],
+    acceptance_ledger: Path | None,
+) -> dict[str, Any]:
+    evidence_label = f"{label}.evidence"
+    _exact_keys(
+        envelope,
+        {
+            "schema",
+            "suite_digest",
+            "case_id",
+            "tree_digest",
+            "run_id",
+            "system",
+            "verdict",
+            "reason_codes",
+            "private_manifest_digest",
+            "dispatch_digest",
+            "acceptance_receipt_digest",
+            "issuance_digest",
+        },
+        evidence_label,
+    )
+    manifest_digest = _verify_composed_evidence_common(
+        cas,
+        outcome,
+        expected_manifest=expected_manifest,
+        label=label,
+        envelope=envelope,
+    )
+    dispatch_digest, dispatch = _load_candidate_dispatch(
+        cas,
+        envelope["dispatch_digest"],
+        suite_digest=outcome["suite_digest"],
+        label=evidence_label,
+    )
+    matches = [
+        entry
+        for entry in dispatch["jobs"]
+        if entry["case_id"] == outcome["case_id"]
+        and entry["run_id"] == outcome["run_id"]
+        and entry["system"] == outcome["system"]
+    ]
+    if len(matches) != 1:
+        raise BenchmarkError(
+            f"{evidence_label}.dispatch does not select one exact worker job"
+        )
+    job = matches[0]
+    for field, expected in {
+        "suite_digest": outcome["suite_digest"],
+        "tree_digest": outcome["tree_digest"],
+        "private_manifest_digest": manifest_digest,
+    }.items():
+        if job[field] != expected:
+            raise BenchmarkError(
+                f"{evidence_label}.dispatch job {field} does not match outcome"
+            )
+
+    request = _read_canonical_document(
+        cas,
+        job["request_digest"],
+        f"{evidence_label}.worker_request",
+        max_bytes=64 * 1024,
+    )
+    try:
+        validate_worker_request_v2(request)
+        subject = sanitize_subject_manifest(expected_manifest)
+    except WorkerProtocolError as exc:
+        raise BenchmarkError(
+            f"{evidence_label}.worker_request is invalid: {exc}"
+        ) from exc
+    expected_request_system = {
+        field: outcome["system"][field]
+        for field in ("name", "version", "implementation_digest")
+    }
+    if (
+        canonical_request_digest_v2(request) != job["request_digest"]
+        or request["job_id"] != job["job_id"]
+        or request["subject"]
+        != {
+            "manifest_digest": _digest_json(subject),
+            "tree_digest": outcome["tree_digest"],
+        }
+        or request["portable_policy_digest"] != outcome["system"]["config_digest"]
+        or request["system"] != expected_request_system
+    ):
+        raise BenchmarkError(
+            f"{evidence_label}.worker_request does not match private dispatch"
+        )
+
+    issuance_digest = _digest(
+        envelope["issuance_digest"], f"{evidence_label}.issuance_digest"
+    )
+    receipt_digest = _digest(
+        envelope["acceptance_receipt_digest"],
+        f"{evidence_label}.acceptance_receipt_digest",
+    )
+    issuance = _read_canonical_document(
+        cas,
+        issuance_digest,
+        f"{evidence_label}.issuance",
+        max_bytes=256 * 1024,
+    )
+    receipt = _read_canonical_document(
+        cas,
+        receipt_digest,
+        f"{evidence_label}.acceptance_receipt",
+        max_bytes=256 * 1024,
+    )
+    from .benchmark_authenticated_handoff_v2 import (
+        load_verified_worker_output_acceptance,
+    )
+
+    if acceptance_ledger is None:
+        raise BenchmarkError(
+            f"{evidence_label} requires a protected acceptance ledger"
+        )
+    try:
+        accepted = load_verified_worker_output_acceptance(
+            cas,
+            acceptance_ledger,
+            receipt.get("verifier_challenge"),
+        )
+    except ValueError as exc:
+        raise BenchmarkError(
+            f"{evidence_label} authenticated acceptance is invalid: {exc}"
+        ) from exc
+    if accepted != {"issuance": issuance, "receipt": receipt}:
+        raise BenchmarkError(
+            f"{evidence_label} acceptance is not a member of the protected ledger"
+        )
+    if (
+        receipt["job_id"] != job["job_id"]
+        or receipt["request_digest"] != job["request_digest"]
+    ):
+        raise BenchmarkError(
+            f"{evidence_label} authenticated acceptance changed its dispatch job"
+        )
+
+    result = _read_canonical_document(
+        cas,
+        receipt["result_digest"],
+        f"{evidence_label}.worker_result",
+        max_bytes=_MAX_SUITE_BYTES,
+    )
+    try:
+        validate_worker_result_v2(result)
+    except WorkerProtocolError as exc:
+        raise BenchmarkError(
+            f"{evidence_label}.worker_result is invalid: {exc}"
+        ) from exc
+    result_bindings = {
+        "job_id": job["job_id"],
+        "verifier_challenge": request["verifier_challenge"],
+        "request_digest": job["request_digest"],
+        "portable_policy_digest": outcome["system"]["config_digest"],
+        "subject_manifest_digest": request["subject"]["manifest_digest"],
+        "tree_digest": outcome["tree_digest"],
+        "verified_subject_digest": outcome["tree_digest"],
+        "system": expected_request_system,
+        "verdict": outcome["verdict"],
+        "reason_codes": outcome["reason_codes"],
+    }
+    for field, expected in result_bindings.items():
+        if result[field] != expected:
+            raise BenchmarkError(
+                f"{evidence_label}.worker_result.{field} does not match outcome"
+            )
+    return {
+        "evidence_kind": "authenticated_worker",
+        "evidence_digest": outcome["evidence_digest"],
+        "envelope": envelope,
+        "dispatch_digest": dispatch_digest,
+        "dispatch": dispatch,
+        "policy_digest": dispatch["candidate_policy_digest"],
+        "job": job,
+    }
+
+
+def _verify_candidate_evidence(
+    cas: CAS,
+    outcome: dict[str, Any],
+    *,
+    expected_manifest: dict[str, Any],
+    label: str,
+    envelope: dict[str, Any],
+) -> dict[str, Any]:
+    evidence_label = f"{label}.evidence"
+    _exact_keys(
+        envelope,
+        {
+            "schema",
+            "suite_digest",
+            "case_id",
+            "tree_digest",
+            "run_id",
+            "system",
+            "verdict",
+            "reason_codes",
+            "private_manifest_digest",
+            "source_graph_digest",
+            "dispatch_digest",
+            "policy_digest",
+            "component_evidence_digests",
+        },
+        evidence_label,
+    )
+    manifest_digest = _verify_composed_evidence_common(
+        cas,
+        outcome,
+        expected_manifest=expected_manifest,
+        label=label,
+        envelope=envelope,
+    )
+    dispatch_digest, dispatch = _load_candidate_dispatch(
+        cas,
+        envelope["dispatch_digest"],
+        suite_digest=outcome["suite_digest"],
+        label=evidence_label,
+    )
+    policy_digest = _digest(
+        envelope["policy_digest"], f"{evidence_label}.policy_digest"
+    )
+    if policy_digest != dispatch["candidate_policy_digest"]:
+        raise BenchmarkError(f"{evidence_label}.policy_digest changed dispatch policy")
+    policy_document = _read_canonical_document(
+        cas,
+        policy_digest,
+        f"{evidence_label}.policy",
+        max_bytes=_MAX_INPUT_BYTES,
+    )
+    from .phase0_candidate import build_candidate_policy, candidate_system_identity
+
+    try:
+        policy = build_candidate_policy(policy_document)
+        candidate_system = candidate_system_identity(policy)
+    except ValueError as exc:
+        raise BenchmarkError(f"{evidence_label}.policy is invalid: {exc}") from exc
+    if _digest_json(policy) != policy_digest:
+        raise BenchmarkError(f"{evidence_label}.policy canonical digest changed")
+    if (
+        candidate_system != outcome["system"]
+        or candidate_system != dispatch["candidate_system"]
+    ):
+        raise BenchmarkError(f"{evidence_label}.system does not match candidate policy")
+
+    source_graph_digest = _digest(
+        envelope["source_graph_digest"],
+        f"{evidence_label}.source_graph_digest",
+    )
+    source_graph = _read_canonical_document(
+        cas,
+        source_graph_digest,
+        f"{evidence_label}.source_graph",
+        max_bytes=_MAX_SUITE_BYTES,
+    )
+    try:
+        expected_graph = resolve_source_graph(
+            expected_manifest,
+            cas,
+            root_manifest_digest=manifest_digest,
+        )
+    except (ArtifactClosureError, CASError) as exc:
+        raise BenchmarkError(
+            f"{evidence_label}.source_graph cannot be re-derived: {exc}"
+        ) from exc
+    if (
+        source_graph != expected_graph
+        or _digest_json(expected_graph) != source_graph_digest
+    ):
+        raise BenchmarkError(f"{evidence_label}.source_graph does not re-derive")
+
+    raw_component_digests = envelope["component_evidence_digests"]
+    if not isinstance(raw_component_digests, list):
+        raise BenchmarkError(
+            f"{evidence_label}.component_evidence_digests must be an array"
+        )
+    component_digests = [
+        _digest(value, f"{evidence_label}.component_evidence_digests")
+        for value in raw_component_digests
+    ]
+    if len(component_digests) != 2 or component_digests != sorted(
+        set(component_digests)
+    ):
+        raise BenchmarkError(
+            f"{evidence_label}.component_evidence_digests must be two sorted digests"
+        )
+    return {
+        "evidence_kind": "candidate",
+        "evidence_digest": outcome["evidence_digest"],
+        "envelope": envelope,
+        "dispatch_digest": dispatch_digest,
+        "dispatch": dispatch,
+        "policy_digest": policy_digest,
+        "policy": policy,
+        "candidate_system": candidate_system,
+        "source_graph": source_graph,
+    }
+
+
 def _verify_evidence(
     cas: CAS,
     outcome: dict[str, Any],
@@ -1017,7 +1868,8 @@ def _verify_evidence(
         tuple[tuple[str, str, str, str], str, int], dict[str, Any]
     ]
     | None = None,
-) -> dict[str, str] | None:
+    acceptance_ledger: Path | None = None,
+) -> dict[str, Any] | None:
     envelope = _read_canonical_document(
         cas,
         outcome["evidence_digest"],
@@ -1032,6 +1884,26 @@ def _verify_evidence(
             label=label,
             envelope=envelope,
             expected_dispatch_matrix=expected_dispatch_matrix,
+        )
+    if (
+        envelope.get("schema")
+        == "aragorn/benchmark-authenticated-worker-evidence/v1"
+    ):
+        return _verify_authenticated_worker_evidence(
+            cas,
+            outcome,
+            expected_manifest=expected_manifest,
+            label=label,
+            envelope=envelope,
+            acceptance_ledger=acceptance_ledger,
+        )
+    if envelope.get("schema") == "aragorn/benchmark-candidate-evidence/v1":
+        return _verify_candidate_evidence(
+            cas,
+            outcome,
+            expected_manifest=expected_manifest,
+            label=label,
+            envelope=envelope,
         )
     if envelope.get("schema") in {
         "aragorn/benchmark-evidence/v2",
@@ -3880,6 +4752,302 @@ def _phase0_gate_report(
     }
 
 
+def _phase0_hidden_gate_report(
+    *,
+    benchmark_report: dict[str, Any],
+    systems: dict[tuple[str, str, str, str], dict[str, str]],
+    binding: dict[str, str],
+) -> dict[str, Any]:
+    candidates = [system for system in systems.values() if system["name"] == "aragorn"]
+    if len(candidates) != 1:
+        raise BenchmarkError(
+            "Phase 0 suite must declare exactly one Aragorn candidate identity"
+        )
+    comparison = _phase0_hidden_comparative_gate(
+        benchmark_report,
+        candidate=candidates[0],
+    )
+    return {
+        "schema": "aragorn/benchmark-phase0-gate-report/v2",
+        "assurance": "comparative_metrics_only",
+        "suite_id": benchmark_report["suite_id"],
+        "purpose": benchmark_report["purpose"],
+        "suite_digest": benchmark_report["suite_digest"],
+        "outcomes_digest": benchmark_report["outcomes_digest"],
+        "benchmark_report_digest": _digest_json(benchmark_report),
+        "corpus_lock_digest": binding["corpus_lock_digest"],
+        "public_manifest_digest": binding["public_manifest_digest"],
+        "hidden_suite_lock_digest": binding["hidden_suite_lock_digest"],
+        "candidate_policy_digest": binding["candidate_policy_digest"],
+        "label_ledger_digest": binding["label_ledger_digest"],
+        "evaluation_split": "hidden",
+        "comparison": comparison,
+    }
+
+
+def _validate_phase0_hidden_binding(
+    *,
+    corpus_lock_path: Path,
+    public_manifest_path: Path,
+    hidden_suite_lock_path: Path,
+    candidate_policy_path: Path,
+    label_ledger_digest: str,
+    suite_digest: str,
+    runs_per_case: int,
+    cases: dict[str, dict[str, Any]],
+    systems: dict[tuple[str, str, str, str], dict[str, str]],
+    manifests: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    corpus_lock_raw = _read_bounded(corpus_lock_path)
+    corpus_lock_digest = _digest_bytes(corpus_lock_raw)
+    if corpus_lock_digest != _PHASE0_CORPUS_LOCK_DIGEST:
+        raise BenchmarkError("Phase 0 hidden gate corpus lock identity does not match")
+    corpus_lock = _decode_json(corpus_lock_raw, "Phase 0 corpus lock")
+    if not isinstance(corpus_lock, dict):
+        raise BenchmarkError("Phase 0 corpus lock must be a JSON object")
+    _exact_keys(
+        corpus_lock,
+        {
+            "schema",
+            "corpus_id",
+            "assurance",
+            "case_count",
+            "runs_per_case",
+            "worker_archive",
+            "public_manifest",
+            "evaluator_archive",
+            "freeze",
+            "signing",
+        },
+        "Phase 0 corpus lock",
+    )
+    if (
+        corpus_lock["schema"]
+        != "aragorn/benchmark-corpus-provenance-lock/v1"
+        or corpus_lock["corpus_id"] != "independent-v1.0.0"
+        or corpus_lock["case_count"] != 448
+        or corpus_lock["runs_per_case"] != 1
+    ):
+        raise BenchmarkError("Phase 0 hidden gate corpus lock is unsupported")
+
+    public_manifest_raw = _read_bounded(public_manifest_path)
+    public_manifest_digest = _digest_bytes(public_manifest_raw)
+    if public_manifest_digest != corpus_lock["public_manifest"].get("sha256"):
+        raise BenchmarkError("Phase 0 public manifest digest does not match corpus lock")
+    public_manifest = _decode_json(
+        public_manifest_raw,
+        "Phase 0 public corpus manifest",
+    )
+    if not isinstance(public_manifest, dict):
+        raise BenchmarkError("Phase 0 public corpus manifest must be a JSON object")
+    _exact_keys(
+        public_manifest,
+        {
+            "schema_version",
+            "corpus_version",
+            "hash_algorithm",
+            "case_count",
+            "entries",
+        },
+        "Phase 0 public corpus manifest",
+    )
+    if (
+        public_manifest["schema_version"] != "1.0"
+        or public_manifest["hash_algorithm"] != "sha256"
+        or public_manifest["corpus_version"] != corpus_lock["corpus_id"]
+        or public_manifest["case_count"] != corpus_lock["case_count"]
+    ):
+        raise BenchmarkError("Phase 0 public corpus manifest identity does not match")
+    raw_entries = public_manifest["entries"]
+    if not isinstance(raw_entries, list) or len(raw_entries) != 448:
+        raise BenchmarkError("Phase 0 public corpus manifest must contain 448 entries")
+    entries: dict[str, dict[str, Any]] = {}
+    for index, raw_entry in enumerate(raw_entries):
+        label = f"Phase 0 public corpus manifest entries[{index}]"
+        if not isinstance(raw_entry, dict):
+            raise BenchmarkError(f"{label} must be a JSON object")
+        _exact_keys(raw_entry, {"id", "path", "sha256", "size"}, label)
+        case_id = raw_entry["id"]
+        if (
+            not isinstance(case_id, str)
+            or _PHASE0_OPAQUE_CASE_ID.fullmatch(case_id) is None
+        ):
+            raise BenchmarkError(f"{label}.id is not an opaque case identifier")
+        if case_id in entries:
+            raise BenchmarkError("Phase 0 public corpus manifest repeats a case")
+        sha256 = raw_entry["sha256"]
+        if not isinstance(sha256, str) or _HEX_DIGEST.fullmatch(sha256) is None:
+            raise BenchmarkError(f"{label}.sha256 is invalid")
+        size = raw_entry["size"]
+        if (
+            isinstance(size, bool)
+            or not isinstance(size, int)
+            or not 1 <= size <= _MAX_FIXTURE_BYTES
+        ):
+            raise BenchmarkError(f"{label}.size is invalid")
+        expected_path = f"cases/{case_id}/SKILL.md"
+        if raw_entry["path"] != expected_path:
+            raise BenchmarkError(f"{label}.path does not match its case identifier")
+        entries[case_id] = {
+            "digest": f"sha256:{sha256}",
+            "size": size,
+        }
+    if list(entries) != sorted(entries):
+        raise BenchmarkError("Phase 0 public corpus manifest entries must be sorted")
+
+    candidate_policy_raw = _read_bounded(candidate_policy_path)
+    candidate_policy = _decode_json(
+        candidate_policy_raw,
+        "Phase 0 candidate policy",
+    )
+    try:
+        from .phase0_candidate import (
+            build_candidate_policy,
+            candidate_policy_digest,
+            candidate_system_identity,
+        )
+
+        canonical_policy = build_candidate_policy(candidate_policy)
+        frozen_policy_digest = candidate_policy_digest(canonical_policy)
+        expected_systems = sorted(
+            [
+                candidate_system_identity(canonical_policy),
+                *canonical_policy["required_comparators"],
+            ],
+            key=_system_key,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise BenchmarkError(f"invalid Phase 0 candidate policy: {exc}") from exc
+
+    hidden_suite_lock_raw = _read_bounded(hidden_suite_lock_path)
+    hidden_suite_lock_digest = _digest_bytes(hidden_suite_lock_raw)
+    hidden_suite_lock = _decode_json(
+        hidden_suite_lock_raw,
+        "Phase 0 hidden suite lock",
+    )
+    if not isinstance(hidden_suite_lock, dict):
+        raise BenchmarkError("Phase 0 hidden suite lock must be a JSON object")
+    if hidden_suite_lock_raw != _canonical_json_bytes(hidden_suite_lock):
+        raise BenchmarkError("Phase 0 hidden suite lock must use canonical JSON bytes")
+    _exact_keys(
+        hidden_suite_lock,
+        {
+            "schema",
+            "assurance",
+            "corpus_lock_digest",
+            "worker_archive_digest",
+            "public_manifest_digest",
+            "evaluator_archive_digest",
+            "label_ledger_digest",
+            "candidate_policy_digest",
+            "suite_digest",
+            "case_count",
+            "class_counts",
+            "runs_per_case",
+            "split",
+            "systems",
+        },
+        "Phase 0 hidden suite lock",
+    )
+    if (
+        hidden_suite_lock["schema"]
+        != "aragorn/benchmark-phase0-hidden-suite-lock/v1"
+        or hidden_suite_lock["assurance"]
+        != "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    ):
+        raise BenchmarkError("Phase 0 hidden suite lock is unsupported")
+    for field in (
+        "corpus_lock_digest",
+        "worker_archive_digest",
+        "public_manifest_digest",
+        "evaluator_archive_digest",
+        "label_ledger_digest",
+        "candidate_policy_digest",
+        "suite_digest",
+    ):
+        _digest(hidden_suite_lock[field], f"Phase 0 hidden suite lock.{field}")
+    expected_bindings = {
+        "corpus_lock_digest": corpus_lock_digest,
+        "worker_archive_digest": corpus_lock["worker_archive"]["sha256"],
+        "public_manifest_digest": public_manifest_digest,
+        "evaluator_archive_digest": corpus_lock["evaluator_archive"]["sha256"],
+        "candidate_policy_digest": frozen_policy_digest,
+        "label_ledger_digest": _digest(
+            label_ledger_digest,
+            "Phase 0 verified label ledger digest",
+        ),
+        "suite_digest": suite_digest,
+    }
+    if any(
+        hidden_suite_lock[field] != expected
+        for field, expected in expected_bindings.items()
+    ):
+        raise BenchmarkError(
+            "Phase 0 hidden suite lock does not bind the frozen inputs"
+        )
+    if (
+        hidden_suite_lock["case_count"] != 448
+        or hidden_suite_lock["class_counts"]
+        != {"benign": 336, "adversarial": 112}
+        or hidden_suite_lock["runs_per_case"] != 1
+        or hidden_suite_lock["split"] != "hidden"
+    ):
+        raise BenchmarkError("Phase 0 hidden suite lock has invalid matrix accounting")
+    raw_systems = hidden_suite_lock["systems"]
+    if not isinstance(raw_systems, list):
+        raise BenchmarkError("Phase 0 hidden suite lock systems must be an array")
+    locked_systems = [
+        _validate_system(value, f"Phase 0 hidden suite lock systems[{index}]")
+        for index, value in enumerate(raw_systems)
+    ]
+    if locked_systems != expected_systems:
+        raise BenchmarkError(
+            "Phase 0 hidden suite lock does not bind the frozen system identities"
+        )
+    declared_systems = [systems[key] for key in sorted(systems)]
+    if declared_systems != expected_systems:
+        raise BenchmarkError(
+            "Phase 0 hidden suite does not declare the frozen system identities"
+        )
+
+    if (
+        runs_per_case != 1
+        or len(cases) != 448
+        or set(cases) != set(entries)
+        or any(case["split"] != "hidden" for case in cases.values())
+    ):
+        raise BenchmarkError(
+            "Phase 0 hidden suite does not match the frozen public case matrix"
+        )
+    class_counts = {
+        case_class: sum(
+            case["class"] == case_class for case in cases.values()
+        )
+        for case_class in ("benign", "adversarial")
+    }
+    if class_counts != hidden_suite_lock["class_counts"]:
+        raise BenchmarkError("Phase 0 hidden suite class accounting does not match")
+    for case_id, entry in entries.items():
+        files = manifests[case_id]["files"]
+        if (
+            len(files) != 1
+            or files[0]["path"] != "SKILL.md"
+            or files[0]["digest"] != entry["digest"]
+            or files[0]["size"] != entry["size"]
+            or files[0]["executable"] is not False
+        ):
+            raise BenchmarkError(
+                f"Phase 0 hidden suite case {case_id} does not match public manifest"
+            )
+    return {
+        "corpus_lock_digest": corpus_lock_digest,
+        "public_manifest_digest": public_manifest_digest,
+        "hidden_suite_lock_digest": hidden_suite_lock_digest,
+        "candidate_policy_digest": frozen_policy_digest,
+        "label_ledger_digest": label_ledger_digest,
+    }
+
+
 def _validate_phase0_accounting(
     value: object,
     *,
@@ -5047,46 +6215,17 @@ def _phase0_comparative_gate(
     candidate: dict[str, str],
     held_out_accounting: dict[str, Any],
 ) -> dict[str, Any]:
-    candidate_key = _system_key(candidate)
-    points = []
-    held_out_missing = False
-    for system_report in benchmark_report["systems"]:
-        split = next(
-            (item for item in system_report["splits"] if item["split"] == "held_out"),
-            None,
-        )
-        if split is None:
-            held_out_missing = True
-            continue
-        summary = split["summary"]
-        benign_evaluations = sum(summary["class_verdicts"]["benign"].values())
-        adversarial_evaluations = sum(summary["class_verdicts"]["adversarial"].values())
-        burden = Fraction(summary["benign_intervened"], benign_evaluations)
-        attack = Fraction(summary["adversarial_flagged"], adversarial_evaluations)
-        points.append(
-            {
-                "system": system_report["system"],
-                "burden": burden,
-                "attack": attack,
-                "burden_compliant": burden <= _PHASE0_BENIGN_BURDEN_CEILING,
-            }
-        )
-    candidate_point = next(
-        (point for point in points if _system_key(point["system"]) == candidate_key),
-        None,
+    (
+        candidate_point,
+        comparator_points,
+        frontier,
+        selected,
+        held_out_missing,
+    ) = _phase0_comparison_points(
+        benchmark_report,
+        candidate=candidate,
+        evaluation_split="held_out",
     )
-    comparator_points = [
-        point for point in points if _system_key(point["system"]) != candidate_key
-    ]
-    frontier = _phase0_pareto_frontier(comparator_points)
-    eligible = [point for point in comparator_points if point["burden_compliant"]]
-    selected = None
-    if eligible:
-        best_attack = max(point["attack"] for point in eligible)
-        selected = min(
-            (point for point in eligible if point["attack"] == best_attack),
-            key=lambda point: _system_key(point["system"]),
-        )
 
     reasons = []
     delta: Fraction | None = None
@@ -5143,6 +6282,129 @@ def _phase0_comparative_gate(
         "passed": not reasons,
         "reason_codes": sorted(reasons),
     }
+
+
+def _phase0_hidden_comparative_gate(
+    benchmark_report: dict[str, Any],
+    *,
+    candidate: dict[str, str],
+) -> dict[str, Any]:
+    (
+        candidate_point,
+        comparator_points,
+        frontier,
+        selected,
+        hidden_missing,
+    ) = _phase0_comparison_points(
+        benchmark_report,
+        candidate=candidate,
+        evaluation_split="hidden",
+    )
+    reasons = []
+    delta: Fraction | None = None
+    if hidden_missing or candidate_point is None:
+        reasons.append("NO_HIDDEN_SPLIT")
+    else:
+        if not candidate_point["burden_compliant"]:
+            reasons.append("CANDIDATE_BURDEN_CEILING_EXCEEDED")
+        if selected is None:
+            reasons.append("NO_BURDEN_COMPLIANT_COMPARATOR")
+        else:
+            delta = candidate_point["attack"] - selected["attack"]
+            if delta < _PHASE0_MINIMUM_ATTACK_FLAG_DELTA:
+                reasons.append("ATTACK_FLAG_DELTA_BELOW_10PP")
+    return {
+        "benign_burden_ceiling": _phase0_fraction_report(_PHASE0_BENIGN_BURDEN_CEILING),
+        "minimum_attack_flag_delta": _phase0_fraction_report(
+            _PHASE0_MINIMUM_ATTACK_FLAG_DELTA
+        ),
+        "candidate": (
+            _phase0_point_report(candidate_point)
+            if candidate_point is not None
+            else None
+        ),
+        "comparators": [
+            _phase0_point_report(point)
+            for point in sorted(
+                comparator_points, key=lambda item: _system_key(item["system"])
+            )
+        ],
+        "pareto_frontier": [
+            _phase0_point_report(point)
+            for point in sorted(frontier, key=lambda item: _system_key(item["system"]))
+        ],
+        "selected_comparator": (
+            _phase0_point_report(selected) if selected is not None else None
+        ),
+        "attack_flag_delta": (
+            _phase0_fraction_report(delta) if delta is not None else None
+        ),
+        "evaluable": not any(
+            reason in {"NO_HIDDEN_SPLIT", "NO_BURDEN_COMPLIANT_COMPARATOR"}
+            for reason in reasons
+        ),
+        "passed": not reasons,
+        "reason_codes": sorted(reasons),
+    }
+
+
+def _phase0_comparison_points(
+    benchmark_report: dict[str, Any],
+    *,
+    candidate: dict[str, str],
+    evaluation_split: str,
+) -> tuple[
+    dict[str, Any] | None,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any] | None,
+    bool,
+]:
+    candidate_key = _system_key(candidate)
+    points = []
+    split_missing = False
+    for system_report in benchmark_report["systems"]:
+        split = next(
+            (
+                item
+                for item in system_report["splits"]
+                if item["split"] == evaluation_split
+            ),
+            None,
+        )
+        if split is None:
+            split_missing = True
+            continue
+        summary = split["summary"]
+        benign_evaluations = sum(summary["class_verdicts"]["benign"].values())
+        adversarial_evaluations = sum(summary["class_verdicts"]["adversarial"].values())
+        burden = Fraction(summary["benign_intervened"], benign_evaluations)
+        attack = Fraction(summary["adversarial_flagged"], adversarial_evaluations)
+        points.append(
+            {
+                "system": system_report["system"],
+                "burden": burden,
+                "attack": attack,
+                "burden_compliant": burden <= _PHASE0_BENIGN_BURDEN_CEILING,
+            }
+        )
+    candidate_point = next(
+        (point for point in points if _system_key(point["system"]) == candidate_key),
+        None,
+    )
+    comparator_points = [
+        point for point in points if _system_key(point["system"]) != candidate_key
+    ]
+    frontier = _phase0_pareto_frontier(comparator_points)
+    eligible = [point for point in comparator_points if point["burden_compliant"]]
+    selected = None
+    if eligible:
+        best_attack = max(point["attack"] for point in eligible)
+        selected = min(
+            (point for point in eligible if point["attack"] == best_attack),
+            key=lambda point: _system_key(point["system"]),
+        )
+    return candidate_point, comparator_points, frontier, selected, split_missing
 
 
 def _phase0_pareto_frontier(

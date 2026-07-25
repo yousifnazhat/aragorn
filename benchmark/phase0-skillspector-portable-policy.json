@@ -1,0 +1,75 @@
+{
+  "schema": "aragorn/benchmark-portable-policy/v1",
+  "system": {
+    "name": "skillspector",
+    "version": "2.4.3+git.a54947c",
+    "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e"
+  },
+  "baseline": {
+    "lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+    "entry_digest": "sha256:fe4b58c8e20ec0427beb93f29e695926119cdc66f70c99f1de9493d7c3700897"
+  },
+  "image": {
+    "index_digest": "sha256:21de7549ea44da85465c854e26f776f87454a6fca6a92e817bbceb58b25d4468",
+    "platform_manifest_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+    "config_digest": "sha256:263ce9ccdd9c0b9708fb17f2a4f671ecc34b61f2e8a22f1f2cb5ea101182b70c",
+    "build_provenance_manifest_digest": "sha256:19aa6243d53a78ae1a72077c998c0417ad5195685d329faab8e92967af628012",
+    "os": "linux",
+    "architecture": "arm64",
+    "size_bytes": 122129009
+  },
+  "entrypoint": [
+    "/opt/venv/bin/python",
+    "-P",
+    "-m",
+    "skillspector.cli"
+  ],
+  "arguments": [
+    "scan",
+    "/workspace",
+    "--no-llm",
+    "--format",
+    "json"
+  ],
+  "environment": {
+    "SKILLSPECTOR_OSV_TIMEOUT": "0.2"
+  },
+  "runtime_profile": {
+    "engine": "docker",
+    "pull": "never",
+    "network": "none",
+    "read_only_rootfs": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "no_new_privileges": true,
+    "user": "65532:65532",
+    "workdir": "/opt/aragorn-control",
+    "pids_limit": 256,
+    "memory_bytes": 2147483648,
+    "memory_swap_bytes": 2147483648,
+    "cpus": 2,
+    "nofile_soft": 1024,
+    "nofile_hard": 1024,
+    "tmpfs": {
+      "destination": "/tmp",
+      "size_bytes": 536870912,
+      "options": [
+        "rw",
+        "noexec",
+        "nosuid",
+        "nodev",
+        "mode=1777"
+      ]
+    },
+    "workspace": {
+      "destination": "/workspace",
+      "read_only": true
+    }
+  },
+  "limits": {
+    "timeout_seconds": 120.0,
+    "output_bytes": 1048576
+  },
+  "normalization": "nvidia-skillspector-2.4.3/v1"
+}

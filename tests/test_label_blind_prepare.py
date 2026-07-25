@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from copy import deepcopy
+from io import BytesIO
+from pathlib import Path
 from unittest.mock import patch
 
 from aragorn import label_blind_prepare as prepare_module
@@ -20,12 +21,13 @@ from aragorn.benchmark_protocol_v2 import (
 from aragorn.benchmark_semantic_closure_v2 import (
     derive_worker_input_cas_closure,
 )
-from aragorn.cas import CAS
+from aragorn.cas import CAS, CASError
 from aragorn.label_blind_prepare import (
     PrepareError,
     prepare_files,
     prepare_files_v2,
     validate_private_dispatch,
+    validate_private_dispatch_v2,
     validate_worker_worklist,
 )
 from aragorn.oci_runtime import load_baseline_lock
@@ -37,7 +39,15 @@ from aragorn.oci_worker_protocol import (
     validate_worker_request,
     verify_request_subject,
 )
-
+from aragorn.phase0_candidate import (
+    POLICY_ALGORITHM,
+    POLICY_ASSURANCE,
+    POLICY_SCHEMA,
+    candidate_implementation_digest,
+    candidate_policy_digest,
+    candidate_system_identity,
+    compose_candidate_batch,
+)
 
 ROOT = Path(__file__).parents[1]
 BENCHMARK = ROOT / "benchmark"
@@ -134,6 +144,29 @@ def _v2_suite(root: Path, policies: list[dict]) -> Path:
     path = root / "v2-suite.json"
     path.write_bytes(canonical_json(suite))
     return path
+
+
+def _candidate_policy(policies: list[dict]) -> dict:
+    return {
+        "schema": POLICY_SCHEMA,
+        "assurance": POLICY_ASSURANCE,
+        "algorithm": POLICY_ALGORITHM,
+        "candidate": {
+            "name": "aragorn",
+            "version": "0.1.0-phase0",
+            "implementation_digest": candidate_implementation_digest(),
+        },
+        "required_comparators": sorted(
+            (
+                {
+                    **policy["system"],
+                    "config_digest": portable_policy_digest(policy),
+                }
+                for policy in policies
+            ),
+            key=lambda system: system["name"],
+        ),
+    }
 
 
 class LabelBlindPrepareTests(unittest.TestCase):
@@ -316,8 +349,10 @@ class LabelBlindPrepareTests(unittest.TestCase):
                 },
             )
             for case in cases:
-                with self.subTest(case=case["message"]):
-                    with self.assertRaisesRegex(PrepareError, case["message"]):
+                with (
+                    self.subTest(case=case["message"]),
+                    self.assertRaisesRegex(PrepareError, case["message"]),
+                ):
                         prepare_files(
                             SUITE,
                             worker_identities=identities,
@@ -439,6 +474,228 @@ class LabelBlindPrepareTests(unittest.TestCase):
 
 
 class LabelBlindPrepareV2Tests(unittest.TestCase):
+    def test_composes_one_exact_candidate_from_each_comparator_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            os.chmod(root, 0o700)
+            control = root / "control"
+            ledger = root / "ledger"
+            policies = _portable_policies()
+            policy = _candidate_policy(policies)
+            suite = _v2_suite(root / "suite-input", policies)
+            suite_document = json.loads(suite.read_bytes())
+            suite_document["systems"].append(candidate_system_identity(policy))
+            suite.write_bytes(canonical_json(suite_document))
+            prepared = prepare_files_v2(
+                suite,
+                portable_policies=policies,
+                candidate_policy=policy,
+                trust_domain="phase0.example",
+                worker_id="isolated-worker-01",
+                challenge_ledger=ledger,
+                control_state=control,
+                jobs_root=root / "jobs",
+                lock_path=LOCK,
+            )
+
+            cas = CAS(control)
+            dispatch = json.loads(cas.read(prepared["dispatch_digest"]))
+            acceptances = {}
+            for entry in dispatch["jobs"]:
+                request = json.loads(cas.read(entry["request_digest"]))
+                fake_result = {
+                    "job_id": entry["job_id"],
+                    "request_digest": entry["request_digest"],
+                    "tree_digest": entry["tree_digest"],
+                    "portable_policy_digest": entry["system"]["config_digest"],
+                    "system": {
+                        field: entry["system"][field]
+                        for field in (
+                            "name",
+                            "version",
+                            "implementation_digest",
+                        )
+                    },
+                    "verdict": "ALLOW",
+                    "reason_codes": [],
+                }
+                raw = canonical_json(fake_result)
+                result_digest = cas.put(BytesIO(raw), max_bytes=len(raw))
+                challenge = request["verifier_challenge"]
+                acceptances[challenge] = {
+                    "issuance": {
+                        "job_id": entry["job_id"],
+                        "verifier_challenge": challenge,
+                    },
+                    "receipt": {
+                        "job_id": entry["job_id"],
+                        "request_digest": entry["request_digest"],
+                        "result_digest": result_digest,
+                    },
+                }
+
+            def load_acceptance(_cas, _ledger, challenge):
+                return acceptances[challenge]
+
+            with (
+                patch(
+                    "aragorn.phase0_candidate."
+                    "load_verified_worker_output_acceptance",
+                    side_effect=load_acceptance,
+                ),
+                patch("aragorn.phase0_candidate.validate_worker_result_v2"),
+                patch("aragorn.phase0_candidate._validate_result_observations"),
+            ):
+                composition = compose_candidate_batch(
+                    dispatch_digest=prepared["dispatch_digest"],
+                    control_state=control,
+                    challenge_ledger=ledger,
+                )
+
+            self.assertEqual(
+                len(composition["outcomes"]),
+                len(dispatch["cases"]) * dispatch["runs_per_case"] * 3,
+            )
+            for case in dispatch["cases"]:
+                self.assertTrue(
+                    {"class", "family", "split"}.isdisjoint(case)
+                )
+                for run_id in range(1, dispatch["runs_per_case"] + 1):
+                    outcomes = [
+                        outcome
+                        for outcome in composition["outcomes"]
+                        if outcome["case_id"] == case["case_id"]
+                        and outcome["run_id"] == run_id
+                    ]
+                    self.assertEqual(
+                        {outcome["system"]["name"] for outcome in outcomes},
+                        {
+                            "aragorn",
+                            "cisco-skill-scanner",
+                            "skillspector",
+                        },
+                    )
+                    candidate = next(
+                        outcome
+                        for outcome in outcomes
+                        if outcome["system"]["name"] == "aragorn"
+                    )
+                    evidence = json.loads(
+                        cas.read(candidate["evidence_digest"])
+                    )
+                    self.assertEqual(
+                        evidence["component_evidence_digests"],
+                        sorted(
+                            outcome["evidence_digest"]
+                            for outcome in outcomes
+                            if outcome["system"]["name"] != "aragorn"
+                        ),
+                    )
+
+    def test_candidate_policy_dispatches_only_comparators(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            os.chmod(root, 0o700)
+            policies = _portable_policies()
+            policy = _candidate_policy(policies)
+            suite = _v2_suite(root / "suite-input", policies)
+            suite_document = json.loads(suite.read_bytes())
+            suite_document["systems"].append(candidate_system_identity(policy))
+            suite.write_bytes(canonical_json(suite_document))
+
+            result = prepare_files_v2(
+                suite,
+                portable_policies=policies,
+                candidate_policy=policy,
+                trust_domain="phase0.example",
+                worker_id="isolated-worker-01",
+                challenge_ledger=root / "ledger",
+                control_state=root / "control",
+                jobs_root=root / "jobs",
+                lock_path=LOCK,
+            )
+
+            self.assertEqual(
+                result["schema"],
+                "aragorn/benchmark-prepare-result/v2",
+            )
+            self.assertEqual(result["job_count"], 4)
+            self.assertEqual(
+                result["candidate_policy_digest"],
+                candidate_policy_digest(policy),
+            )
+            cas = CAS(root / "control", read_only=True)
+            dispatch = json.loads(cas.read(result["dispatch_digest"]))
+            validate_private_dispatch_v2(dispatch)
+            with self.assertRaises(CASError):
+                cas.read(result["suite_digest"])
+            self.assertEqual(
+                dispatch["candidate_system"],
+                candidate_system_identity(policy),
+            )
+            self.assertEqual(
+                {
+                    entry["system"]["name"]
+                    for entry in dispatch["jobs"]
+                },
+                {"cisco-skill-scanner", "skillspector"},
+            )
+            identities = json.loads(
+                cas.read(result["worker_identities_digest"])
+            )
+            self.assertEqual(
+                {system["name"] for system in identities["systems"]},
+                {"cisco-skill-scanner", "skillspector"},
+            )
+            truncated = deepcopy(dispatch)
+            truncated["jobs"].pop()
+            with self.assertRaisesRegex(PrepareError, "matrix is incomplete"):
+                validate_private_dispatch_v2(truncated)
+            with self.assertRaisesRegex(PrepareError, "fresh control CAS"):
+                prepare_files_v2(
+                    suite,
+                    portable_policies=policies,
+                    candidate_policy=policy,
+                    trust_domain="phase0.example",
+                    worker_id="isolated-worker-01",
+                    challenge_ledger=root / "second-ledger",
+                    control_state=root / "control",
+                    jobs_root=root / "second-jobs",
+                    lock_path=LOCK,
+                )
+
+    def test_candidate_policy_must_match_suite_comparators(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            os.chmod(root, 0o700)
+            policies = _portable_policies()
+            policy = _candidate_policy(policies)
+            suite = _v2_suite(root / "suite-input", policies)
+            suite_document = json.loads(suite.read_bytes())
+            suite_document["systems"].append(candidate_system_identity(policy))
+            next(
+                system
+                for system in suite_document["systems"]
+                if system["name"] == "cisco-skill-scanner"
+            )["version"] = "2.0.13"
+            suite.write_bytes(canonical_json(suite_document))
+
+            with self.assertRaisesRegex(
+                PrepareError,
+                "comparator identities",
+            ):
+                prepare_files_v2(
+                    suite,
+                    portable_policies=policies,
+                    candidate_policy=policy,
+                    trust_domain="phase0.example",
+                    worker_id="isolated-worker-01",
+                    challenge_ledger=root / "ledger",
+                    control_state=root / "control",
+                    jobs_root=root / "jobs",
+                    lock_path=LOCK,
+                )
+
     def test_prepares_challenge_bound_cross_owner_input_bundles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

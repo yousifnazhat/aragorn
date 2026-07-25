@@ -1,0 +1,73 @@
+{
+  "schema": "aragorn/benchmark-portable-policy/v1",
+  "system": {
+    "name": "cisco-skill-scanner",
+    "version": "2.0.12",
+    "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c"
+  },
+  "baseline": {
+    "lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+    "entry_digest": "sha256:514e02dcee9ce4b17eeb5b1e2d784e7638f1189bb43a2e790ebce55474a4a265"
+  },
+  "image": {
+    "index_digest": "sha256:f06e307a2765d2ecd389fc8c706bd991f2ab5a47be6cb88caf69f48971a8b72b",
+    "platform_manifest_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+    "config_digest": "sha256:643fae7d757deff706e26252ad167cdecadb8ee314358aaa10861182f4eed3c6",
+    "build_provenance_manifest_digest": "sha256:9d673d3657c7848fe4472e077f1cac9ae76cb4c4721803f1240f07882a1889cd",
+    "os": "linux",
+    "architecture": "arm64",
+    "size_bytes": 138894369
+  },
+  "entrypoint": [
+    "/opt/venv/bin/skill-scanner"
+  ],
+  "arguments": [
+    "scan",
+    "/workspace",
+    "--use-behavioral",
+    "--policy",
+    "strict",
+    "--format",
+    "json",
+    "--compact"
+  ],
+  "environment": {},
+  "runtime_profile": {
+    "engine": "docker",
+    "pull": "never",
+    "network": "none",
+    "read_only_rootfs": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "no_new_privileges": true,
+    "user": "65532:65532",
+    "workdir": "/opt/aragorn-control",
+    "pids_limit": 256,
+    "memory_bytes": 2147483648,
+    "memory_swap_bytes": 2147483648,
+    "cpus": 2,
+    "nofile_soft": 1024,
+    "nofile_hard": 1024,
+    "tmpfs": {
+      "destination": "/tmp",
+      "size_bytes": 536870912,
+      "options": [
+        "rw",
+        "noexec",
+        "nosuid",
+        "nodev",
+        "mode=1777"
+      ]
+    },
+    "workspace": {
+      "destination": "/workspace",
+      "read_only": true
+    }
+  },
+  "limits": {
+    "timeout_seconds": 120.0,
+    "output_bytes": 1048576
+  },
+  "normalization": "cisco-ai-skill-scanner-2.0.12/v1"
+}

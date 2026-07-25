@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
 import sys
+from copy import deepcopy
+from pathlib import Path
 
 try:
     from jsonschema import FormatChecker
@@ -22,22 +22,22 @@ except ImportError as exc:  # pragma: no cover - developer setup error
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from aragorn.benchmark import evaluate_files  # noqa: E402
-from aragorn.benchmark_handoff_v2 import build_handoff_manifest  # noqa: E402
-from aragorn.benchmark_protocol_v2 import (  # noqa: E402
+from aragorn.benchmark import evaluate_files
+from aragorn.benchmark_handoff_v2 import build_handoff_manifest
+from aragorn.benchmark_protocol_v2 import (
     build_worker_request_v2,
     canonical_request_digest_v2,
     portable_policy_digest,
     validate_worker_result_v2,
     verify_request_result_binding_v2,
 )
-from aragorn.corpus_audit import audit_suite  # noqa: E402
-from aragorn.oci_worker_protocol import canonical_digest  # noqa: E402
-from aragorn.standards_gate import validate_standards_gate  # noqa: E402
-from aragorn.benchmark_worker_measurement import (  # noqa: E402
+from aragorn.benchmark_worker_measurement import (
     build_worker_measurement,
     build_worker_trust_store,
 )
+from aragorn.corpus_audit import audit_suite
+from aragorn.oci_worker_protocol import canonical_digest
+from aragorn.standards_gate import validate_standards_gate
 
 
 def load(path: Path) -> object:
@@ -83,6 +83,31 @@ def main() -> int:
     validators["benchmark-suite-v1.schema.json"].validate(
         load(ROOT / "benchmark" / "phase0-oci-pilot-v1.json")
     )
+    phase0_candidate_policy = load(
+        ROOT / "benchmark" / "phase0-candidate-policy.json"
+    )
+    validators["benchmark-candidate-policy-v1.schema.json"].validate(
+        phase0_candidate_policy
+    )
+    portable_identities = []
+    for filename in (
+        "phase0-cisco-portable-policy.json",
+        "phase0-skillspector-portable-policy.json",
+    ):
+        portable_policy = load(ROOT / "benchmark" / filename)
+        validators["benchmark-portable-policy-v1.schema.json"].validate(
+            portable_policy
+        )
+        portable_identities.append(
+            {
+                **portable_policy["system"],
+                "config_digest": portable_policy_digest(portable_policy),
+            }
+        )
+    if portable_identities != phase0_candidate_policy["required_comparators"]:
+        raise AssertionError(
+            "checked portable-policy identities do not match candidate policy"
+        )
     validators["benchmark-e2e-smoke-receipt-v1.schema.json"].validate(
         load(
             ROOT
@@ -113,6 +138,208 @@ def main() -> int:
     )
     validators["benchmark-report-v1.schema.json"].validate(report)
     digest = "sha256:" + "0" * 64
+    second_digest = "sha256:" + "1" * 64
+    third_digest = "sha256:" + "2" * 64
+    validators["benchmark-phase0-gate-report-v2.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-gate-report/v2",
+            "assurance": "comparative_metrics_only",
+            "suite_id": "schema-test",
+            "purpose": "evidence_smoke",
+            "suite_digest": digest,
+            "outcomes_digest": second_digest,
+            "benchmark_report_digest": third_digest,
+            "corpus_lock_digest": digest,
+            "public_manifest_digest": second_digest,
+            "hidden_suite_lock_digest": third_digest,
+            "candidate_policy_digest": digest,
+            "label_ledger_digest": second_digest,
+            "evaluation_split": "hidden",
+            "comparison": {
+                "benign_burden_ceiling": {
+                    "numerator": 1,
+                    "denominator": 20,
+                    "rate": 0.05,
+                },
+                "minimum_attack_flag_delta": {
+                    "numerator": 1,
+                    "denominator": 10,
+                    "rate": 0.1,
+                },
+                "candidate": None,
+                "comparators": [],
+                "pareto_frontier": [],
+                "selected_comparator": None,
+                "attack_flag_delta": None,
+                "evaluable": False,
+                "passed": False,
+                "reason_codes": ["NO_HIDDEN_SPLIT"],
+            },
+        }
+    )
+    validators["benchmark-phase0-hidden-suite-lock-v1.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-hidden-suite-lock/v1",
+            "assurance": (
+                "operator_asserted_pre_outcome_binding_"
+                "not_independent_or_timestamped"
+            ),
+            "corpus_lock_digest": digest,
+            "worker_archive_digest": second_digest,
+            "public_manifest_digest": third_digest,
+            "evaluator_archive_digest": digest,
+            "label_ledger_digest": second_digest,
+            "candidate_policy_digest": third_digest,
+            "suite_digest": digest,
+            "case_count": 448,
+            "class_counts": {"benign": 336, "adversarial": 112},
+            "runs_per_case": 1,
+            "split": "hidden",
+            "systems": [
+                {
+                    "name": name,
+                    "version": "1",
+                    "implementation_digest": implementation,
+                    "config_digest": configuration,
+                }
+                for name, implementation, configuration in (
+                    ("aragorn", digest, second_digest),
+                    ("cisco-skill-scanner", second_digest, third_digest),
+                    ("skillspector", third_digest, digest),
+                )
+            ],
+        }
+    )
+    comparator_system = {
+        "name": "cisco-skill-scanner",
+        "version": "2.0.12",
+        "implementation_digest": digest,
+        "config_digest": second_digest,
+    }
+    candidate_policy = {
+        "schema": "aragorn/benchmark-candidate-policy/v1",
+        "assurance": "comparative_candidate_only_not_admission",
+        "algorithm": "source-graph-fail-closed-vendor-union/v1",
+        "candidate": {
+            "name": "aragorn",
+            "version": "0.1.0-phase0",
+            "implementation_digest": third_digest,
+        },
+        "required_comparators": [
+            comparator_system,
+            {
+                "name": "skillspector",
+                "version": "2.4.3",
+                "implementation_digest": second_digest,
+                "config_digest": third_digest,
+            },
+        ],
+    }
+    candidate_system = {
+        **candidate_policy["candidate"],
+        "config_digest": digest,
+    }
+    validators["benchmark-candidate-policy-v1.schema.json"].validate(candidate_policy)
+    private_dispatch_v2 = {
+        "schema": "aragorn/benchmark-private-dispatch/v2",
+        "suite_digest": digest,
+        "candidate_system": candidate_system,
+        "candidate_policy_digest": digest,
+        "runs_per_case": 1,
+        "cases": [
+            {
+                "case_id": "schema-test",
+                "tree_digest": digest,
+                "private_manifest_digest": digest,
+            }
+        ],
+        "jobs": [
+            {
+                "job_id": "0" * 32,
+                "request_digest": digest,
+                "suite_digest": digest,
+                "case_id": "schema-test",
+                "run_id": 1,
+                "system": comparator_system,
+                "tree_digest": digest,
+                "private_manifest_digest": digest,
+            }
+        ],
+    }
+    validators["benchmark-private-dispatch-v2.schema.json"].validate(
+        private_dispatch_v2
+    )
+    validators["benchmark-prepare-result-v2.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-prepare-result/v2",
+            "suite_digest": digest,
+            "dispatch_digest": digest,
+            "candidate_policy_digest": digest,
+            "worker_identities_digest": digest,
+            "worklist_digest": digest,
+            "job_count": 1,
+        }
+    )
+    authenticated_worker_evidence = {
+        "schema": "aragorn/benchmark-authenticated-worker-evidence/v1",
+        "suite_digest": digest,
+        "case_id": "schema-test",
+        "tree_digest": digest,
+        "run_id": 1,
+        "system": comparator_system,
+        "verdict": "ALLOW",
+        "reason_codes": [],
+        "private_manifest_digest": digest,
+        "dispatch_digest": digest,
+        "acceptance_receipt_digest": digest,
+        "issuance_digest": digest,
+    }
+    validators["benchmark-authenticated-worker-evidence-v1.schema.json"].validate(
+        authenticated_worker_evidence
+    )
+    candidate_evidence = {
+        "schema": "aragorn/benchmark-candidate-evidence/v1",
+        "suite_digest": digest,
+        "case_id": "schema-test",
+        "tree_digest": digest,
+        "run_id": 1,
+        "system": candidate_system,
+        "verdict": "ALLOW",
+        "reason_codes": [],
+        "private_manifest_digest": digest,
+        "source_graph_digest": digest,
+        "dispatch_digest": digest,
+        "policy_digest": digest,
+        "component_evidence_digests": [digest, second_digest],
+    }
+    validators["benchmark-candidate-evidence-v1.schema.json"].validate(
+        candidate_evidence
+    )
+    validators["benchmark-candidate-composition-v1.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-candidate-composition/v1",
+            "assurance": (
+                "derived_from_authenticated_comparator_evidence_not_hardware_attested"
+            ),
+            "suite_digest": digest,
+            "dispatch_digest": digest,
+            "policy_digest": digest,
+            "outcomes_digest": digest,
+            "outcomes": [
+                {
+                    "schema": "aragorn/benchmark-outcome/v1",
+                    "suite_digest": digest,
+                    "case_id": "schema-test",
+                    "tree_digest": digest,
+                    "run_id": 1,
+                    "system": candidate_system,
+                    "evidence_digest": third_digest,
+                    "verdict": "ALLOW",
+                    "reason_codes": [],
+                }
+            ],
+        }
+    )
     validators["benchmark-prepare-result-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-prepare-result/v1",

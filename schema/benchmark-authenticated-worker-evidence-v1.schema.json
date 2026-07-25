@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn authenticated benchmark worker evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "suite_digest",
+    "case_id",
+    "tree_digest",
+    "run_id",
+    "system",
+    "verdict",
+    "reason_codes",
+    "private_manifest_digest",
+    "dispatch_digest",
+    "acceptance_receipt_digest",
+    "issuance_digest"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-authenticated-worker-evidence/v1"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "case_id": {"$ref": "#/$defs/id"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "run_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "system": {"$ref": "#/$defs/system"},
+    "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},
+    "reason_codes": {
+      "type": "array",
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/reason"}
+    },
+    "private_manifest_digest": {"$ref": "#/$defs/digest"},
+    "dispatch_digest": {"$ref": "#/$defs/digest"},
+    "acceptance_receipt_digest": {"$ref": "#/$defs/digest"},
+    "issuance_digest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"verdict": {"const": "ALLOW"}}},
+      "then": {"properties": {"reason_codes": {"maxItems": 0}}},
+      "else": {"properties": {"reason_codes": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "reason": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$",
+      "maxLength": 256
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "implementation_digest",
+        "config_digest"
+      ],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {"$ref": "#/$defs/version"},
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

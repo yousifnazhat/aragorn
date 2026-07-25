@@ -6,10 +6,12 @@ import stat
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from scripts.prepare_hidden_suite import _V2_GATE
 from scripts.run_hidden_workers import (
     ExecutionError,
     Job,
@@ -20,6 +22,7 @@ from scripts.run_hidden_workers import (
     _parse_guest_attempts,
     _retain_exact,
     _run_receipt,
+    _run_worker,
     _validate_acceptance,
     _validate_run_receipt,
     _write_outcomes,
@@ -93,6 +96,13 @@ class HiddenWorkerControllerTests(unittest.TestCase):
                 job=job,
                 preparation=preparation,
             )
+        receipt["trust_domain"] = _V2_GATE.trust_domain
+        _validate_acceptance(
+            acceptance={"receipt": receipt},
+            job=job,
+            preparation=preparation,
+            gate=_V2_GATE,
+        )
 
     def test_outcomes_are_exclusive_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -152,6 +162,69 @@ class HiddenWorkerControllerTests(unittest.TestCase):
                     mode=0o400,
                     label="worker run receipt",
                 )
+
+    def test_calibration_run_receipt_and_worker_command_bind_gate(self) -> None:
+        digest = "sha256:" + "1" * 64
+        arguments = {
+            "runner_commit": "2" * 40,
+            "preparation": {"state": {"binding_digest": digest}},
+            "preparation_raw": b"preparation",
+            "acceptance_set_digest": digest,
+            "result_set_digest": digest,
+            "composition_digest": digest,
+            "outcomes_digest": digest,
+            "outcomes_file_digest": digest,
+        }
+        receipt = _run_receipt(**arguments, gate=_V2_GATE)
+        self.assertEqual(
+            receipt["schema"],
+            "aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
+        )
+        self.assertEqual(
+            receipt["limitations"]["evaluation_status"],
+            "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout",
+        )
+        with self.assertRaisesRegex(ValueError, "registered profile"):
+            _run_receipt(
+                **arguments,
+                gate=replace(_V2_GATE, calibration_only=False),
+            )
+
+        job = Job(
+            ordinal=1,
+            job_id="3" * 32,
+            request_digest=digest,
+            challenge="4" * 64,
+            input_manifest_digest=digest,
+            input_bundle=Path("/input"),
+        )
+        supervisor = {
+            "schema": "aragorn/benchmark-worker-supervisor-result/v1",
+            "request_digest": digest,
+        }
+        with patch(
+            "scripts.run_hidden_workers._guest_command",
+            return_value=canonical_json(supervisor) + b"\n",
+        ) as guest_command:
+            self.assertEqual(
+                _run_worker(
+                    limactl=Path("/limactl"),
+                    vm="worker",
+                    guest_source="/source",
+                    guest_python="/venv/bin/python",
+                    guest_signing_key="/key",
+                    guest_execution_root="/execution",
+                    attempt_name="attempt",
+                    job=job,
+                    key_id=digest,
+                    gate=_V2_GATE,
+                ),
+                supervisor,
+            )
+        self.assertEqual(
+            guest_command.call_args.args[3][-2:],
+            [_V2_GATE.trust_domain, digest],
+        )
 
     def test_worker_run_receipt_semantics_are_replayed(self) -> None:
         digest = "sha256:" + "1" * 64

@@ -48,18 +48,22 @@ from scripts.freeze_hidden_suite import (
     _require_private_directory,
 )
 from scripts.prepare_hidden_suite import (
-    _FREEZE_RECEIPT_PATH,
-    _LOCK_PATH,
-    _PREPARATION_RECEIPT_PATH,
+    PreparationGate,
+    _GATES,
+    _V1_GATE,
     _git,
+    _registered_gate,
     _state_paths,
     validate_retained_preparation_receipt,
 )
 
 _EXPECTED_JOBS = 896
 _EXPECTED_OUTCOMES = 1_344
-_TRUST_DOMAIN = "phase0.hidden-independent-v1.0.0"
 _WORKER_ID = "isolated-worker-01"
+_RUN_RECEIPT_SCHEMAS = {
+    "v1": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",
+    "calibration-v2": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
+}
 _MAX_JSON = 128 * 1024 * 1024
 _MAX_ENVELOPE = 256 * 1024
 _MAX_COMMAND_OUTPUT = 8 * 1024 * 1024
@@ -304,17 +308,20 @@ def _validate_staging_root(staging_root: Path) -> None:
             raise ExecutionError("worker return root contains an unsafe entry")
 
 
-def _load_preparation() -> tuple[dict[str, object], bytes, str]:
+def _load_preparation(
+    gate: PreparationGate = _V1_GATE,
+) -> tuple[dict[str, object], bytes, str]:
+    gate = _registered_gate(gate)
     preparation, raw = _canonical_document(
-        ROOT / _PREPARATION_RECEIPT_PATH,
+        ROOT / gate.preparation_receipt_path,
         "hidden preparation receipt",
     )
     hidden_lock, _lock_raw = _canonical_document(
-        ROOT / _LOCK_PATH,
+        ROOT / gate.lock_path,
         "hidden suite lock",
     )
     freeze_receipt, _freeze_raw = _canonical_document(
-        ROOT / _FREEZE_RECEIPT_PATH,
+        ROOT / gate.freeze_receipt_path,
         "hidden freeze receipt",
     )
     validate_retained_preparation_receipt(
@@ -322,6 +329,7 @@ def _load_preparation() -> tuple[dict[str, object], bytes, str]:
         raw,
         hidden_lock,
         freeze_receipt,
+        gate,
     )
     source_digest = candidate_implementation_digest()
     candidates = [
@@ -365,7 +373,9 @@ def _load_jobs(
     jobs_root: Path,
     ledger_root: Path,
     preparation: dict[str, object],
+    gate: PreparationGate = _V1_GATE,
 ) -> list[Job]:
+    gate = _registered_gate(gate)
     worklist, _worklist_raw = _canonical_document(
         jobs_root / "worklist.json",
         "worker worklist",
@@ -450,7 +460,7 @@ def _load_jobs(
         )
         if issuance != {
             "schema": "aragorn/benchmark-worker-measurement-issuance/v1",
-            "trust_domain": _TRUST_DOMAIN,
+            "trust_domain": gate.trust_domain,
             "worker_id": _WORKER_ID,
             "job_id": job.job_id,
             "request_digest": job.request_digest,
@@ -463,12 +473,14 @@ def _load_jobs(
 def _worker_binding(
     preparation: dict[str, object],
     trust_store_path: Path,
+    gate: PreparationGate = _V1_GATE,
 ) -> str:
+    gate = _registered_gate(gate)
     trust_store = load_worker_trust_store(trust_store_path)
     keys = trust_store["keys"]
     if (
         canonical_digest(trust_store) != preparation["worker"]["trust_store_digest"]
-        or trust_store["trust_domain"] != _TRUST_DOMAIN
+        or trust_store["trust_domain"] != gate.trust_domain
         or len(keys) != 1
         or keys[0]["worker_id"] != _WORKER_ID
         or keys[0]["key_id"] != preparation["worker"]["key_id"]
@@ -826,7 +838,9 @@ def _run_worker(
     attempt_name: str,
     job: Job,
     key_id: str,
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
+    gate = _registered_gate(gate)
     script = r"""
 set -euo pipefail
 source_root=$1
@@ -837,7 +851,8 @@ attempt=$5
 manifest_digest=$6
 request_digest=$7
 challenge=$8
-key_id=$9
+trust_domain=$9
+key_id=${10}
 job="$execution_root/$attempt"
 docker=$(command -v docker)
 site_packages="${python%/bin/python}/lib/python3.12/site-packages"
@@ -855,7 +870,7 @@ flock -n "$execution_root/.worker.lock" \
     --measurement-output "$job/measurement.dsse.json" \
     --signing-key "$signing_key" \
     --worker-id isolated-worker-01 \
-    --trust-domain phase0.hidden-independent-v1.0.0 \
+    --trust-domain "$trust_domain" \
     --key-id "$key_id" \
     --lock "$source_root/benchmark/baselines.lock.json" \
     --docker "$docker" \
@@ -874,6 +889,7 @@ flock -n "$execution_root/.worker.lock" \
             job.input_manifest_digest,
             job.request_digest,
             job.challenge,
+            gate.trust_domain,
             key_id,
         ],
         label=f"worker execution ordinal {job.ordinal}",
@@ -977,12 +993,14 @@ def _validate_acceptance(
     job: Job,
     preparation: dict[str, object],
     supervisor: dict[str, object] | None = None,
+    gate: PreparationGate = _V1_GATE,
 ) -> None:
+    gate = _registered_gate(gate)
     receipt = acceptance["receipt"]
     if (
         receipt["trust_store_digest"] != preparation["worker"]["trust_store_digest"]
         or receipt["key_id"] != preparation["worker"]["key_id"]
-        or receipt["trust_domain"] != _TRUST_DOMAIN
+        or receipt["trust_domain"] != gate.trust_domain
         or receipt["worker_id"] != _WORKER_ID
         or receipt["job_id"] != job.job_id
         or receipt["request_digest"] != job.request_digest
@@ -1007,6 +1025,7 @@ def _collect(
     ledger_root: Path,
     preparation: dict[str, object],
     supervisor: dict[str, object] | None,
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
     envelope = _read(
         staged / "measurement.dsse.json",
@@ -1032,6 +1051,7 @@ def _collect(
         job=job,
         preparation=preparation,
         supervisor=supervisor,
+        gate=gate,
     )
     return accepted
 
@@ -1210,9 +1230,25 @@ def _run_receipt(
     composition_digest: str,
     outcomes_digest: str,
     outcomes_file_digest: str,
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
+    gate = _registered_gate(gate)
+    limitations = {
+        "authorship": "technical_codex_authorship_not_independent_human_identity",
+        "custody": (
+            "software_signatures_operator_uid_trusted_"
+            "not_same_uid_or_hardware_attested"
+        ),
+        "worker_attestation": (
+            "software_key_possession_not_vm_or_hardware_attestation"
+        ),
+    }
+    if gate.calibration_only:
+        limitations["evaluation_status"] = (
+            "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+        )
     return {
-        "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",
+        "schema": _RUN_RECEIPT_SCHEMAS[gate.name],
         "assurance": (
             "authenticated_complete_worker_batch_not_independent_or_hardware_attested"
         ),
@@ -1237,15 +1273,7 @@ def _run_receipt(
             "outcomes_file_digest": outcomes_file_digest,
             "outcome_count": _EXPECTED_OUTCOMES,
         },
-        "limitations": {
-            "authorship": ("technical_codex_authorship_not_independent_human_identity"),
-            "custody": (
-                "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
-            ),
-            "worker_attestation": (
-                "software_key_possession_not_vm_or_hardware_attestation"
-            ),
-        },
+        "limitations": limitations,
     }
 
 
@@ -1257,14 +1285,16 @@ def _validate_run_receipt(
     preparation: dict[str, object],
     preparation_raw: bytes,
     run_state_root: Path,
+    gate: PreparationGate = _V1_GATE,
 ) -> None:
+    gate = _registered_gate(gate)
     if raw != canonical_json(receipt) or _runner_commit() != runner_commit:
         raise ExecutionError("worker run receipt source binding changed")
-    current_preparation, current_raw, _source_digest = _load_preparation()
+    current_preparation, current_raw, _source_digest = _load_preparation(gate)
     if current_preparation != preparation or current_raw != preparation_raw:
         raise ExecutionError("worker run receipt preparation binding changed")
 
-    state_paths = _state_paths(run_state_root)
+    state_paths = _state_paths(run_state_root, gate)
     for label, path in state_paths.items():
         _reject_symlink_components(path, label)
     jobs_root = state_paths["jobs_root"]
@@ -1281,6 +1311,7 @@ def _validate_run_receipt(
         jobs_root=jobs_root,
         ledger_root=ledger_root,
         preparation=preparation,
+        gate=gate,
     )
     expected_receipts = {f"{job.challenge}.json" for job in jobs}
     receipt_root = ledger_root / "receipts"
@@ -1299,6 +1330,7 @@ def _validate_run_receipt(
             acceptance=acceptance,
             job=job,
             preparation=preparation,
+            gate=gate,
         )
         acceptances.append(acceptance)
     receipt_digests = sorted(
@@ -1366,6 +1398,7 @@ def _validate_run_receipt(
         composition_digest=composition_digest,
         outcomes_digest=composition["outcomes_digest"],
         outcomes_file_digest=("sha256:" + hashlib.sha256(outcomes_raw).hexdigest()),
+        gate=gate,
     )
     if receipt != expected:
         raise ExecutionError("worker run receipt semantic binding changed")
@@ -1383,7 +1416,9 @@ def run(
     verifier_root: Path,
     staging_root: Path,
     progress_every: int,
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
+    gate = _registered_gate(gate)
     if _VM_NAME.fullmatch(vm) is None:
         raise ExecutionError("Lima instance name is invalid")
     for value in (
@@ -1420,11 +1455,11 @@ def run(
 
     _reject_symlink_components(run_state_root, "run state root")
     _require_private_directory(run_state_root, "run state root")
-    state_paths = _state_paths(run_state_root)
+    state_paths = _state_paths(run_state_root, gate)
     for label, path in state_paths.items():
         _reject_symlink_components(path, label)
     _require_private_directory(verifier_root, "verifier root")
-    preparation, preparation_raw, source_digest = _load_preparation()
+    preparation, preparation_raw, source_digest = _load_preparation(gate)
     runner_commit = _runner_commit()
     _separate((ROOT, run_state_root, verifier_root, staging_root))
     staging_root = _private_root(staging_root, "worker return root")
@@ -1442,11 +1477,12 @@ def run(
         ):
             _require_private_directory(path, label)
         trust_store_path = verifier_root / "worker-trust-store.json"
-        key_id = _worker_binding(preparation, trust_store_path)
+        key_id = _worker_binding(preparation, trust_store_path, gate)
         jobs = _load_jobs(
             jobs_root=jobs_root,
             ledger_root=ledger_root,
             preparation=preparation,
+            gate=gate,
         )
         destination = CAS(control_root)
         acceptances: list[dict[str, object]] = []
@@ -1466,6 +1502,7 @@ def run(
                     acceptance=accepted,
                     job=job,
                     preparation=preparation,
+                    gate=gate,
                 )
             else:
                 staged, copy_number = _host_returns(staging_root, job.ordinal)
@@ -1508,6 +1545,7 @@ def run(
                             attempt_name=attempt_name,
                             job=job,
                             key_id=key_id,
+                            gate=gate,
                         )
                     staged = _copy_worker_return(
                         limactl=limactl,
@@ -1526,6 +1564,7 @@ def run(
                     ledger_root=ledger_root,
                     preparation=preparation,
                     supervisor=supervisor,
+                    gate=gate,
                 )
                 if limactl is not None:
                     _cleanup_ordinal(
@@ -1604,7 +1643,7 @@ def run(
         ):
             raise ExecutionError("candidate composition was not retained exactly")
         outcomes_raw = _write_outcomes(outcomes_path, outcomes)
-        retained_preparation, retained_raw, retained_source = _load_preparation()
+        retained_preparation, retained_raw, retained_source = _load_preparation(gate)
         if (
             retained_preparation != preparation
             or retained_raw != preparation_raw
@@ -1621,6 +1660,7 @@ def run(
             composition_digest=composition_digest,
             outcomes_digest=composition["outcomes_digest"],
             outcomes_file_digest=("sha256:" + hashlib.sha256(outcomes_raw).hexdigest()),
+            gate=gate,
         )
         receipt_raw = canonical_json(receipt)
         _validate_run_receipt(
@@ -1630,6 +1670,7 @@ def run(
             preparation=preparation,
             preparation_raw=preparation_raw,
             run_state_root=run_state_root,
+            gate=gate,
         )
         receipt_digest = _retain_cas_document(
             destination,
@@ -1660,6 +1701,7 @@ def run(
             preparation=preparation,
             preparation_raw=preparation_raw,
             run_state_root=run_state_root,
+            gate=gate,
         )
         return receipt
     finally:
@@ -1673,6 +1715,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
 def _parser() -> ArgumentParser:
     parser = ArgumentParser()
+    parser.add_argument("--gate", choices=sorted(_GATES), default=_V1_GATE.name)
     parser.add_argument(
         "--limactl",
         type=Path,
@@ -1716,6 +1759,7 @@ def main() -> int:
             verifier_root=_lexical_absolute(arguments.verifier_root),
             staging_root=_lexical_absolute(arguments.staging_root),
             progress_every=arguments.progress_every,
+            gate=_GATES[arguments.gate],
         )
     except (
         ExecutionError,

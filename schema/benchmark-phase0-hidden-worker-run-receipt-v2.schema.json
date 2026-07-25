@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-worker-run-receipt-v2.schema.json",
+  "title": "Aragorn Phase 0 hidden calibration worker run receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "source",
+    "state",
+    "batch",
+    "composition",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v2"
+    },
+    "assurance": {
+      "const": "authenticated_complete_worker_batch_not_independent_or_hardware_attested"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_commit",
+        "preparation_receipt_digest"
+      ],
+      "properties": {
+        "runner_commit": {"$ref": "#/$defs/git_oid"},
+        "preparation_receipt_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layout",
+        "binding_digest"
+      ],
+      "properties": {
+        "layout": {"const": "phase0-hidden-run-state/v1"},
+        "binding_digest": {
+          "const": "sha256:8c7e35b9b88052ad63ba325b1eccd74ad944c3464800da0b1749d81900bab005"
+        }
+      }
+    },
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted_count",
+        "acceptance_set_digest",
+        "result_set_digest"
+      ],
+      "properties": {
+        "accepted_count": {"const": 896},
+        "acceptance_set_digest": {"$ref": "#/$defs/digest"},
+        "result_set_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "composition_digest",
+        "outcomes_digest",
+        "outcomes_file_digest",
+        "outcome_count"
+      ],
+      "properties": {
+        "composition_digest": {"$ref": "#/$defs/digest"},
+        "outcomes_digest": {"$ref": "#/$defs/digest"},
+        "outcomes_file_digest": {"$ref": "#/$defs/digest"},
+        "outcome_count": {"const": 1344}
+      }
+    },
+    "limitations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorship",
+        "custody",
+        "worker_attestation",
+        "evaluation_status"
+      ],
+      "properties": {
+        "authorship": {
+          "const": "technical_codex_authorship_not_independent_human_identity"
+        },
+        "custody": {
+          "const": "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+        },
+        "worker_attestation": {
+          "const": "software_key_possession_not_vm_or_hardware_attestation"
+        },
+        "evaluation_status": {
+          "const": "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

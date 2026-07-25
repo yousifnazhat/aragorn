@@ -1075,6 +1075,47 @@ def main() -> int:
             },
         }
     )
+    validators["benchmark-phase0-hidden-worker-run-receipt-v2.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
+            "assurance": (
+                "authenticated_complete_worker_batch_not_independent_or_hardware_attested"
+            ),
+            "source": {
+                "runner_commit": "1" * 40,
+                "preparation_receipt_digest": digest,
+            },
+            "state": {
+                "layout": "phase0-hidden-run-state/v1",
+                "binding_digest": _V2_GATE.state_binding_digest,
+            },
+            "batch": {
+                "accepted_count": 896,
+                "acceptance_set_digest": digest,
+                "result_set_digest": digest,
+            },
+            "composition": {
+                "composition_digest": digest,
+                "outcomes_digest": digest,
+                "outcomes_file_digest": digest,
+                "outcome_count": 1_344,
+            },
+            "limitations": {
+                "authorship": (
+                    "technical_codex_authorship_not_independent_human_identity"
+                ),
+                "custody": (
+                    "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+                ),
+                "worker_attestation": (
+                    "software_key_possession_not_vm_or_hardware_attestation"
+                ),
+                "evaluation_status": (
+                    "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+                ),
+            },
+        }
+    )
     comparator_system = {
         "name": "cisco-skill-scanner",
         "version": "2.0.12",

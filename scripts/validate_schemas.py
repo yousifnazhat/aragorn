@@ -23,6 +23,8 @@ except ImportError as exc:  # pragma: no cover - developer setup error
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from freeze_hidden_suite import validate_freeze_receipt_bindings
+
 from aragorn.acquire import ingest_local
 from aragorn.artifact_closure import resolve_source_graph
 from aragorn.benchmark import evaluate_files
@@ -734,8 +736,11 @@ def main() -> int:
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)
+    phase0_corpus_lock_path = ROOT / "benchmark" / "phase0-corpus.lock.json"
+    phase0_corpus_lock_raw = phase0_corpus_lock_path.read_bytes()
+    phase0_corpus_lock = json.loads(phase0_corpus_lock_raw)
     validators["benchmark-corpus-provenance-lock-v1.schema.json"].validate(
-        load(ROOT / "benchmark" / "phase0-corpus.lock.json")
+        phase0_corpus_lock
     )
     standards_gate = load(ROOT / "benchmark" / "phase0-standards-gate.json")
     validators["phase0-standards-gate-v1.schema.json"].validate(standards_gate)
@@ -887,37 +892,27 @@ def main() -> int:
             },
         }
     )
+    hidden_lock_path = ROOT / "benchmark" / "phase0-hidden-suite.lock.json"
+    hidden_lock_raw = hidden_lock_path.read_bytes()
+    hidden_lock = json.loads(hidden_lock_raw)
+    hidden_receipt_path = (
+        ROOT / "benchmark" / "receipts" / "phase0-hidden-suite-freeze-2026-07-24.json"
+    )
+    hidden_receipt_raw = hidden_receipt_path.read_bytes()
+    hidden_receipt = json.loads(hidden_receipt_raw)
     validators["benchmark-phase0-hidden-suite-lock-v1.schema.json"].validate(
-        {
-            "schema": "aragorn/benchmark-phase0-hidden-suite-lock/v1",
-            "assurance": (
-                "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
-            ),
-            "corpus_lock_digest": digest,
-            "worker_archive_digest": second_digest,
-            "public_manifest_digest": third_digest,
-            "evaluator_archive_digest": digest,
-            "label_ledger_digest": second_digest,
-            "candidate_policy_digest": third_digest,
-            "suite_digest": digest,
-            "case_count": 448,
-            "class_counts": {"benign": 336, "adversarial": 112},
-            "runs_per_case": 1,
-            "split": "hidden",
-            "systems": [
-                {
-                    "name": name,
-                    "version": "1",
-                    "implementation_digest": implementation,
-                    "config_digest": configuration,
-                }
-                for name, implementation, configuration in (
-                    ("aragorn", digest, second_digest),
-                    ("cisco-skill-scanner", second_digest, third_digest),
-                    ("skillspector", third_digest, digest),
-                )
-            ],
-        }
+        hidden_lock
+    )
+    validators["benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json"].validate(
+        hidden_receipt
+    )
+    validate_freeze_receipt_bindings(
+        hidden_receipt,
+        hidden_receipt_raw,
+        hidden_lock,
+        hidden_lock_raw,
+        phase0_corpus_lock,
+        phase0_corpus_lock_raw,
     )
     comparator_system = {
         "name": "cisco-skill-scanner",

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json",
+  "title": "Aragorn Phase 0 hidden-suite pre-outcome freeze receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_on",
+    "assurance",
+    "release",
+    "evaluator",
+    "suite",
+    "lock",
+    "pre_outcome",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v1"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "assurance": {
+      "const": "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_manifest_digest",
+        "signature_status",
+        "principal",
+        "fingerprint",
+        "worker_archive_digest",
+        "evaluator_ciphertext_digest",
+        "source_bundle_digest",
+        "freeze_commit",
+        "freeze_tag",
+        "freeze_tag_object"
+      ],
+      "properties": {
+        "release_manifest_digest": {"$ref": "#/$defs/digest"},
+        "signature_status": {"const": "verified"},
+        "principal": {"const": "codex-independent-corpus@local.invalid"},
+        "fingerprint": {
+          "const": "SHA256:ZEvALtqmkjf1dRDeiSmgl9Og/n+AEUMEypoMFezoWAo"
+        },
+        "worker_archive_digest": {"$ref": "#/$defs/digest"},
+        "evaluator_ciphertext_digest": {"$ref": "#/$defs/digest"},
+        "source_bundle_digest": {"$ref": "#/$defs/digest"},
+        "freeze_commit": {"$ref": "#/$defs/git_oid"},
+        "freeze_tag": {"const": "independent-corpus-v1.0.0"},
+        "freeze_tag_object": {"$ref": "#/$defs/git_oid"}
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_digest",
+        "manifest_signature_status",
+        "ciphertext_link_status",
+        "gpg_closure_digest",
+        "gpg_passphrase_cache",
+        "label_ledger_digest",
+        "label_ledger_digest_rule",
+        "label_ledger_signature_status",
+        "public_manifest_digest",
+        "case_count",
+        "class_counts"
+      ],
+      "properties": {
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "manifest_signature_status": {"const": "verified"},
+        "ciphertext_link_status": {
+          "const": "in_process_gpg_decryption_then_inner_signature_verification"
+        },
+        "gpg_closure_digest": {
+          "const": "sha256:87eb42a2bdd3e709670b4e8159139fff7c9d256d09581ff02d54adf6257ac045"
+        },
+        "gpg_passphrase_cache": {
+          "const": "disabled_with_no_symkey_cache_and_private_homedir"
+        },
+        "label_ledger_digest": {"$ref": "#/$defs/digest"},
+        "label_ledger_digest_rule": {
+          "const": "raw_sha256_of_signature_verified_canonical_jsonl_bytes"
+        },
+        "label_ledger_signature_status": {"const": "verified"},
+        "public_manifest_digest": {"$ref": "#/$defs/digest"},
+        "case_count": {"const": 448},
+        "class_counts": {"$ref": "#/$defs/class_counts"}
+      }
+    },
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_digest",
+        "candidate_policy_digest",
+        "case_count",
+        "class_counts",
+        "runs_per_case",
+        "split",
+        "systems",
+        "private_suite_retained_outside_repository"
+      ],
+      "properties": {
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "candidate_policy_digest": {"$ref": "#/$defs/digest"},
+        "case_count": {"const": 448},
+        "class_counts": {"$ref": "#/$defs/class_counts"},
+        "runs_per_case": {"const": 1},
+        "split": {"const": "hidden"},
+        "systems": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-lock-v1.schema.json#/$defs/system"
+          }
+        },
+        "private_suite_retained_outside_repository": {"const": true}
+      }
+    },
+    "lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_digest", "semantic_preflight", "canonical_json"],
+      "properties": {
+        "lock_digest": {"$ref": "#/$defs/digest"},
+        "semantic_preflight": {"const": "passed"},
+        "canonical_json": {"const": true}
+      }
+    },
+    "pre_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_status",
+        "state_layout",
+        "state_binding_digest",
+        "paths_checked_absent",
+        "dispatch_material_observed",
+        "outcomes_observed",
+        "labels_exposed_to_worker"
+      ],
+      "properties": {
+        "evidence_status": {
+          "const": "operator_observed_paths_absent_not_timestamp_attested"
+        },
+        "state_layout": {"const": "phase0-hidden-run-state/v1"},
+        "state_binding_digest": {"$ref": "#/$defs/digest"},
+        "paths_checked_absent": {"const": 4},
+        "dispatch_material_observed": {"const": false},
+        "outcomes_observed": {"const": false},
+        "labels_exposed_to_worker": {"const": false}
+      }
+    },
+    "limitations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorship", "ordering", "custody"],
+      "properties": {
+        "authorship": {
+          "const": "technical_codex_authorship_not_independent_human_identity"
+        },
+        "ordering": {
+          "const": "signed_commit_ordering_must_be_verified_before_dispatch"
+        },
+        "custody": {
+          "const": "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "class_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["benign", "adversarial"],
+      "properties": {
+        "benign": {"const": 336},
+        "adversarial": {"const": 112}
+      }
+    }
+  }
+}

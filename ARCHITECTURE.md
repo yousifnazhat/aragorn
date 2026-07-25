@@ -792,10 +792,17 @@ For every case/system/run cell it requires the suite configuration identity to
 equal the canonical portable-policy digest, issues a verifier-owned challenge,
 retains the private dispatch, exports only the request's exact semantic input
 closure plus a label-free worklist, and derives Aragorn outcomes from both
-authenticated comparator results. Before hidden evaluation, the encrypted
-evaluator package and canonical hidden-suite lock must be verified and frozen
-in a signed commit. The GitHub acquisition/reference oracle remains a separate
-Phase 0 stratum.
+authenticated comparator results. The evaluator command now decrypts the
+pinned ciphertext in-process through a digest-pinned GPG software closure with
+symmetric passphrase caching disabled, verifies the signed inner package,
+rebuilds and semantically validates the private 448-case suite, and retains
+only a digest-level lock and receipt in the repository. Four canonical
+pre-outcome paths derive from one protected run-state root, and their binding
+digest is retained for the subsequent prepare/collect path. The commit
+containing the lock must be signature-verified before any hidden dispatch.
+This software boundary trusts the operator UID and does not claim same-UID or
+hardware-backed resistance. The GitHub acquisition/reference oracle remains a
+separate Phase 0 stratum.
 
 The opt-in Phase 0 gate report v2 scores only the `hidden` split and accepts
 only a complete authenticated candidate-composition `evidence_smoke` matrix;

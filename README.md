@@ -512,11 +512,22 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete roadmap and [SECURITY.
 ## Next production gate
 
 The public, unmocked two-comparator composition smoke is complete and retained.
-The next gate is to verify the encrypted evaluator package, derive its
-label-ledger digest inside the evaluator boundary, and signed-commit the
-canonical hidden-suite lock before any hidden dispatch or outcome exists. Then
-repeat the authenticated protocol-v2 path in fresh mount-free workers for all
-448 cases. Protect labels, dispatch, challenges, expectations, trust store, and
+The encrypted evaluator package has now been decrypted from its pinned
+ciphertext inside a private temporary boundary, its inner signatures and exact
+448-case join were verified, and the canonical
+[hidden-suite lock](./benchmark/phase0-hidden-suite.lock.json) and
+[digest-only freeze receipt](./benchmark/receipts/phase0-hidden-suite-freeze-2026-07-24.json)
+were generated while all declared dispatch and outcome paths were absent.
+`scripts/freeze_hidden_suite.py` is a one-time evaluator command per corpus
+freeze; it reads the passphrase only from stdin, retains the label-bearing suite
+outside the repository, pins the local GPG software closure, disables symmetric
+passphrase caching in a private temporary home, derives the four pre-outcome
+paths from one protected run-state root, retains their binding digest, and emits
+no per-case labels to stdout or the repository. The operator UID remains
+trusted; this is not same-UID or hardware-backed attestation. Verify the signed
+commit containing the lock before dispatch. The next gate is to repeat the
+authenticated protocol-v2 path in fresh mount-free workers for all 448 cases.
+Protect labels, dispatch, challenges, expectations, trust store, and
 consumption ledger; keep declared-byte test transport outside every acceptance
 path. The candidate `implementation_digest` binds all `src/aragorn` Python
 sources plus `requirements-worker.lock`; it is not runtime or hardware

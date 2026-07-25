@@ -240,17 +240,29 @@ def _verified_repository() -> dict[str, dict[str, str]]:
     return {"freeze": freeze, "preparation": preparation}
 
 
-def _committed_bytes(commit: str, path: Path, expected_digest: str) -> bytes:
+def _committed_bytes(
+    commit: str,
+    path: Path,
+    expected_digest: str | None = None,
+) -> bytes:
     raw = _git(
         ["cat-file", "blob", f"{commit}:{path.as_posix()}"],
         maximum=_MAX_JSON,
     )
-    if _sha256(raw) != expected_digest:
+    if expected_digest is not None and _sha256(raw) != expected_digest:
         raise PreparationError(f"committed {path.name} digest changed")
     working = _read(ROOT / path, max_bytes=_MAX_JSON)
     if working != raw:
         raise PreparationError(f"working {path.name} differs from signed bytes")
     return raw
+
+
+def _committed_document(
+    commit: str,
+    path: Path,
+    label: str,
+) -> dict[str, object]:
+    return _decode_json(_committed_bytes(commit, path), label)
 
 
 def _canonical_document(path: Path, label: str) -> dict[str, object]:
@@ -930,12 +942,18 @@ def prepare(
     if load_worker_trust_store(trust_store_path) != trust_store:
         raise PreparationError("published worker trust store changed")
 
+    preparation_commit = commits["preparation"]["commit"]
     portable_policies = [
-        _canonical_document(ROOT / path, f"portable policy {index}")
+        _committed_document(
+            preparation_commit,
+            path,
+            f"portable policy {index}",
+        )
         for index, path in enumerate(_PORTABLE_POLICY_PATHS)
     ]
-    candidate_policy = _canonical_document(
-        ROOT / _CANDIDATE_POLICY_PATH,
+    candidate_policy = _committed_document(
+        preparation_commit,
+        _CANDIDATE_POLICY_PATH,
         "candidate policy",
     )
     result = prepare_files_v2(

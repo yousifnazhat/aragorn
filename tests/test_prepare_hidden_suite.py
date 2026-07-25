@@ -17,6 +17,7 @@ from scripts.prepare_hidden_suite import (
     _SIGNER_FINGERPRINT,
     _SIGNER_PRINCIPAL,
     PreparationError,
+    _committed_document,
     _receipt,
     validate_preparation_receipt_bindings,
     validate_retained_preparation_receipt,
@@ -24,6 +25,16 @@ from scripts.prepare_hidden_suite import (
 
 
 class HiddenPreparationReceiptTests(unittest.TestCase):
+    def test_signed_policy_loader_accepts_formatted_json(self) -> None:
+        with patch(
+            "scripts.prepare_hidden_suite._committed_bytes",
+            return_value=b'{\n  "schema": "example/v1"\n}\n',
+        ):
+            self.assertEqual(
+                _committed_document("2" * 40, Path("policy.json"), "policy"),
+                {"schema": "example/v1"},
+            )
+
     def test_receipt_rejects_matrix_substitution(self) -> None:
         hidden_lock = json.loads(
             (ROOT / "benchmark" / "phase0-hidden-suite.lock.json").read_bytes()

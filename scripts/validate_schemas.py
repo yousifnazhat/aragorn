@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from freeze_hidden_suite import validate_freeze_receipt_bindings
-from prepare_hidden_suite import validate_retained_preparation_receipt
+from prepare_hidden_suite import _V2_GATE, validate_retained_preparation_receipt
 
 from aragorn.acquire import ingest_local
 from aragorn.artifact_closure import resolve_source_graph
@@ -990,6 +990,52 @@ def main() -> int:
             hidden_preparation_raw,
             hidden_lock,
             hidden_receipt,
+        )
+    calibration_lock_path = (
+        ROOT / "benchmark" / "phase0-hidden-suite-calibration-v2.lock.json"
+    )
+    calibration_lock_raw = calibration_lock_path.read_bytes()
+    calibration_lock = json.loads(calibration_lock_raw)
+    calibration_receipt_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-suite-calibration-v2-freeze-2026-07-25.json"
+    )
+    calibration_receipt_raw = calibration_receipt_path.read_bytes()
+    calibration_receipt = json.loads(calibration_receipt_raw)
+    validators["benchmark-phase0-hidden-suite-lock-v1.schema.json"].validate(
+        calibration_lock
+    )
+    validators["benchmark-phase0-hidden-suite-freeze-receipt-v2.schema.json"].validate(
+        calibration_receipt
+    )
+    validate_freeze_receipt_bindings(
+        calibration_receipt,
+        calibration_receipt_raw,
+        calibration_lock,
+        calibration_lock_raw,
+        phase0_corpus_lock,
+        phase0_corpus_lock_raw,
+    )
+    calibration_preparation_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-calibration-v2-preparation-2026-07-25.json"
+    )
+    if calibration_preparation_path.exists():
+        calibration_preparation_raw = calibration_preparation_path.read_bytes()
+        calibration_preparation = json.loads(calibration_preparation_raw)
+        validators[
+            "benchmark-phase0-hidden-preparation-receipt-v2.schema.json"
+        ].validate(calibration_preparation)
+        validate_retained_preparation_receipt(
+            calibration_preparation,
+            calibration_preparation_raw,
+            calibration_lock,
+            calibration_receipt,
+            _V2_GATE,
         )
     validators["benchmark-phase0-hidden-worker-run-receipt-v1.schema.json"].validate(
         {

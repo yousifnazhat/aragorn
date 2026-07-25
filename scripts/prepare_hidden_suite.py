@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -57,46 +58,17 @@ from scripts.freeze_hidden_suite import (
     validate_freeze_receipt_bindings,
 )
 
-_FREEZE_COMMIT = "7ee1bd3422c11b31ddf2d942019d23a5617673f5"
-_FREEZE_TREE = "27100abd85554fa409b7e2dd410ffb0656cdcce7"
 _SIGNER_PRINCIPAL = "yousif.snazhat@gmail.com"
 _SIGNER_FINGERPRINT = "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
 _ALLOWED_SIGNER = (
     "yousif.snazhat@gmail.com ssh-ed25519 "
     "AAAAC3NzaC1lZDI1NTE5AAAAIP+34WpE4lJYYXs96Dbx/j7GMMm0WahOQl267+T2ESDA\n"
 ).encode("ascii")
-_LOCK_PATH = Path("benchmark/phase0-hidden-suite.lock.json")
-_FREEZE_RECEIPT_PATH = Path(
-    "benchmark/receipts/phase0-hidden-suite-freeze-2026-07-24.json"
-)
-_PREPARATION_RECEIPT_PATH = Path(
-    "benchmark/receipts/phase0-hidden-preparation-2026-07-24.json"
-)
 _PREPARATION_SCRIPT_PATH = Path("scripts/prepare_hidden_suite.py")
 _CORPUS_LOCK_PATH = Path("benchmark/phase0-corpus.lock.json")
-_CANDIDATE_POLICY_PATH = Path("benchmark/phase0-candidate-policy.json")
 _BASELINE_LOCK_PATH = Path("benchmark/baselines.lock.json")
-_PORTABLE_POLICY_PATHS = (
-    Path("benchmark/phase0-cisco-portable-policy.json"),
-    Path("benchmark/phase0-skillspector-portable-policy.json"),
-)
-_LOCK_DIGEST = "sha256:7f05171db56b35f8f76053222a6806228711679d4a5562b0b7328417fae549c7"
-_FREEZE_RECEIPT_DIGEST = (
-    "sha256:98909fff1a9eddd27f2ad02f27e7705078b713d822c8e5eaa9e11db420a46ad2"
-)
-_SUITE_DIGEST = (
-    "sha256:5307d67bef0d074d600b6eae2a7e935f657dccc691927e5b9a2a05b0b4afbc5c"
-)
-_CANDIDATE_POLICY_DIGEST = (
-    "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0"
-)
-_STATE_BINDING_DIGEST = (
-    "sha256:c8957dc21e2ace612ce9686e526dad17db6974f8970e16978568754118f8d53f"
-)
-_TRUST_DOMAIN = "phase0.hidden-independent-v1.0.0"
 _WORKER_ID = "isolated-worker-01"
 _WORKER_SCOPE = "aragorn/benchmark-worker-output/v2"
-_RECORDED_ON = "2026-07-24"
 _EXPECTED_CASES = 448
 _EXPECTED_JOBS = 896
 _MAX_JSON = 128 * 1024 * 1024
@@ -106,8 +78,118 @@ _JOB_ID = re.compile(r"[0-9a-f]{32}\Z")
 _CHALLENGE = re.compile(r"[0-9a-f]{64}\Z")
 
 
+@dataclass(frozen=True)
+class PreparationGate:
+    name: str
+    freeze_commit: str
+    freeze_tree: str
+    lock_path: Path
+    freeze_receipt_path: Path
+    preparation_receipt_path: Path
+    candidate_policy_path: Path
+    portable_policy_paths: tuple[Path, Path]
+    lock_digest: str
+    freeze_receipt_digest: str
+    suite_digest: str
+    candidate_policy_digest: str
+    state_binding_digest: str
+    trust_domain: str
+    recorded_on: str
+    receipt_schema: str
+    calibration_only: bool = False
+
+
+_V1_GATE = PreparationGate(
+    name="v1",
+    freeze_commit="7ee1bd3422c11b31ddf2d942019d23a5617673f5",
+    freeze_tree="27100abd85554fa409b7e2dd410ffb0656cdcce7",
+    lock_path=Path("benchmark/phase0-hidden-suite.lock.json"),
+    freeze_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-suite-freeze-2026-07-24.json"
+    ),
+    preparation_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-preparation-2026-07-24.json"
+    ),
+    candidate_policy_path=Path("benchmark/phase0-candidate-policy.json"),
+    portable_policy_paths=(
+        Path("benchmark/phase0-cisco-portable-policy.json"),
+        Path("benchmark/phase0-skillspector-portable-policy.json"),
+    ),
+    lock_digest=(
+        "sha256:7f05171db56b35f8f76053222a6806228711679d4a5562b0b7328417fae549c7"
+    ),
+    freeze_receipt_digest=(
+        "sha256:98909fff1a9eddd27f2ad02f27e7705078b713d822c8e5eaa9e11db420a46ad2"
+    ),
+    suite_digest=(
+        "sha256:5307d67bef0d074d600b6eae2a7e935f657dccc691927e5b9a2a05b0b4afbc5c"
+    ),
+    candidate_policy_digest=(
+        "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0"
+    ),
+    state_binding_digest=(
+        "sha256:c8957dc21e2ace612ce9686e526dad17db6974f8970e16978568754118f8d53f"
+    ),
+    trust_domain="phase0.hidden-independent-v1.0.0",
+    recorded_on="2026-07-24",
+    receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v1",
+)
+
+_V2_GATE = PreparationGate(
+    name="calibration-v2",
+    freeze_commit="f8e6d29f20f5f93d03a2298a19124ddf2b928bed",
+    freeze_tree="a3c2ba0f460bcecd5aa34754fff944e00a22dd96",
+    lock_path=Path("benchmark/phase0-hidden-suite-calibration-v2.lock.json"),
+    freeze_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-suite-calibration-v2-freeze-2026-07-25.json"
+    ),
+    preparation_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-calibration-v2-preparation-2026-07-25.json"
+    ),
+    candidate_policy_path=Path("benchmark/phase0-candidate-policy-v2.json"),
+    portable_policy_paths=(
+        Path("benchmark/phase0-cisco-portable-policy-v2.json"),
+        Path("benchmark/phase0-skillspector-portable-policy-v2.json"),
+    ),
+    lock_digest=(
+        "sha256:762d3ef3da98e26f82028ddf0ff4095fbcde64afa96e90caf5c58bfd969c2537"
+    ),
+    freeze_receipt_digest=(
+        "sha256:b46a917d0439ed499545e43b1a51e6d6d8f496a6ddfedf39ddf8e7ed785d7217"
+    ),
+    suite_digest=(
+        "sha256:68f320152b034128b02510cd0749138abf609acb2abe82328626a6449686f497"
+    ),
+    candidate_policy_digest=(
+        "sha256:a2bc17bc81120e9e4b0092a62f25b374cce6f6d582e946b117569ed72b1333cc"
+    ),
+    state_binding_digest=(
+        "sha256:8c7e35b9b88052ad63ba325b1eccd74ad944c3464800da0b1749d81900bab005"
+    ),
+    trust_domain="phase0.hidden-calibration-v2.0.0",
+    recorded_on="2026-07-25",
+    receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v2",
+    calibration_only=True,
+)
+_GATES = {gate.name: gate for gate in (_V1_GATE, _V2_GATE)}
+
+# Compatibility names used by retained v1 validators and tests.
+_FREEZE_COMMIT = _V1_GATE.freeze_commit
+_FREEZE_TREE = _V1_GATE.freeze_tree
+_LOCK_PATH = _V1_GATE.lock_path
+_FREEZE_RECEIPT_PATH = _V1_GATE.freeze_receipt_path
+_PREPARATION_RECEIPT_PATH = _V1_GATE.preparation_receipt_path
+
+
 class PreparationError(ValueError):
     """The frozen hidden batch could not be prepared safely."""
+
+
+def _registered_gate(gate: PreparationGate) -> PreparationGate:
+    registered = _GATES.get(gate.name)
+    if registered is None or gate != registered:
+        raise PreparationError("preparation gate is not a registered profile")
+    return registered
 
 
 def _exec(
@@ -209,7 +291,10 @@ def _verified_commit(commit: str, allowed_signers: Path) -> dict[str, str]:
     }
 
 
-def _verified_repository() -> dict[str, dict[str, str]]:
+def _verified_repository(
+    gate: PreparationGate = _V1_GATE,
+) -> dict[str, dict[str, str]]:
+    gate = _registered_gate(gate)
     root = _git(["rev-parse", "--show-toplevel"]).decode("utf-8").strip()
     if Path(root).resolve(strict=True) != ROOT.resolve(strict=True):
         raise PreparationError("Git repository root changed")
@@ -218,6 +303,10 @@ def _verified_repository() -> dict[str, dict[str, str]]:
     if _git(["status", "--porcelain=v1", "--untracked-files=all"]):
         raise PreparationError("working tree must be clean before preparation")
     head = _git(["rev-parse", "--verify", "HEAD^{commit}"]).decode("ascii").strip()
+    if head == gate.freeze_commit:
+        raise PreparationError(
+            "preparation commit must strictly follow the freeze commit"
+        )
     with tempfile.TemporaryDirectory(prefix="aragorn-preparation-signer-") as temporary:
         allowed_signers = Path(temporary) / "allowed_signers"
         _write_new(allowed_signers, _ALLOWED_SIGNER)
@@ -232,11 +321,11 @@ def _verified_repository() -> dict[str, dict[str, str]]:
         )
         if len(fingerprint) < 2 or fingerprint[1] != _SIGNER_FINGERPRINT:
             raise PreparationError("embedded preparation signer changed")
-        freeze = _verified_commit(_FREEZE_COMMIT, allowed_signers)
+        freeze = _verified_commit(gate.freeze_commit, allowed_signers)
         preparation = _verified_commit(head, allowed_signers)
-    if freeze["tree"] != _FREEZE_TREE:
+    if freeze["tree"] != gate.freeze_tree:
         raise PreparationError("signed freeze tree changed")
-    _git(["merge-base", "--is-ancestor", _FREEZE_COMMIT, head])
+    _git(["merge-base", "--is-ancestor", gate.freeze_commit, head])
     return {"freeze": freeze, "preparation": preparation}
 
 
@@ -273,7 +362,11 @@ def _canonical_document(path: Path, label: str) -> dict[str, object]:
     return document
 
 
-def _state_paths(run_state_root: Path) -> dict[str, Path]:
+def _state_paths(
+    run_state_root: Path,
+    gate: PreparationGate = _V1_GATE,
+) -> dict[str, Path]:
+    gate = _registered_gate(gate)
     paths = {
         "challenge_ledger": run_state_root / "challenge-ledger",
         "control_state": run_state_root / "control-state",
@@ -282,7 +375,7 @@ def _state_paths(run_state_root: Path) -> dict[str, Path]:
     }
     if (
         canonical_digest({role: str(path) for role, path in sorted(paths.items())})
-        != _STATE_BINDING_DIGEST
+        != gate.state_binding_digest
     ):
         raise PreparationError("run-state path binding does not match the freeze")
     return paths
@@ -299,8 +392,9 @@ def _require_preparation_paths(
     verifier_root: Path,
     worker_trust_record: Path,
     receipt_output: Path,
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, Path]:
-    paths = _state_paths(run_state_root)
+    paths = _state_paths(run_state_root, gate)
     checked = [
         private_suite_path,
         run_state_root,
@@ -324,7 +418,7 @@ def _require_preparation_paths(
         raise PreparationError("all frozen dispatch and outcome paths must be absent")
     if os.path.lexists(receipt_output):
         raise PreparationError("preparation receipt already exists")
-    if receipt_output != ROOT / _PREPARATION_RECEIPT_PATH:
+    if receipt_output != ROOT / gate.preparation_receipt_path:
         raise PreparationError("preparation receipt path does not match the gate")
     protected = [
         private_suite_path.parent,
@@ -355,7 +449,10 @@ def _require_preparation_paths(
     return paths
 
 
-def _load_worker_record(path: Path) -> dict[str, object]:
+def _load_worker_record(
+    path: Path,
+    gate: PreparationGate = _V1_GATE,
+) -> dict[str, object]:
     metadata = os.lstat(path)
     if (
         not stat.S_ISREG(metadata.st_mode)
@@ -366,7 +463,7 @@ def _load_worker_record(path: Path) -> dict[str, object]:
         raise PreparationError("worker trust record must be a protected regular file")
     record = _canonical_document(path, "worker trust record")
     store = build_worker_trust_store(
-        trust_domain=_TRUST_DOMAIN,
+        trust_domain=gate.trust_domain,
         keys=[record],
     )
     keys = store["keys"]
@@ -383,6 +480,7 @@ def _load_worker_record(path: Path) -> dict[str, object]:
 def _preflight_suite(
     private_suite_path: Path,
     lock: dict[str, object],
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="aragorn-hidden-preflight-") as temporary:
         loaded = load_suite_for_run(
@@ -393,8 +491,8 @@ def _preflight_suite(
     _validate_phase0_hidden_binding(
         corpus_lock_path=ROOT / _CORPUS_LOCK_PATH,
         public_manifest_path=private_suite_path.parent / "public-manifest.json",
-        hidden_suite_lock_path=ROOT / _LOCK_PATH,
-        candidate_policy_path=ROOT / _CANDIDATE_POLICY_PATH,
+        hidden_suite_lock_path=ROOT / gate.lock_path,
+        candidate_policy_path=ROOT / gate.candidate_policy_path,
         label_ledger_digest=lock["label_ledger_digest"],
         suite_digest=loaded["digest"],
         runs_per_case=loaded["runs_per_case"],
@@ -403,7 +501,7 @@ def _preflight_suite(
         manifests=loaded["manifests"],
     )
     if (
-        loaded["digest"] != _SUITE_DIGEST
+        loaded["digest"] != gate.suite_digest
         or len(loaded["cases"]) != _EXPECTED_CASES
         or loaded["runs_per_case"] != 1
     ):
@@ -458,11 +556,12 @@ def _verify_prepared_batch(
     result: dict[str, Any],
     paths: dict[str, Path],
     expected_suite: dict[str, object],
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
     if (
         result.get("schema") != "aragorn/benchmark-prepare-result/v2"
-        or result.get("suite_digest") != _SUITE_DIGEST
-        or result.get("candidate_policy_digest") != _CANDIDATE_POLICY_DIGEST
+        or result.get("suite_digest") != gate.suite_digest
+        or result.get("candidate_policy_digest") != gate.candidate_policy_digest
         or result.get("job_count") != _EXPECTED_JOBS
     ):
         raise PreparationError("preparation result does not match the frozen matrix")
@@ -472,8 +571,8 @@ def _verify_prepared_batch(
     validate_private_dispatch_v2(dispatch)
     if (
         canonical_digest(dispatch) != result["dispatch_digest"]
-        or dispatch["suite_digest"] != _SUITE_DIGEST
-        or dispatch["candidate_policy_digest"] != _CANDIDATE_POLICY_DIGEST
+        or dispatch["suite_digest"] != gate.suite_digest
+        or dispatch["candidate_policy_digest"] != gate.candidate_policy_digest
         or dispatch["candidate_system"] != expected_suite["candidate_system"]
         or dispatch["cases"] != expected_suite["cases"]
         or dispatch["runs_per_case"] != 1
@@ -608,7 +707,7 @@ def _verify_prepared_batch(
     for binding in issuance_bindings:
         issue_worker_measurement_challenge(
             ledger,
-            trust_domain=_TRUST_DOMAIN,
+            trust_domain=gate.trust_domain,
             worker_id=_WORKER_ID,
             **binding,
         )
@@ -667,9 +766,26 @@ def _receipt(
     key_id: str,
     result: dict[str, Any],
     matrix: dict[str, object],
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
+    gate = _registered_gate(gate)
+    limitations = {
+        "authorship": "technical_codex_authorship_not_independent_human_identity",
+        "ordering": "signed_preparation_commit_verified_before_issuance",
+        "custody": (
+            "software_signatures_operator_uid_trusted_"
+            "not_same_uid_or_hardware_attested"
+        ),
+        "worker_attestation": (
+            "software_key_possession_not_vm_or_hardware_attestation"
+        ),
+    }
+    if gate.calibration_only:
+        limitations["evaluation_status"] = (
+            "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+        )
     return {
-        "schema": "aragorn/benchmark-phase0-hidden-preparation-receipt/v1",
+        "schema": gate.receipt_schema,
         "recorded_on": recorded_on,
         "assurance": (
             "operator_asserted_signed_preparation_not_independent_or_hardware_attested"
@@ -683,18 +799,18 @@ def _receipt(
             "preparation_signature_status": commits["preparation"]["signature_status"],
             "signer_principal": commits["preparation"]["principal"],
             "signer_fingerprint": commits["preparation"]["fingerprint"],
-            "hidden_suite_lock_digest": _LOCK_DIGEST,
-            "freeze_receipt_digest": _FREEZE_RECEIPT_DIGEST,
+            "hidden_suite_lock_digest": gate.lock_digest,
+            "freeze_receipt_digest": gate.freeze_receipt_digest,
         },
         "state": {
             "layout": "phase0-hidden-run-state/v1",
-            "binding_digest": _STATE_BINDING_DIGEST,
+            "binding_digest": gate.state_binding_digest,
             "fresh_before_prepare": True,
             "outcomes_absent_after_prepare": True,
             "operator_uid_protected": True,
         },
         "worker": {
-            "trust_domain": _TRUST_DOMAIN,
+            "trust_domain": gate.trust_domain,
             "worker_id": _WORKER_ID,
             "key_id": key_id,
             "trust_store_digest": trust_store_digest,
@@ -712,17 +828,7 @@ def _receipt(
             "semantic_validation": "passed",
             "forbidden_evaluator_metadata_absent": True,
         },
-        "limitations": {
-            "authorship": "technical_codex_authorship_not_independent_human_identity",
-            "ordering": "signed_preparation_commit_verified_before_issuance",
-            "custody": (
-                "software_signatures_operator_uid_trusted_"
-                "not_same_uid_or_hardware_attested"
-            ),
-            "worker_attestation": (
-                "software_key_possession_not_vm_or_hardware_attestation"
-            ),
-        },
+        "limitations": limitations,
     }
 
 
@@ -733,13 +839,148 @@ def validate_preparation_receipt_bindings(
     freeze_receipt: dict[str, object],
     *,
     verified_preparation: dict[str, str] | None = None,
+    gate: PreparationGate = _V1_GATE,
 ) -> None:
     """Reject a digest-only preparation receipt detached from the frozen gate."""
 
+    gate = _registered_gate(gate)
     try:
         if raw != canonical_json(receipt):
             raise PreparationError("preparation receipt must use canonical JSON bytes")
-        if receipt["source"]["freeze_commit"] != _FREEZE_COMMIT:
+        if set(receipt) != {
+            "schema",
+            "recorded_on",
+            "assurance",
+            "source",
+            "state",
+            "worker",
+            "preparation",
+            "preparation_result_digest",
+            "matrix",
+            "worker_surface",
+            "limitations",
+        } or receipt["assurance"] != (
+            "operator_asserted_signed_preparation_not_independent_or_hardware_attested"
+        ):
+            raise PreparationError("preparation receipt contract changed")
+        source = receipt["source"]
+        if (
+            set(source)
+            != {
+                "freeze_commit",
+                "freeze_tree",
+                "freeze_signature_status",
+                "preparation_commit",
+                "preparation_tree",
+                "preparation_signature_status",
+                "signer_principal",
+                "signer_fingerprint",
+                "hidden_suite_lock_digest",
+                "freeze_receipt_digest",
+            }
+            or _GIT_OID.fullmatch(source["preparation_commit"]) is None
+            or _GIT_OID.fullmatch(source["preparation_tree"]) is None
+            or source["preparation_signature_status"] != "verified"
+            or source["signer_principal"] != _SIGNER_PRINCIPAL
+            or source["signer_fingerprint"] != _SIGNER_FINGERPRINT
+        ):
+            raise PreparationError("preparation receipt source contract changed")
+        if receipt["state"] != {
+            "layout": "phase0-hidden-run-state/v1",
+            "binding_digest": gate.state_binding_digest,
+            "fresh_before_prepare": True,
+            "outcomes_absent_after_prepare": True,
+            "operator_uid_protected": True,
+        }:
+            raise PreparationError("preparation receipt state contract changed")
+        worker = receipt["worker"]
+        if (
+            _DIGEST.fullmatch(worker["key_id"]) is None
+            or _DIGEST.fullmatch(worker["trust_store_digest"]) is None
+            or worker
+            != {
+                "trust_domain": gate.trust_domain,
+                "worker_id": _WORKER_ID,
+                "key_id": worker["key_id"],
+                "trust_store_digest": worker["trust_store_digest"],
+                "key_provisioning": (
+                    "operator_asserted_guest_generated_public_record_not_attested"
+                ),
+                "trust_store_status": "verifier_owned_protected_file",
+            }
+        ):
+            raise PreparationError("preparation receipt worker contract changed")
+        preparation = receipt["preparation"]
+        if (
+            set(preparation)
+            != {
+                "schema",
+                "suite_digest",
+                "dispatch_digest",
+                "candidate_policy_digest",
+                "worker_identities_digest",
+                "worklist_digest",
+                "job_count",
+            }
+            or preparation["schema"] != "aragorn/benchmark-prepare-result/v2"
+            or any(
+                _DIGEST.fullmatch(preparation[field]) is None
+                for field in (
+                    "suite_digest",
+                    "dispatch_digest",
+                    "candidate_policy_digest",
+                    "worker_identities_digest",
+                    "worklist_digest",
+                )
+            )
+            or _DIGEST.fullmatch(receipt["preparation_result_digest"]) is None
+        ):
+            raise PreparationError("preparation result contract changed")
+        expected_systems = [
+            system for system in hidden_lock["systems"] if system["name"] != "aragorn"
+        ]
+        expected_matrix = {
+            "case_count": hidden_lock["case_count"],
+            "comparator_count": len(expected_systems),
+            "runs_per_case": hidden_lock["runs_per_case"],
+            "job_count": _EXPECTED_JOBS,
+            "worklist_count": _EXPECTED_JOBS,
+            "issuance_count": _EXPECTED_JOBS,
+            "acceptance_count": 0,
+            "systems": expected_systems,
+        }
+        if receipt["matrix"] != expected_matrix or receipt["worker_surface"] != {
+            "request_count": _EXPECTED_JOBS,
+            "handoff_count": _EXPECTED_JOBS,
+            "semantic_validation": "passed",
+            "forbidden_evaluator_metadata_absent": True,
+        }:
+            raise PreparationError("preparation receipt matrix contract changed")
+        expected_limitations = {
+            "authorship": "technical_codex_authorship_not_independent_human_identity",
+            "ordering": "signed_preparation_commit_verified_before_issuance",
+            "custody": (
+                "software_signatures_operator_uid_trusted_"
+                "not_same_uid_or_hardware_attested"
+            ),
+            "worker_attestation": (
+                "software_key_possession_not_vm_or_hardware_attestation"
+            ),
+        }
+        if gate.calibration_only:
+            expected_limitations["evaluation_status"] = (
+                "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+            )
+        if receipt["limitations"] != expected_limitations:
+            raise PreparationError("preparation receipt limitations contract changed")
+        if (
+            receipt["schema"] != gate.receipt_schema
+            or receipt["recorded_on"] != gate.recorded_on
+            or receipt["source"]["freeze_commit"] != gate.freeze_commit
+            or receipt["source"]["freeze_tree"] != gate.freeze_tree
+            or receipt["source"]["freeze_signature_status"] != "verified"
+            or receipt["worker"]["trust_domain"] != gate.trust_domain
+        ):
             raise PreparationError("preparation receipt freeze commit changed")
         if verified_preparation is not None and any(
             receipt["source"][receipt_field] != verified_preparation[verified_field]
@@ -753,23 +994,25 @@ def validate_preparation_receipt_bindings(
         ):
             raise PreparationError("preparation receipt signed source changed")
         if (
-            receipt["source"]["hidden_suite_lock_digest"] != _LOCK_DIGEST
-            or receipt["source"]["freeze_receipt_digest"] != _FREEZE_RECEIPT_DIGEST
+            receipt["source"]["hidden_suite_lock_digest"] != gate.lock_digest
+            or receipt["source"]["freeze_receipt_digest"]
+            != gate.freeze_receipt_digest
         ):
             raise PreparationError("preparation receipt source digests changed")
         if (
             receipt["state"]["binding_digest"]
             != freeze_receipt["pre_outcome"]["state_binding_digest"]
+            or receipt["state"]["binding_digest"] != gate.state_binding_digest
             or receipt["preparation"]["suite_digest"] != hidden_lock["suite_digest"]
+            or receipt["preparation"]["suite_digest"] != gate.suite_digest
             or receipt["preparation"]["candidate_policy_digest"]
             != hidden_lock["candidate_policy_digest"]
+            or receipt["preparation"]["candidate_policy_digest"]
+            != gate.candidate_policy_digest
             or receipt["preparation_result_digest"]
             != canonical_digest(receipt["preparation"])
         ):
             raise PreparationError("preparation receipt frozen binding changed")
-        expected_systems = [
-            system for system in hidden_lock["systems"] if system["name"] != "aragorn"
-        ]
         matrix = receipt["matrix"]
         expected_worker_identities_digest = canonical_digest(
             {
@@ -799,22 +1042,24 @@ def validate_retained_preparation_receipt(
     raw: bytes,
     hidden_lock: dict[str, object],
     freeze_receipt: dict[str, object],
+    gate: PreparationGate = _V1_GATE,
 ) -> None:
     """Verify a checked receipt through its signed Git retention boundary."""
 
+    gate = _registered_gate(gate)
     try:
         claimed_commit = receipt["source"]["preparation_commit"]
     except (KeyError, TypeError) as exc:
         raise PreparationError("retained preparation source is malformed") from exc
     if not isinstance(claimed_commit, str):
         raise PreparationError("retained preparation commit is invalid")
-    retained = _verified_repository()
+    retained = _verified_repository(gate)
     retained_commit = retained["preparation"]["commit"]
     if claimed_commit == retained_commit:
         raise PreparationError(
             "retained receipt must strictly follow the preparation commit"
         )
-    if claimed_commit == _FREEZE_COMMIT:
+    if claimed_commit == gate.freeze_commit:
         raise PreparationError("preparation commit must strictly follow the freeze")
     with tempfile.TemporaryDirectory(
         prefix="aragorn-retained-preparation-signer-"
@@ -822,7 +1067,7 @@ def validate_retained_preparation_receipt(
         allowed_signers = Path(temporary) / "allowed_signers"
         _write_new(allowed_signers, _ALLOWED_SIGNER)
         claimed = _verified_commit(claimed_commit, allowed_signers)
-    _git(["merge-base", "--is-ancestor", _FREEZE_COMMIT, claimed_commit])
+    _git(["merge-base", "--is-ancestor", gate.freeze_commit, claimed_commit])
     _git(
         [
             "merge-base",
@@ -861,7 +1106,7 @@ def validate_retained_preparation_receipt(
             "--name-only",
             claimed_commit,
             "--",
-            _PREPARATION_RECEIPT_PATH.as_posix(),
+            gate.preparation_receipt_path.as_posix(),
         ]
     ):
         raise PreparationError("preparation receipt already exists at claimed commit")
@@ -869,7 +1114,7 @@ def validate_retained_preparation_receipt(
         [
             "cat-file",
             "blob",
-            f"{retained_commit}:{_PREPARATION_RECEIPT_PATH}",
+            f"{retained_commit}:{gate.preparation_receipt_path}",
         ],
         maximum=_MAX_JSON,
     )
@@ -881,6 +1126,7 @@ def validate_retained_preparation_receipt(
         hidden_lock,
         freeze_receipt,
         verified_preparation=claimed,
+        gate=gate,
     )
 
 
@@ -892,14 +1138,16 @@ def prepare(
     worker_trust_record: Path,
     receipt_output: Path,
     recorded_on: str,
+    gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
+    gate = _registered_gate(gate)
     try:
         parsed_date = date.fromisoformat(recorded_on)
     except ValueError as exc:
         raise PreparationError("recorded_on must be a real YYYY-MM-DD date") from exc
     if parsed_date.isoformat() != recorded_on:
         raise PreparationError("recorded_on must use YYYY-MM-DD")
-    if recorded_on != _RECORDED_ON:
+    if recorded_on != gate.recorded_on:
         raise PreparationError("recorded_on does not match the preparation gate")
     paths = _require_preparation_paths(
         private_suite_path=private_suite_path,
@@ -907,13 +1155,18 @@ def prepare(
         verifier_root=verifier_root,
         worker_trust_record=worker_trust_record,
         receipt_output=receipt_output,
+        gate=gate,
     )
-    commits = _verified_repository()
-    lock_raw = _committed_bytes(_FREEZE_COMMIT, _LOCK_PATH, _LOCK_DIGEST)
+    commits = _verified_repository(gate)
+    lock_raw = _committed_bytes(
+        gate.freeze_commit,
+        gate.lock_path,
+        gate.lock_digest,
+    )
     freeze_raw = _committed_bytes(
-        _FREEZE_COMMIT,
-        _FREEZE_RECEIPT_PATH,
-        _FREEZE_RECEIPT_DIGEST,
+        gate.freeze_commit,
+        gate.freeze_receipt_path,
+        gate.freeze_receipt_digest,
     )
     corpus_raw = _read(ROOT / _CORPUS_LOCK_PATH, max_bytes=_MAX_JSON)
     lock = _decode_json(lock_raw, "hidden suite lock")
@@ -927,11 +1180,11 @@ def prepare(
         corpus_lock,
         corpus_raw,
     )
-    expected_suite = _preflight_suite(private_suite_path, lock)
-    worker_record = _load_worker_record(worker_trust_record)
+    expected_suite = _preflight_suite(private_suite_path, lock, gate)
+    worker_record = _load_worker_record(worker_trust_record, gate)
 
     trust_store = build_worker_trust_store(
-        trust_domain=_TRUST_DOMAIN,
+        trust_domain=gate.trust_domain,
         keys=[worker_record],
     )
     trust_store_path = verifier_root / "worker-trust-store.json"
@@ -949,25 +1202,25 @@ def prepare(
             path,
             f"portable policy {index}",
         )
-        for index, path in enumerate(_PORTABLE_POLICY_PATHS)
+        for index, path in enumerate(gate.portable_policy_paths)
     ]
     candidate_policy = _committed_document(
         preparation_commit,
-        _CANDIDATE_POLICY_PATH,
+        gate.candidate_policy_path,
         "candidate policy",
     )
     result = prepare_files_v2(
         private_suite_path,
         portable_policies=portable_policies,
         candidate_policy=candidate_policy,
-        trust_domain=_TRUST_DOMAIN,
+        trust_domain=gate.trust_domain,
         worker_id=_WORKER_ID,
         challenge_ledger=paths["challenge_ledger"],
         control_state=paths["control_state"],
         jobs_root=paths["jobs_root"],
         lock_path=ROOT / _BASELINE_LOCK_PATH,
     )
-    matrix = _verify_prepared_batch(result, paths, expected_suite)
+    matrix = _verify_prepared_batch(result, paths, expected_suite, gate)
     if _git(["rev-parse", "--verify", "HEAD^{commit}"]).decode(
         "ascii"
     ).strip() != commits["preparation"]["commit"] or _git(
@@ -981,6 +1234,7 @@ def prepare(
         key_id=worker_record["key_id"],
         result=result,
         matrix=matrix,
+        gate=gate,
     )
     receipt_raw = canonical_json(receipt)
     validate_preparation_receipt_bindings(
@@ -989,6 +1243,7 @@ def prepare(
         lock,
         freeze_receipt,
         verified_preparation=commits["preparation"],
+        gate=gate,
     )
     _write_new(receipt_output, receipt_raw, mode=0o644)
     return {
@@ -1005,6 +1260,7 @@ def prepare(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--gate", choices=sorted(_GATES), default=_V1_GATE.name)
     parser.add_argument("--private-suite", type=Path, required=True)
     parser.add_argument("--run-state-root", type=Path, required=True)
     parser.add_argument("--verifier-root", type=Path, required=True)
@@ -1020,6 +1276,7 @@ def main() -> int:
             worker_trust_record=_lexical_absolute(arguments.worker_trust_record),
             receipt_output=_lexical_absolute(arguments.receipt_output),
             recorded_on=arguments.recorded_on,
+            gate=_GATES[arguments.gate],
         )
     except (
         FreezeError,

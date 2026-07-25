@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import stat
 import tempfile
+from pathlib import Path
 from typing import Any
 
 from .benchmark_protocol_v2 import (
@@ -15,6 +15,7 @@ from .benchmark_protocol_v2 import (
     validate_worker_result_v2,
     verify_effective_config_binding_v2,
     verify_effective_config_policy_v2,
+    verify_effective_environment_v2,
     verify_request_bindings_v2,
     verify_request_result_binding_v2,
 )
@@ -32,6 +33,8 @@ from .oci_benchmark_runner import (
 )
 from .oci_runtime import (
     LOCK,
+    VerificationError,
+    _environment_mapping,
     _sha256,
     _verify_docker_unchanged,
     resolve_docker,
@@ -52,7 +55,6 @@ from .oci_worker_protocol import (
     canonical_json,
     validate_subject_manifest,
 )
-
 
 _MAX_REQUEST_BYTES = 64 * 1024
 _MAX_POLICY_BYTES = 8 * 1024 * 1024
@@ -296,6 +298,10 @@ def _select_preflight_v2(
             _sha256(item.selected_json),
             policy["baseline"]["entry_digest"],
         ),
+        "profile environment": (
+            item.baseline["profile"]["environment"],
+            policy["environment"],
+        ),
         "image": (
             {
                 field: item.baseline["image"][field]
@@ -320,13 +326,22 @@ def _select_preflight_v2(
         "effective OCI configuration v2",
     )
     try:
+        image_environment = _environment_mapping(
+            item.verification.image_environment,
+            f"{item.baseline['name']} image environment",
+        )
+        verify_effective_environment_v2(
+            image_environment,
+            policy["environment"],
+            effective["environment"],
+        )
         verify_effective_config_policy_v2(
             policy,
             effective,
             expected_config_digest=_sha256(item.effective_config_json),
             expected_docker_digest=item.docker.digest,
         )
-    except WorkerProtocolError as exc:
+    except (VerificationError, WorkerProtocolError) as exc:
         raise WorkerError(
             f"worker v2 effective policy is invalid before launch: {exc}"
         ) from exc

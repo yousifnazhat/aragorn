@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from io import BytesIO
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from io import BytesIO
+from pathlib import Path
 from unittest import mock
 
-import aragorn.benchmark_protocol_v2 as benchmark_protocol_v2
 import aragorn.benchmark_handoff_v2 as benchmark_handoff_v2
-from tests import test_benchmark_oci_evidence as evidence_support
+import aragorn.benchmark_protocol_v2 as benchmark_protocol_v2
 from aragorn.benchmark_handoff_v2 import (
     HandoffError,
     build_handoff_manifest,
@@ -34,6 +33,7 @@ from aragorn.oci_worker_protocol import (
     canonical_json,
     sanitize_subject_manifest,
 )
+from tests import test_benchmark_oci_evidence as evidence_support
 
 
 def _digest(character: str) -> str:
@@ -221,6 +221,26 @@ class BenchmarkSemanticClosureV2Tests(unittest.TestCase):
             self.source, b"{}"
         )
         forged["runner_receipts"] = forged_receipts
+        forged_digest = self._put(self.source, canonical_json(forged))
+        with self.assertRaisesRegex(SemanticClosureError, "OCI evidence"):
+            verify_worker_output_evidence_cas_v2(
+                self.source,
+                forged_digest,
+                expected_request_digest=request_digest,
+                expected_challenge="b" * 64,
+            )
+
+        forged_effective = json.loads(
+            self.source.read(result["effective_config_digest"])
+        )
+        forged_effective["environment"]["PYTHONPATH"] = "/workspace/evil"
+        forged = {
+            **result,
+            "effective_config_digest": self._put(
+                self.source,
+                canonical_json(forged_effective),
+            ),
+        }
         forged_digest = self._put(self.source, canonical_json(forged))
         with self.assertRaisesRegex(SemanticClosureError, "OCI evidence"):
             verify_worker_output_evidence_cas_v2(
@@ -1063,7 +1083,7 @@ class BenchmarkSemanticClosureV2Tests(unittest.TestCase):
             },
             "entrypoint": effective["entrypoint"],
             "arguments": effective["arguments"],
-            "environment": effective["environment"],
+            "environment": selected["profile"]["environment"],
             "runtime_profile": effective["runtime_profile"],
             "limits": effective["limits"],
             "normalization": effective["normalization"],

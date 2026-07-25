@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import json
 import math
 import posixpath
 import re
 import secrets
-from typing import Any
 import unicodedata
+from collections.abc import Callable
+from typing import Any
 from urllib.parse import urlsplit
 
 from .oci_worker_protocol import (
@@ -19,7 +19,6 @@ from .oci_worker_protocol import (
     subject_manifest_digest,
     validate_subject_manifest,
 )
-
 
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IDENTIFIER = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
@@ -657,6 +656,14 @@ def verify_effective_config_policy_v2(
     _validate_environment(config["environment"])
     _validate_runtime_profile(config["runtime_profile"])
     _validate_limits(config["limits"], "effective config v2 limits")
+    policy_environment = portable_policy["environment"]
+    if any(
+        config["environment"].get(name) != value
+        for name, value in policy_environment.items()
+    ):
+        raise WorkerProtocolError(
+            "effective config v2 changed portable policy binding: environment"
+        )
     comparisons = {
         "name": (config["name"], portable_policy["system"]["name"]),
         "version": (config["version"], portable_policy["system"]["version"]),
@@ -698,7 +705,6 @@ def verify_effective_config_policy_v2(
         ),
         "entrypoint": (config["entrypoint"], portable_policy["entrypoint"]),
         "arguments": (config["arguments"], portable_policy["arguments"]),
-        "environment": (config["environment"], portable_policy["environment"]),
         "runtime_profile": (
             config["runtime_profile"],
             portable_policy["runtime_profile"],
@@ -714,6 +720,24 @@ def verify_effective_config_policy_v2(
             raise WorkerProtocolError(
                 f"effective config v2 changed portable policy binding: {field}"
             )
+
+
+def verify_effective_environment_v2(
+    image_environment: object,
+    policy_environment: object,
+    effective_environment: object,
+) -> None:
+    """Require the exact image environment plus portable policy overrides."""
+
+    _validate_environment(image_environment)
+    _validate_environment(policy_environment)
+    _validate_environment(effective_environment)
+    expected = {**image_environment, **policy_environment}
+    if effective_environment != expected:
+        raise WorkerProtocolError(
+            "effective config v2 environment is not the exact image and "
+            "portable policy merge"
+        )
 
 
 def verify_effective_config_binding_v2(

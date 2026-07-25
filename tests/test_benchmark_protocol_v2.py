@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import unittest
+from copy import deepcopy
 
 from aragorn.benchmark_protocol_v2 import (
     build_portable_policy,
@@ -14,6 +14,7 @@ from aragorn.benchmark_protocol_v2 import (
     validate_worker_result_v2,
     verify_effective_config_binding_v2,
     verify_effective_config_policy_v2,
+    verify_effective_environment_v2,
     verify_request_bindings_v2,
     verify_request_challenge_v2,
     verify_request_policy_v2,
@@ -566,6 +567,35 @@ class WorkerResultV2Tests(unittest.TestCase):
         )
         verify_effective_config_binding_v2(policy, result, config)
 
+        cisco_policy = deepcopy(policy)
+        cisco_policy["environment"] = {}
+        image_environment = {
+            "PATH": "/opt/venv/bin:/usr/local/bin:/usr/bin:/bin",
+            "LANG": "C.UTF-8",
+            "HOME": "/tmp/aragorn",
+            "PYTHONHASHSEED": "0",
+        }
+        cisco_config = effective_config(cisco_policy, result)
+        cisco_config["environment"] = image_environment
+        verify_effective_config_policy_v2(
+            cisco_policy,
+            cisco_config,
+            expected_config_digest=canonical_digest(cisco_config),
+            expected_docker_digest=result["docker_executable_digest"],
+        )
+        verify_effective_environment_v2(
+            image_environment,
+            cisco_policy["environment"],
+            cisco_config["environment"],
+        )
+        injected = {**image_environment, "PYTHONPATH": "/workspace/evil"}
+        with self.assertRaisesRegex(WorkerProtocolError, "exact image"):
+            verify_effective_environment_v2(
+                image_environment,
+                cisco_policy["environment"],
+                injected,
+            )
+
         docker_drift = deepcopy(config)
         docker_drift["docker_executable_digest"] = digest("f")
         changed_result = deepcopy(result)
@@ -601,7 +631,7 @@ class WorkerResultV2Tests(unittest.TestCase):
         mutations.append(("arguments", changed))
 
         changed = deepcopy(config)
-        changed["environment"]["EXTRA"] = "1"
+        changed["environment"]["PATH"] = "/tmp"
         mutations.append(("environment", changed))
 
         changed = deepcopy(config)

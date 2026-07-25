@@ -26,6 +26,7 @@ from .benchmark_protocol_v2 import (
     canonical_request_digest_v2,
     validate_worker_request_v2,
     validate_worker_result_v2,
+    verify_effective_environment_v2,
 )
 from .cas import CAS, CASError
 from .oci_worker_protocol import (
@@ -2788,7 +2789,6 @@ def _verify_oci_evidence_v2(
     image_environment = _verify_oci_image_config(
         raw_image_config,
         selected=selected,
-        effective=effective,
         baseline_spec=baseline_spec,
         label=evidence_label,
     )
@@ -2802,12 +2802,21 @@ def _verify_oci_evidence_v2(
     )
     if inspected_environment != image_environment:
         raise BenchmarkError(f"{evidence_label} image config evidence is inconsistent")
+    try:
+        verify_effective_environment_v2(
+            image_environment,
+            selected["profile"]["environment"],
+            effective["environment"],
+        )
+    except WorkerProtocolError as exc:
+        raise BenchmarkError(
+            f"{evidence_label} effective environment is unbound: {exc}"
+        ) from exc
     _verify_oci_container_inspect(
         raw_prestart_container,
         selected=selected,
         effective=effective,
         execution=execution,
-        image_environment=image_environment,
         phase="prestart",
         label=evidence_label,
     )
@@ -2816,7 +2825,6 @@ def _verify_oci_evidence_v2(
         selected=selected,
         effective=effective,
         execution=execution,
-        image_environment=image_environment,
         phase="postrun",
         label=evidence_label,
     )
@@ -3910,8 +3918,6 @@ def _verify_oci_image_inspects(
         platform_config.get("Env"),
         f"{label}.platform_inspect.Config.Env",
     )
-    if environment != effective["environment"]:
-        raise BenchmarkError(f"{label} effective environment is not image-derived")
     return environment
 
 
@@ -4123,7 +4129,6 @@ def _verify_oci_image_config(
     raw: bytes,
     *,
     selected: dict[str, Any],
-    effective: dict[str, Any],
     baseline_spec: dict[str, Any],
     label: str,
 ) -> dict[str, str]:
@@ -4152,8 +4157,6 @@ def _verify_oci_image_config(
         config.get("Env"),
         f"{config_label}.config.Env",
     )
-    if environment != effective["environment"]:
-        raise BenchmarkError(f"{config_label}.config.Env is not effective-config bound")
     labels = config.get("Labels")
     if not isinstance(labels, dict):
         raise BenchmarkError(f"{config_label}.config.Labels must be an object")
@@ -4247,7 +4250,6 @@ def _verify_oci_container_inspect(
     selected: dict[str, Any],
     effective: dict[str, Any],
     execution: dict[str, Any],
-    image_environment: dict[str, str],
     phase: str,
     label: str,
 ) -> None:
@@ -4294,7 +4296,7 @@ def _verify_oci_container_inspect(
         raise BenchmarkError(f"{container_label}.Config is not effective-config bound")
     if (
         _docker_environment(config.get("Env"), f"{container_label}.Config.Env")
-        != image_environment
+        != effective["environment"]
     ):
         raise BenchmarkError(f"{container_label}.Config.Env is unbound")
 

@@ -1,0 +1,684 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn authenticated candidate-composition smoke receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_on",
+    "purpose",
+    "assurance",
+    "source",
+    "preparation",
+    "isolation",
+    "runtime",
+    "trust_store",
+    "acceptances",
+    "lineage",
+    "replay",
+    "composition",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-candidate-composition-smoke-receipt/v1"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "purpose": {
+      "const": "infrastructure_validation_only_not_efficacy"
+    },
+    "assurance": {
+      "const": "signed_commit_plus_software_key_signature_not_hardware_attested"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "evidence_status",
+        "evaluated_commit",
+        "evaluated_commit_tree",
+        "signature",
+        "source_archive_digest",
+        "candidate_implementation_digest"
+      ],
+      "properties": {
+        "status": {
+          "const": "signed_evaluated_commit_and_archive_digest_bound"
+        },
+        "evidence_status": {
+          "const": "operator_observed_from_local_git_and_guest_copy_not_portable_attestation"
+        },
+        "evaluated_commit": {"$ref": "#/$defs/git_oid"},
+        "evaluated_commit_tree": {"$ref": "#/$defs/git_oid"},
+        "signature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "format", "principal", "fingerprint"],
+          "properties": {
+            "status": {"const": "good_valid_signature"},
+            "format": {"const": "ssh-ed25519"},
+            "principal": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 254
+            },
+            "fingerprint": {"$ref": "#/$defs/ssh_fingerprint"}
+          }
+        },
+        "source_archive_digest": {"$ref": "#/$defs/digest"},
+        "candidate_implementation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "purpose",
+        "suite",
+        "suite_digest",
+        "dispatch_digest",
+        "candidate_policy_digest",
+        "worker_identities_digest",
+        "worklist_digest",
+        "runs_per_case",
+        "case_count",
+        "comparator_job_count",
+        "boundary_evidence_status",
+        "hidden_material_loaded",
+        "labels_decrypted"
+      ],
+      "properties": {
+        "schema": {"const": "aragorn/benchmark-prepare-result/v2"},
+        "purpose": {"const": "evidence_smoke"},
+        "suite": {"type": "object"},
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "dispatch_digest": {"$ref": "#/$defs/digest"},
+        "candidate_policy_digest": {"$ref": "#/$defs/digest"},
+        "worker_identities_digest": {"$ref": "#/$defs/digest"},
+        "worklist_digest": {"$ref": "#/$defs/digest"},
+        "runs_per_case": {"const": 1},
+        "case_count": {"const": 2},
+        "comparator_job_count": {"const": 4},
+        "boundary_evidence_status": {
+          "const": "operator_observed_no_hidden_material_or_labels_entered_smoke"
+        },
+        "hidden_material_loaded": {"const": false},
+        "labels_decrypted": {"const": false}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "evidence_status",
+        "instance",
+        "vm_type",
+        "architecture",
+        "guest_os",
+        "kernel",
+        "host_filesystem_mount_count",
+        "docker_mode",
+        "signing_key_mode",
+        "signing_key_mounted_into_analyzer",
+        "source_and_runtime_writable_by_worker"
+      ],
+      "properties": {
+        "provider": {"const": "lima"},
+        "evidence_status": {
+          "const": "operator_observed_mount_free_guest_not_hardware_attested"
+        },
+        "instance": {"const": "aragorn-phase0-public-2667dda"},
+        "vm_type": {"const": "vz"},
+        "architecture": {"const": "aarch64"},
+        "guest_os": {"const": "Ubuntu 26.04 LTS"},
+        "kernel": {"$ref": "#/$defs/nonempty"},
+        "host_filesystem_mount_count": {"const": 0},
+        "docker_mode": {"const": "guest_local_rootless"},
+        "signing_key_mode": {"const": "0600"},
+        "signing_key_mounted_into_analyzer": {"const": false},
+        "source_and_runtime_writable_by_worker": {"const": false}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vm_image_digest",
+        "evidence_status",
+        "python_version",
+        "python_executable_digest",
+        "uv_version",
+        "uv_executable_digest",
+        "uv_image_digest",
+        "worker_dependency_lock_digest",
+        "docker_version",
+        "docker_executable_digest",
+        "baseline_lock_digest",
+        "analyzers"
+      ],
+      "properties": {
+        "vm_image_digest": {"$ref": "#/$defs/digest"},
+        "evidence_status": {
+          "const": "operator_observed_runtime_measurements_not_hardware_attested"
+        },
+        "python_version": {"const": "3.12.13"},
+        "python_executable_digest": {"$ref": "#/$defs/digest"},
+        "uv_version": {"const": "0.11.29"},
+        "uv_executable_digest": {"$ref": "#/$defs/digest"},
+        "uv_image_digest": {"$ref": "#/$defs/digest"},
+        "worker_dependency_lock_digest": {"$ref": "#/$defs/digest"},
+        "docker_version": {"const": "29.6.2"},
+        "docker_executable_digest": {"$ref": "#/$defs/digest"},
+        "baseline_lock_digest": {"$ref": "#/$defs/digest"},
+        "analyzers": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "allOf": [
+                {"$ref": "#/$defs/analyzer"},
+                {
+                  "properties": {
+                    "name": {"const": "cisco-skill-scanner"},
+                    "version": {"const": "2.0.12"}
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/analyzer"},
+                {
+                  "properties": {
+                    "name": {"const": "skillspector"},
+                    "version": {"const": "2.4.3+git.a54947c"}
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "trust_store": {
+      "type": "object"
+    },
+    "acceptances": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/acceptance"},
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "case_id": {"const": "benign-basic"},
+              "system": {"const": "cisco-skill-scanner"}
+            },
+            "required": ["case_id", "system"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "case_id": {"const": "benign-basic"},
+              "system": {"const": "skillspector"}
+            },
+            "required": ["case_id", "system"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "case_id": {"const": "delegated-agent-propagation"},
+              "system": {"const": "cisco-skill-scanner"}
+            },
+            "required": ["case_id", "system"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "case_id": {"const": "delegated-agent-propagation"},
+              "system": {"const": "skillspector"}
+            },
+            "required": ["case_id", "system"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dispatch",
+        "component_evidence",
+        "candidate_evidence",
+        "source_graphs"
+      ],
+      "properties": {
+        "dispatch": {"type": "object"},
+        "component_evidence": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/component_evidence"}
+        },
+        "candidate_evidence": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/candidate_evidence"}
+        },
+        "source_graphs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/source_graph"}
+        }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "evidence_status",
+        "replayed_job_ids",
+        "acceptance_receipt_digests",
+        "retry_count_per_result",
+        "exact_retry_idempotent",
+        "ledger_receipt_count_before",
+        "ledger_receipt_count_after"
+      ],
+      "properties": {
+        "operation": {"const": "collect_signed_worker_output"},
+        "evidence_status": {
+          "const": "operator_observed_not_independently_retained"
+        },
+        "replayed_job_ids": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/job_id"}
+        },
+        "acceptance_receipt_digests": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/digest"}
+        },
+        "retry_count_per_result": {"const": 1},
+        "exact_retry_idempotent": {"const": true},
+        "ledger_receipt_count_before": {"const": 4},
+        "ledger_receipt_count_after": {"const": 4}
+      }
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "assurance",
+        "candidate_composition_digest",
+        "outcomes_digest",
+        "runs_per_case",
+        "case_count",
+        "candidate_outcome_count",
+        "comparator_outcome_count",
+        "outcome_count",
+        "system_count",
+        "comparator_execution_ok_count",
+        "comparator_execution_error_count",
+        "systems",
+        "outcomes"
+      ],
+      "properties": {
+        "schema": {"const": "aragorn/benchmark-candidate-composition/v1"},
+        "assurance": {
+          "const": "derived_from_authenticated_comparator_evidence_not_hardware_attested"
+        },
+        "candidate_composition_digest": {"$ref": "#/$defs/digest"},
+        "outcomes_digest": {"$ref": "#/$defs/digest"},
+        "runs_per_case": {"const": 1},
+        "case_count": {"const": 2},
+        "candidate_outcome_count": {"const": 2},
+        "comparator_outcome_count": {"const": 4},
+        "outcome_count": {"const": 6},
+        "system_count": {"const": 3},
+        "comparator_execution_ok_count": {"const": 4},
+        "comparator_execution_error_count": {"const": 0},
+        "systems": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "allOf": [
+                {"$ref": "#/$defs/system"},
+                {
+                  "properties": {
+                    "name": {"const": "aragorn"},
+                    "version": {"const": "0.1.0-phase0"}
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/system"},
+                {
+                  "properties": {
+                    "name": {"const": "cisco-skill-scanner"},
+                    "version": {"const": "2.0.12"}
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/system"},
+                {
+                  "properties": {
+                    "name": {"const": "skillspector"},
+                    "version": {"const": "2.4.3+git.a54947c"}
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        },
+        "outcomes": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/outcome"}
+        }
+      }
+    },
+    "limitations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture_scope",
+        "efficacy",
+        "repeatability",
+        "attestation",
+        "runtime_identity",
+        "replay",
+        "hidden_material",
+        "phase0_exit"
+      ],
+      "properties": {
+        "fixture_scope": {
+          "const": "two_public_synthetic_cases_one_benign_one_adversarial_one_run_each"
+        },
+        "efficacy": {"const": "not_evaluated_or_claimed"},
+        "repeatability": {"const": "unevaluable_with_one_run_per_case"},
+        "attestation": {
+          "const": "software_keys_and_docker_reported_identity_not_hardware_or_vm_attestation"
+        },
+        "runtime_identity": {
+          "const": "python_uv_and_lima_measurements_not_bound_into_worker_dsse"
+        },
+        "replay": {
+          "const": "exact_retry_was_operator_observed_without_a_separate_replay_transcript"
+        },
+        "hidden_material": {
+          "const": "negative_hidden_material_claim_is_operator_observed_not_attested"
+        },
+        "phase0_exit": {
+          "const": "does_not_satisfy_hidden_corpus_acquisition_reference_or_release_gates"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "ssh_fingerprint": {
+      "type": "string",
+      "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "challenge": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nonempty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "implementation_digest",
+        "config_digest"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "analyzer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "implementation_digest",
+        "portable_policy_digest",
+        "oci_index_digest",
+        "oci_platform_manifest_digest",
+        "image_config_digest",
+        "effective_config_digest"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "portable_policy_digest": {"$ref": "#/$defs/digest"},
+        "oci_index_digest": {"$ref": "#/$defs/digest"},
+        "oci_platform_manifest_digest": {"$ref": "#/$defs/digest"},
+        "image_config_digest": {"$ref": "#/$defs/digest"},
+        "effective_config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "component_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_digest", "evidence"],
+      "properties": {
+        "evidence_digest": {"$ref": "#/$defs/digest"},
+        "evidence": {"type": "object"}
+      }
+    },
+    "candidate_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_digest", "evidence"],
+      "properties": {
+        "evidence_digest": {"$ref": "#/$defs/digest"},
+        "evidence": {"type": "object"}
+      }
+    },
+    "source_graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_graph_digest", "graph"],
+      "properties": {
+        "source_graph_digest": {"$ref": "#/$defs/digest"},
+        "graph": {"type": "object"}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "fixture_class",
+        "tree_digest",
+        "run_id",
+        "system",
+        "acceptance_receipt_digest",
+        "schema",
+        "assurance",
+        "issuance_digest",
+        "trust_store_digest",
+        "envelope_digest",
+        "measurement_envelope",
+        "key_id",
+        "trust_domain",
+        "worker_id",
+        "job_id",
+        "verifier_challenge",
+        "request_digest",
+        "result_digest",
+        "worker_result",
+        "handoff_manifest_digest"
+      ],
+      "properties": {
+        "case_id": {
+          "enum": ["benign-basic", "delegated-agent-propagation"]
+        },
+        "fixture_class": {"enum": ["benign", "adversarial"]},
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "run_id": {"const": 1},
+        "system": {
+          "enum": ["cisco-skill-scanner", "skillspector"]
+        },
+        "acceptance_receipt_digest": {"$ref": "#/$defs/digest"},
+        "schema": {
+          "const": "aragorn/benchmark-worker-output-acceptance/v1"
+        },
+        "assurance": {
+          "const": "software_key_signature_not_hardware_attested"
+        },
+        "issuance_digest": {"$ref": "#/$defs/digest"},
+        "trust_store_digest": {"$ref": "#/$defs/digest"},
+        "envelope_digest": {"$ref": "#/$defs/digest"},
+        "measurement_envelope": {"type": "object"},
+        "key_id": {"$ref": "#/$defs/digest"},
+        "trust_domain": {"const": "phase0.public-smoke"},
+        "worker_id": {"const": "isolated-worker-01"},
+        "job_id": {"$ref": "#/$defs/job_id"},
+        "verifier_challenge": {"$ref": "#/$defs/challenge"},
+        "request_digest": {"$ref": "#/$defs/digest"},
+        "result_digest": {"$ref": "#/$defs/digest"},
+        "worker_result": {"type": "object"},
+        "handoff_manifest_digest": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"case_id": {"const": "benign-basic"}},
+            "required": ["case_id"]
+          },
+          "then": {
+            "properties": {"fixture_class": {"const": "benign"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "case_id": {"const": "delegated-agent-propagation"}
+            },
+            "required": ["case_id"]
+          },
+          "then": {
+            "properties": {"fixture_class": {"const": "adversarial"}}
+          }
+        }
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "suite_digest",
+        "case_id",
+        "tree_digest",
+        "run_id",
+        "system",
+        "evidence_digest",
+        "verdict",
+        "reason_codes"
+      ],
+      "properties": {
+        "schema": {"const": "aragorn/benchmark-outcome/v1"},
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "case_id": {
+          "enum": ["benign-basic", "delegated-agent-propagation"]
+        },
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "run_id": {"const": 1},
+        "system": {"$ref": "#/$defs/system"},
+        "evidence_digest": {"$ref": "#/$defs/digest"},
+        "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},
+        "reason_codes": {"$ref": "#/$defs/reason_codes"}
+      }
+    }
+  }
+}

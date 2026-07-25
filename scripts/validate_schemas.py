@@ -7,6 +7,7 @@ import json
 import sys
 from copy import deepcopy
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 try:
     from jsonschema import FormatChecker
@@ -22,6 +23,8 @@ except ImportError as exc:  # pragma: no cover - developer setup error
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from aragorn.acquire import ingest_local
+from aragorn.artifact_closure import resolve_source_graph
 from aragorn.benchmark import evaluate_files
 from aragorn.benchmark_handoff_v2 import build_handoff_manifest
 from aragorn.benchmark_protocol_v2 import (
@@ -34,14 +37,677 @@ from aragorn.benchmark_protocol_v2 import (
 from aragorn.benchmark_worker_measurement import (
     build_worker_measurement,
     build_worker_trust_store,
+    validate_worker_trust_store,
+    verify_worker_measurement,
 )
+from aragorn.cas import CAS
 from aragorn.corpus_audit import audit_suite
-from aragorn.oci_worker_protocol import canonical_digest
+from aragorn.label_blind_prepare import validate_private_dispatch_v2
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.phase0_candidate import compose_candidate_decision
 from aragorn.standards_gate import validate_standards_gate
 
 
 def load(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _outcome(evidence: dict[str, object], evidence_digest: str) -> dict[str, object]:
+    return {
+        "schema": "aragorn/benchmark-outcome/v1",
+        **{
+            field: evidence[field]
+            for field in (
+                "suite_digest",
+                "case_id",
+                "tree_digest",
+                "run_id",
+                "system",
+            )
+        },
+        "evidence_digest": evidence_digest,
+        "verdict": evidence["verdict"],
+        "reason_codes": evidence["reason_codes"],
+    }
+
+
+def validate_candidate_composition_smoke_receipt(
+    receipt: dict[str, object],
+    *,
+    candidate_policy: dict[str, object],
+    portable_identities: list[dict[str, object]],
+    baseline_lock: dict[str, object],
+) -> None:
+    preparation = receipt["preparation"]
+    composition = receipt["composition"]
+    acceptances = receipt["acceptances"]
+    lineage = receipt["lineage"]
+    replay = receipt["replay"]
+    expected_policy_digest = canonical_digest(candidate_policy)
+    if preparation["candidate_policy_digest"] != expected_policy_digest:
+        raise AssertionError("composition smoke receipt candidate policy drift")
+
+    candidate_system = {
+        **candidate_policy["candidate"],
+        "config_digest": expected_policy_digest,
+    }
+    expected_systems = [candidate_system, *portable_identities]
+    if (
+        receipt["source"]["candidate_implementation_digest"]
+        != candidate_system["implementation_digest"]
+    ):
+        raise AssertionError("composition smoke receipt candidate source drift")
+    if composition["systems"] != expected_systems:
+        raise AssertionError("composition smoke receipt system identity drift")
+    suite = preparation["suite"]
+    if canonical_digest(suite) != preparation["suite_digest"]:
+        raise AssertionError("composition smoke receipt suite digest drift")
+    if suite["systems"] != expected_systems:
+        raise AssertionError("composition smoke receipt suite system drift")
+    if suite["runs_per_case"] != preparation["runs_per_case"]:
+        raise AssertionError("composition smoke receipt suite run-count drift")
+    if len(suite["cases"]) != preparation["case_count"]:
+        raise AssertionError("composition smoke receipt suite case-count drift")
+
+    raw_baseline_digest = (
+        "sha256:"
+        + hashlib.sha256(
+            (ROOT / "benchmark" / "baselines.lock.json").read_bytes()
+        ).hexdigest()
+    )
+    if receipt["runtime"]["baseline_lock_digest"] != raw_baseline_digest:
+        raise AssertionError("composition smoke receipt baseline lock drift")
+    baselines = {item["name"]: item for item in baseline_lock["baselines"]}
+    expected_analyzers = []
+    for identity in portable_identities:
+        baseline = baselines[identity["name"]]
+        expected_analyzers.append(
+            {
+                "name": identity["name"],
+                "version": identity["version"],
+                "implementation_digest": identity["implementation_digest"],
+                "portable_policy_digest": identity["config_digest"],
+                "oci_index_digest": baseline["image"]["index_digest"],
+                "oci_platform_manifest_digest": baseline["image"][
+                    "platform_manifest_digest"
+                ],
+                "image_config_digest": baseline["image"]["config_digest"],
+            }
+        )
+    for observed, expected in zip(
+        receipt["runtime"]["analyzers"], expected_analyzers, strict=True
+    ):
+        if {key: observed[key] for key in expected} != expected:
+            raise AssertionError("composition smoke receipt analyzer identity drift")
+    analyzers_by_name = {item["name"]: item for item in receipt["runtime"]["analyzers"]}
+
+    expected_comparator_cells = {
+        (case_id, system)
+        for case_id in ("benign-basic", "delegated-agent-propagation")
+        for system in ("cisco-skill-scanner", "skillspector")
+    }
+    observed_comparator_cells = {
+        (item["case_id"], item["system"]) for item in acceptances
+    }
+    if observed_comparator_cells != expected_comparator_cells:
+        raise AssertionError("composition smoke receipt comparator matrix drift")
+    if len(acceptances) != preparation["comparator_job_count"]:
+        raise AssertionError("composition smoke receipt comparator job-count drift")
+    suite_cases = {item["id"]: item for item in suite["cases"]}
+    trust_store = receipt["trust_store"]
+    validate_worker_trust_store(trust_store)
+    trust_store_digest = canonical_digest(trust_store)
+    receipt_fields = (
+        "schema",
+        "assurance",
+        "issuance_digest",
+        "trust_store_digest",
+        "envelope_digest",
+        "key_id",
+        "trust_domain",
+        "worker_id",
+        "job_id",
+        "verifier_challenge",
+        "request_digest",
+        "result_digest",
+        "handoff_manifest_digest",
+    )
+    worker_results_by_cell = {}
+    acceptances_by_cell = {}
+    for acceptance in acceptances:
+        retained_receipt = {field: acceptance[field] for field in receipt_fields}
+        if (
+            canonical_digest(retained_receipt)
+            != acceptance["acceptance_receipt_digest"]
+        ):
+            raise AssertionError("composition smoke receipt acceptance digest drift")
+        issuance = {
+            "schema": "aragorn/benchmark-worker-measurement-issuance/v1",
+            "trust_domain": acceptance["trust_domain"],
+            "worker_id": acceptance["worker_id"],
+            "job_id": acceptance["job_id"],
+            "request_digest": acceptance["request_digest"],
+            "verifier_challenge": acceptance["verifier_challenge"],
+        }
+        if canonical_digest(issuance) != acceptance["issuance_digest"]:
+            raise AssertionError("composition smoke receipt issuance digest drift")
+        verified = verify_worker_measurement(
+            canonical_json(acceptance["measurement_envelope"]),
+            trust_store,
+            expected_worker_id=acceptance["worker_id"],
+            expected_job_id=acceptance["job_id"],
+            expected_request_digest=acceptance["request_digest"],
+            expected_challenge=acceptance["verifier_challenge"],
+        )
+        statement = verified.statement
+        if (
+            verified.envelope_digest != acceptance["envelope_digest"]
+            or verified.trust_store_digest != acceptance["trust_store_digest"]
+            or verified.trust_store_digest != trust_store_digest
+            or statement["key_id"] != acceptance["key_id"]
+            or statement["trust_domain"] != acceptance["trust_domain"]
+            or statement["result_digest"] != acceptance["result_digest"]
+            or statement["handoff_manifest_digest"]
+            != acceptance["handoff_manifest_digest"]
+        ):
+            raise AssertionError("composition smoke receipt signed measurement drift")
+        case = suite_cases[acceptance["case_id"]]
+        if (
+            acceptance["fixture_class"] != case["class"]
+            or acceptance["tree_digest"] != case["tree_digest"]
+        ):
+            raise AssertionError("composition smoke receipt acceptance case drift")
+        result = acceptance["worker_result"]
+        if canonical_digest(result) != acceptance["result_digest"]:
+            raise AssertionError("composition smoke receipt worker result drift")
+        analyzer = analyzers_by_name[acceptance["system"]]
+        for result_field, acceptance_field in (
+            ("job_id", "job_id"),
+            ("verifier_challenge", "verifier_challenge"),
+            ("request_digest", "request_digest"),
+            ("tree_digest", "tree_digest"),
+        ):
+            if result[result_field] != acceptance[acceptance_field]:
+                raise AssertionError(
+                    f"composition smoke receipt worker {result_field} drift"
+                )
+        if (
+            result["system"]["name"] != acceptance["system"]
+            or result["system"]["version"] != analyzer["version"]
+            or result["system"]["implementation_digest"]
+            != analyzer["implementation_digest"]
+            or result["portable_policy_digest"] != analyzer["portable_policy_digest"]
+            or result["effective_config_digest"] != analyzer["effective_config_digest"]
+            or result["oci_index_digest"] != analyzer["oci_index_digest"]
+            or result["oci_platform_manifest_digest"]
+            != analyzer["oci_platform_manifest_digest"]
+            or result["image_config_digest"] != analyzer["image_config_digest"]
+            or result["baseline_lock_digest"]
+            != receipt["runtime"]["baseline_lock_digest"]
+            or result["docker_executable_digest"]
+            != receipt["runtime"]["docker_executable_digest"]
+        ):
+            raise AssertionError("composition smoke receipt worker identity drift")
+        cell = (
+            acceptance["case_id"],
+            acceptance["run_id"],
+            acceptance["system"],
+        )
+        if cell in acceptances_by_cell:
+            raise AssertionError("composition smoke receipt duplicate acceptance cell")
+        acceptances_by_cell[cell] = acceptance
+        worker_results_by_cell[cell] = result
+    for field in (
+        "acceptance_receipt_digest",
+        "issuance_digest",
+        "envelope_digest",
+        "job_id",
+        "verifier_challenge",
+        "request_digest",
+        "result_digest",
+        "handoff_manifest_digest",
+    ):
+        if len({item[field] for item in acceptances}) != len(acceptances):
+            raise AssertionError(
+                f"composition smoke receipt duplicate acceptance {field}"
+            )
+    for field in ("trust_store_digest", "key_id"):
+        if len({item[field] for item in acceptances}) != 1:
+            raise AssertionError(
+                f"composition smoke receipt inconsistent acceptance {field}"
+            )
+    if set(replay["replayed_job_ids"]) != {item["job_id"] for item in acceptances}:
+        raise AssertionError("composition smoke receipt replay job drift")
+    if set(replay["acceptance_receipt_digests"]) != {
+        item["acceptance_receipt_digest"] for item in acceptances
+    }:
+        raise AssertionError("composition smoke receipt replay receipt drift")
+
+    outcomes = composition["outcomes"]
+    outcomes_by_cell = {}
+    for outcome in outcomes:
+        cell = (
+            outcome["case_id"],
+            outcome["run_id"],
+            outcome["system"]["name"],
+        )
+        if cell in outcomes_by_cell:
+            raise AssertionError("composition smoke receipt duplicate outcome cell")
+        outcomes_by_cell[cell] = outcome
+    expected_outcome_cells = {
+        (case["id"], run_id, system["name"])
+        for case in suite["cases"]
+        for run_id in range(1, suite["runs_per_case"] + 1)
+        for system in expected_systems
+    }
+    if set(outcomes_by_cell) != expected_outcome_cells:
+        raise AssertionError("composition smoke receipt outcome matrix drift")
+
+    dispatch = lineage["dispatch"]
+    try:
+        validate_private_dispatch_v2(dispatch)
+    except ValueError as exc:
+        raise AssertionError(
+            f"composition smoke receipt dispatch invalid: {exc}"
+        ) from exc
+    if (
+        canonical_digest(dispatch) != preparation["dispatch_digest"]
+        or dispatch["suite_digest"] != preparation["suite_digest"]
+        or dispatch["candidate_policy_digest"] != preparation["candidate_policy_digest"]
+        or dispatch["candidate_system"] != candidate_system
+        or dispatch["runs_per_case"] != suite["runs_per_case"]
+    ):
+        raise AssertionError("composition smoke receipt dispatch root drift")
+    expected_identities = {
+        "schema": "aragorn/benchmark-system-identities/v1",
+        "systems": sorted(portable_identities, key=lambda item: item["name"]),
+    }
+    if canonical_digest(expected_identities) != preparation["worker_identities_digest"]:
+        raise AssertionError("composition smoke receipt worker identities digest drift")
+    expected_worklist = {
+        "schema": "aragorn/benchmark-worker-worklist/v1",
+        "jobs": [
+            {
+                "job_id": job["job_id"],
+                "request_digest": job["request_digest"],
+            }
+            for job in dispatch["jobs"]
+        ],
+    }
+    if canonical_digest(expected_worklist) != preparation["worklist_digest"]:
+        raise AssertionError("composition smoke receipt worklist digest drift")
+    dispatch_cases = {item["case_id"]: item for item in dispatch["cases"]}
+    if set(dispatch_cases) != set(suite_cases):
+        raise AssertionError("composition smoke receipt dispatch case drift")
+    for case_id, case in suite_cases.items():
+        if dispatch_cases[case_id]["tree_digest"] != case["tree_digest"]:
+            raise AssertionError("composition smoke receipt dispatch tree drift")
+
+    comparator_systems = {
+        item["name"]: item for item in expected_systems if item["name"] != "aragorn"
+    }
+    dispatch_jobs = {}
+    for job in dispatch["jobs"]:
+        cell = (job["case_id"], job["run_id"], job["system"]["name"])
+        if cell in dispatch_jobs:
+            raise AssertionError("composition smoke receipt duplicate dispatch cell")
+        if (
+            job["suite_digest"] != preparation["suite_digest"]
+            or comparator_systems.get(job["system"]["name"]) != job["system"]
+        ):
+            raise AssertionError("composition smoke receipt dispatch job drift")
+        dispatch_jobs[cell] = job
+    if set(dispatch_jobs) != set(acceptances_by_cell):
+        raise AssertionError("composition smoke receipt dispatch matrix drift")
+    for cell, acceptance in acceptances_by_cell.items():
+        job = dispatch_jobs[cell]
+        if (
+            job["job_id"] != acceptance["job_id"]
+            or job["request_digest"] != acceptance["request_digest"]
+            or job["tree_digest"] != acceptance["tree_digest"]
+            or job["private_manifest_digest"]
+            != dispatch_cases[cell[0]]["private_manifest_digest"]
+        ):
+            raise AssertionError("composition smoke receipt dispatch acceptance drift")
+
+    retained_graphs = {}
+    for retained in lineage["source_graphs"]:
+        graph = retained["graph"]
+        digest = retained["source_graph_digest"]
+        if canonical_digest(graph) != digest or digest in retained_graphs:
+            raise AssertionError("composition smoke receipt source graph drift")
+        retained_graphs[digest] = graph
+
+    graphs_by_case = {}
+    with TemporaryDirectory(prefix="aragorn-composition-replay-") as temporary:
+        cas = CAS(temporary)
+        for case_id, case in suite_cases.items():
+            expected_path = f"oci-fixtures/{case_id}"
+            if case["path"] != expected_path:
+                raise AssertionError("composition smoke receipt fixture path drift")
+            manifest = ingest_local(ROOT / "benchmark" / expected_path, cas)
+            manifest["source"]["path"] = "/aragorn/opaque-benchmark-fixture"
+            manifest_digest = canonical_digest(manifest)
+            dispatch_case = dispatch_cases[case_id]
+            if (
+                manifest_digest != dispatch_case["private_manifest_digest"]
+                or manifest["tree_digest"] != dispatch_case["tree_digest"]
+            ):
+                raise AssertionError("composition smoke receipt source manifest drift")
+            graph = resolve_source_graph(
+                manifest,
+                cas,
+                root_manifest_digest=manifest_digest,
+            )
+            graph_digest = canonical_digest(graph)
+            if retained_graphs.get(graph_digest) != graph:
+                raise AssertionError(
+                    "composition smoke receipt source graph does not re-derive"
+                )
+            graphs_by_case[case_id] = (graph_digest, graph)
+    if len(graphs_by_case) != len(retained_graphs):
+        raise AssertionError("composition smoke receipt extra source graph")
+
+    component_by_cell = {}
+    derived_outcomes = []
+    for retained in lineage["component_evidence"]:
+        evidence = retained["evidence"]
+        evidence_digest = retained["evidence_digest"]
+        if canonical_digest(evidence) != evidence_digest:
+            raise AssertionError("composition smoke receipt component digest drift")
+        cell = (
+            evidence["case_id"],
+            evidence["run_id"],
+            evidence["system"]["name"],
+        )
+        if cell in component_by_cell or cell not in dispatch_jobs:
+            raise AssertionError("composition smoke receipt component cell drift")
+        job = dispatch_jobs[cell]
+        acceptance = acceptances_by_cell[cell]
+        result = worker_results_by_cell[cell]
+        expected_evidence = {
+            "schema": "aragorn/benchmark-authenticated-worker-evidence/v1",
+            "suite_digest": preparation["suite_digest"],
+            "case_id": job["case_id"],
+            "tree_digest": job["tree_digest"],
+            "run_id": job["run_id"],
+            "system": job["system"],
+            "verdict": result["verdict"],
+            "reason_codes": result["reason_codes"],
+            "private_manifest_digest": job["private_manifest_digest"],
+            "dispatch_digest": preparation["dispatch_digest"],
+            "acceptance_receipt_digest": acceptance["acceptance_receipt_digest"],
+            "issuance_digest": acceptance["issuance_digest"],
+        }
+        if evidence != expected_evidence:
+            raise AssertionError("composition smoke receipt component evidence drift")
+        component_by_cell[cell] = (evidence_digest, evidence)
+        derived_outcomes.append(_outcome(evidence, evidence_digest))
+    if set(component_by_cell) != set(dispatch_jobs):
+        raise AssertionError("composition smoke receipt component matrix drift")
+
+    candidate_cells = {}
+    for retained in lineage["candidate_evidence"]:
+        evidence = retained["evidence"]
+        evidence_digest = retained["evidence_digest"]
+        if canonical_digest(evidence) != evidence_digest:
+            raise AssertionError("composition smoke receipt candidate digest drift")
+        cell = (evidence["case_id"], evidence["run_id"])
+        if cell in candidate_cells or evidence["case_id"] not in graphs_by_case:
+            raise AssertionError("composition smoke receipt candidate cell drift")
+        components = sorted(
+            (
+                component_by_cell[
+                    (evidence["case_id"], evidence["run_id"], system_name)
+                ]
+                for system_name in comparator_systems
+            ),
+            key=lambda item: item[1]["system"]["name"],
+        )
+        graph_digest, graph = graphs_by_case[evidence["case_id"]]
+        verdict, reason_codes = compose_candidate_decision(
+            candidate_policy,
+            graph,
+            (item[1] for item in components),
+        )
+        dispatch_case = dispatch_cases[evidence["case_id"]]
+        expected_evidence = {
+            "schema": "aragorn/benchmark-candidate-evidence/v1",
+            "suite_digest": preparation["suite_digest"],
+            "case_id": evidence["case_id"],
+            "tree_digest": dispatch_case["tree_digest"],
+            "run_id": evidence["run_id"],
+            "system": candidate_system,
+            "verdict": verdict,
+            "reason_codes": reason_codes,
+            "private_manifest_digest": dispatch_case["private_manifest_digest"],
+            "source_graph_digest": graph_digest,
+            "dispatch_digest": preparation["dispatch_digest"],
+            "policy_digest": preparation["candidate_policy_digest"],
+            "component_evidence_digests": sorted(item[0] for item in components),
+        }
+        if evidence != expected_evidence:
+            raise AssertionError("composition smoke receipt candidate evidence drift")
+        candidate_cells[cell] = evidence
+        derived_outcomes.append(_outcome(evidence, evidence_digest))
+    expected_candidate_cells = {
+        (case["id"], run_id)
+        for case in suite["cases"]
+        for run_id in range(1, suite["runs_per_case"] + 1)
+    }
+    if set(candidate_cells) != expected_candidate_cells:
+        raise AssertionError("composition smoke receipt candidate matrix drift")
+
+    derived_outcomes.sort(
+        key=lambda item: (
+            item["system"]["name"],
+            item["system"]["version"],
+            item["system"]["implementation_digest"],
+            item["system"]["config_digest"],
+            item["case_id"],
+            item["run_id"],
+        )
+    )
+    if outcomes != derived_outcomes:
+        raise AssertionError("composition smoke receipt outcomes do not re-derive")
+    candidate_count = sum(item["system"]["name"] == "aragorn" for item in outcomes)
+    comparator_count = len(outcomes) - candidate_count
+    comparator_outcome_error_count = sum(
+        item["system"]["name"] != "aragorn" and item["verdict"] == "ERROR"
+        for item in outcomes
+    )
+    worker_ok_count = sum(
+        item["execution"]["status"] == "ok" for item in worker_results_by_cell.values()
+    )
+    if (
+        composition["runs_per_case"] != suite["runs_per_case"]
+        or composition["case_count"] != len(suite["cases"])
+        or composition["candidate_outcome_count"] != candidate_count
+        or composition["comparator_outcome_count"] != comparator_count
+        or composition["outcome_count"] != len(outcomes)
+        or composition["system_count"]
+        != len({item["system"]["name"] for item in outcomes})
+        or composition["comparator_execution_ok_count"] != worker_ok_count
+        or composition["comparator_execution_error_count"]
+        != len(worker_results_by_cell) - worker_ok_count
+        or comparator_outcome_error_count
+        != composition["comparator_execution_error_count"]
+    ):
+        raise AssertionError("composition smoke receipt derived counter drift")
+    if canonical_digest(outcomes) != composition["outcomes_digest"]:
+        raise AssertionError("composition smoke receipt outcomes digest drift")
+    composed = {
+        "assurance": composition["assurance"],
+        "dispatch_digest": preparation["dispatch_digest"],
+        "outcomes": outcomes,
+        "outcomes_digest": composition["outcomes_digest"],
+        "policy_digest": preparation["candidate_policy_digest"],
+        "schema": composition["schema"],
+        "suite_digest": preparation["suite_digest"],
+    }
+    if canonical_digest(composed) != composition["candidate_composition_digest"]:
+        raise AssertionError("composition smoke receipt composition digest drift")
+
+
+def _rehash_composition_smoke_receipt(receipt: dict[str, object]) -> None:
+    """Rehash attacker-controlled lineage to test external trust anchors."""
+
+    preparation = receipt["preparation"]
+    lineage = receipt["lineage"]
+    composition = receipt["composition"]
+    dispatch_digest = canonical_digest(lineage["dispatch"])
+    preparation["dispatch_digest"] = dispatch_digest
+
+    component_digests = {}
+    for retained in lineage["component_evidence"]:
+        evidence = retained["evidence"]
+        evidence["dispatch_digest"] = dispatch_digest
+        evidence_digest = canonical_digest(evidence)
+        retained["evidence_digest"] = evidence_digest
+        component_digests[
+            (evidence["case_id"], evidence["run_id"], evidence["system"]["name"])
+        ] = evidence_digest
+
+    graph_digests = {}
+    for retained in lineage["source_graphs"]:
+        graph = retained["graph"]
+        graph_digest = canonical_digest(graph)
+        retained["source_graph_digest"] = graph_digest
+        graph_digests[(graph["root_manifest_digest"], graph["tree_digest"])] = (
+            graph_digest
+        )
+
+    for retained in lineage["candidate_evidence"]:
+        evidence = retained["evidence"]
+        evidence["dispatch_digest"] = dispatch_digest
+        evidence["component_evidence_digests"] = sorted(
+            digest
+            for (case_id, run_id, _), digest in component_digests.items()
+            if (case_id, run_id) == (evidence["case_id"], evidence["run_id"])
+        )
+        evidence["source_graph_digest"] = graph_digests[
+            (evidence["private_manifest_digest"], evidence["tree_digest"])
+        ]
+        retained["evidence_digest"] = canonical_digest(evidence)
+
+    retained_evidence = [
+        *lineage["component_evidence"],
+        *lineage["candidate_evidence"],
+    ]
+    outcomes = [
+        _outcome(item["evidence"], item["evidence_digest"])
+        for item in retained_evidence
+    ]
+    outcomes.sort(
+        key=lambda item: (
+            item["system"]["name"],
+            item["system"]["version"],
+            item["system"]["implementation_digest"],
+            item["system"]["config_digest"],
+            item["case_id"],
+            item["run_id"],
+        )
+    )
+    composition["outcomes"] = outcomes
+    composition["outcomes_digest"] = canonical_digest(outcomes)
+    composition["candidate_composition_digest"] = canonical_digest(
+        {
+            "assurance": composition["assurance"],
+            "dispatch_digest": dispatch_digest,
+            "outcomes": outcomes,
+            "outcomes_digest": composition["outcomes_digest"],
+            "policy_digest": preparation["candidate_policy_digest"],
+            "schema": composition["schema"],
+            "suite_digest": preparation["suite_digest"],
+        }
+    )
+
+
+def validate_composition_smoke_mutation_resistance(
+    receipt: dict[str, object],
+    *,
+    candidate_policy: dict[str, object],
+    portable_identities: list[dict[str, object]],
+    baseline_lock: dict[str, object],
+) -> None:
+    mutations = []
+
+    changed = deepcopy(receipt)
+    changed["preparation"]["worker_identities_digest"] = "sha256:" + "3" * 64
+    mutations.append(("worker identities digest", changed))
+
+    changed = deepcopy(receipt)
+    changed["preparation"]["worklist_digest"] = "sha256:" + "4" * 64
+    mutations.append(("worklist digest", changed))
+
+    changed = deepcopy(receipt)
+    changed["lineage"]["dispatch"]["jobs"][0]["request_digest"] = "sha256:" + "0" * 64
+    _rehash_composition_smoke_receipt(changed)
+    mutations.append(("rehashed dispatch request", changed))
+
+    changed = deepcopy(receipt)
+    case_id = changed["lineage"]["dispatch"]["cases"][0]["case_id"]
+    old_manifest = changed["lineage"]["dispatch"]["cases"][0]["private_manifest_digest"]
+    new_manifest = "sha256:" + "1" * 64
+    changed["lineage"]["dispatch"]["cases"][0]["private_manifest_digest"] = new_manifest
+    for job in changed["lineage"]["dispatch"]["jobs"]:
+        if job["case_id"] == case_id:
+            job["private_manifest_digest"] = new_manifest
+    for retained in changed["lineage"]["component_evidence"]:
+        if retained["evidence"]["case_id"] == case_id:
+            retained["evidence"]["private_manifest_digest"] = new_manifest
+    for retained in changed["lineage"]["candidate_evidence"]:
+        if retained["evidence"]["case_id"] == case_id:
+            retained["evidence"]["private_manifest_digest"] = new_manifest
+    for retained in changed["lineage"]["source_graphs"]:
+        if retained["graph"]["root_manifest_digest"] == old_manifest:
+            retained["graph"]["root_manifest_digest"] = new_manifest
+    _rehash_composition_smoke_receipt(changed)
+    mutations.append(("rehashed private manifest", changed))
+
+    changed = deepcopy(receipt)
+    evidence = changed["lineage"]["candidate_evidence"][0]["evidence"]
+    evidence["verdict"] = "ERROR"
+    evidence["reason_codes"] = ["FORGED_CANDIDATE_RESULT"]
+    _rehash_composition_smoke_receipt(changed)
+    mutations.append(("rehashed candidate decision", changed))
+
+    changed = deepcopy(receipt)
+    retained = changed["lineage"]["candidate_evidence"][0]
+    retained["evidence_digest"] = "sha256:" + "2" * 64
+    for outcome in changed["composition"]["outcomes"]:
+        if (
+            outcome["case_id"] == retained["evidence"]["case_id"]
+            and outcome["system"]["name"] == "aragorn"
+        ):
+            outcome["evidence_digest"] = retained["evidence_digest"]
+    changed["composition"]["outcomes_digest"] = canonical_digest(
+        changed["composition"]["outcomes"]
+    )
+    changed["composition"]["candidate_composition_digest"] = canonical_digest(
+        {
+            "assurance": changed["composition"]["assurance"],
+            "dispatch_digest": changed["preparation"]["dispatch_digest"],
+            "outcomes": changed["composition"]["outcomes"],
+            "outcomes_digest": changed["composition"]["outcomes_digest"],
+            "policy_digest": changed["preparation"]["candidate_policy_digest"],
+            "schema": changed["composition"]["schema"],
+            "suite_digest": changed["preparation"]["suite_digest"],
+        }
+    )
+    mutations.append(("detached candidate evidence digest", changed))
+
+    for label, changed in mutations:
+        try:
+            validate_candidate_composition_smoke_receipt(
+                changed,
+                candidate_policy=candidate_policy,
+                portable_identities=portable_identities,
+                baseline_lock=baseline_lock,
+            )
+        except (AssertionError, ValueError):
+            continue
+        raise AssertionError(f"composition smoke accepted {label} mutation")
 
 
 def main() -> int:
@@ -83,9 +749,7 @@ def main() -> int:
     validators["benchmark-suite-v1.schema.json"].validate(
         load(ROOT / "benchmark" / "phase0-oci-pilot-v1.json")
     )
-    phase0_candidate_policy = load(
-        ROOT / "benchmark" / "phase0-candidate-policy.json"
-    )
+    phase0_candidate_policy = load(ROOT / "benchmark" / "phase0-candidate-policy.json")
     validators["benchmark-candidate-policy-v1.schema.json"].validate(
         phase0_candidate_policy
     )
@@ -95,9 +759,7 @@ def main() -> int:
         "phase0-skillspector-portable-policy.json",
     ):
         portable_policy = load(ROOT / "benchmark" / filename)
-        validators["benchmark-portable-policy-v1.schema.json"].validate(
-            portable_policy
-        )
+        validators["benchmark-portable-policy-v1.schema.json"].validate(portable_policy)
         portable_identities.append(
             {
                 **portable_policy["system"],
@@ -123,6 +785,54 @@ def main() -> int:
             / "receipts"
             / "phase0-isolated-protocol-v2-smoke-2026-07-23.json"
         )
+    )
+    composition_smoke_receipt = load(
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-public-candidate-composition-smoke-2026-07-24.json"
+    )
+    validators["benchmark-candidate-composition-smoke-receipt-v1.schema.json"].validate(
+        composition_smoke_receipt
+    )
+    validators["benchmark-suite-v1.schema.json"].validate(
+        composition_smoke_receipt["preparation"]["suite"]
+    )
+    validators["benchmark-worker-trust-store-v1.schema.json"].validate(
+        composition_smoke_receipt["trust_store"]
+    )
+    lineage = composition_smoke_receipt["lineage"]
+    validators["benchmark-private-dispatch-v2.schema.json"].validate(
+        lineage["dispatch"]
+    )
+    for retained in lineage["component_evidence"]:
+        validators["benchmark-authenticated-worker-evidence-v1.schema.json"].validate(
+            retained["evidence"]
+        )
+    for retained in lineage["candidate_evidence"]:
+        validators["benchmark-candidate-evidence-v1.schema.json"].validate(
+            retained["evidence"]
+        )
+    for retained in lineage["source_graphs"]:
+        validators["source-artifact-graph-v1.schema.json"].validate(retained["graph"])
+    for acceptance in composition_smoke_receipt["acceptances"]:
+        validators["benchmark-worker-result-v2.schema.json"].validate(
+            acceptance["worker_result"]
+        )
+        validate_worker_result_v2(acceptance["worker_result"])
+    for outcome in composition_smoke_receipt["composition"]["outcomes"]:
+        validators["benchmark-outcome-v1.schema.json"].validate(outcome)
+    validate_candidate_composition_smoke_receipt(
+        composition_smoke_receipt,
+        candidate_policy=phase0_candidate_policy,
+        portable_identities=portable_identities,
+        baseline_lock=baseline_lock,
+    )
+    validate_composition_smoke_mutation_resistance(
+        composition_smoke_receipt,
+        candidate_policy=phase0_candidate_policy,
+        portable_identities=portable_identities,
+        baseline_lock=baseline_lock,
     )
     validators["corpus-audit-v1.schema.json"].validate(
         audit_suite(ROOT / "benchmark" / "phase0-oci-pilot-v1.json")
@@ -181,8 +891,7 @@ def main() -> int:
         {
             "schema": "aragorn/benchmark-phase0-hidden-suite-lock/v1",
             "assurance": (
-                "operator_asserted_pre_outcome_binding_"
-                "not_independent_or_timestamped"
+                "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
             ),
             "corpus_lock_digest": digest,
             "worker_archive_digest": second_digest,
@@ -517,9 +1226,7 @@ def main() -> int:
             }
         ],
     )
-    validators["benchmark-worker-trust-store-v1.schema.json"].validate(
-        trust_store
-    )
+    validators["benchmark-worker-trust-store-v1.schema.json"].validate(trust_store)
     measurement = build_worker_measurement(
         trust_domain=trust_store["trust_domain"],
         worker_id=trust_store["keys"][0]["worker_id"],
@@ -530,9 +1237,7 @@ def main() -> int:
         result_digest=digest,
         handoff_manifest_digest=digest,
     )
-    validators["benchmark-worker-measurement-v1.schema.json"].validate(
-        measurement
-    )
+    validators["benchmark-worker-measurement-v1.schema.json"].validate(measurement)
     issuance = {
         "schema": "aragorn/benchmark-worker-measurement-issuance/v1",
         "trust_domain": measurement["trust_domain"],
@@ -541,9 +1246,9 @@ def main() -> int:
         "request_digest": measurement["request_digest"],
         "verifier_challenge": measurement["verifier_challenge"],
     }
-    validators[
-        "benchmark-worker-measurement-issuance-v1.schema.json"
-    ].validate(issuance)
+    validators["benchmark-worker-measurement-issuance-v1.schema.json"].validate(
+        issuance
+    )
     validators["benchmark-worker-output-acceptance-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-worker-output-acceptance/v1",

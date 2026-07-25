@@ -1,6 +1,6 @@
 # Aragorn: architecture and roadmap
 
-Date: 2026-07-23
+Date: 2026-07-24
 
 Status: private implementation in progress; Phase 0 evaluation infrastructure
 
@@ -53,7 +53,7 @@ Runtime:      not implemented
 Interface:    standard-library base CLI; locked crypto dependencies for signed workers
 Verdicts:     ALLOW | REVIEW | DENY | ERROR
 Benchmark:    process and digest-bound OCI evidence-smoke runners; efficacy disabled
-Handoff:      v2 semantic import/execute/export/sign/accept; one isolated smoke retained
+Handoff:      v2 semantic import/execute/export/sign/accept/compose; authenticated public smoke retained
 Comparators:  pinned Cisco and NVIDIA local Linux/arm64 OCI images
 ```
 
@@ -769,17 +769,33 @@ distinct UID connected to the control plane's shared rootful Docker daemon is
 not isolated; use a disposable VM or a dedicated rootless/scoped daemon whose
 socket and host filesystem cannot reach control-plane state.
 
-The control plane can now prepare the complete protocol-v2 matrix without
-launching a worker. For every case/system/run cell it requires the suite
-configuration identity to equal the canonical portable-policy digest, issues a
-verifier-owned challenge, retains the private dispatch, and exports only the
-request's exact semantic input closure plus a label-free worklist. This closes
-the batch-preparation gap, not the result-composition gap: accepted Cisco and
-NVIDIA results still require a separately evidence-bound, frozen Aragorn
-candidate derivation before hidden evaluation. That derivation binds the
-locally re-derived source-reference graph and both authenticated comparator
-results; the GitHub acquisition/reference oracle remains a separate Phase 0
-stratum.
+The corrected public candidate-composition smoke evaluated signed commit
+`2667dda227479385135a171958ff3011777b8e24` in a new mount-free Lima VM with
+guest-local rootless Docker. It prepared two public cases across both pinned
+comparators, accepted four verifier-accepted software-key-signed results,
+operator-observed exact retry idempotence, and composed them with two
+deterministic Aragorn outcomes. The retained
+[`candidate-composition receipt`](./benchmark/receipts/phase0-public-candidate-composition-smoke-2026-07-24.json)
+binds the evaluated source claim, operator-observed runtime, exact public suite,
+four verifier-accepted software-key-signed worker-result roots, and the exact
+dispatch, component, candidate, and source-graph lineage used to re-derive all
+six outcomes and the canonical composition digest. Aragorn and Cisco allowed
+the public adversarial fixture; SkillSpector returned `REVIEW` with
+`NVIDIA_ANALYSIS_INCOMPLETE` for both cases. No hidden material was loaded or
+decrypted according to the operator observation; the negative claim is not
+separately attested. Exact retry was also operator-observed without a retained
+replay transcript. This closes the public composition-plumbing gap only; two
+public cases with one run cannot support efficacy or repeatability claims.
+
+The control plane can now prepare and compose the complete protocol-v2 matrix.
+For every case/system/run cell it requires the suite configuration identity to
+equal the canonical portable-policy digest, issues a verifier-owned challenge,
+retains the private dispatch, exports only the request's exact semantic input
+closure plus a label-free worklist, and derives Aragorn outcomes from both
+authenticated comparator results. Before hidden evaluation, the encrypted
+evaluator package and canonical hidden-suite lock must be verified and frozen
+in a signed commit. The GitHub acquisition/reference oracle remains a separate
+Phase 0 stratum.
 
 The opt-in Phase 0 gate report v2 scores only the `hidden` split and accepts
 only a complete authenticated candidate-composition `evidence_smoke` matrix;

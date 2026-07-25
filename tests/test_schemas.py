@@ -13,6 +13,7 @@ EXPECTED_CONTRACTS = {
     "benchmark-cas-handoff-v1.schema.json": "aragorn/benchmark-cas-handoff/v1",
     "benchmark-authenticated-worker-evidence-v1.schema.json": "aragorn/benchmark-authenticated-worker-evidence/v1",
     "benchmark-candidate-composition-v1.schema.json": "aragorn/benchmark-candidate-composition/v1",
+    "benchmark-candidate-composition-smoke-receipt-v1.schema.json": "aragorn/benchmark-candidate-composition-smoke-receipt/v1",
     "benchmark-candidate-evidence-v1.schema.json": "aragorn/benchmark-candidate-evidence/v1",
     "benchmark-candidate-policy-v1.schema.json": "aragorn/benchmark-candidate-policy/v1",
     "benchmark-collection-v1.schema.json": "aragorn/benchmark-collection/v1",

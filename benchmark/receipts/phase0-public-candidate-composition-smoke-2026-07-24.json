@@ -1,0 +1,972 @@
+{
+  "schema": "aragorn/benchmark-candidate-composition-smoke-receipt/v1",
+  "recorded_on": "2026-07-24",
+  "purpose": "infrastructure_validation_only_not_efficacy",
+  "assurance": "signed_commit_plus_software_key_signature_not_hardware_attested",
+  "source": {
+    "status": "signed_evaluated_commit_and_archive_digest_bound",
+    "evidence_status": "operator_observed_from_local_git_and_guest_copy_not_portable_attestation",
+    "evaluated_commit": "2667dda227479385135a171958ff3011777b8e24",
+    "evaluated_commit_tree": "e103cff85e9e4d8f89dacb0fd57dcc357595396f",
+    "signature": {
+      "status": "good_valid_signature",
+      "format": "ssh-ed25519",
+      "principal": "yousif.snazhat@gmail.com",
+      "fingerprint": "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
+    },
+    "source_archive_digest": "sha256:b58475a9ded52704b1863816aed56d0c3ac956de2e02ecc37a44a87aa5ed11a9",
+    "candidate_implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85"
+  },
+  "preparation": {
+    "schema": "aragorn/benchmark-prepare-result/v2",
+    "purpose": "evidence_smoke",
+    "suite": {
+      "schema": "aragorn/benchmark-suite/v1",
+      "id": "phase0-public-candidate-composition-smoke-2667dda",
+      "purpose": "evidence_smoke",
+      "runs_per_case": 1,
+      "systems": [
+        {
+          "name": "aragorn",
+          "version": "0.1.0-phase0",
+          "implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85",
+          "config_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0"
+        },
+        {
+          "name": "cisco-skill-scanner",
+          "version": "2.0.12",
+          "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+          "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c"
+        },
+        {
+          "name": "skillspector",
+          "version": "2.4.3+git.a54947c",
+          "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+          "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec"
+        }
+      ],
+      "cases": [
+        {
+          "schema": "aragorn/benchmark-case/v1",
+          "id": "benign-basic",
+          "path": "oci-fixtures/benign-basic",
+          "class": "benign",
+          "family": "benign",
+          "split": "development",
+          "inert": true,
+          "lineage": "pilot-bd00-basic",
+          "source": {
+            "kind": "synthetic",
+            "reference": "aragorn-phase0-pilot-v1/benign-basic",
+            "license": "CC0-1.0"
+          },
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713"
+        },
+        {
+          "schema": "aragorn/benchmark-case/v1",
+          "id": "delegated-agent-propagation",
+          "path": "oci-fixtures/delegated-agent-propagation",
+          "class": "adversarial",
+          "family": "agent-propagation",
+          "split": "development",
+          "inert": true,
+          "lineage": "pilot-ad04-delegated-propagation",
+          "source": {
+            "kind": "synthetic",
+            "reference": "aragorn-phase0-pilot-v1/delegated-agent-propagation",
+            "license": "CC0-1.0"
+          },
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf"
+        }
+      ]
+    },
+    "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+    "dispatch_digest": "sha256:ebf61f8ee8860be5e1939e82b798d03fbaa5fb1bccb9f9f7dc1f144d654f009e",
+    "candidate_policy_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0",
+    "worker_identities_digest": "sha256:19998c67fa090e943b2eb8c58b7d6d5fa0e6f56ff153d0bd6991621c9ed271a5",
+    "worklist_digest": "sha256:e3fb8cc5e78e8b0e3318531705ceef26d003c0c81f1a8ad66a8f3a53cd568f53",
+    "runs_per_case": 1,
+    "case_count": 2,
+    "comparator_job_count": 4,
+    "boundary_evidence_status": "operator_observed_no_hidden_material_or_labels_entered_smoke",
+    "hidden_material_loaded": false,
+    "labels_decrypted": false
+  },
+  "isolation": {
+    "provider": "lima",
+    "evidence_status": "operator_observed_mount_free_guest_not_hardware_attested",
+    "instance": "aragorn-phase0-public-2667dda",
+    "vm_type": "vz",
+    "architecture": "aarch64",
+    "guest_os": "Ubuntu 26.04 LTS",
+    "kernel": "7.0.0-27-generic",
+    "host_filesystem_mount_count": 0,
+    "docker_mode": "guest_local_rootless",
+    "signing_key_mode": "0600",
+    "signing_key_mounted_into_analyzer": false,
+    "source_and_runtime_writable_by_worker": false
+  },
+  "runtime": {
+    "vm_image_digest": "sha256:3d8db37fa9a8a0c8676dfc0ee3eb41fd0049d66cb055a792bddc8f4123443ae1",
+    "evidence_status": "operator_observed_runtime_measurements_not_hardware_attested",
+    "python_version": "3.12.13",
+    "python_executable_digest": "sha256:001718d5edf61e6fbc3642c9668def38d2bf28cc320e75196e6a95d49614cca8",
+    "uv_version": "0.11.29",
+    "uv_executable_digest": "sha256:f32f61ced7feb20342032cdac4d0825cebbda61911554f5de5231ec72821812e",
+    "uv_image_digest": "sha256:eb2843a1e56fd9e30c7276ce1a52cba86e64c7b385f5e3279a0e08e02dd058fc",
+    "worker_dependency_lock_digest": "sha256:945fd7620689d38962297a61f5e888f3156b90780e7ea8d3bf62a1459d75d0f4",
+    "docker_version": "29.6.2",
+    "docker_executable_digest": "sha256:242d23ba3267159f5eca1a2d89db77ddbf86dc552827e1059bcb878e2ecb005d",
+    "baseline_lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+    "analyzers": [
+      {
+        "name": "cisco-skill-scanner",
+        "version": "2.0.12",
+        "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+        "portable_policy_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c",
+        "oci_index_digest": "sha256:f06e307a2765d2ecd389fc8c706bd991f2ab5a47be6cb88caf69f48971a8b72b",
+        "oci_platform_manifest_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+        "image_config_digest": "sha256:643fae7d757deff706e26252ad167cdecadb8ee314358aaa10861182f4eed3c6",
+        "effective_config_digest": "sha256:a68ebb58098d4922407f8aeab147427ef852d546cf49e1ed43b2a145343e2d25"
+      },
+      {
+        "name": "skillspector",
+        "version": "2.4.3+git.a54947c",
+        "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+        "portable_policy_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec",
+        "oci_index_digest": "sha256:21de7549ea44da85465c854e26f776f87454a6fca6a92e817bbceb58b25d4468",
+        "oci_platform_manifest_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+        "image_config_digest": "sha256:263ce9ccdd9c0b9708fb17f2a4f671ecc34b61f2e8a22f1f2cb5ea101182b70c",
+        "effective_config_digest": "sha256:e6d312cf5f6f12e7f1620671da16ee911d5794c290e6951bef1561af35a2f0d7"
+      }
+    ]
+  },
+  "trust_store": {
+    "schema": "aragorn/benchmark-worker-trust-store/v1",
+    "trust_domain": "phase0.public-smoke",
+    "keys": [
+      {
+        "key_id": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+        "algorithm": "Ed25519",
+        "public_key": "e67ab2bd42c571c6e5c983f0dd9f342d3003be6d49b3830b74cf7ecdb4caaf4e",
+        "worker_id": "isolated-worker-01",
+        "scopes": [
+          "aragorn/benchmark-worker-output/v2"
+        ],
+        "status": "active"
+      }
+    ]
+  },
+  "acceptances": [
+    {
+      "case_id": "benign-basic",
+      "fixture_class": "benign",
+      "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+      "run_id": 1,
+      "system": "cisco-skill-scanner",
+      "acceptance_receipt_digest": "sha256:538e6ae1193cb2c5dae7dbad423f3e93b0b759f677d23a254431fb6128646c2d",
+      "schema": "aragorn/benchmark-worker-output-acceptance/v1",
+      "assurance": "software_key_signature_not_hardware_attested",
+      "issuance_digest": "sha256:5a399926614ad19336a35cc46988fd2516d5495b901e3ee2b8fd57b451bbb1ed",
+      "trust_store_digest": "sha256:27f36640fadcf51ec3a81cb249aa53451943f7b427b040ba3986b7cf87e5c00d",
+      "envelope_digest": "sha256:78b12c33522edcf3cbd1e5cee2898b78d1abe0891722edd0a55a645be007a4aa",
+      "measurement_envelope": {
+        "payload": "eyJhbGdvcml0aG0iOiJFZDI1NTE5IiwiaGFuZG9mZl9tYW5pZmVzdF9kaWdlc3QiOiJzaGEyNTY6Y2YxZTEyOGEzNjYwMGI4NWM0ZjdmN2FjZTZiNzkyZDg5YTk4NmI2Y2ViZDE1OThiMDIxNTkxMzQyOWJkZmE2YSIsImpvYl9pZCI6IjdlZTc1YWJjNmRlZWQ5YmI0NzhiMDZiMTRlMThkMWRiIiwia2V5X2lkIjoic2hhMjU2OjI3YWE5MTc1ZGUyNzA5YmQyZjE2NWM3MTFjZDQxNGVlNDk4NDY0ODE0MzNkZjVkMmYyMjEzZDU4ODhmMzk3NDMiLCJyZXF1ZXN0X2RpZ2VzdCI6InNoYTI1Njo3NmRhZjhlN2UxMjk2MDYzYmY1MWE5MWZhYTBlNTY4ZWM4MWEwNWQ3YjY2MGU1Zjc3MDEwMzZjN2QyZWNiNjcxIiwicmVzdWx0X2RpZ2VzdCI6InNoYTI1NjozMjA3MTQ3YTU3ODFjNzNjNTA2NWNiNjAwMzczNjZmYzlkMTNhZGI2NDg4YzJkZjlhMjA5OGIwYTBhMmMzMjEzIiwic2NoZW1hIjoiYXJhZ29ybi9iZW5jaG1hcmstd29ya2VyLW1lYXN1cmVtZW50L3YxIiwic2NvcGUiOiJhcmFnb3JuL2JlbmNobWFyay13b3JrZXItb3V0cHV0L3YyIiwidHJ1c3RfZG9tYWluIjoicGhhc2UwLnB1YmxpYy1zbW9rZSIsInZlcmlmaWVyX2NoYWxsZW5nZSI6IjU2OTAzZmY2OTUzM2I5NDkzYzk3NGUzYzYyNmQ4YjczNjNlMzFiMDllNzQzY2QxMTY4ODhlMGM4ZjAxMmI2MTciLCJ3b3JrZXJfaWQiOiJpc29sYXRlZC13b3JrZXItMDEifQ==",
+        "payloadType": "application/vnd.aragorn.benchmark-worker-measurement.v1+json",
+        "signatures": [
+          {
+            "keyid": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+            "sig": "S4sX6OB76xv+wGsI1AsUxaYZ8RWTw7Qbam/bwQiWX7qXuwtxNUuicOR5/L5aCQS8MY892VqkZQV/Dk2JBED4CQ=="
+          }
+        ]
+      },
+      "key_id": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+      "trust_domain": "phase0.public-smoke",
+      "worker_id": "isolated-worker-01",
+      "job_id": "7ee75abc6deed9bb478b06b14e18d1db",
+      "verifier_challenge": "56903ff69533b9493c974e3c626d8b7363e31b09e743cd116888e0c8f012b617",
+      "request_digest": "sha256:76daf8e7e1296063bf51a91faa0e568ec81a05d7b660e5f7701036c7d2ecb671",
+      "result_digest": "sha256:3207147a5781c73c5065cb60037366fc9d13adb6488c2df9a2098b0a0a2c3213",
+      "worker_result": {
+        "baseline_entry_digest": "sha256:514e02dcee9ce4b17eeb5b1e2d784e7638f1189bb43a2e790ebce55474a4a265",
+        "baseline_lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+        "build_provenance_manifest_digest": "sha256:9d673d3657c7848fe4472e077f1cac9ae76cb4c4721803f1240f07882a1889cd",
+        "docker_executable_digest": "sha256:242d23ba3267159f5eca1a2d89db77ddbf86dc552827e1059bcb878e2ecb005d",
+        "effective_config_digest": "sha256:a68ebb58098d4922407f8aeab147427ef852d546cf49e1ed43b2a145343e2d25",
+        "execution": {
+          "container_id": "ebe70e7f86e91c4273dedb215bcee847329bf6f88f2d6c2c8b5a08cb849e0037",
+          "error_code": null,
+          "returncode": 0,
+          "status": "ok"
+        },
+        "image_config_digest": "sha256:643fae7d757deff706e26252ad167cdecadb8ee314358aaa10861182f4eed3c6",
+        "index_inspect_digest": "sha256:6df980f45f5d0ec9ddfabf8857c28822c75c48449dc5f603de920ad8e2678719",
+        "job_id": "7ee75abc6deed9bb478b06b14e18d1db",
+        "normalization": "cisco-ai-skill-scanner-2.0.12/v1",
+        "observation_digests": [
+          "sha256:9d89eae16f596e0fc91198fcb745258b2a8e940171d761026cc286b4c1eaae97"
+        ],
+        "oci_index_digest": "sha256:f06e307a2765d2ecd389fc8c706bd991f2ab5a47be6cb88caf69f48971a8b72b",
+        "oci_platform_manifest_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+        "platform_inspect_digest": "sha256:d7720540115617b436e9ce85d62c147054d4d0113d1e6df4d747e4c64d12f294",
+        "portable_policy_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c",
+        "postrun_container_inspect_digest": "sha256:eb958fab295f2d7d9d959581ccf4a85646e91343b1da2a9324ef958119674965",
+        "prestart_container_inspect_digest": "sha256:31f29c724ea0f4230cfcaa4e909fa9fe1b9d8d68cd907dc0e38969968bf5fc9f",
+        "reason_codes": [],
+        "request_digest": "sha256:76daf8e7e1296063bf51a91faa0e568ec81a05d7b660e5f7701036c7d2ecb671",
+        "runner_receipts": {
+          "post": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          },
+          "pre": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          }
+        },
+        "schema": "aragorn/benchmark-worker-result/v2",
+        "stderr_digest": "sha256:03bff405a74a4ca339c501ffe4479647fc802914703cff075bce196757c1996d",
+        "stdout_digest": "sha256:eb6ef157fde82db377057bc79d3b4c7f26f90fdcdeae39a1f1c66aa45b64b114",
+        "subject_manifest_digest": "sha256:04c7630b1b306136152fd6173946d113c258a428126cd40fd8281fe5db21f801",
+        "system": {
+          "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+          "name": "cisco-skill-scanner",
+          "version": "2.0.12"
+        },
+        "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+        "verdict": "ALLOW",
+        "verified_subject_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+        "verifier_challenge": "56903ff69533b9493c974e3c626d8b7363e31b09e743cd116888e0c8f012b617"
+      },
+      "handoff_manifest_digest": "sha256:cf1e128a36600b85c4f7f7ace6b792d89a986b6cebd1598b0215913429bdfa6a"
+    },
+    {
+      "case_id": "benign-basic",
+      "fixture_class": "benign",
+      "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+      "run_id": 1,
+      "system": "skillspector",
+      "acceptance_receipt_digest": "sha256:4a03f92b9a8873935cf05f0d888565950480cc46e9030e462a8a8720a82af967",
+      "schema": "aragorn/benchmark-worker-output-acceptance/v1",
+      "assurance": "software_key_signature_not_hardware_attested",
+      "issuance_digest": "sha256:fce4012019ab5f42bff75ed8070cc98d91a51a1b201d94473a42cd84820ce296",
+      "trust_store_digest": "sha256:27f36640fadcf51ec3a81cb249aa53451943f7b427b040ba3986b7cf87e5c00d",
+      "envelope_digest": "sha256:fe0e07569f5eb6cf5b7c4527ca9167fe50f671539da6cfc39dae2c5fc1058d19",
+      "measurement_envelope": {
+        "payload": "eyJhbGdvcml0aG0iOiJFZDI1NTE5IiwiaGFuZG9mZl9tYW5pZmVzdF9kaWdlc3QiOiJzaGEyNTY6ZmI2ZmFiYjA3YmZlNWI2ODk4NjUxYjg0NDMxNTllNTlkMmZjNGNhZjdlZmE1ZDMzZDFkNjY1MWI3NDFlYWZlMCIsImpvYl9pZCI6ImVlYWY0NTRmMjBiNWU2Yzk2ZTI2M2IzNDlmN2QzZjU0Iiwia2V5X2lkIjoic2hhMjU2OjI3YWE5MTc1ZGUyNzA5YmQyZjE2NWM3MTFjZDQxNGVlNDk4NDY0ODE0MzNkZjVkMmYyMjEzZDU4ODhmMzk3NDMiLCJyZXF1ZXN0X2RpZ2VzdCI6InNoYTI1NjplZjIxYzBkNDg2NTcwZTc1MDI5MmFkYzlhMjBmMTAyYTI4NjA2MzNmOWQwYWFhYTBjZDM4ODRkZGRlMDMzOTdkIiwicmVzdWx0X2RpZ2VzdCI6InNoYTI1NjoyYWRhNjc2N2ZhYjlkZGE4NWQyYmE5ZmYxZGM5MmFmODhmMTAwMjZlMTNmMjgzMzljZDRmMTdhZWYzNmUzYTgyIiwic2NoZW1hIjoiYXJhZ29ybi9iZW5jaG1hcmstd29ya2VyLW1lYXN1cmVtZW50L3YxIiwic2NvcGUiOiJhcmFnb3JuL2JlbmNobWFyay13b3JrZXItb3V0cHV0L3YyIiwidHJ1c3RfZG9tYWluIjoicGhhc2UwLnB1YmxpYy1zbW9rZSIsInZlcmlmaWVyX2NoYWxsZW5nZSI6IjUyNzE1OTY4MmI1ZjAxZTg5ZjM0MjlhNjY0NzU5MDllZTRlODQxZGUzYjA1ZTUyNDA0YWY3NjkzMmI2ZmM4MmYiLCJ3b3JrZXJfaWQiOiJpc29sYXRlZC13b3JrZXItMDEifQ==",
+        "payloadType": "application/vnd.aragorn.benchmark-worker-measurement.v1+json",
+        "signatures": [
+          {
+            "keyid": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+            "sig": "b3i/xkLUgh0SHlG0f1LD5jNJV1autscGfDitZfXh5HjMeMsLlG5jY2RvYPgXnNO7xb6BoeVwuZVifkuLkaY7AA=="
+          }
+        ]
+      },
+      "key_id": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+      "trust_domain": "phase0.public-smoke",
+      "worker_id": "isolated-worker-01",
+      "job_id": "eeaf454f20b5e6c96e263b349f7d3f54",
+      "verifier_challenge": "527159682b5f01e89f3429a66475909ee4e841de3b05e52404af76932b6fc82f",
+      "request_digest": "sha256:ef21c0d486570e750292adc9a20f102a2860633f9d0aaaa0cd3884ddde03397d",
+      "result_digest": "sha256:2ada6767fab9dda85d2ba9ff1dc92af88f10026e13f28339cd4f17aef36e3a82",
+      "worker_result": {
+        "baseline_entry_digest": "sha256:fe4b58c8e20ec0427beb93f29e695926119cdc66f70c99f1de9493d7c3700897",
+        "baseline_lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+        "build_provenance_manifest_digest": "sha256:19aa6243d53a78ae1a72077c998c0417ad5195685d329faab8e92967af628012",
+        "docker_executable_digest": "sha256:242d23ba3267159f5eca1a2d89db77ddbf86dc552827e1059bcb878e2ecb005d",
+        "effective_config_digest": "sha256:e6d312cf5f6f12e7f1620671da16ee911d5794c290e6951bef1561af35a2f0d7",
+        "execution": {
+          "container_id": "f8df41f4e50dfdc409c4065e2affa493e982f8f66175cfe0c6474f28a5d843ae",
+          "error_code": null,
+          "returncode": 0,
+          "status": "ok"
+        },
+        "image_config_digest": "sha256:263ce9ccdd9c0b9708fb17f2a4f671ecc34b61f2e8a22f1f2cb5ea101182b70c",
+        "index_inspect_digest": "sha256:646a6b004bf476c18723a672310cc9ce69dd97d353b03227a7767bbd808eb797",
+        "job_id": "eeaf454f20b5e6c96e263b349f7d3f54",
+        "normalization": "nvidia-skillspector-2.4.3/v1",
+        "observation_digests": [
+          "sha256:6369ea05846054fa31582013ed9b4893df33ff2fa462b55f21054e7fc6d21f7c",
+          "sha256:67749bc1576ee789c4dd500fcef03ffcc32d1fba1183f7c1109447e87fa4bea3"
+        ],
+        "oci_index_digest": "sha256:21de7549ea44da85465c854e26f776f87454a6fca6a92e817bbceb58b25d4468",
+        "oci_platform_manifest_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+        "platform_inspect_digest": "sha256:501e8f6a647eea1be1e56a9a15075c2bd71b9ec27cba35f0141880d3a91e410e",
+        "portable_policy_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec",
+        "postrun_container_inspect_digest": "sha256:9a16b19cb9e0b9bf510f08acc823a2569c85afeeb561aa53c9ec8c6a9d48820b",
+        "prestart_container_inspect_digest": "sha256:197f991ccf444df475fc9604e20b080d3ac972d43b374c7c9de1ab639eab89fc",
+        "reason_codes": [
+          "NVIDIA_ANALYSIS_INCOMPLETE"
+        ],
+        "request_digest": "sha256:ef21c0d486570e750292adc9a20f102a2860633f9d0aaaa0cd3884ddde03397d",
+        "runner_receipts": {
+          "post": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          },
+          "pre": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          }
+        },
+        "schema": "aragorn/benchmark-worker-result/v2",
+        "stderr_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_digest": "sha256:a916baef13c501f5e600c1fa288f01caf4664b2abf171f9cb04075493d0ac622",
+        "subject_manifest_digest": "sha256:04c7630b1b306136152fd6173946d113c258a428126cd40fd8281fe5db21f801",
+        "system": {
+          "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+          "name": "skillspector",
+          "version": "2.4.3+git.a54947c"
+        },
+        "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+        "verdict": "REVIEW",
+        "verified_subject_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+        "verifier_challenge": "527159682b5f01e89f3429a66475909ee4e841de3b05e52404af76932b6fc82f"
+      },
+      "handoff_manifest_digest": "sha256:fb6fabb07bfe5b6898651b8443159e59d2fc4caf7efa5d33d1d6651b741eafe0"
+    },
+    {
+      "case_id": "delegated-agent-propagation",
+      "fixture_class": "adversarial",
+      "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+      "run_id": 1,
+      "system": "cisco-skill-scanner",
+      "acceptance_receipt_digest": "sha256:017f813aa4965b1288ebd174f45c15dee46de4e00957d754fb1699c6ef6ad264",
+      "schema": "aragorn/benchmark-worker-output-acceptance/v1",
+      "assurance": "software_key_signature_not_hardware_attested",
+      "issuance_digest": "sha256:fdb54adc11f9abdace68dc7b3288a57f1c8136b1508b52b4e5c7b44ee5d3b426",
+      "trust_store_digest": "sha256:27f36640fadcf51ec3a81cb249aa53451943f7b427b040ba3986b7cf87e5c00d",
+      "envelope_digest": "sha256:e38fc69a67f627b095ed8388370e52d62bba3d9707b8678b1cf4ded181689115",
+      "measurement_envelope": {
+        "payload": "eyJhbGdvcml0aG0iOiJFZDI1NTE5IiwiaGFuZG9mZl9tYW5pZmVzdF9kaWdlc3QiOiJzaGEyNTY6Y2U0MzViNjA0YTA4NmIzYzU0ZTg1NTUzN2U0ODE4N2E2MDc4NmQzYjYxMjI2MmQ3ODQ5NjRjMjkxN2ExYmRiMSIsImpvYl9pZCI6ImViOWI0NGM5ZDNmMmUwODVmMDY3Y2NmY2I1YjYxNWRjIiwia2V5X2lkIjoic2hhMjU2OjI3YWE5MTc1ZGUyNzA5YmQyZjE2NWM3MTFjZDQxNGVlNDk4NDY0ODE0MzNkZjVkMmYyMjEzZDU4ODhmMzk3NDMiLCJyZXF1ZXN0X2RpZ2VzdCI6InNoYTI1NjplYzM4MjFlOTdlN2U3ZGExMmU1NDY4NGZiYmU5NGMwYjdjZGUwZjI0NDYwYWIzMmVhMzhlMTk5ZGY0ZTA5ZDljIiwicmVzdWx0X2RpZ2VzdCI6InNoYTI1NjoxZGU3Mzc3MTBjODk3ODBhYjQxMWYzNmQ1NDM3ZWViZDY3N2M1OThjZGVkYmUyNzZiMDFiMGFjODgxY2I5N2YwIiwic2NoZW1hIjoiYXJhZ29ybi9iZW5jaG1hcmstd29ya2VyLW1lYXN1cmVtZW50L3YxIiwic2NvcGUiOiJhcmFnb3JuL2JlbmNobWFyay13b3JrZXItb3V0cHV0L3YyIiwidHJ1c3RfZG9tYWluIjoicGhhc2UwLnB1YmxpYy1zbW9rZSIsInZlcmlmaWVyX2NoYWxsZW5nZSI6IjdiMzg1NGIxNWZmMWVlYzkxYWFlZDViM2I3MjVlMGNmNzEzMmYxOTg3M2EyMDA4YWQ4YzU3MmEyNzJiOTIyMTMiLCJ3b3JrZXJfaWQiOiJpc29sYXRlZC13b3JrZXItMDEifQ==",
+        "payloadType": "application/vnd.aragorn.benchmark-worker-measurement.v1+json",
+        "signatures": [
+          {
+            "keyid": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+            "sig": "D2qnoZlVVtjmOCB1A5YmyhFulx4f9QRSlvrfOa2iaTnjweFjHvR+HPm3jeraACdNHlDzz41THDPl+AWji38aAw=="
+          }
+        ]
+      },
+      "key_id": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+      "trust_domain": "phase0.public-smoke",
+      "worker_id": "isolated-worker-01",
+      "job_id": "eb9b44c9d3f2e085f067ccfcb5b615dc",
+      "verifier_challenge": "7b3854b15ff1eec91aaed5b3b725e0cf7132f19873a2008ad8c572a272b92213",
+      "request_digest": "sha256:ec3821e97e7e7da12e54684fbbe94c0b7cde0f24460ab32ea38e199df4e09d9c",
+      "result_digest": "sha256:1de737710c89780ab411f36d5437eebd677c598cdedbe276b01b0ac881cb97f0",
+      "worker_result": {
+        "baseline_entry_digest": "sha256:514e02dcee9ce4b17eeb5b1e2d784e7638f1189bb43a2e790ebce55474a4a265",
+        "baseline_lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+        "build_provenance_manifest_digest": "sha256:9d673d3657c7848fe4472e077f1cac9ae76cb4c4721803f1240f07882a1889cd",
+        "docker_executable_digest": "sha256:242d23ba3267159f5eca1a2d89db77ddbf86dc552827e1059bcb878e2ecb005d",
+        "effective_config_digest": "sha256:a68ebb58098d4922407f8aeab147427ef852d546cf49e1ed43b2a145343e2d25",
+        "execution": {
+          "container_id": "194aadf7620c75db5ab46f89044f0385a291c08c0a6c20715a9c4503d9c556c2",
+          "error_code": null,
+          "returncode": 0,
+          "status": "ok"
+        },
+        "image_config_digest": "sha256:643fae7d757deff706e26252ad167cdecadb8ee314358aaa10861182f4eed3c6",
+        "index_inspect_digest": "sha256:6df980f45f5d0ec9ddfabf8857c28822c75c48449dc5f603de920ad8e2678719",
+        "job_id": "eb9b44c9d3f2e085f067ccfcb5b615dc",
+        "normalization": "cisco-ai-skill-scanner-2.0.12/v1",
+        "observation_digests": [
+          "sha256:5df46f0f20483129b36d5b2ffb69643da796866750cb96c93051b4900ece46dd"
+        ],
+        "oci_index_digest": "sha256:f06e307a2765d2ecd389fc8c706bd991f2ab5a47be6cb88caf69f48971a8b72b",
+        "oci_platform_manifest_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+        "platform_inspect_digest": "sha256:d7720540115617b436e9ce85d62c147054d4d0113d1e6df4d747e4c64d12f294",
+        "portable_policy_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c",
+        "postrun_container_inspect_digest": "sha256:f958f588e53fd3742238ead8653c901c994e678a754a8aeff6d236c7f154c00d",
+        "prestart_container_inspect_digest": "sha256:71e8c53cbda08c12b802d6713474c8c358acd59d8feef6ac343a8945e1f0b47c",
+        "reason_codes": [],
+        "request_digest": "sha256:ec3821e97e7e7da12e54684fbbe94c0b7cde0f24460ab32ea38e199df4e09d9c",
+        "runner_receipts": {
+          "post": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          },
+          "pre": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          }
+        },
+        "schema": "aragorn/benchmark-worker-result/v2",
+        "stderr_digest": "sha256:3b0479bdb1802109d1240f050e0e3be4e1163b99965c078769fc08722da900ba",
+        "stdout_digest": "sha256:3f198c4af99ba0f4137091113f4985d98776ac00744224b5d3657959927ed034",
+        "subject_manifest_digest": "sha256:cf612f98fa7f49892176e59bdabb24c2e2b647ec83a928111ebdf8b7484f8515",
+        "system": {
+          "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+          "name": "cisco-skill-scanner",
+          "version": "2.0.12"
+        },
+        "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+        "verdict": "ALLOW",
+        "verified_subject_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+        "verifier_challenge": "7b3854b15ff1eec91aaed5b3b725e0cf7132f19873a2008ad8c572a272b92213"
+      },
+      "handoff_manifest_digest": "sha256:ce435b604a086b3c54e855537e48187a60786d3b612262d784964c2917a1bdb1"
+    },
+    {
+      "case_id": "delegated-agent-propagation",
+      "fixture_class": "adversarial",
+      "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+      "run_id": 1,
+      "system": "skillspector",
+      "acceptance_receipt_digest": "sha256:777c388b5557021dd989197df096498ea12dd3469cc26cc134922e570466fd90",
+      "schema": "aragorn/benchmark-worker-output-acceptance/v1",
+      "assurance": "software_key_signature_not_hardware_attested",
+      "issuance_digest": "sha256:83e29f8805cfc7dcc3125fd13a6e14e1ab65e2817800c81053668d5aef23f494",
+      "trust_store_digest": "sha256:27f36640fadcf51ec3a81cb249aa53451943f7b427b040ba3986b7cf87e5c00d",
+      "envelope_digest": "sha256:9ad556728a0347e261c09409be267b8ed05cdd6b5ecddbe05800b3973818a0c8",
+      "measurement_envelope": {
+        "payload": "eyJhbGdvcml0aG0iOiJFZDI1NTE5IiwiaGFuZG9mZl9tYW5pZmVzdF9kaWdlc3QiOiJzaGEyNTY6ZGFmY2EwOTRmMDE4YTA4MTY0ZDg3MDlhNmIzNGYzMWQ0ZWY3MGQyYzFjMWVmM2ZjMTdiNTcwMzZiZWVlMmRmMyIsImpvYl9pZCI6IjgwZDI4ZjUxYTRjZGNjMDBkYmE5MTIzNTAzMTllZjg4Iiwia2V5X2lkIjoic2hhMjU2OjI3YWE5MTc1ZGUyNzA5YmQyZjE2NWM3MTFjZDQxNGVlNDk4NDY0ODE0MzNkZjVkMmYyMjEzZDU4ODhmMzk3NDMiLCJyZXF1ZXN0X2RpZ2VzdCI6InNoYTI1NjowZTU1MDFkODE0YjFjNTU3OGEwYTZhOWIxOGRlYzIwZTY3MjY0NjcwMDZhZjdkNjRmYjZkNTEyZDRjNjNhMzc1IiwicmVzdWx0X2RpZ2VzdCI6InNoYTI1NjplMTFiZjUxNzlhMjkxOTkyYTI3NjNkZDVjYzQyNWMxNjUxZmRmOWIxZGJmMDg2MDdlNjZmYjVmN2ZhMzE5YTIxIiwic2NoZW1hIjoiYXJhZ29ybi9iZW5jaG1hcmstd29ya2VyLW1lYXN1cmVtZW50L3YxIiwic2NvcGUiOiJhcmFnb3JuL2JlbmNobWFyay13b3JrZXItb3V0cHV0L3YyIiwidHJ1c3RfZG9tYWluIjoicGhhc2UwLnB1YmxpYy1zbW9rZSIsInZlcmlmaWVyX2NoYWxsZW5nZSI6IjY5NTZhNmYxOWYxZGQ0MDYxMzNlMTAxYWIyYTFiN2IyNTUwMTc2MDhiYTMxZDI4N2ZjYmE1ZTgzNGEzZjY0NTciLCJ3b3JrZXJfaWQiOiJpc29sYXRlZC13b3JrZXItMDEifQ==",
+        "payloadType": "application/vnd.aragorn.benchmark-worker-measurement.v1+json",
+        "signatures": [
+          {
+            "keyid": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+            "sig": "RzyZcdSufxp13xySJfIRfRykPi/doMi2s936n5gwOO1lHBcShzl82NHjoHRvrMEgGQxxcxygsIzwA0I6kGwsBQ=="
+          }
+        ]
+      },
+      "key_id": "sha256:27aa9175de2709bd2f165c711cd414ee49846481433df5d2f2213d5888f39743",
+      "trust_domain": "phase0.public-smoke",
+      "worker_id": "isolated-worker-01",
+      "job_id": "80d28f51a4cdcc00dba912350319ef88",
+      "verifier_challenge": "6956a6f19f1dd406133e101ab2a1b7b255017608ba31d287fcba5e834a3f6457",
+      "request_digest": "sha256:0e5501d814b1c5578a0a6a9b18dec20e6726467006af7d64fb6d512d4c63a375",
+      "result_digest": "sha256:e11bf5179a291992a2763dd5cc425c1651fdf9b1dbf08607e66fb5f7fa319a21",
+      "worker_result": {
+        "baseline_entry_digest": "sha256:fe4b58c8e20ec0427beb93f29e695926119cdc66f70c99f1de9493d7c3700897",
+        "baseline_lock_digest": "sha256:f8ce11cba91d3557bd15192c44c5eb64b8db13568c63b2df260ef4004dafc83b",
+        "build_provenance_manifest_digest": "sha256:19aa6243d53a78ae1a72077c998c0417ad5195685d329faab8e92967af628012",
+        "docker_executable_digest": "sha256:242d23ba3267159f5eca1a2d89db77ddbf86dc552827e1059bcb878e2ecb005d",
+        "effective_config_digest": "sha256:e6d312cf5f6f12e7f1620671da16ee911d5794c290e6951bef1561af35a2f0d7",
+        "execution": {
+          "container_id": "76082df41f5e1291f3fce59e1a7dbabc1faaa67a4287b15cba8e7388db3724be",
+          "error_code": null,
+          "returncode": 0,
+          "status": "ok"
+        },
+        "image_config_digest": "sha256:263ce9ccdd9c0b9708fb17f2a4f671ecc34b61f2e8a22f1f2cb5ea101182b70c",
+        "index_inspect_digest": "sha256:646a6b004bf476c18723a672310cc9ce69dd97d353b03227a7767bbd808eb797",
+        "job_id": "80d28f51a4cdcc00dba912350319ef88",
+        "normalization": "nvidia-skillspector-2.4.3/v1",
+        "observation_digests": [
+          "sha256:82a967c47e5dd6a521b7f82fdb700da885c7998494eadcba8bdeb97e7825ca4c",
+          "sha256:cb14760225b68583e7cb6fb2e2f9e6c86980d1af6ec2ca5cb2d02cb75ec34d03"
+        ],
+        "oci_index_digest": "sha256:21de7549ea44da85465c854e26f776f87454a6fca6a92e817bbceb58b25d4468",
+        "oci_platform_manifest_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+        "platform_inspect_digest": "sha256:501e8f6a647eea1be1e56a9a15075c2bd71b9ec27cba35f0141880d3a91e410e",
+        "portable_policy_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec",
+        "postrun_container_inspect_digest": "sha256:72adcd517e7b510f14cc83de3a63ac880d2181c3c1480e51ba11d9339c1ecf34",
+        "prestart_container_inspect_digest": "sha256:85154d0e4052679ff3e0b69f382322d9ebba731b5281ff65f013fd7dab157650",
+        "reason_codes": [
+          "NVIDIA_ANALYSIS_INCOMPLETE"
+        ],
+        "request_digest": "sha256:0e5501d814b1c5578a0a6a9b18dec20e6726467006af7d64fb6d512d4c63a375",
+        "runner_receipts": {
+          "post": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          },
+          "pre": {
+            "context_inspect_digest": "sha256:e7c4766d8913e91637cab926975aa9d982240dd109cc3b77c12713b0b6ee0762",
+            "daemon_info_digest": "sha256:b91dd7cbafefd3902d8d218378cabca838d94ad4139fd28398077fb195750cf2",
+            "daemon_version_digest": "sha256:6ad80eb55c54435fb073ea6e3e550562687864cf0a7de5f9d0836c555628aa75"
+          }
+        },
+        "schema": "aragorn/benchmark-worker-result/v2",
+        "stderr_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_digest": "sha256:bea2d5fa73c3746085f4e1eb245e9ae0a88d288a8db86caf0e6bae17358f9441",
+        "subject_manifest_digest": "sha256:cf612f98fa7f49892176e59bdabb24c2e2b647ec83a928111ebdf8b7484f8515",
+        "system": {
+          "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+          "name": "skillspector",
+          "version": "2.4.3+git.a54947c"
+        },
+        "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+        "verdict": "REVIEW",
+        "verified_subject_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+        "verifier_challenge": "6956a6f19f1dd406133e101ab2a1b7b255017608ba31d287fcba5e834a3f6457"
+      },
+      "handoff_manifest_digest": "sha256:dafca094f018a08164d8709a6b34f31d4ef70d2c1c1ef3fc17b57036beee2df3"
+    }
+  ],
+  "lineage": {
+    "dispatch": {
+      "candidate_policy_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0",
+      "candidate_system": {
+        "config_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0",
+        "implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85",
+        "name": "aragorn",
+        "version": "0.1.0-phase0"
+      },
+      "cases": [
+        {
+          "case_id": "benign-basic",
+          "private_manifest_digest": "sha256:6a7ef753f1514585f3695b951c7017b050079ed9952e29992ed16fb9d47f6acd",
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713"
+        },
+        {
+          "case_id": "delegated-agent-propagation",
+          "private_manifest_digest": "sha256:24bcd65918915eb3380b4bc30ffafa80a01c1fc786e1ec79ee58150202fdf1d0",
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf"
+        }
+      ],
+      "jobs": [
+        {
+          "case_id": "benign-basic",
+          "job_id": "7ee75abc6deed9bb478b06b14e18d1db",
+          "private_manifest_digest": "sha256:6a7ef753f1514585f3695b951c7017b050079ed9952e29992ed16fb9d47f6acd",
+          "request_digest": "sha256:76daf8e7e1296063bf51a91faa0e568ec81a05d7b660e5f7701036c7d2ecb671",
+          "run_id": 1,
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c",
+            "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+            "name": "cisco-skill-scanner",
+            "version": "2.0.12"
+          },
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713"
+        },
+        {
+          "case_id": "delegated-agent-propagation",
+          "job_id": "80d28f51a4cdcc00dba912350319ef88",
+          "private_manifest_digest": "sha256:24bcd65918915eb3380b4bc30ffafa80a01c1fc786e1ec79ee58150202fdf1d0",
+          "request_digest": "sha256:0e5501d814b1c5578a0a6a9b18dec20e6726467006af7d64fb6d512d4c63a375",
+          "run_id": 1,
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec",
+            "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+            "name": "skillspector",
+            "version": "2.4.3+git.a54947c"
+          },
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf"
+        },
+        {
+          "case_id": "delegated-agent-propagation",
+          "job_id": "eb9b44c9d3f2e085f067ccfcb5b615dc",
+          "private_manifest_digest": "sha256:24bcd65918915eb3380b4bc30ffafa80a01c1fc786e1ec79ee58150202fdf1d0",
+          "request_digest": "sha256:ec3821e97e7e7da12e54684fbbe94c0b7cde0f24460ab32ea38e199df4e09d9c",
+          "run_id": 1,
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c",
+            "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+            "name": "cisco-skill-scanner",
+            "version": "2.0.12"
+          },
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf"
+        },
+        {
+          "case_id": "benign-basic",
+          "job_id": "eeaf454f20b5e6c96e263b349f7d3f54",
+          "private_manifest_digest": "sha256:6a7ef753f1514585f3695b951c7017b050079ed9952e29992ed16fb9d47f6acd",
+          "request_digest": "sha256:ef21c0d486570e750292adc9a20f102a2860633f9d0aaaa0cd3884ddde03397d",
+          "run_id": 1,
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec",
+            "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+            "name": "skillspector",
+            "version": "2.4.3+git.a54947c"
+          },
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713"
+        }
+      ],
+      "runs_per_case": 1,
+      "schema": "aragorn/benchmark-private-dispatch/v2",
+      "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347"
+    },
+    "component_evidence": [
+      {
+        "evidence_digest": "sha256:b66e6fdd39bbad617529b4f4388a337224f884d525e7dca4d5c2fb618d69fda9",
+        "evidence": {
+          "acceptance_receipt_digest": "sha256:538e6ae1193cb2c5dae7dbad423f3e93b0b759f677d23a254431fb6128646c2d",
+          "case_id": "benign-basic",
+          "dispatch_digest": "sha256:ebf61f8ee8860be5e1939e82b798d03fbaa5fb1bccb9f9f7dc1f144d654f009e",
+          "issuance_digest": "sha256:5a399926614ad19336a35cc46988fd2516d5495b901e3ee2b8fd57b451bbb1ed",
+          "private_manifest_digest": "sha256:6a7ef753f1514585f3695b951c7017b050079ed9952e29992ed16fb9d47f6acd",
+          "reason_codes": [],
+          "run_id": 1,
+          "schema": "aragorn/benchmark-authenticated-worker-evidence/v1",
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c",
+            "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+            "name": "cisco-skill-scanner",
+            "version": "2.0.12"
+          },
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+          "verdict": "ALLOW"
+        }
+      },
+      {
+        "evidence_digest": "sha256:7d2db07b0d438477651512ecdc58985af5a7256a126e07dc6512aeb1bae38043",
+        "evidence": {
+          "acceptance_receipt_digest": "sha256:4a03f92b9a8873935cf05f0d888565950480cc46e9030e462a8a8720a82af967",
+          "case_id": "benign-basic",
+          "dispatch_digest": "sha256:ebf61f8ee8860be5e1939e82b798d03fbaa5fb1bccb9f9f7dc1f144d654f009e",
+          "issuance_digest": "sha256:fce4012019ab5f42bff75ed8070cc98d91a51a1b201d94473a42cd84820ce296",
+          "private_manifest_digest": "sha256:6a7ef753f1514585f3695b951c7017b050079ed9952e29992ed16fb9d47f6acd",
+          "reason_codes": [
+            "NVIDIA_ANALYSIS_INCOMPLETE"
+          ],
+          "run_id": 1,
+          "schema": "aragorn/benchmark-authenticated-worker-evidence/v1",
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec",
+            "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+            "name": "skillspector",
+            "version": "2.4.3+git.a54947c"
+          },
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+          "verdict": "REVIEW"
+        }
+      },
+      {
+        "evidence_digest": "sha256:742ffa567337bb5cc7c82ca869804d11bcdc8142d510eb5e5dd7ba901ebf8b72",
+        "evidence": {
+          "acceptance_receipt_digest": "sha256:017f813aa4965b1288ebd174f45c15dee46de4e00957d754fb1699c6ef6ad264",
+          "case_id": "delegated-agent-propagation",
+          "dispatch_digest": "sha256:ebf61f8ee8860be5e1939e82b798d03fbaa5fb1bccb9f9f7dc1f144d654f009e",
+          "issuance_digest": "sha256:fdb54adc11f9abdace68dc7b3288a57f1c8136b1508b52b4e5c7b44ee5d3b426",
+          "private_manifest_digest": "sha256:24bcd65918915eb3380b4bc30ffafa80a01c1fc786e1ec79ee58150202fdf1d0",
+          "reason_codes": [],
+          "run_id": 1,
+          "schema": "aragorn/benchmark-authenticated-worker-evidence/v1",
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c",
+            "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+            "name": "cisco-skill-scanner",
+            "version": "2.0.12"
+          },
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+          "verdict": "ALLOW"
+        }
+      },
+      {
+        "evidence_digest": "sha256:871d2a534fb9f2c60efb0bd402e8108aac9e50f2af56a9e3c38f2151f5712360",
+        "evidence": {
+          "acceptance_receipt_digest": "sha256:777c388b5557021dd989197df096498ea12dd3469cc26cc134922e570466fd90",
+          "case_id": "delegated-agent-propagation",
+          "dispatch_digest": "sha256:ebf61f8ee8860be5e1939e82b798d03fbaa5fb1bccb9f9f7dc1f144d654f009e",
+          "issuance_digest": "sha256:83e29f8805cfc7dcc3125fd13a6e14e1ab65e2817800c81053668d5aef23f494",
+          "private_manifest_digest": "sha256:24bcd65918915eb3380b4bc30ffafa80a01c1fc786e1ec79ee58150202fdf1d0",
+          "reason_codes": [
+            "NVIDIA_ANALYSIS_INCOMPLETE"
+          ],
+          "run_id": 1,
+          "schema": "aragorn/benchmark-authenticated-worker-evidence/v1",
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec",
+            "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+            "name": "skillspector",
+            "version": "2.4.3+git.a54947c"
+          },
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+          "verdict": "REVIEW"
+        }
+      }
+    ],
+    "candidate_evidence": [
+      {
+        "evidence_digest": "sha256:d4632099cc208215936eaf517a715ff638c7f049096c5d827902174e2c34dae1",
+        "evidence": {
+          "case_id": "benign-basic",
+          "component_evidence_digests": [
+            "sha256:7d2db07b0d438477651512ecdc58985af5a7256a126e07dc6512aeb1bae38043",
+            "sha256:b66e6fdd39bbad617529b4f4388a337224f884d525e7dca4d5c2fb618d69fda9"
+          ],
+          "dispatch_digest": "sha256:ebf61f8ee8860be5e1939e82b798d03fbaa5fb1bccb9f9f7dc1f144d654f009e",
+          "policy_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0",
+          "private_manifest_digest": "sha256:6a7ef753f1514585f3695b951c7017b050079ed9952e29992ed16fb9d47f6acd",
+          "reason_codes": [],
+          "run_id": 1,
+          "schema": "aragorn/benchmark-candidate-evidence/v1",
+          "source_graph_digest": "sha256:fa8ffd8c4510dc5e5ed45391f210193c3dffcea9d45c33a42759ceea96367ab4",
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0",
+            "implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85",
+            "name": "aragorn",
+            "version": "0.1.0-phase0"
+          },
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+          "verdict": "ALLOW"
+        }
+      },
+      {
+        "evidence_digest": "sha256:f731bf212189c2247ea956a837c3c166d411393cdc1d19b16929292f42fffe48",
+        "evidence": {
+          "case_id": "delegated-agent-propagation",
+          "component_evidence_digests": [
+            "sha256:742ffa567337bb5cc7c82ca869804d11bcdc8142d510eb5e5dd7ba901ebf8b72",
+            "sha256:871d2a534fb9f2c60efb0bd402e8108aac9e50f2af56a9e3c38f2151f5712360"
+          ],
+          "dispatch_digest": "sha256:ebf61f8ee8860be5e1939e82b798d03fbaa5fb1bccb9f9f7dc1f144d654f009e",
+          "policy_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0",
+          "private_manifest_digest": "sha256:24bcd65918915eb3380b4bc30ffafa80a01c1fc786e1ec79ee58150202fdf1d0",
+          "reason_codes": [],
+          "run_id": 1,
+          "schema": "aragorn/benchmark-candidate-evidence/v1",
+          "source_graph_digest": "sha256:46175a11ac5c5f16bff0fd3f8f0feec6bc5ada559d5a518b6aa61bca3ec23956",
+          "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+          "system": {
+            "config_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0",
+            "implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85",
+            "name": "aragorn",
+            "version": "0.1.0-phase0"
+          },
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+          "verdict": "ALLOW"
+        }
+      }
+    ],
+    "source_graphs": [
+      {
+        "source_graph_digest": "sha256:fa8ffd8c4510dc5e5ed45391f210193c3dffcea9d45c33a42759ceea96367ab4",
+        "graph": {
+          "assurance": "evaluation_only_literal_reference_profile",
+          "closure": {
+            "profile": "phase0-literal-source-refs/v1",
+            "scope": "source_reference_graph",
+            "status": "complete",
+            "unresolved": []
+          },
+          "edges": [],
+          "nodes": [
+            {
+              "digest": "sha256:7412d1cbf2cda34dfe73822d333c12059a9d007d6790dec22045b934ee606fd9",
+              "executable": false,
+              "opaque_reason": null,
+              "path": "SKILL.md",
+              "scan_status": "scanned",
+              "size": 234
+            }
+          ],
+          "profile": "phase0-literal-source-refs/v1",
+          "root_manifest_digest": "sha256:6a7ef753f1514585f3695b951c7017b050079ed9952e29992ed16fb9d47f6acd",
+          "schema": "aragorn/source-artifact-graph/v1",
+          "source_assurance": "local_manifest_reverified",
+          "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713"
+        }
+      },
+      {
+        "source_graph_digest": "sha256:46175a11ac5c5f16bff0fd3f8f0feec6bc5ada559d5a518b6aa61bca3ec23956",
+        "graph": {
+          "assurance": "evaluation_only_literal_reference_profile",
+          "closure": {
+            "profile": "phase0-literal-source-refs/v1",
+            "scope": "source_reference_graph",
+            "status": "complete",
+            "unresolved": []
+          },
+          "edges": [],
+          "nodes": [
+            {
+              "digest": "sha256:fad3ae81b67bd0ef86241beb0c3d18442c79954d7a719cf5789c47ac494a1006",
+              "executable": false,
+              "opaque_reason": null,
+              "path": "SKILL.md",
+              "scan_status": "scanned",
+              "size": 202
+            },
+            {
+              "digest": "sha256:7e1e08135955348911304acde960499c15e6d2081df0183ee3250ca136035714",
+              "executable": false,
+              "opaque_reason": null,
+              "path": "handoff.md",
+              "scan_status": "scanned",
+              "size": 260
+            }
+          ],
+          "profile": "phase0-literal-source-refs/v1",
+          "root_manifest_digest": "sha256:24bcd65918915eb3380b4bc30ffafa80a01c1fc786e1ec79ee58150202fdf1d0",
+          "schema": "aragorn/source-artifact-graph/v1",
+          "source_assurance": "local_manifest_reverified",
+          "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf"
+        }
+      }
+    ]
+  },
+  "replay": {
+    "operation": "collect_signed_worker_output",
+    "evidence_status": "operator_observed_not_independently_retained",
+    "replayed_job_ids": [
+      "7ee75abc6deed9bb478b06b14e18d1db",
+      "eeaf454f20b5e6c96e263b349f7d3f54",
+      "eb9b44c9d3f2e085f067ccfcb5b615dc",
+      "80d28f51a4cdcc00dba912350319ef88"
+    ],
+    "acceptance_receipt_digests": [
+      "sha256:538e6ae1193cb2c5dae7dbad423f3e93b0b759f677d23a254431fb6128646c2d",
+      "sha256:4a03f92b9a8873935cf05f0d888565950480cc46e9030e462a8a8720a82af967",
+      "sha256:017f813aa4965b1288ebd174f45c15dee46de4e00957d754fb1699c6ef6ad264",
+      "sha256:777c388b5557021dd989197df096498ea12dd3469cc26cc134922e570466fd90"
+    ],
+    "retry_count_per_result": 1,
+    "exact_retry_idempotent": true,
+    "ledger_receipt_count_before": 4,
+    "ledger_receipt_count_after": 4
+  },
+  "composition": {
+    "schema": "aragorn/benchmark-candidate-composition/v1",
+    "assurance": "derived_from_authenticated_comparator_evidence_not_hardware_attested",
+    "candidate_composition_digest": "sha256:a17abb522bbd9a7813c6580aeb3d8fabec3b8bf624bae2faeafb40068dde95e5",
+    "outcomes_digest": "sha256:67df09fa47bdd93a82f60fb6a64ac6399989978dbe183476597c7aa917222174",
+    "runs_per_case": 1,
+    "case_count": 2,
+    "candidate_outcome_count": 2,
+    "comparator_outcome_count": 4,
+    "outcome_count": 6,
+    "system_count": 3,
+    "comparator_execution_ok_count": 4,
+    "comparator_execution_error_count": 0,
+    "systems": [
+      {
+        "name": "aragorn",
+        "version": "0.1.0-phase0",
+        "implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85",
+        "config_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0"
+      },
+      {
+        "name": "cisco-skill-scanner",
+        "version": "2.0.12",
+        "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+        "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c"
+      },
+      {
+        "name": "skillspector",
+        "version": "2.4.3+git.a54947c",
+        "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+        "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec"
+      }
+    ],
+    "outcomes": [
+      {
+        "schema": "aragorn/benchmark-outcome/v1",
+        "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+        "case_id": "benign-basic",
+        "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+        "run_id": 1,
+        "system": {
+          "name": "aragorn",
+          "version": "0.1.0-phase0",
+          "implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85",
+          "config_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0"
+        },
+        "evidence_digest": "sha256:d4632099cc208215936eaf517a715ff638c7f049096c5d827902174e2c34dae1",
+        "verdict": "ALLOW",
+        "reason_codes": []
+      },
+      {
+        "schema": "aragorn/benchmark-outcome/v1",
+        "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+        "case_id": "delegated-agent-propagation",
+        "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+        "run_id": 1,
+        "system": {
+          "name": "aragorn",
+          "version": "0.1.0-phase0",
+          "implementation_digest": "sha256:becf8c0ea320eac74658c3befee45d1629bc6b7d3a87b80764f2543bf94fac85",
+          "config_digest": "sha256:80b760cd54e0470b11d8c030ca9ce2e438eeb515f5dfe4d29b0d21a7d40f87f0"
+        },
+        "evidence_digest": "sha256:f731bf212189c2247ea956a837c3c166d411393cdc1d19b16929292f42fffe48",
+        "verdict": "ALLOW",
+        "reason_codes": []
+      },
+      {
+        "schema": "aragorn/benchmark-outcome/v1",
+        "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+        "case_id": "benign-basic",
+        "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+        "run_id": 1,
+        "system": {
+          "name": "cisco-skill-scanner",
+          "version": "2.0.12",
+          "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+          "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c"
+        },
+        "evidence_digest": "sha256:b66e6fdd39bbad617529b4f4388a337224f884d525e7dca4d5c2fb618d69fda9",
+        "verdict": "ALLOW",
+        "reason_codes": []
+      },
+      {
+        "schema": "aragorn/benchmark-outcome/v1",
+        "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+        "case_id": "delegated-agent-propagation",
+        "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+        "run_id": 1,
+        "system": {
+          "name": "cisco-skill-scanner",
+          "version": "2.0.12",
+          "implementation_digest": "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c",
+          "config_digest": "sha256:1bd32d308ef4341513ce023a026f163e3476b6dbb8f0fe0692688643ef5b272c"
+        },
+        "evidence_digest": "sha256:742ffa567337bb5cc7c82ca869804d11bcdc8142d510eb5e5dd7ba901ebf8b72",
+        "verdict": "ALLOW",
+        "reason_codes": []
+      },
+      {
+        "schema": "aragorn/benchmark-outcome/v1",
+        "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+        "case_id": "benign-basic",
+        "tree_digest": "sha256:51eeac2c2184a6ca81d3e292b91df91b92f8721f0a1c036b5c638cd9515ed713",
+        "run_id": 1,
+        "system": {
+          "name": "skillspector",
+          "version": "2.4.3+git.a54947c",
+          "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+          "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec"
+        },
+        "evidence_digest": "sha256:7d2db07b0d438477651512ecdc58985af5a7256a126e07dc6512aeb1bae38043",
+        "verdict": "REVIEW",
+        "reason_codes": [
+          "NVIDIA_ANALYSIS_INCOMPLETE"
+        ]
+      },
+      {
+        "schema": "aragorn/benchmark-outcome/v1",
+        "suite_digest": "sha256:f9049419feb9a348f48a2d37dbe3fce4f026c0505b737dc73d15b96faf0a4347",
+        "case_id": "delegated-agent-propagation",
+        "tree_digest": "sha256:9ac247168befa1865815f52215ace4425305352bef0bc35d8684521b87522bcf",
+        "run_id": 1,
+        "system": {
+          "name": "skillspector",
+          "version": "2.4.3+git.a54947c",
+          "implementation_digest": "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e",
+          "config_digest": "sha256:3ea219f45c1b65bff7b521e76d0b38a6b3a2aee6d260d04f60613e3ee4a7f7ec"
+        },
+        "evidence_digest": "sha256:871d2a534fb9f2c60efb0bd402e8108aac9e50f2af56a9e3c38f2151f5712360",
+        "verdict": "REVIEW",
+        "reason_codes": [
+          "NVIDIA_ANALYSIS_INCOMPLETE"
+        ]
+      }
+    ]
+  },
+  "limitations": {
+    "fixture_scope": "two_public_synthetic_cases_one_benign_one_adversarial_one_run_each",
+    "efficacy": "not_evaluated_or_claimed",
+    "repeatability": "unevaluable_with_one_run_per_case",
+    "attestation": "software_keys_and_docker_reported_identity_not_hardware_or_vm_attestation",
+    "runtime_identity": "python_uv_and_lima_measurements_not_bound_into_worker_dsse",
+    "replay": "exact_retry_was_operator_observed_without_a_separate_replay_transcript",
+    "hidden_material": "negative_hidden_material_claim_is_operator_observed_not_attested",
+    "phase0_exit": "does_not_satisfy_hidden_corpus_acquisition_reference_or_release_gates"
+  }
+}

@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private Phase 0 implementation with bounded exact-commit GitHub expansion, process and OCI evidence-smoke runners, a one-shot protocol-v2 executor/signing supervisor, authenticated output acceptance, and one retained mount-free isolated smoke**. This is not yet an EDR, a supported release, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private Phase 0 implementation with bounded exact-commit GitHub expansion, process and OCI evidence-smoke runners, a one-shot protocol-v2 executor/signing supervisor, authenticated output acceptance, and a retained mount-free two-case candidate-composition smoke**. This is not yet an EDR, a supported release, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 ## What works now
 
@@ -481,6 +481,21 @@ copied out only the output bundle and envelope, accepted them through
 [retained isolated protocol-v2 receipt](./benchmark/receipts/phase0-isolated-protocol-v2-smoke-2026-07-23.json).
 It covers one public benign fixture and validates infrastructure only.
 
+The corrected public candidate-composition smoke evaluated signed commit
+`2667dda227479385135a171958ff3011777b8e24` in a new mount-free VM. Both
+comparators crossed the authenticated boundary for one public benign and one
+public adversarial case; all four results were accepted and composed with two
+locally derived Aragorn outcomes. The six-cell matrix had no execution errors.
+Aragorn and Cisco allowed the adversarial fixture, while SkillSpector returned
+`REVIEW` with `NVIDIA_ANALYSIS_INCOMPLETE` for both fixtures. This is the honest
+observed smoke result, not an efficacy claim. The
+[candidate-composition smoke receipt](./benchmark/receipts/phase0-public-candidate-composition-smoke-2026-07-24.json)
+binds the evaluated source claim, operator-observed runtime, exact public suite,
+four verifier-accepted software-key-signed worker-result roots, and the exact
+dispatch, component, candidate, and source-graph lineage used to re-derive the
+composition and outcomes. Exact retry and the negative hidden-material
+observations are explicitly operator-observed rather than separately attested.
+
 ## Test
 
 ```console
@@ -496,20 +511,16 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete roadmap and [SECURITY.
 
 ## Next production gate
 
-Run one public, unmocked two-comparator composition smoke through the frozen
-authenticated candidate path before any hidden outcomes are viewed. The
-implemented deterministic policy binds Aragorn's locally re-derived
-source-reference graph and both authenticated comparator results without
-receiving class, family, split, or expected-result fields. The checked Cisco
-and SkillSpector portable-policy files are the exact `prepare_files_v2`
-comparator inputs. The candidate `implementation_digest` binds all
-`src/aragorn` Python sources plus `requirements-worker.lock`; it is not runtime
-or hardware attestation, and the policy remains comparative-only. After that
-smoke passes, verify the encrypted evaluator package, generate and
-signed-commit the canonical hidden-suite lock before dispatch, then repeat the
-authenticated protocol-v2 path in fresh mount-free workers for all 448 cases.
-Protect labels, dispatch, challenges, expectations, trust store, and consumption
-ledger; keep declared-byte test transport outside every acceptance path.
+The public, unmocked two-comparator composition smoke is complete and retained.
+The next gate is to verify the encrypted evaluator package, derive its
+label-ledger digest inside the evaluator boundary, and signed-commit the
+canonical hidden-suite lock before any hidden dispatch or outcome exists. Then
+repeat the authenticated protocol-v2 path in fresh mount-free workers for all
+448 cases. Protect labels, dispatch, challenges, expectations, trust store, and
+consumption ledger; keep declared-byte test transport outside every acceptance
+path. The candidate `implementation_digest` binds all `src/aragorn` Python
+sources plus `requirements-worker.lock`; it is not runtime or hardware
+attestation, and the policy remains comparative-only.
 
 The accepted corpus measures inert natural-language skill and adversarial
 instruction risk. It does not by itself demonstrate recursive artifact
@@ -527,11 +538,11 @@ frozen oracle and measured result, Aragorn exceeds the best burden-compliant
 comparator by at least 10 percentage points of hidden attack flag rate while
 keeping combined benign intervention at or below 5%, and the three-pack
 standards gate continues to validate with zero unresolved selected items. The
-18-case pilot, local and isolated worker receipts, and source-reference graph
-validate infrastructure only. Hardware- or platform-backed attestation and a
-dedicated credential-free fetch gateway remain open. Independent human security
-review remains mandatory at the Phase 5 release gate, but is not represented by
-the Phase 0 standards crosswalk.
+18-case pilot, local and isolated worker receipts, public candidate-composition
+receipt, and source-reference graph validate infrastructure only. Hardware- or
+platform-backed attestation and a dedicated credential-free fetch gateway
+remain open. Independent human security review remains mandatory at the Phase 5
+release gate, but is not represented by the Phase 0 standards crosswalk.
 
 After the Phase 0 exit gate passes, Phase 1 turns acquisition into a supported
 quarantine, recursive artifact-closure, and exact-digest installation boundary.

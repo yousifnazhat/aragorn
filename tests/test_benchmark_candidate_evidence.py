@@ -10,7 +10,6 @@ import aragorn.benchmark_authenticated_handoff_v2 as authenticated_handoff
 from aragorn import benchmark
 from aragorn.benchmark import BenchmarkError, _verify_candidate_batch_bindings
 from aragorn.phase0_candidate import (
-    candidate_implementation_digest,
     candidate_policy_digest,
     candidate_system_identity,
 )
@@ -24,9 +23,8 @@ def _digest(character: str) -> str:
 
 def _bindings() -> list[dict]:
     policy = json.loads(
-        (_ROOT / "benchmark" / "phase0-candidate-policy.json").read_bytes()
+        (_ROOT / "benchmark" / "phase0-candidate-policy-v2.json").read_bytes()
     )
-    policy["candidate"]["implementation_digest"] = candidate_implementation_digest()
     policy_digest = candidate_policy_digest(policy)
     candidate_system = candidate_system_identity(policy)
     suite_digest = _digest("1")
@@ -101,7 +99,7 @@ def _bindings() -> list[dict]:
         },
     }
     candidate_envelope = {
-        "schema": "aragorn/benchmark-candidate-evidence/v1",
+        "schema": "aragorn/benchmark-candidate-evidence/v2",
         "suite_digest": suite_digest,
         "case_id": "case",
         "tree_digest": tree_digest,
@@ -116,6 +114,7 @@ def _bindings() -> list[dict]:
         "component_evidence_digests": sorted(
             item["evidence_digest"] for item in components
         ),
+        "first_party_observation_digests": [],
     }
     return [
         *components,
@@ -129,11 +128,76 @@ def _bindings() -> list[dict]:
             "policy": policy,
             "candidate_system": candidate_system,
             "source_graph": graph,
+            "first_party_observations": (),
         },
     ]
 
 
 class BenchmarkCandidateEvidenceTests(unittest.TestCase):
+    def _verify_candidate(
+        self,
+        envelope: dict,
+    ) -> dict:
+        candidate = _bindings()[2]
+        envelope = deepcopy(envelope)
+        envelope["source_graph_digest"] = benchmark._digest_json(
+            candidate["source_graph"]
+        )
+        outcome = {
+            "evidence_digest": candidate["evidence_digest"],
+            **{
+                field: envelope[field]
+                for field in (
+                    "suite_digest",
+                    "case_id",
+                    "tree_digest",
+                    "run_id",
+                    "system",
+                    "verdict",
+                    "reason_codes",
+                )
+            },
+        }
+        with (
+            mock.patch.object(
+                benchmark,
+                "_verify_composed_evidence_common",
+                return_value=envelope["private_manifest_digest"],
+            ),
+            mock.patch.object(
+                benchmark,
+                "_load_candidate_dispatch",
+                return_value=(
+                    candidate["dispatch_digest"],
+                    candidate["dispatch"],
+                ),
+            ),
+            mock.patch.object(
+                benchmark,
+                "_read_canonical_document",
+                side_effect=(
+                    candidate["policy"],
+                    candidate["source_graph"],
+                ),
+            ),
+            mock.patch.object(
+                benchmark,
+                "resolve_source_graph",
+                return_value=candidate["source_graph"],
+            ),
+            mock.patch(
+                "aragorn.phase0_candidate.detect_first_party_observations",
+                return_value=(),
+            ),
+        ):
+            return benchmark._verify_candidate_evidence(
+                object(),
+                outcome,
+                expected_manifest={},
+                label="outcome",
+                envelope=envelope,
+            )
+
     def test_exact_cell_closure_and_component_tampering(self) -> None:
         bindings = _bindings()
         _verify_candidate_batch_bindings(
@@ -248,6 +312,28 @@ class BenchmarkCandidateEvidenceTests(unittest.TestCase):
                     envelope=component["envelope"],
                     acceptance_ledger=Path("/trusted-ledger"),
                 )
+
+    def test_v2_policy_rejects_downgraded_or_malformed_detector_evidence(
+        self,
+    ) -> None:
+        envelope = deepcopy(_bindings()[2]["envelope"])
+        downgraded = deepcopy(envelope)
+        downgraded["schema"] = "aragorn/benchmark-candidate-evidence/v1"
+        downgraded.pop("first_party_observation_digests")
+        with self.assertRaisesRegex(BenchmarkError, "does not match candidate policy"):
+            self._verify_candidate(downgraded)
+
+        malformed = deepcopy(envelope)
+        malformed["first_party_observation_digests"] = [{}]
+        with self.assertRaisesRegex(BenchmarkError, "lowercase SHA-256 digest"):
+            self._verify_candidate(malformed)
+
+        oversized = deepcopy(envelope)
+        oversized["first_party_observation_digests"] = [
+            _digest(character) for character in "abcde"
+        ]
+        with self.assertRaisesRegex(BenchmarkError, "is invalid"):
+            self._verify_candidate(oversized)
 
 
 if __name__ == "__main__":

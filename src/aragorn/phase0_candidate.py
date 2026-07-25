@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -12,7 +13,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from .analyze import _parse_observations
+from .analyze import OBSERVATION_SCHEMA, Observation, _parse_observations
 from .artifact_closure import (
     ASSURANCE as SOURCE_GRAPH_ASSURANCE,
 )
@@ -41,9 +42,9 @@ from .oci_worker_protocol import (
     sanitize_subject_manifest,
 )
 
-POLICY_SCHEMA = "aragorn/benchmark-candidate-policy/v1"
+POLICY_SCHEMA = "aragorn/benchmark-candidate-policy/v2"
 POLICY_ASSURANCE = "comparative_candidate_only_not_admission"
-POLICY_ALGORITHM = "source-graph-fail-closed-vendor-union/v1"
+POLICY_ALGORITHM = "source-graph-fail-closed-vendor-union/v2"
 COMPOSITION_ASSURANCE = (
     "derived_from_authenticated_comparator_evidence_not_hardware_attested"
 )
@@ -70,8 +71,8 @@ _REQUIRED_COMPARATORS = (
             "64c11eb541077e3efee5f61edbd2e65c"
         ),
         "config_digest": (
-            "sha256:1bd32d308ef4341513ce023a026f163e"
-            "3476b6dbb8f0fe0692688643ef5b272c"
+            "sha256:0471e144da9f709a1596d0daa15c6faf"
+            "85c6358d12840dadb652a1e45369085a"
         ),
     },
     {
@@ -82,12 +83,119 @@ _REQUIRED_COMPARATORS = (
             "6bbcb5cb306f44b4845121d109a4a95e"
         ),
         "config_digest": (
-            "sha256:3ea219f45c1b65bff7b521e76d0b38a"
-            "6b3a2aee6d260d04f60613e3ee4a7f7ec"
+            "sha256:2de741d4af73b3047ec0307795f7ceeb"
+            "0f39e25837a5a8a7c97fa23992de7207"
         ),
     },
 )
 _NVIDIA_INCOMPLETE = "NVIDIA_ANALYSIS_INCOMPLETE"
+_FIRST_PARTY_ANALYZER = "aragorn-agent-skill-threats"
+_FIRST_PARTY_ALGORITHM = "imperative-source-sink-clusters/v1"
+_FIRST_PARTY_TEXT_LIMIT = 8 * 1024 * 1024
+_FIRST_PARTY_SEGMENT_LIMIT = 4096
+_BASE64_TEXT_LIMIT = 64 * 1024
+_BASE64_TOKEN = re.compile(
+    r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{32,}={0,2}(?![A-Za-z0-9+/=])"
+)
+_DEFENSIVE_CONTEXT = re.compile(
+    r"\b(?:never|do not|must not|cannot|can't)\s+"
+    r"(?:read|fetch|download|execute|run|launch|invoke|inspect|contact|grant|"
+    r"send|post|upload|transmit|make\s+network|attach|write|delete|remove|"
+    r"modify|source|follow|forward|install)\b|"
+    r"\b(?:for display only|as data|classification data|indicators? to discuss|"
+    r"flag quoted|identify prompt|dry[- ]run|require explicit confirmation|"
+    r"reject absolute paths|review .* as data)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_ANALYSIS_CONTEXT = re.compile(
+    r"\b(?:for display only|as data|classification data|quoted phrases?|"
+    r"untrusted content|indicators? to discuss|review .* as data)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_CROSS_SEGMENT_BRIDGE = re.compile(
+    r"\b(?:combine|merge)\b.{0,120}\b(?:instruction|instructions|source|sink|"
+    r"files?)\b.{0,120}\b(?:perform|apply|execute|run|issue)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_DECODE_BRIDGE = re.compile(
+    r"\b(?:decode|base64)\b.{0,160}\b(?:follow|perform|apply|execute|run|"
+    r"launch|instruction)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_PROMPT_OVERRIDE = re.compile(
+    r"\b(?:ignore|bypass|override|disregard|supersede)\b.{0,100}"
+    r"\b(?:higher[- ]priority|previous|system|policy|policies|instruction|"
+    r"instructions|guardrail|guardrails)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_PROMPT_DISCLOSURE = re.compile(
+    r"\b(?:reveal|disclose|expose|print|return)\b.{0,80}"
+    r"\b(?:system\s+prompt|hidden\s+(?:agent\s+)?memory|private\s+memory|secret|"
+    r"credential)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_CONCEALMENT = re.compile(
+    r"\b(?:do not|don't|never)\s+(?:show|mention|describe|disclose|report|"
+    r"request)\b|"
+    r"\b(?:hide|conceal|suppress)\b.{0,50}\b(?:action|step|error|operation)\b|"
+    r"\breport only\b|\bclaim\b.{0,80}\bapproved\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_SENSITIVE_SOURCE = re.compile(
+    r"\b(?:credential|credentials|secret|secrets|api[_\s-]?token|"
+    r"session[_\s-]?key|private\s+key|id_rsa|environment\s+variable|"
+    r"process\s+environment|system\s+prompt|hidden\s+(?:agent\s+)?memory)\b|"
+    r"~/\.(?:ssh|aws)",
+    re.IGNORECASE,
+)
+_EXTERNAL_SINK = re.compile(
+    r"\b(?:post|send|upload|transmit|exfiltrate|exfiltrates|exfiltrated|"
+    r"exfiltrating|telemetry|dns\s+query|"
+    r"webhook)\b|https?://",
+    re.IGNORECASE,
+)
+_FETCH_OR_DECODE = re.compile(
+    r"\b(?:download|fetch|retrieve|curl|wget|decode(?:d|s|ing)?|base64)\b",
+    re.IGNORECASE,
+)
+_EXECUTION_SINK = re.compile(
+    r"\b(?:execute|launch|run|shell|source|perform)\b",
+    re.IGNORECASE,
+)
+_DESTRUCTIVE_ACTION = re.compile(
+    r"\b(?:recursively delete|delete|remove|erase|wipe)\b.{0,120}"
+    r"\b(?:workspace|project|repository|version history|history|backup|"
+    r"recovery)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_PERSISTENCE_ACTION = re.compile(
+    r"\b(?:modify|append|write|install)\b.{0,100}"
+    r"\b(?:shell profile|\.zshrc|\.bashrc|startup|cron|new terminal|"
+    r"later session)\b|"
+    r"\b(?:shell profile|\.zshrc|\.bashrc)\b.{0,120}"
+    r"\b(?:retrieve|download|launch|execute|source)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_AGENT_PROPAGATION = re.compile(
+    r"\b(?:another|receiving|every|other)\s+agent\b.{0,220}"
+    r"\b(?:copy|install|repeat|propagat)\w*\b|"
+    r"\b(?:copy|install)\b.{0,120}\b(?:skill|capability)\b.{0,160}"
+    r"\b(?:agent|handoff)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_SIGNAL_NAMES = {
+    _PROMPT_OVERRIDE: "prompt_override",
+    _PROMPT_DISCLOSURE: "prompt_disclosure",
+    _CONCEALMENT: "concealment",
+    _SENSITIVE_SOURCE: "sensitive_source",
+    _EXTERNAL_SINK: "external_sink",
+    _FETCH_OR_DECODE: "fetch_or_decode",
+    _EXECUTION_SINK: "execution_sink",
+    _DESTRUCTIVE_ACTION: "destructive_action",
+    _PERSISTENCE_ACTION: "persistence_action",
+    _AGENT_PROPAGATION: "agent_propagation",
+    _CROSS_SEGMENT_BRIDGE: "cross_segment_bridge",
+}
 
 
 class CandidateError(ValueError):
@@ -140,11 +248,13 @@ def build_candidate_policy(document: object) -> dict[str, Any]:
     """Validate and return an independent canonical candidate-policy copy."""
 
     policy = _exact_object(document, _POLICY_KEYS, "candidate policy")
-    if policy["schema"] != POLICY_SCHEMA:
+    schema = policy["schema"]
+    if schema != POLICY_SCHEMA:
         raise CandidateError("candidate policy schema is unsupported")
     if policy["assurance"] != POLICY_ASSURANCE:
         raise CandidateError("candidate policy assurance is unsupported")
-    if policy["algorithm"] != POLICY_ALGORITHM:
+    algorithm = policy["algorithm"]
+    if algorithm != POLICY_ALGORITHM:
         raise CandidateError("candidate policy algorithm is unsupported")
     candidate = _partial_system(policy["candidate"], "candidate policy candidate")
     if (
@@ -168,9 +278,9 @@ def build_candidate_policy(document: object) -> dict[str, Any]:
     if comparators != list(_REQUIRED_COMPARATORS):
         raise CandidateError("candidate policy comparator identities are unsupported")
     canonical = {
-        "schema": POLICY_SCHEMA,
+        "schema": schema,
         "assurance": POLICY_ASSURANCE,
-        "algorithm": POLICY_ALGORITHM,
+        "algorithm": algorithm,
         "candidate": candidate,
         "required_comparators": comparators,
     }
@@ -193,10 +303,380 @@ def candidate_system_identity(document: object) -> dict[str, str]:
     }
 
 
+def detect_first_party_observations(
+    manifest: object,
+    cas: CAS,
+) -> tuple[Observation, ...]:
+    """Derive bounded, label-free agent-skill threat observations."""
+
+    if not isinstance(manifest, dict):
+        raise CandidateError("candidate manifest must be a JSON object")
+    files = manifest.get("files")
+    tree_digest = _digest(
+        manifest.get("tree_digest"),
+        "candidate manifest tree digest",
+    )
+    if not isinstance(files, list) or not files:
+        raise CandidateError("candidate manifest files must be a non-empty array")
+
+    segments: list[tuple[str, str, str, int, str]] = []
+    text_carriers: list[tuple[str, str, str]] = []
+    incomplete: list[dict[str, Any]] = []
+    total = 0
+    segment_budget_exhausted = False
+    for index, entry in enumerate(files):
+        if not isinstance(entry, dict):
+            raise CandidateError(f"candidate manifest files[{index}] is invalid")
+        path = entry.get("path")
+        digest = entry.get("digest")
+        size = entry.get("size")
+        if (
+            not isinstance(path, str)
+            or not path
+            or not isinstance(size, int)
+            or isinstance(size, bool)
+            or size < 0
+        ):
+            raise CandidateError(f"candidate manifest files[{index}] is invalid")
+        digest = _digest(digest, f"candidate manifest files[{index}].digest")
+        total += size
+        if total > _FIRST_PARTY_TEXT_LIMIT:
+            incomplete.append(
+                {
+                    "path": path,
+                    "blob_digest": digest,
+                    "line": 1,
+                    "signal": "aggregate_text_limit",
+                }
+            )
+            break
+        try:
+            content = cas.read(digest, max_bytes=size)
+        except CASError as exc:
+            raise CandidateError(
+                f"cannot read candidate manifest file {path}: {exc}"
+            ) from exc
+        if len(content) != size:
+            raise CandidateError(f"candidate manifest file {path} size changed")
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            incomplete.append(
+                {
+                    "path": path,
+                    "blob_digest": digest,
+                    "line": 1,
+                    "signal": "non_utf8_text",
+                }
+            )
+            continue
+        text_carriers.append((text, path, digest))
+        for segment in _active_text_segments(text, path=path, digest=digest):
+            if len(segments) >= _FIRST_PARTY_SEGMENT_LIMIT:
+                incomplete.append(
+                    {
+                        "path": path,
+                        "blob_digest": digest,
+                        "line": segment[3],
+                        "signal": "segment_limit",
+                    }
+                )
+                segment_budget_exhausted = True
+                break
+            segments.append(segment)
+        if segment_budget_exhausted:
+            break
+
+    decode_bridge = [
+        segment for segment in segments if _DECODE_BRIDGE.search(segment[0])
+    ]
+    if decode_bridge and not segment_budget_exhausted:
+        for text, path, digest in text_carriers:
+            for segment in _decoded_text_segments(
+                text,
+                path=path,
+                digest=digest,
+            ):
+                if len(segments) >= _FIRST_PARTY_SEGMENT_LIMIT:
+                    incomplete.append(
+                        {
+                            "path": path,
+                            "blob_digest": digest,
+                            "line": segment[3],
+                            "signal": "segment_limit",
+                        }
+                    )
+                    segment_budget_exhausted = True
+                    break
+                segments.append(segment)
+            if segment_budget_exhausted:
+                break
+
+    findings: dict[str, list[dict[str, Any]]] = {}
+    if incomplete:
+        findings["ARAGORN_ANALYSIS_INCOMPLETE"] = incomplete
+
+    prompt_segments = [
+        segment
+        for segment in segments
+        if _PROMPT_OVERRIDE.search(segment[0])
+        or (
+            _PROMPT_DISCLOSURE.search(segment[0])
+            and (
+                _CONCEALMENT.search(segment[0])
+                or _EXTERNAL_SINK.search(segment[0])
+            )
+        )
+    ]
+    if prompt_segments:
+        findings["ARAGORN_PROMPT_OVERRIDE"] = _matching_locations(
+            prompt_segments,
+            (
+                _PROMPT_OVERRIDE,
+                _PROMPT_DISCLOSURE,
+                _CONCEALMENT,
+                _EXTERNAL_SINK,
+            ),
+        )
+
+    exfil_segments = [
+        segment
+        for segment in segments
+        if _SENSITIVE_SOURCE.search(segment[0])
+        and _EXTERNAL_SINK.search(segment[0])
+    ]
+    bridge_segments = [
+        segment for segment in segments if _CROSS_SEGMENT_BRIDGE.search(segment[0])
+    ]
+    if (
+        not exfil_segments
+        and bridge_segments
+        and any(_SENSITIVE_SOURCE.search(segment[0]) for segment in segments)
+        and any(_EXTERNAL_SINK.search(segment[0]) for segment in segments)
+    ):
+        exfil_segments = segments
+    if exfil_segments:
+        findings["ARAGORN_CREDENTIAL_EXFILTRATION"] = _matching_locations(
+            exfil_segments,
+            (_CROSS_SEGMENT_BRIDGE, _SENSITIVE_SOURCE, _EXTERNAL_SINK),
+        )
+
+    unsafe_segments = [
+        segment
+        for segment in segments
+        if (
+            _FETCH_OR_DECODE.search(segment[0])
+            and _EXECUTION_SINK.search(segment[0])
+        )
+        or _DESTRUCTIVE_ACTION.search(segment[0])
+        or _PERSISTENCE_ACTION.search(segment[0])
+        or _AGENT_PROPAGATION.search(segment[0])
+    ]
+    if unsafe_segments:
+        findings["ARAGORN_UNSAFE_EXECUTION_CHAIN"] = _matching_locations(
+            unsafe_segments,
+            (
+                _FETCH_OR_DECODE,
+                _EXECUTION_SINK,
+                _DESTRUCTIVE_ACTION,
+                _PERSISTENCE_ACTION,
+                _AGENT_PROPAGATION,
+            ),
+        )
+
+    observations = []
+    for reason_code in sorted(findings):
+        document = {
+            "schema": OBSERVATION_SCHEMA,
+            "subject_digest": tree_digest,
+            "reason_code": reason_code,
+            "severity": (
+                "medium"
+                if reason_code == "ARAGORN_ANALYSIS_INCOMPLETE"
+                else "high"
+            ),
+            "evidence": {
+                "analyzer": _FIRST_PARTY_ANALYZER,
+                "algorithm": _FIRST_PARTY_ALGORITHM,
+                "locations": sorted(
+                    findings[reason_code],
+                    key=lambda item: (
+                        item["path"],
+                        item["line"],
+                        item["signal"],
+                        item["blob_digest"],
+                    ),
+                )[:16],
+            },
+        }
+        document_json = canonical_json(document).decode("ascii")
+        observations.append(
+            Observation(
+                schema=OBSERVATION_SCHEMA,
+                subject_digest=tree_digest,
+                reason_code=reason_code,
+                severity=document["severity"],
+                document_json=document_json,
+            )
+        )
+    return tuple(observations)
+
+
+def _active_text_segments(
+    text: str,
+    *,
+    path: str,
+    digest: str,
+) -> Iterable[tuple[str, str, str, int, str]]:
+    normalized = _normalize_text(text)
+    yield from _active_segments_from_normalized(
+        normalized,
+        path=path,
+        digest=digest,
+        carrier="text",
+    )
+
+
+def _decoded_text_segments(
+    text: str,
+    *,
+    path: str,
+    digest: str,
+) -> Iterable[tuple[str, str, str, int, str]]:
+    normalized = _normalize_text(text)
+    for match in _BASE64_TOKEN.finditer(normalized):
+        token = match.group(0)
+        if len(token) % 4:
+            continue
+        try:
+            decoded = base64.b64decode(token, validate=True)
+            if not decoded or len(decoded) > _BASE64_TEXT_LIMIT:
+                continue
+            decoded_text = decoded.decode("utf-8")
+        except (UnicodeDecodeError, ValueError):
+            continue
+        printable = sum(
+            character.isprintable() or character.isspace()
+            for character in decoded_text
+        )
+        if printable / len(decoded_text) < 0.95:
+            continue
+        yield from _active_segments_from_normalized(
+            _normalize_text(decoded_text),
+            path=path,
+            digest=digest,
+            carrier="base64_decoded",
+            fixed_line=normalized.count("\n", 0, match.start()) + 1,
+        )
+
+
+def _normalize_text(text: str) -> str:
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKC", text)
+        if unicodedata.category(character) != "Cf"
+    )
+
+
+def _active_segments_from_normalized(
+    text: str,
+    *,
+    path: str,
+    digest: str,
+    carrier: str,
+    fixed_line: int | None = None,
+) -> Iterable[tuple[str, str, str, int, str]]:
+    quote_is_data = False
+    for paragraph in re.finditer(
+        r"(?:\A|\n\s*\n)(.*?)(?=\n\s*\n|\Z)",
+        text,
+        re.DOTALL,
+    ):
+        raw = paragraph.group(1)
+        if not raw.strip():
+            continue
+        leading = len(raw) - len(raw.lstrip())
+        content = raw.strip()
+        offset = paragraph.start(1) + leading
+        quoted = all(
+            line.lstrip().startswith(">")
+            for line in content.splitlines()
+            if line.strip()
+        )
+        analysis_context = _ANALYSIS_CONTEXT.search(content) is not None
+        if analysis_context or (quoted and quote_is_data):
+            quote_is_data = analysis_context
+            continue
+        quote_is_data = False
+        for clause, clause_offset in _clauses(content):
+            if _DEFENSIVE_CONTEXT.search(clause):
+                continue
+            line = (
+                fixed_line
+                if fixed_line is not None
+                else text.count("\n", 0, offset + clause_offset) + 1
+            )
+            yield (clause, path, digest, line, carrier)
+
+
+def _clauses(text: str) -> Iterable[tuple[str, int]]:
+    start = 0
+    boundary = re.compile(
+        r"(?:[.!?;](?=\s|$)|,\s*(?=(?:but|instead|however)\b)|"
+        r"\s+(?=(?:but|instead|however)\b))",
+        re.IGNORECASE,
+    )
+    for match in boundary.finditer(text):
+        end = match.end()
+        clause = text[start:end].strip()
+        if clause:
+            yield clause, start + len(text[start:end]) - len(text[start:end].lstrip())
+        start = end
+    clause = text[start:].strip()
+    if clause:
+        yield clause, start + len(text[start:]) - len(text[start:].lstrip())
+
+
+def _matching_locations(
+    segments: Iterable[tuple[str, str, str, int, str]],
+    patterns: Iterable[re.Pattern[str]],
+) -> list[dict[str, Any]]:
+    locations: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int, str]] = set()
+    for text, path, digest, line, carrier in segments:
+        for pattern in patterns:
+            match = pattern.search(text)
+            if match is None:
+                continue
+            signal = f"{carrier}:{_SIGNAL_NAMES[pattern]}"
+            match_line = (
+                line
+                if carrier == "base64_decoded"
+                else line + text.count("\n", 0, match.start())
+            )
+            key = (path, digest, match_line, signal)
+            if key in seen:
+                continue
+            seen.add(key)
+            locations.append(
+                {
+                    "path": path,
+                    "blob_digest": digest,
+                    "line": match_line,
+                    "signal": signal,
+                }
+            )
+            if len(locations) >= 16:
+                return locations
+    return locations
+
+
 def compose_candidate_decision(
     policy: object,
     source_graph: object,
     components: Iterable[object],
+    *,
+    first_party_observations: Iterable[Observation] = (),
 ) -> tuple[str, list[str]]:
     """Apply the frozen label-free vendor-union policy."""
 
@@ -255,7 +735,15 @@ def compose_candidate_decision(
         reasons = _actionable_reasons(denied)
         return "DENY", reasons or ["COMPARATOR_DENY"]
 
-    review_reasons: set[str] = set()
+    first_party = tuple(first_party_observations)
+    if any(
+        not isinstance(observation, Observation)
+        or observation.schema != OBSERVATION_SCHEMA
+        or observation.subject_digest != graph["tree_digest"]
+        for observation in first_party
+    ):
+        raise CandidateError("first-party observations do not bind the source graph")
+    review_reasons = {observation.reason_code for observation in first_party}
     cisco = by_name["cisco-skill-scanner"]
     if cisco["verdict"] == "REVIEW":
         review_reasons.update(cisco["reason_codes"])
@@ -438,13 +926,16 @@ def compose_candidate_batch(
             [],
         ).append((evidence_digest, evidence))
 
-    graph_digests: dict[str, str] = {}
+    analyses: dict[
+        str,
+        tuple[str, tuple[str, ...], tuple[Observation, ...]],
+    ] = {}
     candidate_outcomes: list[dict[str, Any]] = []
     for cell in sorted(cells):
         entries = cells[cell]
         manifest_digest = entries[0]["private_manifest_digest"]
-        graph_digest = graph_digests.get(manifest_digest)
-        if graph_digest is None:
+        retained = analyses.get(manifest_digest)
+        if retained is None:
             try:
                 manifest = load_retained_manifest(cas, manifest_digest)
                 graph = resolve_source_graph(
@@ -452,18 +943,35 @@ def compose_candidate_batch(
                     cas,
                     root_manifest_digest=manifest_digest,
                 )
+                first_party_observations = detect_first_party_observations(
+                    manifest,
+                    cas,
+                )
             except (ArtifactClosureError, CASError) as exc:
                 raise CandidateError(
-                    f"cannot derive source-reference graph: {exc}"
+                    f"cannot derive candidate analysis: {exc}"
                 ) from exc
             graph_digest = _put_json(cas, graph)
-            graph_digests[manifest_digest] = graph_digest
+            observation_digests = tuple(
+                sorted(
+                    _put_json(cas, json.loads(observation.document_json))
+                    for observation in first_party_observations
+                )
+            )
+            retained = (
+                graph_digest,
+                observation_digests,
+                first_party_observations,
+            )
+            analyses[manifest_digest] = retained
         else:
+            graph_digest, observation_digests, first_party_observations = retained
             graph = _read_canonical_document(
                 cas,
                 graph_digest,
                 "source-reference graph",
             )
+        graph_digest, observation_digests, first_party_observations = retained
         components = sorted(
             component_evidence[cell],
             key=lambda item: item[1]["system"]["name"],
@@ -472,9 +980,10 @@ def compose_candidate_batch(
             policy,
             graph,
             (item[1] for item in components),
+            first_party_observations=first_party_observations,
         )
         candidate_evidence = {
-            "schema": "aragorn/benchmark-candidate-evidence/v1",
+            "schema": "aragorn/benchmark-candidate-evidence/v2",
             "suite_digest": dispatch["suite_digest"],
             "case_id": cell[0],
             "tree_digest": entries[0]["tree_digest"],
@@ -490,6 +999,9 @@ def compose_candidate_batch(
                 item[0] for item in components
             ),
         }
+        candidate_evidence["first_party_observation_digests"] = list(
+            observation_digests
+        )
         evidence_digest = _put_json(cas, candidate_evidence)
         candidate_outcomes.append(_outcome(candidate_evidence, evidence_digest))
 

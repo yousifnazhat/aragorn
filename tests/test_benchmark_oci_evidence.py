@@ -542,7 +542,7 @@ class OciEvidenceTests(unittest.TestCase):
                     label="outcomes[0]",
                 )
 
-    def test_only_completion_is_ignored_by_vendor_outcome_policy(self) -> None:
+    def test_vendor_outcome_policy_ignores_non_actionable_information(self) -> None:
         completion = Observation(
             schema="aragorn/observation/v1",
             subject_digest=SUBJECT,
@@ -557,10 +557,33 @@ class OciEvidenceTests(unittest.TestCase):
             severity="high",
             document_json="{}",
         )
+        information = Observation(
+            schema="aragorn/observation/v1",
+            subject_digest=SUBJECT,
+            reason_code="CISCO_MANIFEST_MISSING_LICENSE",
+            severity="info",
+            document_json="{}",
+        )
 
         self.assertEqual(
             normalize_vendor_observations(
-                "cisco-skill-scanner", (completion, finding)
+                "cisco-skill-scanner", (completion, information)
+            ),
+            ("REVIEW", ("CISCO_MANIFEST_MISSING_LICENSE",)),
+        )
+        self.assertEqual(
+            normalize_vendor_observations(
+                "cisco-skill-scanner",
+                (completion, information),
+                normalization="cisco-ai-skill-scanner-2.0.12/v2",
+            ),
+            ("ALLOW", ()),
+        )
+        self.assertEqual(
+            normalize_vendor_observations(
+                "cisco-skill-scanner",
+                (completion, information, finding),
+                normalization="cisco-ai-skill-scanner-2.0.12/v2",
             ),
             ("DENY", ("CISCO_VENDOR_FINDING",)),
         )

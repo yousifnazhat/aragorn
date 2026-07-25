@@ -86,8 +86,8 @@ def _portable_policies() -> list[dict]:
         ],
     }
     normalizations = {
-        "cisco-skill-scanner": "cisco-ai-skill-scanner-2.0.12/v1",
-        "skillspector": "nvidia-skillspector-2.4.3/v1",
+        "cisco-skill-scanner": "cisco-ai-skill-scanner-2.0.12/v2",
+        "skillspector": "nvidia-skillspector-2.4.3/v2",
     }
     return [
         {
@@ -582,6 +582,14 @@ class LabelBlindPrepareV2Tests(unittest.TestCase):
                     )
                     evidence = json.loads(
                         cas.read(candidate["evidence_digest"])
+                    )
+                    self.assertEqual(
+                        evidence["schema"],
+                        "aragorn/benchmark-candidate-evidence/v2",
+                    )
+                    self.assertIn(
+                        "first_party_observation_digests",
+                        evidence,
                     )
                     self.assertEqual(
                         evidence["component_evidence_digests"],

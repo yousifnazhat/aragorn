@@ -103,7 +103,9 @@
     "normalization": {
       "enum": [
         "cisco-ai-skill-scanner-2.0.12/v1",
-        "nvidia-skillspector-2.4.3/v1"
+        "cisco-ai-skill-scanner-2.0.12/v2",
+        "nvidia-skillspector-2.4.3/v1",
+        "nvidia-skillspector-2.4.3/v2"
       ]
     },
     "verdict": {"enum": ["ALLOW", "REVIEW", "DENY", "ERROR"]},

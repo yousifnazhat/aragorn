@@ -14,6 +14,7 @@ import sys
 import tarfile
 import tempfile
 from collections import Counter
+from contextlib import ExitStack
 from datetime import date
 from io import BytesIO
 from pathlib import Path, PurePosixPath
@@ -82,6 +83,26 @@ _GPG_CLOSURE = {
 _GPG_CLOSURE_DIGEST = (
     "sha256:87eb42a2bdd3e709670b4e8159139fff7c9d256d09581ff02d54adf6257ac045"
 )
+_PRIOR_FREEZE_COMMIT = "7ee1bd3422c11b31ddf2d942019d23a5617673f5"
+_PRIOR_FREEZE_TREE = "27100abd85554fa409b7e2dd410ffb0656cdcce7"
+_PRIOR_FREEZE_RECEIPT = (
+    "benchmark/receipts/phase0-hidden-suite-freeze-2026-07-24.json"
+)
+_PRIOR_FREEZE_RECEIPT_DIGEST = (
+    "sha256:98909fff1a9eddd27f2ad02f27e7705078b713d822c8e5eaa9e11db420a46ad2"
+)
+_PRIOR_FREEZE_LOCK = "benchmark/phase0-hidden-suite.lock.json"
+_PRIOR_FREEZE_LOCK_DIGEST = (
+    "sha256:7f05171db56b35f8f76053222a6806228711679d4a5562b0b7328417fae549c7"
+)
+_PRIOR_SIGNER_PRINCIPAL = "yousif.snazhat@gmail.com"
+_PRIOR_SIGNER_FINGERPRINT = (
+    "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
+)
+_PRIOR_ALLOWED_SIGNER = (
+    "yousif.snazhat@gmail.com ssh-ed25519 "
+    "AAAAC3NzaC1lZDI1NTE5AAAAIP+34WpE4lJYYXs96Dbx/j7GMMm0WahOQl267+T2ESDA\n"
+).encode("ascii")
 
 
 class FreezeError(ValueError):
@@ -244,7 +265,7 @@ def _require_private_directory(path: Path, label: str) -> None:
     if path.is_symlink() or not path.is_dir():
         raise FreezeError(f"{label} must be a protected directory")
     status = path.stat()
-    if status.st_uid != os.getuid() or stat.S_IMODE(status.st_mode) & 0o077:
+    if status.st_uid != os.getuid() or stat.S_IMODE(status.st_mode) != 0o700:
         raise FreezeError(f"{label} must be owned by the operator with mode 0700")
 
 
@@ -1049,10 +1070,151 @@ def validate_freeze_receipt_bindings(
         raise FreezeError("freeze receipt binding contract is malformed") from exc
 
 
+def _verified_prior_freeze(
+    corpus_lock: dict[str, object],
+    corpus_lock_raw: bytes,
+) -> dict[str, object]:
+    if _run(["git", "-C", str(ROOT), "rev-parse", "--show-toplevel"]) != str(
+        ROOT.resolve(strict=True)
+    ):
+        raise FreezeError("prior freeze repository root changed")
+    with tempfile.TemporaryDirectory(
+        prefix="aragorn-prior-freeze-signer-"
+    ) as temporary:
+        allowed = Path(temporary) / "allowed_signers"
+        _write_new(allowed, _PRIOR_ALLOWED_SIGNER)
+        fingerprint = _run(
+            ["ssh-keygen", "-lf", str(allowed), "-E", "sha256"]
+        ).split()
+        if len(fingerprint) < 2 or fingerprint[1] != _PRIOR_SIGNER_FINGERPRINT:
+            raise FreezeError("prior freeze signer fingerprint changed")
+        _run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "-c",
+                "gpg.format=ssh",
+                "-c",
+                f"gpg.ssh.allowedSignersFile={allowed}",
+                "-c",
+                f"gpg.ssh.program={_executable('ssh-keygen')}",
+                "verify-commit",
+                _PRIOR_FREEZE_COMMIT,
+            ]
+        )
+    tree = _run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "rev-parse",
+            f"{_PRIOR_FREEZE_COMMIT}^{{tree}}",
+        ]
+    )
+    if tree != _PRIOR_FREEZE_TREE:
+        raise FreezeError("prior freeze signed tree changed")
+    _run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "merge-base",
+            "--is-ancestor",
+            _PRIOR_FREEZE_COMMIT,
+            "HEAD",
+        ]
+    )
+    receipt_raw = _run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "cat-file",
+            "blob",
+            f"{_PRIOR_FREEZE_COMMIT}:{_PRIOR_FREEZE_RECEIPT}",
+        ]
+    ).encode("ascii")
+    lock_raw = _run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "cat-file",
+            "blob",
+            f"{_PRIOR_FREEZE_COMMIT}:{_PRIOR_FREEZE_LOCK}",
+        ]
+    ).encode("ascii")
+    if (
+        _sha256(receipt_raw) != _PRIOR_FREEZE_RECEIPT_DIGEST
+        or _sha256(lock_raw) != _PRIOR_FREEZE_LOCK_DIGEST
+    ):
+        raise FreezeError("prior freeze committed evidence changed")
+    receipt = _decode_json(receipt_raw, "prior freeze receipt")
+    lock = _decode_json(lock_raw, "prior hidden-suite lock")
+    validate_freeze_receipt_bindings(
+        receipt,
+        receipt_raw,
+        lock,
+        lock_raw,
+        corpus_lock,
+        corpus_lock_raw,
+    )
+    return {
+        "commit": _PRIOR_FREEZE_COMMIT,
+        "tree": tree,
+        "receipt_digest": _PRIOR_FREEZE_RECEIPT_DIGEST,
+        "lock_digest": _PRIOR_FREEZE_LOCK_DIGEST,
+        "signature_status": "verified",
+        "principal": _PRIOR_SIGNER_PRINCIPAL,
+        "fingerprint": _PRIOR_SIGNER_FINGERPRINT,
+        "receipt": receipt,
+    }
+
+
+def _match_prior_freeze(
+    prior: dict[str, object],
+    release: dict[str, object],
+    evaluator: dict[str, object],
+) -> None:
+    receipt = prior["receipt"]
+    current = {
+        "release_manifest_digest": release["release_manifest_digest"],
+        "worker_archive_digest": release["worker_archive_digest"],
+        "evaluator_ciphertext_digest": release["evaluator_archive_digest"],
+        "source_bundle_digest": release["source_bundle_digest"],
+        "manifest_digest": evaluator["evaluator_manifest_digest"],
+        "label_ledger_digest": evaluator["label_ledger_digest"],
+        "public_manifest_digest": evaluator["public_manifest_digest"],
+    }
+    expected = {
+        **{
+            field: receipt["release"][field]
+            for field in (
+                "release_manifest_digest",
+                "worker_archive_digest",
+                "evaluator_ciphertext_digest",
+                "source_bundle_digest",
+            )
+        },
+        **{
+            field: receipt["evaluator"][field]
+            for field in (
+                "manifest_digest",
+                "label_ledger_digest",
+                "public_manifest_digest",
+            )
+        },
+    }
+    if current != expected:
+        raise FreezeError("preserved evaluator does not match prior signed freeze")
+
+
 def freeze(
     *,
     release_dir: Path,
-    evaluator_passphrase: bytes,
+    evaluator_passphrase: bytes | None,
+    verified_evaluator_package: Path | None = None,
     corpus_lock_path: Path,
     candidate_policy_path: Path,
     private_suite_root: Path,
@@ -1061,6 +1223,10 @@ def freeze(
     recorded_on: str,
     run_state_root: Path,
 ) -> dict[str, str]:
+    if (evaluator_passphrase is None) == (verified_evaluator_package is None):
+        raise FreezeError(
+            "select exactly one evaluator passphrase or verified evaluator package"
+        )
     try:
         parsed_date = date.fromisoformat(recorded_on)
     except ValueError as exc:
@@ -1115,27 +1281,53 @@ def freeze(
         raise FreezeError("checked corpus lock digest changed")
     corpus_lock = _decode_json(corpus_lock_raw, "corpus lock")
     release = verify_release(release_dir, corpus_lock)
-    (
-        gpg_executable,
-        gpg_agent_executable,
-        gpg_closure_digest,
-    ) = _verified_gpg_closure()
+    prior = None
+    gpg_executable = None
+    gpg_agent_executable = None
+    gpg_closure_digest = None
+    if verified_evaluator_package is None:
+        (
+            gpg_executable,
+            gpg_agent_executable,
+            gpg_closure_digest,
+        ) = _verified_gpg_closure()
+    else:
+        _reject_symlink_components(
+            verified_evaluator_package,
+            "verified evaluator package",
+        )
+        _require_private_directory(
+            verified_evaluator_package,
+            "verified evaluator package",
+        )
+        prior = _verified_prior_freeze(corpus_lock, corpus_lock_raw)
     policy_raw = _read(candidate_policy_path, max_bytes=_MAX_JSON)
     policy = _decode_json(policy_raw, "candidate policy")
     policy_digest, systems = _systems(policy)
-    with tempfile.TemporaryDirectory(
-        prefix="aragorn-evaluator-decryption-",
-        dir=parent,
-    ) as temporary:
-        evaluator_dir = Path(temporary) / "package"
-        _decrypt_evaluator(
-            release["evaluator_archive"],
-            evaluator_passphrase,
-            evaluator_dir,
-            gpg_executable,
-            gpg_agent_executable,
-        )
+    with ExitStack() as stack:
+        if verified_evaluator_package is None:
+            temporary = stack.enter_context(
+                tempfile.TemporaryDirectory(
+                    prefix="aragorn-evaluator-decryption-",
+                    dir=parent,
+                )
+            )
+            evaluator_dir = Path(temporary) / "package"
+            assert evaluator_passphrase is not None
+            assert gpg_executable is not None
+            assert gpg_agent_executable is not None
+            _decrypt_evaluator(
+                release["evaluator_archive"],
+                evaluator_passphrase,
+                evaluator_dir,
+                gpg_executable,
+                gpg_agent_executable,
+            )
+        else:
+            evaluator_dir = verified_evaluator_package
         evaluator = verify_evaluator_package(evaluator_dir, release, corpus_lock)
+        if prior is not None:
+            _match_prior_freeze(prior, release, evaluator)
         content = _verified_worker_content(
             release["worker_archive"],
             evaluator["public_manifest_raw"],
@@ -1214,25 +1406,11 @@ def freeze(
             )
         if any(os.path.lexists(path) for path in pre_outcome_values):
             raise FreezeError("dispatch/outcome state appeared during freeze")
-        receipt = {
-            "schema": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v1",
-            "recorded_on": recorded_on,
-            "assurance": (
-                "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
-            ),
-            "release": {
-                "release_manifest_digest": release["release_manifest_digest"],
-                "signature_status": "verified",
-                "principal": corpus_lock["signing"]["principal"],
-                "fingerprint": corpus_lock["signing"]["fingerprint"],
-                "worker_archive_digest": release["worker_archive_digest"],
-                "evaluator_ciphertext_digest": release["evaluator_archive_digest"],
-                "source_bundle_digest": release["source_bundle_digest"],
-                "freeze_commit": corpus_lock["freeze"]["commit"],
-                "freeze_tag": corpus_lock["freeze"]["tag"],
-                "freeze_tag_object": corpus_lock["freeze"]["tag_object"],
-            },
-            "evaluator": {
+        if prior is None:
+            receipt_schema = (
+                "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v1"
+            )
+            evaluator_receipt = {
                 "manifest_digest": evaluator["evaluator_manifest_digest"],
                 "manifest_signature_status": "verified",
                 "ciphertext_link_status": (
@@ -1250,7 +1428,89 @@ def freeze(
                 "public_manifest_digest": evaluator["public_manifest_digest"],
                 "case_count": 448,
                 "class_counts": evaluator["class_counts"],
+            }
+            limitations = {
+                "authorship": (
+                    "technical_codex_authorship_not_independent_human_identity"
+                ),
+                "ordering": (
+                    "signed_commit_ordering_must_be_verified_before_dispatch"
+                ),
+                "custody": (
+                    "software_signatures_operator_uid_trusted_"
+                    "not_same_uid_or_hardware_attested"
+                ),
+            }
+        else:
+            receipt_schema = (
+                "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v2"
+            )
+            evaluator_receipt = {
+                "manifest_digest": evaluator["evaluator_manifest_digest"],
+                "manifest_signature_status": "verified",
+                "package_verification_mode": (
+                    "preserved_signed_package_reverified"
+                ),
+                "ciphertext_link_status": (
+                    "matched_prior_signed_freeze_receipt_no_current_decryption"
+                ),
+                "current_gpg_status": "not_invoked",
+                "label_ledger_digest": evaluator["label_ledger_digest"],
+                "label_ledger_digest_rule": (
+                    "raw_sha256_of_signature_verified_canonical_jsonl_bytes"
+                ),
+                "label_ledger_signature_status": "verified",
+                "public_manifest_digest": evaluator["public_manifest_digest"],
+                "case_count": 448,
+                "class_counts": evaluator["class_counts"],
+                "prior_freeze": {
+                    field: prior[field]
+                    for field in (
+                        "commit",
+                        "tree",
+                        "receipt_digest",
+                        "lock_digest",
+                        "signature_status",
+                        "principal",
+                        "fingerprint",
+                    )
+                },
+            }
+            limitations = {
+                "authorship": (
+                    "technical_codex_authorship_not_independent_human_identity"
+                ),
+                "ordering": (
+                    "signed_commit_ordering_must_be_verified_before_dispatch"
+                ),
+                "custody": (
+                    "software_signatures_operator_uid_trusted_"
+                    "not_same_uid_or_hardware_attested"
+                ),
+                "evaluation_status": (
+                    "calibration_rerun_on_previously_evaluated_corpus_"
+                    "not_fresh_holdout"
+                ),
+            }
+        receipt = {
+            "schema": receipt_schema,
+            "recorded_on": recorded_on,
+            "assurance": (
+                "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+            ),
+            "release": {
+                "release_manifest_digest": release["release_manifest_digest"],
+                "signature_status": "verified",
+                "principal": corpus_lock["signing"]["principal"],
+                "fingerprint": corpus_lock["signing"]["fingerprint"],
+                "worker_archive_digest": release["worker_archive_digest"],
+                "evaluator_ciphertext_digest": release["evaluator_archive_digest"],
+                "source_bundle_digest": release["source_bundle_digest"],
+                "freeze_commit": corpus_lock["freeze"]["commit"],
+                "freeze_tag": corpus_lock["freeze"]["tag"],
+                "freeze_tag_object": corpus_lock["freeze"]["tag_object"],
             },
+            "evaluator": evaluator_receipt,
             "suite": {
                 "suite_digest": lock["suite_digest"],
                 "candidate_policy_digest": policy_digest,
@@ -1277,16 +1537,7 @@ def freeze(
                 "outcomes_observed": False,
                 "labels_exposed_to_worker": False,
             },
-            "limitations": {
-                "authorship": (
-                    "technical_codex_authorship_not_independent_human_identity"
-                ),
-                "ordering": ("signed_commit_ordering_must_be_verified_before_dispatch"),
-                "custody": (
-                    "software_signatures_operator_uid_trusted_"
-                    "not_same_uid_or_hardware_attested"
-                ),
-            },
+            "limitations": limitations,
         }
         receipt_raw = canonical_json(receipt)
         validate_freeze_receipt_bindings(
@@ -1323,10 +1574,14 @@ def freeze(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--release-dir", type=Path, required=True)
-    parser.add_argument(
+    evaluator_source = parser.add_mutually_exclusive_group(required=True)
+    evaluator_source.add_argument(
         "--evaluator-passphrase-stdin",
         action="store_true",
-        required=True,
+    )
+    evaluator_source.add_argument(
+        "--verified-evaluator-package",
+        type=Path,
     )
     parser.add_argument(
         "--corpus-lock",
@@ -1336,7 +1591,7 @@ def main() -> int:
     parser.add_argument(
         "--candidate-policy",
         type=Path,
-        default=ROOT / "benchmark" / "phase0-candidate-policy.json",
+        default=ROOT / "benchmark" / "phase0-candidate-policy-v2.json",
     )
     parser.add_argument("--private-suite-root", type=Path, required=True)
     parser.add_argument("--lock-output", type=Path, required=True)
@@ -1345,14 +1600,21 @@ def main() -> int:
     parser.add_argument("--run-state-root", type=Path, required=True)
     arguments = parser.parse_args()
     try:
-        if sys.stdin.isatty():
-            raise FreezeError("evaluator passphrase must be piped through stdin")
-        passphrase = sys.stdin.buffer.read(4097)
-        if passphrase.endswith(b"\n"):
-            passphrase = passphrase[:-1]
+        passphrase = None
+        if arguments.evaluator_passphrase_stdin:
+            if sys.stdin.isatty():
+                raise FreezeError("evaluator passphrase must be piped through stdin")
+            passphrase = sys.stdin.buffer.read(4097)
+            if passphrase.endswith(b"\n"):
+                passphrase = passphrase[:-1]
         result = freeze(
             release_dir=arguments.release_dir.resolve(strict=True),
             evaluator_passphrase=passphrase,
+            verified_evaluator_package=(
+                None
+                if arguments.verified_evaluator_package is None
+                else arguments.verified_evaluator_package.resolve(strict=True)
+            ),
             corpus_lock_path=arguments.corpus_lock.resolve(strict=True),
             candidate_policy_path=arguments.candidate_policy.resolve(strict=True),
             private_suite_root=_lexical_absolute(arguments.private_suite_root),

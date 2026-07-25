@@ -196,6 +196,7 @@ def run(
                     expected_effective_config_json=(
                         prepared.effective_config_json
                     ),
+                    normalization=policy["normalization"],
                 )
                 retained = _retain_execution_evidence(
                     output_cas,
@@ -274,6 +275,9 @@ def _select_preflight_v2(
         docker_executable=docker_executable,
         timeout_seconds=policy["limits"]["timeout_seconds"],
         output_limit_bytes=policy["limits"]["output_bytes"],
+        normalizations={
+            policy["system"]["name"]: policy["normalization"],
+        },
     )
     selected = [
         item

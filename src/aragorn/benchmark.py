@@ -1471,6 +1471,10 @@ def _verify_candidate_batch_bindings(
                 policy,
                 candidate["source_graph"],
                 (item["envelope"] for item in components),
+                first_party_observations=candidate.get(
+                    "first_party_observations",
+                    (),
+                ),
             )
         except ValueError as exc:
             raise BenchmarkError(
@@ -1747,23 +1751,29 @@ def _verify_candidate_evidence(
     envelope: dict[str, Any],
 ) -> dict[str, Any]:
     evidence_label = f"{label}.evidence"
+    evidence_schema = envelope.get("schema")
+    evidence_keys = {
+        "schema",
+        "suite_digest",
+        "case_id",
+        "tree_digest",
+        "run_id",
+        "system",
+        "verdict",
+        "reason_codes",
+        "private_manifest_digest",
+        "source_graph_digest",
+        "dispatch_digest",
+        "policy_digest",
+        "component_evidence_digests",
+    }
+    if evidence_schema == "aragorn/benchmark-candidate-evidence/v2":
+        evidence_keys.add("first_party_observation_digests")
+    elif evidence_schema != "aragorn/benchmark-candidate-evidence/v1":
+        raise BenchmarkError(f"{evidence_label}.schema is unsupported")
     _exact_keys(
         envelope,
-        {
-            "schema",
-            "suite_digest",
-            "case_id",
-            "tree_digest",
-            "run_id",
-            "system",
-            "verdict",
-            "reason_codes",
-            "private_manifest_digest",
-            "source_graph_digest",
-            "dispatch_digest",
-            "policy_digest",
-            "component_evidence_digests",
-        },
+        evidence_keys,
         evidence_label,
     )
     manifest_digest = _verify_composed_evidence_common(
@@ -1790,13 +1800,29 @@ def _verify_candidate_evidence(
         f"{evidence_label}.policy",
         max_bytes=_MAX_INPUT_BYTES,
     )
-    from .phase0_candidate import build_candidate_policy, candidate_system_identity
+    from .phase0_candidate import (
+        build_candidate_policy,
+        candidate_system_identity,
+        detect_first_party_observations,
+    )
 
     try:
         policy = build_candidate_policy(policy_document)
         candidate_system = candidate_system_identity(policy)
     except ValueError as exc:
         raise BenchmarkError(f"{evidence_label}.policy is invalid: {exc}") from exc
+    expected_evidence_schema = {
+        "aragorn/benchmark-candidate-policy/v1": (
+            "aragorn/benchmark-candidate-evidence/v1"
+        ),
+        "aragorn/benchmark-candidate-policy/v2": (
+            "aragorn/benchmark-candidate-evidence/v2"
+        ),
+    }[policy["schema"]]
+    if evidence_schema != expected_evidence_schema:
+        raise BenchmarkError(
+            f"{evidence_label}.schema does not match candidate policy"
+        )
     if _digest_json(policy) != policy_digest:
         raise BenchmarkError(f"{evidence_label}.policy canonical digest changed")
     if (
@@ -1831,6 +1857,53 @@ def _verify_candidate_evidence(
     ):
         raise BenchmarkError(f"{evidence_label}.source_graph does not re-derive")
 
+    first_party_observations = ()
+    if evidence_schema == "aragorn/benchmark-candidate-evidence/v2":
+        try:
+            first_party_observations = detect_first_party_observations(
+                expected_manifest,
+                cas,
+            )
+        except ValueError as exc:
+            raise BenchmarkError(
+                f"{evidence_label}.first_party analysis cannot be re-derived: {exc}"
+            ) from exc
+        expected_observations = {
+            _digest_bytes(observation.document_json.encode("ascii")): observation
+            for observation in first_party_observations
+        }
+        expected_observation_digests = sorted(expected_observations)
+        raw_observation_digests = envelope["first_party_observation_digests"]
+        if not isinstance(raw_observation_digests, list) or len(
+            raw_observation_digests
+        ) > 4:
+            raise BenchmarkError(
+                f"{evidence_label}.first_party_observation_digests is invalid"
+            )
+        observation_digests = [
+            _digest(
+                value,
+                f"{evidence_label}.first_party_observation_digests",
+            )
+            for value in raw_observation_digests
+        ]
+        if observation_digests != sorted(set(observation_digests)):
+            raise BenchmarkError(
+                f"{evidence_label}.first_party_observation_digests is invalid"
+            )
+        if observation_digests != expected_observation_digests:
+            raise BenchmarkError(
+                f"{evidence_label}.first_party observations do not re-derive"
+            )
+        for digest in observation_digests:
+            observation = expected_observations[digest]
+            if cas.read(digest, max_bytes=_MAX_EVIDENCE_BYTES) != (
+                observation.document_json.encode("ascii")
+            ):
+                raise BenchmarkError(
+                    f"{evidence_label}.first_party observation bytes changed"
+                )
+
     raw_component_digests = envelope["component_evidence_digests"]
     if not isinstance(raw_component_digests, list):
         raise BenchmarkError(
@@ -1856,6 +1929,7 @@ def _verify_candidate_evidence(
         "policy": policy,
         "candidate_system": candidate_system,
         "source_graph": source_graph,
+        "first_party_observations": first_party_observations,
     }
 
 
@@ -1898,7 +1972,10 @@ def _verify_evidence(
             envelope=envelope,
             acceptance_ledger=acceptance_ledger,
         )
-    if envelope.get("schema") == "aragorn/benchmark-candidate-evidence/v1":
+    if envelope.get("schema") in {
+        "aragorn/benchmark-candidate-evidence/v1",
+        "aragorn/benchmark-candidate-evidence/v2",
+    }:
         return _verify_candidate_evidence(
             cas,
             outcome,
@@ -2898,6 +2975,7 @@ def _verify_oci_evidence_v2(
         expected_verdict, expected_reasons = normalize_vendor_observations(
             selected["name"],
             observations,
+            normalization=normalization,
         )
 
     if outcome["verdict"] != expected_verdict or outcome["reason_codes"] != list(
@@ -2929,11 +3007,27 @@ def _normalize_pinned_vendor_report(
 
 
 def normalize_vendor_observations(
-    baseline_name: str, observations: tuple[Any, ...]
+    baseline_name: str,
+    observations: tuple[Any, ...],
+    *,
+    normalization: str | None = None,
 ) -> tuple[str, tuple[str, ...]]:
-    """Derive an outcome while excluding only a trusted completion observation."""
+    """Derive an outcome under an explicitly versioned vendor policy."""
 
     spec = _OCI_BASELINES[baseline_name]
+    legacy_normalization = spec["normalization"]
+    actionable_normalization = {
+        "cisco-skill-scanner": "cisco-ai-skill-scanner-2.0.12/v2",
+        "skillspector": "nvidia-skillspector-2.4.3/v2",
+    }[baseline_name]
+    selected_normalization = (
+        legacy_normalization if normalization is None else normalization
+    )
+    if selected_normalization not in {
+        legacy_normalization,
+        actionable_normalization,
+    }:
+        raise BenchmarkError("vendor outcome normalization is unsupported")
     completion_reason = spec["completion_reason"]
     completion = [
         observation
@@ -2946,6 +3040,10 @@ def normalize_vendor_observations(
         observation
         for observation in observations
         if observation.reason_code != completion_reason
+        and (
+            selected_normalization == legacy_normalization
+            or _SEVERITY_RANK[observation.severity] >= _SEVERITY_RANK["medium"]
+        )
     ]
     if not findings:
         return "ALLOW", ()
@@ -3329,7 +3427,15 @@ def _validate_oci_effective_config(
         or not 1 <= output_bytes <= _MAX_EVIDENCE_BYTES
     ):
         raise BenchmarkError(f"{config_label}.limits.output_bytes is invalid")
-    if document["normalization"] != spec["normalization"]:
+    supported_normalizations = {spec["normalization"]}
+    if evidence_schema == "aragorn/benchmark-evidence/v3":
+        supported_normalizations.add(
+            {
+                "cisco-skill-scanner": "cisco-ai-skill-scanner-2.0.12/v2",
+                "skillspector": "nvidia-skillspector-2.4.3/v2",
+            }[selected["name"]]
+        )
+    if document["normalization"] not in supported_normalizations:
         raise BenchmarkError(f"{config_label}.normalization is not pinned")
     return spec
 

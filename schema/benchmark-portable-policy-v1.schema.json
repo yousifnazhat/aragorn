@@ -106,7 +106,9 @@
     "normalization": {
       "enum": [
         "cisco-ai-skill-scanner-2.0.12/v1",
-        "nvidia-skillspector-2.4.3/v1"
+        "cisco-ai-skill-scanner-2.0.12/v2",
+        "nvidia-skillspector-2.4.3/v1",
+        "nvidia-skillspector-2.4.3/v2"
       ]
     }
   },
@@ -130,7 +132,10 @@
               "required": ["platform_manifest_digest"]
             },
             "normalization": {
-              "const": "cisco-ai-skill-scanner-2.0.12/v1"
+              "enum": [
+                "cisco-ai-skill-scanner-2.0.12/v1",
+                "cisco-ai-skill-scanner-2.0.12/v2"
+              ]
             }
           }
         },
@@ -151,7 +156,10 @@
               "required": ["platform_manifest_digest"]
             },
             "normalization": {
-              "const": "nvidia-skillspector-2.4.3/v1"
+              "enum": [
+                "nvidia-skillspector-2.4.3/v1",
+                "nvidia-skillspector-2.4.3/v2"
+              ]
             }
           }
         }

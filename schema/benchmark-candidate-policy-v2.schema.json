@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn comparative benchmark candidate policy v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "algorithm",
+    "candidate",
+    "required_comparators"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-candidate-policy/v2"},
+    "assurance": {"const": "comparative_candidate_only_not_admission"},
+    "algorithm": {"const": "source-graph-fail-closed-vendor-union/v2"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "required_comparators": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/system"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$",
+      "maxLength": 256
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest"],
+      "properties": {
+        "name": {"const": "aragorn"},
+        "version": {"$ref": "#/$defs/version"},
+        "implementation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "implementation_digest",
+        "config_digest"
+      ],
+      "properties": {
+        "name": {"$ref": "#/$defs/id"},
+        "version": {"$ref": "#/$defs/version"},
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

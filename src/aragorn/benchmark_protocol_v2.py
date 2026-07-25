@@ -128,14 +128,20 @@ _SYSTEM_IDENTITIES = {
         "implementation_digest": (
             "sha256:7fadcfbe836eef9490feba0fadd2ada564c11eb541077e3efee5f61edbd2e65c"
         ),
-        "normalization": "cisco-ai-skill-scanner-2.0.12/v1",
+        "normalizations": (
+            "cisco-ai-skill-scanner-2.0.12/v1",
+            "cisco-ai-skill-scanner-2.0.12/v2",
+        ),
     },
     "skillspector": {
         "version": "2.4.3+git.a54947c",
         "implementation_digest": (
             "sha256:e731be01105243f94437a4b9bd449bd46bbcb5cb306f44b4845121d109a4a95e"
         ),
-        "normalization": "nvidia-skillspector-2.4.3/v1",
+        "normalizations": (
+            "nvidia-skillspector-2.4.3/v1",
+            "nvidia-skillspector-2.4.3/v2",
+        ),
     },
 }
 _FORBIDDEN_ENVIRONMENT_NAMES = {
@@ -216,7 +222,7 @@ def validate_portable_policy(document: object) -> None:
     _validate_limits(policy["limits"], "portable policy limits")
 
     normalization = policy["normalization"]
-    if normalization != system["normalization"]:
+    if normalization not in system["normalizations"]:
         raise WorkerProtocolError(
             "portable policy normalization does not match the selected system"
         )
@@ -415,7 +421,7 @@ def validate_worker_result_v2(document: object) -> None:
 
     execution = _validate_execution(result["execution"], system["name"])
     normalization = result["normalization"]
-    if normalization != system["normalization"]:
+    if normalization not in system["normalizations"]:
         raise WorkerProtocolError(
             "worker result v2 normalization does not match the selected system"
         )
@@ -756,7 +762,7 @@ def verify_effective_config_binding_v2(
     )
 
 
-def _validate_system(value: object, label: str) -> dict[str, str]:
+def _validate_system(value: object, label: str) -> dict[str, Any]:
     system = _exact_object(
         value,
         {"name", "version", "implementation_digest"},
@@ -787,7 +793,7 @@ def _validate_system(value: object, label: str) -> dict[str, str]:
         "name": name,
         "version": version,
         "implementation_digest": implementation_digest,
-        "normalization": expected["normalization"],
+        "normalizations": expected["normalizations"],
     }
 
 

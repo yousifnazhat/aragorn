@@ -737,6 +737,36 @@ class WorkerResultV2Tests(unittest.TestCase):
         normalizer_order["observation_digests"] = [digest("b"), digest("a")]
         validate_worker_result_v2(normalizer_order)
 
+    def test_versioned_normalization_is_exactly_bound(self) -> None:
+        _request, subject, policy = worker_request()
+        policy["normalization"] = "cisco-ai-skill-scanner-2.0.12/v2"
+        request = build_worker_request_v2(
+            subject,
+            policy,
+            verifier_challenge="b" * 64,
+            token_hex=lambda _size: "a" * 32,
+        )
+        result = worker_result(request, policy)
+        validate_worker_result_v2(result)
+        verify_request_result_binding_v2(
+            request,
+            policy,
+            result,
+            expected_request_digest=canonical_request_digest_v2(request),
+            expected_challenge=request["verifier_challenge"],
+        )
+
+        result["normalization"] = "cisco-ai-skill-scanner-2.0.12/v1"
+        validate_worker_result_v2(result)
+        with self.assertRaisesRegex(WorkerProtocolError, "normalization"):
+            verify_request_result_binding_v2(
+                request,
+                policy,
+                result,
+                expected_request_digest=canonical_request_digest_v2(request),
+                expected_challenge=request["verifier_challenge"],
+            )
+
     def test_every_result_binding_fails_closed_on_drift(self) -> None:
         request, _subject, policy = worker_request()
         request_digest = canonical_request_digest_v2(request)

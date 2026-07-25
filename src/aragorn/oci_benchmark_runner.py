@@ -270,6 +270,7 @@ def _preflight(
     docker_executable: str | os.PathLike[str],
     timeout_seconds: float,
     output_limit_bytes: int,
+    normalizations: dict[str, str] | None = None,
 ) -> tuple[_PreparedBaseline, ...]:
     timeout, output_limit = _validate_limits(timeout_seconds, output_limit_bytes)
     raw_lock, baselines = load_baseline_lock(lock_path)
@@ -310,6 +311,11 @@ def _preflight(
                     timeout_seconds=timeout,
                     output_limit_bytes=output_limit,
                     runner_identity_json=runner_identity.document_json,
+                    normalization=(
+                        None
+                        if normalizations is None
+                        else normalizations.get(baseline["name"])
+                    ),
                 )
                 prepared.append(
                     _PreparedBaseline(
@@ -430,10 +436,15 @@ def _retain_execution_evidence(
 
     if result.returncode is None or result.container_id is None:
         raise RunnerError("retainable OCI execution lacks a concrete exit identity")
+    effective = _load_object(
+        prepared.effective_config_json,
+        "effective OCI configuration",
+    )
     if status == "ok":
         verdict, reason_codes = normalize_vendor_observations(
             prepared.baseline["name"],
             observations,
+            normalization=effective["normalization"],
         )
     else:
         verdict = "ERROR"
@@ -525,9 +536,7 @@ def _retain_execution_evidence(
             "returncode": result.returncode,
             "container_id": result.container_id,
         },
-        "normalization": _load_object(
-            result.effective_config_json, "effective configuration"
-        )["normalization"],
+        "normalization": effective["normalization"],
         "verdict": verdict,
         "reason_codes": list(reason_codes),
     }

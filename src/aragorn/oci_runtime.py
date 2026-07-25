@@ -93,6 +93,16 @@ _EXPECTED_IDENTITIES = {
         },
     },
 }
+_NORMALIZATIONS = {
+    "cisco-skill-scanner": (
+        "cisco-ai-skill-scanner-2.0.12/v1",
+        "cisco-ai-skill-scanner-2.0.12/v2",
+    ),
+    "skillspector": (
+        "nvidia-skillspector-2.4.3/v1",
+        "nvidia-skillspector-2.4.3/v2",
+    ),
+}
 _EXPECTED_RUNTIME = {
     "engine": "docker",
     "pull": "never",
@@ -1323,12 +1333,19 @@ def _build_effective_config_json(
     timeout_seconds: float,
     output_limit_bytes: int,
     runner_identity_json: bytes,
+    normalization: str | None = None,
 ) -> bytes:
     """Build the single canonical runtime identity used by preflight and runs."""
 
     runner_identity = _load(runner_identity_json, "Docker runner identity")
     if not isinstance(runner_identity, dict):
         raise VerificationError("Docker runner identity must be an object")
+    supported_normalizations = _NORMALIZATIONS[baseline["name"]]
+    selected_normalization = (
+        supported_normalizations[0] if normalization is None else normalization
+    )
+    if selected_normalization not in supported_normalizations:
+        raise VerificationError("OCI normalization policy is unsupported")
     return _canonical_json(
         {
             "schema": "aragorn/benchmark-oci-system-config/v2",
@@ -1357,10 +1374,7 @@ def _build_effective_config_json(
                 "timeout_seconds": float(timeout_seconds),
                 "output_bytes": output_limit_bytes,
             },
-            "normalization": {
-                "cisco-skill-scanner": "cisco-ai-skill-scanner-2.0.12/v1",
-                "skillspector": "nvidia-skillspector-2.4.3/v1",
-            }[baseline["name"]],
+            "normalization": selected_normalization,
         }
     )
 
@@ -1642,6 +1656,7 @@ def run_baseline(
     output_limit_bytes: int = 1024 * 1024,
     expected_tree_digest: str,
     expected_effective_config_json: bytes | None = None,
+    normalization: str | None = None,
 ) -> OCIExecutionResult | OCIExecutionError:
     """Run a pinned OCI baseline only after inspecting its effective policy."""
 
@@ -1832,6 +1847,7 @@ def run_baseline(
                 timeout_seconds=float(timeout_seconds),
                 output_limit_bytes=output_limit_bytes,
                 runner_identity_json=runner_identity_json,
+                normalization=normalization,
             )
         except VerificationError as exc:
             return failure("CONFIGURATION_FAILED", str(exc))

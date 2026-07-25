@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -47,7 +48,6 @@ from aragorn.cas import CAS
 from aragorn.corpus_audit import audit_suite
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
-from aragorn.phase0_candidate import compose_candidate_decision
 from aragorn.standards_gate import validate_standards_gate
 
 
@@ -72,6 +72,45 @@ def _outcome(evidence: dict[str, object], evidence_digest: str) -> dict[str, obj
         "verdict": evidence["verdict"],
         "reason_codes": evidence["reason_codes"],
     }
+
+
+def _compose_historical_candidate(
+    graph: dict[str, object],
+    components: list[dict[str, object]],
+) -> tuple[str, list[str]]:
+    by_name = {item["system"]["name"]: item for item in components}
+    errors = set()
+    if graph["closure"]["status"] != "complete":
+        errors.add("SOURCE_REFERENCE_GRAPH_INCOMPLETE")
+    for name, component in by_name.items():
+        if component["verdict"] == "ERROR":
+            errors.add(
+                "COMPARATOR_ERROR_"
+                + re.sub(r"[^A-Z0-9]+", "_", name.upper()).strip("_")
+            )
+    if errors:
+        return "ERROR", sorted(errors)
+    denied = [item for item in components if item["verdict"] == "DENY"]
+    if denied:
+        reasons = sorted(
+            {
+                reason
+                for item in denied
+                for reason in item["reason_codes"]
+                if reason != "NVIDIA_ANALYSIS_INCOMPLETE"
+            }
+        )
+        return "DENY", reasons or ["COMPARATOR_DENY"]
+    reviews = set()
+    if by_name["cisco-skill-scanner"]["verdict"] == "REVIEW":
+        reviews.update(by_name["cisco-skill-scanner"]["reason_codes"])
+    if by_name["skillspector"]["verdict"] == "REVIEW":
+        reviews.update(
+            reason
+            for reason in by_name["skillspector"]["reason_codes"]
+            if reason != "NVIDIA_ANALYSIS_INCOMPLETE"
+        )
+    return ("REVIEW", sorted(reviews)) if reviews else ("ALLOW", [])
 
 
 def validate_candidate_composition_smoke_receipt(
@@ -468,10 +507,9 @@ def validate_candidate_composition_smoke_receipt(
             key=lambda item: item[1]["system"]["name"],
         )
         graph_digest, graph = graphs_by_case[evidence["case_id"]]
-        verdict, reason_codes = compose_candidate_decision(
-            candidate_policy,
+        verdict, reason_codes = _compose_historical_candidate(
             graph,
-            (item[1] for item in components),
+            [item[1] for item in components],
         )
         dispatch_case = dispatch_cases[evidence["case_id"]]
         expected_evidence = {
@@ -759,6 +797,12 @@ def main() -> int:
     validators["benchmark-candidate-policy-v1.schema.json"].validate(
         phase0_candidate_policy
     )
+    phase0_candidate_policy_v2 = load(
+        ROOT / "benchmark" / "phase0-candidate-policy-v2.json"
+    )
+    validators["benchmark-candidate-policy-v2.schema.json"].validate(
+        phase0_candidate_policy_v2
+    )
     portable_identities = []
     for filename in (
         "phase0-cisco-portable-policy.json",
@@ -775,6 +819,23 @@ def main() -> int:
     if portable_identities != phase0_candidate_policy["required_comparators"]:
         raise AssertionError(
             "checked portable-policy identities do not match candidate policy"
+        )
+    portable_identities_v2 = []
+    for filename in (
+        "phase0-cisco-portable-policy-v2.json",
+        "phase0-skillspector-portable-policy-v2.json",
+    ):
+        portable_policy = load(ROOT / "benchmark" / filename)
+        validators["benchmark-portable-policy-v1.schema.json"].validate(portable_policy)
+        portable_identities_v2.append(
+            {
+                **portable_policy["system"],
+                "config_digest": portable_policy_digest(portable_policy),
+            }
+        )
+    if portable_identities_v2 != phase0_candidate_policy_v2["required_comparators"]:
+        raise AssertionError(
+            "checked portable-policy identities do not match v2 candidate policy"
         )
     validators["benchmark-e2e-smoke-receipt-v1.schema.json"].validate(
         load(
@@ -1072,6 +1133,13 @@ def main() -> int:
     }
     validators["benchmark-candidate-evidence-v1.schema.json"].validate(
         candidate_evidence
+    )
+    validators["benchmark-candidate-evidence-v2.schema.json"].validate(
+        {
+            **candidate_evidence,
+            "schema": "aragorn/benchmark-candidate-evidence/v2",
+            "first_party_observation_digests": [],
+        }
     )
     validators["benchmark-candidate-composition-v1.schema.json"].validate(
         {

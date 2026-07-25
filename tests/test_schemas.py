@@ -33,6 +33,7 @@ EXPECTED_CONTRACTS = {
     "benchmark-phase0-accounting-v1.schema.json": "aragorn/benchmark-phase0-accounting/v1",
     "benchmark-phase0-gate-report-v1.schema.json": "aragorn/benchmark-phase0-gate-report/v1",
     "benchmark-phase0-gate-report-v2.schema.json": "aragorn/benchmark-phase0-gate-report/v2",
+    "benchmark-phase0-hidden-calibration-result-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v1",
     "benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v1",
     "benchmark-phase0-hidden-suite-freeze-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v2",
     "benchmark-phase0-hidden-preparation-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v1",

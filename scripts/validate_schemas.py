@@ -1037,6 +1037,80 @@ def main() -> int:
             calibration_receipt,
             _V2_GATE,
         )
+    calibration_result_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-calibration-v2-result-2026-07-25.json"
+    )
+    if calibration_result_path.exists():
+        if not calibration_preparation_path.exists():
+            raise AssertionError(
+                "calibration result requires its retained preparation receipt"
+            )
+        calibration_result_raw = calibration_result_path.read_bytes()
+        calibration_result = json.loads(calibration_result_raw)
+        validators[
+            "benchmark-phase0-hidden-calibration-result-receipt-v1.schema.json"
+        ].validate(calibration_result)
+        if calibration_result_raw != canonical_json(calibration_result):
+            raise AssertionError("calibration result receipt is not canonical JSON")
+        worker_run = calibration_result["worker_run_receipt"]
+        gate_report = calibration_result["gate_report"]
+        source = calibration_result["source"]
+        worker_run_digest = (
+            "sha256:" + hashlib.sha256(canonical_json(worker_run)).hexdigest()
+        )
+        gate_report_file_digest = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(gate_report, sort_keys=True).encode("ascii") + b"\n"
+            ).hexdigest()
+        )
+        preparation_digest = (
+            "sha256:" + hashlib.sha256(calibration_preparation_raw).hexdigest()
+        )
+        calibration_lock_digest = (
+            "sha256:" + hashlib.sha256(calibration_lock_raw).hexdigest()
+        )
+        if source["worker_run_receipt_digest"] != worker_run_digest:
+            raise AssertionError("calibration worker receipt digest drift")
+        if source["gate_report_file_digest"] != gate_report_file_digest:
+            raise AssertionError("calibration gate report file digest drift")
+        if source["evaluator_commit"] != worker_run["source"]["runner_commit"]:
+            raise AssertionError("calibration evaluator commit drift")
+        if (
+            worker_run["source"]["preparation_receipt_digest"]
+            != preparation_digest
+        ):
+            raise AssertionError("calibration preparation receipt digest drift")
+        if worker_run["state"]["binding_digest"] != _V2_GATE.state_binding_digest:
+            raise AssertionError("calibration run state binding drift")
+        if (
+            worker_run["limitations"]["evaluation_status"]
+            != calibration_result["evaluation_status"]
+        ):
+            raise AssertionError("calibration run status drift")
+        if (
+            worker_run["composition"]["outcomes_digest"]
+            != gate_report["outcomes_digest"]
+        ):
+            raise AssertionError("calibration outcome digest drift")
+        expected_gate_bindings = {
+            "corpus_lock_digest": calibration_lock["corpus_lock_digest"],
+            "public_manifest_digest": calibration_lock["public_manifest_digest"],
+            "hidden_suite_lock_digest": calibration_lock_digest,
+            "candidate_policy_digest": calibration_lock[
+                "candidate_policy_digest"
+            ],
+            "label_ledger_digest": calibration_lock["label_ledger_digest"],
+            "suite_digest": calibration_lock["suite_digest"],
+        }
+        for field, expected in expected_gate_bindings.items():
+            if gate_report[field] != expected:
+                raise AssertionError(f"calibration gate report {field} drift")
+        if gate_report["comparison"]["passed"]:
+            raise AssertionError("retained calibration result unexpectedly passed")
     validators["benchmark-phase0-hidden-worker-run-receipt-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",

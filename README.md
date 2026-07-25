@@ -525,8 +525,18 @@ passphrase caching in a private temporary home, derives the four pre-outcome
 paths from one protected run-state root, retains their binding digest, and emits
 no per-case labels to stdout or the repository. The operator UID remains
 trusted; this is not same-UID or hardware-backed attestation. Verify the signed
-commit containing the lock before dispatch. The next gate is to repeat the
-authenticated protocol-v2 path in fresh mount-free workers for all 448 cases.
+commit containing the lock before dispatch.
+`scripts/prepare_hidden_suite.py` is the one-shot production preparation gate.
+It must itself be present in a clean, signed descendant of the freeze commit;
+it accepts an operator-designated public worker trust record, publishes the
+verifier-owned trust store outside the repository, re-verifies the frozen suite,
+creates the exact 896-job comparator matrix, and semantically imports every
+label-free worker handoff before retaining a digest-only receipt. Guest key
+generation is an operator assertion until worker measurements prove software
+key possession; it is not VM or hardware attestation. A failed preparation is
+never retried in place because the control CAS may contain partial state. The
+next gate is to repeat the authenticated protocol-v2 path in a fresh mount-free
+worker for all 448 cases.
 Protect labels, dispatch, challenges, expectations, trust store, and
 consumption ledger; keep declared-byte test transport outside every acceptance
 path. The candidate `implementation_digest` binds all `src/aragorn` Python

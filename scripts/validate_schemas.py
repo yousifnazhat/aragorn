@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from freeze_hidden_suite import validate_freeze_receipt_bindings
+from prepare_hidden_suite import validate_retained_preparation_receipt
 
 from aragorn.acquire import ingest_local
 from aragorn.artifact_closure import resolve_source_graph
@@ -914,6 +915,21 @@ def main() -> int:
         phase0_corpus_lock,
         phase0_corpus_lock_raw,
     )
+    hidden_preparation_path = (
+        ROOT / "benchmark" / "receipts" / "phase0-hidden-preparation-2026-07-24.json"
+    )
+    if hidden_preparation_path.exists():
+        hidden_preparation_raw = hidden_preparation_path.read_bytes()
+        hidden_preparation = json.loads(hidden_preparation_raw)
+        validators[
+            "benchmark-phase0-hidden-preparation-receipt-v1.schema.json"
+        ].validate(hidden_preparation)
+        validate_retained_preparation_receipt(
+            hidden_preparation,
+            hidden_preparation_raw,
+            hidden_lock,
+            hidden_receipt,
+        )
     comparator_system = {
         "name": "cisco-skill-scanner",
         "version": "2.0.12",

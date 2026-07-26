@@ -111,6 +111,14 @@ _PHASE0_CORPUS_LOCKS = {
         "local-v4.0.0",
         re.compile(r"v4-[0-9a-f]{24}\Z"),
     ),
+    (
+        "sha256:"
+        "88961457a794c142402278b4ff62fd3eab4fce07f1171f73c1047acc453df28e"
+    ): (
+        "aragorn/benchmark-corpus-provenance-lock/v2",
+        "local-v5.0.0",
+        re.compile(r"v5-[0-9a-f]{24}\Z"),
+    ),
 }
 _CONTAINER_ID = re.compile(r"[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")

@@ -198,6 +198,76 @@ class GitHubAcquisitionTests(unittest.TestCase):
         )
         self.assertFalse(any("?recursive" in path for path in calls + second_calls))
 
+    def test_bearer_token_is_redacted_and_never_retained(self) -> None:
+        token = "github_pat_private-evaluation-token"
+        responses = valid_responses()
+        observed_authorization_reprs: list[str] = []
+
+        def request(path: str, **kwargs: object) -> dict[str, object]:
+            observed_authorization_reprs.append(repr(kwargs["authorization"]))
+            return responses[path]
+
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "state"
+            cas = CAS(state)
+            with patch.object(
+                github_acquire,
+                "_request_json",
+                side_effect=request,
+            ):
+                manifest = acquire_github_commit(
+                    "https://github.com/example/project",
+                    COMMIT,
+                    "skills/demo",
+                    cas,
+                    bearer_token=token,
+                )
+            retained = b"".join(
+                path.read_bytes() for path in state.rglob("*") if path.is_file()
+            )
+
+        self.assertTrue(observed_authorization_reprs)
+        self.assertTrue(
+            all(
+                value == "_BearerToken(<redacted>)"
+                for value in observed_authorization_reprs
+            )
+        )
+        self.assertNotIn(token, json.dumps(manifest, sort_keys=True))
+        self.assertNotIn(token.encode("ascii"), retained)
+
+    def test_invalid_bearer_tokens_fail_before_network_without_echo(self) -> None:
+        invalid = (
+            b"private-token",
+            "",
+            "private token",
+            "private\ttoken",
+            "private\ntoken",
+            "private\x00token",
+            "private\u00a0token",
+            "private-\N{LATIN SMALL LETTER E WITH ACUTE}-token",
+            "p" * 1025,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "state")
+            for value in invalid:
+                with self.subTest(value=repr(value)):
+                    with patch.object(github_acquire, "_request_json") as request:
+                        with self.assertRaises(GitHubAcquisitionError) as raised:
+                            acquire_github_commit(
+                                "https://github.com/example/project",
+                                COMMIT,
+                                "skills/demo",
+                                cas,
+                                bearer_token=value,
+                            )
+                    request.assert_not_called()
+                    rendered = repr(raised.exception)
+                    if isinstance(value, str) and len(value) > 8:
+                        self.assertNotIn(value, rendered)
+                    if isinstance(value, bytes):
+                        self.assertNotIn(value.decode("ascii"), rendered)
+
     def test_repository_hash_algorithm_and_commit_are_exact(self) -> None:
         cases = (
             (
@@ -566,7 +636,102 @@ class GitHubTransportTests(unittest.TestCase):
         self.assertIn("User-Agent", headers)
         self.assertNotIn("Authorization", headers)
         self.assertNotIn("Proxy-Authorization", headers)
+        connection.set_debuglevel.assert_called_once_with(0)
         connection.close.assert_called_once()
+
+    def test_explicit_bearer_token_is_sent_only_to_the_fixed_transport(self) -> None:
+        token = "github_pat_private-transport-token"
+        authorization = github_acquire._validate_bearer_token(token)
+        connection = MagicMock()
+        connection.getresponse.return_value = self.response()
+        with patch.object(
+            github_acquire.http.client,
+            "HTTPSConnection",
+            return_value=connection,
+        ) as constructor:
+            result = github_acquire._request_json(
+                "/repos/example/project/hash-algorithm",
+                max_bytes=1024,
+                timeout_seconds=1.0,
+                budget=github_acquire._RequestBudget(1, 1024),
+                authorization=authorization,
+            )
+
+        self.assertEqual(result, {"hash_algorithm": "sha1"})
+        self.assertEqual(constructor.call_args.args, (API_HOST,))
+        self.assertEqual(
+            connection.request.call_args.args,
+            ("GET", "/repos/example/project/hash-algorithm"),
+        )
+        headers = connection.request.call_args.kwargs["headers"]
+        self.assertEqual(headers["Authorization"], f"Bearer {token}")
+        self.assertNotIn("Proxy-Authorization", headers)
+        self.assertNotIn(token, repr(authorization))
+
+    def test_authenticated_transport_redacts_token_from_failures(self) -> None:
+        token = "github_pat_private-error-token"
+        authorization = github_acquire._validate_bearer_token(token)
+        connection = MagicMock()
+        connection.request.side_effect = OSError(f"transport echoed {token}")
+        with patch.object(
+            github_acquire.http.client,
+            "HTTPSConnection",
+            return_value=connection,
+        ):
+            with self.assertRaises(GitHubAcquisitionError) as raised:
+                github_acquire._request_json(
+                    "/repos/example/project/hash-algorithm",
+                    max_bytes=1024,
+                    timeout_seconds=1.0,
+                    budget=github_acquire._RequestBudget(1, 1024),
+                    authorization=authorization,
+                )
+
+        self.assertNotIn(token, str(raised.exception))
+        self.assertNotIn(token, repr(raised.exception))
+        self.assertIsNone(raised.exception.__cause__)
+
+    def test_authenticated_response_errors_do_not_chain_token_text(self) -> None:
+        token = "github_pat_private-response-token"
+        authorization = github_acquire._validate_bearer_token(token)
+        connection = MagicMock()
+        connection.getresponse.return_value = self.response(
+            headers={"Content-Length": token}
+        )
+        with patch.object(
+            github_acquire.http.client,
+            "HTTPSConnection",
+            return_value=connection,
+        ):
+            with self.assertRaises(GitHubAcquisitionError) as raised:
+                github_acquire._request_json(
+                    "/repos/example/project/hash-algorithm",
+                    max_bytes=1024,
+                    timeout_seconds=1.0,
+                    budget=github_acquire._RequestBudget(1, 1024),
+                    authorization=authorization,
+                )
+
+        self.assertNotIn(token, repr(raised.exception))
+        self.assertIsNone(raised.exception.__cause__)
+
+    def test_transport_rejects_unvalidated_authorization_before_network(self) -> None:
+        token = "github_pat_unvalidated-token"
+        with patch.object(
+            github_acquire.http.client,
+            "HTTPSConnection",
+        ) as constructor:
+            with self.assertRaises(GitHubAcquisitionError) as raised:
+                github_acquire._request_json(
+                    "/repos/example/project/hash-algorithm",
+                    max_bytes=1024,
+                    timeout_seconds=1.0,
+                    budget=github_acquire._RequestBudget(1, 1024),
+                    authorization=token,
+                )
+
+        constructor.assert_not_called()
+        self.assertNotIn(token, repr(raised.exception))
 
     def test_transport_rejects_ambient_ca_overrides_before_network(self) -> None:
         for variable in ("SSL_CERT_FILE", "SSL_CERT_DIR"):

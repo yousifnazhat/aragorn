@@ -73,7 +73,21 @@ _PHASE0_MINIMUM_ATTACK_FLAG_DELTA = Fraction(1, 10)
 _PHASE0_CORPUS_LOCK_DIGEST = (
     "sha256:bbd4c584fa06d2ef7ee9d69011bf756432bb0f6f06c16b6f9dfd0cde87267fb8"
 )
-_PHASE0_OPAQUE_CASE_ID = re.compile(r"case-[0-9a-f]{16}\Z")
+_PHASE0_CORPUS_LOCKS = {
+    _PHASE0_CORPUS_LOCK_DIGEST: (
+        "aragorn/benchmark-corpus-provenance-lock/v1",
+        "independent-v1.0.0",
+        re.compile(r"case-[0-9a-f]{16}\Z"),
+    ),
+    (
+        "sha256:"
+        "2390161f836ac42a5b8526d5ec0b11a2dce9a3c693e3d76513f7b4959eb533b9"
+    ): (
+        "aragorn/benchmark-corpus-provenance-lock/v2",
+        "independent-v3.0.0",
+        re.compile(r"v3-[0-9a-f]{24}\Z"),
+    ),
+}
 _CONTAINER_ID = re.compile(r"[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -1275,12 +1289,24 @@ def _validate_outcomes(
         expected_count=expected_count,
         suite_digest=suite_digest,
     )
-    _verify_candidate_batch_bindings(
-        candidate_bindings,
-        expected_count=expected_count,
-        suite_digest=suite_digest,
-        expected_policy_digest=expected_candidate_policy_digest,
-    )
+    if candidate_bindings and all(
+        item["evidence_kind"] == "authenticated_worker"
+        and item["dispatch"].get("schema")
+        == "aragorn/benchmark-private-dispatch/v1"
+        for item in candidate_bindings
+    ):
+        _verify_authenticated_worker_batch_bindings(
+            candidate_bindings,
+            expected_count=expected_count,
+            suite_digest=suite_digest,
+        )
+    else:
+        _verify_candidate_batch_bindings(
+            candidate_bindings,
+            expected_count=expected_count,
+            suite_digest=suite_digest,
+            expected_policy_digest=expected_candidate_policy_digest,
+        )
     return normalized
 
 
@@ -1324,6 +1350,44 @@ def _verify_v4_batch_bindings(
     )
     if bindings[0]["ledger_id"] != expected_ledger_id:
         raise BenchmarkError("evidence v4 nonce binding digest does not re-derive")
+
+
+def _verify_authenticated_worker_batch_bindings(
+    bindings: list[dict[str, Any]],
+    *,
+    expected_count: int,
+    suite_digest: str,
+) -> None:
+    if len(bindings) != expected_count:
+        raise BenchmarkError(
+            "authenticated worker evidence cannot be mixed with older evidence"
+        )
+    if (
+        len({item["dispatch_digest"] for item in bindings}) != 1
+        or any(item["dispatch"] != bindings[0]["dispatch"] for item in bindings)
+    ):
+        raise BenchmarkError(
+            "authenticated worker outcomes do not share one dispatch"
+        )
+    dispatch = bindings[0]["dispatch"]
+    if (
+        dispatch.get("schema") != "aragorn/benchmark-private-dispatch/v1"
+        or {entry["suite_digest"] for entry in dispatch["jobs"]} != {suite_digest}
+    ):
+        raise BenchmarkError(
+            "authenticated worker dispatch does not bind the suite"
+        )
+    dispatch_jobs = {entry["job_id"]: entry for entry in dispatch["jobs"]}
+    bound_jobs = {item["job"]["job_id"]: item["job"] for item in bindings}
+    if (
+        len(dispatch_jobs) != expected_count
+        or len(bound_jobs) != expected_count
+        or dispatch_jobs != bound_jobs
+        or len({item["evidence_digest"] for item in bindings}) != expected_count
+    ):
+        raise BenchmarkError(
+            "authenticated worker evidence does not close the exact dispatch"
+        )
 
 
 def _verify_candidate_batch_bindings(
@@ -1558,6 +1622,42 @@ def _load_candidate_dispatch(
     return dispatch_digest, dispatch
 
 
+def _load_authenticated_worker_dispatch(
+    cas: CAS,
+    digest: object,
+    *,
+    suite_digest: str,
+    label: str,
+) -> tuple[str, dict[str, Any]]:
+    dispatch_digest = _digest(digest, f"{label}.dispatch_digest")
+    dispatch = _read_canonical_document(
+        cas,
+        dispatch_digest,
+        f"{label}.dispatch",
+        max_bytes=_MAX_SUITE_BYTES,
+    )
+    from .label_blind_prepare import (
+        validate_private_dispatch,
+        validate_private_dispatch_v2,
+    )
+
+    try:
+        if dispatch.get("schema") == "aragorn/benchmark-private-dispatch/v1":
+            validate_private_dispatch(dispatch)
+            suites = {entry["suite_digest"] for entry in dispatch["jobs"]}
+            if suites != {suite_digest}:
+                raise ValueError("dispatch spans a different suite")
+        else:
+            validate_private_dispatch_v2(dispatch)
+            if dispatch["suite_digest"] != suite_digest:
+                raise ValueError("dispatch spans a different suite")
+    except (KeyError, ValueError) as exc:
+        raise BenchmarkError(f"{label}.dispatch is invalid: {exc}") from exc
+    if _digest_json(dispatch) != dispatch_digest:
+        raise BenchmarkError(f"{label}.dispatch is not canonical")
+    return dispatch_digest, dispatch
+
+
 def _verify_authenticated_worker_evidence(
     cas: CAS,
     outcome: dict[str, Any],
@@ -1593,12 +1693,20 @@ def _verify_authenticated_worker_evidence(
         label=label,
         envelope=envelope,
     )
-    dispatch_digest, dispatch = _load_candidate_dispatch(
-        cas,
-        envelope["dispatch_digest"],
-        suite_digest=outcome["suite_digest"],
-        label=evidence_label,
-    )
+    try:
+        dispatch_digest, dispatch = _load_candidate_dispatch(
+            cas,
+            envelope["dispatch_digest"],
+            suite_digest=outcome["suite_digest"],
+            label=evidence_label,
+        )
+    except BenchmarkError:
+        dispatch_digest, dispatch = _load_authenticated_worker_dispatch(
+            cas,
+            envelope["dispatch_digest"],
+            suite_digest=outcome["suite_digest"],
+            label=evidence_label,
+        )
     matches = [
         entry
         for entry in dispatch["jobs"]
@@ -1731,15 +1839,17 @@ def _verify_authenticated_worker_evidence(
             raise BenchmarkError(
                 f"{evidence_label}.worker_result.{field} does not match outcome"
             )
-    return {
+    binding = {
         "evidence_kind": "authenticated_worker",
         "evidence_digest": outcome["evidence_digest"],
         "envelope": envelope,
         "dispatch_digest": dispatch_digest,
         "dispatch": dispatch,
-        "policy_digest": dispatch["candidate_policy_digest"],
         "job": job,
     }
+    if dispatch["schema"] == "aragorn/benchmark-private-dispatch/v2":
+        binding["policy_digest"] = dispatch["candidate_policy_digest"]
+    return binding
 
 
 def _verify_candidate_evidence(
@@ -4911,35 +5021,47 @@ def _validate_phase0_hidden_binding(
 ) -> dict[str, str]:
     corpus_lock_raw = _read_bounded(corpus_lock_path)
     corpus_lock_digest = _digest_bytes(corpus_lock_raw)
-    if corpus_lock_digest != _PHASE0_CORPUS_LOCK_DIGEST:
+    corpus_identity = _PHASE0_CORPUS_LOCKS.get(corpus_lock_digest)
+    if corpus_identity is None:
         raise BenchmarkError("Phase 0 hidden gate corpus lock identity does not match")
+    expected_schema, expected_corpus_id, opaque_case_id = corpus_identity
     corpus_lock = _decode_json(corpus_lock_raw, "Phase 0 corpus lock")
     if not isinstance(corpus_lock, dict):
         raise BenchmarkError("Phase 0 corpus lock must be a JSON object")
+    corpus_lock_keys = {
+        "schema",
+        "corpus_id",
+        "assurance",
+        "case_count",
+        "runs_per_case",
+        "worker_archive",
+        "public_manifest",
+        "evaluator_archive",
+        "freeze",
+        "signing",
+    }
+    if expected_schema == "aragorn/benchmark-corpus-provenance-lock/v2":
+        corpus_lock_keys.update({"evaluator_encryption", "release_manifest"})
     _exact_keys(
         corpus_lock,
-        {
-            "schema",
-            "corpus_id",
-            "assurance",
-            "case_count",
-            "runs_per_case",
-            "worker_archive",
-            "public_manifest",
-            "evaluator_archive",
-            "freeze",
-            "signing",
-        },
+        corpus_lock_keys,
         "Phase 0 corpus lock",
     )
     if (
-        corpus_lock["schema"]
-        != "aragorn/benchmark-corpus-provenance-lock/v1"
-        or corpus_lock["corpus_id"] != "independent-v1.0.0"
+        corpus_lock["schema"] != expected_schema
+        or corpus_lock["corpus_id"] != expected_corpus_id
         or corpus_lock["case_count"] != 448
         or corpus_lock["runs_per_case"] != 1
     ):
         raise BenchmarkError("Phase 0 hidden gate corpus lock is unsupported")
+    if expected_schema == "aragorn/benchmark-corpus-provenance-lock/v2" and (
+        corpus_lock["evaluator_encryption"]
+        != {
+            "profile": "openssl-aes-256-cbc-pbkdf2-sha256/v1",
+            "iterations": 600000,
+        }
+    ):
+        raise BenchmarkError("Phase 0 hidden gate corpus encryption is unsupported")
 
     public_manifest_raw = _read_bounded(public_manifest_path)
     public_manifest_digest = _digest_bytes(public_manifest_raw)
@@ -4981,7 +5103,7 @@ def _validate_phase0_hidden_binding(
         case_id = raw_entry["id"]
         if (
             not isinstance(case_id, str)
-            or _PHASE0_OPAQUE_CASE_ID.fullmatch(case_id) is None
+            or opaque_case_id.fullmatch(case_id) is None
         ):
             raise BenchmarkError(f"{label}.id is not an opaque case identifier")
         if case_id in entries:
@@ -5262,8 +5384,9 @@ def _validate_phase0_case_record(value: object, label: str) -> dict[str, Any]:
 
 def _phase0_reference_key(
     value: dict[str, Any],
-) -> tuple[str, str, int, int, str]:
+) -> tuple[str, str, str, int, int, str]:
     return (
+        value["source_commit"],
         value["source_repository_path"],
         value["source_blob_digest"],
         value["byte_offset"],
@@ -5278,6 +5401,12 @@ def _validate_phase0_reference_identity(
     if not isinstance(value, dict):
         raise BenchmarkError(f"{label} must be a JSON object")
     _exact_keys(value, expected, label)
+    source_commit = value["source_commit"]
+    if (
+        not isinstance(source_commit, str)
+        or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+    ):
+        raise BenchmarkError(f"{label}.source_commit must be a lowercase Git SHA-1")
     source_path = _relative_path(
         value["source_repository_path"], f"{label}.source_repository_path"
     ).as_posix()
@@ -5291,6 +5420,7 @@ def _validate_phase0_reference_identity(
         maximum=_MAX_FIXTURE_BYTES,
     )
     return {
+        "source_commit": source_commit,
         "source_repository_path": source_path,
         "source_blob_digest": _digest(
             value["source_blob_digest"], f"{label}.source_blob_digest"
@@ -5307,7 +5437,7 @@ def _validate_phase0_expected_references(
     if not isinstance(value, list) or len(value) > 10_000:
         raise BenchmarkError(f"{label} must be an array with at most 10000 entries")
     normalized = []
-    seen: set[tuple[str, str, int, int, str]] = set()
+    seen: set[tuple[str, str, str, int, int, str]] = set()
     for index, raw in enumerate(value):
         item_label = f"{label}[{index}]"
         item = _validate_phase0_reference_identity(
@@ -5315,15 +5445,26 @@ def _validate_phase0_expected_references(
             item_label,
             expected={
                 "source_repository_path",
+                "source_commit",
                 "source_blob_digest",
                 "byte_offset",
                 "literal_size",
                 "literal_digest",
+                "target_commit",
                 "target_repository_path",
                 "target_digest",
             },
         )
         assert isinstance(raw, dict)
+        target_commit = raw["target_commit"]
+        if (
+            not isinstance(target_commit, str)
+            or re.fullmatch(r"[0-9a-f]{40}", target_commit) is None
+        ):
+            raise BenchmarkError(
+                f"{item_label}.target_commit must be a lowercase Git SHA-1"
+            )
+        item["target_commit"] = target_commit
         item["target_repository_path"] = _relative_path(
             raw["target_repository_path"],
             f"{item_label}.target_repository_path",
@@ -5341,6 +5482,7 @@ def _validate_phase0_expected_references(
 
 def _phase0_reference_sort_key(value: dict[str, Any]) -> tuple[Any, ...]:
     return (
+        value["source_commit"],
         value["source_repository_path"],
         value["source_blob_digest"],
         value["byte_offset"],
@@ -5436,7 +5578,10 @@ def _load_phase0_expansion(
         raw["references"], f"{label}.references"
     )
     objects = _validate_phase0_expansion_objects(
-        raw["objects"], cas, f"{label}.objects"
+        raw["objects"],
+        cas,
+        f"{label}.objects",
+        root_commit=source["commit"],
     )
     closure = _validate_phase0_expansion_closure(raw["closure"], f"{label}.closure")
     accounting = _validate_phase0_expansion_accounting(
@@ -5500,16 +5645,23 @@ def _load_phase0_expansion(
                 f"{label} incomplete expansion root tree does not match the benchmark case"
             )
 
-    target_digests = dict(root["repository_targets"])
+    target_digests = {
+        (source["commit"], path): digest
+        for path, digest in root["repository_targets"].items()
+    }
     for item in objects:
-        if item["repository_path"] in target_digests:
-            raise BenchmarkError(f"{label} expansion target duplicates a root path")
-        target_digests[item["repository_path"]] = item["digest"]
+        target_identity = (item["commit"], item["repository_path"])
+        if target_identity in target_digests:
+            raise BenchmarkError(
+                f"{label} expansion target duplicates an exact commit path"
+            )
+        target_digests[target_identity] = item["digest"]
     source_content: dict[str, bytes] = {}
     for reference in references:
         source_path = reference["source_repository_path"]
+        source_commit = reference["source_commit"]
         source_digest = reference["source_blob_digest"]
-        if target_digests.get(source_path) != source_digest:
+        if target_digests.get((source_commit, source_path)) != source_digest:
             raise BenchmarkError(
                 f"{label} reference source is not bound to retained bytes"
             )
@@ -5537,7 +5689,7 @@ def _load_phase0_expansion(
         if reference["status"] == "unresolved":
             continue
         target_path = reference["target_repository_path"]
-        if target_path not in target_digests:
+        if (reference["target_commit"], target_path) not in target_digests:
             raise BenchmarkError(f"{label} resolved reference has no retained target")
     if closure["status"] == "complete":
         if not accounting["references"]["scan_complete"]:
@@ -5553,15 +5705,20 @@ def _load_phase0_expansion(
             raise BenchmarkError(
                 f"{label} complete expansion contains incomplete reference evidence"
             )
-        expanded_by_target: dict[str, list[dict[str, Any]]] = {}
+        expanded_by_target: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for reference in references:
             if reference["status"] == "expanded":
                 expanded_by_target.setdefault(
-                    reference["target_repository_path"], []
+                    (
+                        reference["target_commit"],
+                        reference["target_repository_path"],
+                    ),
+                    [],
                 ).append(
                     {
                         key: reference[key]
                         for key in (
+                            "source_commit",
                             "source_repository_path",
                             "source_blob_digest",
                             "byte_offset",
@@ -5571,7 +5728,8 @@ def _load_phase0_expansion(
                     }
                 )
         object_references = {
-            item["repository_path"]: item["references"] for item in objects
+            (item["commit"], item["repository_path"]): item["references"]
+            for item in objects
         }
         if object_references != {
             target: sorted(items, key=_phase0_reference_sort_key)
@@ -5891,7 +6049,7 @@ def _validate_phase0_expansion_references(
     if not isinstance(value, list) or len(value) > 10_000:
         raise BenchmarkError(f"{label} must contain at most 10000 references")
     normalized = []
-    seen: set[tuple[str, str, int, int, str]] = set()
+    seen: set[tuple[str, str, str, int, int, str]] = set()
     for index, raw in enumerate(value):
         item_label = f"{label}[{index}]"
         item = _validate_phase0_reference_identity(
@@ -5899,10 +6057,12 @@ def _validate_phase0_expansion_references(
             item_label,
             expected={
                 "source_repository_path",
+                "source_commit",
                 "source_blob_digest",
                 "byte_offset",
                 "literal_size",
                 "literal_digest",
+                "target_commit",
                 "target_repository_path",
                 "status",
                 "reason_code",
@@ -5913,14 +6073,29 @@ def _validate_phase0_expansion_references(
         if status not in {"root_resolved", "expanded", "unresolved"}:
             raise BenchmarkError(f"{item_label}.status is unsupported")
         target_path = raw["target_repository_path"]
+        target_commit = raw["target_commit"]
         reason = raw["reason_code"]
         if status == "unresolved":
+            if target_commit is not None and (
+                not isinstance(target_commit, str)
+                or re.fullmatch(r"[0-9a-f]{40}", target_commit) is None
+            ):
+                raise BenchmarkError(
+                    f"{item_label}.target_commit must be null or a lowercase Git SHA-1"
+                )
             if target_path is not None:
                 target_path = _relative_path(
                     target_path, f"{item_label}.target_repository_path"
                 ).as_posix()
             reason = _reason_code(reason, f"{item_label}.reason_code")
         else:
+            if (
+                not isinstance(target_commit, str)
+                or re.fullmatch(r"[0-9a-f]{40}", target_commit) is None
+            ):
+                raise BenchmarkError(
+                    f"{item_label}.target_commit must be a lowercase Git SHA-1"
+                )
             target_path = _relative_path(
                 target_path, f"{item_label}.target_repository_path"
             ).as_posix()
@@ -5930,6 +6105,7 @@ def _validate_phase0_expansion_references(
                 )
         item.update(
             {
+                "target_commit": target_commit,
                 "target_repository_path": target_path,
                 "status": status,
                 "reason_code": reason,
@@ -5944,12 +6120,17 @@ def _validate_phase0_expansion_references(
 
 
 def _validate_phase0_expansion_objects(
-    value: object, cas: CAS, label: str
+    value: object,
+    cas: CAS,
+    label: str,
+    *,
+    root_commit: str,
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list) or len(value) > 256:
         raise BenchmarkError(f"{label} must contain at most 256 objects")
     normalized = []
-    paths: set[str] = set()
+    identities: set[tuple[str, str]] = set()
+    materialized_paths: set[str] = set()
     for index, raw in enumerate(value):
         item_label = f"{label}[{index}]"
         if not isinstance(raw, dict):
@@ -5957,6 +6138,8 @@ def _validate_phase0_expansion_objects(
         _exact_keys(
             raw,
             {
+                "commit",
+                "commit_tree",
                 "repository_path",
                 "materialized_path",
                 "depth",
@@ -5971,16 +6154,33 @@ def _validate_phase0_expansion_objects(
         repository_path = _relative_path(
             raw["repository_path"], f"{item_label}.repository_path"
         ).as_posix()
+        commit = raw["commit"]
+        commit_tree = raw["commit_tree"]
+        for field, item in (("commit", commit), ("commit_tree", commit_tree)):
+            if (
+                not isinstance(item, str)
+                or re.fullmatch(r"[0-9a-f]{40}", item) is None
+            ):
+                raise BenchmarkError(
+                    f"{item_label}.{field} must be a lowercase Git SHA-1"
+                )
         materialized_path = _relative_path(
             raw["materialized_path"], f"{item_label}.materialized_path"
         ).as_posix()
-        if materialized_path != f"__aragorn_expanded__/{repository_path}":
+        expected_materialized = "__aragorn_expanded__/" + (
+            repository_path
+            if commit == root_commit
+            else f"{commit}/{repository_path}"
+        )
+        if materialized_path != expected_materialized:
             raise BenchmarkError(
-                f"{item_label}.materialized_path does not match repository_path"
+                f"{item_label}.materialized_path does not match repository_path and commit"
             )
-        if repository_path in paths:
-            raise BenchmarkError(f"{label} has duplicate repository paths")
-        paths.add(repository_path)
+        identity = (commit, repository_path)
+        if identity in identities or materialized_path in materialized_paths:
+            raise BenchmarkError(f"{label} has duplicate expanded object identities")
+        identities.add(identity)
+        materialized_paths.add(materialized_path)
         digest = _digest(raw["digest"], f"{item_label}.digest")
         size = _phase0_count(
             raw["size"], f"{item_label}.size", maximum=_MAX_FIXTURE_BYTES
@@ -6001,7 +6201,7 @@ def _validate_phase0_expansion_objects(
         ):
             raise BenchmarkError(f"{item_label}.references must not be empty")
         references: list[dict[str, Any]] = []
-        seen_references: set[tuple[str, str, int, int, str]] = set()
+        seen_references: set[tuple[str, str, str, int, int, str]] = set()
         for reference_index, reference in enumerate(raw_references):
             reference_label = f"{item_label}.references[{reference_index}]"
             normalized_reference = _validate_phase0_reference_identity(
@@ -6009,6 +6209,7 @@ def _validate_phase0_expansion_objects(
                 reference_label,
                 expected={
                     "source_repository_path",
+                    "source_commit",
                     "source_blob_digest",
                     "byte_offset",
                     "literal_size",
@@ -6036,6 +6237,8 @@ def _validate_phase0_expansion_objects(
             )
         normalized.append(
             {
+                "commit": commit,
+                "commit_tree": commit_tree,
                 "repository_path": repository_path,
                 "materialized_path": materialized_path,
                 "depth": depth,
@@ -6046,7 +6249,7 @@ def _validate_phase0_expansion_objects(
                 "references": references,
             }
         )
-    return sorted(normalized, key=lambda item: item["repository_path"])
+    return sorted(normalized, key=lambda item: (item["commit"], item["repository_path"]))
 
 
 def _phase0_git_blob_sha1(content: bytes) -> str:
@@ -6249,13 +6452,20 @@ def _phase0_case_facts(record: dict[str, Any], plan: dict[str, Any]) -> dict[str
     for key, expectation in expected.items():
         observation = observed.get(key)
         actual_digest = (
-            record["_target_digests"].get(observation["target_repository_path"])
+            record["_target_digests"].get(
+                (
+                    observation["target_commit"],
+                    observation["target_repository_path"],
+                )
+            )
             if observation is not None and observation["status"] != "unresolved"
             else None
         )
         if observation is not None and observation["status"] == "unresolved":
             unresolved_expected += 1
         elif observation is not None and (
+            observation["target_commit"] == expectation["target_commit"]
+            and
             observation["target_repository_path"]
             == expectation["target_repository_path"]
             and actual_digest == expectation["target_digest"]

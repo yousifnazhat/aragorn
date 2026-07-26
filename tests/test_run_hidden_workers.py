@@ -150,6 +150,10 @@ class HiddenWorkerControllerTests(unittest.TestCase):
             outcomes_digest=digest,
             outcomes_file_digest=digest,
         )
+        self.assertEqual(
+            receipt["schema"],
+            "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",
+        )
         raw = canonical_json(receipt)
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "worker-run-receipt.json"
@@ -190,6 +194,21 @@ class HiddenWorkerControllerTests(unittest.TestCase):
             _run_receipt(
                 **arguments,
                 gate=replace(_V2_GATE, calibration_only=False),
+            )
+        synthetic = replace(
+            _V2_GATE,
+            name="synthetic-v3",
+            run_receipt_schema=(
+                "aragorn/benchmark-phase0-hidden-worker-run-receipt/v3"
+            ),
+        )
+        with patch.dict(
+            "scripts.prepare_hidden_suite._GATES",
+            {synthetic.name: synthetic},
+        ):
+            self.assertEqual(
+                _run_receipt(**arguments, gate=synthetic)["schema"],
+                synthetic.run_receipt_schema,
             )
 
         job = Job(

@@ -5,7 +5,7 @@
   "candidate": {
     "name": "aragorn",
     "version": "0.1.0-phase0",
-    "implementation_digest": "sha256:234aab94503016046e21991296d03025454a81f3f1b62c856dccdee162f4eac0"
+    "implementation_digest": "sha256:1c6a96aa6d13c50b39a2ec4c9ccaf877d46043f220309d8fb6afdc70543ef059"
   },
   "required_comparators": [
     {

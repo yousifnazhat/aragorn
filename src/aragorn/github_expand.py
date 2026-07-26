@@ -84,6 +84,7 @@ def acquire_github_expansion(
     max_source_entries: int = _DEFAULT_MAX_SOURCE_ENTRIES,
     max_file_size: int = _DEFAULT_MAX_FILE_SIZE,
     timeout_seconds: float = 120.0,
+    bearer_token: str | None = None,
 ) -> dict[str, Any]:
     """Acquire a skill and recursively retain supported exact-commit blob refs.
 
@@ -149,6 +150,7 @@ def acquire_github_expansion(
             max_api_requests=max_api_requests,
             max_api_bytes=max_api_bytes,
             timeout_seconds=timeout_seconds,
+            bearer_token=bearer_token,
         )
         root_manifest, root_content, retained_bytes = _stage_root(
             session,
@@ -164,19 +166,23 @@ def acquire_github_expansion(
     root_manifest_digest = _digest_document(root_manifest)
     root_source = root_manifest["source"]
     root_repository_entries = {
-        _repository_path(root_source["skill_path"], entry["path"]): {
+        (
+            root_source["commit"],
+            _repository_path(root_source["skill_path"], entry["path"]),
+        ): {
             **entry,
             "path": _repository_path(root_source["skill_path"], entry["path"]),
         }
         for entry in root_manifest["files"]
     }
     all_content: dict[str, bytes] = dict(root_content)
-    expanded: dict[str, dict[str, Any]] = {}
-    queued_depth: dict[str, int] = {}
-    references_by_target: dict[str, list[dict[str, Any]]] = {}
+    expanded: dict[tuple[str, str], dict[str, Any]] = {}
+    queued_depth: dict[tuple[str, str], int] = {}
+    references_by_target: dict[tuple[str, str], list[dict[str, Any]]] = {}
     reference_occurrences: list[dict[str, Any]] = []
     deferred_local_references: list[dict[str, Any]] = []
-    pending: deque[str] = deque()
+    pending: deque[tuple[str, str]] = deque()
+    sessions = {root_source["commit"]: session}
     reference_totals = {
         "total_edges": 0,
         "artifact_references": 0,
@@ -194,6 +200,13 @@ def acquire_github_expansion(
     incomplete_reasons: list[dict[str, str]] = []
     stop_scanning = False
 
+    def session_for_commit(target_commit: str) -> GitHubAcquisitionSession:
+        cached = sessions.get(target_commit)
+        if cached is None:
+            cached = session.for_commit(target_commit)
+            sessions[target_commit] = cached
+        return cached
+
     def add_incomplete(reason_code: str, subject: str) -> None:
         reason = {"reason_code": reason_code, "subject": subject}
         if reason not in incomplete_reasons:
@@ -210,11 +223,12 @@ def acquire_github_expansion(
         edges: tuple[dict[str, Any], ...],
         *,
         source_repository_path: str,
+        source_commit: str,
         target_base_path: str,
         next_depth: int,
     ) -> None:
         nonlocal maximum_depth_used
-        immutable_targets: dict[str, dict[str, str]] = {}
+        immutable_targets: dict[tuple[str, str], dict[str, str]] = {}
         for edge in edges:
             if edge["reference_kind"] != "github_immutable":
                 continue
@@ -223,7 +237,7 @@ def acquire_github_expansion(
                 raise GitHubExpansionError(
                     "supported GitHub edge has no canonical immutable target"
                 )
-            immutable_targets[target["path"]] = target
+            immutable_targets[(target["commit"], target["path"])] = target
 
         suppressed_dynamic: set[tuple[str, int, str]] = set()
         for edge in edges:
@@ -235,8 +249,9 @@ def acquire_github_expansion(
             fetch_target = exact_raw_github_fetch_target(edge["literal"])
             if (
                 fetch_target is not None
-                and fetch_target["path"] in immutable_targets
-                and _same_source(fetch_target, root_source)
+                and (fetch_target["commit"], fetch_target["path"])
+                in immutable_targets
+                and _same_repository(fetch_target, root_source)
             ):
                 suppressed_dynamic.add(
                     (
@@ -275,24 +290,28 @@ def acquire_github_expansion(
                         raise GitHubExpansionError(
                             "resolved GitHub edge has no canonical immutable target"
                         )
+                    target_commit = target["commit"]
                     target_path = target["path"]
                 else:
+                    target_commit = source_commit
                     target_path = _repository_path(
                         target_base_path, edge["target"]["path"]
                     )
-                if target_path in root_repository_entries:
+                target_identity = (target_commit, target_path)
+                if target_identity in root_repository_entries:
                     occurrence_status = "root_resolved"
-                elif target_path in expanded:
+                elif target_identity in expanded:
                     occurrence_status = "expanded"
                     reference = {
                         "source_repository_path": source_repository_path,
+                        "source_commit": source_commit,
                         "source_blob_digest": edge["source_blob_digest"],
                         "byte_offset": edge["byte_offset"],
                         "literal_size": edge["literal_size"],
                         "literal_digest": edge["literal_digest"],
                     }
                     target_references = references_by_target.setdefault(
-                        target_path,
+                        target_identity,
                         [],
                     )
                     if reference not in target_references:
@@ -306,6 +325,8 @@ def acquire_github_expansion(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
                         target_repository_path=target_path,
                         status=occurrence_status,
                         reason_code=None,
@@ -332,6 +353,8 @@ def acquire_github_expansion(
                         {
                             "edge": edge,
                             "source_repository_path": source_repository_path,
+                            "source_commit": source_commit,
+                            "target_commit": source_commit,
                             "target_repository_path": _repository_path(
                                 target_base_path, target
                             ),
@@ -344,6 +367,8 @@ def acquire_github_expansion(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=None,
                         target_repository_path=None,
                         status="unresolved",
                         reason_code=reason_code,
@@ -357,12 +382,14 @@ def acquire_github_expansion(
                 raise GitHubExpansionError(
                     "immutable GitHub edge has no canonical target"
                 )
-            if not _same_source(target, root_source):
+            if not _same_repository(target, root_source):
                 reference_totals["unresolved"] += 1
                 reference_occurrences.append(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target["commit"],
                         target_repository_path=target["path"],
                         status="unresolved",
                         reason_code="CROSS_SOURCE_GITHUB_REFERENCE",
@@ -370,14 +397,18 @@ def acquire_github_expansion(
                 )
                 add_incomplete("CROSS_SOURCE_GITHUB_REFERENCE", source_repository_path)
                 continue
+            target_commit = target["commit"]
             target_path = target["path"]
+            target_identity = (target_commit, target_path)
             reference_totals["artifact_references"] += 1
-            if target_path in root_repository_entries:
+            if target_identity in root_repository_entries:
                 reference_totals["resolved_in_root"] += 1
                 reference_occurrences.append(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
                         target_repository_path=target_path,
                         status="root_resolved",
                         reason_code=None,
@@ -391,6 +422,8 @@ def acquire_github_expansion(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
                         target_repository_path=target_path,
                         status="unresolved",
                         reason_code="EXPANSION_DEPTH_BUDGET_EXCEEDED",
@@ -400,23 +433,26 @@ def acquire_github_expansion(
                 continue
             reference = {
                 "source_repository_path": source_repository_path,
+                "source_commit": source_commit,
                 "source_blob_digest": edge["source_blob_digest"],
                 "byte_offset": edge["byte_offset"],
                 "literal_size": edge["literal_size"],
                 "literal_digest": edge["literal_digest"],
             }
-            target_references = references_by_target.setdefault(target_path, [])
+            target_references = references_by_target.setdefault(target_identity, [])
             reference_is_new = reference not in target_references
             if reference_is_new:
                 target_references.append(reference)
             reference_totals["expanded"] += 1
-            if target_path in expanded or target_path in queued_depth:
+            if target_identity in expanded or target_identity in queued_depth:
                 if reference_is_new:
                     reference_totals["deduplicated"] += 1
                 reference_occurrences.append(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
                         target_repository_path=target_path,
                         status="expanded",
                         reason_code=None,
@@ -430,6 +466,8 @@ def acquire_github_expansion(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
                         target_repository_path=target_path,
                         status="unresolved",
                         reason_code="EXPANDED_OBJECT_BUDGET_EXCEEDED",
@@ -447,6 +485,8 @@ def acquire_github_expansion(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
                         target_repository_path=target_path,
                         status="unresolved",
                         reason_code="COMPARATOR_SUBJECT_FILE_BUDGET_EXCEEDED",
@@ -457,7 +497,11 @@ def acquire_github_expansion(
                     target_path,
                 )
                 continue
-            materialized_path = f"{MATERIALIZED_PREFIX}/{target_path}"
+            materialized_path = _materialized_path(
+                root_source["commit"],
+                target_commit,
+                target_path,
+            )
             if len(materialized_path) > _MAX_SUBJECT_PATH_LENGTH:
                 reference_totals["expanded"] -= 1
                 reference_totals["unresolved"] += 1
@@ -465,6 +509,8 @@ def acquire_github_expansion(
                     _occurrence(
                         edge,
                         source_repository_path=source_repository_path,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
                         target_repository_path=target_path,
                         status="unresolved",
                         reason_code="COMPARATOR_SUBJECT_PATH_BUDGET_EXCEEDED",
@@ -475,13 +521,15 @@ def acquire_github_expansion(
                     target_path,
                 )
                 continue
-            queued_depth[target_path] = next_depth
-            pending.append(target_path)
+            queued_depth[target_identity] = next_depth
+            pending.append(target_identity)
             maximum_depth_used = max(maximum_depth_used, next_depth)
             reference_occurrences.append(
                 _occurrence(
                     edge,
                     source_repository_path=source_repository_path,
+                    source_commit=source_commit,
+                    target_commit=target_commit,
                     target_repository_path=target_path,
                     status="expanded",
                     reason_code=None,
@@ -521,6 +569,7 @@ def acquire_github_expansion(
             source_repository_path=_repository_path(
                 root_source["skill_path"], entry["path"]
             ),
+            source_commit=root_source["commit"],
             target_base_path=root_source["skill_path"],
             next_depth=1,
         )
@@ -530,17 +579,18 @@ def acquire_github_expansion(
     if not incomplete_reasons:
         while pending:
             depth = queued_depth[pending[0]]
-            layer: list[str] = []
+            layer: list[tuple[str, str]] = []
             while pending and queued_depth[pending[0]] == depth:
-                repository_path = pending.popleft()
-                queued_depth.pop(repository_path)
-                layer.append(repository_path)
+                target_identity = pending.popleft()
+                queued_depth.pop(target_identity)
+                layer.append(target_identity)
             layer.sort()
 
-            for repository_path in layer:
+            for target_commit, repository_path in layer:
                 remaining_bytes = max_retained_bytes - retained_bytes
                 try:
-                    staged = session.read_repository_blob(
+                    target_session = session_for_commit(target_commit)
+                    staged = target_session.read_repository_blob(
                         repository_path,
                         max_file_size=min(max_file_size, remaining_bytes),
                     )
@@ -561,19 +611,28 @@ def acquire_github_expansion(
                 if retained_bytes > max_retained_bytes:
                     add_incomplete("RETAINED_BYTE_BUDGET_EXCEEDED", repository_path)
                     break
-                entry = {**staged, "digest": digest}
-                expanded[repository_path] = {
+                entry = {
+                    **staged,
+                    "commit": target_commit,
+                    "commit_tree": target_session.root_tree_sha,
+                    "digest": digest,
+                }
+                expanded[(target_commit, repository_path)] = {
                     **entry,
                     "depth": depth,
-                    "materialized_path": (f"{MATERIALIZED_PREFIX}/{repository_path}"),
+                    "materialized_path": _materialized_path(
+                        root_source["commit"],
+                        target_commit,
+                        repository_path,
+                    ),
                 }
                 all_content.setdefault(digest, content)
 
             if incomplete_reasons:
                 break
-            repository_entries = {
-                **root_repository_entries,
-                **{
+            for target_commit, repository_path in layer:
+                target_identity = (target_commit, repository_path)
+                repository_entries = {
                     path: {
                         "path": path,
                         "size": value["size"],
@@ -581,16 +640,23 @@ def acquire_github_expansion(
                         "git_blob_sha1": value["git_blob_sha1"],
                         "executable": value["executable"],
                     }
-                    for path, value in expanded.items()
-                },
-            }
-            for repository_path in layer:
-                content = all_content[expanded[repository_path]["digest"]]
+                    for (entry_commit, path), value in {
+                        **root_repository_entries,
+                        **expanded,
+                    }.items()
+                    if entry_commit == target_commit
+                }
+                target_source = {
+                    **repository_source,
+                    "commit": target_commit,
+                    "commit_tree": sessions[target_commit].root_tree_sha,
+                }
+                content = all_content[expanded[target_identity]["digest"]]
                 try:
                     edges = _scan_entry(
                         content,
                         source_entry=repository_entries[repository_path],
-                        source=repository_source,
+                        source=target_source,
                         source_by_path=repository_entries,
                     )
                 except _IncompleteExpansion as exc:
@@ -611,6 +677,7 @@ def acquire_github_expansion(
                 register_edges(
                     edges,
                     source_repository_path=repository_path,
+                    source_commit=target_commit,
                     target_base_path=".",
                     next_depth=depth + 1,
                 )
@@ -630,21 +697,24 @@ def acquire_github_expansion(
                 )
 
     for deferred in deferred_local_references:
+        target_commit = deferred["target_commit"]
         target_path = deferred["target_repository_path"]
-        if target_path in root_repository_entries:
+        target_identity = (target_commit, target_path)
+        if target_identity in root_repository_entries:
             status = "root_resolved"
             reason_code = None
-        elif target_path in expanded:
+        elif target_identity in expanded:
             status = "expanded"
             reason_code = None
             reference = {
                 "source_repository_path": deferred["source_repository_path"],
+                "source_commit": deferred["source_commit"],
                 "source_blob_digest": deferred["edge"]["source_blob_digest"],
                 "byte_offset": deferred["edge"]["byte_offset"],
                 "literal_size": deferred["edge"]["literal_size"],
                 "literal_digest": deferred["edge"]["literal_digest"],
             }
-            target_references = references_by_target.setdefault(target_path, [])
+            target_references = references_by_target.setdefault(target_identity, [])
             if reference not in target_references:
                 target_references.append(reference)
                 reference_totals["deduplicated"] += 1
@@ -659,6 +729,8 @@ def acquire_github_expansion(
             _occurrence(
                 deferred["edge"],
                 source_repository_path=deferred["source_repository_path"],
+                source_commit=deferred["source_commit"],
+                target_commit=target_commit,
                 target_repository_path=target_path,
                 status=status,
                 reason_code=reason_code,
@@ -680,10 +752,13 @@ def acquire_github_expansion(
             ) from exc
         comparator_manifest_digest = canonical_digest(comparator_manifest)
         comparator_tree_digest = comparator_manifest["tree_digest"]
-        for repository_path in sorted(expanded):
-            item = expanded[repository_path]
+        for target_identity in sorted(expanded):
+            target_commit, repository_path = target_identity
+            item = expanded[target_identity]
             objects.append(
                 {
+                    "commit": target_commit,
+                    "commit_tree": item["commit_tree"],
                     "repository_path": repository_path,
                     "materialized_path": item["materialized_path"],
                     "depth": item["depth"],
@@ -692,8 +767,9 @@ def acquire_github_expansion(
                     "git_blob_sha1": item["git_blob_sha1"],
                     "executable": item["executable"],
                     "references": sorted(
-                        references_by_target[repository_path],
+                        references_by_target[target_identity],
                         key=lambda reference: (
+                            reference["source_commit"],
                             reference["source_repository_path"],
                             reference["byte_offset"],
                             reference["literal_size"],
@@ -711,10 +787,12 @@ def acquire_github_expansion(
 
     reference_occurrences.sort(
         key=lambda occurrence: (
+            occurrence["source_commit"],
             occurrence["source_repository_path"],
             occurrence["byte_offset"],
             occurrence["literal_size"],
             occurrence["literal_digest"],
+            occurrence["target_commit"] or "",
             occurrence["target_repository_path"] or "",
             occurrence["status"],
         )
@@ -1018,7 +1096,7 @@ def _scan_entry(
             "NON_UTF8_SOURCE_CARRIER", source_entry["path"]
         ) from exc
     try:
-        return scan_retained_text_references(
+        edges = scan_retained_text_references(
             text,
             source_entry=source_entry,
             source=source,
@@ -1032,6 +1110,49 @@ def _scan_entry(
             source_entry["path"],
             references_seen=exc.references_seen,
         ) from exc
+    return tuple(
+        {
+            **edge,
+            "reason_code": "IMMUTABLE_GITHUB_OBJECT_NOT_RETAINED",
+        }
+        if _standalone_raw_github_reference(content, edge)
+        else edge
+        for edge in edges
+    )
+
+
+def _standalone_raw_github_reference(
+    content: bytes,
+    edge: dict[str, Any],
+) -> bool:
+    literal = edge["literal"]
+    if (
+        edge["reference_kind"] != "github_immutable"
+        or edge["status"] != "unresolved"
+        or edge["reason_code"] != "BARE_IMMUTABLE_REFERENCE_CONTEXT_UNSUPPORTED"
+        or not isinstance(literal, str)
+        or not literal.startswith("https://raw.githubusercontent.com/")
+        or parse_immutable_github_reference(literal) is None
+    ):
+        return False
+    start = edge["byte_offset"]
+    end = start + edge["literal_size"]
+    if not 0 <= start < end <= len(content):
+        return False
+    try:
+        literal_bytes = literal.encode("ascii")
+    except UnicodeEncodeError:
+        return False
+    if content[start:end] != literal_bytes:
+        return False
+    line_start = content.rfind(b"\n", 0, start) + 1
+    line_end = content.find(b"\n", end)
+    if line_end < 0:
+        line_end = len(content)
+    return (
+        not content[line_start:start].strip(b" \t")
+        and not content[end:line_end].strip(b" \t\r")
+    )
 
 
 def _comparator_subject(
@@ -1068,12 +1189,20 @@ def _comparator_subject(
     }
 
 
-def _same_source(target: dict[str, str], source: dict[str, Any]) -> bool:
+def _same_repository(target: dict[str, str], source: dict[str, Any]) -> bool:
     return (
         target["owner"] == source["owner"]
         and target["repository"] == source["repository"]
-        and target["commit"] == source["commit"]
     )
+
+
+def _materialized_path(
+    root_commit: str,
+    target_commit: str,
+    repository_path: str,
+) -> str:
+    commit_prefix = "" if target_commit == root_commit else f"{target_commit}/"
+    return f"{MATERIALIZED_PREFIX}/{commit_prefix}{repository_path}"
 
 
 def _repository_path(skill_path: str, relative_path: str) -> str:
@@ -1084,16 +1213,20 @@ def _occurrence(
     edge: dict[str, Any],
     *,
     source_repository_path: str,
+    source_commit: str,
+    target_commit: str | None,
     target_repository_path: str | None,
     status: str,
     reason_code: str | None,
 ) -> dict[str, Any]:
     return {
         "source_repository_path": source_repository_path,
+        "source_commit": source_commit,
         "source_blob_digest": edge["source_blob_digest"],
         "byte_offset": edge["byte_offset"],
         "literal_size": edge["literal_size"],
         "literal_digest": edge["literal_digest"],
+        "target_commit": target_commit,
         "target_repository_path": target_repository_path,
         "status": status,
         "reason_code": reason_code,

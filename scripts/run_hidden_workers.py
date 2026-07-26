@@ -60,10 +60,6 @@ from scripts.prepare_hidden_suite import (
 _EXPECTED_JOBS = 896
 _EXPECTED_OUTCOMES = 1_344
 _WORKER_ID = "isolated-worker-01"
-_RUN_RECEIPT_SCHEMAS = {
-    "v1": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",
-    "calibration-v2": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
-}
 _MAX_JSON = 128 * 1024 * 1024
 _MAX_ENVELOPE = 256 * 1024
 _MAX_COMMAND_OUTPUT = 8 * 1024 * 1024
@@ -369,21 +365,39 @@ def _load_jobs(
     *,
     jobs_root: Path,
     ledger_root: Path,
-    preparation: dict[str, object],
+    preparation: dict[str, object] | None = None,
     gate: PreparationGate = _V1_GATE,
+    expected_job_count: int | None = None,
+    expected_worklist_digest: str | None = None,
+    trust_domain: str | None = None,
+    worker_id: str = _WORKER_ID,
 ) -> list[Job]:
-    gate = _registered_gate(gate)
+    if preparation is not None:
+        gate = _registered_gate(gate)
+        expected_job_count = _EXPECTED_JOBS
+        expected_worklist_digest = preparation["preparation"]["worklist_digest"]
+        trust_domain = gate.trust_domain
+        if preparation["matrix"]["job_count"] != expected_job_count:
+            raise ExecutionError("worker worklist does not match signed preparation")
+    if (
+        isinstance(expected_job_count, bool)
+        or not isinstance(expected_job_count, int)
+        or expected_job_count < 1
+        or _DIGEST.fullmatch(str(expected_worklist_digest)) is None
+        or re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", str(trust_domain)) is None
+        or re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", worker_id) is None
+    ):
+        raise ExecutionError("worker worklist binding is invalid")
     worklist, _worklist_raw = _canonical_document(
         jobs_root / "worklist.json",
         "worker worklist",
     )
     validate_worker_worklist(worklist)
     if (
-        canonical_digest(worklist) != preparation["preparation"]["worklist_digest"]
-        or len(worklist["jobs"]) != _EXPECTED_JOBS
-        or preparation["matrix"]["job_count"] != _EXPECTED_JOBS
+        canonical_digest(worklist) != expected_worklist_digest
+        or len(worklist["jobs"]) != expected_job_count
     ):
-        raise ExecutionError("worker worklist does not match signed preparation")
+        raise ExecutionError("worker worklist does not match its preparation")
     expected_job_entries = {
         "worklist.json",
         *(entry["job_id"] for entry in worklist["jobs"]),
@@ -457,8 +471,8 @@ def _load_jobs(
         )
         if issuance != {
             "schema": "aragorn/benchmark-worker-measurement-issuance/v1",
-            "trust_domain": gate.trust_domain,
-            "worker_id": _WORKER_ID,
+            "trust_domain": trust_domain,
+            "worker_id": worker_id,
             "job_id": job.job_id,
             "request_digest": job.request_digest,
             "verifier_challenge": job.challenge,
@@ -832,8 +846,12 @@ def _run_worker(
     job: Job,
     key_id: str,
     gate: PreparationGate = _V1_GATE,
+    trust_domain: str | None = None,
 ) -> dict[str, object]:
-    gate = _registered_gate(gate)
+    if trust_domain is None:
+        trust_domain = _registered_gate(gate).trust_domain
+    elif re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", trust_domain) is None:
+        raise ExecutionError("worker trust domain is invalid")
     script = r"""
 set -euo pipefail
 source_root=$1
@@ -882,7 +900,7 @@ flock -n "$execution_root/.worker.lock" \
             job.input_manifest_digest,
             job.request_digest,
             job.challenge,
-            gate.trust_domain,
+            trust_domain,
             key_id,
         ],
         label=f"worker execution ordinal {job.ordinal}",
@@ -989,12 +1007,33 @@ def _validate_acceptance(
     gate: PreparationGate = _V1_GATE,
 ) -> None:
     gate = _registered_gate(gate)
+    _validate_acceptance_binding(
+        acceptance=acceptance,
+        job=job,
+        trust_store_digest=preparation["worker"]["trust_store_digest"],
+        key_id=preparation["worker"]["key_id"],
+        trust_domain=gate.trust_domain,
+        worker_id=_WORKER_ID,
+        supervisor=supervisor,
+    )
+
+
+def _validate_acceptance_binding(
+    *,
+    acceptance: dict[str, object],
+    job: Job,
+    trust_store_digest: str,
+    key_id: str,
+    trust_domain: str,
+    worker_id: str,
+    supervisor: dict[str, object] | None = None,
+) -> None:
     receipt = acceptance["receipt"]
     if (
-        receipt["trust_store_digest"] != preparation["worker"]["trust_store_digest"]
-        or receipt["key_id"] != preparation["worker"]["key_id"]
-        or receipt["trust_domain"] != gate.trust_domain
-        or receipt["worker_id"] != _WORKER_ID
+        receipt["trust_store_digest"] != trust_store_digest
+        or receipt["key_id"] != key_id
+        or receipt["trust_domain"] != trust_domain
+        or receipt["worker_id"] != worker_id
         or receipt["job_id"] != job.job_id
         or receipt["request_digest"] != job.request_digest
         or receipt["verifier_challenge"] != job.challenge
@@ -1020,6 +1059,34 @@ def _collect(
     supervisor: dict[str, object] | None,
     gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
+    gate = _registered_gate(gate)
+    return _collect_authenticated(
+        job=job,
+        staged=staged,
+        destination=destination,
+        trust_store_path=trust_store_path,
+        ledger_root=ledger_root,
+        trust_store_digest=preparation["worker"]["trust_store_digest"],
+        key_id=preparation["worker"]["key_id"],
+        trust_domain=gate.trust_domain,
+        worker_id=_WORKER_ID,
+        supervisor=supervisor,
+    )
+
+
+def _collect_authenticated(
+    *,
+    job: Job,
+    staged: Path,
+    destination: CAS,
+    trust_store_path: Path,
+    ledger_root: Path,
+    trust_store_digest: str,
+    key_id: str,
+    trust_domain: str,
+    worker_id: str,
+    supervisor: dict[str, object] | None,
+) -> dict[str, object]:
     envelope = _read(
         staged / "measurement.dsse.json",
         max_bytes=_MAX_ENVELOPE,
@@ -1039,12 +1106,14 @@ def _collect(
     )
     if accepted["receipt"] != receipt:
         raise ExecutionError("retained worker acceptance differs after replay")
-    _validate_acceptance(
+    _validate_acceptance_binding(
         acceptance=accepted,
         job=job,
-        preparation=preparation,
+        trust_store_digest=trust_store_digest,
+        key_id=key_id,
+        trust_domain=trust_domain,
+        worker_id=worker_id,
         supervisor=supervisor,
-        gate=gate,
     )
     return accepted
 
@@ -1241,7 +1310,7 @@ def _run_receipt(
             "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
         )
     return {
-        "schema": _RUN_RECEIPT_SCHEMAS[gate.name],
+        "schema": gate.run_receipt_schema,
         "assurance": (
             "authenticated_complete_worker_batch_not_independent_or_hardware_attested"
         ),

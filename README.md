@@ -16,9 +16,10 @@ Current status: **private Phase 0 implementation with bounded exact-commit GitHu
   references across retained text carriers, with opaque, mutable, dynamic, and
   unsupported cases recorded fail closed in a digest-bound source-reference
   graph.
-- Evaluation-only recursive acquisition of supported exact same-repository,
-  same-commit GitHub blob references under shared request, byte, object, depth,
-  reference, and deadline budgets. Complete expansion produces one
+- Evaluation-only recursive acquisition of supported exact same-repository
+  GitHub blob references, including references to another immutable commit,
+  under shared request, byte, object, depth, reference, and deadline budgets.
+  Complete expansion produces one
   deterministic comparator subject; incomplete expansion retains accounting
   but no comparator subject.
 - Same-file-descriptor ingestion into a private SHA-256 content-addressed store.
@@ -196,7 +197,7 @@ required before this becomes a supported production acquisition boundary: the
 direct Phase 0 HTTP client's read timeout is a best-effort transport bound, not
 a hard wall against a peer that continuously trickles bytes.
 
-Recursively retain supported exact same-commit blob references for Phase 0
+Recursively retain supported exact same-repository blob references for Phase 0
 comparator evaluation:
 
 ```console
@@ -205,8 +206,9 @@ comparator evaluation:
   --state ~/.local/state/aragorn
 ```
 
-This uses the same unauthenticated, pinned GitHub session and one shared
-resource budget. Mutable commits, cross-repository references, archives,
+This caches one pinned session per referenced commit while sharing one
+credential, monotonic deadline, and resource budget across the expansion.
+Mutable commits, cross-repository references, archives,
 submodules, LFS objects, opaque carriers, dynamic fetches, and exhausted
 budgets produce an incomplete receipt and no comparator subject. The command
 never executes fetched bytes and never creates an admission decision.

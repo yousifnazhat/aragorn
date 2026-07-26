@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from aragorn.benchmark import (
-    _PHASE0_CORPUS_LOCK_DIGEST,
+    _PHASE0_CORPUS_LOCKS,
     _validate_phase0_hidden_binding,
     load_suite_for_run,
 )
@@ -35,17 +35,23 @@ from aragorn.phase0_candidate import (
     candidate_system_identity,
 )
 
-_OPAQUE_ID = re.compile(r"case-[0-9a-f]{16}\Z")
+_OPAQUE_IDS = {
+    "independent-v1.0.0": re.compile(r"case-[0-9a-f]{16}\Z"),
+    "independent-v3.0.0": re.compile(r"v3-[0-9a-f]{24}\Z"),
+}
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+_GIT_OID = re.compile(r"[0-9a-f]{40}\Z")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 _MAX_JSON = 4 * 1024 * 1024
 _MAX_LEDGER = 4 * 1024 * 1024
 _MAX_CASE = 16 * 1024 * 1024
 _MAX_CORPUS = 128 * 1024 * 1024
-_WORKER_NAME = "skill-scan-corpus-worker-independent-v1.0.0.tar.gz"
-_EVALUATOR_NAME = "skill-scan-corpus-label-ledger-independent-v1.0.0.tar.gz.gpg"
-_SOURCE_NAME = "skill-scan-corpus-source-independent-v1.0.0.bundle"
+_ARTIFACT_PURPOSES = {
+    "worker": "worker cases and public case manifest; no label ledger",
+    "evaluator": "signed encrypted evaluator ledger and exact builder",
+    "source": "complete Git history with signed freeze commit and tag",
+}
 _SAFE_EXECUTABLE_ROOTS = (
     Path("/usr/bin"),
     Path("/bin"),
@@ -261,6 +267,18 @@ def _verified_gpg_closure() -> tuple[str, str, str]:
     return str(executable), str(agent), digest
 
 
+def _verified_system_openssl() -> tuple[str, str]:
+    executable = Path(_executable("openssl"))
+    status = executable.stat()
+    if (
+        executable != Path("/usr/bin/openssl")
+        or status.st_uid != 0
+        or stat.S_IMODE(status.st_mode) & 0o022
+    ):
+        raise FreezeError("OpenSSL must be the protected system executable")
+    return str(executable), _sha256(_read(executable, max_bytes=128 * 1024 * 1024))
+
+
 def _require_private_directory(path: Path, label: str) -> None:
     if path.is_symlink() or not path.is_dir():
         raise FreezeError(f"{label} must be a protected directory")
@@ -289,24 +307,25 @@ def _reject_symlink_components(path: Path, label: str) -> None:
 
 def _signer_material(
     allowed_signers: Path,
-    public_key: Path,
     *,
     principal: str,
     fingerprint: str,
 ) -> tuple[bytes, bytes]:
     allowed_raw = _read(allowed_signers, max_bytes=16 * 1024)
-    public_raw = _read(public_key, max_bytes=16 * 1024)
     allowed = allowed_raw.decode("ascii").splitlines()
-    public = public_raw.decode("ascii").split()
-    if len(allowed) != 1 or len(allowed[0].split()) != 3 or len(public) < 2:
+    if len(allowed) != 1 or len(allowed[0].split()) not in {3, 4}:
         raise FreezeError("signer material is not one canonical SSH Ed25519 key")
-    identity, key_type, key_data = allowed[0].split()
-    if (
-        identity != principal
-        or key_type != "ssh-ed25519"
-        or public[:2] != [key_type, key_data]
-    ):
-        raise FreezeError("allowed signers and public key do not match")
+    fields = allowed[0].split()
+    identity = fields[0]
+    if len(fields) == 4:
+        if fields[1] != 'namespaces="file,git"':
+            raise FreezeError("allowed signer namespaces changed")
+        key_type, key_data = fields[2:]
+    else:
+        key_type, key_data = fields[1:]
+    if identity != principal or key_type != "ssh-ed25519":
+        raise FreezeError("allowed signer does not match the corpus lock")
+    public_raw = f"{key_type} {key_data}\n".encode("ascii")
     with tempfile.TemporaryDirectory(prefix="aragorn-signer-") as temporary:
         checked_key = Path(temporary) / "signer.pub"
         _write_new(checked_key, public_raw)
@@ -348,22 +367,30 @@ def _verify_signature(
         )
 
 
-def _artifact_map(release: dict[str, object]) -> dict[str, dict[str, object]]:
+def _artifact_map(
+    release: dict[str, object],
+    corpus_lock: dict[str, object],
+) -> dict[str, dict[str, object]]:
     artifacts = release.get("artifacts")
     if not isinstance(artifacts, list) or len(artifacts) != 3:
         raise FreezeError("release manifest must name exactly three artifacts")
-    result = {}
+    by_name = {}
+    by_purpose = {}
     for artifact in artifacts:
         if not isinstance(artifact, dict):
             raise FreezeError("release artifact record must be an object")
         _exact(artifact, {"path", "purpose", "sha256", "size"}, "release artifact")
         name = artifact["path"]
+        relative = PurePosixPath(name) if isinstance(name, str) else None
         if (
-            not isinstance(name, str)
-            or PurePosixPath(name).name != name
-            or name in result
+            relative is None
+            or relative.is_absolute()
+            or not relative.parts
+            or ".." in relative.parts
+            or any(part in {"", "."} for part in relative.parts)
+            or name in by_name
             or not isinstance(artifact["purpose"], str)
-            or not artifact["purpose"]
+            or artifact["purpose"] not in _ARTIFACT_PURPOSES.values()
             or not isinstance(artifact["sha256"], str)
             or _HEX_DIGEST.fullmatch(artifact["sha256"]) is None
             or isinstance(artifact["size"], bool)
@@ -371,10 +398,22 @@ def _artifact_map(release: dict[str, object]) -> dict[str, dict[str, object]]:
             or not 1 <= artifact["size"] <= 512 * 1024 * 1024
         ):
             raise FreezeError("release artifact path is unsafe or repeated")
-        result[name] = artifact
-    if set(result) != {_WORKER_NAME, _EVALUATOR_NAME, _SOURCE_NAME}:
+        role = next(
+            key
+            for key, purpose in _ARTIFACT_PURPOSES.items()
+            if purpose == artifact["purpose"]
+        )
+        if role in by_purpose:
+            raise FreezeError("release artifact purpose is repeated")
+        by_name[name] = artifact
+        by_purpose[role] = artifact
+    if (
+        set(by_purpose) != set(_ARTIFACT_PURPOSES)
+        or PurePosixPath(by_purpose["worker"]["path"]).name
+        != corpus_lock["worker_archive"]["name"]
+    ):
         raise FreezeError("release artifact closure does not match Phase 0")
-    return result
+    return by_purpose
 
 
 def _verify_source_freeze(
@@ -423,17 +462,160 @@ def _verify_source_freeze(
             raise FreezeError("signed source freeze object identities changed")
 
 
+def _verify_release_v2(
+    release_root: Path,
+    corpus_lock: dict[str, object],
+) -> dict[str, object]:
+    corpus_id = corpus_lock["corpus_id"]
+    principal = corpus_lock["signing"]["principal"]
+    fingerprint = corpus_lock["signing"]["fingerprint"]
+    allowed = release_root / "signing" / f"{corpus_id}-allowed-signers"
+    allowed_raw, public_key_raw = _signer_material(
+        allowed,
+        principal=principal,
+        fingerprint=fingerprint,
+    )
+    manifest_path = release_root / "release" / f"{corpus_id}-release-manifest.json"
+    release_raw = _read(manifest_path, max_bytes=_MAX_JSON)
+    if _sha256(release_raw) != corpus_lock["release_manifest"]["sha256"]:
+        raise FreezeError("release manifest digest does not match the corpus lock")
+    _verify_signature(
+        release_raw,
+        manifest_path.with_name(manifest_path.name + ".sig"),
+        allowed,
+        principal=principal,
+    )
+    release = _decode_json(release_raw, "release manifest")
+    _exact(
+        release,
+        {
+            "aggregate_counts",
+            "artifacts",
+            "corpus_id",
+            "corpus_version",
+            "custody",
+            "schema_version",
+            "signing",
+        },
+        "release manifest",
+    )
+    if not isinstance(release["custody"], dict) or not isinstance(
+        release["signing"], dict
+    ):
+        raise FreezeError("release custody and signing records must be objects")
+    _exact(
+        release["custody"],
+        {
+            "evaluator_plaintext_sha256",
+            "freeze_commit",
+            "freeze_tag",
+            "generator_sha256",
+            "keychain_account",
+            "keychain_service",
+            "source_commit",
+            "tag_object",
+        },
+        "release custody",
+    )
+    _exact(
+        release["signing"],
+        {"identity", "public_key_fingerprint", "signed_objects"},
+        "release signing",
+    )
+    custody = release["custody"]
+    if (
+        release["schema_version"] != "1.0"
+        or release["corpus_id"] != corpus_id
+        or release["corpus_version"] != corpus_id
+        or release["aggregate_counts"]
+        != {"total": 448, "benign": 336, "adversarial": 112}
+        or custody["freeze_commit"] != corpus_lock["freeze"]["commit"]
+        or custody["freeze_tag"] != corpus_lock["freeze"]["tag"]
+        or custody["tag_object"] != corpus_lock["freeze"]["tag_object"]
+        or not isinstance(custody["source_commit"], str)
+        or _GIT_OID.fullmatch(custody["source_commit"]) is None
+        or not isinstance(custody["generator_sha256"], str)
+        or _HEX_DIGEST.fullmatch(custody["generator_sha256"]) is None
+        or not isinstance(custody["evaluator_plaintext_sha256"], str)
+        or _HEX_DIGEST.fullmatch(custody["evaluator_plaintext_sha256"]) is None
+        or not isinstance(custody["keychain_service"], str)
+        or re.fullmatch(
+            r"org\.openai\.codex\.aragorn\.phase0\.independent-v3\.0\.0"
+            r"\.evaluator\.[A-Za-z0-9._-]{1,96}",
+            custody["keychain_service"],
+        )
+        is None
+        or not isinstance(custody["keychain_account"], str)
+        or re.fullmatch(
+            r"aragorn-independent-v3\.0\.0-author\.[A-Za-z0-9._-]{1,96}",
+            custody["keychain_account"],
+        )
+        is None
+        or release["signing"]["identity"] != principal
+        or release["signing"]["public_key_fingerprint"] != fingerprint
+        or release["signing"]["signed_objects"]
+        != [
+            "freeze commit",
+            "annotated freeze tag",
+            "label ledger",
+            "evaluator manifest",
+            "release manifest",
+        ]
+    ):
+        raise FreezeError("release manifest does not match the v2 corpus lock")
+    artifacts = _artifact_map(release, corpus_lock)
+    artifacts_raw = {}
+    for role, artifact in artifacts.items():
+        relative = PurePosixPath(artifact["path"])
+        path = release_root.joinpath(*relative.parts)
+        raw = _read(path, max_bytes=512 * 1024 * 1024)
+        if (
+            len(raw) != artifact["size"]
+            or hashlib.sha256(raw).hexdigest() != artifact["sha256"]
+        ):
+            raise FreezeError(
+                f"release artifact digest or size changed: {artifact['path']}"
+            )
+        artifacts_raw[role] = raw
+    if (
+        "sha256:" + artifacts["worker"]["sha256"]
+        != corpus_lock["worker_archive"]["sha256"]
+        or "sha256:" + artifacts["evaluator"]["sha256"]
+        != corpus_lock["evaluator_archive"]["sha256"]
+    ):
+        raise FreezeError("signed release artifacts do not match the corpus lock")
+    _verify_source_freeze(
+        artifacts_raw["source"],
+        allowed_raw,
+        corpus_lock["freeze"],
+    )
+    return {
+        "release_manifest_digest": _sha256(release_raw),
+        "release_manifest": release,
+        "worker_archive": artifacts_raw["worker"],
+        "worker_archive_digest": "sha256:" + artifacts["worker"]["sha256"],
+        "evaluator_archive": artifacts_raw["evaluator"],
+        "evaluator_archive_digest": "sha256:" + artifacts["evaluator"]["sha256"],
+        "evaluator_plaintext_digest": (
+            "sha256:" + custody["evaluator_plaintext_sha256"]
+        ),
+        "source_bundle_digest": "sha256:" + artifacts["source"]["sha256"],
+        "allowed_signers": allowed_raw,
+        "public_key": public_key_raw,
+    }
+
+
 def verify_release(
     release_dir: Path,
     corpus_lock: dict[str, object],
 ) -> dict[str, object]:
+    if corpus_lock.get("schema") == "aragorn/benchmark-corpus-provenance-lock/v2":
+        return _verify_release_v2(release_dir, corpus_lock)
     principal = corpus_lock["signing"]["principal"]
     fingerprint = corpus_lock["signing"]["fingerprint"]
     allowed = release_dir / "allowed_signers"
-    public_key = release_dir / "codex-independent-corpus-v1.0.0.pub"
     allowed_raw, public_key_raw = _signer_material(
         allowed,
-        public_key,
         principal=principal,
         fingerprint=fingerprint,
     )
@@ -509,25 +691,29 @@ def verify_release(
             "evaluator manifest",
             "release manifest",
         ]
-        or release["evaluator_custody"]
-        != {
-            "encryption": (
-                "GnuPG symmetric AES-256 with iterated-and-salted S2K and MDC"
-            ),
-            "key_store": "macOS login Keychain",
-            "service": ("codex-skill-corpus-evaluator-independent-v1.0.0-5ff1144"),
-            "account": "independent-evaluator-custodian",
-            "worker_must_not_receive": [
-                "encrypted evaluator artifact",
-                "decryption material",
-                "per-case labels",
-            ],
-        }
+        or release["evaluator_custody"]["encryption"]
+        != "GnuPG symmetric AES-256 with iterated-and-salted S2K and MDC"
+        or release["evaluator_custody"]["key_store"] != "macOS login Keychain"
+        or not isinstance(release["evaluator_custody"]["service"], str)
+        or re.fullmatch(
+            r"codex-skill-corpus-evaluator-[A-Za-z0-9._-]{1,200}",
+            release["evaluator_custody"]["service"],
+        )
+        is None
+        or release["evaluator_custody"]["account"]
+        != "independent-evaluator-custodian"
+        or release["evaluator_custody"]["worker_must_not_receive"]
+        != [
+            "encrypted evaluator artifact",
+            "decryption material",
+            "per-case labels",
+        ]
     ):
         raise FreezeError("release manifest does not match corpus lock")
-    artifacts = _artifact_map(release)
+    artifacts = _artifact_map(release, corpus_lock)
     artifacts_raw = {}
-    for name, artifact in artifacts.items():
+    for role, artifact in artifacts.items():
+        name = artifact["path"]
         path = release_dir / name
         raw = _read(path, max_bytes=512 * 1024 * 1024)
         if (
@@ -535,26 +721,26 @@ def verify_release(
             or hashlib.sha256(raw).hexdigest() != artifact["sha256"]
         ):
             raise FreezeError(f"release artifact digest or size changed: {name}")
-        artifacts_raw[name] = raw
+        artifacts_raw[role] = raw
     if (
-        "sha256:" + artifacts[_WORKER_NAME]["sha256"]
+        "sha256:" + artifacts["worker"]["sha256"]
         != corpus_lock["worker_archive"]["sha256"]
-        or "sha256:" + artifacts[_EVALUATOR_NAME]["sha256"]
+        or "sha256:" + artifacts["evaluator"]["sha256"]
         != corpus_lock["evaluator_archive"]["sha256"]
     ):
         raise FreezeError("signed release artifacts do not match corpus lock")
     _verify_source_freeze(
-        artifacts_raw[_SOURCE_NAME],
+        artifacts_raw["source"],
         allowed_raw,
         corpus_lock["freeze"],
     )
     return {
         "release_manifest_digest": _sha256(release_raw),
-        "worker_archive": artifacts_raw[_WORKER_NAME],
-        "worker_archive_digest": "sha256:" + artifacts[_WORKER_NAME]["sha256"],
-        "evaluator_archive": artifacts_raw[_EVALUATOR_NAME],
-        "evaluator_archive_digest": "sha256:" + artifacts[_EVALUATOR_NAME]["sha256"],
-        "source_bundle_digest": "sha256:" + artifacts[_SOURCE_NAME]["sha256"],
+        "worker_archive": artifacts_raw["worker"],
+        "worker_archive_digest": "sha256:" + artifacts["worker"]["sha256"],
+        "evaluator_archive": artifacts_raw["evaluator"],
+        "evaluator_archive_digest": "sha256:" + artifacts["evaluator"]["sha256"],
+        "source_bundle_digest": "sha256:" + artifacts["source"]["sha256"],
         "allowed_signers": allowed_raw,
         "public_key": public_key_raw,
     }
@@ -562,6 +748,8 @@ def verify_release(
 
 def _public_manifest(
     raw: bytes,
+    *,
+    corpus_id: str,
 ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     manifest = _decode_json(raw, "public manifest")
     _exact(
@@ -578,7 +766,7 @@ def _public_manifest(
     entries = manifest["entries"]
     if (
         manifest["schema_version"] != "1.0"
-        or manifest["corpus_version"] != "independent-v1.0.0"
+        or manifest["corpus_version"] != corpus_id
         or manifest["hash_algorithm"] != "sha256"
         or manifest["case_count"] != 448
         or not isinstance(entries, list)
@@ -586,6 +774,9 @@ def _public_manifest(
     ):
         raise FreezeError("public manifest identity or count changed")
     by_id = {}
+    opaque_id = _OPAQUE_IDS.get(corpus_id)
+    if opaque_id is None:
+        raise FreezeError("public manifest corpus is unsupported")
     for entry in entries:
         if not isinstance(entry, dict):
             raise FreezeError("public manifest entry must be an object")
@@ -593,7 +784,7 @@ def _public_manifest(
         case_id = entry["id"]
         if (
             not isinstance(case_id, str)
-            or _OPAQUE_ID.fullmatch(case_id) is None
+            or opaque_id.fullmatch(case_id) is None
             or case_id in by_id
             or entry["path"] != f"cases/{case_id}/SKILL.md"
             or not isinstance(entry["sha256"], str)
@@ -617,12 +808,14 @@ def verify_evaluator_package(
     _require_private_directory(evaluator_dir, "evaluator package")
     outer_allowed = release["allowed_signers"]
     outer_key = release["public_key"]
-    inner_allowed = evaluator_dir / "signing" / "allowed_signers"
-    inner_key = evaluator_dir / "signing" / "codex-independent-corpus-v1.0.0.pub"
-    if (
-        _read(inner_allowed, max_bytes=16 * 1024) != outer_allowed
-        or _read(inner_key, max_bytes=16 * 1024) != outer_key
-    ):
+    inner_allowed_name = (
+        f"{corpus_lock['corpus_id']}-allowed-signers"
+        if corpus_lock["schema"]
+        == "aragorn/benchmark-corpus-provenance-lock/v2"
+        else "allowed_signers"
+    )
+    inner_allowed = evaluator_dir / "signing" / inner_allowed_name
+    if _read(inner_allowed, max_bytes=16 * 1024) != outer_allowed:
         raise FreezeError("evaluator signer material changed")
     principal = corpus_lock["signing"]["principal"]
     manifest_raw = _read(evaluator_dir / "evaluator-manifest.json", max_bytes=_MAX_JSON)
@@ -644,11 +837,17 @@ def verify_evaluator_package(
         },
         "evaluator manifest",
     )
+    expected_source_commit = (
+        release["release_manifest"]["custody"]["source_commit"]
+        if corpus_lock["schema"]
+        == "aragorn/benchmark-corpus-provenance-lock/v2"
+        else corpus_lock["freeze"]["commit"]
+    )
     if (
         manifest["schema_version"] != "1.0"
         or manifest["corpus_version"] != corpus_lock["corpus_id"]
         or manifest["freeze_tag"] != corpus_lock["freeze"]["tag"]
-        or manifest["source_commit"] != corpus_lock["freeze"]["commit"]
+        or manifest["source_commit"] != expected_source_commit
     ):
         raise FreezeError("evaluator manifest does not match signed freeze")
     raw_records = manifest["files"]
@@ -697,6 +896,23 @@ def verify_evaluator_package(
         path.is_symlink() for path in evaluator_dir.rglob("*")
     ):
         raise FreezeError("evaluator package file closure changed")
+    public_keys = [
+        raw
+        for path, raw in records.items()
+        if path.startswith("signing/") and path.endswith(".pub")
+    ]
+    if len(public_keys) != 1:
+        raise FreezeError("evaluator public signing key changed")
+    try:
+        public_fields = public_keys[0].decode("ascii").strip().split()
+    except UnicodeDecodeError as exc:
+        raise FreezeError("evaluator public signing key is not ASCII") from exc
+    if (
+        len(public_fields) < 2
+        or f"{public_fields[0]} {public_fields[1]}\n".encode("ascii")
+        != outer_key
+    ):
+        raise FreezeError("evaluator public signing key changed")
     labels = records.get("labels.jsonl")
     public_raw = records.get("public-manifest.json")
     if labels is None or public_raw is None:
@@ -709,7 +925,10 @@ def verify_evaluator_package(
     )
     if _sha256(public_raw) != corpus_lock["public_manifest"]["sha256"]:
         raise FreezeError("evaluator public manifest digest changed")
-    _, public_entries = _public_manifest(public_raw)
+    _, public_entries = _public_manifest(
+        public_raw,
+        corpus_id=corpus_lock["corpus_id"],
+    )
     labels_by_id, class_counts = _verified_labels(labels, public_entries)
     return {
         "evaluator_manifest_digest": _sha256(manifest_raw),
@@ -916,6 +1135,55 @@ def _decrypt_evaluator(
     )
 
 
+def _decrypt_evaluator_openssl(
+    ciphertext: bytes,
+    passphrase: bytes,
+    destination: Path,
+    openssl_executable: str,
+    *,
+    iterations: int,
+    expected_archive_digest: str,
+) -> None:
+    if (
+        not 1 <= len(passphrase) <= 4096
+        or b"\0" in passphrase
+        or b"\r" in passphrase
+        or b"\n" in passphrase
+    ):
+        raise FreezeError("evaluator passphrase input is invalid")
+    ciphertext_path = destination.parent / "evaluator.tar.gz.enc"
+    archive_path = destination.parent / "evaluator.tar.gz"
+    _write_new(ciphertext_path, ciphertext)
+    _run(
+        [
+            openssl_executable,
+            "enc",
+            "-d",
+            "-aes-256-cbc",
+            "-pbkdf2",
+            "-iter",
+            str(iterations),
+            "-md",
+            "sha256",
+            "-pass",
+            "stdin",
+            "-in",
+            str(ciphertext_path),
+            "-out",
+            str(archive_path),
+        ],
+        input_bytes=passphrase + b"\n",
+    )
+    os.chmod(archive_path, 0o600)
+    archive = _read(archive_path, max_bytes=128 * 1024 * 1024)
+    if _sha256(archive) != expected_archive_digest:
+        raise FreezeError("decrypted evaluator archive commitment changed")
+    _extract_evaluator_archive(
+        archive,
+        destination,
+    )
+
+
 def _write_new(path: Path, data: bytes, *, mode: int = 0o600) -> None:
     descriptor = os.open(
         path,
@@ -961,6 +1229,8 @@ def _suite_document(
     entries: dict[str, dict[str, object]],
     labels: dict[str, str],
     systems: list[dict[str, str]],
+    *,
+    corpus_id: str,
 ) -> dict[str, object]:
     cases = []
     for case_id, entry in entries.items():
@@ -988,14 +1258,14 @@ def _suite_document(
                 "inert": True,
                 "source": {
                     "kind": "synthetic",
-                    "reference": f"independent-v1.0.0/{case_id}",
+                    "reference": f"{corpus_id}/{case_id}",
                     "license": "private-evaluation-only",
                 },
             }
         )
     return {
         "schema": "aragorn/benchmark-suite/v1",
-        "id": "phase0-hidden-independent-v1.0.0",
+        "id": f"phase0-hidden-{corpus_id}",
         "purpose": "evidence_smoke",
         "runs_per_case": 1,
         "systems": systems,
@@ -1277,20 +1547,40 @@ def freeze(
         {role: str(path) for role, path in sorted(pre_outcome_paths.items())}
     )
     corpus_lock_raw = _read(corpus_lock_path, max_bytes=_MAX_JSON)
-    if _sha256(corpus_lock_raw) != _PHASE0_CORPUS_LOCK_DIGEST:
+    corpus_lock_digest = _sha256(corpus_lock_raw)
+    corpus_identity = _PHASE0_CORPUS_LOCKS.get(corpus_lock_digest)
+    if corpus_identity is None:
         raise FreezeError("checked corpus lock digest changed")
     corpus_lock = _decode_json(corpus_lock_raw, "corpus lock")
+    if (
+        corpus_lock.get("schema") != corpus_identity[0]
+        or corpus_lock.get("corpus_id") != corpus_identity[1]
+    ):
+        raise FreezeError("corpus lock identity is inconsistent")
     release = verify_release(release_dir, corpus_lock)
     prior = None
     gpg_executable = None
     gpg_agent_executable = None
     gpg_closure_digest = None
+    openssl_executable = None
+    openssl_executable_digest = None
+    encryption = corpus_lock.get("evaluator_encryption")
     if verified_evaluator_package is None:
-        (
-            gpg_executable,
-            gpg_agent_executable,
-            gpg_closure_digest,
-        ) = _verified_gpg_closure()
+        if encryption is None:
+            (
+                gpg_executable,
+                gpg_agent_executable,
+                gpg_closure_digest,
+            ) = _verified_gpg_closure()
+        elif encryption == {
+            "profile": "openssl-aes-256-cbc-pbkdf2-sha256/v1",
+            "iterations": 600000,
+        }:
+            openssl_executable, openssl_executable_digest = (
+                _verified_system_openssl()
+            )
+        else:
+            raise FreezeError("evaluator encryption profile is unsupported")
     else:
         _reject_symlink_components(
             verified_evaluator_package,
@@ -1314,15 +1604,28 @@ def freeze(
             )
             evaluator_dir = Path(temporary) / "package"
             assert evaluator_passphrase is not None
-            assert gpg_executable is not None
-            assert gpg_agent_executable is not None
-            _decrypt_evaluator(
-                release["evaluator_archive"],
-                evaluator_passphrase,
-                evaluator_dir,
-                gpg_executable,
-                gpg_agent_executable,
-            )
+            if encryption is None:
+                assert gpg_executable is not None
+                assert gpg_agent_executable is not None
+                _decrypt_evaluator(
+                    release["evaluator_archive"],
+                    evaluator_passphrase,
+                    evaluator_dir,
+                    gpg_executable,
+                    gpg_agent_executable,
+                )
+            else:
+                assert openssl_executable is not None
+                _decrypt_evaluator_openssl(
+                    release["evaluator_archive"],
+                    evaluator_passphrase,
+                    evaluator_dir,
+                    openssl_executable,
+                    iterations=encryption["iterations"],
+                    expected_archive_digest=release[
+                        "evaluator_plaintext_digest"
+                    ],
+                )
         else:
             evaluator_dir = verified_evaluator_package
         evaluator = verify_evaluator_package(evaluator_dir, release, corpus_lock)
@@ -1337,6 +1640,7 @@ def freeze(
             evaluator["public_entries"],
             evaluator["labels_by_id"],
             systems,
+            corpus_id=corpus_lock["corpus_id"],
         )
 
     if any(
@@ -1376,7 +1680,7 @@ def freeze(
                     "operator_asserted_pre_outcome_binding_"
                     "not_independent_or_timestamped"
                 ),
-                "corpus_lock_digest": _PHASE0_CORPUS_LOCK_DIGEST,
+                "corpus_lock_digest": corpus_lock_digest,
                 "worker_archive_digest": release["worker_archive_digest"],
                 "public_manifest_digest": evaluator["public_manifest_digest"],
                 "evaluator_archive_digest": release["evaluator_archive_digest"],
@@ -1407,28 +1711,53 @@ def freeze(
         if any(os.path.lexists(path) for path in pre_outcome_values):
             raise FreezeError("dispatch/outcome state appeared during freeze")
         if prior is None:
-            receipt_schema = (
-                "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v1"
-            )
-            evaluator_receipt = {
-                "manifest_digest": evaluator["evaluator_manifest_digest"],
-                "manifest_signature_status": "verified",
-                "ciphertext_link_status": (
-                    "in_process_gpg_decryption_then_inner_signature_verification"
-                ),
-                "gpg_closure_digest": gpg_closure_digest,
-                "gpg_passphrase_cache": (
-                    "disabled_with_no_symkey_cache_and_private_homedir"
-                ),
-                "label_ledger_digest": evaluator["label_ledger_digest"],
-                "label_ledger_digest_rule": (
-                    "raw_sha256_of_signature_verified_canonical_jsonl_bytes"
-                ),
-                "label_ledger_signature_status": "verified",
-                "public_manifest_digest": evaluator["public_manifest_digest"],
-                "case_count": 448,
-                "class_counts": evaluator["class_counts"],
-            }
+            if encryption is None:
+                receipt_schema = (
+                    "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v1"
+                )
+                evaluator_receipt = {
+                    "manifest_digest": evaluator["evaluator_manifest_digest"],
+                    "manifest_signature_status": "verified",
+                    "ciphertext_link_status": (
+                        "in_process_gpg_decryption_then_inner_signature_verification"
+                    ),
+                    "gpg_closure_digest": gpg_closure_digest,
+                    "gpg_passphrase_cache": (
+                        "disabled_with_no_symkey_cache_and_private_homedir"
+                    ),
+                    "label_ledger_digest": evaluator["label_ledger_digest"],
+                    "label_ledger_digest_rule": (
+                        "raw_sha256_of_signature_verified_canonical_jsonl_bytes"
+                    ),
+                    "label_ledger_signature_status": "verified",
+                    "public_manifest_digest": evaluator["public_manifest_digest"],
+                    "case_count": 448,
+                    "class_counts": evaluator["class_counts"],
+                }
+            else:
+                receipt_schema = (
+                    "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3"
+                )
+                evaluator_receipt = {
+                    "manifest_digest": evaluator["evaluator_manifest_digest"],
+                    "manifest_signature_status": "verified",
+                    "ciphertext_link_status": (
+                        "in_process_openssl_decryption_then_inner_"
+                        "signature_verification"
+                    ),
+                    "encryption_profile": encryption["profile"],
+                    "pbkdf2_iterations": encryption["iterations"],
+                    "openssl_executable_digest": openssl_executable_digest,
+                    "passphrase_transport": "bounded_stdin_not_argv_or_environment",
+                    "label_ledger_digest": evaluator["label_ledger_digest"],
+                    "label_ledger_digest_rule": (
+                        "raw_sha256_of_signature_verified_canonical_jsonl_bytes"
+                    ),
+                    "label_ledger_signature_status": "verified",
+                    "public_manifest_digest": evaluator["public_manifest_digest"],
+                    "case_count": 448,
+                    "class_counts": evaluator["class_counts"],
+                }
             limitations = {
                 "authorship": (
                     "technical_codex_authorship_not_independent_human_identity"

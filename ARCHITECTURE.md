@@ -46,7 +46,7 @@ The best strategic position is therefore **a specialized, vendor-neutral evidenc
 Source:       local directory or evaluation-only exact public GitHub commit
 Artifact:     file-based Agent Skill
 Identity:     canonical tree digest plus per-file SHA-256 digests
-Resolution:   bounded literal graph plus exact same-commit GitHub expansion
+Resolution:   bounded literal graph plus exact same-repository GitHub expansion
 Analysis:     trusted administrator-installed JSONL adapters; untrusted output
 Detonation:   evaluation-only isolated OCI comparator execution; no product detonation
 Runtime:      not implemented
@@ -172,13 +172,14 @@ SHA-1 identities are rederived, but commit/path membership still inherits the
 authenticated API assertion rather than an independently verified raw tree
 proof.
 
-`expand-github` is the bounded Phase 0 differentiation candidate. It shares one
-immutable repository session, tree cache, monotonic deadline, and API
-request/byte budget across the root and recursive acquisition. It scans the
-same retained-text grammar as `resolve-artifacts`, follows only exact
-same-owner, same-repository, same-commit blob references, independently
-rederives Git blob SHA-1 and SHA-256 identities, and bounds retained bytes,
-objects, depth, and reference occurrences. A complete result creates a
+`expand-github` is the bounded Phase 0 differentiation candidate. It caches one
+immutable session and tree cache per exact commit while sharing one credential,
+monotonic deadline, and API request/byte budget across the root and recursive
+acquisition. It scans the same retained-text grammar as `resolve-artifacts`,
+follows only exact same-owner and same-repository blob references, including
+references to another immutable commit, independently rederives Git blob SHA-1
+and SHA-256 identities, and bounds retained bytes, objects, depth, and reference
+occurrences. A complete result creates a
 deterministic inert comparator subject. Mutable, cross-source, dynamic, opaque,
 LFS, submodule, missing, or exhausted-budget cases create an incomplete
 accounting receipt with null comparator identity. Neither result satisfies
@@ -519,7 +520,7 @@ aragorn/
 │   ├── acquire.py                # Bounded local inventory and CAS ingestion
 │   ├── artifact_closure.py       # Evaluation-only literal source-reference graph
 │   ├── github_acquire.py         # Evaluation-only immutable public GitHub source
-│   ├── github_expand.py          # Bounded exact same-commit comparator expansion
+│   ├── github_expand.py          # Bounded exact same-repository comparator expansion
 │   ├── analyze.py                # JSONL analyzer subprocess runner
 │   ├── benchmark.py              # Evidence verifier and metric aggregation
 │   ├── benchmark_handoff_v2.py   # Cross-owner-capable CAS snapshot importer
@@ -594,7 +595,7 @@ python -m aragorn.label_blind_collect <suite.json> --dispatch-digest <digest> --
 - `acquire-github` retains independently verified public Git blob bytes and
   API-reported commit/tree identities without checkout, repository execution,
   ambient authentication, proxy inheritance, or ambient CA overrides.
-- `expand-github` recursively retains supported exact same-commit blobs under
+- `expand-github` recursively retains supported exact same-repository blobs under
   shared bounds and emits a comparator subject only for complete evaluation
   closure. It is not an admission or install command.
 - `resolve-artifacts` retains a bounded, evaluation-only literal

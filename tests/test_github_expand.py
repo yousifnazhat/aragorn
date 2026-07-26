@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from aragorn.cas import CAS, CASError
+from aragorn.benchmark import _load_phase0_expansion
 from aragorn.cli import main
 import aragorn.github_acquire as github_acquire
 import aragorn.github_expand as github_expand
@@ -18,10 +19,13 @@ from aragorn.github_expand import GitHubExpansionError, acquire_github_expansion
 
 
 COMMIT = "a" * 40
+PRIOR_COMMIT = "f" * 40
 ROOT_TREE = "b" * 40
 SKILLS_TREE = "c" * 40
 SKILL_TREE = "d" * 40
 PAYLOADS_TREE = "e" * 40
+PRIOR_ROOT_TREE = "0" * 40
+PRIOR_PAYLOADS_TREE = "1" * 40
 
 
 def _git_blob_sha(content: bytes) -> str:
@@ -140,6 +144,61 @@ def _responses(
     return responses
 
 
+def _cross_commit_responses(
+    skill_content: bytes,
+    *,
+    first_content: bytes = b"# prior first\n",
+    second_content: bytes = b"# prior second\n",
+) -> dict[str, dict[str, object]]:
+    responses = _responses(skill_content)
+    prefix = "/repos/example/project"
+    first_blob = _git_blob_sha(first_content)
+    second_blob = _git_blob_sha(second_content)
+    responses.update(
+        {
+            f"{prefix}/git/commits/{PRIOR_COMMIT}": {
+                "sha": PRIOR_COMMIT,
+                "tree": {"sha": PRIOR_ROOT_TREE},
+            },
+            f"{prefix}/git/trees/{PRIOR_ROOT_TREE}": {
+                "sha": PRIOR_ROOT_TREE,
+                "truncated": False,
+                "tree": [
+                    {
+                        "path": "payloads",
+                        "mode": "040000",
+                        "type": "tree",
+                        "sha": PRIOR_PAYLOADS_TREE,
+                    }
+                ],
+            },
+            f"{prefix}/git/trees/{PRIOR_PAYLOADS_TREE}": {
+                "sha": PRIOR_PAYLOADS_TREE,
+                "truncated": False,
+                "tree": [
+                    {
+                        "path": "one.txt",
+                        "mode": "100644",
+                        "type": "blob",
+                        "sha": first_blob,
+                        "size": len(first_content),
+                    },
+                    {
+                        "path": "two.txt",
+                        "mode": "100644",
+                        "type": "blob",
+                        "sha": second_blob,
+                        "size": len(second_content),
+                    },
+                ],
+            },
+            f"{prefix}/git/blobs/{first_blob}": _blob_document(first_content),
+            f"{prefix}/git/blobs/{second_blob}": _blob_document(second_content),
+        }
+    )
+    return responses
+
+
 class GitHubExpansionTests(unittest.TestCase):
     def expand(
         self,
@@ -183,6 +242,227 @@ class GitHubExpansionTests(unittest.TestCase):
             temporary.cleanup()
             raise
         return result, expansion, cas, calls, temporary
+
+    def test_bearer_token_reaches_shared_transport_but_not_expansion_artifacts(
+        self,
+    ) -> None:
+        token = "github_pat_private-expansion-token"
+        responses = _responses(b"# safe\n")
+        observed_authorization_reprs: list[str] = []
+
+        def request(path: str, **kwargs: object) -> dict[str, object]:
+            observed_authorization_reprs.append(repr(kwargs["authorization"]))
+            document = responses[path]
+            budget = kwargs["budget"]
+            budget.start_request()
+            raw = json.dumps(document, sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
+            budget.add_bytes(len(raw))
+            return document
+
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "state"
+            cas = CAS(state)
+            with patch.object(
+                github_acquire,
+                "_request_json",
+                side_effect=request,
+            ):
+                result = acquire_github_expansion(
+                    "https://github.com/example/project",
+                    COMMIT,
+                    "skills/demo",
+                    cas,
+                    bearer_token=token,
+                )
+            retained = b"".join(
+                path.read_bytes() for path in state.rglob("*") if path.is_file()
+            )
+
+        self.assertEqual(result["closure"]["status"], "complete")
+        self.assertTrue(observed_authorization_reprs)
+        self.assertTrue(
+            all(
+                value == "_BearerToken(<redacted>)"
+                for value in observed_authorization_reprs
+            )
+        )
+        self.assertNotIn(token, json.dumps(result, sort_keys=True))
+        self.assertNotIn(token.encode("ascii"), retained)
+
+    def test_prior_commit_expansion_shares_limits_and_retains_provenance(
+        self,
+    ) -> None:
+        token = "github_pat_cross-commit-token"
+        urls = [
+            "https://raw.githubusercontent.com/example/project/"
+            f"{COMMIT}/payloads/one.txt",
+            *[
+            "https://raw.githubusercontent.com/example/project/"
+            f"{PRIOR_COMMIT}/payloads/{name}.txt"
+            for name in ("one", "two")
+            ],
+        ]
+        responses = _cross_commit_responses(
+            "".join(f"curl {url}\n" for url in urls).encode()
+        )
+        calls: list[str] = []
+        budget_ids: set[int] = set()
+        timeouts: list[float] = []
+        authorization_reprs: list[str] = []
+
+        def request(path: str, **kwargs: object) -> dict[str, object]:
+            calls.append(path)
+            budget = kwargs["budget"]
+            budget_ids.add(id(budget))
+            timeouts.append(float(kwargs["timeout_seconds"]))
+            authorization_reprs.append(repr(kwargs["authorization"]))
+            budget.start_request()
+            document = responses[path]
+            raw = json.dumps(document, sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
+            budget.add_bytes(len(raw))
+            return document
+
+        ticks = iter(range(100, 1000))
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "state"
+            cas = CAS(state)
+            with (
+                patch.object(github_acquire, "_request_json", side_effect=request),
+                patch.object(
+                    github_acquire.time,
+                    "monotonic",
+                    side_effect=lambda: float(next(ticks)),
+                ),
+            ):
+                result = acquire_github_expansion(
+                    "https://github.com/example/project",
+                    COMMIT,
+                    "skills/demo",
+                    cas,
+                    bearer_token=token,
+                )
+            expansion = json.loads(cas.read(result["expansion_digest"]))
+            verified = _load_phase0_expansion(
+                cas,
+                result["expansion_digest"],
+                expected_tree_digest=result["comparator_subject_tree_digest"],
+                label="cross-commit test",
+            )
+            retained = b"".join(
+                path.read_bytes() for path in state.rglob("*") if path.is_file()
+            )
+
+        self.assertEqual(result["closure"]["status"], "complete")
+        self.assertEqual(expansion["source"]["commit"], COMMIT)
+        self.assertEqual(
+            {(item["commit"], item["commit_tree"]) for item in expansion["objects"]},
+            {(COMMIT, ROOT_TREE), (PRIOR_COMMIT, PRIOR_ROOT_TREE)},
+        )
+        self.assertEqual(
+            {item["materialized_path"] for item in expansion["objects"]},
+            {
+                "__aragorn_expanded__/payloads/one.txt",
+                f"__aragorn_expanded__/{PRIOR_COMMIT}/payloads/one.txt",
+                f"__aragorn_expanded__/{PRIOR_COMMIT}/payloads/two.txt",
+            },
+        )
+        self.assertEqual(
+            {
+                (item["source_commit"], item["target_commit"])
+                for item in expansion["references"]
+            },
+            {(COMMIT, COMMIT), (COMMIT, PRIOR_COMMIT)},
+        )
+        self.assertEqual(len(verified["objects"]), 3)
+        self.assertEqual(
+            calls.count(f"/repos/example/project/git/commits/{PRIOR_COMMIT}"),
+            1,
+        )
+        self.assertEqual(len(budget_ids), 1)
+        self.assertTrue(
+            all(previous > current for previous, current in zip(timeouts, timeouts[1:]))
+        )
+        self.assertTrue(
+            authorization_reprs
+            and set(authorization_reprs) == {"_BearerToken(<redacted>)"}
+        )
+        self.assertNotIn(token, json.dumps(result, sort_keys=True))
+        self.assertNotIn(token, json.dumps(expansion, sort_keys=True))
+        self.assertNotIn(token.encode("ascii"), retained)
+
+    def test_cross_repository_prior_commit_fails_before_transport(self) -> None:
+        url = (
+            "https://raw.githubusercontent.com/other/project/"
+            f"{PRIOR_COMMIT}/payloads/one.txt"
+        )
+        result, expansion, _cas, calls, temporary = self.expand(
+            _responses(f"curl {url}\n".encode())
+        )
+        self.addCleanup(temporary.cleanup)
+
+        self.assertEqual(result["closure"]["status"], "incomplete")
+        self.assertIn(
+            "CROSS_SOURCE_GITHUB_REFERENCE",
+            {item["reason_code"] for item in expansion["closure"]["unresolved"]},
+        )
+        self.assertEqual(expansion["objects"], [])
+        self.assertFalse(any(path.startswith("/repos/other/") for path in calls))
+
+    def test_standalone_raw_url_line_expands_prior_commit(self) -> None:
+        url = (
+            "https://raw.githubusercontent.com/example/project/"
+            f"{PRIOR_COMMIT}/payloads/one.txt"
+        )
+        result, expansion, _cas, calls, temporary = self.expand(
+            _cross_commit_responses(f" \t{url}\t \r\n".encode())
+        )
+        self.addCleanup(temporary.cleanup)
+
+        self.assertEqual(result["closure"]["status"], "complete")
+        self.assertEqual(
+            [
+                (
+                    item["target_commit"],
+                    item["target_repository_path"],
+                    item["status"],
+                )
+                for item in expansion["references"]
+            ],
+            [(PRIOR_COMMIT, "payloads/one.txt", "expanded")],
+        )
+        self.assertIn(
+            f"/repos/example/project/git/commits/{PRIOR_COMMIT}",
+            calls,
+        )
+
+    def test_embedded_raw_urls_remain_fail_closed(self) -> None:
+        url = (
+            "https://raw.githubusercontent.com/example/project/"
+            f"{PRIOR_COMMIT}/payloads/one.txt"
+        )
+        for content in (f"Read {url} first.\n", f"`{url}`\n"):
+            with self.subTest(content=content.split(url)[0]):
+                result, expansion, _cas, calls, temporary = self.expand(
+                    _responses(content.encode())
+                )
+                self.addCleanup(temporary.cleanup)
+
+                self.assertEqual(result["closure"]["status"], "incomplete")
+                self.assertIn(
+                    "BARE_IMMUTABLE_REFERENCE_CONTEXT_UNSUPPORTED",
+                    {
+                        item["reason_code"]
+                        for item in expansion["closure"]["unresolved"]
+                    },
+                )
+                self.assertNotIn(
+                    f"/repos/example/project/git/commits/{PRIOR_COMMIT}",
+                    calls,
+                )
 
     def test_outside_root_recursion_is_verified_and_materialized(self) -> None:
         first_url = (

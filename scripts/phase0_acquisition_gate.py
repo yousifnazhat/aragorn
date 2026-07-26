@@ -563,20 +563,26 @@ def evaluate_pair(
             and all(
                 reference.get(field) == expected_reference[field]
                 for field in (
+                    "source_commit",
                     "source_repository_path",
                     "source_blob_digest",
                     "byte_offset",
                     "literal_size",
                     "literal_digest",
+                    "target_commit",
                     "target_repository_path",
                 )
             )
             and record["_target_digests"].get(
-                expected_reference["target_repository_path"]
+                (
+                    expected_reference["target_commit"],
+                    expected_reference["target_repository_path"],
+                )
             )
             == expected_reference["target_digest"]
             and any(
-                item.get("repository_path")
+                item.get("commit") == expected_reference["target_commit"]
+                and item.get("repository_path")
                 == expected_reference["target_repository_path"]
                 and item.get("digest") == expected_reference["target_digest"]
                 for item in record["objects"]

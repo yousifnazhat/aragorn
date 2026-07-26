@@ -13,13 +13,16 @@ sys.path.insert(0, str(ROOT))
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from scripts.prepare_hidden_suite import (
+    _CORPUS_LOCK_PATH,
     _FREEZE_COMMIT,
     _FREEZE_TREE,
     _SIGNER_FINGERPRINT,
     _SIGNER_PRINCIPAL,
+    _V1_GATE,
     _V2_GATE,
     PreparationError,
     _committed_document,
+    _preflight_suite,
     _receipt,
     _state_paths,
     _verified_repository,
@@ -29,6 +32,56 @@ from scripts.prepare_hidden_suite import (
 
 
 class HiddenPreparationReceiptTests(unittest.TestCase):
+    def test_gate_selects_its_corpus_lock_without_changing_retained_profiles(
+        self,
+    ) -> None:
+        retained_path = Path("benchmark/phase0-corpus.lock.json")
+        self.assertEqual(_V1_GATE.corpus_lock_path, retained_path)
+        self.assertEqual(_V2_GATE.corpus_lock_path, retained_path)
+        self.assertEqual(_CORPUS_LOCK_PATH, retained_path)
+
+        digest = "sha256:" + "1" * 64
+        cases = {
+            f"case-{index:03d}": {"tree_digest": digest}
+            for index in range(448)
+        }
+        loaded = {
+            "digest": _V2_GATE.suite_digest,
+            "runs_per_case": 1,
+            "cases": cases,
+            "systems": {
+                "candidate": {
+                    "name": "aragorn",
+                    "version": "test",
+                    "implementation_digest": digest,
+                    "config_digest": digest,
+                }
+            },
+            "manifests": {case_id: {"case_id": case_id} for case_id in cases},
+        }
+        synthetic = replace(
+            _V2_GATE,
+            corpus_lock_path=Path("benchmark/phase0-corpus-v3.lock.json"),
+        )
+        with (
+            patch(
+                "scripts.prepare_hidden_suite.load_suite_for_run",
+                return_value=loaded,
+            ),
+            patch(
+                "scripts.prepare_hidden_suite._validate_phase0_hidden_binding"
+            ) as validate,
+        ):
+            _preflight_suite(
+                Path("/private/phase0-v3/private-suite.json"),
+                {"label_ledger_digest": digest},
+                synthetic,
+            )
+        self.assertEqual(
+            validate.call_args.kwargs["corpus_lock_path"],
+            ROOT / synthetic.corpus_lock_path,
+        )
+
     def test_preparation_commit_must_strictly_follow_freeze(self) -> None:
         with (
             patch(

@@ -782,6 +782,12 @@ def main() -> int:
     validators["benchmark-corpus-provenance-lock-v1.schema.json"].validate(
         phase0_corpus_lock
     )
+    validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
+        load(ROOT / "benchmark" / "phase0-corpus-v3.lock.json")
+    )
+    validators["benchmark-phase0-acquisition-corpus-lock-v1.schema.json"].validate(
+        load(ROOT / "benchmark" / "phase0-acquisition-corpus.lock.json")
+    )
     standards_gate = load(ROOT / "benchmark" / "phase0-standards-gate.json")
     validators["phase0-standards-gate-v1.schema.json"].validate(standards_gate)
     validate_standards_gate(standards_gate, repository_root=ROOT)
@@ -1025,6 +1031,9 @@ def main() -> int:
                 },
                 "expected_references": [
                     {
+                        "source_commit": hashlib.sha1(
+                            f"{case_id}:commit".encode()
+                        ).hexdigest(),
                         "source_repository_path": (
                             f"skills/{case_id}/SKILL.md"
                         ),
@@ -1040,6 +1049,9 @@ def main() -> int:
                             "sha256:"
                             + hashlib.sha256(literal.encode()).hexdigest()
                         ),
+                        "target_commit": hashlib.sha1(
+                            f"{case_id}:commit".encode()
+                        ).hexdigest(),
                         "target_repository_path": literal,
                         "target_digest": (
                             "sha256:"

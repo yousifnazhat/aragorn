@@ -24,6 +24,10 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "gitSha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
     "path": {
       "type": "string",
       "minLength": 1,
@@ -55,15 +59,18 @@
       "additionalProperties": false,
       "required": [
         "source_repository_path",
+        "source_commit",
         "source_blob_digest",
         "byte_offset",
         "literal_size",
         "literal_digest",
+        "target_commit",
         "target_repository_path",
         "target_digest"
       ],
       "properties": {
         "source_repository_path": {"$ref": "#/$defs/path"},
+        "source_commit": {"$ref": "#/$defs/gitSha1"},
         "source_blob_digest": {"$ref": "#/$defs/digest"},
         "byte_offset": {
           "type": "integer",
@@ -76,6 +83,7 @@
           "maximum": 16777216
         },
         "literal_digest": {"$ref": "#/$defs/digest"},
+        "target_commit": {"$ref": "#/$defs/gitSha1"},
         "target_repository_path": {"$ref": "#/$defs/path"},
         "target_digest": {"$ref": "#/$defs/digest"}
       }

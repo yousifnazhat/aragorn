@@ -65,7 +65,6 @@ _ALLOWED_SIGNER = (
     "AAAAC3NzaC1lZDI1NTE5AAAAIP+34WpE4lJYYXs96Dbx/j7GMMm0WahOQl267+T2ESDA\n"
 ).encode("ascii")
 _PREPARATION_SCRIPT_PATH = Path("scripts/prepare_hidden_suite.py")
-_CORPUS_LOCK_PATH = Path("benchmark/phase0-corpus.lock.json")
 _BASELINE_LOCK_PATH = Path("benchmark/baselines.lock.json")
 _WORKER_ID = "isolated-worker-01"
 _WORKER_SCOPE = "aragorn/benchmark-worker-output/v2"
@@ -83,6 +82,7 @@ class PreparationGate:
     name: str
     freeze_commit: str
     freeze_tree: str
+    corpus_lock_path: Path
     lock_path: Path
     freeze_receipt_path: Path
     preparation_receipt_path: Path
@@ -96,6 +96,7 @@ class PreparationGate:
     trust_domain: str
     recorded_on: str
     receipt_schema: str
+    run_receipt_schema: str
     calibration_only: bool = False
 
 
@@ -103,6 +104,7 @@ _V1_GATE = PreparationGate(
     name="v1",
     freeze_commit="7ee1bd3422c11b31ddf2d942019d23a5617673f5",
     freeze_tree="27100abd85554fa409b7e2dd410ffb0656cdcce7",
+    corpus_lock_path=Path("benchmark/phase0-corpus.lock.json"),
     lock_path=Path("benchmark/phase0-hidden-suite.lock.json"),
     freeze_receipt_path=Path(
         "benchmark/receipts/phase0-hidden-suite-freeze-2026-07-24.json"
@@ -133,12 +135,14 @@ _V1_GATE = PreparationGate(
     trust_domain="phase0.hidden-independent-v1.0.0",
     recorded_on="2026-07-24",
     receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v1",
+    run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",
 )
 
 _V2_GATE = PreparationGate(
     name="calibration-v2",
     freeze_commit="f8e6d29f20f5f93d03a2298a19124ddf2b928bed",
     freeze_tree="a3c2ba0f460bcecd5aa34754fff944e00a22dd96",
+    corpus_lock_path=Path("benchmark/phase0-corpus.lock.json"),
     lock_path=Path("benchmark/phase0-hidden-suite-calibration-v2.lock.json"),
     freeze_receipt_path=Path(
         "benchmark/receipts/phase0-hidden-suite-calibration-v2-freeze-2026-07-25.json"
@@ -169,6 +173,7 @@ _V2_GATE = PreparationGate(
     trust_domain="phase0.hidden-calibration-v2.0.0",
     recorded_on="2026-07-25",
     receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v2",
+    run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
     calibration_only=True,
 )
 _GATES = {gate.name: gate for gate in (_V1_GATE, _V2_GATE)}
@@ -176,6 +181,7 @@ _GATES = {gate.name: gate for gate in (_V1_GATE, _V2_GATE)}
 # Compatibility names used by retained v1 validators and tests.
 _FREEZE_COMMIT = _V1_GATE.freeze_commit
 _FREEZE_TREE = _V1_GATE.freeze_tree
+_CORPUS_LOCK_PATH = _V1_GATE.corpus_lock_path
 _LOCK_PATH = _V1_GATE.lock_path
 _FREEZE_RECEIPT_PATH = _V1_GATE.freeze_receipt_path
 _PREPARATION_RECEIPT_PATH = _V1_GATE.preparation_receipt_path
@@ -489,7 +495,7 @@ def _preflight_suite(
             required_purpose="evidence_smoke",
         )
     _validate_phase0_hidden_binding(
-        corpus_lock_path=ROOT / _CORPUS_LOCK_PATH,
+        corpus_lock_path=ROOT / gate.corpus_lock_path,
         public_manifest_path=private_suite_path.parent / "public-manifest.json",
         hidden_suite_lock_path=ROOT / gate.lock_path,
         candidate_policy_path=ROOT / gate.candidate_policy_path,
@@ -1168,7 +1174,7 @@ def prepare(
         gate.freeze_receipt_path,
         gate.freeze_receipt_digest,
     )
-    corpus_raw = _read(ROOT / _CORPUS_LOCK_PATH, max_bytes=_MAX_JSON)
+    corpus_raw = _read(ROOT / gate.corpus_lock_path, max_bytes=_MAX_JSON)
     lock = _decode_json(lock_raw, "hidden suite lock")
     freeze_receipt = _decode_json(freeze_raw, "hidden suite freeze receipt")
     corpus_lock = _decode_json(corpus_raw, "Phase 0 corpus lock")

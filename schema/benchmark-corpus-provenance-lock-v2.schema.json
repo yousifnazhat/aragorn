@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-corpus-provenance-lock-v2.schema.json",
+  "title": "Aragorn benchmark corpus provenance lock v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "corpus_id",
+    "assurance",
+    "case_count",
+    "runs_per_case",
+    "worker_archive",
+    "public_manifest",
+    "evaluator_archive",
+    "evaluator_encryption",
+    "release_manifest",
+    "freeze",
+    "signing"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-corpus-provenance-lock/v2"
+    },
+    "corpus_id": {
+      "$ref": "#/$defs/id"
+    },
+    "assurance": {
+      "const": "technical_codex_authorship_not_independent_human_identity"
+    },
+    "case_count": {
+      "const": 448
+    },
+    "runs_per_case": {
+      "const": 1
+    },
+    "worker_archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "sha256"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "public_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "evaluator_archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "evaluator_encryption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "iterations"
+      ],
+      "properties": {
+        "profile": {
+          "const": "openssl-aes-256-cbc-pbkdf2-sha256/v1"
+        },
+        "iterations": {
+          "const": 600000
+        }
+      }
+    },
+    "release_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "freeze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tag",
+        "tag_object"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/git_object"
+        },
+        "tag": {
+          "$ref": "#/$defs/id"
+        },
+        "tag_object": {
+          "$ref": "#/$defs/git_object"
+        }
+      }
+    },
+    "signing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "principal",
+        "fingerprint"
+      ],
+      "properties": {
+        "format": {
+          "const": "ssh-ed25519"
+        },
+        "principal": {
+          "$ref": "#/$defs/id"
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^SHA256:[a-zA-Z0-9+/]{43}$"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_object": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

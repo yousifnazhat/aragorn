@@ -148,6 +148,7 @@
       "additionalProperties": false,
       "required": [
         "source_repository_path",
+        "source_commit",
         "source_blob_digest",
         "byte_offset",
         "literal_size",
@@ -155,6 +156,7 @@
       ],
       "properties": {
         "source_repository_path": {"$ref": "#/$defs/path"},
+        "source_commit": {"$ref": "#/$defs/git_sha1"},
         "source_blob_digest": {"$ref": "#/$defs/digest"},
         "byte_offset": {
           "type": "integer",
@@ -174,16 +176,19 @@
       "additionalProperties": false,
       "required": [
         "source_repository_path",
+        "source_commit",
         "source_blob_digest",
         "byte_offset",
         "literal_size",
         "literal_digest",
+        "target_commit",
         "target_repository_path",
         "status",
         "reason_code"
       ],
       "properties": {
         "source_repository_path": {"$ref": "#/$defs/path"},
+        "source_commit": {"$ref": "#/$defs/git_sha1"},
         "source_blob_digest": {"$ref": "#/$defs/digest"},
         "byte_offset": {
           "type": "integer",
@@ -196,6 +201,12 @@
           "maximum": 16777216
         },
         "literal_digest": {"$ref": "#/$defs/digest"},
+        "target_commit": {
+          "oneOf": [
+            {"$ref": "#/$defs/git_sha1"},
+            {"type": "null"}
+          ]
+        },
         "target_repository_path": {
           "oneOf": [
             {"$ref": "#/$defs/path"},
@@ -221,6 +232,7 @@
           },
           "else": {
             "properties": {
+              "target_commit": {"$ref": "#/$defs/git_sha1"},
               "target_repository_path": {"$ref": "#/$defs/path"},
               "reason_code": {"type": "null"}
             }
@@ -236,6 +248,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "commit",
+        "commit_tree",
         "repository_path",
         "materialized_path",
         "depth",
@@ -246,6 +260,8 @@
         "references"
       ],
       "properties": {
+        "commit": {"$ref": "#/$defs/git_sha1"},
+        "commit_tree": {"$ref": "#/$defs/git_sha1"},
         "repository_path": {"$ref": "#/$defs/path"},
         "materialized_path": {
           "type": "string",

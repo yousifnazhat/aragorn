@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v3.schema.json",
+  "title": "Aragorn Phase 0 fresh OpenSSL hidden-suite freeze receipt v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_on",
+    "assurance",
+    "release",
+    "evaluator",
+    "suite",
+    "lock",
+    "pre_outcome",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "assurance": {
+      "const": "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_manifest_digest",
+        "signature_status",
+        "principal",
+        "fingerprint",
+        "worker_archive_digest",
+        "evaluator_ciphertext_digest",
+        "source_bundle_digest",
+        "freeze_commit",
+        "freeze_tag",
+        "freeze_tag_object"
+      ],
+      "properties": {
+        "release_manifest_digest": {
+          "const": "sha256:69c5ed7171e374bffc01c54e1f557fac17faefaaf87e9ea3ba78cc9f3b01466f"
+        },
+        "signature_status": {
+          "const": "verified"
+        },
+        "principal": {
+          "const": "aragorn-independent-v3-author"
+        },
+        "fingerprint": {
+          "const": "SHA256:vywLKduMdQ7V9XXNnixiAaGG1z8MnRXdMoIPC6qUIiw"
+        },
+        "worker_archive_digest": {
+          "const": "sha256:f8c3d3ee459c3059088051ec293f85bc82585bab21b3c8316a894998e6ffd1b7"
+        },
+        "evaluator_ciphertext_digest": {
+          "const": "sha256:73af2d48cf96a301d00c71c9459f126c3b7eeff79ff07b8deb6a2dddaa7f76ff"
+        },
+        "source_bundle_digest": {
+          "const": "sha256:ff021c88ba95331ec4e21eac6ba2705c1b956b8a4febc12da44f2b6186453e4e"
+        },
+        "freeze_commit": {
+          "const": "63634406ef51a9d5728d889762e012d9204b4a82"
+        },
+        "freeze_tag": {
+          "const": "independent-v3.0.0"
+        },
+        "freeze_tag_object": {
+          "const": "e8117cc3d790043e0bdd0f69ed59d3c1a95cca84"
+        }
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_digest",
+        "manifest_signature_status",
+        "ciphertext_link_status",
+        "encryption_profile",
+        "pbkdf2_iterations",
+        "openssl_executable_digest",
+        "passphrase_transport",
+        "label_ledger_digest",
+        "label_ledger_digest_rule",
+        "label_ledger_signature_status",
+        "public_manifest_digest",
+        "case_count",
+        "class_counts"
+      ],
+      "properties": {
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "manifest_signature_status": {
+          "const": "verified"
+        },
+        "ciphertext_link_status": {
+          "const": "in_process_openssl_decryption_then_inner_signature_verification"
+        },
+        "encryption_profile": {
+          "const": "openssl-aes-256-cbc-pbkdf2-sha256/v1"
+        },
+        "pbkdf2_iterations": {
+          "const": 600000
+        },
+        "openssl_executable_digest": {
+          "const": "sha256:517827f877751b6d7abebe404a296fa8e82425c63694a73ab06db35e6d9a8362"
+        },
+        "passphrase_transport": {
+          "const": "bounded_stdin_not_argv_or_environment"
+        },
+        "label_ledger_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "label_ledger_digest_rule": {
+          "const": "raw_sha256_of_signature_verified_canonical_jsonl_bytes"
+        },
+        "label_ledger_signature_status": {
+          "const": "verified"
+        },
+        "public_manifest_digest": {
+          "const": "sha256:8f74ebbbf4a146992ec7088282d93e94ce11e0ca3845a74522fa745d9974c808"
+        },
+        "case_count": {
+          "const": 448
+        },
+        "class_counts": {
+          "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/$defs/class_counts"
+        }
+      }
+    },
+    "suite": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/suite"
+    },
+    "lock": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/lock"
+    },
+    "pre_outcome": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/pre_outcome"
+    },
+    "limitations": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/limitations"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

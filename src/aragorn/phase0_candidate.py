@@ -1376,14 +1376,12 @@ def compose_candidate_decision(
     return "ALLOW", []
 
 
-def compose_candidate_batch(
+def _composition_state(
     *,
     dispatch_digest: str,
     control_state: str | os.PathLike[str],
     challenge_ledger: str | os.PathLike[str],
-) -> dict[str, Any]:
-    """Compose a complete candidate matrix without reading benchmark labels."""
-
+) -> tuple[str, Path, CAS, dict[str, Any]]:
     dispatch_digest = _digest(dispatch_digest, "dispatch digest")
     control_root = _existing_directory(control_state, "control state")
     ledger_root = _existing_directory(challenge_ledger, "challenge ledger")
@@ -1393,50 +1391,31 @@ def compose_candidate_batch(
     dispatch = _read_canonical_document(
         cas,
         dispatch_digest,
-        "private dispatch v2",
+        "private dispatch",
     )
-    from .label_blind_prepare import validate_private_dispatch_v2
-
-    try:
-        validate_private_dispatch_v2(dispatch)
-    except ValueError as exc:
-        raise CandidateError(f"private dispatch v2 is invalid: {exc}") from exc
     if canonical_digest(dispatch) != dispatch_digest:
-        raise CandidateError("private dispatch v2 digest is not canonical")
+        raise CandidateError("private dispatch digest is not canonical")
+    return dispatch_digest, ledger_root, cas, dispatch
 
-    policy = build_candidate_policy(
-        _read_canonical_document(
-            cas,
-            dispatch["candidate_policy_digest"],
-            "candidate policy",
-        )
-    )
-    if (
-        policy["candidate"]["implementation_digest"]
-        != candidate_implementation_digest()
-    ):
-        raise CandidateError(
-            "candidate policy implementation digest does not match composer bytes"
-        )
-    policy_digest = canonical_digest(policy)
-    if policy_digest != dispatch["candidate_policy_digest"]:
-        raise CandidateError("candidate policy digest changed")
-    candidate_system = candidate_system_identity(policy)
-    if candidate_system != dispatch["candidate_system"]:
-        raise CandidateError("candidate system does not match its policy")
 
-    required_comparators = {
-        item["name"]: item for item in policy["required_comparators"]
-    }
-    cells: dict[tuple[str, int], list[dict[str, Any]]] = {}
+def _authenticated_components(
+    *,
+    dispatch_digest: str,
+    dispatch: dict[str, Any],
+    cas: CAS,
+    ledger_root: Path,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[tuple[str, int], list[tuple[str, dict[str, Any]]]],
+]:
+    suite_digests = {entry["suite_digest"] for entry in dispatch["jobs"]}
+    if len(suite_digests) != 1:
+        raise CandidateError("private dispatch spans multiple suites")
+    suite_digest = next(iter(suite_digests))
     expected_challenges: dict[str, dict[str, Any]] = {}
     subjects: dict[str, dict[str, Any]] = {}
     for entry in dispatch["jobs"]:
         system = entry["system"]
-        if required_comparators.get(system["name"]) != system:
-            raise CandidateError(
-                "private dispatch system is outside the candidate policy"
-            )
         request = _read_canonical_document(
             cas,
             entry["request_digest"],
@@ -1469,23 +1448,12 @@ def compose_candidate_batch(
         challenge = request["verifier_challenge"]
         if challenge in expected_challenges:
             raise CandidateError("private dispatch repeats a verifier challenge")
-        expected_challenges[challenge] = {**entry, "request": request}
-        cells.setdefault((entry["case_id"], entry["run_id"]), []).append(entry)
-
-    expected_names = set(required_comparators)
-    for entries in cells.values():
-        if (
-            len(entries) != 2
-            or {entry["system"]["name"] for entry in entries} != expected_names
-            or len({entry["tree_digest"] for entry in entries}) != 1
-            or len({entry["private_manifest_digest"] for entry in entries}) != 1
-        ):
-            raise CandidateError(
-                "private dispatch does not contain one exact comparator pair per cell"
-            )
+        expected_challenges[challenge] = entry
 
     component_outcomes: list[dict[str, Any]] = []
-    component_evidence: dict[tuple[str, int], list[tuple[str, dict[str, Any]]]] = {}
+    component_evidence: dict[
+        tuple[str, int], list[tuple[str, dict[str, Any]]]
+    ] = {}
     for challenge in sorted(expected_challenges):
         entry = expected_challenges[challenge]
         accepted = load_verified_worker_output_acceptance(
@@ -1530,7 +1498,7 @@ def compose_candidate_batch(
         _validate_result_observations(cas, result)
         evidence = {
             "schema": "aragorn/benchmark-authenticated-worker-evidence/v1",
-            "suite_digest": dispatch["suite_digest"],
+            "suite_digest": suite_digest,
             "case_id": entry["case_id"],
             "tree_digest": entry["tree_digest"],
             "run_id": entry["run_id"],
@@ -1543,12 +1511,127 @@ def compose_candidate_batch(
             "issuance_digest": issuance_digest,
         }
         evidence_digest = _put_json(cas, evidence)
-        outcome = _outcome(evidence, evidence_digest)
-        component_outcomes.append(outcome)
+        component_outcomes.append(_outcome(evidence, evidence_digest))
         component_evidence.setdefault(
             (entry["case_id"], entry["run_id"]),
             [],
         ).append((evidence_digest, evidence))
+    return component_outcomes, component_evidence
+
+
+def compose_authenticated_comparator_batch(
+    *,
+    dispatch_digest: str,
+    control_state: str | os.PathLike[str],
+    challenge_ledger: str | os.PathLike[str],
+) -> dict[str, Any]:
+    """Compose comparator outcomes from one authenticated protocol-v2 dispatch."""
+
+    dispatch_digest, ledger_root, cas, dispatch = _composition_state(
+        dispatch_digest=dispatch_digest,
+        control_state=control_state,
+        challenge_ledger=challenge_ledger,
+    )
+    from .label_blind_prepare import validate_private_dispatch
+
+    try:
+        validate_private_dispatch(dispatch)
+    except ValueError as exc:
+        raise CandidateError(f"private dispatch is invalid: {exc}") from exc
+    outcomes, _evidence = _authenticated_components(
+        dispatch_digest=dispatch_digest,
+        dispatch=dispatch,
+        cas=cas,
+        ledger_root=ledger_root,
+    )
+    outcomes.sort(key=_outcome_sort_key)
+    if len(outcomes) != len(dispatch["jobs"]) or len(
+        {canonical_digest(outcome) for outcome in outcomes}
+    ) != len(outcomes):
+        raise CandidateError("authenticated comparator matrix is incomplete")
+    composition = {
+        "schema": "aragorn/benchmark-authenticated-worker-composition/v1",
+        "assurance": COMPOSITION_ASSURANCE,
+        "suite_digest": dispatch["jobs"][0]["suite_digest"],
+        "dispatch_digest": dispatch_digest,
+        "outcomes_digest": canonical_digest(outcomes),
+        "outcomes": outcomes,
+    }
+    _put_json(cas, composition)
+    return composition
+
+
+def compose_candidate_batch(
+    *,
+    dispatch_digest: str,
+    control_state: str | os.PathLike[str],
+    challenge_ledger: str | os.PathLike[str],
+) -> dict[str, Any]:
+    """Compose a complete candidate matrix without reading benchmark labels."""
+
+    dispatch_digest, ledger_root, cas, dispatch = _composition_state(
+        dispatch_digest=dispatch_digest,
+        control_state=control_state,
+        challenge_ledger=challenge_ledger,
+    )
+    from .label_blind_prepare import validate_private_dispatch_v2
+
+    try:
+        validate_private_dispatch_v2(dispatch)
+    except ValueError as exc:
+        raise CandidateError(f"private dispatch v2 is invalid: {exc}") from exc
+
+    policy = build_candidate_policy(
+        _read_canonical_document(
+            cas,
+            dispatch["candidate_policy_digest"],
+            "candidate policy",
+        )
+    )
+    if (
+        policy["candidate"]["implementation_digest"]
+        != candidate_implementation_digest()
+    ):
+        raise CandidateError(
+            "candidate policy implementation digest does not match composer bytes"
+        )
+    policy_digest = canonical_digest(policy)
+    if policy_digest != dispatch["candidate_policy_digest"]:
+        raise CandidateError("candidate policy digest changed")
+    candidate_system = candidate_system_identity(policy)
+    if candidate_system != dispatch["candidate_system"]:
+        raise CandidateError("candidate system does not match its policy")
+
+    required_comparators = {
+        item["name"]: item for item in policy["required_comparators"]
+    }
+    cells: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for entry in dispatch["jobs"]:
+        system = entry["system"]
+        if required_comparators.get(system["name"]) != system:
+            raise CandidateError(
+                "private dispatch system is outside the candidate policy"
+            )
+        cells.setdefault((entry["case_id"], entry["run_id"]), []).append(entry)
+
+    expected_names = set(required_comparators)
+    for entries in cells.values():
+        if (
+            len(entries) != 2
+            or {entry["system"]["name"] for entry in entries} != expected_names
+            or len({entry["tree_digest"] for entry in entries}) != 1
+            or len({entry["private_manifest_digest"] for entry in entries}) != 1
+        ):
+            raise CandidateError(
+                "private dispatch does not contain one exact comparator pair per cell"
+            )
+
+    component_outcomes, component_evidence = _authenticated_components(
+        dispatch_digest=dispatch_digest,
+        dispatch=dispatch,
+        cas=cas,
+        ledger_root=ledger_root,
+    )
 
     analyses: dict[
         str,
@@ -1629,17 +1712,7 @@ def compose_candidate_batch(
         evidence_digest = _put_json(cas, candidate_evidence)
         candidate_outcomes.append(_outcome(candidate_evidence, evidence_digest))
 
-    outcomes = sorted(
-        [*component_outcomes, *candidate_outcomes],
-        key=lambda item: (
-            item["system"]["name"],
-            item["system"]["version"],
-            item["system"]["implementation_digest"],
-            item["system"]["config_digest"],
-            item["case_id"],
-            item["run_id"],
-        ),
-    )
+    outcomes = sorted([*component_outcomes, *candidate_outcomes], key=_outcome_sort_key)
     expected_outcomes = len(cells) * 3
     if len(outcomes) != expected_outcomes:
         raise CandidateError("candidate composition matrix is incomplete")
@@ -1752,6 +1825,19 @@ def _outcome(evidence: dict[str, Any], evidence_digest: str) -> dict[str, Any]:
         "verdict": evidence["verdict"],
         "reason_codes": list(evidence["reason_codes"]),
     }
+
+
+def _outcome_sort_key(
+    item: dict[str, Any],
+) -> tuple[str, str, str, str, str, int]:
+    return (
+        item["system"]["name"],
+        item["system"]["version"],
+        item["system"]["implementation_digest"],
+        item["system"]["config_digest"],
+        item["case_id"],
+        item["run_id"],
+    )
 
 
 def _validate_result_observations(cas: CAS, result: dict[str, Any]) -> None:

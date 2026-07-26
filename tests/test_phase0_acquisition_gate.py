@@ -415,11 +415,13 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
                     {
                         key: expected_reference[key]
                         for key in (
+                            "source_commit",
                             "source_repository_path",
                             "source_blob_digest",
                             "byte_offset",
                             "literal_size",
                             "literal_digest",
+                            "target_commit",
                             "target_repository_path",
                         )
                     }
@@ -427,11 +429,14 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
                 ],
                 "objects": [
                     {
+                        "commit": expected_reference["target_commit"],
                         "repository_path": target_path,
                         "digest": target_digest,
                     }
                 ],
-                "_target_digests": {target_path: target_digest},
+                "_target_digests": {
+                    (expected_reference["target_commit"], target_path): target_digest
+                },
                 "closure": {"status": "complete"},
                 "accounting": {
                     "budgets": {
@@ -578,12 +583,15 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
     @staticmethod
     def _reference(case_id: str) -> dict[str, object]:
         literal = f"payloads/{case_id}.txt"
+        commit = hashlib.sha1(f"{case_id}:commit".encode()).hexdigest()
         return {
+            "source_commit": commit,
             "source_repository_path": f"skills/{case_id}/SKILL.md",
             "source_blob_digest": _digest_text(f"{case_id}:source"),
             "byte_offset": 0,
             "literal_size": len(literal.encode()),
             "literal_digest": _digest_text(literal),
+            "target_commit": commit,
             "target_repository_path": literal,
             "target_digest": _digest_text(f"{case_id}:target"),
         }

@@ -377,7 +377,7 @@ class Phase0GateTests(unittest.TestCase):
         self.assertEqual(report["evaluation_split"], "held_out")
         self.assertEqual(
             _digest_json(report),
-            "sha256:4b1d2ae97332da6c4341db956a31843a7a189554febd7eea222fd0f7769a687b",
+            "sha256:072fd0427f6a29af1d2d4cf90f57be432741123de0e0479a6c1d82085183cfd8",
         )
         self.assertEqual(
             set(report),
@@ -1377,6 +1377,7 @@ class Phase0GateTests(unittest.TestCase):
             "sha256:" + hashlib.sha256(literal).hexdigest()
         )
         reference_identity = {
+            "source_commit": COMMIT,
             "source_repository_path": source_repository_path,
             "source_blob_digest": source_digest,
             "byte_offset": source_content.index(literal),
@@ -1426,6 +1427,7 @@ class Phase0GateTests(unittest.TestCase):
             subject_tree_digest = None
             reference = {
                 **reference_identity,
+                "target_commit": COMMIT,
                 "target_repository_path": target_repository_path,
                 "status": "unresolved",
                 "reason_code": "EXPANDED_OBJECT_BUDGET_EXCEEDED",
@@ -1473,12 +1475,15 @@ class Phase0GateTests(unittest.TestCase):
             subject_tree_digest = subject_manifest["tree_digest"]
             reference = {
                 **reference_identity,
+                "target_commit": COMMIT,
                 "target_repository_path": target_repository_path,
                 "status": "expanded",
                 "reason_code": None,
             }
             objects = [
                 {
+                    "commit": COMMIT,
+                    "commit_tree": COMMIT_TREE,
                     "repository_path": target_repository_path,
                     "materialized_path": materialized_path,
                     "depth": 1,
@@ -1570,6 +1575,7 @@ class Phase0GateTests(unittest.TestCase):
         }
         expectation = {
             **reference_identity,
+            "target_commit": COMMIT,
             "target_repository_path": target_repository_path,
             "target_digest": payload_digest,
         }

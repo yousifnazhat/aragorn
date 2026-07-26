@@ -124,7 +124,7 @@ def _parser() -> ArgumentParser:
 
     github_expansion = commands.add_parser(
         "expand-github",
-        help="evaluation-only expansion of exact same-commit GitHub blob references",
+        help="evaluation-only expansion of exact same-repository GitHub blob references",
     )
     github_expansion.add_argument("repository")
     github_expansion.add_argument("commit")

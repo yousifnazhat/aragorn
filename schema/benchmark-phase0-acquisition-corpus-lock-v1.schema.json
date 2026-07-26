@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-acquisition-corpus-lock-v1.schema.json",
+  "title": "Aragorn Phase 0 acquisition corpus lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "repository",
+    "freeze",
+    "aggregate_counts",
+    "artifacts",
+    "encryption",
+    "keychain",
+    "signing",
+    "evaluations_performed_before_freeze"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-acquisition-corpus-lock/v1"
+    },
+    "assurance": {
+      "const": "technical_codex_authorship_not_independent_human_identity"
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "name", "visibility"],
+      "properties": {
+        "owner": {"const": "yousifnazhat"},
+        "name": {"const": "aragorn-phase0-acquisition-holdout-v1"},
+        "visibility": {"const": "PRIVATE"}
+      }
+    },
+    "freeze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit_a",
+        "commit_a_tree",
+        "commit_b",
+        "commit_b_tree",
+        "tag",
+        "tag_object"
+      ],
+      "properties": {
+        "commit_a": {"$ref": "#/$defs/git_oid"},
+        "commit_a_tree": {"$ref": "#/$defs/git_oid"},
+        "commit_b": {"$ref": "#/$defs/git_oid"},
+        "commit_b_tree": {"$ref": "#/$defs/git_oid"},
+        "tag": {"const": "acquisition-holdout-v1.0.0"},
+        "tag_object": {"$ref": "#/$defs/git_oid"}
+      }
+    },
+    "aggregate_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases", "targets", "roots", "benign", "adversarial"],
+      "properties": {
+        "cases": {"const": 448},
+        "targets": {"const": 448},
+        "roots": {"const": 448},
+        "benign": {"const": 336},
+        "adversarial": {"const": 112}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluator_catalog_ciphertext",
+        "evaluator_catalog_plaintext",
+        "worker_catalog",
+        "release_manifest",
+        "release_manifest_signature",
+        "signing_public_key",
+        "keychain_locator"
+      ],
+      "properties": {
+        "evaluator_catalog_ciphertext": {"$ref": "#/$defs/artifact"},
+        "evaluator_catalog_plaintext": {"$ref": "#/$defs/artifact"},
+        "worker_catalog": {"$ref": "#/$defs/artifact"},
+        "release_manifest": {"$ref": "#/$defs/artifact"},
+        "release_manifest_signature": {"$ref": "#/$defs/artifact"},
+        "signing_public_key": {"$ref": "#/$defs/artifact"},
+        "keychain_locator": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "encryption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "iterations"],
+      "properties": {
+        "profile": {"const": "openssl-aes-256-cbc-pbkdf2/v1"},
+        "iterations": {"const": 250000}
+      }
+    },
+    "keychain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "account"],
+      "properties": {
+        "service": {
+          "const": "org.openai.codex.aragorn.phase0.acquisition-holdout-v1"
+        },
+        "account": {
+          "const": "evaluator-catalog-20260725-8ad3f3c4b6626d37"
+        }
+      }
+    },
+    "signing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "principal", "fingerprint"],
+      "properties": {
+        "format": {"const": "ssh-ed25519"},
+        "principal": {
+          "const": "codex-independent@users.noreply.github.com"
+        },
+        "fingerprint": {
+          "const": "SHA256:peIi/mQfEKMkLRBJ08OrX+VzR0lGv5QoxWWWT2vuIS8"
+        }
+      }
+    },
+    "evaluations_performed_before_freeze": {
+      "const": 0
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

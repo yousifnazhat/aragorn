@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from aragorn.oci_worker_protocol import canonical_json
 from scripts.freeze_hidden_suite import (
     FreezeError,
+    _artifact_map,
     _match_prior_freeze,
     freeze,
     validate_freeze_receipt_bindings,
@@ -20,6 +21,45 @@ from scripts.freeze_hidden_suite import (
 
 
 class FreezeReceiptTests(unittest.TestCase):
+    def test_release_artifacts_are_selected_by_signed_role_not_v1_name(self) -> None:
+        release = {
+            "artifacts": [
+                {
+                    "path": "worker-independent-v3.0.0.tar.gz",
+                    "purpose": "worker cases and public case manifest; no label ledger",
+                    "sha256": "1" * 64,
+                    "size": 1,
+                },
+                {
+                    "path": "evaluator-independent-v3.0.0.tar.gz.gpg",
+                    "purpose": "signed encrypted evaluator ledger and exact builder",
+                    "sha256": "2" * 64,
+                    "size": 1,
+                },
+                {
+                    "path": "source-independent-v3.0.0.bundle",
+                    "purpose": "complete Git history with signed freeze commit and tag",
+                    "sha256": "3" * 64,
+                    "size": 1,
+                },
+            ]
+        }
+        lock = {"worker_archive": {"name": "worker-independent-v3.0.0.tar.gz"}}
+        artifacts = _artifact_map(release, lock)
+        self.assertEqual(
+            {role: artifact["path"] for role, artifact in artifacts.items()},
+            {
+                "worker": "worker-independent-v3.0.0.tar.gz",
+                "evaluator": "evaluator-independent-v3.0.0.tar.gz.gpg",
+                "source": "source-independent-v3.0.0.bundle",
+            },
+        )
+
+        changed = deepcopy(release)
+        changed["artifacts"][2]["purpose"] = changed["artifacts"][1]["purpose"]
+        with self.assertRaisesRegex(FreezeError, "purpose is repeated"):
+            _artifact_map(changed, lock)
+
     def test_preserved_evaluator_source_is_exclusive_and_bound(self) -> None:
         arguments = {
             "release_dir": ROOT,

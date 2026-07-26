@@ -29,6 +29,7 @@ _MAX_METADATA_BYTES = 8 * 1024 * 1024
 _MAX_API_REQUESTS = 20_050
 _MAX_API_BYTES = 384 * 1024 * 1024
 _MAX_ACQUISITION_SECONDS = 600.0
+_MAX_BEARER_TOKEN_BYTES = 1024
 
 
 class GitHubAcquisitionError(ValueError):
@@ -37,6 +38,26 @@ class GitHubAcquisitionError(ValueError):
 
 class GitHubBudgetExceeded(GitHubAcquisitionError):
     """A shared acquisition resource budget was exhausted."""
+
+
+class _BearerToken:
+    """Validated credential whose diagnostic forms are always redacted."""
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    def authorization_header(self) -> str:
+        return f"Bearer {self._value}"
+
+    def redact(self, value: object) -> str:
+        return str(value).replace(self._value, "<redacted>")
+
+    def __repr__(self) -> str:
+        return "_BearerToken(<redacted>)"
+
+    __str__ = __repr__
 
 
 class GitHubAcquisitionSession:
@@ -50,12 +71,14 @@ class GitHubAcquisitionSession:
         max_api_requests: int = _MAX_API_REQUESTS,
         max_api_bytes: int = _MAX_API_BYTES,
         timeout_seconds: float = 120.0,
+        bearer_token: str | None = None,
     ) -> None:
         owner, repository = _parse_repository_url(repository_url)
         if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
             raise GitHubAcquisitionError(
                 "commit must contain exactly 40 lowercase hexadecimal characters"
             )
+        authorization = _validate_bearer_token(bearer_token)
         _check_limit("max_api_requests", max_api_requests, 1)
         _check_limit("max_api_bytes", max_api_bytes, 1)
         if (
@@ -71,6 +94,7 @@ class GitHubAcquisitionSession:
         self.repository = repository
         self.commit = commit
         self.prefix = f"/repos/{owner}/{repository}"
+        self._authorization = authorization
         self._budget = _RequestBudget(max_api_requests, max_api_bytes)
         self._deadline = time.monotonic() + float(timeout_seconds)
         self._tree_cache: dict[str, tuple[dict[str, Any], ...]] = {}
@@ -85,6 +109,30 @@ class GitHubAcquisitionSession:
         ):
             raise GitHubAcquisitionError("repository object format is not exactly sha1")
 
+        self._load_commit(commit)
+
+    def for_commit(self, commit: str) -> GitHubAcquisitionSession:
+        """Open another exact commit in this repository under the same limits."""
+
+        if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
+            raise GitHubAcquisitionError(
+                "commit must contain exactly 40 lowercase hexadecimal characters"
+            )
+        if commit == self.commit:
+            return self
+        session = GitHubAcquisitionSession.__new__(GitHubAcquisitionSession)
+        session.owner = self.owner
+        session.repository = self.repository
+        session.prefix = self.prefix
+        session._authorization = self._authorization
+        session._budget = self._budget
+        session._deadline = self._deadline
+        session._tree_cache = {}
+        session._load_commit(commit)
+        return session
+
+    def _load_commit(self, commit: str) -> None:
+        self.commit = commit
         commit_document = self._request(
             f"{self.prefix}/git/commits/{commit}",
             max_bytes=_MAX_METADATA_BYTES,
@@ -181,6 +229,7 @@ class GitHubAcquisitionSession:
                 selected["size"],
                 budget=self._budget,
                 deadline=self._deadline,
+                authorization=self._authorization,
             )
             if _is_lfs_pointer(content):
                 raise GitHubAcquisitionError(f"Git LFS pointer rejected: {path}")
@@ -230,6 +279,7 @@ class GitHubAcquisitionSession:
             max_bytes=max_bytes,
             budget=self._budget,
             deadline=self._deadline,
+            authorization=self._authorization,
         )
 
 
@@ -246,11 +296,13 @@ def acquire_github_commit(
     max_api_requests: int = _MAX_API_REQUESTS,
     max_api_bytes: int = _MAX_API_BYTES,
     timeout_seconds: float = 120.0,
+    bearer_token: str | None = None,
 ) -> dict[str, Any]:
     """Acquire exact file bytes from one public GitHub SHA-1 commit.
 
     This narrow Phase 0 resolver never runs Git, checks out a repository, follows
-    redirects, sends credentials, or claims external-artifact closure.
+    redirects, reads ambient credentials, or claims external-artifact closure.
+    An explicit bearer token is confined to the fixed GitHub API transport.
     """
 
     owner, repository = _parse_repository_url(repository_url)
@@ -280,6 +332,7 @@ def acquire_github_commit(
         max_api_requests=max_api_requests,
         max_api_bytes=max_api_bytes,
         timeout_seconds=timeout_seconds,
+        bearer_token=bearer_token,
     )
     root_tree_sha = session.root_tree_sha
     skill_tree_sha, _ = session.resolve_tree(skill_path)
@@ -390,6 +443,27 @@ def acquire_github_commit(
         "files": files,
         "closure": {"scope": "source_tree", "status": "complete"},
     }
+
+
+def _validate_bearer_token(value: object) -> _BearerToken | None:
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise GitHubAcquisitionError(
+            "bearer_token must be a string of 1 to 1024 visible ASCII characters"
+        )
+    try:
+        encoded = value.encode("ascii")
+    except UnicodeEncodeError:
+        encoded = b""
+    if (
+        not 1 <= len(encoded) <= _MAX_BEARER_TOKEN_BYTES
+        or any(byte < 0x21 or byte > 0x7E for byte in encoded)
+    ):
+        raise GitHubAcquisitionError(
+            "bearer_token must be a string of 1 to 1024 visible ASCII characters"
+        )
+    return _BearerToken(value)
 
 
 def _parse_repository_url(value: object) -> tuple[str, str]:
@@ -535,12 +609,14 @@ def _read_blob(
     *,
     budget: _RequestBudget,
     deadline: float,
+    authorization: _BearerToken | None,
 ) -> bytes:
     document = _request_before_deadline(
         f"{prefix}/git/blobs/{sha}",
         max_bytes=max(65_536, expected_size * 2 + 65_536),
         budget=budget,
         deadline=deadline,
+        authorization=authorization,
     )
     if document.get("sha") != sha:
         raise GitHubAcquisitionError("GitHub returned a different blob identity")
@@ -625,28 +701,31 @@ def _request_json(
     max_bytes: int,
     timeout_seconds: float,
     budget: _RequestBudget,
+    authorization: _BearerToken | None = None,
 ) -> dict[str, Any]:
-    """GET one bounded public GitHub API object without ambient auth or proxies."""
+    """GET one bounded GitHub API object without ambient auth or proxies."""
 
     if not path.startswith("/repos/") or any(character in path for character in "\r\n"):
         raise GitHubAcquisitionError("invalid GitHub API path")
+    if authorization is not None and not isinstance(authorization, _BearerToken):
+        raise GitHubAcquisitionError("invalid internal GitHub authorization")
     budget.start_request()
     context = _server_tls_context()
     connection = http.client.HTTPSConnection(
         API_HOST, timeout=timeout_seconds, context=context
     )
+    connection.set_debuglevel(0)
     try:
-        connection.request(
-            "GET",
-            path,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Accept-Encoding": "identity",
-                "Connection": "close",
-                "User-Agent": "aragorn-evaluation-resolver/0",
-                "X-GitHub-Api-Version": API_VERSION,
-            },
-        )
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Accept-Encoding": "identity",
+            "Connection": "close",
+            "User-Agent": "aragorn-evaluation-resolver/0",
+            "X-GitHub-Api-Version": API_VERSION,
+        }
+        if authorization is not None:
+            headers["Authorization"] = authorization.authorization_header()
+        connection.request("GET", path, headers=headers)
         response = connection.getresponse()
         if response.status != 200:
             raise GitHubAcquisitionError(
@@ -664,6 +743,10 @@ def _request_json(
             try:
                 declared_length = int(content_length)
             except ValueError as exc:
+                if authorization is not None:
+                    raise GitHubAcquisitionError(
+                        "GitHub response has an invalid Content-Length"
+                    ) from None
                 raise GitHubAcquisitionError(
                     "GitHub response has an invalid Content-Length"
                 ) from exc
@@ -683,7 +766,13 @@ def _request_json(
     except GitHubAcquisitionError:
         raise
     except (OSError, http.client.HTTPException, ssl.SSLError) as exc:
-        raise GitHubAcquisitionError(f"GitHub API request failed: {exc}") from exc
+        if authorization is None:
+            raise GitHubAcquisitionError(
+                f"GitHub API request failed: {exc}"
+            ) from exc
+        raise GitHubAcquisitionError(
+            f"GitHub API request failed: {authorization.redact(exc)}"
+        ) from None
     finally:
         connection.close()
     try:
@@ -696,7 +785,13 @@ def _request_json(
             ),
         )
     except (UnicodeDecodeError, ValueError, RecursionError) as exc:
-        raise GitHubAcquisitionError(f"GitHub returned invalid JSON: {exc}") from exc
+        if authorization is None:
+            raise GitHubAcquisitionError(
+                f"GitHub returned invalid JSON: {exc}"
+            ) from exc
+        raise GitHubAcquisitionError(
+            f"GitHub returned invalid JSON: {authorization.redact(exc)}"
+        ) from None
     if not isinstance(document, dict):
         raise GitHubAcquisitionError("GitHub response must be a JSON object")
     return document
@@ -722,12 +817,14 @@ def _request_before_deadline(
     max_bytes: int,
     budget: _RequestBudget,
     deadline: float,
+    authorization: _BearerToken | None,
 ) -> dict[str, Any]:
     document = _request_json(
         path,
         max_bytes=max_bytes,
         timeout_seconds=_remaining_seconds(deadline),
         budget=budget,
+        authorization=authorization,
     )
     _remaining_seconds(deadline)
     return document

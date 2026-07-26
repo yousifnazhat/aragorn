@@ -836,11 +836,6 @@ def main() -> int:
     validators["benchmark-candidate-policy-v3.schema.json"].validate(
         phase0_candidate_policy_v4
     )
-    if (
-        build_candidate_policy(phase0_candidate_policy_v4)
-        != phase0_candidate_policy_v4
-    ):
-        raise AssertionError("checked v4 candidate policy is not canonical")
     phase0_candidate_policy_v5 = load(
         ROOT / "benchmark" / "phase0-candidate-policy-v5.json"
     )

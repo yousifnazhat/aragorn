@@ -34,6 +34,14 @@ from .oci_worker_protocol import (
 
 PROFILE = "phase0-exact-github-blob-expansion/v1"
 ASSURANCE = "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
+TERMINAL_DEPTH_1_MODE = "terminal_depth_1"
+TERMINAL_DEPTH_1_PROFILE = (
+    "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+)
+TERMINAL_DEPTH_1_ASSURANCE = (
+    "evaluation_only_github_api_membership_asserted_blob_identity_reverified_"
+    "depth_1_targets_terminal_not_reference_scanned"
+)
 MATERIALIZED_PREFIX = "__aragorn_expanded__"
 MAX_RECORD_BYTES = 16 * 1024 * 1024
 
@@ -85,12 +93,14 @@ def acquire_github_expansion(
     max_file_size: int = _DEFAULT_MAX_FILE_SIZE,
     timeout_seconds: float = 120.0,
     bearer_token: str | None = None,
+    expansion_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Acquire a skill and recursively retain supported exact-commit blob refs.
+    """Acquire a skill and retain supported exact-commit blob references.
 
     The function stages and verifies every byte before publishing any manifest or
-    result record to the caller. Existing ``github-manifest/v1`` and
-    ``source-artifact-graph/v1`` semantics are not changed.
+    result record to the caller. The default recursively closes supported
+    references. ``terminal_depth_1`` retains verified first-hop targets without
+    scanning their contents for additional references.
     """
 
     _bounded_integer(
@@ -141,6 +151,23 @@ def acquire_github_expansion(
         max_file_size,
         minimum=0,
         maximum=_DEFAULT_MAX_FILE_SIZE,
+    )
+    if expansion_mode not in (None, TERMINAL_DEPTH_1_MODE):
+        raise GitHubExpansionError("unsupported GitHub expansion mode")
+    if (
+        expansion_mode == TERMINAL_DEPTH_1_MODE
+        and max_expansion_depth != 1
+    ):
+        raise GitHubExpansionError(
+            "terminal-depth-1 expansion requires max_expansion_depth=1"
+        )
+    terminal_depth_1 = expansion_mode == TERMINAL_DEPTH_1_MODE
+    profile = TERMINAL_DEPTH_1_PROFILE if terminal_depth_1 else PROFILE
+    assurance = TERMINAL_DEPTH_1_ASSURANCE if terminal_depth_1 else ASSURANCE
+    closure_scope = (
+        "phase0_exact_github_blob_expansion_terminal_depth_1"
+        if terminal_depth_1
+        else "phase0_exact_github_blob_expansion"
     )
 
     try:
@@ -630,6 +657,8 @@ def acquire_github_expansion(
 
             if incomplete_reasons:
                 break
+            if terminal_depth_1:
+                continue
             for target_commit, repository_path in layer:
                 target_identity = (target_commit, repository_path)
                 repository_entries = {
@@ -831,7 +860,7 @@ def acquire_github_expansion(
         },
     }
     closure = {
-        "scope": "phase0_exact_github_blob_expansion",
+        "scope": closure_scope,
         "status": "complete" if complete else "incomplete",
         "unresolved": sorted(
             incomplete_reasons,
@@ -840,8 +869,8 @@ def acquire_github_expansion(
     }
     expansion = {
         "schema": "aragorn/github-expansion/v1",
-        "profile": PROFILE,
-        "assurance": ASSURANCE,
+        "profile": profile,
+        "assurance": assurance,
         "source": {
             "host": "github.com",
             "owner": root_source["owner"],
@@ -905,7 +934,7 @@ def acquire_github_expansion(
             "references": compact_reference_totals,
         }
         closure = {
-            "scope": "phase0_exact_github_blob_expansion",
+            "scope": closure_scope,
             "status": "incomplete",
             "unresolved": sorted(
                 incomplete_reasons,

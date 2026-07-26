@@ -50,7 +50,7 @@ from aragorn.phase0_candidate import (
     compose_authenticated_comparator_batch,
     compose_candidate_batch,
 )
-from scripts.phase0_acquisition_gate import build_lock
+from scripts.phase0_acquisition_gate import EXPANSION_PROFILE, build_lock
 from scripts.prepare_hidden_suite import _git
 from scripts.run_hidden_workers import (
     ExecutionError,
@@ -501,6 +501,7 @@ def prepare(
                     "tree_digest"
                 ],
                 label=f"acquisition case {case_id}",
+                expected_profile=EXPANSION_PROFILE,
             )
             if (
                 item["expected_references"] != expected["expected_references"]

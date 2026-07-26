@@ -14,6 +14,11 @@ from unittest import mock
 import scripts.prepare_phase0_acquisition as preparation
 from aragorn.benchmark import _canonical_json_bytes, _digest_json, load_suite_for_run
 from aragorn.cas import CAS
+from aragorn.github_expand import (
+    TERMINAL_DEPTH_1_ASSURANCE,
+    TERMINAL_DEPTH_1_MODE,
+    TERMINAL_DEPTH_1_PROFILE,
+)
 from aragorn.phase0_candidate import candidate_implementation_digest
 from scripts.prepare_phase0_acquisition import (
     AcquisitionPreparationError,
@@ -86,6 +91,7 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
 
     def test_prepares_digest_bound_paired_inputs_without_outcomes(self) -> None:
         seen_tokens = []
+        seen_modes = []
 
         def acquire(
             repository_url: str,
@@ -94,9 +100,11 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
             cas: CAS,
             *,
             bearer_token: str | None,
+            expansion_mode: str | None,
             **budgets: int,
         ) -> dict[str, object]:
             seen_tokens.append(bearer_token)
+            seen_modes.append(expansion_mode)
             return self._retain_expansion(
                 repository_url,
                 commit,
@@ -126,6 +134,7 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
             "sha256:" + hashlib.sha256(self.catalog_path.read_bytes()).hexdigest(),
         )
         self.assertEqual(seen_tokens, ["github-test-token"] * 448)
+        self.assertEqual(seen_modes, [TERMINAL_DEPTH_1_MODE] * 448)
         self.assertEqual(
             sorted(path.name for path in self.output.iterdir()),
             [
@@ -151,6 +160,16 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
             accounting["suite_digest"], result["expanded_suite_digest"]
         )
         self.assertEqual(oracle["budgets"], _BUDGETS)
+        self.assertEqual(oracle["expansion_profile"], TERMINAL_DEPTH_1_PROFILE)
+        self.assertEqual(
+            oracle["expansion_assurance"], TERMINAL_DEPTH_1_ASSURANCE
+        )
+        self.assertEqual(
+            accounting["expansion_profile"], TERMINAL_DEPTH_1_PROFILE
+        )
+        self.assertEqual(
+            accounting["expansion_assurance"], TERMINAL_DEPTH_1_ASSURANCE
+        )
         self.assertEqual(len(oracle["cases"]), 448)
         self.assertEqual(len(accounting["cases"]), 448)
         self.assertTrue(
@@ -212,6 +231,7 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
             cas: CAS,
             *,
             bearer_token: str | None,
+            expansion_mode: str | None,
             **budgets: int,
         ) -> dict[str, object]:
             result = self._retain_expansion(
@@ -222,7 +242,7 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
                 budgets,
             )
             result["closure"] = {
-                "scope": "phase0_exact_github_blob_expansion",
+                "scope": "phase0_exact_github_blob_expansion_terminal_depth_1",
                 "status": "incomplete",
                 "unresolved": [
                     {"reason_code": "REFERENCE_BUDGET_EXCEEDED", "subject": "SKILL.md"}
@@ -304,6 +324,7 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
             cas: CAS,
             *,
             bearer_token: str | None,
+            expansion_mode: str | None,
             **budgets: int,
         ) -> dict[str, object]:
             return self._retain_expansion(
@@ -509,11 +530,8 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
         budgets["retained_bytes"]["used"] = len(root_content) + len(target_content)
         expansion = {
             "schema": "aragorn/github-expansion/v1",
-            "profile": "phase0-exact-github-blob-expansion/v1",
-            "assurance": (
-                "evaluation_only_github_api_membership_asserted_"
-                "blob_identity_reverified"
-            ),
+            "profile": TERMINAL_DEPTH_1_PROFILE,
+            "assurance": TERMINAL_DEPTH_1_ASSURANCE,
             "source": {
                 "host": "github.com",
                 "owner": owner,
@@ -559,7 +577,7 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
                 "budgets": budgets,
             },
             "closure": {
-                "scope": "phase0_exact_github_blob_expansion",
+                "scope": "phase0_exact_github_blob_expansion_terminal_depth_1",
                 "status": "complete",
                 "unresolved": [],
             },

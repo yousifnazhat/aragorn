@@ -29,6 +29,12 @@ from .benchmark_protocol_v2 import (
     verify_effective_environment_v2,
 )
 from .cas import CAS, CASError
+from .github_expand import (
+    ASSURANCE as GITHUB_EXPANSION_ASSURANCE,
+    PROFILE as GITHUB_EXPANSION_PROFILE,
+    TERMINAL_DEPTH_1_ASSURANCE,
+    TERMINAL_DEPTH_1_PROFILE,
+)
 from .oci_worker_protocol import (
     WorkerProtocolError,
     canonical_digest,
@@ -70,6 +76,16 @@ _REQUIRED_DOCKER_COMPONENTS = frozenset({"Engine", "containerd", "runc"})
 _UNREPORTED_COMPONENT_DETAILS_PREFIX = "unreported-details-sha256:"
 _PHASE0_BENIGN_BURDEN_CEILING = Fraction(1, 20)
 _PHASE0_MINIMUM_ATTACK_FLAG_DELTA = Fraction(1, 10)
+_PHASE0_EXPANSION_CONTRACTS = {
+    GITHUB_EXPANSION_PROFILE: (
+        GITHUB_EXPANSION_ASSURANCE,
+        "phase0_exact_github_blob_expansion",
+    ),
+    TERMINAL_DEPTH_1_PROFILE: (
+        TERMINAL_DEPTH_1_ASSURANCE,
+        "phase0_exact_github_blob_expansion_terminal_depth_1",
+    ),
+}
 _PHASE0_CORPUS_LOCK_DIGEST = (
     "sha256:bbd4c584fa06d2ef7ee9d69011bf756432bb0f6f06c16b6f9dfd0cde87267fb8"
 )
@@ -4921,11 +4937,15 @@ def _phase0_gate_report(
         cases=cases,
         systems=systems,
     )
+    expansion_profile = canonical_accounting.get(
+        "expansion_profile", GITHUB_EXPANSION_PROFILE
+    )
     records = {
         case_id: _load_phase0_expansion(
             evidence_cas,
             plan["expansion_digest"],
             expected_tree_digest=cases[case_id]["tree_digest"],
+            expected_profile=expansion_profile,
             label=f"Phase 0 accounting case {case_id}",
         )
         for case_id, plan in plans.items()
@@ -5291,16 +5311,13 @@ def _validate_phase0_accounting(
     label = "Phase 0 accounting sidecar"
     if not isinstance(value, dict):
         raise BenchmarkError(f"{label} must be a JSON object")
-    _exact_keys(
-        value,
-        {
-            "schema",
-            "suite_digest",
-            "candidate_system",
-            "cases",
-        },
-        label,
-    )
+    base_fields = {"schema", "suite_digest", "candidate_system", "cases"}
+    contract_fields = {"expansion_profile", "expansion_assurance"}
+    if frozenset(value) not in {
+        frozenset(base_fields),
+        frozenset(base_fields | contract_fields),
+    }:
+        raise BenchmarkError(f"{label} has missing or unknown fields")
     if value["schema"] != "aragorn/benchmark-phase0-accounting/v1":
         raise BenchmarkError("unsupported Phase 0 accounting schema")
     if value["suite_digest"] != suite_digest:
@@ -5317,6 +5334,25 @@ def _validate_phase0_accounting(
         raise BenchmarkError(
             "Phase 0 suite must declare exactly one Aragorn candidate identity"
         )
+    expansion_contract: dict[str, str] = {}
+    if contract_fields <= set(value):
+        profile = value["expansion_profile"]
+        contract = (
+            _PHASE0_EXPANSION_CONTRACTS.get(profile)
+            if isinstance(profile, str)
+            else None
+        )
+        if contract is None:
+            raise BenchmarkError("Phase 0 accounting expansion profile is unsupported")
+        assurance, _scope = contract
+        if value["expansion_assurance"] != assurance:
+            raise BenchmarkError(
+                "Phase 0 accounting expansion assurance does not match its profile"
+            )
+        expansion_contract = {
+            "expansion_profile": profile,
+            "expansion_assurance": assurance,
+        }
 
     raw_records = value["cases"]
     if not isinstance(raw_records, list):
@@ -5350,6 +5386,7 @@ def _validate_phase0_accounting(
         "schema": "aragorn/benchmark-phase0-accounting/v1",
         "suite_digest": suite_digest,
         "candidate_system": candidate,
+        **expansion_contract,
         "cases": [
             normalized_records[case_id] for case_id in sorted(normalized_records)
         ],
@@ -5515,7 +5552,16 @@ def _load_phase0_expansion(
     *,
     expected_tree_digest: str,
     label: str,
+    expected_profile: str = GITHUB_EXPANSION_PROFILE,
 ) -> dict[str, Any]:
+    contract = (
+        _PHASE0_EXPANSION_CONTRACTS.get(expected_profile)
+        if isinstance(expected_profile, str)
+        else None
+    )
+    if contract is None:
+        raise BenchmarkError(f"{label} expected expansion profile is unsupported")
+    expected_assurance, expected_scope = contract
     raw = _read_phase0_cas_json(cas, expansion_digest, label)
     if not isinstance(raw, dict):
         raise BenchmarkError(f"{label} expansion must be a JSON object")
@@ -5539,12 +5585,9 @@ def _load_phase0_expansion(
     )
     if raw["schema"] != "aragorn/github-expansion/v1":
         raise BenchmarkError(f"{label} has an unsupported expansion schema")
-    if raw["profile"] != "phase0-exact-github-blob-expansion/v1":
+    if raw["profile"] != expected_profile:
         raise BenchmarkError(f"{label} has an unsupported expansion profile")
-    if (
-        raw["assurance"]
-        != "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
-    ):
+    if raw["assurance"] != expected_assurance:
         raise BenchmarkError(f"{label} has an unsupported expansion assurance")
     root_manifest_digest = _digest(
         raw["root_manifest_digest"], f"{label}.root_manifest_digest"
@@ -5583,7 +5626,11 @@ def _load_phase0_expansion(
         f"{label}.objects",
         root_commit=source["commit"],
     )
-    closure = _validate_phase0_expansion_closure(raw["closure"], f"{label}.closure")
+    closure = _validate_phase0_expansion_closure(
+        raw["closure"],
+        f"{label}.closure",
+        expected_scope=expected_scope,
+    )
     accounting = _validate_phase0_expansion_accounting(
         raw["accounting"], references, objects, f"{label}.accounting"
     )
@@ -5777,6 +5824,8 @@ def _load_phase0_expansion(
             )
     return {
         "expansion_digest": expansion_digest,
+        "profile": expected_profile,
+        "assurance": expected_assurance,
         "source": source,
         "root_manifest_digest": root_manifest_digest,
         "root_tree_digest": root_tree_digest,
@@ -6398,11 +6447,16 @@ def _validate_phase0_budget(value: object, label: str) -> dict[str, int]:
     return {"limit": limit, "used": used}
 
 
-def _validate_phase0_expansion_closure(value: object, label: str) -> dict[str, Any]:
+def _validate_phase0_expansion_closure(
+    value: object,
+    label: str,
+    *,
+    expected_scope: str,
+) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise BenchmarkError(f"{label} must be a JSON object")
     _exact_keys(value, {"scope", "status", "unresolved"}, label)
-    if value["scope"] != "phase0_exact_github_blob_expansion":
+    if value["scope"] != expected_scope:
         raise BenchmarkError(f"{label}.scope is unsupported")
     status = value["status"]
     if status not in {"complete", "incomplete"}:
@@ -6433,7 +6487,7 @@ def _validate_phase0_expansion_closure(value: object, label: str) -> dict[str, A
     if status == "incomplete" and not normalized:
         raise BenchmarkError(f"{label}: incomplete closure needs an unresolved item")
     return {
-        "scope": "phase0_exact_github_blob_expansion",
+        "scope": expected_scope,
         "status": status,
         "unresolved": sorted(
             normalized, key=lambda item: (item["reason_code"], item["subject"])

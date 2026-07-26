@@ -35,6 +35,7 @@ from aragorn.benchmark import (
 from aragorn.cas import CAS, CASError
 from aragorn.github_expand import (
     GitHubExpansionError,
+    TERMINAL_DEPTH_1_MODE,
     acquire_github_expansion,
 )
 from aragorn.phase0_candidate import (
@@ -44,6 +45,7 @@ from aragorn.phase0_candidate import (
     candidate_system_identity,
 )
 from scripts.phase0_acquisition_gate import (
+    EXPANSION_ASSURANCE,
     EXPANSION_PROFILE,
     ORACLE_SCHEMA,
     build_lock,
@@ -80,7 +82,7 @@ _BUDGETS = {
     "api_bytes": 384 * 1024 * 1024,
     "retained_bytes": 128 * 1024 * 1024,
     "expanded_objects": 256,
-    "expansion_depth": 4,
+    "expansion_depth": 1,
     "references": 10_000,
 }
 
@@ -541,6 +543,7 @@ def prepare_files(
                 source["skill_path"],
                 cas,
                 bearer_token=bearer_token,
+                expansion_mode=TERMINAL_DEPTH_1_MODE,
                 **{
                     f"max_{name}": limit
                     for name, limit in _BUDGETS.items()
@@ -585,6 +588,7 @@ def prepare_files(
                 result["expansion_digest"],
                 expected_tree_digest=result["comparator_subject_tree_digest"],
                 label=f"acquisition case {case_id}",
+                expected_profile=EXPANSION_PROFILE,
             )
             acquired_source = record["source"]
             if any(
@@ -596,6 +600,8 @@ def prepare_files(
                 )
             if (
                 record["root_manifest_digest"] != result["root_manifest_digest"]
+                or record["profile"] != EXPANSION_PROFILE
+                or record["assurance"] != EXPANSION_ASSURANCE
                 or record["root_tree_digest"] != result["root_tree_digest"]
                 or record["comparator_subject_manifest_digest"]
                 != result["comparator_subject_manifest_digest"]
@@ -704,6 +710,7 @@ def prepare_files(
             "candidate_system": policy["candidate"],
             "comparators": policy["comparators"],
             "expansion_profile": EXPANSION_PROFILE,
+            "expansion_assurance": EXPANSION_ASSURANCE,
             "budgets": dict(_BUDGETS),
             "cases": [
                 {
@@ -723,6 +730,8 @@ def prepare_files(
             "schema": "aragorn/benchmark-phase0-accounting/v1",
             "suite_digest": expanded_loaded["digest"],
             "candidate_system": policy["candidate"],
+            "expansion_profile": EXPANSION_PROFILE,
+            "expansion_assurance": EXPANSION_ASSURANCE,
             "cases": [
                 {
                     "case_id": case["case_id"],

@@ -982,7 +982,7 @@ def main() -> int:
         "api_bytes": 402_653_184,
         "retained_bytes": 134_217_728,
         "expanded_objects": 256,
-        "expansion_depth": 4,
+        "expansion_depth": 1,
         "references": 10_000,
     }
     acquisition_cases = []
@@ -1071,7 +1071,13 @@ def main() -> int:
         "runs_per_case": 1,
         "candidate_system": acquisition_candidate,
         "comparators": phase0_candidate_policy_v3["required_comparators"],
-        "expansion_profile": "phase0-exact-github-blob-expansion/v1",
+        "expansion_profile": (
+            "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+        ),
+        "expansion_assurance": (
+            "evaluation_only_github_api_membership_asserted_blob_identity_"
+            "reverified_depth_1_targets_terminal_not_reference_scanned"
+        ),
         "budgets": acquisition_budgets,
         "cases": acquisition_cases,
     }
@@ -1105,12 +1111,28 @@ def main() -> int:
         "runs_per_case": 1,
         "candidate_system": acquisition_candidate,
         "comparators": phase0_candidate_policy_v3["required_comparators"],
-        "expansion_profile": "phase0-exact-github-blob-expansion/v1",
+        "expansion_profile": (
+            "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+        ),
+        "expansion_assurance": (
+            "evaluation_only_github_api_membership_asserted_blob_identity_"
+            "reverified_depth_1_targets_terminal_not_reference_scanned"
+        ),
         "budgets": acquisition_budgets,
     }
     validators[
         "benchmark-phase0-acquisition-oracle-lock-v1.schema.json"
     ].validate(acquisition_lock)
+    validators["benchmark-phase0-accounting-v1.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-accounting/v1",
+            "suite_digest": second_digest,
+            "candidate_system": acquisition_candidate,
+            "expansion_profile": acquisition_oracle["expansion_profile"],
+            "expansion_assurance": acquisition_oracle["expansion_assurance"],
+            "cases": [],
+        }
+    )
     zero_fraction = {"numerator": 0, "denominator": 10, "rate": 0.0}
     candidate_point = {
         "system": acquisition_candidate,
@@ -1873,6 +1895,19 @@ def main() -> int:
         },
     }
     validators["github-expansion-v1.schema.json"].validate(expansion)
+    terminal_expansion = deepcopy(expansion)
+    terminal_expansion["profile"] = (
+        "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+    )
+    terminal_expansion["assurance"] = (
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified_"
+        "depth_1_targets_terminal_not_reference_scanned"
+    )
+    terminal_expansion["accounting"]["budgets"]["expansion_depth"]["limit"] = 1
+    terminal_expansion["closure"]["scope"] = (
+        "phase0_exact_github_blob_expansion_terminal_depth_1"
+    )
+    validators["github-expansion-v1.schema.json"].validate(terminal_expansion)
     expansion_result = {
         "schema": "aragorn/github-expansion-result/v1",
         "expansion_digest": digest,

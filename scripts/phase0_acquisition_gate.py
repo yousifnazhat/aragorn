@@ -40,6 +40,10 @@ from aragorn.benchmark import (
     load_suite_for_run,
 )
 from aragorn.cas import CAS, CASError
+from aragorn.github_expand import (
+    TERMINAL_DEPTH_1_ASSURANCE,
+    TERMINAL_DEPTH_1_PROFILE,
+)
 from aragorn.phase0_candidate import (
     CandidateError,
     build_candidate_policy,
@@ -54,7 +58,8 @@ LOCK_ASSURANCE = (
     "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
 )
 REPORT_ASSURANCE = "paired_evidence_metrics_only"
-EXPANSION_PROFILE = "phase0-exact-github-blob-expansion/v1"
+EXPANSION_PROFILE = TERMINAL_DEPTH_1_PROFILE
+EXPANSION_ASSURANCE = TERMINAL_DEPTH_1_ASSURANCE
 _BUDGET_NAMES = {
     "api_requests",
     "api_bytes",
@@ -148,6 +153,7 @@ def _oracle(value: object, policy: dict[str, Any]) -> dict[str, Any]:
             "candidate_system",
             "comparators",
             "expansion_profile",
+            "expansion_assurance",
             "budgets",
             "cases",
         },
@@ -159,6 +165,8 @@ def _oracle(value: object, policy: dict[str, Any]) -> dict[str, Any]:
         raise AcquisitionGateError("acquisition oracle split must be held_out")
     if value["expansion_profile"] != EXPANSION_PROFILE:
         raise AcquisitionGateError("unsupported acquisition expansion profile")
+    if value["expansion_assurance"] != EXPANSION_ASSURANCE:
+        raise AcquisitionGateError("unsupported acquisition expansion assurance")
     candidate = _validate_system(value["candidate_system"], f"{label}.candidate_system")
     if candidate != policy["candidate"]:
         raise AcquisitionGateError("acquisition oracle candidate policy changed")
@@ -256,6 +264,11 @@ def _oracle(value: object, policy: dict[str, Any]) -> dict[str, Any]:
         raise AcquisitionGateError(
             "acquisition oracle GitHub source identities must be unique"
         )
+    budgets = _budgets(value["budgets"], f"{label}.budgets")
+    if budgets["expansion_depth"] != 1:
+        raise AcquisitionGateError(
+            "terminal-depth-1 acquisition requires expansion_depth=1"
+        )
     return {
         "schema": ORACLE_SCHEMA,
         "root_suite_digest": _digest(
@@ -274,7 +287,8 @@ def _oracle(value: object, policy: dict[str, Any]) -> dict[str, Any]:
         "candidate_system": candidate,
         "comparators": comparators,
         "expansion_profile": EXPANSION_PROFILE,
-        "budgets": _budgets(value["budgets"], f"{label}.budgets"),
+        "expansion_assurance": EXPANSION_ASSURANCE,
+        "budgets": budgets,
         "cases": [cases[case_id] for case_id in sorted(cases)],
     }
 
@@ -381,6 +395,7 @@ def build_lock(
         "candidate_system": policy["candidate"],
         "comparators": policy["comparators"],
         "expansion_profile": EXPANSION_PROFILE,
+        "expansion_assurance": EXPANSION_ASSURANCE,
         "budgets": canonical_oracle["budgets"],
     }
 
@@ -529,6 +544,11 @@ def evaluate_pair(
     )
     if candidate != policy["candidate"]:
         raise AcquisitionGateError("acquisition accounting candidate changed")
+    if (
+        canonical_accounting.get("expansion_profile") != EXPANSION_PROFILE
+        or canonical_accounting.get("expansion_assurance") != EXPANSION_ASSURANCE
+    ):
+        raise AcquisitionGateError("acquisition accounting expansion contract changed")
     oracle_cases = {item["case_id"]: item for item in canonical_oracle["cases"]}
     if set(expansion_records) != set(oracle_cases):
         raise AcquisitionGateError("acquisition expansion pairing is incomplete")
@@ -538,6 +558,13 @@ def evaluate_pair(
                 f"acquisition case {case_id} oracle references changed"
             )
         record = expansion_records[case_id]
+        if (
+            record.get("profile") != EXPANSION_PROFILE
+            or record.get("assurance") != EXPANSION_ASSURANCE
+        ):
+            raise AcquisitionGateError(
+                f"acquisition case {case_id} expansion contract changed"
+            )
         if record["source"] != expected["source"]:
             raise AcquisitionGateError(
                 f"acquisition case {case_id} source changed"
@@ -745,6 +772,7 @@ def evaluate_pair_files(
             plan["expansion_digest"],
             expected_tree_digest=expanded_suite["cases"][case_id]["tree_digest"],
             label=f"Phase 0 acquisition case {case_id}",
+            expected_profile=EXPANSION_PROFILE,
         )
         for case_id, plan in plans.items()
     }

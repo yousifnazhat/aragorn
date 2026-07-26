@@ -33,7 +33,18 @@
         "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v1.schema.json#/$defs/system"
       }
     },
-    "expansion_profile": {"const": "phase0-exact-github-blob-expansion/v1"},
+    "expansion_profile": {
+      "enum": [
+        "phase0-exact-github-blob-expansion/v1",
+        "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+      ]
+    },
+    "expansion_assurance": {
+      "enum": [
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified",
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+      ]
+    },
     "budgets": {"$ref": "#/$defs/budgets"},
     "cases": {
       "type": "array",
@@ -42,6 +53,39 @@
       "items": {"$ref": "#/$defs/case"}
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "expansion_profile": {
+            "const": "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+          }
+        },
+        "required": ["expansion_profile"]
+      },
+      "then": {
+        "required": ["expansion_assurance"],
+        "properties": {
+          "expansion_assurance": {
+            "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+          },
+          "budgets": {
+            "properties": {
+              "expansion_depth": {"const": 1}
+            },
+            "required": ["expansion_depth"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "expansion_assurance": {
+            "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "id": {
       "type": "string",

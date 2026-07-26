@@ -20,9 +20,17 @@
   ],
   "properties": {
     "schema": {"const": "aragorn/github-expansion/v1"},
-    "profile": {"const": "phase0-exact-github-blob-expansion/v1"},
+    "profile": {
+      "enum": [
+        "phase0-exact-github-blob-expansion/v1",
+        "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+      ]
+    },
     "assurance": {
-      "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
+      "enum": [
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified",
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+      ]
     },
     "source": {"$ref": "#/$defs/source"},
     "root_manifest_digest": {"$ref": "#/$defs/digest"},
@@ -91,6 +99,58 @@
           "comparator_subject_manifest_digest": {"type": "null"},
           "comparator_subject_tree_digest": {"type": "null"},
           "objects": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+          }
+        },
+        "required": ["profile"]
+      },
+      "then": {
+        "properties": {
+          "assurance": {
+            "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+          },
+          "closure": {
+            "properties": {
+              "scope": {
+                "const": "phase0_exact_github_blob_expansion_terminal_depth_1"
+              }
+            },
+            "required": ["scope"]
+          },
+          "accounting": {
+            "properties": {
+              "budgets": {
+                "properties": {
+                  "expansion_depth": {
+                    "properties": {"limit": {"const": 1}},
+                    "required": ["limit"]
+                  }
+                },
+                "required": ["expansion_depth"]
+              }
+            },
+            "required": ["budgets"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "assurance": {
+            "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
+          },
+          "closure": {
+            "properties": {
+              "scope": {"const": "phase0_exact_github_blob_expansion"}
+            },
+            "required": ["scope"]
+          }
         }
       }
     }
@@ -420,7 +480,12 @@
       "additionalProperties": false,
       "required": ["scope", "status", "unresolved"],
       "properties": {
-        "scope": {"const": "phase0_exact_github_blob_expansion"},
+        "scope": {
+          "enum": [
+            "phase0_exact_github_blob_expansion",
+            "phase0_exact_github_blob_expansion_terminal_depth_1"
+          ]
+        },
         "status": {"enum": ["complete", "incomplete"]},
         "unresolved": {
           "type": "array",

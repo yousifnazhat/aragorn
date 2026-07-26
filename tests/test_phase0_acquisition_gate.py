@@ -11,8 +11,11 @@ from pathlib import Path
 
 from aragorn.benchmark import _canonical_json_bytes, _digest_json, _system_key
 from aragorn.cas import CAS
+from aragorn.github_expand import ASSURANCE, PROFILE
 from scripts.phase0_acquisition_gate import (
     AcquisitionGateError,
+    EXPANSION_ASSURANCE,
+    EXPANSION_PROFILE,
     ORACLE_SCHEMA,
     REPORT_SCHEMA,
     _policy,
@@ -344,6 +347,36 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
                 ):
                     evaluate_pair(**fixture)
 
+    def test_evaluation_rejects_nonterminal_expansion_contract(self) -> None:
+        fixture = self._fixture()
+        fixture["expansion_records"]["benign-000"]["profile"] = PROFILE
+        fixture["expansion_records"]["benign-000"]["assurance"] = ASSURANCE
+
+        with self.assertRaisesRegex(
+            AcquisitionGateError, "expansion contract changed"
+        ):
+            evaluate_pair(**fixture)
+
+        fixture = self._fixture()
+        fixture["accounting"]["expansion_profile"] = PROFILE
+        fixture["accounting"]["expansion_assurance"] = ASSURANCE
+        with self.assertRaisesRegex(
+            AcquisitionGateError, "accounting expansion contract changed"
+        ):
+            evaluate_pair(**fixture)
+
+        fixture = self._fixture()
+        fixture["oracle"]["budgets"]["expansion_depth"] = 2
+        with self.assertRaisesRegex(
+            AcquisitionGateError, "requires expansion_depth=1"
+        ):
+            build_lock(
+                fixture["oracle"],
+                fixture["root_suite"],
+                fixture["expanded_suite"],
+                self.policy,
+            )
+
     def _fixture(self) -> dict[str, object]:
         root_cases = self._cases(expanded=False)
         expanded_cases = self._cases(expanded=True)
@@ -359,7 +392,7 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
             "api_bytes": 402_653_184,
             "retained_bytes": 134_217_728,
             "expanded_objects": 256,
-            "expansion_depth": 4,
+            "expansion_depth": 1,
             "references": 10_000,
         }
         oracle = {
@@ -370,7 +403,8 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
             "runs_per_case": 1,
             "candidate_system": self.policy["candidate"],
             "comparators": self.policy["comparators"],
-            "expansion_profile": "phase0-exact-github-blob-expansion/v1",
+            "expansion_profile": EXPANSION_PROFILE,
+            "expansion_assurance": EXPANSION_ASSURANCE,
             "budgets": budgets,
             "cases": [
                 {
@@ -391,6 +425,8 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
             "schema": "aragorn/benchmark-phase0-accounting/v1",
             "suite_digest": expanded_suite["digest"],
             "candidate_system": self.policy["candidate"],
+            "expansion_profile": EXPANSION_PROFILE,
+            "expansion_assurance": EXPANSION_ASSURANCE,
             "cases": [
                 {
                     "case_id": case_id,
@@ -406,6 +442,8 @@ class Phase0AcquisitionGateTests(unittest.TestCase):
             target_path = expected_reference["target_repository_path"]
             target_digest = expected_reference["target_digest"]
             expansion_records[case_id] = {
+                "profile": EXPANSION_PROFILE,
+                "assurance": EXPANSION_ASSURANCE,
                 "source": self._source(case_id),
                 "root_tree_digest": root_cases[case_id]["tree_digest"],
                 "comparator_subject_tree_digest": expanded_cases[case_id][

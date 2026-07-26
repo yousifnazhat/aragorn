@@ -15,7 +15,15 @@ from aragorn.benchmark import _load_phase0_expansion
 from aragorn.cli import main
 import aragorn.github_acquire as github_acquire
 import aragorn.github_expand as github_expand
-from aragorn.github_expand import GitHubExpansionError, acquire_github_expansion
+from aragorn.github_expand import (
+    ASSURANCE,
+    PROFILE,
+    GitHubExpansionError,
+    TERMINAL_DEPTH_1_ASSURANCE,
+    TERMINAL_DEPTH_1_MODE,
+    TERMINAL_DEPTH_1_PROFILE,
+    acquire_github_expansion,
+)
 
 
 COMMIT = "a" * 40
@@ -523,6 +531,77 @@ class GitHubExpansionTests(unittest.TestCase):
             calls.count(f"/repos/example/project/git/trees/{PAYLOADS_TREE}"),
             1,
         )
+
+    def test_terminal_depth_1_retains_target_without_recursing(self) -> None:
+        first_url = (
+            "https://raw.githubusercontent.com/example/project/"
+            f"{COMMIT}/payloads/one.txt"
+        )
+        second_url = (
+            f"https://github.com/example/project/blob/{COMMIT}/payloads/two.txt"
+        )
+        target_content = f"[reserved-next-hop]({second_url})\n".encode()
+        second_content = b"# second\n"
+        second_blob_path = (
+            f"/repos/example/project/git/blobs/{_git_blob_sha(second_content)}"
+        )
+        responses = _responses(
+            f"curl {first_url}\n".encode(),
+            first_content=target_content,
+            second_content=second_content,
+        )
+
+        terminal_result, terminal, cas, terminal_calls, temporary = self.expand(
+            responses,
+            expansion_mode=TERMINAL_DEPTH_1_MODE,
+            max_expansion_depth=1,
+        )
+        self.addCleanup(temporary.cleanup)
+        subject = json.loads(
+            cas.read(terminal_result["comparator_subject_manifest_digest"])
+        )
+        retained_target = next(
+            item
+            for item in subject["files"]
+            if item["path"] == "__aragorn_expanded__/payloads/one.txt"
+        )
+
+        self.assertEqual(terminal["profile"], TERMINAL_DEPTH_1_PROFILE)
+        self.assertEqual(terminal["assurance"], TERMINAL_DEPTH_1_ASSURANCE)
+        self.assertEqual(
+            terminal["closure"]["scope"],
+            "phase0_exact_github_blob_expansion_terminal_depth_1",
+        )
+        self.assertEqual(
+            [item["repository_path"] for item in terminal["objects"]],
+            ["payloads/one.txt"],
+        )
+        self.assertEqual(cas.read(retained_target["digest"]), target_content)
+        self.assertNotIn(second_blob_path, terminal_calls)
+
+        default_result, default, _cas, default_calls, temporary = self.expand(
+            responses
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertEqual(default_result["closure"]["status"], "complete")
+        self.assertEqual(default["profile"], PROFILE)
+        self.assertEqual(default["assurance"], ASSURANCE)
+        self.assertEqual(
+            [item["repository_path"] for item in default["objects"]],
+            ["payloads/one.txt", "payloads/two.txt"],
+        )
+        self.assertIn(second_blob_path, default_calls)
+
+    def test_terminal_depth_1_requires_exact_depth_budget(self) -> None:
+        with self.assertRaisesRegex(
+            GitHubExpansionError,
+            "requires max_expansion_depth=1",
+        ):
+            self.expand(
+                _responses(b"# safe\n"),
+                expansion_mode=TERMINAL_DEPTH_1_MODE,
+                max_expansion_depth=2,
+            )
 
     def test_same_depth_acquisition_is_independent_of_root_reference_order(
         self,

@@ -9,12 +9,61 @@
     "schema": {"const": "aragorn/benchmark-phase0-accounting/v1"},
     "suite_digest": {"$ref": "#/$defs/digest"},
     "candidate_system": {"$ref": "#/$defs/system"},
+    "expansion_profile": {
+      "enum": [
+        "phase0-exact-github-blob-expansion/v1",
+        "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+      ]
+    },
+    "expansion_assurance": {
+      "enum": [
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified",
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+      ]
+    },
     "cases": {
       "type": "array",
       "maxItems": 10000,
       "items": {"$ref": "#/$defs/case"}
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {"required": ["expansion_profile"]},
+          {"required": ["expansion_assurance"]}
+        ]
+      },
+      "then": {
+        "required": ["expansion_profile", "expansion_assurance"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "expansion_profile": {
+            "const": "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+          }
+        },
+        "required": ["expansion_profile"]
+      },
+      "then": {
+        "properties": {
+          "expansion_assurance": {
+            "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "expansion_assurance": {
+            "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "id": {
       "type": "string",

@@ -372,7 +372,7 @@ class BenchmarkCandidateEvidenceV3Tests(unittest.TestCase):
     def test_v3_policy_accepts_v2_evidence_and_rederives_composed_review(
         self,
     ) -> None:
-        bindings = _bindings("phase0-candidate-policy-v3.json")
+        bindings = _bindings("phase0-candidate-policy-v4.json")
         candidate = bindings[2]
         observation = Observation(
             schema="aragorn/observation/v1",

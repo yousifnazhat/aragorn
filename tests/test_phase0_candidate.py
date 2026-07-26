@@ -30,7 +30,7 @@ _ROOT = Path(__file__).parents[1]
 
 def _policy() -> dict:
     return json.loads(
-        (_ROOT / "benchmark" / "phase0-candidate-policy-v3.json").read_bytes()
+        (_ROOT / "benchmark" / "phase0-candidate-policy-v4.json").read_bytes()
     )
 
 

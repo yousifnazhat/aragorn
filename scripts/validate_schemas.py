@@ -792,6 +792,12 @@ def main() -> int:
     validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
         phase0_corpus_lock_v3
     )
+    phase0_corpus_lock_v4 = load(
+        ROOT / "benchmark" / "phase0-corpus-v4.lock.json"
+    )
+    validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
+        phase0_corpus_lock_v4
+    )
     validators["benchmark-phase0-acquisition-corpus-lock-v1.schema.json"].validate(
         load(ROOT / "benchmark" / "phase0-acquisition-corpus.lock.json")
     )
@@ -823,8 +829,17 @@ def main() -> int:
     validators["benchmark-candidate-policy-v3.schema.json"].validate(
         phase0_candidate_policy_v3
     )
-    if build_candidate_policy(phase0_candidate_policy_v3) != phase0_candidate_policy_v3:
-        raise AssertionError("checked v3 candidate policy is not canonical")
+    phase0_candidate_policy_v4 = load(
+        ROOT / "benchmark" / "phase0-candidate-policy-v4.json"
+    )
+    validators["benchmark-candidate-policy-v3.schema.json"].validate(
+        phase0_candidate_policy_v4
+    )
+    if (
+        build_candidate_policy(phase0_candidate_policy_v4)
+        != phase0_candidate_policy_v4
+    ):
+        raise AssertionError("checked v4 candidate policy is not canonical")
     portable_identities = []
     for filename in (
         "phase0-cisco-portable-policy.json",

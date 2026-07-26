@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import unittest
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -16,6 +18,8 @@ from scripts.freeze_hidden_suite import (
     _artifact_map,
     _match_prior_freeze,
     _validate_skill_frontmatter,
+    _verify_release_v2,
+    _verify_source_freeze,
     freeze,
     validate_freeze_receipt_bindings,
 )
@@ -106,6 +110,169 @@ class FreezeReceiptTests(unittest.TestCase):
         changed["artifacts"][2]["purpose"] = changed["artifacts"][1]["purpose"]
         with self.assertRaisesRegex(FreezeError, "purpose is repeated"):
             _artifact_map(changed, lock)
+
+    def test_local_v4_release_manifest_is_exact_and_fail_closed(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release_root = root / "release"
+            release_root.mkdir()
+            payloads = {
+                "release/local-v4.0.0-worker-holdout.tar.gz": b"worker",
+                "release/local-v4.0.0-evaluator.tar.gz.enc": b"evaluator",
+                "release/local-v4.0.0-git-history.bundle": b"source",
+            }
+            purposes = [
+                (
+                    "worker cases and public case manifest; no labels or custody "
+                    "material"
+                ),
+                (
+                    "signed encrypted evaluator ledger, v3 source evidence, and "
+                    "exact repair builder"
+                ),
+                (
+                    "complete Git history with signed source and freeze commits "
+                    "and signed tag"
+                ),
+            ]
+            for path, raw in payloads.items():
+                destination = root / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(raw)
+            artifacts = [
+                {
+                    "path": path,
+                    "purpose": purpose,
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "size": len(raw),
+                }
+                for (path, raw), purpose in zip(payloads.items(), purposes)
+            ]
+            manifest = {
+                "aggregate_counts": {
+                    "total": 448,
+                    "benign": 336,
+                    "adversarial": 112,
+                },
+                "artifacts": artifacts,
+                "authorship": {
+                    "independent_human_authorship": False,
+                    "label_changes": 0,
+                    "mode": "technical-codex-metadata-repair",
+                    "outcome_driven_content_changes": 0,
+                    "outcomes_used_for_tuning": False,
+                    "scanner_evaluations": 0,
+                    "semantic_case_body_changes": 0,
+                },
+                "corpus_id": "local-v4.0.0",
+                "corpus_version": "local-v4.0.0",
+                "custody": {
+                    "evaluator_plaintext_sha256": "4" * 64,
+                    "freeze_commit": "5" * 40,
+                    "freeze_tag": "local-v4.0.0",
+                    "generator_sha256": "6" * 64,
+                    "keychain_account": "aragorn-local-v4.0.0-author.test",
+                    "keychain_service": (
+                        "org.openai.codex.aragorn.phase0.local-v4.0.0."
+                        "evaluator.test"
+                    ),
+                    "source_commit": "7" * 40,
+                    "tag_object": "8" * 40,
+                },
+                "repair_scope": "yaml-frontmatter-name-description-only",
+                "schema_version": "1.0",
+                "signing": {
+                    "identity": "aragorn-local-v4-author",
+                    "public_key_fingerprint": "SHA256:test",
+                    "signed_objects": [
+                        "source commit",
+                        "freeze commit",
+                        "annotated freeze tag",
+                        "label ledger",
+                        "evaluator manifest",
+                        "release manifest",
+                    ],
+                },
+                "source_corpus_version": "independent-v3.0.0",
+            }
+            manifest_path = (
+                release_root / "local-v4.0.0-release-manifest.json"
+            )
+            manifest_raw = canonical_json(manifest)
+            manifest_path.write_bytes(manifest_raw)
+            lock = {
+                "corpus_id": "local-v4.0.0",
+                "evaluator_archive": {
+                    "sha256": "sha256:" + artifacts[1]["sha256"]
+                },
+                "freeze": {
+                    "commit": "5" * 40,
+                    "tag": "local-v4.0.0",
+                    "tag_object": "8" * 40,
+                },
+                "release_manifest": {
+                    "sha256": "sha256:" + hashlib.sha256(manifest_raw).hexdigest()
+                },
+                "signing": {
+                    "fingerprint": "SHA256:test",
+                    "principal": "aragorn-local-v4-author",
+                },
+                "worker_archive": {
+                    "name": "local-v4.0.0-worker-holdout.tar.gz",
+                    "sha256": "sha256:" + artifacts[0]["sha256"],
+                },
+            }
+            checks = (
+                patch(
+                    "scripts.freeze_hidden_suite._signer_material",
+                    return_value=(b"allowed", b"ssh-ed25519 key\n"),
+                ),
+                patch("scripts.freeze_hidden_suite._verify_signature"),
+                patch("scripts.freeze_hidden_suite._verify_source_freeze"),
+            )
+            with checks[0], checks[1], checks[2] as source_check:
+                verified = _verify_release_v2(root, lock)
+                self.assertEqual(
+                    verified["worker_archive_digest"],
+                    lock["worker_archive"]["sha256"],
+                )
+                self.assertEqual(
+                    source_check.call_args.kwargs,
+                    {"source_commit": "7" * 40},
+                )
+
+                manifest["authorship"]["scanner_evaluations"] = 1
+                changed_raw = canonical_json(manifest)
+                manifest_path.write_bytes(changed_raw)
+                lock["release_manifest"]["sha256"] = (
+                    "sha256:" + hashlib.sha256(changed_raw).hexdigest()
+                )
+                with self.assertRaisesRegex(
+                    FreezeError,
+                    "does not match the v2 corpus lock",
+                ):
+                    _verify_release_v2(root, lock)
+
+    def test_local_v4_source_commit_must_be_direct_freeze_parent(self) -> None:
+        source = "1" * 40
+
+        def run(arguments: list[str], **_: object) -> str:
+            if "--format=%P" in arguments:
+                return "2" * 40
+            return ""
+
+        with patch("scripts.freeze_hidden_suite._run", side_effect=run):
+            with self.assertRaisesRegex(FreezeError, "direct freeze parent"):
+                _verify_source_freeze(
+                    b"bundle",
+                    b"allowed",
+                    {
+                        "commit": "3" * 40,
+                        "tag": "local-v4.0.0",
+                        "tag_object": "4" * 40,
+                    },
+                    source_commit=source,
+                )
 
     def test_preserved_evaluator_source_is_exclusive_and_bound(self) -> None:
         arguments = {

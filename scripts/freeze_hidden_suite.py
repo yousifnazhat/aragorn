@@ -39,6 +39,7 @@ from aragorn.phase0_candidate import (
 _OPAQUE_IDS = {
     "independent-v1.0.0": re.compile(r"case-[0-9a-f]{16}\Z"),
     "independent-v3.0.0": re.compile(r"v3-[0-9a-f]{24}\Z"),
+    "local-v4.0.0": re.compile(r"v4-[0-9a-f]{24}\Z"),
 }
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -57,6 +58,27 @@ _ARTIFACT_PURPOSES = {
     "worker": "worker cases and public case manifest; no label ledger",
     "evaluator": "signed encrypted evaluator ledger and exact builder",
     "source": "complete Git history with signed freeze commit and tag",
+}
+_V4_ARTIFACT_PURPOSES = {
+    "worker": (
+        "worker cases and public case manifest; no labels or custody material"
+    ),
+    "evaluator": (
+        "signed encrypted evaluator ledger, v3 source evidence, and exact "
+        "repair builder"
+    ),
+    "source": (
+        "complete Git history with signed source and freeze commits and signed tag"
+    ),
+}
+_V4_AUTHORSHIP = {
+    "independent_human_authorship": False,
+    "label_changes": 0,
+    "mode": "technical-codex-metadata-repair",
+    "outcome_driven_content_changes": 0,
+    "outcomes_used_for_tuning": False,
+    "scanner_evaluations": 0,
+    "semantic_case_body_changes": 0,
 }
 _SAFE_EXECUTABLE_ROOTS = (
     Path("/usr/bin"),
@@ -377,6 +399,11 @@ def _artifact_map(
     release: dict[str, object],
     corpus_lock: dict[str, object],
 ) -> dict[str, dict[str, object]]:
+    purposes = (
+        _V4_ARTIFACT_PURPOSES
+        if corpus_lock.get("corpus_id") == "local-v4.0.0"
+        else _ARTIFACT_PURPOSES
+    )
     artifacts = release.get("artifacts")
     if not isinstance(artifacts, list) or len(artifacts) != 3:
         raise FreezeError("release manifest must name exactly three artifacts")
@@ -396,7 +423,7 @@ def _artifact_map(
             or any(part in {"", "."} for part in relative.parts)
             or name in by_name
             or not isinstance(artifact["purpose"], str)
-            or artifact["purpose"] not in _ARTIFACT_PURPOSES.values()
+            or artifact["purpose"] not in purposes.values()
             or not isinstance(artifact["sha256"], str)
             or _HEX_DIGEST.fullmatch(artifact["sha256"]) is None
             or isinstance(artifact["size"], bool)
@@ -406,7 +433,7 @@ def _artifact_map(
             raise FreezeError("release artifact path is unsafe or repeated")
         role = next(
             key
-            for key, purpose in _ARTIFACT_PURPOSES.items()
+            for key, purpose in purposes.items()
             if purpose == artifact["purpose"]
         )
         if role in by_purpose:
@@ -414,7 +441,7 @@ def _artifact_map(
         by_name[name] = artifact
         by_purpose[role] = artifact
     if (
-        set(by_purpose) != set(_ARTIFACT_PURPOSES)
+        set(by_purpose) != set(purposes)
         or PurePosixPath(by_purpose["worker"]["path"]).name
         != corpus_lock["worker_archive"]["name"]
     ):
@@ -426,6 +453,8 @@ def _verify_source_freeze(
     bundle: bytes,
     allowed_signers: bytes,
     freeze: dict[str, object],
+    *,
+    source_commit: str | None = None,
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="aragorn-corpus-freeze-") as temporary:
         temporary_root = Path(temporary)
@@ -457,6 +486,21 @@ def _verify_source_freeze(
             ]
         )
         _run(["git", "-C", str(repository), "verify-commit", freeze["commit"]])
+        if source_commit is not None:
+            _run(["git", "-C", str(repository), "verify-commit", source_commit])
+            parents = _run(
+                [
+                    "git",
+                    "-C",
+                    str(repository),
+                    "show",
+                    "-s",
+                    "--format=%P",
+                    freeze["commit"],
+                ]
+            ).split()
+            if parents != [source_commit]:
+                raise FreezeError("signed source commit is not the direct freeze parent")
         _run(["git", "-C", str(repository), "verify-tag", freeze["tag"]])
         tag_object = _run(
             ["git", "-C", str(repository), "rev-parse", f"refs/tags/{freeze['tag']}"]
@@ -473,6 +517,9 @@ def _verify_release_v2(
     corpus_lock: dict[str, object],
 ) -> dict[str, object]:
     corpus_id = corpus_lock["corpus_id"]
+    if corpus_id not in {"independent-v3.0.0", "local-v4.0.0"}:
+        raise FreezeError("v2 release corpus is unsupported")
+    is_v4 = corpus_id == "local-v4.0.0"
     principal = corpus_lock["signing"]["principal"]
     fingerprint = corpus_lock["signing"]["fingerprint"]
     allowed = release_root / "signing" / f"{corpus_id}-allowed-signers"
@@ -492,19 +539,18 @@ def _verify_release_v2(
         principal=principal,
     )
     release = _decode_json(release_raw, "release manifest")
-    _exact(
-        release,
-        {
-            "aggregate_counts",
-            "artifacts",
-            "corpus_id",
-            "corpus_version",
-            "custody",
-            "schema_version",
-            "signing",
-        },
-        "release manifest",
-    )
+    release_fields = {
+        "aggregate_counts",
+        "artifacts",
+        "corpus_id",
+        "corpus_version",
+        "custody",
+        "schema_version",
+        "signing",
+    }
+    if is_v4:
+        release_fields |= {"authorship", "repair_scope", "source_corpus_version"}
+    _exact(release, release_fields, "release manifest")
     if not isinstance(release["custody"], dict) or not isinstance(
         release["signing"], dict
     ):
@@ -529,6 +575,15 @@ def _verify_release_v2(
         "release signing",
     )
     custody = release["custody"]
+    escaped_corpus_id = re.escape(corpus_id)
+    expected_signed_objects = [
+        *(["source commit"] if is_v4 else []),
+        "freeze commit",
+        "annotated freeze tag",
+        "label ledger",
+        "evaluator manifest",
+        "release manifest",
+    ]
     if (
         release["schema_version"] != "1.0"
         or release["corpus_id"] != corpus_id
@@ -546,27 +601,29 @@ def _verify_release_v2(
         or _HEX_DIGEST.fullmatch(custody["evaluator_plaintext_sha256"]) is None
         or not isinstance(custody["keychain_service"], str)
         or re.fullmatch(
-            r"org\.openai\.codex\.aragorn\.phase0\.independent-v3\.0\.0"
+            rf"org\.openai\.codex\.aragorn\.phase0\.{escaped_corpus_id}"
             r"\.evaluator\.[A-Za-z0-9._-]{1,96}",
             custody["keychain_service"],
         )
         is None
         or not isinstance(custody["keychain_account"], str)
         or re.fullmatch(
-            r"aragorn-independent-v3\.0\.0-author\.[A-Za-z0-9._-]{1,96}",
+            rf"aragorn-{escaped_corpus_id}-author\.[A-Za-z0-9._-]{{1,96}}",
             custody["keychain_account"],
         )
         is None
         or release["signing"]["identity"] != principal
         or release["signing"]["public_key_fingerprint"] != fingerprint
-        or release["signing"]["signed_objects"]
-        != [
-            "freeze commit",
-            "annotated freeze tag",
-            "label ledger",
-            "evaluator manifest",
-            "release manifest",
-        ]
+        or release["signing"]["signed_objects"] != expected_signed_objects
+        or (
+            is_v4
+            and (
+                release["authorship"] != _V4_AUTHORSHIP
+                or release["repair_scope"]
+                != "yaml-frontmatter-name-description-only"
+                or release["source_corpus_version"] != "independent-v3.0.0"
+            )
+        )
     ):
         raise FreezeError("release manifest does not match the v2 corpus lock")
     artifacts = _artifact_map(release, corpus_lock)
@@ -594,6 +651,7 @@ def _verify_release_v2(
         artifacts_raw["source"],
         allowed_raw,
         corpus_lock["freeze"],
+        source_commit=custody["source_commit"] if is_v4 else None,
     )
     return {
         "release_manifest_digest": _sha256(release_raw),
@@ -832,17 +890,16 @@ def verify_evaluator_package(
         principal=principal,
     )
     manifest = _decode_json(manifest_raw, "evaluator manifest")
-    _exact(
-        manifest,
-        {
-            "schema_version",
-            "corpus_version",
-            "files",
-            "freeze_tag",
-            "source_commit",
-        },
-        "evaluator manifest",
-    )
+    manifest_fields = {
+        "schema_version",
+        "corpus_version",
+        "files",
+        "freeze_tag",
+        "source_commit",
+    }
+    if corpus_lock["corpus_id"] == "local-v4.0.0":
+        manifest_fields.add("source_corpus_version")
+    _exact(manifest, manifest_fields, "evaluator manifest")
     expected_source_commit = (
         release["release_manifest"]["custody"]["source_commit"]
         if corpus_lock["schema"]
@@ -854,6 +911,10 @@ def verify_evaluator_package(
         or manifest["corpus_version"] != corpus_lock["corpus_id"]
         or manifest["freeze_tag"] != corpus_lock["freeze"]["tag"]
         or manifest["source_commit"] != expected_source_commit
+        or (
+            corpus_lock["corpus_id"] == "local-v4.0.0"
+            and manifest["source_corpus_version"] != "independent-v3.0.0"
+        )
     ):
         raise FreezeError("evaluator manifest does not match signed freeze")
     raw_records = manifest["files"]

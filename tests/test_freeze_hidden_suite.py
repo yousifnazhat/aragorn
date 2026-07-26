@@ -15,12 +15,59 @@ from scripts.freeze_hidden_suite import (
     FreezeError,
     _artifact_map,
     _match_prior_freeze,
+    _validate_skill_frontmatter,
     freeze,
     validate_freeze_receipt_bindings,
 )
 
 
 class FreezeReceiptTests(unittest.TestCase):
+    def test_skill_frontmatter_preflight_accepts_valid_and_rejects_invalid(
+        self,
+    ) -> None:
+        _validate_skill_frontmatter(
+            (
+                b"---\n"
+                b"name: inert-skill-1\n"
+                b"description: Inspect an inert local fixture.\n"
+                b"license: private-evaluation-only\n"
+                b"---\n\n"
+                b"# Inert skill\n"
+            ),
+            "valid",
+        )
+
+        invalid = {
+            "missing-leading-marker": b"# Skill\n",
+            "missing-closing-marker": (
+                b"---\nname: inert-skill\ndescription: Inert.\n"
+            ),
+            "missing-name": b"---\ndescription: Inert.\n---\n",
+            "invalid-name": (
+                b"---\nname: Not A Slug\ndescription: Inert.\n---\n"
+            ),
+            "empty-description": (
+                b"---\nname: inert-skill\ndescription: \"\"\n---\n"
+            ),
+            "duplicate-name": (
+                b"---\nname: inert-skill\nname: other\n"
+                b"description: Inert.\n---\n"
+            ),
+            "duplicate-extra-key": (
+                b"---\nname: inert-skill\ndescription: Inert.\n"
+                b"license: one\nlicense: two\n---\n"
+            ),
+            "control-character": (
+                b"---\nname: inert-skill\ndescription: Inert.\x00\n---\n"
+            ),
+        }
+        for label, raw in invalid.items():
+            with self.subTest(label=label), self.assertRaisesRegex(
+                FreezeError,
+                "frontmatter",
+            ):
+                _validate_skill_frontmatter(raw, label)
+
     def test_release_artifacts_are_selected_by_signed_role_not_v1_name(self) -> None:
         release = {
             "artifacts": [

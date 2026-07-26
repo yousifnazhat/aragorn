@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import unicodedata
 from collections import Counter
 from contextlib import ExitStack
 from datetime import date
@@ -43,6 +44,11 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _GIT_OID = re.compile(r"[0-9a-f]{40}\Z")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
+_FRONTMATTER_FIELD = re.compile(r"([A-Za-z][A-Za-z0-9_-]*):[ ]*(.*)\Z")
+_SKILL_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+_EMPTY_YAML_SCALAR = re.compile(
+    r"(?:~|null|Null|NULL|''|\"\")(?:[ ]+#.*)?\Z|#[^\r\n]*\Z"
+)
 _MAX_JSON = 4 * 1024 * 1024
 _MAX_LEDGER = 4 * 1024 * 1024
 _MAX_CASE = 16 * 1024 * 1024
@@ -978,6 +984,56 @@ def _verified_labels(
     return labels_by_id, {"benign": 336, "adversarial": 112}
 
 
+def _validate_skill_frontmatter(raw: bytes, case_id: str) -> None:
+    try:
+        lines = raw.decode("utf-8").split("\n")
+    except UnicodeDecodeError as exc:
+        raise FreezeError(
+            f"{case_id}: SKILL.md frontmatter is not UTF-8"
+        ) from exc
+    if not lines or lines[0] != "---":
+        raise FreezeError(
+            f"{case_id}: SKILL.md frontmatter must start with exact ---"
+        )
+    try:
+        closing = lines.index("---", 1)
+    except ValueError as exc:
+        raise FreezeError(
+            f"{case_id}: SKILL.md frontmatter must have an exact closing ---"
+        ) from exc
+
+    fields: dict[str, str] = {}
+    for line in lines[1:closing]:
+        if any(unicodedata.category(character).startswith("C") for character in line):
+            raise FreezeError(
+                f"{case_id}: SKILL.md frontmatter contains a control character"
+            )
+        if not line or line.startswith("#"):
+            continue
+        match = _FRONTMATTER_FIELD.fullmatch(line)
+        if match is None:
+            raise FreezeError(
+                f"{case_id}: SKILL.md frontmatter is not a flat YAML mapping"
+            )
+        key, value = match.groups()
+        if key in fields:
+            raise FreezeError(
+                f"{case_id}: SKILL.md frontmatter repeats key {key!r}"
+            )
+        fields[key] = value.strip()
+
+    name = fields.get("name", "")
+    if _SKILL_NAME.fullmatch(name) is None:
+        raise FreezeError(
+            f"{case_id}: SKILL.md frontmatter name must be a nonempty simple slug"
+        )
+    description = fields.get("description", "")
+    if not description or _EMPTY_YAML_SCALAR.fullmatch(description):
+        raise FreezeError(
+            f"{case_id}: SKILL.md frontmatter description must be nonempty"
+        )
+
+
 def _verified_worker_content(
     archive: bytes,
     public_raw: bytes,
@@ -1038,6 +1094,7 @@ def _verified_worker_content(
                 or total > _MAX_CORPUS
             ):
                 raise FreezeError("worker case content changed or exceeds budget")
+            _validate_skill_frontmatter(raw, case_id)
             content_by_id[case_id] = raw
     return content_by_id
 

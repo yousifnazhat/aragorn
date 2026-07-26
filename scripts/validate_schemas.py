@@ -1579,6 +1579,98 @@ def main() -> int:
                 raise AssertionError(f"calibration gate report {field} drift")
         if gate_report["comparison"]["passed"]:
             raise AssertionError("retained calibration result unexpectedly passed")
+    hidden_v4_calibration_result_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v4-calibration-result-2026-07-26.json"
+    )
+    if hidden_v4_calibration_result_path.exists():
+        if not hidden_v4_preparation_path.exists():
+            raise AssertionError(
+                "hidden v4 calibration result requires its retained "
+                "preparation receipt"
+            )
+        hidden_v4_calibration_result_raw = (
+            hidden_v4_calibration_result_path.read_bytes()
+        )
+        hidden_v4_calibration_result = json.loads(
+            hidden_v4_calibration_result_raw
+        )
+        validators[
+            "benchmark-phase0-hidden-calibration-result-receipt-v2.schema.json"
+        ].validate(hidden_v4_calibration_result)
+        if hidden_v4_calibration_result_raw != canonical_json(
+            hidden_v4_calibration_result
+        ):
+            raise AssertionError(
+                "hidden v4 calibration result receipt is not canonical JSON"
+            )
+        worker_run = hidden_v4_calibration_result["worker_run_receipt"]
+        gate_report = hidden_v4_calibration_result["gate_report"]
+        source = hidden_v4_calibration_result["source"]
+        worker_run_digest = (
+            "sha256:" + hashlib.sha256(canonical_json(worker_run)).hexdigest()
+        )
+        gate_report_file_digest = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(gate_report, sort_keys=True).encode("ascii") + b"\n"
+            ).hexdigest()
+        )
+        preparation_digest = (
+            "sha256:" + hashlib.sha256(hidden_v4_preparation_raw).hexdigest()
+        )
+        hidden_v4_lock_digest = (
+            "sha256:" + hashlib.sha256(hidden_v4_lock_raw).hexdigest()
+        )
+        if source["worker_run_receipt_digest"] != worker_run_digest:
+            raise AssertionError("hidden v4 calibration worker receipt digest drift")
+        if source["gate_report_file_digest"] != gate_report_file_digest:
+            raise AssertionError(
+                "hidden v4 calibration gate report file digest drift"
+            )
+        if source["evaluator_commit"] != worker_run["source"]["runner_commit"]:
+            raise AssertionError("hidden v4 calibration evaluator commit drift")
+        if (
+            worker_run["source"]["preparation_receipt_digest"]
+            != preparation_digest
+        ):
+            raise AssertionError(
+                "hidden v4 calibration preparation receipt digest drift"
+            )
+        if worker_run["state"]["binding_digest"] != _V4_GATE.state_binding_digest:
+            raise AssertionError("hidden v4 calibration run state binding drift")
+        if (
+            hidden_v4_calibration_result["evaluation_status"]
+            != "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+            or hidden_v4_calibration_result["phase0_exit_eligible"]
+        ):
+            raise AssertionError("hidden v4 result is not retained as calibration")
+        if (
+            worker_run["composition"]["outcomes_digest"]
+            != gate_report["outcomes_digest"]
+        ):
+            raise AssertionError("hidden v4 calibration outcome digest drift")
+        expected_gate_bindings = {
+            "corpus_lock_digest": hidden_v4_lock["corpus_lock_digest"],
+            "public_manifest_digest": hidden_v4_lock["public_manifest_digest"],
+            "hidden_suite_lock_digest": hidden_v4_lock_digest,
+            "candidate_policy_digest": hidden_v4_lock[
+                "candidate_policy_digest"
+            ],
+            "label_ledger_digest": hidden_v4_lock["label_ledger_digest"],
+            "suite_digest": hidden_v4_lock["suite_digest"],
+        }
+        for field, expected in expected_gate_bindings.items():
+            if gate_report[field] != expected:
+                raise AssertionError(
+                    f"hidden v4 calibration gate report {field} drift"
+                )
+        if gate_report["comparison"]["passed"]:
+            raise AssertionError(
+                "retained hidden v4 calibration result unexpectedly passed"
+            )
     validators["benchmark-phase0-hidden-worker-run-receipt-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-calibration-result-receipt-v2.schema.json",
+  "title": "Aragorn Phase 0 hidden calibration result receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "recorded_on",
+    "evaluation_status",
+    "phase0_exit_eligible",
+    "source",
+    "worker_run_receipt",
+    "gate_report"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v2"
+    },
+    "assurance": {
+      "const": "aggregate_calibration_evidence_only_not_phase0_exit_evidence"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "evaluation_status": {
+      "const": "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+    },
+    "phase0_exit_eligible": {
+      "const": false
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluator_commit",
+        "worker_run_receipt_digest",
+        "gate_report_file_digest"
+      ],
+      "properties": {
+        "evaluator_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "worker_run_receipt_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "gate_report_file_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "worker_run_receipt": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-worker-run-receipt-v4.schema.json"
+    },
+    "gate_report": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v2.schema.json"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

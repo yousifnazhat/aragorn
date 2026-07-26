@@ -21,6 +21,7 @@ from scripts.prepare_hidden_suite import (
     _V1_GATE,
     _V2_GATE,
     _V3_GATE,
+    _V4_GATE,
     PreparationError,
     _committed_document,
     _preflight_suite,
@@ -42,6 +43,10 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
         self.assertEqual(
             _V3_GATE.corpus_lock_path,
             Path("benchmark/phase0-corpus-v3.lock.json"),
+        )
+        self.assertEqual(
+            _V4_GATE.corpus_lock_path,
+            Path("benchmark/phase0-corpus-v4.lock.json"),
         )
         self.assertEqual(_CORPUS_LOCK_PATH, retained_path)
 
@@ -130,6 +135,54 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
             ),
         )
         self.assertFalse(_V3_GATE.calibration_only)
+
+    def test_v4_gate_binds_local_hidden_freeze(self) -> None:
+        self.assertEqual(
+            _V4_GATE.freeze_commit,
+            "f348b9f16c0e69ebc293b1c043803fc645f452f1",
+        )
+        self.assertEqual(
+            _V4_GATE.freeze_tree,
+            "ecf8f360a48055bd4b54af7727fd01a28cd970f5",
+        )
+        self.assertEqual(
+            _V4_GATE.lock_digest,
+            "sha256:df5d79e7eac04ceef4d181abfc37f2ed2a11c20266cc74297cea35b7486df587",
+        )
+        self.assertEqual(
+            _V4_GATE.freeze_receipt_digest,
+            "sha256:64780dbf3364cc5c3ed94047a4d0f9dff6ee6bf43d1a89b52cc25fe3632c780c",
+        )
+        self.assertEqual(
+            _V4_GATE.suite_digest,
+            "sha256:797ded20e3c9b9082e9ea53dd13cbfef463dfe6d7adf8ea88b6698bd34861072",
+        )
+        self.assertEqual(
+            _V4_GATE.candidate_policy_digest,
+            "sha256:c9e5e3b1092a427662306608bd1a15de00a306ea30e4e9bab91ce9fb8c3d929c",
+        )
+        self.assertEqual(
+            _V4_GATE.state_binding_digest,
+            "sha256:4a590e6577e73def9ff27cb6cdb69a8309afff3a50e44a189abb77a8eacbffba",
+        )
+        self.assertEqual(
+            _state_paths(
+                Path(
+                    "/Users/yousi/Documents/Codex/2026-07-26/"
+                    "aragorn-phase0-hidden-v4-control/run-state"
+                ),
+                _V4_GATE,
+            )["outcomes"],
+            Path(
+                "/Users/yousi/Documents/Codex/2026-07-26/"
+                "aragorn-phase0-hidden-v4-control/run-state/outcomes.jsonl"
+            ),
+        )
+        self.assertEqual(
+            _V4_GATE.trust_domain,
+            "phase0.hidden-local-v4.0.0",
+        )
+        self.assertFalse(_V4_GATE.calibration_only)
 
     def test_preparation_commit_must_strictly_follow_freeze(self) -> None:
         with (

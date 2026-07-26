@@ -28,6 +28,7 @@ from freeze_hidden_suite import validate_freeze_receipt_bindings
 from prepare_hidden_suite import (
     _V2_GATE,
     _V3_GATE,
+    _V4_GATE,
     validate_retained_preparation_receipt,
 )
 
@@ -792,9 +793,9 @@ def main() -> int:
     validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
         phase0_corpus_lock_v3
     )
-    phase0_corpus_lock_v4 = load(
-        ROOT / "benchmark" / "phase0-corpus-v4.lock.json"
-    )
+    phase0_corpus_lock_v4_path = ROOT / "benchmark" / "phase0-corpus-v4.lock.json"
+    phase0_corpus_lock_v4_raw = phase0_corpus_lock_v4_path.read_bytes()
+    phase0_corpus_lock_v4 = json.loads(phase0_corpus_lock_v4_raw)
     validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
         phase0_corpus_lock_v4
     )
@@ -1384,6 +1385,50 @@ def main() -> int:
             hidden_v3_receipt,
             _V3_GATE,
         )
+    hidden_v4_lock_path = ROOT / "benchmark" / "phase0-hidden-suite-v4.lock.json"
+    hidden_v4_lock_raw = hidden_v4_lock_path.read_bytes()
+    hidden_v4_lock = json.loads(hidden_v4_lock_raw)
+    hidden_v4_receipt_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-suite-v4-freeze-2026-07-26.json"
+    )
+    hidden_v4_receipt_raw = hidden_v4_receipt_path.read_bytes()
+    hidden_v4_receipt = json.loads(hidden_v4_receipt_raw)
+    validators["benchmark-phase0-hidden-suite-lock-v1.schema.json"].validate(
+        hidden_v4_lock
+    )
+    validators["benchmark-phase0-hidden-suite-freeze-receipt-v4.schema.json"].validate(
+        hidden_v4_receipt
+    )
+    validate_freeze_receipt_bindings(
+        hidden_v4_receipt,
+        hidden_v4_receipt_raw,
+        hidden_v4_lock,
+        hidden_v4_lock_raw,
+        phase0_corpus_lock_v4,
+        phase0_corpus_lock_v4_raw,
+    )
+    hidden_v4_preparation_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v4-preparation-2026-07-26.json"
+    )
+    if hidden_v4_preparation_path.exists():
+        hidden_v4_preparation_raw = hidden_v4_preparation_path.read_bytes()
+        hidden_v4_preparation = json.loads(hidden_v4_preparation_raw)
+        validators[
+            "benchmark-phase0-hidden-preparation-receipt-v4.schema.json"
+        ].validate(hidden_v4_preparation)
+        validate_retained_preparation_receipt(
+            hidden_v4_preparation,
+            hidden_v4_preparation_raw,
+            hidden_v4_lock,
+            hidden_v4_receipt,
+            _V4_GATE,
+        )
     hidden_v3_result_path = (
         ROOT
         / "benchmark"
@@ -1626,6 +1671,44 @@ def main() -> int:
             "state": {
                 "layout": "phase0-hidden-run-state/v1",
                 "binding_digest": _V3_GATE.state_binding_digest,
+            },
+            "batch": {
+                "accepted_count": 896,
+                "acceptance_set_digest": digest,
+                "result_set_digest": digest,
+            },
+            "composition": {
+                "composition_digest": digest,
+                "outcomes_digest": digest,
+                "outcomes_file_digest": digest,
+                "outcome_count": 1_344,
+            },
+            "limitations": {
+                "authorship": (
+                    "technical_codex_authorship_not_independent_human_identity"
+                ),
+                "custody": (
+                    "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+                ),
+                "worker_attestation": (
+                    "software_key_possession_not_vm_or_hardware_attestation"
+                ),
+            },
+        }
+    )
+    validators["benchmark-phase0-hidden-worker-run-receipt-v4.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v4",
+            "assurance": (
+                "authenticated_complete_worker_batch_not_independent_or_hardware_attested"
+            ),
+            "source": {
+                "runner_commit": "1" * 40,
+                "preparation_receipt_digest": digest,
+            },
+            "state": {
+                "layout": "phase0-hidden-run-state/v1",
+                "binding_digest": _V4_GATE.state_binding_digest,
             },
             "batch": {
                 "accepted_count": 896,

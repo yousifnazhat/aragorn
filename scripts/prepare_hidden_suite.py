@@ -215,7 +215,47 @@ _V3_GATE = PreparationGate(
     run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v3",
 )
 
-_GATES = {gate.name: gate for gate in (_V1_GATE, _V2_GATE, _V3_GATE)}
+_V4_GATE = PreparationGate(
+    name="v4",
+    freeze_commit="f348b9f16c0e69ebc293b1c043803fc645f452f1",
+    freeze_tree="ecf8f360a48055bd4b54af7727fd01a28cd970f5",
+    corpus_lock_path=Path("benchmark/phase0-corpus-v4.lock.json"),
+    lock_path=Path("benchmark/phase0-hidden-suite-v4.lock.json"),
+    freeze_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-suite-v4-freeze-2026-07-26.json"
+    ),
+    preparation_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-v4-preparation-2026-07-26.json"
+    ),
+    candidate_policy_path=Path("benchmark/phase0-candidate-policy-v4.json"),
+    portable_policy_paths=(
+        Path("benchmark/phase0-cisco-portable-policy-v2.json"),
+        Path("benchmark/phase0-skillspector-portable-policy-v2.json"),
+    ),
+    lock_digest=(
+        "sha256:df5d79e7eac04ceef4d181abfc37f2ed2a11c20266cc74297cea35b7486df587"
+    ),
+    freeze_receipt_digest=(
+        "sha256:64780dbf3364cc5c3ed94047a4d0f9dff6ee6bf43d1a89b52cc25fe3632c780c"
+    ),
+    suite_digest=(
+        "sha256:797ded20e3c9b9082e9ea53dd13cbfef463dfe6d7adf8ea88b6698bd34861072"
+    ),
+    candidate_policy_digest=(
+        "sha256:c9e5e3b1092a427662306608bd1a15de00a306ea30e4e9bab91ce9fb8c3d929c"
+    ),
+    state_binding_digest=(
+        "sha256:4a590e6577e73def9ff27cb6cdb69a8309afff3a50e44a189abb77a8eacbffba"
+    ),
+    trust_domain="phase0.hidden-local-v4.0.0",
+    recorded_on="2026-07-26",
+    receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v4",
+    run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v4",
+)
+
+_GATES = {
+    gate.name: gate for gate in (_V1_GATE, _V2_GATE, _V3_GATE, _V4_GATE)
+}
 
 # Compatibility names used by retained v1 validators and tests.
 _FREEZE_COMMIT = _V1_GATE.freeze_commit

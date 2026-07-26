@@ -15,10 +15,20 @@ sys.path.insert(0, str(ROOT))
 from aragorn.oci_worker_protocol import canonical_json
 from scripts.freeze_hidden_suite import (
     FreezeError,
+    _V5_ARTIFACT_PURPOSES,
+    _V5_AUTHORING_CONTRACT,
+    _V5_AUTHORING_INPUTS,
+    _V5_AUTHORSHIP,
+    _V5_NOVELTY_POLICY,
+    _V5_ALLOWED_SIGNER,
+    _V5_SIGNER_FINGERPRINT,
+    _V5_SIGNER_PRINCIPAL,
     _artifact_map,
     _fresh_openssl_receipt_schema,
     _match_prior_freeze,
+    _measure_v5_novelty,
     _validate_skill_frontmatter,
+    _verify_v5_novelty,
     _verify_release_v2,
     _verify_source_freeze,
     freeze,
@@ -35,6 +45,10 @@ class FreezeReceiptTests(unittest.TestCase):
         self.assertEqual(
             _fresh_openssl_receipt_schema("local-v4.0.0"),
             "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v4",
+        )
+        self.assertEqual(
+            _fresh_openssl_receipt_schema("local-v5.0.0"),
+            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5",
         )
         with self.assertRaises(FreezeError):
             _fresh_openssl_receipt_schema("unknown")
@@ -287,6 +301,360 @@ class FreezeReceiptTests(unittest.TestCase):
                     source_commit=source,
                 )
 
+    def test_local_v5_release_is_new_authorship_not_v4_repair(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "release").mkdir()
+            payloads = {
+                "release/local-v5.0.0-worker-holdout.tar.gz": b"worker",
+                "release/local-v5.0.0-evaluator.tar.gz.enc": b"evaluator",
+                "release/local-v5.0.0-git-history.bundle": b"source",
+            }
+            for path, raw in payloads.items():
+                destination = root / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(raw)
+            artifacts = [
+                {
+                    "path": path,
+                    "purpose": purpose,
+                    "sha256": hashlib.sha256(payloads[path]).hexdigest(),
+                    "size": len(payloads[path]),
+                }
+                for path, purpose in zip(payloads, _V5_ARTIFACT_PURPOSES.values())
+            ]
+            contract = {
+                "commit": "6" * 40,
+                "path": "AUTHORING-CONTRACT.json",
+                "sha256": hashlib.sha256(
+                    canonical_json(_V5_AUTHORING_CONTRACT)
+                ).hexdigest(),
+            }
+            novelty = {
+                **_V5_NOVELTY_POLICY,
+                "candidate_unique_body_count": 448,
+                "exact_reference_body_overlap_count": 0,
+                "maximum_observed_similarity": {
+                    "candidate_case_id": "v5-" + "1" * 24,
+                    "reference_case_id": "v4-" + "2" * 24,
+                    "numerator": 0,
+                    "denominator": 1,
+                },
+            }
+            manifest = {
+                "aggregate_counts": {
+                    "total": 448,
+                    "benign": 336,
+                    "adversarial": 112,
+                },
+                "artifacts": artifacts,
+                "authoring_contract": contract,
+                "authorship": _V5_AUTHORSHIP,
+                "corpus_id": "local-v5.0.0",
+                "corpus_version": "local-v5.0.0",
+                "custody": {
+                    "evaluator_plaintext_sha256": "4" * 64,
+                    "freeze_commit": "5" * 40,
+                    "freeze_tag": "local-v5.0.0",
+                    "generator_sha256": "6" * 64,
+                    "keychain_account": "aragorn-local-v5.0.0-author.test",
+                    "keychain_service": (
+                        "org.openai.codex.aragorn.phase0.local-v5.0.0."
+                        "evaluator.test"
+                    ),
+                    "source_commit": "7" * 40,
+                    "tag_object": "8" * 40,
+                },
+                "novelty": novelty,
+                "schema_version": "2.0",
+                "signing": {
+                    "identity": _V5_SIGNER_PRINCIPAL,
+                    "public_key_fingerprint": _V5_SIGNER_FINGERPRINT,
+                    "signed_objects": [
+                        "authoring contract commit",
+                        "source commit",
+                        "freeze commit",
+                        "annotated freeze tag",
+                        "label ledger",
+                        "evaluator manifest",
+                        "release manifest",
+                    ],
+                },
+            }
+            manifest_path = root / "release" / "local-v5.0.0-release-manifest.json"
+            manifest_raw = canonical_json(manifest)
+            manifest_path.write_bytes(manifest_raw)
+            lock = {
+                "corpus_id": "local-v5.0.0",
+                "evaluator_archive": {
+                    "sha256": "sha256:" + artifacts[1]["sha256"]
+                },
+                "freeze": {
+                    "commit": "5" * 40,
+                    "tag": "local-v5.0.0",
+                    "tag_object": "8" * 40,
+                },
+                "release_manifest": {
+                    "sha256": "sha256:" + hashlib.sha256(manifest_raw).hexdigest()
+                },
+                "signing": {
+                    "fingerprint": _V5_SIGNER_FINGERPRINT,
+                    "principal": _V5_SIGNER_PRINCIPAL,
+                },
+                "worker_archive": {
+                    "name": "local-v5.0.0-worker-holdout.tar.gz",
+                    "sha256": "sha256:" + artifacts[0]["sha256"],
+                },
+            }
+            with (
+                patch(
+                    "scripts.freeze_hidden_suite._signer_material",
+                    return_value=(
+                        _V5_ALLOWED_SIGNER,
+                        b"ssh-ed25519 key\n",
+                    ),
+                ),
+                patch("scripts.freeze_hidden_suite._verify_signature"),
+                patch(
+                    "scripts.freeze_hidden_suite._verify_source_freeze"
+                ) as source_check,
+            ):
+                _verify_release_v2(root, lock)
+                self.assertEqual(
+                    source_check.call_args.kwargs,
+                    {
+                        "source_commit": "7" * 40,
+                        "authoring_contract": contract,
+                    },
+                )
+
+                changed_lock = deepcopy(lock)
+                changed_lock["signing"]["fingerprint"] = "SHA256:" + "A" * 43
+                with self.assertRaisesRegex(FreezeError, "pinned Aragorn key"):
+                    _verify_release_v2(root, changed_lock)
+
+                manifest["authorship"] = {
+                    **_V5_AUTHORSHIP,
+                    "semantic_case_body_changes": 0,
+                }
+                changed_raw = canonical_json(manifest)
+                manifest_path.write_bytes(changed_raw)
+                lock["release_manifest"]["sha256"] = (
+                    "sha256:" + hashlib.sha256(changed_raw).hexdigest()
+                )
+                with self.assertRaisesRegex(
+                    FreezeError,
+                    "does not match the v2 corpus lock",
+                ):
+                    _verify_release_v2(root, lock)
+
+    def test_local_v5_authoring_contract_is_signed_before_source(self) -> None:
+        contract_raw = canonical_json(_V5_AUTHORING_CONTRACT)
+        contract = {
+            "commit": "1" * 40,
+            "path": "AUTHORING-CONTRACT.json",
+            "sha256": hashlib.sha256(contract_raw).hexdigest(),
+        }
+        source = "2" * 40
+        freeze_commit = "3" * 40
+        tag_object = "4" * 40
+
+        def run(arguments: list[str], **_: object) -> str:
+            if "--format=%P" in arguments:
+                return source if arguments[-1] == freeze_commit else contract["commit"]
+            if "ls-tree" in arguments:
+                if "--name-only" not in arguments:
+                    authoring_input = next(
+                        value
+                        for value in (
+                            _V5_AUTHORING_INPUTS["prompt"],
+                            _V5_AUTHORING_INPUTS["source_pack"],
+                        )
+                        if value["path"] == arguments[-1]
+                    )
+                    return (
+                        f"100644 blob {authoring_input['git_blob_sha1']}\t"
+                        f"{authoring_input['path']}"
+                    )
+                return "AUTHORING-CONTRACT.json"
+            if "cat-file" in arguments and "-s" in arguments:
+                return str(len(contract_raw))
+            if arguments[-1] == (
+                f"{contract['commit']}:AUTHORING-CONTRACT.json"
+            ):
+                return contract_raw.decode("ascii")
+            if arguments[-1] == "refs/tags/local-v5.0.0":
+                return tag_object
+            if arguments[-1] == "local-v5.0.0^{}":
+                return freeze_commit
+            return ""
+
+        with patch("scripts.freeze_hidden_suite._run", side_effect=run):
+            _verify_source_freeze(
+                b"bundle",
+                b"allowed",
+                {
+                    "commit": freeze_commit,
+                    "tag": "local-v5.0.0",
+                    "tag_object": tag_object,
+                },
+                source_commit=source,
+                authoring_contract=contract,
+            )
+
+        def wrong_parent(arguments: list[str], **kwargs: object) -> str:
+            if "--format=%P" in arguments and arguments[-1] == source:
+                return "9" * 40
+            return run(arguments, **kwargs)
+
+        with patch("scripts.freeze_hidden_suite._run", side_effect=wrong_parent):
+            with self.assertRaisesRegex(FreezeError, "direct source parent"):
+                _verify_source_freeze(
+                    b"bundle",
+                    b"allowed",
+                    {
+                        "commit": freeze_commit,
+                        "tag": "local-v5.0.0",
+                        "tag_object": tag_object,
+                    },
+                    source_commit=source,
+                    authoring_contract=contract,
+                )
+
+        def wrong_input(arguments: list[str], **kwargs: object) -> str:
+            if (
+                "ls-tree" in arguments
+                and "--name-only" not in arguments
+                and arguments[-1] == "AUTHORING-PROMPT.txt"
+            ):
+                return f"100644 blob {'9' * 40}\tAUTHORING-PROMPT.txt"
+            return run(arguments, **kwargs)
+
+        with patch("scripts.freeze_hidden_suite._run", side_effect=wrong_input):
+            with self.assertRaisesRegex(
+                FreezeError,
+                "source commit retained authoring input changed",
+            ):
+                _verify_source_freeze(
+                    b"bundle",
+                    b"allowed",
+                    {
+                        "commit": freeze_commit,
+                        "tag": "local-v5.0.0",
+                        "tag_object": tag_object,
+                    },
+                    source_commit=source,
+                    authoring_contract=contract,
+                )
+
+    def test_local_v5_authoring_inputs_are_exactly_retained(self) -> None:
+        self.assertEqual(
+            _V5_AUTHORING_CONTRACT["authoring_inputs"],
+            _V5_AUTHORING_INPUTS,
+        )
+        for authoring_input in (
+            _V5_AUTHORING_INPUTS["prompt"],
+            _V5_AUTHORING_INPUTS["source_pack"],
+        ):
+            raw = (ROOT / authoring_input["repository_path"]).read_bytes()
+            blob = f"blob {len(raw)}\0".encode("ascii") + raw
+            self.assertEqual(
+                hashlib.sha256(raw).hexdigest(),
+                authoring_input["sha256"],
+            )
+            self.assertEqual(
+                hashlib.sha1(blob, usedforsecurity=False).hexdigest(),
+                authoring_input["git_blob_sha1"],
+            )
+
+    def test_local_v5_corpus_lock_requires_an_exact_checked_pin(self) -> None:
+        with TemporaryDirectory(dir=ROOT.parent) as temporary:
+            root = Path(temporary)
+            root.chmod(0o700)
+            run_state = root / "run"
+            run_state.mkdir(mode=0o700)
+            corpus_lock = root / "corpus-lock.json"
+            corpus_lock.write_bytes(
+                canonical_json(
+                    {
+                        "schema": (
+                            "aragorn/benchmark-corpus-provenance-lock/v2"
+                        ),
+                        "corpus_id": "local-v5.0.0",
+                    }
+                )
+            )
+            with self.assertRaisesRegex(
+                FreezeError,
+                "checked corpus lock digest changed",
+            ):
+                freeze(
+                    release_dir=root,
+                    evaluator_passphrase=b"test-only",
+                    corpus_lock_path=corpus_lock,
+                    candidate_policy_path=root / "missing-policy.json",
+                    private_suite_root=root / "private-suite",
+                    lock_output=root / "lock.json",
+                    receipt_output=root / "receipt.json",
+                    recorded_on="2026-07-26",
+                    run_state_root=run_state,
+                )
+
+    def test_local_v5_novelty_is_recomputed_and_fails_closed(self) -> None:
+        def skill(prefix: str, index: int, *, long: bool = False) -> bytes:
+            tokens = [
+                f"{prefix}{index}a",
+                f"{prefix}{index}b",
+                f"{prefix}{index}c",
+                f"{prefix}{index}d",
+                f"{prefix}{index}e",
+            ]
+            if long:
+                tokens.extend(
+                    f"{prefix}{index}{suffix}" for suffix in "fghijk"
+                )
+            return (
+                "---\n"
+                f"name: {prefix}-{index}\n"
+                f"description: Inert {prefix} fixture {index}.\n"
+                "---\n\n"
+                + " ".join(tokens)
+                + "\n"
+            ).encode()
+
+        candidate = {
+            f"v5-{index:024x}": skill("candidate", index)
+            for index in range(448)
+        }
+        reference = {
+            f"v4-{index:024x}": skill("reference", index)
+            for index in range(448)
+        }
+        measured = _measure_v5_novelty(candidate, reference)
+        self.assertEqual(measured["candidate_unique_body_count"], 448)
+        self.assertEqual(measured["exact_reference_body_overlap_count"], 0)
+        _verify_v5_novelty(candidate, reference, measured)
+
+        changed = deepcopy(measured)
+        changed["maximum_observed_similarity"]["reference_case_id"] = (
+            "v4-" + "f" * 24
+        )
+        with self.assertRaisesRegex(FreezeError, "does not match recomputation"):
+            _verify_v5_novelty(candidate, reference, changed)
+
+        overlap = dict(candidate)
+        overlap["v5-" + "0" * 24] = reference["v4-" + "0" * 24]
+        with self.assertRaisesRegex(FreezeError, "reuses a normalized"):
+            _measure_v5_novelty(overlap, reference)
+
+        similar_candidate = dict(candidate)
+        similar_reference = dict(reference)
+        similar_reference["v4-" + "0" * 24] = skill("near", 0, long=True)
+        near = skill("near", 0, long=True).decode().replace("near0k", "changed")
+        similar_candidate["v5-" + "0" * 24] = near.encode()
+        with self.assertRaisesRegex(FreezeError, "exceeds one half"):
+            _measure_v5_novelty(similar_candidate, similar_reference)
+
     def test_preserved_evaluator_source_is_exclusive_and_bound(self) -> None:
         arguments = {
             "release_dir": ROOT,
@@ -378,6 +746,198 @@ class FreezeReceiptTests(unittest.TestCase):
                     **{**common, "private_suite_root": alias / "private-suite"},
                     recorded_on="2026-07-24",
                 )
+
+    def test_local_v5_receipt_declarations_bind_to_release_manifest(self) -> None:
+        novelty = {
+            **_V5_NOVELTY_POLICY,
+            "candidate_unique_body_count": 448,
+            "exact_reference_body_overlap_count": 0,
+            "maximum_observed_similarity": {
+                "candidate_case_id": "v5-" + "1" * 24,
+                "reference_case_id": "v4-" + "2" * 24,
+                "numerator": 0,
+                "denominator": 1,
+            },
+        }
+        authoring_contract = {
+            "commit": "1" * 40,
+            "path": "AUTHORING-CONTRACT.json",
+            "sha256": "2" * 64,
+        }
+        release_manifest = {
+            "authoring_contract": authoring_contract,
+            "authorship": _V5_AUTHORSHIP,
+            "novelty": novelty,
+        }
+        release_manifest_digest = (
+            "sha256:"
+            + hashlib.sha256(canonical_json(release_manifest)).hexdigest()
+        )
+        corpus_lock = {
+            "release_manifest": {"sha256": release_manifest_digest},
+            "worker_archive": {"sha256": "sha256:" + "3" * 64},
+            "evaluator_archive": {"sha256": "sha256:" + "4" * 64},
+            "public_manifest": {"sha256": "sha256:" + "5" * 64},
+            "signing": {
+                "principal": _V5_SIGNER_PRINCIPAL,
+                "fingerprint": _V5_SIGNER_FINGERPRINT,
+            },
+            "freeze": {
+                "commit": "6" * 40,
+                "tag": "local-v5.0.0",
+                "tag_object": "7" * 40,
+            },
+        }
+        corpus_lock_raw = canonical_json(corpus_lock)
+        suite = {
+            "suite_digest": "sha256:" + "8" * 64,
+            "candidate_policy_digest": "sha256:" + "9" * 64,
+            "case_count": 448,
+            "class_counts": {"benign": 336, "adversarial": 112},
+            "runs_per_case": 1,
+            "split": "hidden",
+            "systems": ["baseline", "candidate"],
+        }
+        lock = {
+            "corpus_lock_digest": (
+                "sha256:" + hashlib.sha256(corpus_lock_raw).hexdigest()
+            ),
+            "worker_archive_digest": corpus_lock["worker_archive"]["sha256"],
+            "evaluator_archive_digest": (
+                corpus_lock["evaluator_archive"]["sha256"]
+            ),
+            "public_manifest_digest": corpus_lock["public_manifest"]["sha256"],
+            "label_ledger_digest": "sha256:" + "a" * 64,
+            **suite,
+        }
+        lock_raw = canonical_json(lock)
+        receipt = {
+            "schema": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5",
+            "release": {
+                "release_manifest_digest": release_manifest_digest,
+                "worker_archive_digest": lock["worker_archive_digest"],
+                "evaluator_ciphertext_digest": lock["evaluator_archive_digest"],
+                "principal": _V5_SIGNER_PRINCIPAL,
+                "fingerprint": _V5_SIGNER_FINGERPRINT,
+                "freeze_commit": corpus_lock["freeze"]["commit"],
+                "freeze_tag": corpus_lock["freeze"]["tag"],
+                "freeze_tag_object": corpus_lock["freeze"]["tag_object"],
+                "authoring_contract": {
+                    **authoring_contract,
+                    "signature_status": "verified",
+                },
+                "authorship": _V5_AUTHORSHIP,
+                "novelty": {**novelty, "verification_status": "passed"},
+            },
+            "evaluator": {
+                "public_manifest_digest": lock["public_manifest_digest"],
+                "label_ledger_digest": lock["label_ledger_digest"],
+            },
+            "suite": suite,
+            "lock": {
+                "lock_digest": (
+                    "sha256:" + hashlib.sha256(lock_raw).hexdigest()
+                )
+            },
+        }
+        receipt_raw = canonical_json(receipt)
+
+        with self.assertRaisesRegex(
+            FreezeError,
+            "requires its verified release manifest",
+        ):
+            validate_freeze_receipt_bindings(
+                receipt,
+                receipt_raw,
+                lock,
+                lock_raw,
+                corpus_lock,
+                corpus_lock_raw,
+            )
+
+        validate_freeze_receipt_bindings(
+            receipt,
+            receipt_raw,
+            lock,
+            lock_raw,
+            corpus_lock,
+            corpus_lock_raw,
+            release_manifest=release_manifest,
+        )
+
+        changed_manifest = {
+            **release_manifest,
+            "authoring_contract": {
+                **authoring_contract,
+                "commit": "b" * 40,
+            },
+        }
+        with self.assertRaisesRegex(
+            FreezeError,
+            "verified release manifest digest changed",
+        ):
+            validate_freeze_receipt_bindings(
+                receipt,
+                receipt_raw,
+                lock,
+                lock_raw,
+                corpus_lock,
+                corpus_lock_raw,
+                release_manifest=changed_manifest,
+            )
+
+        for field, value in (
+            ("authoring_contract", {**authoring_contract, "commit": "b" * 40}),
+            ("authorship", {**_V5_AUTHORSHIP, "outcomes_used_for_tuning": True}),
+            (
+                "novelty",
+                {
+                    **novelty,
+                    "maximum_observed_similarity": {
+                        **novelty["maximum_observed_similarity"],
+                        "reference_case_id": "v4-" + "c" * 24,
+                    },
+                },
+            ),
+        ):
+            with self.subTest(field=field):
+                changed_manifest = deepcopy(release_manifest)
+                changed_manifest[field] = value
+                changed_manifest_digest = (
+                    "sha256:"
+                    + hashlib.sha256(canonical_json(changed_manifest)).hexdigest()
+                )
+                changed_corpus_lock = deepcopy(corpus_lock)
+                changed_corpus_lock["release_manifest"]["sha256"] = (
+                    changed_manifest_digest
+                )
+                changed_corpus_lock_raw = canonical_json(changed_corpus_lock)
+                changed_lock = deepcopy(lock)
+                changed_lock["corpus_lock_digest"] = (
+                    "sha256:"
+                    + hashlib.sha256(changed_corpus_lock_raw).hexdigest()
+                )
+                changed_lock_raw = canonical_json(changed_lock)
+                changed_receipt = deepcopy(receipt)
+                changed_receipt["release"]["release_manifest_digest"] = (
+                    changed_manifest_digest
+                )
+                changed_receipt["lock"]["lock_digest"] = (
+                    "sha256:" + hashlib.sha256(changed_lock_raw).hexdigest()
+                )
+                with self.assertRaisesRegex(
+                    FreezeError,
+                    "do not match the verified release manifest",
+                ):
+                    validate_freeze_receipt_bindings(
+                        changed_receipt,
+                        canonical_json(changed_receipt),
+                        changed_lock,
+                        changed_lock_raw,
+                        changed_corpus_lock,
+                        changed_corpus_lock_raw,
+                        release_manifest=changed_manifest,
+                    )
 
     def test_schema_valid_label_digest_substitution_is_rejected(self) -> None:
         lock_raw = (ROOT / "benchmark" / "phase0-hidden-suite.lock.json").read_bytes()

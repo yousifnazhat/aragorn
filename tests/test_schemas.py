@@ -46,6 +46,7 @@ EXPECTED_CONTRACTS = {
     "benchmark-phase0-hidden-suite-freeze-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v2",
     "benchmark-phase0-hidden-suite-freeze-receipt-v3.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3",
     "benchmark-phase0-hidden-suite-freeze-receipt-v4.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v4",
+    "benchmark-phase0-hidden-suite-freeze-receipt-v5.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5",
     "benchmark-phase0-hidden-preparation-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v1",
     "benchmark-phase0-hidden-preparation-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v2",
     "benchmark-phase0-hidden-preparation-receipt-v3.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v3",

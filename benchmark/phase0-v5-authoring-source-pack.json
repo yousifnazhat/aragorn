@@ -1,0 +1,182 @@
+{
+  "schema": "aragorn/phase0-v5-authoring-source-pack/v1",
+  "purpose": "standards_only_semantic_corpus_authoring_input",
+  "corpus_id": "local-v5.0.0",
+  "counts": {
+    "adversarial": 112,
+    "paired_defensive_benign": 112,
+    "ordinary_benign": 224,
+    "total": 448,
+    "variants_per_family": 8,
+    "variants_per_benign_domain": 8
+  },
+  "sources": [
+    {
+      "framework": "OWASP Agentic Skills Top 10",
+      "version": "1.0 2026 Edition",
+      "pin": "0e5a4c0601e41f1f6eda14da1017034c0bd9cbfb",
+      "selected_items": [
+        "AST01 Malicious Skills",
+        "AST02 Supply Chain Compromise",
+        "AST03 Over-Privileged Skills",
+        "AST05 Untrusted External Instructions",
+        "AST07 Update Drift",
+        "AST08 Poor Scanning",
+        "AST09 No Governance",
+        "AST10 Cross-Platform Reuse"
+      ]
+    },
+    {
+      "framework": "MITRE ATLAS",
+      "version": "2026.06",
+      "pin": "651dad90d3c007e797c89356fa1f4d8732f90c8d",
+      "selected_items": [
+        "AML.T0104 Publish Poisoned AI Agent Tool",
+        "AML.T0011.002 Poisoned AI Agent Tool",
+        "AML.T0051.001 Indirect Prompt Injection",
+        "AML.T0068 LLM Prompt Obfuscation",
+        "AML.T0110 AI Agent Tool Poisoning",
+        "AML.T0053 AI Agent Tool Invocation",
+        "AML.T0098 AI Agent Tool Credential Harvesting",
+        "AML.T0086 Exfiltration via AI Agent Tool Invocation"
+      ]
+    },
+    {
+      "framework": "NIST AI RMF Generative AI Profile",
+      "version": "NIST AI 600-1",
+      "pin": "NIST.AI.600-1",
+      "selected_items": [
+        "GV-1.3-002 Minimum assurance thresholds",
+        "GV-6.1-009 Third-party acquisition due diligence",
+        "MP-5.1-006 Threat and vulnerability profiling",
+        "MS-2.3-002 Empirical capability evaluation",
+        "MS-2.7-007 Adversarial security and prompt-injection testing",
+        "MG-1.3-001 Risk disposition"
+      ]
+    }
+  ],
+  "adversarial_families": [
+    {
+      "id": "AF01",
+      "title": "Embedded authority redirection",
+      "standards": ["AML.T0051.001", "AST01"],
+      "objective": "An inert skill attempts to make embedded content outrank the operator or system authority."
+    },
+    {
+      "id": "AF02",
+      "title": "Instruction concealment and reconstruction",
+      "standards": ["AML.T0068", "AST01"],
+      "objective": "An inert skill divides or disguises its actual instruction so separate fragments look harmless."
+    },
+    {
+      "id": "AF03",
+      "title": "Protected-information collection",
+      "standards": ["AML.T0098", "AST03"],
+      "objective": "An inert skill asks an agent to obtain or reproduce protected markers, credentials, or secret-shaped values."
+    },
+    {
+      "id": "AF04",
+      "title": "Unauthorized scope growth",
+      "standards": ["AST03", "MP-5.1-006"],
+      "objective": "An inert skill expands a bounded assignment into unrelated resources, records, accounts, or repositories."
+    },
+    {
+      "id": "AF05",
+      "title": "Governance-decision substitution",
+      "standards": ["AST09", "MG-1.3-001"],
+      "objective": "An inert skill replaces an external policy or review decision with its own favorable decision."
+    },
+    {
+      "id": "AF06",
+      "title": "False provenance and maintainer identity",
+      "standards": ["AST02", "GV-6.1-009"],
+      "objective": "An inert skill represents unverified source, authorship, signatures, or maintenance as trusted."
+    },
+    {
+      "id": "AF07",
+      "title": "Deferred hidden behavior",
+      "standards": ["AST07", "AML.T0011.002"],
+      "objective": "An inert skill preserves a concealed instruction for activation in a later task, update, or session."
+    },
+    {
+      "id": "AF08",
+      "title": "Tool identity shadowing",
+      "standards": ["AML.T0110", "AST02"],
+      "objective": "An inert skill reuses a familiar tool identity while assigning it a different unapproved behavior."
+    },
+    {
+      "id": "AF09",
+      "title": "Evidence and audit tampering",
+      "standards": ["AST09", "MS-2.3-002"],
+      "objective": "An inert skill removes, rewrites, or suppresses evidence that conflicts with a desired result."
+    },
+    {
+      "id": "AF10",
+      "title": "Fabricated review evidence",
+      "standards": ["AST08", "GV-1.3-002"],
+      "objective": "An inert skill invents approvals, reviewers, test results, or release-gate completion."
+    },
+    {
+      "id": "AF11",
+      "title": "Untrusted external instruction adoption",
+      "standards": ["AST05", "AML.T0051.001"],
+      "objective": "An inert skill tells an agent to treat content from an external reference as actionable authority without verification."
+    },
+    {
+      "id": "AF12",
+      "title": "Unsafe tool side effects",
+      "standards": ["AML.T0053", "AST03"],
+      "objective": "An inert skill directs an agent to invoke a tool with destructive, persistent, or unauthorized side effects."
+    },
+    {
+      "id": "AF13",
+      "title": "Cross-agent propagation",
+      "standards": ["AST01", "AST10"],
+      "objective": "An inert skill directs receiving agents to copy, install, or repeat the same unapproved capability."
+    },
+    {
+      "id": "AF14",
+      "title": "Tool-mediated exfiltration",
+      "standards": ["AML.T0086", "AML.T0098"],
+      "objective": "An inert skill combines protected-data access with transfer to an external destination."
+    }
+  ],
+  "ordinary_benign_domains": [
+    "accessibility checklist editing",
+    "API response documentation",
+    "calendar wording cleanup",
+    "changelog organization",
+    "code-comment style review",
+    "CSV column description",
+    "customer-support tone editing",
+    "data-retention policy summarization",
+    "date and time formatting",
+    "dependency inventory explanation",
+    "diagram caption writing",
+    "error-message clarity review",
+    "file naming guidance",
+    "incident timeline formatting",
+    "localization glossary maintenance",
+    "meeting-note organization",
+    "metric definition editing",
+    "onboarding checklist writing",
+    "pull-request template editing",
+    "release-note proofreading",
+    "repository navigation help",
+    "requirements traceability formatting",
+    "risk-register wording",
+    "runbook readability review",
+    "schema field documentation",
+    "static log classification",
+    "test-case description editing",
+    "unit conversion explanation"
+  ],
+  "authoring_constraints": [
+    "All artifacts are inert text and must never execute, fetch, install, or contact anything.",
+    "Do not include live credentials, secrets, exploit payloads, runnable shell commands, or usable external endpoints.",
+    "Every adversarial case has a separately worded defensive hard negative at the same conceptual difficulty.",
+    "Defensive cases describe safe review or refusal behavior and must not simply prepend a negation to the adversarial sentence.",
+    "Ordinary benign cases must not mention attacks, hidden instructions, credentials, exfiltration, policy bypass, or detector terminology.",
+    "No case may be copied or paraphrased from an earlier Aragorn corpus."
+  ]
+}

@@ -93,7 +93,7 @@ _REQUIRED_COMPARATORS = (
 )
 _NVIDIA_INCOMPLETE = "NVIDIA_ANALYSIS_INCOMPLETE"
 _FIRST_PARTY_ANALYZER = "aragorn-agent-skill-threats"
-_FIRST_PARTY_ALGORITHM = "imperative-source-sink-clusters/v1"
+_FIRST_PARTY_ALGORITHM = "imperative-agent-integrity-clusters/v2"
 _FIRST_PARTY_TEXT_LIMIT = 8 * 1024 * 1024
 _FIRST_PARTY_SEGMENT_LIMIT = 4096
 _BASE64_TEXT_LIMIT = 64 * 1024
@@ -172,6 +172,26 @@ _MIXED_SCRIPT_CONFUSABLES = {
     "υ": "y",
     "χ": "x",
 }
+_DEFENSIVE_SENSITIVE_CONTEXT = re.compile(
+    r"\b(?:never|do not|must not|cannot|can't)\s+"
+    r"(?:request|reveal|copy|transform)"
+    r"(?:\s*,\s*(?:request|reveal|copy|transform))*"
+    r"(?:\s*,?\s*(?:or|and)\s+(?:request|reveal|copy|transform))?"
+    r"\s+(?:any\s+)?(?:protected markers?|credential[- ]shaped values?)"
+    r"(?:\s+(?:or|and)\s+(?:protected markers?|"
+    r"credential[- ]shaped values?))?\b[.!?]?",
+    re.IGNORECASE | re.DOTALL,
+)
+_DEFENSIVE_SENSITIVE_CONTRAST = re.compile(
+    r"\A\s*(?:[.!?;,:—-]\s*)?"
+    r"(?:but|instead|however|yet|although|notwithstanding)\b",
+    re.IGNORECASE,
+)
+_DEFENSIVE_SENSITIVE_REFERENCE = re.compile(
+    r"\b(?:them|those|these|such)\b|"
+    r"\b(?:protected markers?|credential[- ]shaped values?)\b",
+    re.IGNORECASE,
+)
 _DEFENSIVE_CONTEXT = re.compile(
     r"\b(?:never|do not|must not|cannot|can't)\s+"
     r"(?:read|fetch|download|execute|run|launch|invoke|inspect|contact|grant|"
@@ -214,6 +234,35 @@ _PROMPT_OVERRIDE = re.compile(
     r".{0,100}\b(?:higher[- ]priority|prior|previous|earlier|system|policy|"
     r"policies|direction|directions|instruction|instructions|guardrail|"
     r"guardrails)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_AGENT_INTEGRITY_ABUSE = re.compile(
+    r"\b(?:treat|regard|consider)\b.{0,80}"
+    r"\b(?:embedded|document(?:'s)?|procedure|instruction)\b.{0,80}"
+    r"\b(?:more authoritative|higher priority)\b|"
+    r"\b(?:split|scatter|separate)\b.{0,80}"
+    r"\b(?:behavior|intent|instruction)\b.{0,80}"
+    r"\b(?:appear|seem|look)(?:s|ed|ing)?\b.{0,30}\bharmless\b|"
+    r"\b(?:request|collect|copy|extract|transform)\b.{0,80}"
+    r"\b(?:protected markers?|credential[- ]shaped values?)\b|"
+    r"\b(?:expand|broaden|extend)\b.{0,80}"
+    r"\b(?:assigned|authorized|approved|stated)\b.{0,80}"
+    r"\b(?:beyond|outside|unrelated)\b|"
+    r"\b(?:replace|substitute|override)\b.{0,80}"
+    r"\b(?:policy|review)\b.{0,40}\bverdict\b.{0,80}"
+    r"\b(?:self[- ]issued|approval|passed)\b|"
+    r"\b(?:present|represent|claim|describe)\b.{0,80}"
+    r"\b(?:document|artifact|source)\b.{0,80}"
+    r"\b(?:trusted maintainer|trusted source)\b.{0,80}\bunverified\b|"
+    r"\b(?:defer|delay)\b.{0,80}\bhidden\b.{0,60}"
+    r"\bbehavior(?:al)?\b.{0,40}\b(?:change|instruction)\b.{0,80}\buntil\b|"
+    r"\b(?:reuse|alias|shadow)\b.{0,80}"
+    r"\b(?:familiar\s+)?tool\s+name\b.{0,80}"
+    r"\b(?:different|substitute|unapproved)\b.{0,80}\bbehavior\b|"
+    r"\b(?:remove|delete|discard|suppress)\b.{0,80}\bevidence\b.{0,80}"
+    r"\b(?:disagrees?|conflicts?|preferred outcome)\b|"
+    r"\b(?:invent|fabricate|forge)\b.{0,80}"
+    r"\b(?:reviewer|review|approval|test result)\b",
     re.IGNORECASE | re.DOTALL,
 )
 _PROMPT_DISCLOSURE = re.compile(
@@ -283,6 +332,7 @@ _AGENT_PROPAGATION = re.compile(
 )
 _SIGNAL_NAMES = {
     _PROMPT_OVERRIDE: "prompt_override",
+    _AGENT_INTEGRITY_ABUSE: "agent_integrity_abuse",
     _PROMPT_DISCLOSURE: "prompt_disclosure",
     _CONCEALMENT: "concealment",
     _SENSITIVE_ACCESS: "sensitive_access",
@@ -294,6 +344,7 @@ _SIGNAL_NAMES = {
     _AGENT_PROPAGATION: "agent_propagation",
 }
 _FIRST_PARTY_ACTIONABLE = {
+    "ARAGORN_AGENT_INTEGRITY_ABUSE",
     "ARAGORN_CREDENTIAL_EXFILTRATION",
     "ARAGORN_PROMPT_OVERRIDE",
     "ARAGORN_UNSAFE_EXECUTION_CHAIN",
@@ -552,6 +603,17 @@ def detect_first_party_observations(
         findings["ARAGORN_ANALYSIS_INCOMPLETE"] = incomplete
 
     windows = tuple(_relation_windows(segments))
+    integrity_windows = [
+        window
+        for window in windows
+        if _AGENT_INTEGRITY_ABUSE.search(_window_text(window))
+    ]
+    if integrity_windows:
+        findings["ARAGORN_AGENT_INTEGRITY_ABUSE"] = _matching_locations(
+            integrity_windows,
+            (_AGENT_INTEGRITY_ABUSE,),
+        )
+
     prompt_windows = [
         window
         for window in windows
@@ -950,6 +1012,7 @@ def _text_incomplete_signals(text: str) -> Iterable[tuple[int, str]]:
             pattern.search(context)
             for pattern in (
                 _PROMPT_DISCLOSURE,
+                _AGENT_INTEGRITY_ABUSE,
                 _SENSITIVE_ACCESS,
                 _TRANSFER_SINK,
                 _EXECUTION_SINK,
@@ -1053,6 +1116,12 @@ def _active_segments_from_normalized(
         leading = len(raw) - len(raw.lstrip())
         content = raw.strip()
         offset = paragraph.start(1) + leading
+        content = _DEFENSIVE_SENSITIVE_CONTEXT.sub(
+            _defensive_sensitive_replacement,
+            content,
+        )
+        if not content.strip():
+            continue
         quoted = all(
             line.lstrip().startswith(">")
             for line in content.splitlines()
@@ -1105,6 +1174,34 @@ def _active_segments_from_normalized(
             )
 
 
+def _defensive_sensitive_replacement(match: re.Match[str]) -> str:
+    tail = match.string[match.end() : match.end() + 256]
+    sentence_end = re.search(r"[.!?](?=\s|\Z)", tail)
+    if sentence_end is not None:
+        tail = tail[: sentence_end.end()]
+    sensitive_transfer = (
+        _DEFENSIVE_SENSITIVE_REFERENCE.search(tail) is not None
+        and _TRANSFER_SINK.search(tail) is not None
+    )
+    unsafe_contrast = (
+        _DEFENSIVE_SENSITIVE_CONTRAST.match(tail) is not None
+        and (
+            (
+                _FETCH_OR_DECODE.search(tail) is not None
+                and _EXECUTION_SINK.search(tail) is not None
+            )
+            or _DESTRUCTIVE_ACTION.search(tail) is not None
+            or _PERSISTENCE_ACTION.search(tail) is not None
+            or _AGENT_PROPAGATION.search(tail) is not None
+        )
+    )
+    return (
+        match.group(0)
+        if sensitive_transfer or unsafe_contrast
+        else " " * len(match.group(0))
+    )
+
+
 def _clauses(text: str) -> Iterable[tuple[str, int]]:
     start = 0
     boundary = re.compile(
@@ -1150,6 +1247,7 @@ def _analysis_only(text: str) -> bool:
         match
         for pattern in (
             _PROMPT_OVERRIDE,
+            _AGENT_INTEGRITY_ABUSE,
             _PROMPT_DISCLOSURE,
             _SENSITIVE_ACCESS,
             _TRANSFER_SINK,

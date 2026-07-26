@@ -841,6 +841,17 @@ def main() -> int:
         != phase0_candidate_policy_v4
     ):
         raise AssertionError("checked v4 candidate policy is not canonical")
+    phase0_candidate_policy_v5 = load(
+        ROOT / "benchmark" / "phase0-candidate-policy-v5.json"
+    )
+    validators["benchmark-candidate-policy-v3.schema.json"].validate(
+        phase0_candidate_policy_v5
+    )
+    if (
+        build_candidate_policy(phase0_candidate_policy_v5)
+        != phase0_candidate_policy_v5
+    ):
+        raise AssertionError("checked v5 candidate policy is not canonical")
     portable_identities = []
     for filename in (
         "phase0-cisco-portable-policy.json",

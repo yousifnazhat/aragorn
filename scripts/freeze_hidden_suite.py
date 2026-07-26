@@ -40,6 +40,7 @@ _OPAQUE_IDS = {
     "independent-v1.0.0": re.compile(r"case-[0-9a-f]{16}\Z"),
     "independent-v3.0.0": re.compile(r"v3-[0-9a-f]{24}\Z"),
     "local-v4.0.0": re.compile(r"v4-[0-9a-f]{24}\Z"),
+    "local-v5.0.0": re.compile(r"v5-[0-9a-f]{24}\Z"),
 }
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -79,6 +80,103 @@ _V4_AUTHORSHIP = {
     "outcomes_used_for_tuning": False,
     "scanner_evaluations": 0,
     "semantic_case_body_changes": 0,
+}
+_V5_AUTHORSHIP = {
+    "authoring_context": (
+        "fresh_context_subagent_with_instruction_boundary_not_os_sandboxed"
+    ),
+    "authoring_input_provenance_retained": True,
+    "candidate_detector_source_provided_to_author": False,
+    "independent_human_authorship": False,
+    "mode": "technical-codex-semantic-corpus-authoring",
+    "operator_case_or_label_authorship": False,
+    "outcomes_used_for_tuning": False,
+    "prior_corpus_bodies_provided_to_author": False,
+    "prior_outcomes_provided_to_author": False,
+    "v5_scanner_evaluations_before_freeze": 0,
+}
+_V5_AUTHORING_INPUTS = {
+    "context": "fresh_context_subagent_with_instruction_boundary_not_os_sandboxed",
+    "prompt": {
+        "path": "AUTHORING-PROMPT.txt",
+        "repository_path": "benchmark/phase0-v5-authoring-prompt.txt",
+        "sha256": (
+            "f9479f56ebbf63705b4687487bf52d783ef63d520da2abcc740bc12d446a3edf"
+        ),
+        "git_blob_sha1": "194cabededf863c209a6fb83a55ca372d9864ee4",
+    },
+    "source_pack": {
+        "path": "STANDARDS-SOURCE-PACK.json",
+        "repository_path": "benchmark/phase0-v5-authoring-source-pack.json",
+        "sha256": (
+            "0a5334b167992afe0a8a43c07f06b5291ea05ba445a12ae04c2ce195ce22a88f"
+        ),
+        "git_blob_sha1": "980485c96fe769b8736ed5b6a45cee1530a84a81",
+    },
+    "prohibited_inputs_provided": False,
+}
+_V5_NOVELTY_POLICY = {
+    "claim": "new-corpus-with-bounded-lexical-novelty-not-semantic-independence",
+    "reference_corpus_id": "local-v4.0.0",
+    "reference_corpus_lock_digest": (
+        "sha256:20342abfbd3619ee3c3819bb538fc4d25cec54e6b9bbd537e3dca58ffcf73dac"
+    ),
+    "reference_worker_archive_digest": (
+        "sha256:d702666946f19ab4654c5c29c8f5a6d161418010dc9266ab7df1bb4e9324552e"
+    ),
+    "method": "skill-body-nfkc-casefold-alnum-token-5gram-jaccard/v1",
+    "unicode_version": "15.0.0",
+    "maximum_allowed_similarity": {"numerator": 1, "denominator": 2},
+    "required_unique_candidate_body_count": 448,
+    "maximum_exact_reference_body_overlap_count": 0,
+}
+_V5_ARTIFACT_PURPOSES = {
+    "worker": (
+        "worker cases and public case manifest; no labels or custody material"
+    ),
+    "evaluator": (
+        "signed encrypted evaluator ledger and exact semantic corpus builder"
+    ),
+    "source": (
+        "complete Git history with signed authoring-contract, source, and "
+        "freeze commits and signed tag"
+    ),
+}
+_V5_SIGNED_OBJECTS = [
+    "authoring contract commit",
+    "source commit",
+    "freeze commit",
+    "annotated freeze tag",
+    "label ledger",
+    "evaluator manifest",
+    "release manifest",
+]
+_V5_SIGNER_PRINCIPAL = "aragorn-local-v5-author"
+_V5_SIGNER_FINGERPRINT = (
+    "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
+)
+_V5_ALLOWED_SIGNER = (
+    "aragorn-local-v5-author ssh-ed25519 "
+    "AAAAC3NzaC1lZDI1NTE5AAAAIP+34WpE4lJYYXs96Dbx/j7GMMm0WahOQl267+T2ESDA\n"
+).encode("ascii")
+_V5_AUTHORING_CONTRACT = {
+    "schema": "aragorn/corpus-authoring-contract/v1",
+    "corpus_id": "local-v5.0.0",
+    "case_count": 448,
+    "class_counts": {"benign": 336, "adversarial": 112},
+    "authorship": _V5_AUTHORSHIP,
+    "authoring_inputs": _V5_AUTHORING_INPUTS,
+    "novelty": _V5_NOVELTY_POLICY,
+    "release": {
+        "manifest_schema_version": "2.0",
+        "provenance_lock_schema": "aragorn/benchmark-corpus-provenance-lock/v2",
+        "evaluator_encryption": {
+            "profile": "openssl-aes-256-cbc-pbkdf2-sha256/v1",
+            "iterations": 600000,
+        },
+        "artifact_purposes": _V5_ARTIFACT_PURPOSES,
+        "signed_objects": _V5_SIGNED_OBJECTS,
+    },
 }
 _SAFE_EXECUTABLE_ROOTS = (
     Path("/usr/bin"),
@@ -148,6 +246,8 @@ def _fresh_openssl_receipt_schema(corpus_id: str) -> str:
         return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3"
     if corpus_id == "local-v4.0.0":
         return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v4"
+    if corpus_id == "local-v5.0.0":
+        return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5"
     raise FreezeError("fresh OpenSSL corpus does not have a receipt schema")
 
 
@@ -407,11 +507,10 @@ def _artifact_map(
     release: dict[str, object],
     corpus_lock: dict[str, object],
 ) -> dict[str, dict[str, object]]:
-    purposes = (
-        _V4_ARTIFACT_PURPOSES
-        if corpus_lock.get("corpus_id") == "local-v4.0.0"
-        else _ARTIFACT_PURPOSES
-    )
+    purposes = {
+        "local-v4.0.0": _V4_ARTIFACT_PURPOSES,
+        "local-v5.0.0": _V5_ARTIFACT_PURPOSES,
+    }.get(corpus_lock.get("corpus_id"), _ARTIFACT_PURPOSES)
     artifacts = release.get("artifacts")
     if not isinstance(artifacts, list) or len(artifacts) != 3:
         raise FreezeError("release manifest must name exactly three artifacts")
@@ -463,6 +562,7 @@ def _verify_source_freeze(
     freeze: dict[str, object],
     *,
     source_commit: str | None = None,
+    authoring_contract: dict[str, object] | None = None,
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="aragorn-corpus-freeze-") as temporary:
         temporary_root = Path(temporary)
@@ -509,6 +609,117 @@ def _verify_source_freeze(
             ).split()
             if parents != [source_commit]:
                 raise FreezeError("signed source commit is not the direct freeze parent")
+        if authoring_contract is not None:
+            _exact(
+                authoring_contract,
+                {"commit", "path", "sha256"},
+                "authoring contract",
+            )
+            contract_commit = authoring_contract["commit"]
+            if (
+                source_commit is None
+                or not isinstance(contract_commit, str)
+                or _GIT_OID.fullmatch(contract_commit) is None
+                or authoring_contract["path"] != "AUTHORING-CONTRACT.json"
+                or not isinstance(authoring_contract["sha256"], str)
+                or _HEX_DIGEST.fullmatch(authoring_contract["sha256"]) is None
+            ):
+                raise FreezeError("authoring contract identity is invalid")
+            _run(["git", "-C", str(repository), "verify-commit", contract_commit])
+            source_parents = _run(
+                [
+                    "git",
+                    "-C",
+                    str(repository),
+                    "show",
+                    "-s",
+                    "--format=%P",
+                    source_commit,
+                ]
+            ).split()
+            if source_parents != [contract_commit]:
+                raise FreezeError(
+                    "signed authoring contract is not the direct source parent"
+                )
+            contract_paths = _run(
+                [
+                    "git",
+                    "-C",
+                    str(repository),
+                    "ls-tree",
+                    "-r",
+                    "--name-only",
+                    contract_commit,
+                ]
+            ).splitlines()
+            if contract_paths != ["AUTHORING-CONTRACT.json"]:
+                raise FreezeError(
+                    "authoring contract commit contains corpus authoring material"
+                )
+            contract_raw = _run(
+                [
+                    "git",
+                    "-C",
+                    str(repository),
+                    "show",
+                    f"{contract_commit}:AUTHORING-CONTRACT.json",
+                ]
+            ).encode("utf-8")
+            contract_size = _run(
+                [
+                    "git",
+                    "-C",
+                    str(repository),
+                    "cat-file",
+                    "-s",
+                    f"{contract_commit}:AUTHORING-CONTRACT.json",
+                ]
+            )
+            if (
+                contract_size != str(len(contract_raw))
+                or contract_raw != canonical_json(_V5_AUTHORING_CONTRACT)
+                or hashlib.sha256(contract_raw).hexdigest()
+                != authoring_contract["sha256"]
+            ):
+                raise FreezeError("signed authoring contract changed")
+            for authoring_input in (
+                _V5_AUTHORING_INPUTS["prompt"],
+                _V5_AUTHORING_INPUTS["source_pack"],
+            ):
+                input_raw = _read(
+                    ROOT / authoring_input["repository_path"],
+                    max_bytes=_MAX_JSON,
+                )
+                blob_header = f"blob {len(input_raw)}\0".encode("ascii")
+                if (
+                    hashlib.sha256(input_raw).hexdigest()
+                    != authoring_input["sha256"]
+                    or hashlib.sha1(
+                        blob_header + input_raw,
+                        usedforsecurity=False,
+                    ).hexdigest()
+                    != authoring_input["git_blob_sha1"]
+                ):
+                    raise FreezeError("retained authoring input changed")
+                tree_entry = _run(
+                    [
+                        "git",
+                        "-C",
+                        str(repository),
+                        "ls-tree",
+                        "--full-name",
+                        source_commit,
+                        "--",
+                        authoring_input["path"],
+                    ]
+                )
+                if tree_entry != (
+                    f"100644 blob {authoring_input['git_blob_sha1']}\t"
+                    f"{authoring_input['path']}"
+                ):
+                    raise FreezeError(
+                        "source commit retained authoring input changed"
+                    )
         _run(["git", "-C", str(repository), "verify-tag", freeze["tag"]])
         tag_object = _run(
             ["git", "-C", str(repository), "rev-parse", f"refs/tags/{freeze['tag']}"]
@@ -520,14 +731,72 @@ def _verify_source_freeze(
             raise FreezeError("signed source freeze object identities changed")
 
 
+def _validate_v5_novelty_declaration(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise FreezeError("v5 novelty declaration must be an object")
+    _exact(
+        value,
+        {
+            *_V5_NOVELTY_POLICY,
+            "candidate_unique_body_count",
+            "exact_reference_body_overlap_count",
+            "maximum_observed_similarity",
+        },
+        "v5 novelty declaration",
+    )
+    if {
+        field: value[field] for field in _V5_NOVELTY_POLICY
+    } != _V5_NOVELTY_POLICY:
+        raise FreezeError("v5 novelty policy changed")
+    observed = value["maximum_observed_similarity"]
+    if not isinstance(observed, dict):
+        raise FreezeError("v5 novelty similarity must be an object")
+    _exact(
+        observed,
+        {"candidate_case_id", "reference_case_id", "numerator", "denominator"},
+        "v5 novelty similarity",
+    )
+    numerator = observed["numerator"]
+    denominator = observed["denominator"]
+    if (
+        value["candidate_unique_body_count"] != 448
+        or value["exact_reference_body_overlap_count"] != 0
+        or not isinstance(observed["candidate_case_id"], str)
+        or _OPAQUE_IDS["local-v5.0.0"].fullmatch(
+            observed["candidate_case_id"]
+        )
+        is None
+        or not isinstance(observed["reference_case_id"], str)
+        or _OPAQUE_IDS["local-v4.0.0"].fullmatch(
+            observed["reference_case_id"]
+        )
+        is None
+        or isinstance(numerator, bool)
+        or not isinstance(numerator, int)
+        or numerator < 0
+        or isinstance(denominator, bool)
+        or not isinstance(denominator, int)
+        or denominator < 1
+        or 2 * numerator > denominator
+    ):
+        raise FreezeError("v5 novelty declaration does not meet its frozen policy")
+    return value
+
+
 def _verify_release_v2(
     release_root: Path,
     corpus_lock: dict[str, object],
 ) -> dict[str, object]:
     corpus_id = corpus_lock["corpus_id"]
-    if corpus_id not in {"independent-v3.0.0", "local-v4.0.0"}:
+    if corpus_id not in {
+        "independent-v3.0.0",
+        "local-v4.0.0",
+        "local-v5.0.0",
+    }:
         raise FreezeError("v2 release corpus is unsupported")
     is_v4 = corpus_id == "local-v4.0.0"
+    is_v5 = corpus_id == "local-v5.0.0"
+    is_local = is_v4 or is_v5
     principal = corpus_lock["signing"]["principal"]
     fingerprint = corpus_lock["signing"]["fingerprint"]
     allowed = release_root / "signing" / f"{corpus_id}-allowed-signers"
@@ -536,6 +805,12 @@ def _verify_release_v2(
         principal=principal,
         fingerprint=fingerprint,
     )
+    if is_v5 and (
+        principal != _V5_SIGNER_PRINCIPAL
+        or fingerprint != _V5_SIGNER_FINGERPRINT
+        or allowed_raw != _V5_ALLOWED_SIGNER
+    ):
+        raise FreezeError("v5 signer identity does not match the pinned Aragorn key")
     manifest_path = release_root / "release" / f"{corpus_id}-release-manifest.json"
     release_raw = _read(manifest_path, max_bytes=_MAX_JSON)
     if _sha256(release_raw) != corpus_lock["release_manifest"]["sha256"]:
@@ -547,6 +822,8 @@ def _verify_release_v2(
         principal=principal,
     )
     release = _decode_json(release_raw, "release manifest")
+    if is_v5 and release_raw != canonical_json(release):
+        raise FreezeError("v5 release manifest must be canonical JSON")
     release_fields = {
         "aggregate_counts",
         "artifacts",
@@ -558,6 +835,8 @@ def _verify_release_v2(
     }
     if is_v4:
         release_fields |= {"authorship", "repair_scope", "source_corpus_version"}
+    elif is_v5:
+        release_fields |= {"authoring_contract", "authorship", "novelty"}
     _exact(release, release_fields, "release manifest")
     if not isinstance(release["custody"], dict) or not isinstance(
         release["signing"], dict
@@ -582,10 +861,27 @@ def _verify_release_v2(
         {"identity", "public_key_fingerprint", "signed_objects"},
         "release signing",
     )
+    authoring_contract = None
+    if is_v5:
+        authoring_contract = release["authoring_contract"]
+        if not isinstance(authoring_contract, dict):
+            raise FreezeError("authoring contract must be an object")
+        _exact(
+            authoring_contract,
+            {"commit", "path", "sha256"},
+            "authoring contract",
+        )
+        _validate_v5_novelty_declaration(release["novelty"])
     custody = release["custody"]
     escaped_corpus_id = re.escape(corpus_id)
     expected_signed_objects = [
-        *(["source commit"] if is_v4 else []),
+        *(
+            _V5_SIGNED_OBJECTS[:2]
+            if is_v5
+            else ["source commit"]
+            if is_v4
+            else []
+        ),
         "freeze commit",
         "annotated freeze tag",
         "label ledger",
@@ -593,7 +889,7 @@ def _verify_release_v2(
         "release manifest",
     ]
     if (
-        release["schema_version"] != "1.0"
+        release["schema_version"] != ("2.0" if is_v5 else "1.0")
         or release["corpus_id"] != corpus_id
         or release["corpus_version"] != corpus_id
         or release["aggregate_counts"]
@@ -632,6 +928,17 @@ def _verify_release_v2(
                 or release["source_corpus_version"] != "independent-v3.0.0"
             )
         )
+        or (
+            is_v5
+            and (
+                release["authorship"] != _V5_AUTHORSHIP
+                or authoring_contract["path"] != "AUTHORING-CONTRACT.json"
+                or not isinstance(authoring_contract["commit"], str)
+                or _GIT_OID.fullmatch(authoring_contract["commit"]) is None
+                or not isinstance(authoring_contract["sha256"], str)
+                or _HEX_DIGEST.fullmatch(authoring_contract["sha256"]) is None
+            )
+        )
     ):
         raise FreezeError("release manifest does not match the v2 corpus lock")
     artifacts = _artifact_map(release, corpus_lock)
@@ -655,11 +962,16 @@ def _verify_release_v2(
         != corpus_lock["evaluator_archive"]["sha256"]
     ):
         raise FreezeError("signed release artifacts do not match the corpus lock")
+    source_verification = {
+        "source_commit": custody["source_commit"] if is_local else None,
+    }
+    if authoring_contract is not None:
+        source_verification["authoring_contract"] = authoring_contract
     _verify_source_freeze(
         artifacts_raw["source"],
         allowed_raw,
         corpus_lock["freeze"],
-        source_commit=custody["source_commit"] if is_v4 else None,
+        **source_verification,
     )
     return {
         "release_manifest_digest": _sha256(release_raw),
@@ -907,6 +1219,8 @@ def verify_evaluator_package(
     }
     if corpus_lock["corpus_id"] == "local-v4.0.0":
         manifest_fields.add("source_corpus_version")
+    elif corpus_lock["corpus_id"] == "local-v5.0.0":
+        manifest_fields.add("authoring_contract_commit")
     _exact(manifest, manifest_fields, "evaluator manifest")
     expected_source_commit = (
         release["release_manifest"]["custody"]["source_commit"]
@@ -915,13 +1229,19 @@ def verify_evaluator_package(
         else corpus_lock["freeze"]["commit"]
     )
     if (
-        manifest["schema_version"] != "1.0"
+        manifest["schema_version"]
+        != ("2.0" if corpus_lock["corpus_id"] == "local-v5.0.0" else "1.0")
         or manifest["corpus_version"] != corpus_lock["corpus_id"]
         or manifest["freeze_tag"] != corpus_lock["freeze"]["tag"]
         or manifest["source_commit"] != expected_source_commit
         or (
             corpus_lock["corpus_id"] == "local-v4.0.0"
             and manifest["source_corpus_version"] != "independent-v3.0.0"
+        )
+        or (
+            corpus_lock["corpus_id"] == "local-v5.0.0"
+            and manifest["authoring_contract_commit"]
+            != release["release_manifest"]["authoring_contract"]["commit"]
         )
     ):
         raise FreezeError("evaluator manifest does not match signed freeze")
@@ -1101,6 +1421,145 @@ def _validate_skill_frontmatter(raw: bytes, case_id: str) -> None:
         raise FreezeError(
             f"{case_id}: SKILL.md frontmatter description must be nonempty"
         )
+
+
+def _semantic_body_profile(
+    raw: bytes,
+    case_id: str,
+) -> tuple[str, frozenset[tuple[str, ...]]]:
+    if unicodedata.unidata_version != _V5_NOVELTY_POLICY["unicode_version"]:
+        raise FreezeError("v5 novelty Unicode database version changed")
+    _validate_skill_frontmatter(raw, case_id)
+    text = raw.decode("utf-8")
+    lines = text.split("\n")
+    closing = lines.index("---", 1)
+    normalized = unicodedata.normalize("NFKC", "\n".join(lines[closing + 1 :])).casefold()
+    tokens = []
+    token = []
+    for character in normalized:
+        if character.isalnum():
+            token.append(character)
+        elif token:
+            tokens.append("".join(token))
+            token = []
+    if token:
+        tokens.append("".join(token))
+    if len(tokens) < 5:
+        raise FreezeError(f"{case_id}: semantic body must contain five tokens")
+    normalized_digest = hashlib.sha256("\0".join(tokens).encode("utf-8")).hexdigest()
+    shingles = frozenset(
+        tuple(tokens[index : index + 5])
+        for index in range(len(tokens) - 4)
+    )
+    return normalized_digest, shingles
+
+
+def _measure_v5_novelty(
+    candidate: dict[str, bytes],
+    reference: dict[str, bytes],
+) -> dict[str, object]:
+    if len(candidate) != 448 or len(reference) != 448:
+        raise FreezeError("v5 novelty comparison requires two complete corpora")
+    candidate_profiles = {
+        case_id: _semantic_body_profile(raw, case_id)
+        for case_id, raw in sorted(candidate.items())
+    }
+    reference_profiles = {
+        case_id: _semantic_body_profile(raw, case_id)
+        for case_id, raw in sorted(reference.items())
+    }
+    candidate_digests = [profile[0] for profile in candidate_profiles.values()]
+    if len(set(candidate_digests)) != 448:
+        raise FreezeError("v5 semantic bodies are not unique")
+    reference_digests = {profile[0] for profile in reference_profiles.values()}
+    exact_overlap = sum(digest in reference_digests for digest in candidate_digests)
+    if exact_overlap:
+        raise FreezeError("v5 reuses a normalized v4 semantic body")
+
+    best: tuple[int, int, str, str] | None = None
+    for candidate_id, (_, candidate_shingles) in candidate_profiles.items():
+        for reference_id, (_, reference_shingles) in reference_profiles.items():
+            numerator = len(candidate_shingles & reference_shingles)
+            denominator = len(candidate_shingles | reference_shingles)
+            observed = (numerator, denominator, candidate_id, reference_id)
+            if best is None:
+                best = observed
+                continue
+            comparison = numerator * best[1] - best[0] * denominator
+            if comparison > 0 or (
+                comparison == 0
+                and (candidate_id, reference_id) < (best[2], best[3])
+            ):
+                best = observed
+    assert best is not None
+    numerator, denominator, candidate_id, reference_id = best
+    if 2 * numerator > denominator:
+        raise FreezeError("v5 semantic body similarity exceeds one half")
+    return {
+        **_V5_NOVELTY_POLICY,
+        "candidate_unique_body_count": len(set(candidate_digests)),
+        "exact_reference_body_overlap_count": exact_overlap,
+        "maximum_observed_similarity": {
+            "candidate_case_id": candidate_id,
+            "reference_case_id": reference_id,
+            "numerator": numerator,
+            "denominator": denominator,
+        },
+    }
+
+
+def _verify_v5_novelty(
+    candidate: dict[str, bytes],
+    reference: dict[str, bytes],
+    declaration: object,
+) -> dict[str, object]:
+    declared = _validate_v5_novelty_declaration(declaration)
+    measured = _measure_v5_novelty(candidate, reference)
+    if declared != measured:
+        raise FreezeError("v5 novelty declaration does not match recomputation")
+    return measured
+
+
+def _worker_public_manifest(
+    archive: bytes,
+    corpus_lock: dict[str, object],
+) -> tuple[bytes, dict[str, dict[str, object]]]:
+    with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as source:
+        members = [
+            member
+            for member in source.getmembers()
+            if member.name == "manifest.json" and member.isfile()
+        ]
+        if len(members) != 1 or not 0 < members[0].size <= _MAX_JSON:
+            raise FreezeError("worker archive has no unique bounded manifest")
+        extracted = source.extractfile(members[0])
+        if extracted is None:
+            raise FreezeError("worker manifest is not readable")
+        raw = extracted.read(_MAX_JSON + 1)
+    if _sha256(raw) != corpus_lock["public_manifest"]["sha256"]:
+        raise FreezeError("worker public manifest does not match corpus lock")
+    _, entries = _public_manifest(raw, corpus_id=corpus_lock["corpus_id"])
+    return raw, entries
+
+
+def _verified_v5_reference_content(release_root: Path) -> dict[str, bytes]:
+    lock_raw = _read(
+        ROOT / "benchmark" / "phase0-corpus-v4.lock.json",
+        max_bytes=_MAX_JSON,
+    )
+    if _sha256(lock_raw) != _V5_NOVELTY_POLICY["reference_corpus_lock_digest"]:
+        raise FreezeError("v5 novelty reference lock changed")
+    lock = _decode_json(lock_raw, "v5 novelty reference corpus lock")
+    if (
+        lock.get("schema") != "aragorn/benchmark-corpus-provenance-lock/v2"
+        or lock.get("corpus_id") != _V5_NOVELTY_POLICY["reference_corpus_id"]
+        or lock.get("worker_archive", {}).get("sha256")
+        != _V5_NOVELTY_POLICY["reference_worker_archive_digest"]
+    ):
+        raise FreezeError("v5 novelty reference corpus identity changed")
+    release = verify_release(release_root, lock)
+    public_raw, entries = _worker_public_manifest(release["worker_archive"], lock)
+    return _verified_worker_content(release["worker_archive"], public_raw, entries)
 
 
 def _verified_worker_content(
@@ -1406,6 +1865,8 @@ def validate_freeze_receipt_bindings(
     lock_raw: bytes,
     corpus_lock: dict[str, object],
     corpus_lock_raw: bytes,
+    *,
+    release_manifest: dict[str, object] | None = None,
 ) -> None:
     """Reject schema-valid receipts detached from their frozen inputs."""
 
@@ -1418,6 +1879,12 @@ def validate_freeze_receipt_bindings(
             raise FreezeError("freeze receipt lock digest does not match lock")
         if lock["corpus_lock_digest"] != _sha256(corpus_lock_raw):
             raise FreezeError("hidden-suite lock does not match corpus lock bytes")
+        if (
+            "release_manifest" in corpus_lock
+            and receipt["release"]["release_manifest_digest"]
+            != corpus_lock["release_manifest"]["sha256"]
+        ):
+            raise FreezeError("release manifest binding does not match corpus lock")
         if (
             receipt["release"]["worker_archive_digest"] != lock["worker_archive_digest"]
             or lock["worker_archive_digest"] != corpus_lock["worker_archive"]["sha256"]
@@ -1451,6 +1918,50 @@ def validate_freeze_receipt_bindings(
             raise FreezeError("public manifest binding does not match lock")
         if receipt["evaluator"]["label_ledger_digest"] != lock["label_ledger_digest"]:
             raise FreezeError("label ledger digest does not match lock")
+        if receipt.get("schema") == (
+            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5"
+        ):
+            if not isinstance(release_manifest, dict):
+                raise FreezeError("v5 receipt requires its verified release manifest")
+            if (
+                _sha256(canonical_json(release_manifest))
+                != receipt["release"]["release_manifest_digest"]
+            ):
+                raise FreezeError("v5 verified release manifest digest changed")
+            if receipt["release"]["authorship"] != _V5_AUTHORSHIP:
+                raise FreezeError("v5 receipt authorship declaration changed")
+            authoring_contract = receipt["release"]["authoring_contract"]
+            _exact(
+                authoring_contract,
+                {"commit", "path", "sha256", "signature_status"},
+                "v5 receipt authoring contract",
+            )
+            if (
+                authoring_contract["path"] != "AUTHORING-CONTRACT.json"
+                or authoring_contract["signature_status"] != "verified"
+                or not isinstance(authoring_contract["commit"], str)
+                or _GIT_OID.fullmatch(authoring_contract["commit"]) is None
+                or not isinstance(authoring_contract["sha256"], str)
+                or _HEX_DIGEST.fullmatch(authoring_contract["sha256"]) is None
+            ):
+                raise FreezeError("v5 receipt authoring contract changed")
+            novelty = dict(receipt["release"]["novelty"])
+            if novelty.pop("verification_status", None) != "passed":
+                raise FreezeError("v5 receipt novelty was not verified")
+            _validate_v5_novelty_declaration(novelty)
+            if (
+                release_manifest.get("authoring_contract")
+                != {
+                    field: authoring_contract[field]
+                    for field in ("commit", "path", "sha256")
+                }
+                or release_manifest.get("authorship")
+                != receipt["release"]["authorship"]
+                or release_manifest.get("novelty") != novelty
+            ):
+                raise FreezeError(
+                    "v5 receipt declarations do not match the verified release manifest"
+                )
         for field in (
             "suite_digest",
             "candidate_policy_digest",
@@ -1609,6 +2120,7 @@ def _match_prior_freeze(
 def freeze(
     *,
     release_dir: Path,
+    novelty_reference_release_dir: Path | None = None,
     evaluator_passphrase: bytes | None,
     verified_evaluator_package: Path | None = None,
     corpus_lock_path: Path,
@@ -1674,16 +2186,29 @@ def freeze(
     )
     corpus_lock_raw = _read(corpus_lock_path, max_bytes=_MAX_JSON)
     corpus_lock_digest = _sha256(corpus_lock_raw)
+    corpus_lock = _decode_json(corpus_lock_raw, "corpus lock")
     corpus_identity = _PHASE0_CORPUS_LOCKS.get(corpus_lock_digest)
     if corpus_identity is None:
         raise FreezeError("checked corpus lock digest changed")
-    corpus_lock = _decode_json(corpus_lock_raw, "corpus lock")
     if (
         corpus_lock.get("schema") != corpus_identity[0]
         or corpus_lock.get("corpus_id") != corpus_identity[1]
     ):
         raise FreezeError("corpus lock identity is inconsistent")
     release = verify_release(release_dir, corpus_lock)
+    reference_content = None
+    if corpus_lock["corpus_id"] == "local-v5.0.0":
+        if novelty_reference_release_dir is None:
+            raise FreezeError("v5 requires its signed v4 novelty reference release")
+        _reject_symlink_components(
+            novelty_reference_release_dir,
+            "v5 novelty reference release",
+        )
+        reference_content = _verified_v5_reference_content(
+            novelty_reference_release_dir
+        )
+    elif novelty_reference_release_dir is not None:
+        raise FreezeError("novelty reference release is only valid for v5")
     prior = None
     gpg_executable = None
     gpg_agent_executable = None
@@ -1762,6 +2287,12 @@ def freeze(
             evaluator["public_manifest_raw"],
             evaluator["public_entries"],
         )
+        if reference_content is not None:
+            _verify_v5_novelty(
+                content,
+                reference_content,
+                release["release_manifest"]["novelty"],
+            )
         suite = _suite_document(
             evaluator["public_entries"],
             evaluator["labels_by_id"],
@@ -1896,6 +2427,18 @@ def freeze(
                     "not_same_uid_or_hardware_attested"
                 ),
             }
+            if corpus_lock["corpus_id"] == "local-v5.0.0":
+                limitations = {
+                    **limitations,
+                    "ordering": (
+                        "signed_authoring_contract_source_freeze_chain_"
+                        "verified_before_dispatch"
+                    ),
+                    "novelty": (
+                        "deterministic_lexical_novelty_not_independent_"
+                        "semantic_review"
+                    ),
+                }
         else:
             receipt_schema = (
                 "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v2"
@@ -1947,24 +2490,39 @@ def freeze(
                     "not_fresh_holdout"
                 ),
             }
+        release_receipt = {
+            "release_manifest_digest": release["release_manifest_digest"],
+            "signature_status": "verified",
+            "principal": corpus_lock["signing"]["principal"],
+            "fingerprint": corpus_lock["signing"]["fingerprint"],
+            "worker_archive_digest": release["worker_archive_digest"],
+            "evaluator_ciphertext_digest": release["evaluator_archive_digest"],
+            "source_bundle_digest": release["source_bundle_digest"],
+            "freeze_commit": corpus_lock["freeze"]["commit"],
+            "freeze_tag": corpus_lock["freeze"]["tag"],
+            "freeze_tag_object": corpus_lock["freeze"]["tag_object"],
+        }
+        if corpus_lock["corpus_id"] == "local-v5.0.0":
+            release_receipt.update(
+                {
+                    "authoring_contract": {
+                        **release["release_manifest"]["authoring_contract"],
+                        "signature_status": "verified",
+                    },
+                    "authorship": release["release_manifest"]["authorship"],
+                    "novelty": {
+                        **release["release_manifest"]["novelty"],
+                        "verification_status": "passed",
+                    },
+                }
+            )
         receipt = {
             "schema": receipt_schema,
             "recorded_on": recorded_on,
             "assurance": (
                 "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
             ),
-            "release": {
-                "release_manifest_digest": release["release_manifest_digest"],
-                "signature_status": "verified",
-                "principal": corpus_lock["signing"]["principal"],
-                "fingerprint": corpus_lock["signing"]["fingerprint"],
-                "worker_archive_digest": release["worker_archive_digest"],
-                "evaluator_ciphertext_digest": release["evaluator_archive_digest"],
-                "source_bundle_digest": release["source_bundle_digest"],
-                "freeze_commit": corpus_lock["freeze"]["commit"],
-                "freeze_tag": corpus_lock["freeze"]["tag"],
-                "freeze_tag_object": corpus_lock["freeze"]["tag_object"],
-            },
+            "release": release_receipt,
             "evaluator": evaluator_receipt,
             "suite": {
                 "suite_digest": lock["suite_digest"],
@@ -2002,6 +2560,7 @@ def freeze(
             lock_raw,
             corpus_lock,
             corpus_lock_raw,
+            release_manifest=release.get("release_manifest"),
         )
         os.replace(staging, private_suite_root)
         published_suite = True
@@ -2029,6 +2588,7 @@ def freeze(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--release-dir", type=Path, required=True)
+    parser.add_argument("--novelty-reference-release-dir", type=Path)
     evaluator_source = parser.add_mutually_exclusive_group(required=True)
     evaluator_source.add_argument(
         "--evaluator-passphrase-stdin",
@@ -2064,6 +2624,11 @@ def main() -> int:
                 passphrase = passphrase[:-1]
         result = freeze(
             release_dir=arguments.release_dir.resolve(strict=True),
+            novelty_reference_release_dir=(
+                None
+                if arguments.novelty_reference_release_dir is None
+                else arguments.novelty_reference_release_dir.resolve(strict=True)
+            ),
             evaluator_passphrase=passphrase,
             verified_evaluator_package=(
                 None

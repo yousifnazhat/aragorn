@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v5.schema.json",
+  "title": "Aragorn Phase 0 local v5 fresh OpenSSL hidden-suite freeze receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_on",
+    "assurance",
+    "release",
+    "evaluator",
+    "suite",
+    "lock",
+    "pre_outcome",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "assurance": {
+      "const": "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_manifest_digest",
+        "signature_status",
+        "principal",
+        "fingerprint",
+        "worker_archive_digest",
+        "evaluator_ciphertext_digest",
+        "source_bundle_digest",
+        "freeze_commit",
+        "freeze_tag",
+        "freeze_tag_object",
+        "authoring_contract",
+        "authorship",
+        "novelty"
+      ],
+      "properties": {
+        "release_manifest_digest": {"$ref": "#/$defs/digest"},
+        "signature_status": {"const": "verified"},
+        "principal": {"const": "aragorn-local-v5-author"},
+        "fingerprint": {
+          "const": "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
+        },
+        "worker_archive_digest": {"$ref": "#/$defs/digest"},
+        "evaluator_ciphertext_digest": {"$ref": "#/$defs/digest"},
+        "source_bundle_digest": {"$ref": "#/$defs/digest"},
+        "freeze_commit": {"$ref": "#/$defs/git_oid"},
+        "freeze_tag": {"const": "local-v5.0.0"},
+        "freeze_tag_object": {"$ref": "#/$defs/git_oid"},
+        "authoring_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commit", "path", "sha256", "signature_status"],
+          "properties": {
+            "commit": {"$ref": "#/$defs/git_oid"},
+            "path": {"const": "AUTHORING-CONTRACT.json"},
+            "sha256": {"$ref": "#/$defs/hex_digest"},
+            "signature_status": {"const": "verified"}
+          }
+        },
+        "authorship": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authoring_context",
+            "authoring_input_provenance_retained",
+            "candidate_detector_source_provided_to_author",
+            "independent_human_authorship",
+            "mode",
+            "operator_case_or_label_authorship",
+            "outcomes_used_for_tuning",
+            "prior_corpus_bodies_provided_to_author",
+            "prior_outcomes_provided_to_author",
+            "v5_scanner_evaluations_before_freeze"
+          ],
+          "properties": {
+            "authoring_context": {
+              "const": "fresh_context_subagent_with_instruction_boundary_not_os_sandboxed"
+            },
+            "authoring_input_provenance_retained": {"const": true},
+            "candidate_detector_source_provided_to_author": {"const": false},
+            "independent_human_authorship": {"const": false},
+            "mode": {
+              "const": "technical-codex-semantic-corpus-authoring"
+            },
+            "operator_case_or_label_authorship": {"const": false},
+            "outcomes_used_for_tuning": {"const": false},
+            "prior_corpus_bodies_provided_to_author": {"const": false},
+            "prior_outcomes_provided_to_author": {"const": false},
+            "v5_scanner_evaluations_before_freeze": {"const": 0}
+          }
+        },
+        "novelty": {"$ref": "#/$defs/novelty"}
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_digest",
+        "manifest_signature_status",
+        "ciphertext_link_status",
+        "encryption_profile",
+        "pbkdf2_iterations",
+        "openssl_executable_digest",
+        "passphrase_transport",
+        "label_ledger_digest",
+        "label_ledger_digest_rule",
+        "label_ledger_signature_status",
+        "public_manifest_digest",
+        "case_count",
+        "class_counts"
+      ],
+      "properties": {
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "manifest_signature_status": {"const": "verified"},
+        "ciphertext_link_status": {
+          "const": "in_process_openssl_decryption_then_inner_signature_verification"
+        },
+        "encryption_profile": {
+          "const": "openssl-aes-256-cbc-pbkdf2-sha256/v1"
+        },
+        "pbkdf2_iterations": {"const": 600000},
+        "openssl_executable_digest": {
+          "const": "sha256:517827f877751b6d7abebe404a296fa8e82425c63694a73ab06db35e6d9a8362"
+        },
+        "passphrase_transport": {
+          "const": "bounded_stdin_not_argv_or_environment"
+        },
+        "label_ledger_digest": {"$ref": "#/$defs/digest"},
+        "label_ledger_digest_rule": {
+          "const": "raw_sha256_of_signature_verified_canonical_jsonl_bytes"
+        },
+        "label_ledger_signature_status": {"const": "verified"},
+        "public_manifest_digest": {"$ref": "#/$defs/digest"},
+        "case_count": {"const": 448},
+        "class_counts": {
+          "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/$defs/class_counts"
+        }
+      }
+    },
+    "suite": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/suite"
+    },
+    "lock": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/lock"
+    },
+    "pre_outcome": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/pre_outcome"
+    },
+    "limitations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorship", "ordering", "custody", "novelty"],
+      "properties": {
+        "authorship": {
+          "const": "technical_codex_authorship_not_independent_human_identity"
+        },
+        "ordering": {
+          "const": "signed_authoring_contract_source_freeze_chain_verified_before_dispatch"
+        },
+        "custody": {
+          "const": "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+        },
+        "novelty": {
+          "const": "deterministic_lexical_novelty_not_independent_semantic_review"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hex_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git_oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "novelty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "reference_corpus_id",
+        "reference_corpus_lock_digest",
+        "reference_worker_archive_digest",
+        "method",
+        "unicode_version",
+        "maximum_allowed_similarity",
+        "required_unique_candidate_body_count",
+        "maximum_exact_reference_body_overlap_count",
+        "candidate_unique_body_count",
+        "exact_reference_body_overlap_count",
+        "maximum_observed_similarity",
+        "verification_status"
+      ],
+      "properties": {
+        "claim": {
+          "const": "new-corpus-with-bounded-lexical-novelty-not-semantic-independence"
+        },
+        "reference_corpus_id": {"const": "local-v4.0.0"},
+        "reference_corpus_lock_digest": {
+          "const": "sha256:20342abfbd3619ee3c3819bb538fc4d25cec54e6b9bbd537e3dca58ffcf73dac"
+        },
+        "reference_worker_archive_digest": {
+          "const": "sha256:d702666946f19ab4654c5c29c8f5a6d161418010dc9266ab7df1bb4e9324552e"
+        },
+        "method": {
+          "const": "skill-body-nfkc-casefold-alnum-token-5gram-jaccard/v1"
+        },
+        "unicode_version": {"const": "15.0.0"},
+        "maximum_allowed_similarity": {
+          "const": {"numerator": 1, "denominator": 2}
+        },
+        "required_unique_candidate_body_count": {"const": 448},
+        "maximum_exact_reference_body_overlap_count": {"const": 0},
+        "candidate_unique_body_count": {"const": 448},
+        "exact_reference_body_overlap_count": {"const": 0},
+        "maximum_observed_similarity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_case_id",
+            "reference_case_id",
+            "numerator",
+            "denominator"
+          ],
+          "properties": {
+            "candidate_case_id": {
+              "type": "string",
+              "pattern": "^v5-[0-9a-f]{24}$"
+            },
+            "reference_case_id": {
+              "type": "string",
+              "pattern": "^v4-[0-9a-f]{24}$"
+            },
+            "numerator": {"type": "integer", "minimum": 0},
+            "denominator": {"type": "integer", "minimum": 1}
+          }
+        },
+        "verification_status": {"const": "passed"}
+      }
+    }
+  }
+}

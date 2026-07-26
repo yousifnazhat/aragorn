@@ -10,6 +10,7 @@ import re
 import shutil
 import stat
 import sys
+import tempfile
 from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
@@ -51,7 +52,12 @@ from aragorn.phase0_candidate import (
     compose_candidate_batch,
 )
 from scripts.phase0_acquisition_gate import EXPANSION_PROFILE, build_lock
-from scripts.prepare_hidden_suite import _git
+from scripts.prepare_hidden_suite import (
+    _ALLOWED_SIGNER,
+    _committed_bytes,
+    _git,
+    _verified_commit,
+)
 from scripts.run_hidden_workers import (
     ExecutionError,
     Job,
@@ -89,6 +95,7 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _GIT_OID = re.compile(r"[0-9a-f]{40}\Z")
 _VM_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _GUEST_PATH = re.compile(r"/[A-Za-z0-9._/-]{1,4095}\Z")
+_ORACLE_LOCK_PATH = Path("benchmark/phase0-acquisition-oracle.lock.json")
 
 
 class AcquisitionExecutionError(ValueError):
@@ -100,7 +107,28 @@ def _digest_bytes(raw: bytes) -> str:
 
 
 def _runner_source() -> tuple[str, str]:
+    try:
+        dirty = _git(["status", "--porcelain=v1", "--untracked-files=all"])
+    except (ExecutionError, OSError, RuntimeError, ValueError) as exc:
+        raise AcquisitionExecutionError(
+            "cannot verify the acquisition execution worktree"
+        ) from exc
+    if dirty:
+        raise AcquisitionExecutionError(
+            "working tree must be clean before acquisition execution"
+        )
     commit = _runner_commit()
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix="aragorn-acquisition-signer-"
+        ) as temporary:
+            allowed_signers = Path(temporary) / "allowed_signers"
+            allowed_signers.write_bytes(_ALLOWED_SIGNER)
+            _verified_commit(commit, allowed_signers)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise AcquisitionExecutionError(
+            "acquisition execution HEAD is not signed by the pinned signer"
+        ) from exc
     raw = Path(__file__).read_bytes()
     try:
         committed = _git(
@@ -151,6 +179,27 @@ def _read_canonical(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
     ):
         raise AcquisitionExecutionError(f"{label} must be a bounded canonical object")
     return document, raw
+
+
+def _load_signed_oracle_lock(
+    commit: str,
+    rebuilt: dict[str, Any],
+) -> dict[str, Any]:
+    lock, raw = _read_canonical(
+        ROOT / _ORACLE_LOCK_PATH,
+        "signed acquisition oracle lock",
+    )
+    try:
+        committed = _committed_bytes(commit, _ORACLE_LOCK_PATH)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise AcquisitionExecutionError(
+            "acquisition oracle lock is not retained by signed HEAD"
+        ) from exc
+    if committed != raw or lock != rebuilt:
+        raise AcquisitionExecutionError(
+            "signed acquisition oracle lock does not match the frozen inputs"
+        )
+    return lock
 
 
 def _private_existing(path: Path, label: str) -> Path:
@@ -476,6 +525,7 @@ def prepare(
             expanded_suite,
             policy_record,
         )
+        oracle_lock = _load_signed_oracle_lock(runner_commit, oracle_lock)
         candidate, plans, canonical_accounting = _validate_phase0_accounting(
             accounting,
             suite_digest=expanded_suite["digest"],
@@ -1004,6 +1054,23 @@ def run(
             or ".." in Path(value).parts
         ):
             raise AcquisitionExecutionError("acquisition guest path is invalid")
+    runtime_suffix = "/venv/bin/python"
+    guest_boundaries = [
+        Path(guest_source),
+        Path(guest_python.removesuffix(runtime_suffix)),
+        Path(guest_signing_key),
+        Path(guest_execution_root),
+    ]
+    for index, left in enumerate(guest_boundaries):
+        for right in guest_boundaries[index + 1 :]:
+            if (
+                left == right
+                or left.is_relative_to(right)
+                or right.is_relative_to(left)
+            ):
+                raise AcquisitionExecutionError(
+                    "acquisition guest security boundaries overlap"
+                )
     plan, plan_raw = _load_execution_plan(run_root)
     trust_store = load_worker_trust_store(
         run_root / "verifier" / "worker-trust-store.json"

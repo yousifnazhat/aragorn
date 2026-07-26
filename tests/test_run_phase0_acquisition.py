@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
+import scripts.run_phase0_acquisition as execution
 from aragorn.benchmark import (
     BenchmarkError,
     _verify_authenticated_worker_batch_bindings,
@@ -22,6 +23,12 @@ from aragorn.phase0_candidate import (
     candidate_system_identity,
     compose_authenticated_comparator_batch,
     compose_candidate_batch,
+)
+from scripts.run_phase0_acquisition import (
+    AcquisitionExecutionError,
+    _load_signed_oracle_lock,
+    _runner_source,
+    run,
 )
 from tests.test_label_blind_prepare import (
     LOCK,
@@ -248,6 +255,77 @@ class Phase0AcquisitionCompositionTests(unittest.TestCase):
                 len(composition["outcomes"]),
                 len(dispatch["cases"]) * dispatch["runs_per_case"] * 3,
             )
+
+
+class Phase0AcquisitionExecutionBoundaryTests(unittest.TestCase):
+    def test_runner_requires_clean_signed_head(self) -> None:
+        with (
+            patch.object(execution, "_git", return_value=b" M tracked\n"),
+            self.assertRaisesRegex(AcquisitionExecutionError, "must be clean"),
+        ):
+            _runner_source()
+
+        with (
+            patch.object(execution, "_git", return_value=b""),
+            patch.object(execution, "_runner_commit", return_value="1" * 40),
+            patch.object(
+                execution,
+                "_verified_commit",
+                side_effect=ValueError("unsigned"),
+            ),
+            self.assertRaisesRegex(AcquisitionExecutionError, "pinned signer"),
+        ):
+            _runner_source()
+
+    def test_rebuilt_oracle_lock_must_match_signed_head(self) -> None:
+        rebuilt = {"schema": "aragorn/example/v1"}
+        raw = canonical_json(rebuilt)
+        with (
+            patch.object(
+                execution,
+                "_read_canonical",
+                return_value=(rebuilt, raw),
+            ),
+            patch.object(execution, "_committed_bytes", return_value=b"different"),
+            self.assertRaisesRegex(AcquisitionExecutionError, "frozen inputs"),
+        ):
+            _load_signed_oracle_lock("1" * 40, rebuilt)
+
+        signed = {"schema": "aragorn/other/v1"}
+        signed_raw = canonical_json(signed)
+        with (
+            patch.object(
+                execution,
+                "_read_canonical",
+                return_value=(signed, signed_raw),
+            ),
+            patch.object(
+                execution,
+                "_committed_bytes",
+                return_value=signed_raw,
+            ),
+            self.assertRaisesRegex(AcquisitionExecutionError, "frozen inputs"),
+        ):
+            _load_signed_oracle_lock("1" * 40, rebuilt)
+
+    def test_guest_security_boundaries_must_be_disjoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+            os.chmod(run_root, 0o700)
+            with self.assertRaisesRegex(
+                AcquisitionExecutionError,
+                "security boundaries overlap",
+            ):
+                run(
+                    run_root=run_root,
+                    limactl_path=Path("/opt/homebrew/bin/limactl"),
+                    vm="worker",
+                    guest_source="/opt/aragorn/runtime",
+                    guest_python="/opt/aragorn/runtime/venv/bin/python",
+                    guest_signing_key="/home/worker/signing-key",
+                    guest_execution_root="/home/worker/execution",
+                    progress_every=10,
+                )
 
 
 if __name__ == "__main__":

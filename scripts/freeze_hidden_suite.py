@@ -143,6 +143,14 @@ class FreezeError(ValueError):
     """The hidden-suite freeze could not be verified safely."""
 
 
+def _fresh_openssl_receipt_schema(corpus_id: str) -> str:
+    if corpus_id == "independent-v3.0.0":
+        return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3"
+    if corpus_id == "local-v4.0.0":
+        return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v4"
+    raise FreezeError("fresh OpenSSL corpus does not have a receipt schema")
+
+
 def _read(path: Path, *, max_bytes: int) -> bytes:
     try:
         descriptor = os.open(
@@ -1853,8 +1861,8 @@ def freeze(
                     "class_counts": evaluator["class_counts"],
                 }
             else:
-                receipt_schema = (
-                    "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3"
+                receipt_schema = _fresh_openssl_receipt_schema(
+                    corpus_lock["corpus_id"]
                 )
                 evaluator_receipt = {
                     "manifest_digest": evaluator["evaluator_manifest_digest"],

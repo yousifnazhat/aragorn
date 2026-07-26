@@ -16,6 +16,7 @@ from aragorn.oci_worker_protocol import canonical_json
 from scripts.freeze_hidden_suite import (
     FreezeError,
     _artifact_map,
+    _fresh_openssl_receipt_schema,
     _match_prior_freeze,
     _validate_skill_frontmatter,
     _verify_release_v2,
@@ -26,6 +27,18 @@ from scripts.freeze_hidden_suite import (
 
 
 class FreezeReceiptTests(unittest.TestCase):
+    def test_fresh_openssl_receipt_schema_preserves_v3_and_selects_v4(self) -> None:
+        self.assertEqual(
+            _fresh_openssl_receipt_schema("independent-v3.0.0"),
+            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3",
+        )
+        self.assertEqual(
+            _fresh_openssl_receipt_schema("local-v4.0.0"),
+            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v4",
+        )
+        with self.assertRaises(FreezeError):
+            _fresh_openssl_receipt_schema("unknown")
+
     def test_skill_frontmatter_preflight_accepts_valid_and_rejects_invalid(
         self,
     ) -> None:

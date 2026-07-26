@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
-from scripts.prepare_hidden_suite import _V2_GATE, _V3_GATE, _V4_GATE
+from scripts.prepare_hidden_suite import _V2_GATE, _V3_GATE, _V4_GATE, _V5_GATE
 from scripts.run_hidden_workers import (
     ExecutionError,
     Job,
@@ -196,6 +196,9 @@ class HiddenWorkerControllerTests(unittest.TestCase):
         v4_receipt = _run_receipt(**arguments, gate=_V4_GATE)
         self.assertEqual(v4_receipt["schema"], _V4_GATE.run_receipt_schema)
         self.assertNotIn("evaluation_status", v4_receipt["limitations"])
+        v5_receipt = _run_receipt(**arguments, gate=_V5_GATE)
+        self.assertEqual(v5_receipt["schema"], _V5_GATE.run_receipt_schema)
+        self.assertNotIn("evaluation_status", v5_receipt["limitations"])
         with self.assertRaisesRegex(ValueError, "registered profile"):
             _run_receipt(
                 **arguments,

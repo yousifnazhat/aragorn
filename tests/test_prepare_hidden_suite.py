@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
+import tempfile
 import unittest
 from copy import deepcopy
 from dataclasses import replace
@@ -22,12 +24,15 @@ from scripts.prepare_hidden_suite import (
     _V2_GATE,
     _V3_GATE,
     _V4_GATE,
+    _V5_GATE,
     PreparationError,
     _committed_document,
     _preflight_suite,
     _receipt,
     _state_paths,
+    _verified_release_manifest,
     _verified_repository,
+    prepare,
     validate_preparation_receipt_bindings,
     validate_retained_preparation_receipt,
 )
@@ -47,6 +52,10 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
         self.assertEqual(
             _V4_GATE.corpus_lock_path,
             Path("benchmark/phase0-corpus-v4.lock.json"),
+        )
+        self.assertEqual(
+            _V5_GATE.corpus_lock_path,
+            Path("benchmark/phase0-corpus-v5.lock.json"),
         )
         self.assertEqual(_CORPUS_LOCK_PATH, retained_path)
 
@@ -183,6 +192,224 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
             "phase0.hidden-local-v4.0.0",
         )
         self.assertFalse(_V4_GATE.calibration_only)
+
+    def test_v5_gate_binds_fresh_local_hidden_freeze(self) -> None:
+        self.assertEqual(
+            _V5_GATE.freeze_commit,
+            "89ac883edd2c8617d310d90f468c502b8c864ff6",
+        )
+        self.assertEqual(
+            _V5_GATE.freeze_tree,
+            "e03e83005e56079cd40d106a41367d978405810d",
+        )
+        self.assertEqual(
+            _V5_GATE.lock_digest,
+            "sha256:d96bdbfdd1a8884cbc4dd0293ade0f04708f42627f7f336fb744661b8adbc0c6",
+        )
+        self.assertEqual(
+            _V5_GATE.freeze_receipt_digest,
+            "sha256:37a3d49ff1cb451fcc4db34fba55f83f07e3f1bdfea6467fffe60d3567646b4c",
+        )
+        self.assertEqual(
+            _V5_GATE.suite_digest,
+            "sha256:2d00bf1e1572d1b7871fab301903e9f695023f125fcaea8e22f537400f9616b7",
+        )
+        self.assertEqual(
+            _V5_GATE.candidate_policy_digest,
+            "sha256:59120d59856c30fd803421cd5960f5c9a779f62c7903ee52731d9c4027749aa9",
+        )
+        self.assertEqual(
+            _V5_GATE.state_binding_digest,
+            "sha256:0de77709907f1ee4aa332802e4da588c5e3a39e90908c7d5a7d43bf677d9a28f",
+        )
+        self.assertEqual(
+            _state_paths(
+                Path(
+                    "/Users/yousi/Documents/Codex/2026-07-26/"
+                    "aragorn-phase0-v5-evaluation-20260726/hidden-run-state"
+                ),
+                _V5_GATE,
+            )["outcomes"],
+            Path(
+                "/Users/yousi/Documents/Codex/2026-07-26/"
+                "aragorn-phase0-v5-evaluation-20260726/"
+                "hidden-run-state/outcomes.jsonl"
+            ),
+        )
+        self.assertEqual(
+            _V5_GATE.trust_domain,
+            "phase0.hidden-local-v5.0.0",
+        )
+        self.assertEqual(
+            _V5_GATE.preparation_receipt_path,
+            Path(
+                "benchmark/receipts/"
+                "phase0-hidden-v5-preparation-2026-07-26.json"
+            ),
+        )
+        self.assertEqual(
+            _V5_GATE.receipt_schema,
+            "aragorn/benchmark-phase0-hidden-preparation-receipt/v5",
+        )
+        self.assertEqual(
+            _V5_GATE.run_receipt_schema,
+            "aragorn/benchmark-phase0-hidden-worker-run-receipt/v5",
+        )
+        self.assertEqual(
+            _V5_GATE.release_manifest_digest,
+            "sha256:be9f50ad5d47c9ada8100ef2dc008d36b57d349e5fe288aa33cd00c57af9bb6a",
+        )
+        self.assertFalse(_V5_GATE.calibration_only)
+
+    def test_v5_release_manifest_input_is_exact_and_fail_closed(self) -> None:
+        manifest = {"schema": "example/release-manifest/v1"}
+        raw = canonical_json(manifest)
+        digest = canonical_digest(manifest)
+        gate = replace(_V5_GATE, release_manifest_digest=digest)
+        corpus_lock = {"release_manifest": {"sha256": digest}}
+        freeze_receipt = {
+            "release": {"release_manifest_digest": digest},
+        }
+        with (
+            tempfile.TemporaryDirectory(dir=ROOT) as temporary,
+            patch.dict(
+                "scripts.prepare_hidden_suite._GATES",
+                {gate.name: gate},
+            ),
+        ):
+            path = Path(temporary) / "release-manifest.json"
+            path.write_bytes(raw)
+            self.assertEqual(
+                _verified_release_manifest(
+                    path,
+                    corpus_lock,
+                    freeze_receipt,
+                    gate,
+                ),
+                manifest,
+            )
+            with self.assertRaisesRegex(PreparationError, "requires"):
+                _verified_release_manifest(
+                    None,
+                    corpus_lock,
+                    freeze_receipt,
+                    gate,
+                )
+            changed_lock = deepcopy(corpus_lock)
+            changed_lock["release_manifest"]["sha256"] = "sha256:" + "1" * 64
+            with self.assertRaisesRegex(PreparationError, "binding changed"):
+                _verified_release_manifest(
+                    path,
+                    changed_lock,
+                    freeze_receipt,
+                    gate,
+                )
+            noncanonical = b'{\n  "schema": "example/release-manifest/v1"\n}\n'
+            path.write_bytes(noncanonical)
+            noncanonical_digest = (
+                "sha256:" + hashlib.sha256(noncanonical).hexdigest()
+            )
+            noncanonical_gate = replace(
+                gate,
+                release_manifest_digest=noncanonical_digest,
+            )
+            noncanonical_lock = {
+                "release_manifest": {"sha256": noncanonical_digest},
+            }
+            noncanonical_receipt = {
+                "release": {
+                    "release_manifest_digest": noncanonical_digest,
+                },
+            }
+            with (
+                patch.dict(
+                    "scripts.prepare_hidden_suite._GATES",
+                    {noncanonical_gate.name: noncanonical_gate},
+                ),
+                self.assertRaisesRegex(PreparationError, "binding changed"),
+            ):
+                _verified_release_manifest(
+                    path,
+                    noncanonical_lock,
+                    noncanonical_receipt,
+                    noncanonical_gate,
+                )
+
+        with self.assertRaisesRegex(PreparationError, "only valid"):
+            _verified_release_manifest(
+                Path("/tmp/release-manifest.json"),
+                {},
+                {},
+                _V4_GATE,
+            )
+
+    def test_v5_preparation_passes_verified_manifest_to_freeze_binding(
+        self,
+    ) -> None:
+        lock = {"schema": "example/hidden-lock/v1"}
+        freeze_receipt = {"schema": "example/freeze-receipt/v1"}
+        corpus_lock = {"schema": "example/corpus-lock/v1"}
+        manifest = {"schema": "example/release-manifest/v1"}
+        manifest_path = Path("/public/release-manifest.json")
+        with (
+            patch(
+                "scripts.prepare_hidden_suite._require_preparation_paths",
+                return_value={},
+            ),
+            patch(
+                "scripts.prepare_hidden_suite._verified_repository",
+                return_value={},
+            ),
+            patch(
+                "scripts.prepare_hidden_suite._committed_bytes",
+                side_effect=[b"lock", b"freeze"],
+            ),
+            patch(
+                "scripts.prepare_hidden_suite._read",
+                return_value=b"corpus",
+            ),
+            patch(
+                "scripts.prepare_hidden_suite._decode_json",
+                side_effect=[lock, freeze_receipt, corpus_lock],
+            ),
+            patch(
+                "scripts.prepare_hidden_suite._verified_release_manifest",
+                return_value=manifest,
+            ) as verified_manifest,
+            patch(
+                "scripts.prepare_hidden_suite.validate_freeze_receipt_bindings"
+            ) as validate_freeze,
+            patch(
+                "scripts.prepare_hidden_suite._preflight_suite",
+                side_effect=PreparationError("stop after freeze binding"),
+            ),
+            self.assertRaisesRegex(PreparationError, "stop after"),
+        ):
+            prepare(
+                private_suite_path=Path("/private/suite.json"),
+                run_state_root=Path("/private/run-state"),
+                verifier_root=Path("/private/verifier"),
+                worker_trust_record=Path("/private/worker.json"),
+                receipt_output=ROOT / _V5_GATE.preparation_receipt_path,
+                release_manifest_path=manifest_path,
+                recorded_on=_V5_GATE.recorded_on,
+                gate=_V5_GATE,
+            )
+        verified_manifest.assert_called_once_with(
+            manifest_path,
+            corpus_lock,
+            freeze_receipt,
+            _V5_GATE,
+        )
+        validate_freeze.assert_called_once_with(
+            freeze_receipt,
+            b"freeze",
+            lock,
+            b"lock",
+            corpus_lock,
+            b"corpus",
+            release_manifest=manifest,
+        )
 
     def test_preparation_commit_must_strictly_follow_freeze(self) -> None:
         with (

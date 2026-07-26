@@ -29,6 +29,7 @@ from prepare_hidden_suite import (
     _V2_GATE,
     _V3_GATE,
     _V4_GATE,
+    _V5_GATE,
     validate_retained_preparation_receipt,
 )
 
@@ -799,6 +800,12 @@ def main() -> int:
     validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
         phase0_corpus_lock_v4
     )
+    phase0_corpus_lock_v5_path = ROOT / "benchmark" / "phase0-corpus-v5.lock.json"
+    phase0_corpus_lock_v5_raw = phase0_corpus_lock_v5_path.read_bytes()
+    phase0_corpus_lock_v5 = json.loads(phase0_corpus_lock_v5_raw)
+    validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
+        phase0_corpus_lock_v5
+    )
     validators["benchmark-phase0-acquisition-corpus-lock-v1.schema.json"].validate(
         load(ROOT / "benchmark" / "phase0-acquisition-corpus.lock.json")
     )
@@ -1435,6 +1442,56 @@ def main() -> int:
             hidden_v4_receipt,
             _V4_GATE,
         )
+    hidden_v5_lock_path = ROOT / "benchmark" / "phase0-hidden-suite-v5.lock.json"
+    hidden_v5_lock_raw = hidden_v5_lock_path.read_bytes()
+    hidden_v5_lock = json.loads(hidden_v5_lock_raw)
+    hidden_v5_receipt_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-suite-v5-freeze-2026-07-26.json"
+    )
+    hidden_v5_receipt_raw = hidden_v5_receipt_path.read_bytes()
+    hidden_v5_receipt = json.loads(hidden_v5_receipt_raw)
+    validators["benchmark-phase0-hidden-suite-lock-v1.schema.json"].validate(
+        hidden_v5_lock
+    )
+    validators["benchmark-phase0-hidden-suite-freeze-receipt-v5.schema.json"].validate(
+        hidden_v5_receipt
+    )
+    if (
+        "sha256:" + hashlib.sha256(hidden_v5_lock_raw).hexdigest()
+        != _V5_GATE.lock_digest
+        or "sha256:" + hashlib.sha256(hidden_v5_receipt_raw).hexdigest()
+        != _V5_GATE.freeze_receipt_digest
+        or hidden_v5_lock["corpus_lock_digest"]
+        != "sha256:" + hashlib.sha256(phase0_corpus_lock_v5_raw).hexdigest()
+        or hidden_v5_lock["suite_digest"] != _V5_GATE.suite_digest
+        or hidden_v5_lock["candidate_policy_digest"]
+        != _V5_GATE.candidate_policy_digest
+        or hidden_v5_receipt["pre_outcome"]["state_binding_digest"]
+        != _V5_GATE.state_binding_digest
+    ):
+        raise AssertionError("hidden v5 frozen gate binding drift")
+    hidden_v5_preparation_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v5-preparation-2026-07-26.json"
+    )
+    if hidden_v5_preparation_path.exists():
+        hidden_v5_preparation_raw = hidden_v5_preparation_path.read_bytes()
+        hidden_v5_preparation = json.loads(hidden_v5_preparation_raw)
+        validators[
+            "benchmark-phase0-hidden-preparation-receipt-v5.schema.json"
+        ].validate(hidden_v5_preparation)
+        validate_retained_preparation_receipt(
+            hidden_v5_preparation,
+            hidden_v5_preparation_raw,
+            hidden_v5_lock,
+            hidden_v5_receipt,
+            _V5_GATE,
+        )
     hidden_v3_result_path = (
         ROOT
         / "benchmark"
@@ -1807,6 +1864,44 @@ def main() -> int:
             "state": {
                 "layout": "phase0-hidden-run-state/v1",
                 "binding_digest": _V4_GATE.state_binding_digest,
+            },
+            "batch": {
+                "accepted_count": 896,
+                "acceptance_set_digest": digest,
+                "result_set_digest": digest,
+            },
+            "composition": {
+                "composition_digest": digest,
+                "outcomes_digest": digest,
+                "outcomes_file_digest": digest,
+                "outcome_count": 1_344,
+            },
+            "limitations": {
+                "authorship": (
+                    "technical_codex_authorship_not_independent_human_identity"
+                ),
+                "custody": (
+                    "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+                ),
+                "worker_attestation": (
+                    "software_key_possession_not_vm_or_hardware_attestation"
+                ),
+            },
+        }
+    )
+    validators["benchmark-phase0-hidden-worker-run-receipt-v5.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v5",
+            "assurance": (
+                "authenticated_complete_worker_batch_not_independent_or_hardware_attested"
+            ),
+            "source": {
+                "runner_commit": "1" * 40,
+                "preparation_receipt_digest": digest,
+            },
+            "state": {
+                "layout": "phase0-hidden-run-state/v1",
+                "binding_digest": _V5_GATE.state_binding_digest,
             },
             "batch": {
                 "accepted_count": 896,

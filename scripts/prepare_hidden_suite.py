@@ -97,6 +97,7 @@ class PreparationGate:
     recorded_on: str
     receipt_schema: str
     run_receipt_schema: str
+    release_manifest_digest: str | None = None
     calibration_only: bool = False
 
 
@@ -253,8 +254,50 @@ _V4_GATE = PreparationGate(
     run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v4",
 )
 
+_V5_GATE = PreparationGate(
+    name="v5",
+    freeze_commit="89ac883edd2c8617d310d90f468c502b8c864ff6",
+    freeze_tree="e03e83005e56079cd40d106a41367d978405810d",
+    corpus_lock_path=Path("benchmark/phase0-corpus-v5.lock.json"),
+    lock_path=Path("benchmark/phase0-hidden-suite-v5.lock.json"),
+    freeze_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-suite-v5-freeze-2026-07-26.json"
+    ),
+    preparation_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-v5-preparation-2026-07-26.json"
+    ),
+    candidate_policy_path=Path("benchmark/phase0-candidate-policy-v5.json"),
+    portable_policy_paths=(
+        Path("benchmark/phase0-cisco-portable-policy-v2.json"),
+        Path("benchmark/phase0-skillspector-portable-policy-v2.json"),
+    ),
+    lock_digest=(
+        "sha256:d96bdbfdd1a8884cbc4dd0293ade0f04708f42627f7f336fb744661b8adbc0c6"
+    ),
+    freeze_receipt_digest=(
+        "sha256:37a3d49ff1cb451fcc4db34fba55f83f07e3f1bdfea6467fffe60d3567646b4c"
+    ),
+    suite_digest=(
+        "sha256:2d00bf1e1572d1b7871fab301903e9f695023f125fcaea8e22f537400f9616b7"
+    ),
+    candidate_policy_digest=(
+        "sha256:59120d59856c30fd803421cd5960f5c9a779f62c7903ee52731d9c4027749aa9"
+    ),
+    state_binding_digest=(
+        "sha256:0de77709907f1ee4aa332802e4da588c5e3a39e90908c7d5a7d43bf677d9a28f"
+    ),
+    trust_domain="phase0.hidden-local-v5.0.0",
+    recorded_on="2026-07-26",
+    receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v5",
+    run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v5",
+    release_manifest_digest=(
+        "sha256:be9f50ad5d47c9ada8100ef2dc008d36b57d349e5fe288aa33cd00c57af9bb6a"
+    ),
+)
+
 _GATES = {
-    gate.name: gate for gate in (_V1_GATE, _V2_GATE, _V3_GATE, _V4_GATE)
+    gate.name: gate
+    for gate in (_V1_GATE, _V2_GATE, _V3_GATE, _V4_GATE, _V5_GATE)
 }
 
 # Compatibility names used by retained v1 validators and tests.
@@ -445,6 +488,45 @@ def _canonical_document(path: Path, label: str) -> dict[str, object]:
     if canonical_json(document) != raw:
         raise PreparationError(f"{label} must use canonical JSON bytes")
     return document
+
+
+def _verified_release_manifest(
+    path: Path | None,
+    corpus_lock: dict[str, object],
+    freeze_receipt: dict[str, object],
+    gate: PreparationGate = _V1_GATE,
+) -> dict[str, object] | None:
+    gate = _registered_gate(gate)
+    if gate.name != _V5_GATE.name:
+        if path is not None:
+            raise PreparationError(
+                "release manifest input is only valid for the v5 gate"
+            )
+        return None
+    if path is None:
+        raise PreparationError("v5 requires its signed public release manifest")
+    _reject_symlink_components(path, "v5 release manifest")
+    raw = _read(path, max_bytes=_MAX_JSON)
+    manifest = _decode_json(raw, "v5 release manifest")
+    expected = gate.release_manifest_digest
+    try:
+        locked = corpus_lock["release_manifest"]
+        lock_digest = locked["sha256"]
+        receipt_digest = freeze_receipt["release"]["release_manifest_digest"]
+    except (KeyError, TypeError) as exc:
+        raise PreparationError(
+            "v5 release manifest binding is malformed"
+        ) from exc
+    if (
+        expected is None
+        or locked != {"sha256": expected}
+        or lock_digest != expected
+        or receipt_digest != expected
+        or _sha256(raw) != expected
+        or canonical_json(manifest) != raw
+    ):
+        raise PreparationError("v5 release manifest binding changed")
+    return manifest
 
 
 def _state_paths(
@@ -1222,6 +1304,7 @@ def prepare(
     verifier_root: Path,
     worker_trust_record: Path,
     receipt_output: Path,
+    release_manifest_path: Path | None = None,
     recorded_on: str,
     gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object]:
@@ -1257,6 +1340,12 @@ def prepare(
     lock = _decode_json(lock_raw, "hidden suite lock")
     freeze_receipt = _decode_json(freeze_raw, "hidden suite freeze receipt")
     corpus_lock = _decode_json(corpus_raw, "Phase 0 corpus lock")
+    release_manifest = _verified_release_manifest(
+        release_manifest_path,
+        corpus_lock,
+        freeze_receipt,
+        gate,
+    )
     validate_freeze_receipt_bindings(
         freeze_receipt,
         freeze_raw,
@@ -1264,6 +1353,7 @@ def prepare(
         lock_raw,
         corpus_lock,
         corpus_raw,
+        release_manifest=release_manifest,
     )
     expected_suite = _preflight_suite(private_suite_path, lock, gate)
     worker_record = _load_worker_record(worker_trust_record, gate)
@@ -1351,6 +1441,7 @@ def main() -> int:
     parser.add_argument("--verifier-root", type=Path, required=True)
     parser.add_argument("--worker-trust-record", type=Path, required=True)
     parser.add_argument("--receipt-output", type=Path, required=True)
+    parser.add_argument("--release-manifest", type=Path)
     parser.add_argument("--recorded-on", required=True)
     arguments = parser.parse_args()
     try:
@@ -1360,6 +1451,11 @@ def main() -> int:
             verifier_root=_lexical_absolute(arguments.verifier_root),
             worker_trust_record=_lexical_absolute(arguments.worker_trust_record),
             receipt_output=_lexical_absolute(arguments.receipt_output),
+            release_manifest_path=(
+                None
+                if arguments.release_manifest is None
+                else _lexical_absolute(arguments.release_manifest)
+            ),
             recorded_on=arguments.recorded_on,
             gate=_GATES[arguments.gate],
         )

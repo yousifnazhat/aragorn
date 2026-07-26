@@ -1369,6 +1369,82 @@ def main() -> int:
             hidden_v3_receipt,
             _V3_GATE,
         )
+    hidden_v3_result_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v3-result-2026-07-26.json"
+    )
+    if hidden_v3_result_path.exists():
+        if not hidden_v3_preparation_path.exists():
+            raise AssertionError(
+                "hidden v3 result requires its retained preparation receipt"
+            )
+        hidden_v3_result_raw = hidden_v3_result_path.read_bytes()
+        hidden_v3_result = json.loads(hidden_v3_result_raw)
+        validators[
+            "benchmark-phase0-hidden-result-receipt-v1.schema.json"
+        ].validate(hidden_v3_result)
+        if hidden_v3_result_raw != canonical_json(hidden_v3_result):
+            raise AssertionError("hidden v3 result receipt is not canonical JSON")
+        worker_run = hidden_v3_result["worker_run_receipt"]
+        gate_report = hidden_v3_result["gate_report"]
+        source = hidden_v3_result["source"]
+        worker_run_digest = (
+            "sha256:" + hashlib.sha256(canonical_json(worker_run)).hexdigest()
+        )
+        gate_report_file_digest = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(gate_report, sort_keys=True).encode("ascii") + b"\n"
+            ).hexdigest()
+        )
+        preparation_digest = (
+            "sha256:" + hashlib.sha256(hidden_v3_preparation_raw).hexdigest()
+        )
+        hidden_v3_lock_digest = (
+            "sha256:" + hashlib.sha256(hidden_v3_lock_raw).hexdigest()
+        )
+        if source["worker_run_receipt_digest"] != worker_run_digest:
+            raise AssertionError("hidden v3 worker receipt digest drift")
+        if source["gate_report_file_digest"] != gate_report_file_digest:
+            raise AssertionError("hidden v3 gate report file digest drift")
+        if source["evaluator_commit"] != worker_run["source"]["runner_commit"]:
+            raise AssertionError("hidden v3 evaluator commit drift")
+        if worker_run["source"]["preparation_receipt_digest"] != preparation_digest:
+            raise AssertionError("hidden v3 preparation receipt digest drift")
+        if worker_run["state"]["binding_digest"] != _V3_GATE.state_binding_digest:
+            raise AssertionError("hidden v3 run state binding drift")
+        if worker_run["composition"]["outcomes_digest"] != gate_report[
+            "outcomes_digest"
+        ]:
+            raise AssertionError("hidden v3 outcome digest drift")
+        expected_gate_bindings = {
+            "corpus_lock_digest": hidden_v3_lock["corpus_lock_digest"],
+            "public_manifest_digest": hidden_v3_lock["public_manifest_digest"],
+            "hidden_suite_lock_digest": hidden_v3_lock_digest,
+            "candidate_policy_digest": hidden_v3_lock["candidate_policy_digest"],
+            "label_ledger_digest": hidden_v3_lock["label_ledger_digest"],
+            "suite_digest": hidden_v3_lock["suite_digest"],
+        }
+        for field, expected in expected_gate_bindings.items():
+            if gate_report[field] != expected:
+                raise AssertionError(f"hidden v3 gate report {field} drift")
+        comparison = gate_report["comparison"]
+        if (
+            comparison["evaluable"]
+            or comparison["passed"]
+            or comparison["attack_flag_delta"] is not None
+            or comparison["selected_comparator"] is not None
+            or comparison["reason_codes"]
+            != [
+                "CANDIDATE_BURDEN_CEILING_EXCEEDED",
+                "NO_BURDEN_COMPLIANT_COMPARATOR",
+            ]
+        ):
+            raise AssertionError(
+                "hidden v3 result is not the retained non-evaluable comparison"
+            )
     calibration_result_path = (
         ROOT
         / "benchmark"

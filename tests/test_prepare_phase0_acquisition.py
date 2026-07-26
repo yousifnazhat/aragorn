@@ -4,6 +4,8 @@ import hashlib
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -343,6 +345,20 @@ class Phase0AcquisitionPreparationTests(unittest.TestCase):
             with self.subTest(raw=raw[:16]):
                 with self.assertRaises(AcquisitionPreparationError):
                     _read_bearer_token(io.BytesIO(raw))
+
+    def test_script_entrypoint_loads_from_the_repository_root(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "prepare_phase0_acquisition.py"),
+                "--help",
+            ],
+            cwd=self.root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
     @staticmethod
     def _catalog() -> list[dict[str, str]]:

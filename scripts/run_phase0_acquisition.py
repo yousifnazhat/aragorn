@@ -55,6 +55,7 @@ from scripts.phase0_acquisition_gate import EXPANSION_PROFILE, build_lock
 from scripts.prepare_hidden_suite import (
     _ALLOWED_SIGNER,
     _committed_bytes,
+    _committed_document,
     _git,
     _verified_commit,
 )
@@ -240,12 +241,15 @@ def _separate(paths: Sequence[Path]) -> None:
                 )
 
 
-def _policy(path: Path, label: str) -> dict[str, Any]:
-    document, _raw = _read_canonical(
-        Path(os.path.abspath(os.fspath(path.expanduser()))),
-        label,
-    )
-    return document
+def _policy(path: Path, label: str, commit: str) -> dict[str, Any]:
+    target = Path(os.path.abspath(os.fspath(path.expanduser())))
+    try:
+        relative = target.relative_to(ROOT)
+        return _committed_document(commit, relative, label)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise AcquisitionExecutionError(
+            f"{label} must be retained by signed HEAD"
+        ) from exc
 
 
 def _trust_record(path: Path) -> dict[str, Any]:
@@ -445,15 +449,17 @@ def prepare(
     _separate((ROOT, prepared_root, acquisition_state, run_root))
     if len(portable_policy_paths) != 2:
         raise AcquisitionExecutionError("exactly two portable policies are required")
+    runner_commit, runner_digest = _runner_source()
     candidate_policy = build_candidate_policy(
-        _policy(candidate_policy_path, "candidate policy")
+        _policy(candidate_policy_path, "candidate policy", runner_commit)
     )
     portable_policies = [
-        build_portable_policy(_policy(path, f"portable policy {index}"))
+        build_portable_policy(
+            _policy(path, f"portable policy {index}", runner_commit)
+        )
         for index, path in enumerate(portable_policy_paths)
     ]
     record = _trust_record(worker_trust_record)
-    runner_commit, runner_digest = _runner_source()
     run_root = _new_private_root(run_root)
     completed = False
     try:

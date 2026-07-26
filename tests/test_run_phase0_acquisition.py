@@ -27,6 +27,7 @@ from aragorn.phase0_candidate import (
 from scripts.run_phase0_acquisition import (
     AcquisitionExecutionError,
     _load_signed_oracle_lock,
+    _policy,
     _runner_source,
     run,
 )
@@ -258,6 +259,37 @@ class Phase0AcquisitionCompositionTests(unittest.TestCase):
 
 
 class Phase0AcquisitionExecutionBoundaryTests(unittest.TestCase):
+    def test_policy_loader_uses_exact_signed_formatted_bytes(self) -> None:
+        policy = {"schema": "example/policy/v1"}
+        with patch.object(
+            execution,
+            "_committed_document",
+            return_value=policy,
+        ) as committed:
+            self.assertEqual(
+                _policy(
+                    Path("benchmark/policy.json"),
+                    "candidate policy",
+                    "1" * 40,
+                ),
+                policy,
+            )
+        committed.assert_called_once_with(
+            "1" * 40,
+            Path("benchmark/policy.json"),
+            "candidate policy",
+        )
+
+        with self.assertRaisesRegex(
+            AcquisitionExecutionError,
+            "retained by signed HEAD",
+        ):
+            _policy(
+                Path("/tmp/untrusted-policy.json"),
+                "candidate policy",
+                "1" * 40,
+            )
+
     def test_runner_requires_clean_signed_head(self) -> None:
         with (
             patch.object(execution, "_git", return_value=b" M tracked\n"),

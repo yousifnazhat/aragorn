@@ -20,6 +20,7 @@ from scripts.prepare_hidden_suite import (
     _SIGNER_PRINCIPAL,
     _V1_GATE,
     _V2_GATE,
+    _V3_GATE,
     PreparationError,
     _committed_document,
     _preflight_suite,
@@ -38,6 +39,10 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
         retained_path = Path("benchmark/phase0-corpus.lock.json")
         self.assertEqual(_V1_GATE.corpus_lock_path, retained_path)
         self.assertEqual(_V2_GATE.corpus_lock_path, retained_path)
+        self.assertEqual(
+            _V3_GATE.corpus_lock_path,
+            Path("benchmark/phase0-corpus-v3.lock.json"),
+        )
         self.assertEqual(_CORPUS_LOCK_PATH, retained_path)
 
         digest = "sha256:" + "1" * 64
@@ -81,6 +86,50 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
             validate.call_args.kwargs["corpus_lock_path"],
             ROOT / synthetic.corpus_lock_path,
         )
+
+    def test_v3_gate_binds_fresh_hidden_freeze(self) -> None:
+        self.assertEqual(
+            _V3_GATE.freeze_commit,
+            "4210a5b4305a558016ec7ee6520e13e99f38d576",
+        )
+        self.assertEqual(
+            _V3_GATE.freeze_tree,
+            "ab7294a2d096306567a2939065aa68d4fa524bdc",
+        )
+        self.assertEqual(
+            _V3_GATE.lock_digest,
+            "sha256:68ed78218e3efe41b2cdef1c0873472b52093a42b4001f9b6a60d860476b9def",
+        )
+        self.assertEqual(
+            _V3_GATE.freeze_receipt_digest,
+            "sha256:b6aadf115dd6542cd6d2e0a8005151017efe402bc801db17ffe3bb360080c56b",
+        )
+        self.assertEqual(
+            _V3_GATE.suite_digest,
+            "sha256:75bb5723bbc4973f94f5bea7d54eee76025da57cce806e0aef11740ec83305af",
+        )
+        self.assertEqual(
+            _V3_GATE.candidate_policy_digest,
+            "sha256:817bc01e97437c2d5a38971c5164dae28570a4d492b78816165ff97d0358ff73",
+        )
+        self.assertEqual(
+            _V3_GATE.state_binding_digest,
+            "sha256:e29cd500844122f1c9c4213f1653ca2928bcc49fa1cb2f7ed06005d240ae75ba",
+        )
+        self.assertEqual(
+            _state_paths(
+                Path(
+                    "/Users/yousi/Documents/Codex/2026-07-25/"
+                    "aragorn-phase0-hidden-v3-control/run-state"
+                ),
+                _V3_GATE,
+            )["outcomes"],
+            Path(
+                "/Users/yousi/Documents/Codex/2026-07-25/"
+                "aragorn-phase0-hidden-v3-control/run-state/outcomes.jsonl"
+            ),
+        )
+        self.assertFalse(_V3_GATE.calibration_only)
 
     def test_preparation_commit_must_strictly_follow_freeze(self) -> None:
         with (

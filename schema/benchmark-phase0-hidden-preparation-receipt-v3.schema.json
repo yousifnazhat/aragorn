@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-preparation-receipt-v3.schema.json",
+  "title": "Aragorn Phase 0 hidden v3 preparation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_on",
+    "assurance",
+    "source",
+    "state",
+    "worker",
+    "preparation",
+    "preparation_result_digest",
+    "matrix",
+    "worker_surface",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-preparation-receipt/v3"
+    },
+    "recorded_on": {
+      "const": "2026-07-26"
+    },
+    "assurance": {
+      "const": "operator_asserted_signed_preparation_not_independent_or_hardware_attested"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "freeze_commit",
+        "freeze_tree",
+        "freeze_signature_status",
+        "preparation_commit",
+        "preparation_tree",
+        "preparation_signature_status",
+        "signer_principal",
+        "signer_fingerprint",
+        "hidden_suite_lock_digest",
+        "freeze_receipt_digest"
+      ],
+      "properties": {
+        "freeze_commit": {
+          "const": "4210a5b4305a558016ec7ee6520e13e99f38d576"
+        },
+        "freeze_tree": {
+          "const": "ab7294a2d096306567a2939065aa68d4fa524bdc"
+        },
+        "freeze_signature_status": {"const": "verified"},
+        "preparation_commit": {"$ref": "#/$defs/git_oid"},
+        "preparation_tree": {"$ref": "#/$defs/git_oid"},
+        "preparation_signature_status": {"const": "verified"},
+        "signer_principal": {"const": "yousif.snazhat@gmail.com"},
+        "signer_fingerprint": {
+          "const": "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
+        },
+        "hidden_suite_lock_digest": {
+          "const": "sha256:68ed78218e3efe41b2cdef1c0873472b52093a42b4001f9b6a60d860476b9def"
+        },
+        "freeze_receipt_digest": {
+          "const": "sha256:b6aadf115dd6542cd6d2e0a8005151017efe402bc801db17ffe3bb360080c56b"
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layout",
+        "binding_digest",
+        "fresh_before_prepare",
+        "outcomes_absent_after_prepare",
+        "operator_uid_protected"
+      ],
+      "properties": {
+        "layout": {"const": "phase0-hidden-run-state/v1"},
+        "binding_digest": {
+          "const": "sha256:e29cd500844122f1c9c4213f1653ca2928bcc49fa1cb2f7ed06005d240ae75ba"
+        },
+        "fresh_before_prepare": {"const": true},
+        "outcomes_absent_after_prepare": {"const": true},
+        "operator_uid_protected": {"const": true}
+      }
+    },
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trust_domain",
+        "worker_id",
+        "key_id",
+        "trust_store_digest",
+        "key_provisioning",
+        "trust_store_status"
+      ],
+      "properties": {
+        "trust_domain": {
+          "const": "phase0.hidden-independent-v3.0.0"
+        },
+        "worker_id": {"const": "isolated-worker-01"},
+        "key_id": {"$ref": "#/$defs/digest"},
+        "trust_store_digest": {"$ref": "#/$defs/digest"},
+        "key_provisioning": {
+          "const": "operator_asserted_guest_generated_public_record_not_attested"
+        },
+        "trust_store_status": {
+          "const": "verifier_owned_protected_file"
+        }
+      }
+    },
+    "preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "suite_digest",
+        "dispatch_digest",
+        "candidate_policy_digest",
+        "worker_identities_digest",
+        "worklist_digest",
+        "job_count"
+      ],
+      "properties": {
+        "schema": {"const": "aragorn/benchmark-prepare-result/v2"},
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "dispatch_digest": {"$ref": "#/$defs/digest"},
+        "candidate_policy_digest": {"$ref": "#/$defs/digest"},
+        "worker_identities_digest": {"$ref": "#/$defs/digest"},
+        "worklist_digest": {"$ref": "#/$defs/digest"},
+        "job_count": {"const": 896}
+      }
+    },
+    "preparation_result_digest": {"$ref": "#/$defs/digest"},
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_count",
+        "comparator_count",
+        "runs_per_case",
+        "job_count",
+        "worklist_count",
+        "issuance_count",
+        "acceptance_count",
+        "systems"
+      ],
+      "properties": {
+        "case_count": {"const": 448},
+        "comparator_count": {"const": 2},
+        "runs_per_case": {"const": 1},
+        "job_count": {"const": 896},
+        "worklist_count": {"const": 896},
+        "issuance_count": {"const": 896},
+        "acceptance_count": {"const": 0},
+        "systems": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-lock-v1.schema.json#/$defs/system"
+          }
+        }
+      }
+    },
+    "worker_surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_count",
+        "handoff_count",
+        "semantic_validation",
+        "forbidden_evaluator_metadata_absent"
+      ],
+      "properties": {
+        "request_count": {"const": 896},
+        "handoff_count": {"const": 896},
+        "semantic_validation": {"const": "passed"},
+        "forbidden_evaluator_metadata_absent": {"const": true}
+      }
+    },
+    "limitations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorship", "ordering", "custody", "worker_attestation"],
+      "properties": {
+        "authorship": {
+          "const": "technical_codex_authorship_not_independent_human_identity"
+        },
+        "ordering": {
+          "const": "signed_preparation_commit_verified_before_issuance"
+        },
+        "custody": {
+          "const": "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+        },
+        "worker_attestation": {
+          "const": "software_key_possession_not_vm_or_hardware_attestation"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "git_oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  }
+}

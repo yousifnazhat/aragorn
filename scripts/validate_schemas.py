@@ -25,7 +25,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from freeze_hidden_suite import validate_freeze_receipt_bindings
-from prepare_hidden_suite import _V2_GATE, validate_retained_preparation_receipt
+from prepare_hidden_suite import (
+    _V2_GATE,
+    _V3_GATE,
+    validate_retained_preparation_receipt,
+)
 
 from aragorn.acquire import ingest_local
 from aragorn.artifact_closure import resolve_source_graph
@@ -782,8 +786,11 @@ def main() -> int:
     validators["benchmark-corpus-provenance-lock-v1.schema.json"].validate(
         phase0_corpus_lock
     )
+    phase0_corpus_lock_v3_path = ROOT / "benchmark" / "phase0-corpus-v3.lock.json"
+    phase0_corpus_lock_v3_raw = phase0_corpus_lock_v3_path.read_bytes()
+    phase0_corpus_lock_v3 = json.loads(phase0_corpus_lock_v3_raw)
     validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
-        load(ROOT / "benchmark" / "phase0-corpus-v3.lock.json")
+        phase0_corpus_lock_v3
     )
     validators["benchmark-phase0-acquisition-corpus-lock-v1.schema.json"].validate(
         load(ROOT / "benchmark" / "phase0-acquisition-corpus.lock.json")
@@ -1318,6 +1325,50 @@ def main() -> int:
             calibration_receipt,
             _V2_GATE,
         )
+    hidden_v3_lock_path = ROOT / "benchmark" / "phase0-hidden-suite-v3.lock.json"
+    hidden_v3_lock_raw = hidden_v3_lock_path.read_bytes()
+    hidden_v3_lock = json.loads(hidden_v3_lock_raw)
+    hidden_v3_receipt_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-suite-v3-freeze-2026-07-26.json"
+    )
+    hidden_v3_receipt_raw = hidden_v3_receipt_path.read_bytes()
+    hidden_v3_receipt = json.loads(hidden_v3_receipt_raw)
+    validators["benchmark-phase0-hidden-suite-lock-v1.schema.json"].validate(
+        hidden_v3_lock
+    )
+    validators["benchmark-phase0-hidden-suite-freeze-receipt-v3.schema.json"].validate(
+        hidden_v3_receipt
+    )
+    validate_freeze_receipt_bindings(
+        hidden_v3_receipt,
+        hidden_v3_receipt_raw,
+        hidden_v3_lock,
+        hidden_v3_lock_raw,
+        phase0_corpus_lock_v3,
+        phase0_corpus_lock_v3_raw,
+    )
+    hidden_v3_preparation_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v3-preparation-2026-07-26.json"
+    )
+    if hidden_v3_preparation_path.exists():
+        hidden_v3_preparation_raw = hidden_v3_preparation_path.read_bytes()
+        hidden_v3_preparation = json.loads(hidden_v3_preparation_raw)
+        validators[
+            "benchmark-phase0-hidden-preparation-receipt-v3.schema.json"
+        ].validate(hidden_v3_preparation)
+        validate_retained_preparation_receipt(
+            hidden_v3_preparation,
+            hidden_v3_preparation_raw,
+            hidden_v3_lock,
+            hidden_v3_receipt,
+            _V3_GATE,
+        )
     calibration_result_path = (
         ROOT
         / "benchmark"
@@ -1467,6 +1518,44 @@ def main() -> int:
                 ),
                 "evaluation_status": (
                     "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+                ),
+            },
+        }
+    )
+    validators["benchmark-phase0-hidden-worker-run-receipt-v3.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v3",
+            "assurance": (
+                "authenticated_complete_worker_batch_not_independent_or_hardware_attested"
+            ),
+            "source": {
+                "runner_commit": "1" * 40,
+                "preparation_receipt_digest": digest,
+            },
+            "state": {
+                "layout": "phase0-hidden-run-state/v1",
+                "binding_digest": _V3_GATE.state_binding_digest,
+            },
+            "batch": {
+                "accepted_count": 896,
+                "acceptance_set_digest": digest,
+                "result_set_digest": digest,
+            },
+            "composition": {
+                "composition_digest": digest,
+                "outcomes_digest": digest,
+                "outcomes_file_digest": digest,
+                "outcome_count": 1_344,
+            },
+            "limitations": {
+                "authorship": (
+                    "technical_codex_authorship_not_independent_human_identity"
+                ),
+                "custody": (
+                    "software_signatures_operator_uid_trusted_not_same_uid_or_hardware_attested"
+                ),
+                "worker_attestation": (
+                    "software_key_possession_not_vm_or_hardware_attestation"
                 ),
             },
         }

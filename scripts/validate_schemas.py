@@ -869,6 +869,18 @@ def main() -> int:
         if dynamic_reasons != sorted(set(dynamic_reasons)):
             raise AssertionError("dynamic-conformance reasons are not canonical")
 
+    openclaw_result = load(
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase1-openclaw-admission-probe-2026-07-27.json"
+    )
+    validators["admission-conformance-result-v1.schema.json"].validate(
+        openclaw_result
+    )
+    if validate_admission_conformance(openclaw_result) != "FAIL":
+        raise AssertionError("OpenClaw elimination result did not fail closed")
+
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)
     phase0_corpus_lock_path = ROOT / "benchmark" / "phase0-corpus.lock.json"

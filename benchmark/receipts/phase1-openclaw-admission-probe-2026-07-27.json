@@ -1,0 +1,133 @@
+{
+  "schema": "aragorn/admission-conformance-result/v1",
+  "profile": "admission-conformant/v1",
+  "recorded_at": "2026-07-27T19:24:02.269Z",
+  "bindings": {
+    "runtime": {
+      "name": "openclaw",
+      "version": "2026.7.1",
+      "repository_url": "https://github.com/openclaw/openclaw",
+      "commit": "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4",
+      "source_tree_digest": "sha256:475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c"
+    },
+    "adapter": {
+      "name": "openclaw-v2026.7.1-probe",
+      "implementation_digest": "sha256:e27481d19e8490d0bffe5dfe300431e2233ed16f52fc9c0c21cbf425e4e75fd9",
+      "configuration_digest": "sha256:ed63a0f6e96279f91c3c262165a6e281ed00ab82be83d05fb53781b614123a6a"
+    },
+    "environment": {
+      "worker_digest": "sha256:1df790a7d590f617d0d3c2cd84cbe18b5400ff972dd9701670f7e5a4f1634e52",
+      "os_profile_digest": "sha256:7d133fd1c6c65a3ac1b8e7d4bf8328559983cb5e4af71882e897c4d4458a917f"
+    },
+    "aragorn": {
+      "implementation_digest": "sha256:cd03b632ad28b45d606088c14c8368ff42f4848f84fb774e0beb3afe1cfec631",
+      "policy_digest": "sha256:f23061d06e0f2d28357f74989b9ea21f7270882d60963d60341a3494a98ec764"
+    }
+  },
+  "properties": [
+    {
+      "id": "DET-01",
+      "status": "NOT_TESTED",
+      "scenarios": [
+        {
+          "id": "identical-canonical-input-replay",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        }
+      ]
+    },
+    {
+      "id": "ADM-01",
+      "status": "NOT_TESTED",
+      "scenarios": [
+        {
+          "id": "exact-admitted-bytes",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        }
+      ]
+    },
+    {
+      "id": "ADM-02",
+      "status": "FAIL",
+      "scenarios": [
+        {
+          "id": "install",
+          "status": "PASS",
+          "evidence_digests": [
+            "sha256:c26c1a99f271c632254fb2865b8295714ac09a2dbba4a6cb29820939dde666a0"
+          ],
+          "reason_codes": []
+        },
+        {
+          "id": "update",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        },
+        {
+          "id": "direct-write",
+          "status": "FAIL",
+          "evidence_digests": [
+            "sha256:c26c1a99f271c632254fb2865b8295714ac09a2dbba4a6cb29820939dde666a0"
+          ],
+          "reason_codes": ["DIRECT_WRITE_POLICY_BYPASS"]
+        },
+        {
+          "id": "rename",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        },
+        {
+          "id": "symlink",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        },
+        {
+          "id": "auto-discovery",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        },
+        {
+          "id": "reload",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        },
+        {
+          "id": "restart",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        }
+      ]
+    },
+    {
+      "id": "ADM-03",
+      "status": "NOT_TESTED",
+      "scenarios": [
+        {
+          "id": "policy-failure",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        },
+        {
+          "id": "policy-tampering",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["SCENARIO_NOT_EXECUTED"]
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "status": "FAIL",
+    "installer_work_eligible": false
+  }
+}

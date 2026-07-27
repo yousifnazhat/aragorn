@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor; Pi remains dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 ## What works now
 
@@ -27,8 +27,10 @@ Current status: **private qualified Phase 0 validation milestone complete; Phase
 - Descriptor-bound comparison of a staged source-tree snapshot against a fully
   re-verified retained manifest. This snapshot check neither authorizes nor
   activates the tree.
-- A source-screen-only lock for exact OpenClaw and Pi Git identities; both
-  remain dynamically `NOT_TESTED` and installer-ineligible.
+- A source-screen-only lock for exact OpenClaw and Pi Git identities. A
+  separately bound OpenClaw probe retains one install-path `PASS` and one
+  direct-write `FAIL`; the static lock remains a source-screen record and does
+  not transfer installer authority.
 - Sanitized execution from an empty control directory, with bounded output, process-group wall-clock supervision, and executable-byte identity.
 - Open-once analyzer ingestion and launch from a private CAS materialization, so later replacement of the original configured file cannot change the staged entrypoint bytes.
 - Byte-exact retention of analyzer stdout and stderr.

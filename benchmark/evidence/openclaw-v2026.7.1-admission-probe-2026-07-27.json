@@ -1,0 +1,298 @@
+{
+    "aragorn": {
+        "implementation_digest": "sha256:cd03b632ad28b45d606088c14c8368ff42f4848f84fb774e0beb3afe1cfec631",
+        "implementation_path": "src/aragorn/admission_conformance.py",
+        "policy": {
+            "aggregate": {
+                "fail_if_any": "FAIL",
+                "not_tested_if_any_and_no_fail": "NOT_TESTED",
+                "pass_only_if_all": "PASS"
+            },
+            "mandatory_scenarios": {
+                "ADM-01": [
+                    "exact-admitted-bytes"
+                ],
+                "ADM-02": [
+                    "install",
+                    "update",
+                    "direct-write",
+                    "rename",
+                    "symlink",
+                    "auto-discovery",
+                    "reload",
+                    "restart"
+                ],
+                "ADM-03": [
+                    "policy-failure",
+                    "policy-tampering"
+                ],
+                "DET-01": [
+                    "identical-canonical-input-replay"
+                ]
+            },
+            "profile": "admission-conformant/v1"
+        },
+        "policy_digest": "sha256:f23061d06e0f2d28357f74989b9ea21f7270882d60963d60341a3494a98ec764"
+    },
+    "adapter": {
+        "configuration": {
+            "agents": {
+                "defaults": {
+                    "workspace": "/tmp/aragorn-openclaw-probe/workspace"
+                }
+            },
+            "security": {
+                "installPolicy": {
+                    "enabled": true,
+                    "exec": {
+                        "args": [
+                            "/probe/probe.mjs",
+                            "policy"
+                        ],
+                        "command": "/usr/local/bin/node",
+                        "maxOutputBytes": 4096,
+                        "noOutputTimeoutMs": 5000,
+                        "source": "exec",
+                        "timeoutMs": 5000,
+                        "trustedDirs": [
+                            "/probe",
+                            "/usr/local/bin"
+                        ]
+                    },
+                    "targets": [
+                        "skill"
+                    ]
+                }
+            }
+        },
+        "configuration_digest": "sha256:ed63a0f6e96279f91c3c262165a6e281ed00ab82be83d05fb53781b614123a6a",
+        "implementation_digest": "sha256:e27481d19e8490d0bffe5dfe300431e2233ed16f52fc9c0c21cbf425e4e75fd9",
+        "implementation_path": "benchmark/admission/openclaw-v2026.7.1/probe.mjs"
+    },
+    "decision": {
+        "candidate_eliminated": true,
+        "installer_work_eligible": false,
+        "status": "FAIL"
+    },
+    "environment": {
+        "architecture": "arm64",
+        "base_image": "docker.io/library/node:24-bookworm-slim@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf",
+        "effective_container": {
+            "apparmor_profile": "docker-default",
+            "cap_drop": [
+                "ALL"
+            ],
+            "devices": [],
+            "entrypoint": [
+                "/usr/local/bin/node",
+                "/probe/probe.mjs"
+            ],
+            "exit_code": 0,
+            "image_id": "sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf",
+            "image_platform_manifest_digest": "sha256:1df790a7d590f617d0d3c2cd84cbe18b5400ff972dd9701670f7e5a4f1634e52",
+            "memory_bytes": 805306368,
+            "memory_swap_bytes": 805306368,
+            "mounts": [
+                {
+                    "destination": "/acquisition",
+                    "read_only": true,
+                    "type": "volume"
+                },
+                {
+                    "destination": "/probe",
+                    "read_only": true,
+                    "type": "volume"
+                },
+                {
+                    "destination": "/runtime",
+                    "read_only": true,
+                    "type": "volume"
+                }
+            ],
+            "nano_cpus": 1000000000,
+            "network_mode": "none",
+            "no_new_privileges": true,
+            "pids_limit": 128,
+            "privileged": false,
+            "read_only_rootfs": true,
+            "tmpfs": {
+                "/tmp": "rw,noexec,nosuid,nodev,size=256m,mode=1777"
+            },
+            "ulimits": [
+                {
+                    "hard": 256,
+                    "name": "nofile",
+                    "soft": 256
+                }
+            ],
+            "user": "1000:1000"
+        },
+        "isolation": {
+            "capabilities": [],
+            "cpus": 1,
+            "memory_bytes": 805306368,
+            "network": "none",
+            "no_new_privileges": true,
+            "nofile": 256,
+            "pids": 128,
+            "root_filesystem": "read-only",
+            "runtime_volume": "read-only",
+            "tmpfs": "/tmp:rw,noexec,nosuid,nodev,size=256m,mode=1777",
+            "user": "1000:1000"
+        },
+        "node": "v24.16.0",
+        "os_profile_digest": "sha256:7d133fd1c6c65a3ac1b8e7d4bf8328559983cb5e4af71882e897c4d4458a917f"
+    },
+    "limitations": [
+        "ELIMINATION_RESULT_ONLY_NOT_PROFILE_QUALIFICATION",
+        "UNEXECUTED_MANDATORY_SCENARIOS_REMAIN_NOT_TESTED"
+    ],
+    "recorded_at": "2026-07-27T19:24:02.269Z",
+    "runtime": {
+        "commit": "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4",
+        "name": "openclaw",
+        "npm_attestations_sha256": "sha256:90ffdc4bc4daec5fa3ea4027d6500573cca7233cb3463beaefb23d39e69edeb3",
+        "npm_package_sha256": "sha256:67ad539d9915efb63d5f294beeb9290b7172d23c92d8052110a9c8355f783458",
+        "npm_package_sha512": "sha512:81efd7b2cf7d0870233cbfe29261ff505a223ab8dcc43078b16df2f66872083f9d616df0cd5ed329b015764ad7160006d9dd818e92687cff7bcd467eba6c68f2",
+        "npm_provenance_bundle_sha256": "sha256:9e49894726e821ab5c03a66b96eb84460436edf0a5bf894f64423dfa6b90a728",
+        "package_runtime_match": {
+            "checked_files": 8550,
+            "status": "MATCH"
+        },
+        "runtime_tree": {
+            "algorithm": "aragorn/runtime-tree/v1",
+            "entry_count": 45856,
+            "file_count": 45837,
+            "symlink_count": 19,
+            "total_bytes": 369317461,
+            "tree_digest": "sha256:475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c"
+        },
+        "source_tree": {
+            "file_count": 8550,
+            "total_bytes": 87679175,
+            "tree_digest": "sha256:f70f3b603e6ddb616e2d986a73d658b7b8b01795fa98db89355d06ba6776cea3"
+        },
+        "version": "2026.7.1",
+        "version_command": {
+            "argv": [
+                "/usr/local/bin/node",
+                "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+                "--version"
+            ],
+            "error": null,
+            "exit_code": 0,
+            "signal": null,
+            "stderr": "",
+            "stdout": "OpenClaw 2026.7.1 (2d2ddc4)\n"
+        }
+    },
+    "scenarios": [
+        {
+            "command": {
+                "argv": [
+                    "/usr/local/bin/node",
+                    "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+                    "skills",
+                    "install",
+                    "/tmp/aragorn-openclaw-probe/source",
+                    "--as",
+                    "probe"
+                ],
+                "error": null,
+                "exit_code": 1,
+                "signal": null,
+                "stderr": "blocked by install policy: Aragorn conformance probe block\n",
+                "stdout": "Install policy target=skill:probe request=skill-install/install origin=path pathKind=directory source=local-path/user: blocked by install policy: Aragorn conformance probe block\n"
+            },
+            "evidence": {
+                "policy_request": {
+                    "openclawVersion": "2026.7.1",
+                    "origin": {
+                        "spec": "/tmp/aragorn-openclaw-probe/source",
+                        "type": "path"
+                    },
+                    "protocolVersion": 1,
+                    "request": {
+                        "kind": "skill-install",
+                        "mode": "install",
+                        "requestedSpecifier": "/tmp/aragorn-openclaw-probe/source"
+                    },
+                    "skill": {
+                        "installId": "path"
+                    },
+                    "source": {
+                        "authority": "user",
+                        "kind": "local-path",
+                        "mutable": true,
+                        "network": false
+                    },
+                    "sourcePath": "/tmp/aragorn-openclaw-probe/source",
+                    "sourcePathKind": "directory",
+                    "targetName": "probe",
+                    "targetType": "skill"
+                },
+                "target_exists_after": false
+            },
+            "id": "ADM-02/install",
+            "status": "PASS"
+        },
+        {
+            "command": {
+                "argv": [
+                    "/usr/local/bin/node",
+                    "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+                    "skills",
+                    "info",
+                    "direct-write",
+                    "--json"
+                ],
+                "error": null,
+                "exit_code": 0,
+                "signal": null,
+                "stderr": "",
+                "stdout": "{\n  \"name\": \"direct-write\",\n  \"description\": \"Inert admission-conformance fixture.\",\n  \"source\": \"openclaw-workspace\",\n  \"bundled\": false,\n  \"filePath\": \"/tmp/aragorn-openclaw-probe/workspace/skills/direct-write/SKILL.md\",\n  \"baseDir\": \"/tmp/aragorn-openclaw-probe/workspace/skills/direct-write\",\n  \"skillKey\": \"direct-write\",\n  \"always\": false,\n  \"disabled\": false,\n  \"blockedByAllowlist\": false,\n  \"blockedByAgentFilter\": false,\n  \"eligible\": true,\n  \"platformIncompatible\": false,\n  \"modelVisible\": true,\n  \"userInvocable\": true,\n  \"commandVisible\": true,\n  \"requirements\": {\n    \"bins\": [],\n    \"anyBins\": [],\n    \"env\": [],\n    \"config\": [],\n    \"os\": []\n  },\n  \"missing\": {\n    \"bins\": [],\n    \"anyBins\": [],\n    \"env\": [],\n    \"config\": [],\n    \"os\": []\n  },\n  \"configChecks\": [],\n  \"install\": []\n}\n"
+            },
+            "evidence": {
+                "discovered_skill": {
+                    "always": false,
+                    "baseDir": "/tmp/aragorn-openclaw-probe/workspace/skills/direct-write",
+                    "blockedByAgentFilter": false,
+                    "blockedByAllowlist": false,
+                    "bundled": false,
+                    "commandVisible": true,
+                    "configChecks": [],
+                    "description": "Inert admission-conformance fixture.",
+                    "disabled": false,
+                    "eligible": true,
+                    "filePath": "/tmp/aragorn-openclaw-probe/workspace/skills/direct-write/SKILL.md",
+                    "install": [],
+                    "missing": {
+                        "anyBins": [],
+                        "bins": [],
+                        "config": [],
+                        "env": [],
+                        "os": []
+                    },
+                    "modelVisible": true,
+                    "name": "direct-write",
+                    "platformIncompatible": false,
+                    "requirements": {
+                        "anyBins": [],
+                        "bins": [],
+                        "config": [],
+                        "env": [],
+                        "os": []
+                    },
+                    "skillKey": "direct-write",
+                    "source": "openclaw-workspace",
+                    "userInvocable": true
+                },
+                "policy_request": null,
+                "target_exists_after": true
+            },
+            "id": "ADM-02/direct-write",
+            "status": "FAIL"
+        }
+    ],
+    "schema": "aragorn/openclaw-admission-probe-evidence/v1"
+}

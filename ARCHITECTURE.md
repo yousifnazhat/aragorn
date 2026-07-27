@@ -299,6 +299,12 @@ OpenClaw, Hermes, Pi, or another runtime earns a role only by passing the applic
 
 Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never satisfies a profile. No runtime currently has a passing conformance result. The retained OpenClaw `2026.7.1` probe passed explicit install blocking but failed `ADM-02/direct-write`: OpenClaw discovered a directly written, model-visible skill without invoking `security.installPolicy`. That mandatory failure eliminates this version as a standalone admission reference monitor; its hook remains usable only as defense in depth. A fake runtime validates only Aragorn's harness, not mediation, privilege separation, hook timing, tamper resistance, or attribution in a real runtime.
 
+The retention pre-gate re-verifies every referenced conformance-evidence blob
+from the protected CAS. This proves blob identity and availability, not the
+truth of individual scenario claims. Positive `PASS` remains
+installer-ineligible until a semantic evidence verifier binds every scenario
+claim to the runtime and environment bindings.
+
 The first private bake-off target is OpenClaw because it exposes the clearest operator-owned pre-install policy boundary; Pi is the comparison target because its tool-call hook documents blocking on hook errors; Hermes remains a useful contained workload/detonation candidate but its hook failure behavior is not suitable for fail-closed authority. This ordering is not a runtime selection. A candidate is eliminated as soon as one mandatory scenario fails; a candidate can be chosen only after `DET-01`, `ADM-01`, `ADM-02`, and `ADM-03` all pass against an immutable runtime version. Runtime prevention additionally requires `RUN-01` and `RUN-02` with an external OS-level broker/sensor.
 
 The source-screen-only Git identities and commit-pinned evidence anchors are
@@ -523,7 +529,8 @@ aragorn/
 ├── aragorn                       # Local executable
 ├── src/aragorn/
 │   ├── acquire.py                # Bounded local inventory and CAS ingestion
-│   ├── admission_conformance.py  # Phase 1 runtime conformance evidence gate
+│   ├── admission_conformance.py  # Phase 1 scenario aggregation
+│   ├── admission_gate.py         # Retained-evidence pre-gate
 │   ├── artifact_closure.py       # Evaluation-only literal source-reference graph
 │   ├── materialization.py        # Descriptor-bound staged-tree snapshot check
 │   ├── github_acquire.py         # Evaluation-only immutable public GitHub source

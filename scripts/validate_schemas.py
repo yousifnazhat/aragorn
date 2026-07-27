@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -38,8 +39,8 @@ from prepare_hidden_suite import (
 from aragorn.acquire import ingest_local
 from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
-    validate_admission_conformance,
 )
+from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.artifact_closure import resolve_source_graph
 from aragorn.benchmark import evaluate_files
 from aragorn.benchmark_handoff_v2 import build_handoff_manifest
@@ -836,7 +837,10 @@ def main() -> int:
     validators["admission-conformance-result-v1.schema.json"].validate(
         admission_conformance
     )
-    if validate_admission_conformance(admission_conformance) != "NOT_TESTED":
+    if (
+        validate_retained_admission_conformance(admission_conformance)
+        != "NOT_TESTED"
+    ):
         raise AssertionError("admission conformance example transferred authority")
 
     runtime_candidates = load(
@@ -869,6 +873,12 @@ def main() -> int:
         if dynamic_reasons != sorted(set(dynamic_reasons)):
             raise AssertionError("dynamic-conformance reasons are not canonical")
 
+    openclaw_evidence_raw = (
+        ROOT
+        / "benchmark"
+        / "evidence"
+        / "openclaw-v2026.7.1-admission-probe-2026-07-27.json"
+    ).read_bytes()
     openclaw_result = load(
         ROOT
         / "benchmark"
@@ -878,8 +888,20 @@ def main() -> int:
     validators["admission-conformance-result-v1.schema.json"].validate(
         openclaw_result
     )
-    if validate_admission_conformance(openclaw_result) != "FAIL":
-        raise AssertionError("OpenClaw elimination result did not fail closed")
+    with TemporaryDirectory(prefix="aragorn-admission-evidence-") as temporary:
+        evidence_cas = CAS(temporary)
+        evidence_cas.put(
+            BytesIO(openclaw_evidence_raw),
+            max_bytes=len(openclaw_evidence_raw),
+        )
+        if (
+            validate_retained_admission_conformance(
+                openclaw_result,
+                evidence_cas=evidence_cas,
+            )
+            != "FAIL"
+        ):
+            raise AssertionError("OpenClaw elimination result did not fail closed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

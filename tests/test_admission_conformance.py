@@ -4,15 +4,19 @@ import hashlib
 import json
 import unittest
 from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
     AdmissionConformanceError,
-    validate_admission_conformance,
 )
+from aragorn.admission_gate import validate_retained_admission_conformance
+from aragorn.cas import CAS
 
-_DIGEST = "sha256:" + "1" * 64
+_EVIDENCE_RAW = b'{"schema":"aragorn/test-admission-evidence/v1"}'
+_DIGEST = f"sha256:{hashlib.sha256(_EVIDENCE_RAW).hexdigest()}"
 _ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -84,8 +88,24 @@ def _result(status: str = "PASS") -> dict[str, object]:
 
 
 class AdmissionConformanceTests(unittest.TestCase):
-    def test_all_mandatory_scenarios_pass(self) -> None:
-        self.assertEqual(validate_admission_conformance(_result()), "PASS")
+    def setUp(self) -> None:
+        self.temporary = TemporaryDirectory(prefix="aragorn-admission-gate-test-")
+        self.addCleanup(self.temporary.cleanup)
+        self.cas = CAS(self.temporary.name)
+        self.assertEqual(
+            self.cas.put(BytesIO(_EVIDENCE_RAW), max_bytes=len(_EVIDENCE_RAW)),
+            _DIGEST,
+        )
+
+    def test_all_mandatory_scenarios_cannot_grant_authority_yet(self) -> None:
+        with self.assertRaisesRegex(
+            AdmissionConformanceError,
+            "installer authority remains disabled",
+        ):
+            validate_retained_admission_conformance(
+                _result(),
+                evidence_cas=self.cas,
+            )
 
     def test_not_tested_cannot_authorize_installer_work(self) -> None:
         document = _result("NOT_TESTED")
@@ -94,7 +114,7 @@ class AdmissionConformanceTests(unittest.TestCase):
             AdmissionConformanceError,
             "installer eligibility",
         ):
-            validate_admission_conformance(document)
+            validate_retained_admission_conformance(document)
 
     def test_one_failed_scenario_fails_property_and_profile(self) -> None:
         document = _result()
@@ -110,7 +130,47 @@ class AdmissionConformanceTests(unittest.TestCase):
             "status": "FAIL",
             "installer_work_eligible": False,
         }
-        self.assertEqual(validate_admission_conformance(document), "FAIL")
+        self.assertEqual(
+            validate_retained_admission_conformance(
+                document,
+                evidence_cas=self.cas,
+            ),
+            "FAIL",
+        )
+
+    def test_evidence_bearing_result_requires_retained_cas(self) -> None:
+        with self.assertRaisesRegex(
+            AdmissionConformanceError,
+            "retained evidence CAS",
+        ):
+            validate_retained_admission_conformance(_result("FAIL"))
+
+    def test_missing_retained_evidence_is_rejected(self) -> None:
+        document = _result("FAIL")
+        missing = "sha256:" + "2" * 64
+        for item in document["properties"]:
+            for scenario in item["scenarios"]:
+                scenario["evidence_digests"] = [missing]
+        with self.assertRaisesRegex(
+            AdmissionConformanceError,
+            "cannot verify retained evidence",
+        ):
+            validate_retained_admission_conformance(
+                document,
+                evidence_cas=self.cas,
+            )
+
+    def test_evidence_digest_must_be_canonical(self) -> None:
+        document = _result("FAIL")
+        document["properties"][0]["scenarios"][0]["evidence_digests"] = ["not-a-digest"]
+        with self.assertRaisesRegex(
+            AdmissionConformanceError,
+            "canonical SHA-256",
+        ):
+            validate_retained_admission_conformance(
+                document,
+                evidence_cas=self.cas,
+            )
 
     def test_missing_activation_path_is_rejected(self) -> None:
         document = _result()
@@ -119,7 +179,10 @@ class AdmissionConformanceTests(unittest.TestCase):
             AdmissionConformanceError,
             "every mandatory path",
         ):
-            validate_admission_conformance(document)
+            validate_retained_admission_conformance(
+                document,
+                evidence_cas=self.cas,
+            )
 
     def test_forged_aggregate_pass_is_rejected(self) -> None:
         document = _result("NOT_TESTED")
@@ -131,20 +194,23 @@ class AdmissionConformanceTests(unittest.TestCase):
             AdmissionConformanceError,
             "profile status",
         ):
-            validate_admission_conformance(document)
+            validate_retained_admission_conformance(document)
 
     def test_evidence_and_reasons_must_be_canonical(self) -> None:
         document = deepcopy(_result())
         scenario = document["properties"][0]["scenarios"][0]
         scenario["evidence_digests"] = [
-            "sha256:" + "2" * 64,
             _DIGEST,
+            "sha256:" + "2" * 64,
         ]
         with self.assertRaisesRegex(
             AdmissionConformanceError,
             "sorted and unique",
         ):
-            validate_admission_conformance(document)
+            validate_retained_admission_conformance(
+                document,
+                evidence_cas=self.cas,
+            )
 
     def test_retained_openclaw_elimination_result_is_bound(self) -> None:
         evidence_path = (
@@ -163,8 +229,18 @@ class AdmissionConformanceTests(unittest.TestCase):
         evidence = json.loads(evidence_raw)
         receipt = json.loads(receipt_path.read_bytes())
         evidence_digest = _sha256(evidence_raw)
+        self.assertEqual(
+            self.cas.put(BytesIO(evidence_raw), max_bytes=len(evidence_raw)),
+            evidence_digest,
+        )
 
-        self.assertEqual(validate_admission_conformance(receipt), "FAIL")
+        self.assertEqual(
+            validate_retained_admission_conformance(
+                receipt,
+                evidence_cas=self.cas,
+            ),
+            "FAIL",
+        )
         self.assertEqual(receipt["recorded_at"], evidence["recorded_at"])
         self.assertEqual(evidence["decision"]["status"], "FAIL")
         self.assertTrue(evidence["decision"]["candidate_eliminated"])

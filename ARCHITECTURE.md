@@ -1,8 +1,8 @@
 # Aragorn: architecture and roadmap
 
-Date: 2026-07-24
+Date: 2026-07-27
 
-Status: private implementation in progress; Phase 0 evaluation infrastructure
+Status: private implementation; Phase 0 validation complete; Phase 1 not started
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -635,17 +635,28 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 | 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× the frozen reference workload without dropped evidence |
 | 5. OSS 1.0 | Ongoing | Signed releases, SBOM, reproducible builds, parser fuzzing, disclosure process, compatibility policy | The security tool's own supply chain is defensible | Independent review; no unresolved critical/high findings; 72-hour parser fuzz run; clean supported install and upgrade tests |
 
-Phase 0 remains in progress until all of the following evidence exists:
-protocol-v2 portable policy and cross-owner-capable snapshot handoff; an isolated,
-label-blind worker with protected labels and nonce state, a verifier challenge,
-and an explicitly scoped signed measurement; a frozen hidden corpus at the
-declared minimum size with its exact authorship assurance and label custody
-recorded; a separately frozen acquisition/reference oracle and measured
-differentiation result; the burden-constrained held-out comparison meeting the
-stated thresholds; and the three-pack standards gate passing with zero
-unresolved selected items. The checked-in 18-case pilot, local worker smoke, and
-evaluation-only `source_reference_graph` are infrastructure validation only and
-cannot satisfy the comparative exit gate.
+Phase 0 validation is complete at the phase-evidence level:
+
+- V6 is the sole fresh hidden efficacy pass. It exceeded the best
+  burden-compliant comparator by 29.4643 percentage points with 4.1667% benign
+  intervention and is bound to implementation digest
+  `sha256:480a2361e54c9003723b16fac5fcceb94deea87257052ed9486b652e6ceadc7d`.
+- The final V7 implementation digest
+  `sha256:f42095ad5f4f66e372aceff560bd80b3abdf5e6998f8853014a45e77ebed1895`
+  reproduced that result across 896 authenticated worker results and 1,344
+  outcomes. Because it reused the evaluated V6 corpus, it remains calibration
+  evidence with `phase0_exit_eligible: false`.
+- The separately frozen V7 acquisition/reference regression passed with 12.5
+  percentage points of attack-flag lift, 0% benign intervention, 448/448
+  complete expansions, and zero unresolved, missed, or wrong-target expected
+  references.
+- The standards gate remains passing: 22 evidence-mapped items, four
+  roadmap-mapped items, and zero unresolved items across 26 selected OWASP,
+  MITRE, and NIST items.
+
+Together these records close the Phase 0 decision gate. They do not establish
+Phase 1 supported acquisition, recursive `artifact_graph` closure,
+installation binding, or a credential-free fetch boundary.
 
 The paired acquisition/reference contract is now implemented separately from
 the hidden instruction-risk gate. It freezes digest-bound root and expanded
@@ -657,9 +668,11 @@ ledgers for both arms, independently re-hashes every declared literal
 occurrence from retained source bytes, and compares expanded-arm Aragorn
 against root-arm comparators. The lock records only
 operator-asserted pre-outcome binding, not independent authorship, trusted
-timestamping, or wall-clock ordering. No private oracle, signed lock, paired
-outcomes, or passing result is checked in, so this implementation does not
-close the acquisition/reference exit criterion.
+timestamping, or wall-clock ordering. The repository retains the signed
+digest-only V7 oracle lock and aggregate measured result. The private oracle,
+raw paired outcomes, acceptance ledgers, and evidence CAS remain outside the
+repository. The passing regression closes the Phase 0 acquisition/reference
+decision criterion without establishing Phase 1 acquisition guarantees.
 
 `benchmark/phase0-standards-gate.json` replaces the unavailable three-design-
 partner Phase 0 discovery gate. It freezes OWASP Agentic Skills plus the stable
@@ -820,7 +833,9 @@ hardware-backed resistance. The GitHub acquisition/reference oracle remains a
 separate Phase 0 stratum. Its paired contract binds an original-root comparator
 arm to a matched expanded-subject arm and rejects arm, oracle, reference,
 source, literal-span, budget, suite, authentication, and retained-evidence
-drift. This repository does not retain the private oracle or a measured result.
+drift. The repository retains the signed digest-only V7 oracle lock and
+aggregate measured result. The private oracle, raw outcomes, acceptance
+ledgers, and evidence CAS remain outside the repository.
 
 The opt-in Phase 0 gate report v2 scores only the `hidden` split and accepts
 only a complete authenticated candidate-composition `evidence_smoke` matrix;
@@ -837,12 +852,14 @@ corpus-author approval, or timestamped custody.
   held-out split is provisional and must never be treated as the hidden release
   set.
 
-- The private `independent-v1.0.0` corpus supplies 448 unique single-file inert
+- The private `local-v6.0.0` corpus supplies 448 unique single-file inert
   fixtures: 336 benign and 112 adversarial. Its exact worker archive, signed Git
-  freeze, and signer are pinned by `benchmark/phase0-corpus.lock.json`; labels
-  remain separately encrypted. The recorded assurance is technical Codex
-  authorship, not independent-human identity, external custody, or a public
-  redistribution license.
+  freeze, and signer are pinned by `benchmark/phase0-corpus-v6.lock.json`;
+  labels remain separately encrypted. The recorded assurance is technical
+  Codex authorship, not independent-human identity, external custody, or a
+  public redistribution license. V6 is the sole fresh hidden evaluation; V7
+  reuse remains maintenance calibration and cannot create fresh-holdout
+  eligibility.
 - The accepted corpus covers natural-language skill and adversarial
   instruction risk. Keep a distinct acquisition/reference stratum for the
   artifact-closure differentiation claim; one stratum must not be presented as

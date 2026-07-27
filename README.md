@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private Phase 0 implementation with bounded exact-commit GitHub expansion, process and OCI evidence-smoke runners, a one-shot protocol-v2 executor/signing supervisor, authenticated output acceptance, and a retained mount-free two-case candidate-composition smoke**. This is not yet an EDR, a supported release, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private Phase 0 validation complete; Phase 1 acquisition-lock engineering has not started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. This is not yet an EDR, a supported release, an installation boundary, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 ## What works now
 
@@ -109,13 +109,15 @@ Current status: **private Phase 0 implementation with bounded exact-commit GitHu
   path and control-plane acceptance. This remains infrastructure evidence for
   one public benign fixture; Docker self-reports and a software signing key
   are not hardware attestation or efficacy evidence.
-- An accepted private 448-case corpus (336 benign and 112 adversarial) passed
-  internal integrity, archive-safety, signature, and hidden-label binding
-  checks. [`benchmark/phase0-corpus.lock.json`](./benchmark/phase0-corpus.lock.json)
+- The accepted private `local-v6.0.0` corpus contains 448 inert cases: 336
+  benign and 112 adversarial. It passed internal integrity, archive-safety,
+  signature, and hidden-label binding checks.
+  [`benchmark/phase0-corpus-v6.lock.json`](./benchmark/phase0-corpus-v6.lock.json)
   pins its exact worker archive, signed Git freeze, and signing identity without
-  checking labels into this repository. Its assurance is technical Codex
-  authorship, not proof of an independent human identity, external custody, or
-  redistribution permission.
+  checking labels into this repository. V6 is the sole fresh hidden corpus;
+  the V7 final-candidate run reused it only for calibration. Its assurance is
+  technical Codex authorship, not proof of an independent human identity,
+  external custody, or redistribution permission.
 - A machine-validated Phase 0 standards gate freezes three scoped evidence
   packs: OWASP Agentic Skills with the stable related Agentic Applications
   taxonomy, MITRE ATLAS, and NIST AI RMF/GenAI Profile. The checked-in
@@ -345,11 +347,15 @@ pairs or expected references, changed source/budget bindings, missing CAS
 records, unauthenticated evidence, and corrupt or incomplete closure fail
 closed. Every case must produce a different expanded tree and retain at least
 one oracle-expected expanded object; incomplete or no-delta expansion is an
-evaluation error, not a scoreable result. The repository supplies this contract
-but no private oracle, lock, paired outcomes,
-or differentiation result, so it does not yet satisfy the Phase 0 exit gate.
+evaluation error, not a scoreable result. The repository retains the signed
+digest-only
+[`benchmark/phase0-acquisition-oracle-v7.lock.json`](./benchmark/phase0-acquisition-oracle-v7.lock.json)
+and
+[`aggregate V7 result`](./benchmark/receipts/phase0-acquisition-v7-regression-result-2026-07-27.json).
+The private oracle, paired outcomes, acceptance ledgers, and evidence CAS
+remain outside the repository.
 
-For the next fresh candidate-v3 matrix, score only its newly frozen hidden split
+For a future fresh hidden matrix, score only its newly frozen hidden split
 without mixing in GitHub acquisition accounting:
 
 ```console
@@ -357,7 +363,7 @@ PYTHONPATH=src python3.12 -m aragorn.benchmark \
   ./private-suite.json ./private-outcomes.jsonl \
   --phase0-hidden-gate --state ./private-evidence-state \
   --acceptance-ledger ./private-acceptance-ledger \
-  --phase0-corpus-lock benchmark/phase0-corpus.lock.json \
+  --phase0-corpus-lock ./signed-corpus-lock.json \
   --phase0-public-manifest ./private-worker/manifest.json \
   --phase0-hidden-suite-lock ./private-hidden-suite-lock.json \
   --phase0-candidate-policy ./signed-candidate-policy-v3.json \
@@ -370,8 +376,8 @@ operator-asserted hidden-suite lock must be canonical JSON and signed-committed
 before dispatch or results. The gate checks its byte, corpus, policy, label
 ledger, exact 448-case public-manifest projection, suite, and three system
 bindings, but cannot prove wall-clock ordering, independent authorship, or
-timestamping. Do not reuse the previously evaluated calibration-v2 corpus for
-this v3 measurement.
+timestamping. Any reuse of an evaluated corpus must remain explicitly
+calibration-only and cannot create fresh-holdout eligibility.
 
 Benchmark v1 accepts only synthetic UTF-8 text fixtures explicitly declared inert. It rejects changed digests, executable files, links, special files, non-UTF-8 or NUL-bearing content, duplicate or overlapping cases, lineage changes in split, class, family, or provenance, undeclared systems, and incomplete system-by-case-by-run matrices. Evaluator-only `contract_smoke` validation uses a bounded temporary CAS. The `evidence_smoke` runner instead retains exact fixture bytes in its protected evidence CAS so later evaluation can reconstruct the workspace; neither path imports or executes fixture code.
 
@@ -565,83 +571,38 @@ PYTHONPATH=src uv run --python 3.12 \
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete roadmap and [SECURITY.md](./SECURITY.md) for the trusted boundary and vulnerability policy.
 
-## Next production gate
+## Phase 0 result and next production gate
 
-The public, unmocked two-comparator composition smoke is complete and retained.
-The authenticated calibration-v2 run also completed: 896 worker results were
-accepted and 1,344 comparator-plus-candidate outcomes were composed. Its
-[retained aggregate result](./benchmark/receipts/phase0-hidden-calibration-v2-result-2026-07-25.json)
-is explicitly calibration-only and not fresh holdout evidence. It failed both
-Phase 0 thresholds: attack-flag lift was 6.25 percentage points against the
-best burden-compliant comparator, below the required 10 points, and candidate
-benign intervention was 6.25%, above the 5% ceiling. The receipt therefore sets
-`phase0_exit_eligible` to `false`.
+Phase 0 validation is complete at the phase-evidence level. The fresh
+[V6 hidden result](./benchmark/receipts/phase0-hidden-v6-result-2026-07-26.json)
+exceeded the best burden-compliant comparator by 29.4643 percentage points
+while candidate benign intervention was 4.1667%, below the 5% ceiling.
 
-The current production gate is to freeze the signed candidate-v3 implementation,
-author and freeze a new technically separated 448-case holdout that has never
-been evaluated by any Aragorn policy, run its authenticated protocol-v2 matrix,
-and independently complete the paired 448-case acquisition/reference oracle and
-arms. The calibration-v2 corpus must not be reused for that claim. Human
-independent review remains a Phase 5 release requirement; until then, record
-Codex-authored material as technical authorship rather than independent human
-identity.
+The final V7 candidate reproduced those measurements across 896 authenticated
+worker results and 1,344 composed outcomes. Its
+[V7 maintenance receipt](./benchmark/receipts/phase0-hidden-v7-calibration-result-2026-07-27.json)
+remains explicitly calibration-only, `phase0_exit_eligible: false`, and is not
+additional fresh-holdout evidence.
 
-For retained provenance, the encrypted calibration evaluator package was
-decrypted from its pinned ciphertext inside a private temporary boundary, its
-inner signatures and exact
-448-case join were verified, and the canonical
-[hidden-suite lock](./benchmark/phase0-hidden-suite.lock.json) and
-[digest-only freeze receipt](./benchmark/receipts/phase0-hidden-suite-freeze-2026-07-24.json)
-were generated while all declared dispatch and outcome paths were absent.
-`scripts/freeze_hidden_suite.py` is a one-time evaluator command per corpus
-freeze; it reads the passphrase only from stdin, retains the label-bearing suite
-outside the repository, pins the local GPG software closure, disables symmetric
-passphrase caching in a private temporary home, derives the four pre-outcome
-paths from one protected run-state root, retains their binding digest, and emits
-no per-case labels to stdout or the repository. The operator UID remains
-trusted; this is not same-UID or hardware-backed attestation. Verify the signed
-commit containing the lock before dispatch.
-`scripts/prepare_hidden_suite.py` is the one-shot production preparation gate.
-It must itself be present in a clean, signed descendant of the freeze commit;
-it accepts an operator-designated public worker trust record, publishes the
-verifier-owned trust store outside the repository, re-verifies the frozen suite,
-creates the exact 896-job comparator matrix, and semantically imports every
-label-free worker handoff before retaining a digest-only receipt. Guest key
-generation is an operator assertion until worker measurements prove software
-key possession; it is not VM or hardware attestation. A failed preparation is
-never retried in place because the control CAS may contain partial state. New
-v3 evidence must use a new protected run-state root and a fresh mount-free
-worker for all 448 cases.
-Protect labels, dispatch, challenges, expectations, trust store, and
-consumption ledger; keep declared-byte test transport outside every acceptance
-path. The candidate `implementation_digest` binds all `src/aragorn` Python
-sources plus `requirements-worker.lock`; it is not runtime or hardware
-attestation, and the policy remains comparative-only.
+The separately frozen
+[V7 acquisition/reference evaluation](./benchmark/receipts/phase0-acquisition-v7-regression-result-2026-07-27.json)
+passed with 12.5 percentage points of attack-flag lift, 0% benign intervention,
+448/448 complete expansions, and zero unresolved expected references. Because
+this corpus was previously attempted under V6, the V7 run is regression
+evidence rather than a new fresh holdout.
 
-The accepted corpus measures inert natural-language skill and adversarial
-instruction risk. It does not by itself demonstrate recursive artifact
-acquisition or install binding, so the bounded GitHub expansion/reference
-stratum remains a separate required Phase 0 differentiation test. After both
-results are frozen, run the burden-constrained comparison. The former
-three-design-partner discovery requirement is replaced in Phase 0 by the
-checked-in OWASP, MITRE, and NIST standards coverage gate. This removes an
-unavailable external dependency from early technical validation without
-claiming product adoption.
+The OWASP, MITRE, and NIST standards gate remains passing with 26 selected
+items, 22 evidence-mapped items, four roadmap-mapped items, and zero unresolved
+dispositions. Together these records satisfy the Phase 0 decision gate; they do
+not establish supported acquisition, complete artifact closure, installation
+binding, runtime containment, or EDR status.
 
-Phase 0 remains in progress until the full hidden matrix has crossed the
-isolated evaluation boundary, the separate acquisition/reference stratum has a
-frozen oracle and measured result, Aragorn exceeds the best burden-compliant
-comparator by at least 10 percentage points of hidden attack flag rate while
-keeping combined benign intervention at or below 5%, and the three-pack
-standards gate continues to validate with zero unresolved selected items. The
-18-case pilot, local and isolated worker receipts, public candidate-composition
-receipt, and source-reference graph validate infrastructure only. Hardware- or
-platform-backed attestation and a dedicated credential-free fetch gateway
-remain open. Independent human security review remains mandatory at the Phase 5
-release gate, but is not represented by the Phase 0 standards crosswalk.
+Authorship remains technical Codex authorship rather than independent human
+identity. Software signatures trust the operator UID and prove neither
+same-UID, VM, hardware, nor platform attestation. The acquisition lock's
+pre-outcome ordering remains operator-asserted without trusted timestamping.
+Independent review remains a Phase 5 release requirement.
 
-After the Phase 0 exit gate passes, Phase 1 turns acquisition into a supported
-quarantine, recursive artifact-closure, and exact-digest installation boundary.
-Only an `artifact_graph` manifest with complete closure can reach `ALLOW`; no
-prompt, scanner score, or command-line override may substitute for that
-evidence.
+The next production gate is Phase 1: supported quarantine, recursive artifact
+closure, a dedicated credential-free fetch gateway, decision receipts, and
+exact-digest installation.

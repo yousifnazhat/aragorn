@@ -839,6 +839,36 @@ def main() -> int:
     if validate_admission_conformance(admission_conformance) != "NOT_TESTED":
         raise AssertionError("admission conformance example transferred authority")
 
+    runtime_candidates = load(
+        ROOT / "benchmark" / "admission-runtime-candidates-v1.lock.json"
+    )
+    validators["admission-runtime-candidate-lock-v1.schema.json"].validate(
+        runtime_candidates
+    )
+    if [item["name"] for item in runtime_candidates["candidates"]] != [
+        "openclaw",
+        "pi",
+    ]:
+        raise AssertionError("runtime candidate lock is not canonically ordered")
+    for candidate in runtime_candidates["candidates"]:
+        if (
+            candidate["dynamic_conformance"]["status"] != "NOT_TESTED"
+            or candidate["dynamic_conformance"]["installer_work_eligible"]
+        ):
+            raise AssertionError("source screen transferred installer authority")
+        if any(
+            candidate["commit_sha1"] not in url
+            for url in candidate["source_screen"]["evidence_urls"]
+        ):
+            raise AssertionError("source-screen evidence is not commit-pinned")
+        for field in ("evidence_urls", "reason_codes"):
+            values = candidate["source_screen"][field]
+            if values != sorted(set(values)):
+                raise AssertionError(f"source-screen {field} is not canonical")
+        dynamic_reasons = candidate["dynamic_conformance"]["reason_codes"]
+        if dynamic_reasons != sorted(set(dynamic_reasons)):
+            raise AssertionError("dynamic-conformance reasons are not canonical")
+
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)
     phase0_corpus_lock_path = ROOT / "benchmark" / "phase0-corpus.lock.json"

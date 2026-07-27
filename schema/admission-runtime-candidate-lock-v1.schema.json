@@ -1,0 +1,231 @@
+{
+  "$id": "https://aragorn.dev/schema/admission-runtime-candidate-lock-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn admission-runtime source-screen candidate lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "observed_at",
+    "assurance",
+    "profile",
+    "selection_status",
+    "candidates"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/admission-runtime-candidate-lock/v1"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "assurance": {
+      "const": "static_source_screen_only_not_dynamic_conformance"
+    },
+    "profile": {
+      "const": "admission-conformant/v1"
+    },
+    "selection_status": {
+      "const": "SOURCE_SCREEN_ONLY"
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    }
+  },
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "reason_code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "role",
+        "repository_url",
+        "release_url",
+        "version",
+        "tag",
+        "tag_kind",
+        "tag_object_sha1",
+        "commit_sha1",
+        "tree_sha1",
+        "commit_signature_status",
+        "tag_signature_status",
+        "source_screen",
+        "dynamic_conformance"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "comparator"
+          ]
+        },
+        "repository_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/"
+        },
+        "release_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "tag_kind": {
+          "enum": [
+            "annotated",
+            "lightweight"
+          ]
+        },
+        "tag_object_sha1": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "commit_sha1": {
+          "$ref": "#/$defs/sha1"
+        },
+        "tree_sha1": {
+          "$ref": "#/$defs/sha1"
+        },
+        "commit_signature_status": {
+          "enum": [
+            "github_displayed_verified_not_aragorn_trust_verified",
+            "absent_from_git_object"
+          ]
+        },
+        "tag_signature_status": {
+          "enum": [
+            "github_displayed_verified_not_aragorn_trust_verified",
+            "not_applicable_lightweight"
+          ]
+        },
+        "source_screen": {
+          "$ref": "#/$defs/source_screen"
+        },
+        "dynamic_conformance": {
+          "$ref": "#/$defs/dynamic_conformance"
+        }
+      }
+    },
+    "source_screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_executed",
+        "managed_admission_hook",
+        "hook_default",
+        "known_unmanaged_activation_paths",
+        "evidence_urls",
+        "reason_codes"
+      ],
+      "properties": {
+        "runtime_executed": {
+          "const": false
+        },
+        "managed_admission_hook": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hook_default": {
+          "enum": [
+            "disabled",
+            "not_applicable"
+          ]
+        },
+        "known_unmanaged_activation_paths": {
+          "const": true
+        },
+        "evidence_urls": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://github\\.com/.+/blob/[0-9a-f]{40}/"
+          }
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reason_code"
+          }
+        }
+      }
+    },
+    "dynamic_conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "installer_work_eligible",
+        "reason_codes"
+      ],
+      "properties": {
+        "status": {
+          "const": "NOT_TESTED"
+        },
+        "installer_work_eligible": {
+          "const": false
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reason_code"
+          }
+        }
+      }
+    }
+  }
+}

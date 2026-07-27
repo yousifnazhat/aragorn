@@ -27,6 +27,8 @@ Current status: **private qualified Phase 0 validation milestone complete; Phase
 - Descriptor-bound comparison of a staged source-tree snapshot against a fully
   re-verified retained manifest. This snapshot check neither authorizes nor
   activates the tree.
+- A source-screen-only lock for exact OpenClaw and Pi Git identities; both
+  remain dynamically `NOT_TESTED` and installer-ineligible.
 - Sanitized execution from an empty control directory, with bounded output, process-group wall-clock supervision, and executable-byte identity.
 - Open-once analyzer ingestion and launch from a private CAS materialization, so later replacement of the original configured file cannot change the staged entrypoint bytes.
 - Byte-exact retention of analyzer stdout and stderr.

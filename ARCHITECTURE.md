@@ -301,6 +301,10 @@ Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never sati
 
 The first private bake-off target is OpenClaw because it exposes the clearest operator-owned pre-install policy boundary; Pi is the comparison target because its tool-call hook documents blocking on hook errors; Hermes remains a useful contained workload/detonation candidate but its hook failure behavior is not suitable for fail-closed authority. This ordering is not a runtime selection. The bake-off must execute `DET-01`, `ADM-01`, `ADM-02`, and `ADM-03` against immutable runtime versions before one can be chosen, and runtime prevention additionally requires `RUN-01` and `RUN-02` with an external OS-level broker/sensor.
 
+The source-screen-only Git identities and commit-pinned evidence anchors are
+frozen in `benchmark/admission-runtime-candidates-v1.lock.json`. Both candidates
+remain dynamically `NOT_TESTED` and installer-ineligible.
+
 Harness selection is staged rather than skipped:
 
 | Gate | Timing | Selection earned |

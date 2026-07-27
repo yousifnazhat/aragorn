@@ -1,0 +1,89 @@
+{
+  "schema": "aragorn/admission-runtime-candidate-lock/v1",
+  "observed_at": "2026-07-27",
+  "assurance": "static_source_screen_only_not_dynamic_conformance",
+  "profile": "admission-conformant/v1",
+  "selection_status": "SOURCE_SCREEN_ONLY",
+  "candidates": [
+    {
+      "name": "openclaw",
+      "role": "primary",
+      "repository_url": "https://github.com/openclaw/openclaw",
+      "release_url": "https://github.com/openclaw/openclaw/releases/tag/v2026.7.1",
+      "version": "2026.7.1",
+      "tag": "v2026.7.1",
+      "tag_kind": "annotated",
+      "tag_object_sha1": "842a951d5d0843aa6eb77575dc9867bf0603835c",
+      "commit_sha1": "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4",
+      "tree_sha1": "5e9f2135f1b2c3c14910efdedb9e60b2593f8135",
+      "commit_signature_status": "github_displayed_verified_not_aragorn_trust_verified",
+      "tag_signature_status": "github_displayed_verified_not_aragorn_trust_verified",
+      "source_screen": {
+        "runtime_executed": false,
+        "managed_admission_hook": "security.installPolicy",
+        "hook_default": "disabled",
+        "known_unmanaged_activation_paths": true,
+        "evidence_urls": [
+          "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/discovery.ts#L1435-L1675",
+          "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/loader.ts#L2442-L2503",
+          "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/security/install-policy.ts#L43-L121",
+          "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/refresh.ts#L511-L589",
+          "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/workshop/service.ts#L538-L622"
+        ],
+        "reason_codes": [
+          "DURABLE_ADMISSION_RECEIPT_ABSENT",
+          "INSTALL_HOOK_PATH_BOUND_NOT_ARTIFACT_BOUND",
+          "INSTALL_POLICY_DISABLED_BY_DEFAULT",
+          "NON_INSTALL_ACTIVATION_PATHS_UNGATED"
+        ]
+      },
+      "dynamic_conformance": {
+        "status": "NOT_TESTED",
+        "installer_work_eligible": false,
+        "reason_codes": [
+          "ADAPTER_AND_ENVIRONMENT_UNBOUND",
+          "DYNAMIC_CONFORMANCE_NOT_RUN"
+        ]
+      }
+    },
+    {
+      "name": "pi",
+      "role": "comparator",
+      "repository_url": "https://github.com/earendil-works/pi",
+      "release_url": "https://github.com/earendil-works/pi/releases/tag/v0.82.1",
+      "version": "0.82.1",
+      "tag": "v0.82.1",
+      "tag_kind": "lightweight",
+      "tag_object_sha1": null,
+      "commit_sha1": "b4f293684bba718d59cc1157679bcf6157b3a7f5",
+      "tree_sha1": "33235f8a1b7a50de1dea72d39ee3f3a2adbd5806",
+      "commit_signature_status": "absent_from_git_object",
+      "tag_signature_status": "not_applicable_lightweight",
+      "source_screen": {
+        "runtime_executed": false,
+        "managed_admission_hook": null,
+        "hook_default": "not_applicable",
+        "known_unmanaged_activation_paths": true,
+        "evidence_urls": [
+          "https://github.com/earendil-works/pi/blob/b4f293684bba718d59cc1157679bcf6157b3a7f5/packages/coding-agent/src/cli/args.ts#L149-L164",
+          "https://github.com/earendil-works/pi/blob/b4f293684bba718d59cc1157679bcf6157b3a7f5/packages/coding-agent/src/core/extensions/loader.ts#L627-L667",
+          "https://github.com/earendil-works/pi/blob/b4f293684bba718d59cc1157679bcf6157b3a7f5/packages/coding-agent/src/core/extensions/runner.ts#L919-L939",
+          "https://github.com/earendil-works/pi/blob/b4f293684bba718d59cc1157679bcf6157b3a7f5/packages/coding-agent/src/core/package-manager.ts#L1797-L1888"
+        ],
+        "reason_codes": [
+          "MANDATORY_ADMISSION_HOOK_ABSENT",
+          "NON_INSTALL_ACTIVATION_PATHS_UNGATED",
+          "REMOVABLE_EXTENSION_HOOK"
+        ]
+      },
+      "dynamic_conformance": {
+        "status": "NOT_TESTED",
+        "installer_work_eligible": false,
+        "reason_codes": [
+          "ADAPTER_AND_ENVIRONMENT_UNBOUND",
+          "DYNAMIC_CONFORMANCE_NOT_RUN"
+        ]
+      }
+    }
+  ]
+}

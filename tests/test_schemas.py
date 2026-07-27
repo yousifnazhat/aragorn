@@ -8,6 +8,7 @@ from pathlib import Path
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
 EXPECTED_CONTRACTS = {
     "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
+    "admission-runtime-candidate-lock-v1.schema.json": "aragorn/admission-runtime-candidate-lock/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",
     "analyzers-v1.schema.json": "aragorn/analyzers/v1",
     "baseline-image-verification-v1.schema.json": "aragorn/baseline-image-verification/v1",
@@ -199,6 +200,83 @@ class SchemaTests(unittest.TestCase):
             {item["image"]["architecture"] for item in baselines.values()},
             {"arm64"},
         )
+
+    def test_runtime_candidate_lock_cannot_claim_dynamic_qualification(self) -> None:
+        lock = json.loads(
+            (
+                SCHEMA_DIRECTORY.parent
+                / "benchmark"
+                / "admission-runtime-candidates-v1.lock.json"
+            ).read_text()
+        )
+        self.assertEqual(lock["selection_status"], "SOURCE_SCREEN_ONLY")
+        self.assertEqual(
+            lock["assurance"],
+            "static_source_screen_only_not_dynamic_conformance",
+        )
+        candidates = {item["name"]: item for item in lock["candidates"]}
+        self.assertEqual(
+            {
+                name: (
+                    item["role"],
+                    item["tag_kind"],
+                    item["tag_object_sha1"],
+                    item["commit_sha1"],
+                    item["tree_sha1"],
+                )
+                for name, item in candidates.items()
+            },
+            {
+                "openclaw": (
+                    "primary",
+                    "annotated",
+                    "842a951d5d0843aa6eb77575dc9867bf0603835c",
+                    "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4",
+                    "5e9f2135f1b2c3c14910efdedb9e60b2593f8135",
+                ),
+                "pi": (
+                    "comparator",
+                    "lightweight",
+                    None,
+                    "b4f293684bba718d59cc1157679bcf6157b3a7f5",
+                    "33235f8a1b7a50de1dea72d39ee3f3a2adbd5806",
+                ),
+            },
+        )
+        self.assertEqual(
+            {
+                name: (
+                    item["commit_signature_status"],
+                    item["tag_signature_status"],
+                )
+                for name, item in candidates.items()
+            },
+            {
+                "openclaw": (
+                    "github_displayed_verified_not_aragorn_trust_verified",
+                    "github_displayed_verified_not_aragorn_trust_verified",
+                ),
+                "pi": (
+                    "absent_from_git_object",
+                    "not_applicable_lightweight",
+                ),
+            },
+        )
+        for candidate in candidates.values():
+            self.assertFalse(candidate["source_screen"]["runtime_executed"])
+            self.assertEqual(
+                candidate["dynamic_conformance"]["status"],
+                "NOT_TESTED",
+            )
+            self.assertFalse(
+                candidate["dynamic_conformance"]["installer_work_eligible"]
+            )
+            self.assertTrue(
+                all(
+                    candidate["commit_sha1"] in url
+                    for url in candidate["source_screen"]["evidence_urls"]
+                )
+            )
 
 
 if __name__ == "__main__":

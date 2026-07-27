@@ -903,6 +903,39 @@ def main() -> int:
         ):
             raise AssertionError("OpenClaw elimination result did not fail closed")
 
+    contained_evidence_paths = (
+        ROOT
+        / "benchmark"
+        / "evidence"
+        / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+        ROOT
+        / "benchmark"
+        / "evidence"
+        / "openclaw-v2026.7.1-contained-profile-environment-2026-07-27.json",
+    )
+    contained_result = load(
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase1-openclaw-contained-profile-probe-2026-07-27.json"
+    )
+    validators["admission-conformance-result-v1.schema.json"].validate(
+        contained_result
+    )
+    with TemporaryDirectory(prefix="aragorn-contained-evidence-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in contained_evidence_paths:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        if (
+            validate_retained_admission_conformance(
+                contained_result,
+                evidence_cas=evidence_cas,
+            )
+            != "NOT_TESTED"
+        ):
+            raise AssertionError("contained OpenClaw profile transferred authority")
+
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)
     phase0_corpus_lock_path = ROOT / "benchmark" / "phase0-corpus.lock.json"

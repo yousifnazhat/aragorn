@@ -1,0 +1,144 @@
+{
+  "schema": "aragorn/admission-conformance-result/v1",
+  "profile": "admission-conformant/v1",
+  "recorded_at": "2026-07-27T20:02:32.626Z",
+  "bindings": {
+    "runtime": {
+      "name": "openclaw-contained",
+      "version": "2026.7.1",
+      "repository_url": "https://github.com/openclaw/openclaw",
+      "commit": "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4",
+      "source_tree_digest": "sha256:475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c"
+    },
+    "adapter": {
+      "name": "openclaw-contained-profile",
+      "implementation_digest": "sha256:e193c71dc13978955652850494299a5cc7296c31fdbe96a9de45fda7a4cf8281",
+      "configuration_digest": "sha256:be5741ac8aa25f91c66d743ecee5c9722cb9934fdf8a3b2ba4a90120b239c79a"
+    },
+    "environment": {
+      "worker_digest": "sha256:1df790a7d590f617d0d3c2cd84cbe18b5400ff972dd9701670f7e5a4f1634e52",
+      "os_profile_digest": "sha256:5192514b04dba89def473a991b2ba21d4473bcfce66565286107c00080ae0336"
+    },
+    "aragorn": {
+      "implementation_digest": "sha256:979f1a06b87e26459faba52ce7bb94ceb89e3a39e212c7d2e4f6a418e41d9a71",
+      "policy_digest": "sha256:f23061d06e0f2d28357f74989b9ea21f7270882d60963d60341a3494a98ec764"
+    }
+  },
+  "properties": [
+    {
+      "id": "DET-01",
+      "status": "NOT_TESTED",
+      "scenarios": [
+        {
+          "id": "identical-canonical-input-replay",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["IDENTICAL_REPLAY_NOT_TESTED"]
+        }
+      ]
+    },
+    {
+      "id": "ADM-01",
+      "status": "NOT_TESTED",
+      "scenarios": [
+        {
+          "id": "exact-admitted-bytes",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["EXACT_ACTIVATED_BYTES_NOT_TESTED"]
+        }
+      ]
+    },
+    {
+      "id": "ADM-02",
+      "status": "NOT_TESTED",
+      "scenarios": [
+        {
+          "id": "install",
+          "status": "PASS",
+          "evidence_digests": [
+            "sha256:88ee0bbc0b8986d1d4e3339fd2452af4c15d671aa23b73606d8ec5c63f79616d",
+            "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af"
+          ],
+          "reason_codes": []
+        },
+        {
+          "id": "update",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["UPDATE_PATH_NOT_TESTED"]
+        },
+        {
+          "id": "direct-write",
+          "status": "PASS",
+          "evidence_digests": [
+            "sha256:88ee0bbc0b8986d1d4e3339fd2452af4c15d671aa23b73606d8ec5c63f79616d",
+            "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af"
+          ],
+          "reason_codes": []
+        },
+        {
+          "id": "rename",
+          "status": "PASS",
+          "evidence_digests": [
+            "sha256:88ee0bbc0b8986d1d4e3339fd2452af4c15d671aa23b73606d8ec5c63f79616d",
+            "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af"
+          ],
+          "reason_codes": []
+        },
+        {
+          "id": "symlink",
+          "status": "PASS",
+          "evidence_digests": [
+            "sha256:88ee0bbc0b8986d1d4e3339fd2452af4c15d671aa23b73606d8ec5c63f79616d",
+            "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af"
+          ],
+          "reason_codes": []
+        },
+        {
+          "id": "auto-discovery",
+          "status": "PASS",
+          "evidence_digests": [
+            "sha256:88ee0bbc0b8986d1d4e3339fd2452af4c15d671aa23b73606d8ec5c63f79616d",
+            "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af"
+          ],
+          "reason_codes": []
+        },
+        {
+          "id": "reload",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["LIVE_RELOAD_NOT_TESTED"]
+        },
+        {
+          "id": "restart",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["RUNTIME_RESTART_NOT_TESTED"]
+        }
+      ]
+    },
+    {
+      "id": "ADM-03",
+      "status": "NOT_TESTED",
+      "scenarios": [
+        {
+          "id": "policy-failure",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["POLICY_FAILURE_NOT_TESTED"]
+        },
+        {
+          "id": "policy-tampering",
+          "status": "NOT_TESTED",
+          "evidence_digests": [],
+          "reason_codes": ["POLICY_TAMPERING_NOT_TESTED"]
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "status": "NOT_TESTED",
+    "installer_work_eligible": false
+  }
+}

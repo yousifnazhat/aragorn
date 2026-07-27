@@ -368,6 +368,287 @@ class AdmissionConformanceTests(unittest.TestCase):
             evidence["aragorn"]["policy_digest"],
         )
 
+    def test_retained_openclaw_contained_profile_is_partial_and_bound(self) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        probe_raw = (
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json"
+        ).read_bytes()
+        environment_raw = (
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-profile-environment-2026-07-27.json"
+        ).read_bytes()
+        probe = json.loads(probe_raw)
+        environment = json.loads(environment_raw)
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / "phase1-openclaw-contained-profile-probe-2026-07-27.json"
+            ).read_bytes()
+        )
+        evidence_digests = sorted((_sha256(environment_raw), _sha256(probe_raw)))
+        for raw, digest in (
+            (environment_raw, evidence_digests[0]),
+            (probe_raw, evidence_digests[1]),
+        ):
+            self.assertEqual(
+                self.cas.put(BytesIO(raw), max_bytes=len(raw)),
+                digest,
+            )
+
+        self.assertEqual(
+            validate_retained_admission_conformance(
+                receipt,
+                evidence_cas=self.cas,
+            ),
+            "NOT_TESTED",
+        )
+        self.assertEqual(
+            receipt["decision"],
+            {"status": "NOT_TESTED", "installer_work_eligible": False},
+        )
+        formal = {
+            f"{item['id']}/{scenario['id']}": scenario
+            for item in receipt["properties"]
+            for scenario in item["scenarios"]
+        }
+        self.assertEqual(
+            {key: value["status"] for key, value in formal.items()},
+            {
+                "DET-01/identical-canonical-input-replay": "NOT_TESTED",
+                "ADM-01/exact-admitted-bytes": "NOT_TESTED",
+                "ADM-02/install": "PASS",
+                "ADM-02/update": "NOT_TESTED",
+                "ADM-02/direct-write": "PASS",
+                "ADM-02/rename": "PASS",
+                "ADM-02/symlink": "PASS",
+                "ADM-02/auto-discovery": "PASS",
+                "ADM-02/reload": "NOT_TESTED",
+                "ADM-02/restart": "NOT_TESTED",
+                "ADM-03/policy-failure": "NOT_TESTED",
+                "ADM-03/policy-tampering": "NOT_TESTED",
+            },
+        )
+        self.assertEqual(
+            {
+                key: value["reason_codes"]
+                for key, value in formal.items()
+                if value["status"] == "NOT_TESTED"
+            },
+            {
+                "DET-01/identical-canonical-input-replay": [
+                    "IDENTICAL_REPLAY_NOT_TESTED"
+                ],
+                "ADM-01/exact-admitted-bytes": [
+                    "EXACT_ACTIVATED_BYTES_NOT_TESTED"
+                ],
+                "ADM-02/update": ["UPDATE_PATH_NOT_TESTED"],
+                "ADM-02/reload": ["LIVE_RELOAD_NOT_TESTED"],
+                "ADM-02/restart": ["RUNTIME_RESTART_NOT_TESTED"],
+                "ADM-03/policy-failure": ["POLICY_FAILURE_NOT_TESTED"],
+                "ADM-03/policy-tampering": ["POLICY_TAMPERING_NOT_TESTED"],
+            },
+        )
+        for scenario in formal.values():
+            if scenario["status"] == "PASS":
+                self.assertEqual(scenario["evidence_digests"], evidence_digests)
+
+        self.assertEqual(_sha256(probe_raw), "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af")
+        self.assertEqual(len(probe_raw), 20_607)
+        self.assertEqual(
+            {item["id"]: item["status"] for item in probe["scenarios"]},
+            {
+                "ADM-01/exact-admitted-bytes": "PASS",
+                "ADM-02/install": "PASS",
+                "ADM-02/direct-write": "PASS",
+                "ADM-02/rename": "PASS",
+                "ADM-02/symlink": "PASS",
+                "ADM-02/auto-discovery": "PASS",
+                "ADM-02/restart": "PASS",
+            },
+        )
+        self.assertEqual(
+            probe["decision"],
+            {"installer_work_eligible": False, "status": "NOT_TESTED"},
+        )
+
+        bindings = receipt["bindings"]
+        adapter = probe["adapter"]
+        self.assertEqual(
+            _sha256(
+                (
+                    _ROOT
+                    / "benchmark"
+                    / "admission"
+                    / "openclaw-v2026.7.1"
+                    / "contained-probe.mjs"
+                ).read_bytes()
+            ),
+            adapter["implementation"]["contained_probe_digest"],
+        )
+        self.assertEqual(
+            _sha256(
+                (
+                    _ROOT
+                    / "benchmark"
+                    / "admission"
+                    / "openclaw-v2026.7.1"
+                    / "probe.mjs"
+                ).read_bytes()
+            ),
+            adapter["implementation"]["baseline_probe_digest"],
+        )
+        self.assertEqual(
+            bindings["adapter"]["implementation_digest"],
+            _canonical_digest(adapter["implementation"]),
+        )
+        self.assertEqual(
+            bindings["adapter"]["configuration_digest"],
+            _canonical_digest(adapter["configuration"]),
+        )
+        self.assertEqual(
+            probe["profile"]["admitted"]["digest"],
+            "sha256:5a951f65ad92bc209f9a00139fb88e38015fab9b5ac3035407a027a7d502853d",
+        )
+        self.assertEqual(
+            bindings["runtime"]["source_tree_digest"],
+            probe["runtime"]["runtime_tree"]["tree_digest"],
+        )
+        self.assertEqual(
+            probe["baseline"]["prior_retained_evidence"],
+            {
+                "digest": "sha256:c26c1a99f271c632254fb2865b8295714ac09a2dbba4a6cb29820939dde666a0",
+                "path": "benchmark/evidence/openclaw-v2026.7.1-admission-probe-2026-07-27.json",
+            },
+        )
+
+        self.assertEqual(_sha256(environment_raw), evidence_digests[0])
+        self.assertEqual(
+            environment["container"]["probe_stdout"],
+            {"bytes": len(probe_raw), "digest": _sha256(probe_raw)},
+        )
+        self.assertEqual(
+            environment["docker"]["assurance"],
+            "SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED",
+        )
+        self.assertIn(
+            "ENGINE_CONTAINER_AND_HOST_NOT_INDEPENDENTLY_ATTESTED",
+            environment["limitations"],
+        )
+        self.assertEqual(
+            environment["os_profile_digest"],
+            _canonical_digest(environment["isolation"]),
+        )
+        self.assertEqual(
+            bindings["environment"]["os_profile_digest"],
+            environment["os_profile_digest"],
+        )
+        self.assertEqual(
+            bindings["environment"]["worker_digest"],
+            environment["container"]["image"]["platform_manifest_digest"],
+        )
+        isolation = environment["isolation"]
+        self.assertEqual(
+            (
+                isolation["cap_drop"],
+                isolation["devices"],
+                isolation["nano_cpus"],
+                isolation["memory_bytes"],
+                isolation["memory_swap_bytes"],
+                isolation["network_mode"],
+                isolation["no_new_privileges"],
+                isolation["pids_limit"],
+                isolation["privileged"],
+                isolation["read_only_rootfs"],
+                isolation["user"],
+            ),
+            (
+                ["ALL"],
+                [],
+                1_000_000_000,
+                805_306_368,
+                805_306_368,
+                "none",
+                True,
+                128,
+                False,
+                True,
+                "1000:1000",
+            ),
+        )
+        self.assertEqual(
+            isolation["environment"],
+            {
+                "HOME": "/profile/home",
+                "NODE_VERSION": "24.16.0",
+                "OPENCLAW_CONFIG_PATH": "/profile/config/openclaw.json",
+                "OPENCLAW_STATE_DIR": "/profile/state",
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+                "YARN_VERSION": "1.22.22",
+            },
+        )
+        self.assertEqual(
+            {mount["destination"] for mount in isolation["mounts"]},
+            {
+                "/acquisition",
+                "/probe",
+                "/profile/config",
+                "/profile/home/.agents",
+                "/profile/state/plugin-skills",
+                "/profile/state/skills",
+                "/profile/workspace/.agents",
+                "/profile/workspace/skills",
+                "/runtime",
+            },
+        )
+        self.assertTrue(all(mount["read_only"] for mount in isolation["mounts"]))
+        self.assertEqual(environment["container"]["state"]["exit_code"], 0)
+
+        exact = next(
+            item
+            for item in probe["scenarios"]
+            if item["id"] == "ADM-01/exact-admitted-bytes"
+        )
+        self.assertEqual(
+            [item["name"] for item in exact["evidence"]["effective_skills"]],
+            ["aragorn-admitted"],
+        )
+        discovery = next(
+            item
+            for item in probe["scenarios"]
+            if item["id"] == "ADM-02/auto-discovery"
+        )
+        self.assertEqual(discovery["evidence"]["discovered_injected"], [])
+        unadmitted = [
+            item
+            for item in discovery["evidence"]["observed_skills"]
+            if item["name"] != "aragorn-admitted"
+        ]
+        self.assertTrue(unadmitted)
+        self.assertTrue(
+            all(
+                item["blockedByAgentFilter"]
+                and not item["modelVisible"]
+                and not item["commandVisible"]
+                for item in unadmitted
+            )
+        )
+
+        implementation = {
+            "admission_conformance": _sha256(
+                (_ROOT / "src" / "aragorn" / "admission_conformance.py").read_bytes()
+            ),
+            "admission_gate": _sha256(
+                (_ROOT / "src" / "aragorn" / "admission_gate.py").read_bytes()
+            ),
+        }
+        self.assertEqual(
+            bindings["aragorn"]["implementation_digest"],
+            _canonical_digest(implementation),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -488,6 +488,10 @@ class Phase0AcquisitionExecutionBoundaryTests(unittest.TestCase):
             _runner_source()
 
     def test_rebuilt_oracle_lock_must_match_signed_head(self) -> None:
+        self.assertEqual(
+            execution._ORACLE_LOCK_PATH,
+            Path("benchmark/phase0-acquisition-oracle-v7.lock.json"),
+        )
         rebuilt = {"schema": "aragorn/example/v1"}
         raw = canonical_json(rebuilt)
         with (

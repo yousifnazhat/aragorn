@@ -100,7 +100,7 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _GIT_OID = re.compile(r"[0-9a-f]{40}\Z")
 _VM_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _GUEST_PATH = re.compile(r"/[A-Za-z0-9._/-]{1,4095}\Z")
-_ORACLE_LOCK_PATH = Path("benchmark/phase0-acquisition-oracle.lock.json")
+_ORACLE_LOCK_PATH = Path("benchmark/phase0-acquisition-oracle-v7.lock.json")
 
 
 class AcquisitionExecutionError(ValueError):

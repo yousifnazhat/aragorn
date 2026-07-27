@@ -31,6 +31,7 @@ from prepare_hidden_suite import (
     _V4_GATE,
     _V5_GATE,
     _V6_GATE,
+    _V7_GATE,
     validate_retained_preparation_receipt,
 )
 
@@ -1204,6 +1205,28 @@ def main() -> int:
         != "sha256:d9037d0f3acf2a2448f216f4fa58b9f35730da86b832e27cafd0d7be85e87deb"
     ):
         raise AssertionError("retained acquisition oracle lock drift")
+    retained_acquisition_v7_lock_raw = (
+        ROOT / "benchmark" / "phase0-acquisition-oracle-v7.lock.json"
+    ).read_bytes()
+    retained_acquisition_v7_lock = json.loads(retained_acquisition_v7_lock_raw)
+    validators[
+        "benchmark-phase0-acquisition-oracle-lock-v1.schema.json"
+    ].validate(retained_acquisition_v7_lock)
+    if (
+        retained_acquisition_v7_lock_raw
+        != canonical_json(retained_acquisition_v7_lock)
+        or hashlib.sha256(retained_acquisition_v7_lock_raw).hexdigest()
+        != "bd181e7cdcf60fbefec6c6e3ba61554245e0dfad30eed3be9b35d49b5525aaef"
+        or retained_acquisition_v7_lock["candidate_policy_digest"]
+        != canonical_digest(phase0_candidate_policy_v7)
+        or retained_acquisition_v7_lock["oracle_digest"]
+        != "sha256:4198475552403f0ea0e7e22c83b3df8414a3d071df5f04dbe205407a0f67007a"
+        or retained_acquisition_v7_lock["root_suite_digest"]
+        != "sha256:03bcfb7b92b6465fb7d9c1bf9d07f5067aa4afe0b3130ce2a3dcfc66a341f2e7"
+        or retained_acquisition_v7_lock["expanded_suite_digest"]
+        != "sha256:c6e018cf4a6df22b2126100c125684273edcb28ecf71ae0034330c8c58993a22"
+    ):
+        raise AssertionError("retained acquisition v7 oracle lock drift")
     validators["benchmark-phase0-accounting-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-phase0-accounting/v1",
@@ -1587,6 +1610,61 @@ def main() -> int:
             hidden_v6_receipt,
             _V6_GATE,
         )
+    hidden_v7_lock_path = ROOT / "benchmark" / "phase0-hidden-suite-v7.lock.json"
+    hidden_v7_lock_raw = hidden_v7_lock_path.read_bytes()
+    hidden_v7_lock = json.loads(hidden_v7_lock_raw)
+    hidden_v7_receipt_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-suite-v7-freeze-2026-07-27.json"
+    )
+    hidden_v7_receipt_raw = hidden_v7_receipt_path.read_bytes()
+    hidden_v7_receipt = json.loads(hidden_v7_receipt_raw)
+    validators["benchmark-phase0-hidden-suite-lock-v1.schema.json"].validate(
+        hidden_v7_lock
+    )
+    validators["benchmark-phase0-hidden-v7-freeze-profile-v1.schema.json"].validate(
+        hidden_v7_receipt
+    )
+    validate_freeze_receipt_bindings(
+        hidden_v7_receipt,
+        hidden_v7_receipt_raw,
+        hidden_v7_lock,
+        hidden_v7_lock_raw,
+        phase0_corpus_lock_v6,
+        phase0_corpus_lock_v6_raw,
+    )
+    if (
+        "sha256:" + hashlib.sha256(hidden_v7_lock_raw).hexdigest()
+        != _V7_GATE.lock_digest
+        or "sha256:" + hashlib.sha256(hidden_v7_receipt_raw).hexdigest()
+        != _V7_GATE.freeze_receipt_digest
+        or hidden_v7_lock["suite_digest"] != _V7_GATE.suite_digest
+        or hidden_v7_lock["candidate_policy_digest"]
+        != _V7_GATE.candidate_policy_digest
+        or hidden_v7_receipt["pre_outcome"]["state_binding_digest"]
+        != _V7_GATE.state_binding_digest
+    ):
+        raise AssertionError("hidden v7 frozen gate binding drift")
+    hidden_v7_preparation_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v7-preparation-2026-07-27.json"
+    )
+    hidden_v7_preparation_raw = hidden_v7_preparation_path.read_bytes()
+    hidden_v7_preparation = json.loads(hidden_v7_preparation_raw)
+    validators[
+        "benchmark-phase0-hidden-v7-preparation-profile-v1.schema.json"
+    ].validate(hidden_v7_preparation)
+    validate_retained_preparation_receipt(
+        hidden_v7_preparation,
+        hidden_v7_preparation_raw,
+        hidden_v7_lock,
+        hidden_v7_receipt,
+        _V7_GATE,
+    )
     hidden_v3_result_path = (
         ROOT
         / "benchmark"
@@ -2000,6 +2078,83 @@ def main() -> int:
             != {"numerator": 1, "denominator": 24, "rate": 0.041667}
         ):
             raise AssertionError("hidden v6 result is not the retained passing gate")
+    hidden_v7_result_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v7-calibration-result-2026-07-27.json"
+    )
+    hidden_v7_result_raw = hidden_v7_result_path.read_bytes()
+    hidden_v7_result = json.loads(hidden_v7_result_raw)
+    validators[
+        "benchmark-phase0-hidden-calibration-result-receipt-v3.schema.json"
+    ].validate(hidden_v7_result)
+    if hidden_v7_result_raw != canonical_json(hidden_v7_result):
+        raise AssertionError("hidden v7 result receipt is not canonical JSON")
+    worker_run = hidden_v7_result["worker_run_receipt"]
+    gate_report = hidden_v7_result["gate_report"]
+    source = hidden_v7_result["source"]
+    validators[
+        "benchmark-phase0-hidden-v7-worker-run-profile-v1.schema.json"
+    ].validate(worker_run)
+    worker_run_digest = (
+        "sha256:" + hashlib.sha256(canonical_json(worker_run)).hexdigest()
+    )
+    gate_report_file_digest = (
+        "sha256:"
+        + hashlib.sha256(
+            json.dumps(gate_report, sort_keys=True).encode("ascii") + b"\n"
+        ).hexdigest()
+    )
+    preparation_digest = (
+        "sha256:" + hashlib.sha256(hidden_v7_preparation_raw).hexdigest()
+    )
+    hidden_v7_lock_digest = (
+        "sha256:" + hashlib.sha256(hidden_v7_lock_raw).hexdigest()
+    )
+    if source["worker_run_receipt_digest"] != worker_run_digest:
+        raise AssertionError("hidden v7 worker receipt digest drift")
+    if source["gate_report_file_digest"] != gate_report_file_digest:
+        raise AssertionError("hidden v7 gate report file digest drift")
+    if (
+        source["evaluator_commit"] != worker_run["source"]["runner_commit"]
+        or source["evaluator_commit"]
+        != "a91affe50b26a9bc25839f7c98e3f47f05e16c58"
+    ):
+        raise AssertionError("hidden v7 evaluator commit drift")
+    if worker_run["source"]["preparation_receipt_digest"] != preparation_digest:
+        raise AssertionError("hidden v7 preparation receipt digest drift")
+    if worker_run["state"]["binding_digest"] != _V7_GATE.state_binding_digest:
+        raise AssertionError("hidden v7 run state binding drift")
+    if worker_run["composition"]["outcomes_digest"] != gate_report[
+        "outcomes_digest"
+    ]:
+        raise AssertionError("hidden v7 outcome digest drift")
+    expected_gate_bindings = {
+        "corpus_lock_digest": hidden_v7_lock["corpus_lock_digest"],
+        "public_manifest_digest": hidden_v7_lock["public_manifest_digest"],
+        "hidden_suite_lock_digest": hidden_v7_lock_digest,
+        "candidate_policy_digest": hidden_v7_lock["candidate_policy_digest"],
+        "label_ledger_digest": hidden_v7_lock["label_ledger_digest"],
+        "suite_digest": hidden_v7_lock["suite_digest"],
+    }
+    for field, expected in expected_gate_bindings.items():
+        if gate_report[field] != expected:
+            raise AssertionError(f"hidden v7 gate report {field} drift")
+    comparison = gate_report["comparison"]
+    if (
+        hidden_v7_result["evaluation_status"]
+        != "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+        or hidden_v7_result["phase0_exit_eligible"]
+        or not comparison["evaluable"]
+        or not comparison["passed"]
+        or comparison["reason_codes"]
+        or comparison["attack_flag_delta"]
+        != {"numerator": 33, "denominator": 112, "rate": 0.294643}
+        or comparison["candidate"]["benign_intervention"]
+        != {"numerator": 1, "denominator": 24, "rate": 0.041667}
+    ):
+        raise AssertionError("hidden v7 result is not retained as passing calibration")
     validators["benchmark-phase0-hidden-worker-run-receipt-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",

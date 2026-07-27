@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; Phase 0 validation complete; Phase 1 not started
+Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 not started
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -635,7 +635,9 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 | 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× the frozen reference workload without dropped evidence |
 | 5. OSS 1.0 | Ongoing | Signed releases, SBOM, reproducible builds, parser fuzzing, disclosure process, compatibility policy | The security tool's own supply chain is defensible | Independent review; no unresolved critical/high findings; 72-hour parser fuzz run; clean supported install and upgrade tests |
 
-Phase 0 validation is complete at the phase-evidence level:
+The qualified Phase 0 validation milestone is complete under the checked-in
+aggregate phase-evidence rule in
+`benchmark/receipts/phase0-validation-milestone-2026-07-27.json`:
 
 - V6 is the sole fresh hidden efficacy pass. It exceeded the best
   burden-compliant comparator by 29.4643 percentage points with 4.1667% benign
@@ -654,9 +656,10 @@ Phase 0 validation is complete at the phase-evidence level:
   roadmap-mapped items, and zero unresolved items across 26 selected OWASP,
   MITRE, and NIST items.
 
-Together these records close the Phase 0 decision gate. They do not establish
-Phase 1 supported acquisition, recursive `artifact_graph` closure,
-installation binding, or a credential-free fetch boundary.
+Together these records authorize Phase 1 engineering. They do not establish an
+unqualified fresh-final-candidate Phase 0 exit, Phase 1 supported acquisition,
+recursive `artifact_graph` closure, installation binding, or a credential-free
+fetch boundary.
 
 The paired acquisition/reference contract is now implemented separately from
 the hidden instruction-risk gate. It freezes digest-bound root and expanded
@@ -672,7 +675,9 @@ timestamping, or wall-clock ordering. The repository retains the signed
 digest-only V7 oracle lock and aggregate measured result. The private oracle,
 raw paired outcomes, acceptance ledgers, and evidence CAS remain outside the
 repository. The passing regression closes the Phase 0 acquisition/reference
-decision criterion without establishing Phase 1 acquisition guarantees.
+integration criterion under the aggregate rule while remaining ineligible as
+standalone Phase 0 exit evidence. It does not establish fresh acquisition
+generalization or Phase 1 acquisition guarantees.
 
 `benchmark/phase0-standards-gate.json` replaces the unavailable three-design-
 partner Phase 0 discovery gate. It freezes OWASP Agentic Skills plus the stable

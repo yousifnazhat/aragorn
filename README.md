@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private Phase 0 validation complete; Phase 1 acquisition-lock engineering has not started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. This is not yet an EDR, a supported release, an installation boundary, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; Phase 1 acquisition-lock engineering has not started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 ## What works now
 
@@ -573,7 +573,9 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete roadmap and [SECURITY.
 
 ## Phase 0 result and next production gate
 
-Phase 0 validation is complete at the phase-evidence level. The fresh
+The qualified Phase 0 validation milestone is complete under the checked-in
+[aggregate decision rule](./benchmark/receipts/phase0-validation-milestone-2026-07-27.json).
+The fresh
 [V6 hidden result](./benchmark/receipts/phase0-hidden-v6-result-2026-07-26.json)
 exceeded the best burden-compliant comparator by 29.4643 percentage points
 while candidate benign intervention was 4.1667%, below the 5% ceiling.
@@ -589,13 +591,16 @@ The separately frozen
 passed with 12.5 percentage points of attack-flag lift, 0% benign intervention,
 448/448 complete expansions, and zero unresolved expected references. Because
 this corpus was previously attempted under V6, the V7 run is regression
-evidence rather than a new fresh holdout.
+evidence rather than a new fresh holdout. Its component receipt remains
+`phase0_exit_eligible: false`; the aggregate rule uses it only to satisfy the
+bounded terminal-depth-1 acquisition-integration criterion.
 
 The OWASP, MITRE, and NIST standards gate remains passing with 26 selected
 items, 22 evidence-mapped items, four roadmap-mapped items, and zero unresolved
-dispositions. Together these records satisfy the Phase 0 decision gate; they do
-not establish supported acquisition, complete artifact closure, installation
-binding, runtime containment, or EDR status.
+dispositions. Together these records authorize Phase 1 engineering under the
+qualified aggregate rule; they do not establish an unqualified fresh V7 exit,
+supported acquisition, complete artifact closure, installation binding,
+runtime containment, or EDR status.
 
 Authorship remains technical Codex authorship rather than independent human
 identity. Software signatures trust the operator UID and prove neither

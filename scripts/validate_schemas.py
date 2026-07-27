@@ -2277,6 +2277,141 @@ def main() -> int:
         != {"numerator": 1, "denominator": 24, "rate": 0.041667}
     ):
         raise AssertionError("hidden v7 result is not retained as passing calibration")
+    phase0_milestone_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-validation-milestone-2026-07-27.json"
+    )
+    phase0_milestone_raw = phase0_milestone_path.read_bytes()
+    phase0_milestone = json.loads(phase0_milestone_raw)
+    validators[
+        "benchmark-phase0-validation-milestone-receipt-v1.schema.json"
+    ].validate(phase0_milestone)
+    if phase0_milestone_raw != canonical_json(phase0_milestone):
+        raise AssertionError("phase0 validation milestone is not canonical JSON")
+    milestone_criteria = phase0_milestone["criteria"]
+    milestone_components = {
+        "fresh_hidden_efficacy": (
+            hidden_v6_result_path,
+            hidden_v6_result_raw,
+            hidden_v6_result,
+        ),
+        "final_candidate_maintenance": (
+            hidden_v7_result_path,
+            hidden_v7_result_raw,
+            hidden_v7_result,
+        ),
+        "bounded_acquisition_integration": (
+            acquisition_v7_result_path,
+            acquisition_v7_result_raw,
+            acquisition_v7_result,
+        ),
+    }
+    for criterion, (path, raw, document) in milestone_components.items():
+        retained = milestone_criteria[criterion]
+        if (
+            retained["receipt_path"] != str(path.relative_to(ROOT))
+            or retained["file_digest"]
+            != "sha256:" + hashlib.sha256(raw).hexdigest()
+            or retained["phase0_exit_eligible"]
+            != document["phase0_exit_eligible"]
+        ):
+            raise AssertionError(f"phase0 milestone {criterion} binding drift")
+    standards_gate_path = ROOT / "benchmark" / "phase0-standards-gate.json"
+    standards_gate_raw = standards_gate_path.read_bytes()
+    retained_standards = milestone_criteria["standards_coverage"]
+    if (
+        retained_standards["document_path"]
+        != str(standards_gate_path.relative_to(ROOT))
+        or retained_standards["file_digest"]
+        != "sha256:" + hashlib.sha256(standards_gate_raw).hexdigest()
+        or retained_standards["summary"] != standards_gate["gate"]["summary"]
+        or standards_gate["gate"]["result"] != "pass"
+    ):
+        raise AssertionError("phase0 milestone standards binding drift")
+    milestone_decision = phase0_milestone["decision"]
+    milestone_v6_candidate = hidden_v6_result["gate_report"]["comparison"][
+        "candidate"
+    ]["system"]
+    milestone_v7_candidate = hidden_v7_result["gate_report"]["comparison"][
+        "candidate"
+    ]["system"]
+    milestone_acquisition_candidate = acquisition_v7_result["gate_report"][
+        "comparison"
+    ]["candidate"]["system"]
+    expected_milestone_v6_candidate = {
+        **phase0_candidate_policy_v6["candidate"],
+        "config_digest": canonical_digest(phase0_candidate_policy_v6),
+    }
+    expected_milestone_v7_candidate = {
+        **phase0_candidate_policy_v7["candidate"],
+        "config_digest": canonical_digest(phase0_candidate_policy_v7),
+    }
+    if (
+        phase0_milestone["component_digest_kind"] != "raw_sha256"
+        or phase0_milestone["scope"] != "phase_evidence_validation_only"
+        or milestone_decision["status"]
+        != "qualified_phase0_validation_complete"
+        or milestone_decision["result"] != "pass"
+        or not milestone_decision["phase0_validation_milestone_complete"]
+        or not milestone_decision["phase1_entry_eligible"]
+        or milestone_decision["fresh_final_candidate_claim"]
+        or milestone_decision["fresh_acquisition_generalization_claim"]
+        or milestone_decision["admission_eligible"]
+        or milestone_decision["public_release_eligible"]
+        or milestone_criteria["fresh_hidden_efficacy"]["status"]
+        != "satisfied_by_v6"
+        or milestone_criteria["final_candidate_maintenance"]["status"]
+        != "satisfied_by_v7_calibration"
+        or milestone_criteria["bounded_acquisition_integration"]["status"]
+        != "satisfied_by_v7_regression"
+        or milestone_criteria["fresh_acquisition_generalization"]["status"]
+        != "not_claimed"
+        or milestone_criteria["standards_coverage"]["status"] != "satisfied"
+        or not milestone_criteria["fresh_hidden_efficacy"][
+            "criterion_satisfied"
+        ]
+        or not milestone_criteria["final_candidate_maintenance"][
+            "criterion_satisfied"
+        ]
+        or not milestone_criteria["bounded_acquisition_integration"][
+            "criterion_satisfied"
+        ]
+        or milestone_criteria["fresh_acquisition_generalization"][
+            "criterion_satisfied"
+        ]
+        or not milestone_criteria["standards_coverage"]["criterion_satisfied"]
+        or not hidden_v6_result["phase0_exit_eligible"]
+        or hidden_v7_result["phase0_exit_eligible"]
+        or acquisition_v7_result["phase0_exit_eligible"]
+        or hidden_v6_result["evaluation_status"] != "fresh_clean_holdout_passed"
+        or hidden_v7_result["evaluation_status"]
+        != "calibration_rerun_on_previously_evaluated_corpus_not_fresh_holdout"
+        or hidden_v6_result["gate_report"]["corpus_lock_digest"]
+        != hidden_v7_result["gate_report"]["corpus_lock_digest"]
+        or milestone_v6_candidate != expected_milestone_v6_candidate
+        or milestone_v7_candidate != expected_milestone_v7_candidate
+        or milestone_acquisition_candidate != expected_milestone_v7_candidate
+        or milestone_v6_candidate == milestone_v7_candidate
+        or milestone_criteria["fresh_hidden_efficacy"]["evidence_role"]
+        != "sole_fresh_hidden_efficacy_evidence"
+        or milestone_criteria["final_candidate_maintenance"]["evidence_role"]
+        != "maintenance_only_not_fresh_exit_evidence"
+        or milestone_criteria["bounded_acquisition_integration"]["evidence_role"]
+        != (
+            "authenticated_terminal_depth_1_integration_regression_"
+            "not_fresh_generalization_or_standalone_exit_evidence"
+        )
+        or acquisition_v7_result["assurance"]
+        != (
+            "aggregate_authenticated_acquisition_regression_evidence_only_"
+            "not_fresh_holdout_or_standalone_phase0_exit_evidence"
+        )
+        or standards_gate["gate"]["required_packs"]
+        != ["owasp-agentic-skills", "mitre-atlas", "nist-ai-rmf-genai"]
+    ):
+        raise AssertionError("phase0 validation milestone transfers evidence scope")
     validators["benchmark-phase0-hidden-worker-run-receipt-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v1",

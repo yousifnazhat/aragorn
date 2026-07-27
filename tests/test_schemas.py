@@ -67,6 +67,7 @@ EXPECTED_CONTRACTS = {
     "benchmark-phase0-hidden-v7-preparation-profile-v1.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v2",
     "benchmark-phase0-hidden-v7-worker-run-profile-v1.schema.json": "aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
     "benchmark-phase0-hidden-suite-lock-v1.schema.json": "aragorn/benchmark-phase0-hidden-suite-lock/v1",
+    "benchmark-phase0-validation-milestone-receipt-v1.schema.json": "aragorn/benchmark-phase0-validation-milestone-receipt/v1",
     "benchmark-portable-policy-v1.schema.json": "aragorn/benchmark-portable-policy/v1",
     "benchmark-private-dispatch-v1.schema.json": "aragorn/benchmark-private-dispatch/v1",
     "benchmark-private-dispatch-v2.schema.json": "aragorn/benchmark-private-dispatch/v2",

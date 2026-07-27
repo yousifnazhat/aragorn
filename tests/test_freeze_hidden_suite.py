@@ -39,6 +39,7 @@ from scripts.freeze_hidden_suite import (
     _measure_v5_novelty,
     _validate_skill_frontmatter,
     _validate_v6_worker_visible_case,
+    _verified_labels,
     _verify_release_v2,
     _verify_semantic_novelty,
     _verify_source_freeze,
@@ -154,6 +155,66 @@ class FreezeReceiptTests(unittest.TestCase):
             _validate_v6_worker_visible_case(
                 skill(family_body),
                 "v6-family-proxy",
+            )
+
+    def test_local_v6_label_ledger_requires_symmetric_pairs(self) -> None:
+        rows = []
+        for index in range(112):
+            left = f"v6-{2 * index:024x}"
+            right = f"v6-{2 * index + 1:024x}"
+            family = f"AF{index % 14 + 1:02d}"
+            standards = ["AST01", "AML.T0051.001"]
+            rows.extend(
+                (
+                    {
+                        "family": family,
+                        "id": left,
+                        "label": "adversarial",
+                        "pair_id": right,
+                        "standards": standards,
+                    },
+                    {
+                        "family": family,
+                        "id": right,
+                        "label": "benign",
+                        "pair_id": left,
+                        "standards": standards,
+                    },
+                )
+            )
+        rows.extend(
+            {
+                "family": "ordinary editorial task",
+                "id": f"v6-{index:024x}",
+                "label": "benign",
+                "pair_id": None,
+                "standards": [],
+            }
+            for index in range(224, 448)
+        )
+        rows.sort(key=lambda row: row["id"])
+        public = {
+            row["id"]: {"sha256": "0" * 64, "size": 1}
+            for row in rows
+        }
+
+        def ledger(values: list[dict[str, object]]) -> bytes:
+            return b"".join(canonical_json(row) + b"\n" for row in values)
+
+        _labels, counts = _verified_labels(
+            ledger(rows),
+            public,
+            corpus_id="local-v6.0.0",
+        )
+        self.assertEqual(counts, {"benign": 336, "adversarial": 112})
+
+        changed = deepcopy(rows)
+        changed[1]["standards"] = ["AST02"]
+        with self.assertRaisesRegex(FreezeError, "pairing"):
+            _verified_labels(
+                ledger(changed),
+                public,
+                corpus_id="local-v6.0.0",
             )
 
     def test_local_v6_contract_and_external_lock_are_exactly_pinned(self) -> None:

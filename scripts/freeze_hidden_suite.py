@@ -1712,7 +1712,11 @@ def verify_evaluator_package(
         public_raw,
         corpus_id=corpus_lock["corpus_id"],
     )
-    labels_by_id, class_counts = _verified_labels(labels, public_entries)
+    labels_by_id, class_counts = _verified_labels(
+        labels,
+        public_entries,
+        corpus_id=corpus_lock["corpus_id"],
+    )
     return {
         "evaluator_manifest_digest": _sha256(manifest_raw),
         "label_ledger_digest": _sha256(labels),
@@ -1727,13 +1731,20 @@ def verify_evaluator_package(
 def _verified_labels(
     labels: bytes,
     public_entries: dict[str, dict[str, object]],
+    *,
+    corpus_id: str,
 ) -> tuple[dict[str, str], dict[str, int]]:
     label_rows = []
+    row_fields = (
+        {"id", "label", "family", "pair_id", "standards"}
+        if corpus_id == "local-v6.0.0"
+        else {"id", "label", "sha256", "size"}
+    )
     for line in labels.splitlines(keepends=True):
         if not line.endswith(b"\n"):
             raise FreezeError("label ledger rows must end with LF")
         row = _decode_json(line[:-1], "label ledger row")
-        _exact(row, {"id", "label", "sha256", "size"}, "label ledger row")
+        _exact(row, row_fields, "label ledger row")
         if canonical_json(row) + b"\n" != line:
             raise FreezeError("label ledger row is not canonical JSONL")
         label_rows.append(row)
@@ -1747,11 +1758,54 @@ def _verified_labels(
             public is None
             or case_id in labels_by_id
             or row["label"] not in {"benign", "adversarial"}
-            or row["sha256"] != public["sha256"]
-            or row["size"] != public["size"]
+            or (
+                corpus_id != "local-v6.0.0"
+                and (
+                    row["sha256"] != public["sha256"]
+                    or row["size"] != public["size"]
+                )
+            )
         ):
             raise FreezeError("label ledger does not join exactly to public manifest")
         labels_by_id[case_id] = row["label"]
+    if corpus_id == "local-v6.0.0":
+        rows_by_id = {row["id"]: row for row in label_rows}
+        for row in label_rows:
+            pair_id = row["pair_id"]
+            standards = row["standards"]
+            family = row["family"]
+            if (
+                not isinstance(family, str)
+                or not family
+                or not isinstance(standards, list)
+                or not all(
+                    isinstance(value, str) and value
+                    for value in standards
+                )
+                or len(standards) != len(set(standards))
+                or (
+                    pair_id is not None
+                    and (
+                        not isinstance(pair_id, str)
+                        or _OPAQUE_IDS[corpus_id].fullmatch(pair_id) is None
+                    )
+                )
+            ):
+                raise FreezeError("v6 label metadata is invalid")
+            if pair_id is None:
+                if row["label"] != "benign" or standards:
+                    raise FreezeError("v6 ordinary benign metadata is invalid")
+                continue
+            paired = rows_by_id.get(pair_id)
+            if (
+                paired is None
+                or paired["pair_id"] != row["id"]
+                or paired["label"] == row["label"]
+                or paired["family"] != family
+                or paired["standards"] != standards
+                or re.fullmatch(r"AF(?:0[1-9]|1[0-4])", family) is None
+            ):
+                raise FreezeError("v6 label pairing is invalid")
     counts = Counter(labels_by_id.values())
     if list(labels_by_id) != sorted(labels_by_id) or counts != {
         "benign": 336,

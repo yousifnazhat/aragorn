@@ -26,6 +26,7 @@ from scripts.prepare_hidden_suite import (
     _V4_GATE,
     _V5_GATE,
     _V6_GATE,
+    _V7_GATE,
     PreparationError,
     _committed_document,
     _preflight_suite,
@@ -307,6 +308,25 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
         )
         self.assertEqual(_V6_GATE.trust_domain, "phase0.hidden-local-v6.0.0")
         self.assertFalse(_V6_GATE.calibration_only)
+
+    def test_v7_gate_is_an_explicit_v6_corpus_maintenance_rerun(self) -> None:
+        self.assertEqual(
+            _V7_GATE.corpus_lock_path,
+            Path("benchmark/phase0-corpus-v6.lock.json"),
+        )
+        self.assertEqual(
+            _V7_GATE.candidate_policy_path,
+            Path("benchmark/phase0-candidate-policy-v7.json"),
+        )
+        self.assertEqual(
+            _V7_GATE.receipt_schema,
+            "aragorn/benchmark-phase0-hidden-preparation-receipt/v2",
+        )
+        self.assertEqual(
+            _V7_GATE.run_receipt_schema,
+            "aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
+        )
+        self.assertTrue(_V7_GATE.calibration_only)
 
     def test_v5_release_manifest_input_is_exact_and_fail_closed(self) -> None:
         manifest = {"schema": "example/release-manifest/v1"}

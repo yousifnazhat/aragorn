@@ -336,9 +336,59 @@ _V6_GATE = PreparationGate(
     ),
 )
 
+_V7_GATE = PreparationGate(
+    name="v7",
+    freeze_commit="ef5de70ad1d04849f82ec033b080384dd5401d60",
+    freeze_tree="40897f41cdbb9e6bd739ea22e55054a8492907b1",
+    corpus_lock_path=Path("benchmark/phase0-corpus-v6.lock.json"),
+    lock_path=Path("benchmark/phase0-hidden-suite-v7.lock.json"),
+    freeze_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-suite-v7-freeze-2026-07-27.json"
+    ),
+    preparation_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-v7-preparation-2026-07-27.json"
+    ),
+    candidate_policy_path=Path("benchmark/phase0-candidate-policy-v7.json"),
+    portable_policy_paths=(
+        Path("benchmark/phase0-cisco-portable-policy-v2.json"),
+        Path("benchmark/phase0-skillspector-portable-policy-v2.json"),
+    ),
+    lock_digest=(
+        "sha256:cbad60b6611594fae41391904e3ef120e9db3d1187ba0f8051169f6c916eee99"
+    ),
+    freeze_receipt_digest=(
+        "sha256:6c6d79e625190ff19554a88264b7d08f320102c1cb51242335b528c524b419d9"
+    ),
+    suite_digest=(
+        "sha256:e75d25fa9e48079a138a9e1314827a5060e61ff5b5906c692d83b1325e51c8f0"
+    ),
+    candidate_policy_digest=(
+        "sha256:8ac99b957e113fa5d02b759b5e5d12201164f1d04bc6f0bb20cd131efbdf8c98"
+    ),
+    state_binding_digest=(
+        "sha256:69270229961549590ffc79503c815f30fdb8a737db15f75f55e0013f92a87d24"
+    ),
+    trust_domain="phase0.hidden-local-v7-maintenance.0.0",
+    recorded_on="2026-07-27",
+    receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v2",
+    run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v2",
+    release_manifest_digest=(
+        "sha256:710352b1ef15c1cf0b184bec46e90d4b07efae1a77f5989a98d7d0010e036a9f"
+    ),
+    calibration_only=True,
+)
+
 _GATES = {
     gate.name: gate
-    for gate in (_V1_GATE, _V2_GATE, _V3_GATE, _V4_GATE, _V5_GATE, _V6_GATE)
+    for gate in (
+        _V1_GATE,
+        _V2_GATE,
+        _V3_GATE,
+        _V4_GATE,
+        _V5_GATE,
+        _V6_GATE,
+        _V7_GATE,
+    )
 }
 
 # Compatibility names used by retained v1 validators and tests.

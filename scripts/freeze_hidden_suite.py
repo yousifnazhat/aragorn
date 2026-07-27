@@ -480,6 +480,31 @@ _PRIOR_FREEZE_LOCK = "benchmark/phase0-hidden-suite.lock.json"
 _PRIOR_FREEZE_LOCK_DIGEST = (
     "sha256:7f05171db56b35f8f76053222a6806228711679d4a5562b0b7328417fae549c7"
 )
+_PRIOR_FREEZES = {
+    "independent-v1.0.0": {
+        "commit": _PRIOR_FREEZE_COMMIT,
+        "tree": _PRIOR_FREEZE_TREE,
+        "receipt_path": _PRIOR_FREEZE_RECEIPT,
+        "receipt_digest": _PRIOR_FREEZE_RECEIPT_DIGEST,
+        "lock_path": _PRIOR_FREEZE_LOCK,
+        "lock_digest": _PRIOR_FREEZE_LOCK_DIGEST,
+    },
+    "local-v6.0.0": {
+        "commit": "1ad2b5fd6cba7fb140382596974bf0c72dd6babe",
+        "tree": "955d2c431b7897254f1a3a6de9b78bc1a5ec38bd",
+        "receipt_path": (
+            "benchmark/receipts/"
+            "phase0-hidden-suite-v6-freeze-2026-07-26.json"
+        ),
+        "receipt_digest": (
+            "sha256:d0bcb58ea1286e92a519081e31d34ef4062ee0cf6df9449a8f9a37f2fc6dbeb4"
+        ),
+        "lock_path": "benchmark/phase0-hidden-suite-v6.lock.json",
+        "lock_digest": (
+            "sha256:a862f355c21b3ce4e3d996b8cfd155856fa47a66a7e03f37a728e1aec3a99997"
+        ),
+    },
+}
 _PRIOR_SIGNER_PRINCIPAL = "yousif.snazhat@gmail.com"
 _PRIOR_SIGNER_FINGERPRINT = (
     "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
@@ -2595,7 +2620,14 @@ def validate_freeze_receipt_bindings(
 def _verified_prior_freeze(
     corpus_lock: dict[str, object],
     corpus_lock_raw: bytes,
+    *,
+    release_manifest: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    prior = _PRIOR_FREEZES.get(corpus_lock.get("corpus_id"))
+    if prior is None:
+        raise FreezeError(
+            "preserved evaluator mode has no checked prior freeze for this corpus"
+        )
     if _run(["git", "-C", str(ROOT), "rev-parse", "--show-toplevel"]) != str(
         ROOT.resolve(strict=True)
     ):
@@ -2622,7 +2654,7 @@ def _verified_prior_freeze(
                 "-c",
                 f"gpg.ssh.program={_executable('ssh-keygen')}",
                 "verify-commit",
-                _PRIOR_FREEZE_COMMIT,
+                prior["commit"],
             ]
         )
     tree = _run(
@@ -2631,10 +2663,10 @@ def _verified_prior_freeze(
             "-C",
             str(ROOT),
             "rev-parse",
-            f"{_PRIOR_FREEZE_COMMIT}^{{tree}}",
+            f"{prior['commit']}^{{tree}}",
         ]
     )
-    if tree != _PRIOR_FREEZE_TREE:
+    if tree != prior["tree"]:
         raise FreezeError("prior freeze signed tree changed")
     _run(
         [
@@ -2643,7 +2675,7 @@ def _verified_prior_freeze(
             str(ROOT),
             "merge-base",
             "--is-ancestor",
-            _PRIOR_FREEZE_COMMIT,
+            prior["commit"],
             "HEAD",
         ]
     )
@@ -2654,7 +2686,7 @@ def _verified_prior_freeze(
             str(ROOT),
             "cat-file",
             "blob",
-            f"{_PRIOR_FREEZE_COMMIT}:{_PRIOR_FREEZE_RECEIPT}",
+            f"{prior['commit']}:{prior['receipt_path']}",
         ]
     ).encode("ascii")
     lock_raw = _run(
@@ -2664,12 +2696,12 @@ def _verified_prior_freeze(
             str(ROOT),
             "cat-file",
             "blob",
-            f"{_PRIOR_FREEZE_COMMIT}:{_PRIOR_FREEZE_LOCK}",
+            f"{prior['commit']}:{prior['lock_path']}",
         ]
     ).encode("ascii")
     if (
-        _sha256(receipt_raw) != _PRIOR_FREEZE_RECEIPT_DIGEST
-        or _sha256(lock_raw) != _PRIOR_FREEZE_LOCK_DIGEST
+        _sha256(receipt_raw) != prior["receipt_digest"]
+        or _sha256(lock_raw) != prior["lock_digest"]
     ):
         raise FreezeError("prior freeze committed evidence changed")
     receipt = _decode_json(receipt_raw, "prior freeze receipt")
@@ -2681,12 +2713,13 @@ def _verified_prior_freeze(
         lock_raw,
         corpus_lock,
         corpus_lock_raw,
+        release_manifest=release_manifest,
     )
     return {
-        "commit": _PRIOR_FREEZE_COMMIT,
+        "commit": prior["commit"],
         "tree": tree,
-        "receipt_digest": _PRIOR_FREEZE_RECEIPT_DIGEST,
-        "lock_digest": _PRIOR_FREEZE_LOCK_DIGEST,
+        "receipt_digest": prior["receipt_digest"],
+        "lock_digest": prior["lock_digest"],
         "signature_status": "verified",
         "principal": _PRIOR_SIGNER_PRINCIPAL,
         "fingerprint": _PRIOR_SIGNER_FINGERPRINT,
@@ -2863,7 +2896,11 @@ def freeze(
             verified_evaluator_package,
             "verified evaluator package",
         )
-        prior = _verified_prior_freeze(corpus_lock, corpus_lock_raw)
+        prior = _verified_prior_freeze(
+            corpus_lock,
+            corpus_lock_raw,
+            release_manifest=release.get("release_manifest"),
+        )
     policy_raw = _read(candidate_policy_path, max_bytes=_MAX_JSON)
     policy = _decode_json(policy_raw, "candidate policy")
     policy_digest, systems = _systems(policy)

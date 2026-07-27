@@ -31,6 +31,7 @@ from scripts.freeze_hidden_suite import (
     _V6_SIGNER_FINGERPRINT,
     _V6_SIGNER_PRINCIPAL,
     _V6_WORKER_VISIBLE_LEAKAGE,
+    _PRIOR_FREEZES,
     FreezeError,
     _artifact_map,
     _fresh_openssl_receipt_schema,
@@ -50,6 +51,16 @@ from scripts.freeze_hidden_suite import (
 
 
 class FreezeReceiptTests(unittest.TestCase):
+    def test_preserved_evaluator_profiles_include_v6_maintenance(self) -> None:
+        self.assertEqual(
+            set(_PRIOR_FREEZES),
+            {"independent-v1.0.0", "local-v6.0.0"},
+        )
+        self.assertEqual(
+            _PRIOR_FREEZES["local-v6.0.0"]["lock_digest"],
+            "sha256:a862f355c21b3ce4e3d996b8cfd155856fa47a66a7e03f37a728e1aec3a99997",
+        )
+
     def test_fresh_openssl_receipt_schema_preserves_v3_and_selects_v4(self) -> None:
         self.assertEqual(
             _fresh_openssl_receipt_schema("independent-v3.0.0"),

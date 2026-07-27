@@ -35,6 +35,10 @@ from aragorn.benchmark_worker_measurement import (
     write_worker_trust_store,
 )
 from aragorn.cas import CAS, CASError
+from aragorn.github_expand import (
+    TERMINAL_DEPTH_1_ASSURANCE,
+    TERMINAL_DEPTH_1_PROFILE,
+)
 from aragorn.label_blind_prepare import (
     PrepareError,
     prepare_files_v2,
@@ -917,11 +921,57 @@ def _composition(
         "control_state": run_root / "evidence-state",
         "challenge_ledger": run_root / f"{arm}-ledger",
     }
-    result = (
-        compose_authenticated_comparator_batch(**arguments)
-        if arm == "root"
-        else compose_candidate_batch(**arguments)
-    )
+    if arm == "root":
+        result = compose_authenticated_comparator_batch(**arguments)
+    else:
+        cas = CAS(run_root / "evidence-state", read_only=True)
+        try:
+            raw = cas.read(plan["inputs"]["accounting_digest"], max_bytes=_MAX_JSON)
+            accounting = json.loads(raw)
+        except (CASError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise AcquisitionExecutionError(
+                "acquisition source contexts are unavailable"
+            ) from exc
+        if (
+            not isinstance(accounting, dict)
+            or canonical_json(accounting) != raw
+            or set(accounting)
+            != {
+                "schema",
+                "suite_digest",
+                "candidate_system",
+                "expansion_profile",
+                "expansion_assurance",
+                "cases",
+            }
+            or accounting["schema"]
+            != "aragorn/benchmark-phase0-accounting/v1"
+            or accounting["suite_digest"] != plan["arms"][arm]["suite_digest"]
+            or accounting["expansion_profile"] != TERMINAL_DEPTH_1_PROFILE
+            or accounting["expansion_assurance"] != TERMINAL_DEPTH_1_ASSURANCE
+            or not isinstance(accounting["cases"], list)
+        ):
+            raise AcquisitionExecutionError(
+                "acquisition source context contract changed"
+            )
+        source_contexts: dict[str, str] = {}
+        for item in accounting["cases"]:
+            if (
+                not isinstance(item, dict)
+                or set(item)
+                != {"case_id", "expansion_digest", "expected_references"}
+                or not isinstance(item["case_id"], str)
+                or _DIGEST.fullmatch(str(item["expansion_digest"])) is None
+                or item["case_id"] in source_contexts
+            ):
+                raise AcquisitionExecutionError(
+                    "acquisition source context matrix changed"
+                )
+            source_contexts[item["case_id"]] = item["expansion_digest"]
+        result = compose_candidate_batch(
+            **arguments,
+            source_contexts=source_contexts,
+        )
     expected = ROOT_OUTCOMES if arm == "root" else EXPANDED_OUTCOMES
     if (
         result["suite_digest"] != plan["arms"][arm]["suite_digest"]

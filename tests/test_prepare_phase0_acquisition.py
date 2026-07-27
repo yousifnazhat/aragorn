@@ -34,7 +34,7 @@ from scripts.prepare_phase0_acquisition import (
 )
 
 ROOT = Path(__file__).parents[1]
-POLICY = ROOT / "benchmark" / "phase0-candidate-policy-v6.json"
+POLICY = ROOT / "benchmark" / "phase0-candidate-policy-v7.json"
 CORPUS_LOCK = ROOT / "benchmark" / "phase0-acquisition-corpus.lock.json"
 
 

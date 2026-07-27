@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 import hashlib
 from io import BytesIO
+import json
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -15,10 +16,12 @@ from .artifact_closure import (
     canonical_local_reference_target,
     canonical_json,
     exact_raw_github_fetch_target,
+    load_retained_manifest,
     parse_immutable_github_reference,
     scan_retained_text_references,
+    _validate_manifest,
 )
-from .cas import CAS
+from .cas import CAS, CASError
 from .github_acquire import (
     API_VERSION,
     GitHubAcquisitionError,
@@ -28,6 +31,7 @@ from .github_acquire import (
 from .oci_worker_protocol import (
     WorkerProtocolError,
     canonical_digest,
+    sanitize_subject_manifest,
     validate_subject_manifest,
 )
 
@@ -988,6 +992,443 @@ def acquire_github_expansion(
         "accounting": accounting,
         "closure": closure,
     }
+
+
+def resolve_terminal_source_graph(
+    manifest: object,
+    cas: CAS,
+    expansion: object,
+    *,
+    root_manifest_digest: str,
+) -> dict[str, Any]:
+    """Derive a source graph from a verified terminal-depth-1 expansion."""
+
+    if not isinstance(expansion, dict):
+        raise GitHubExpansionError("terminal expansion must be a JSON object")
+    if (
+        expansion.get("profile") != TERMINAL_DEPTH_1_PROFILE
+        or expansion.get("assurance") != TERMINAL_DEPTH_1_ASSURANCE
+        or expansion.get("closure")
+        != {
+            "scope": "phase0_exact_github_blob_expansion_terminal_depth_1",
+            "status": "complete",
+            "unresolved": [],
+        }
+    ):
+        raise GitHubExpansionError("terminal expansion is not complete")
+
+    try:
+        normalized_manifest, expanded_files = _validate_manifest(manifest, cas)
+    except (ValueError, CASError) as exc:
+        raise GitHubExpansionError(
+            f"expanded source manifest is invalid: {exc}"
+        ) from exc
+    if normalized_manifest["schema"] != "aragorn/manifest/v1":
+        raise GitHubExpansionError(
+            "expanded source manifest must be a re-ingested local tree"
+        )
+    if _digest_document(normalized_manifest) != root_manifest_digest:
+        raise GitHubExpansionError(
+            "expanded source manifest digest does not match candidate evidence"
+        )
+
+    comparator_digest = expansion.get("comparator_subject_manifest_digest")
+    comparator_tree = expansion.get("comparator_subject_tree_digest")
+    if not isinstance(comparator_digest, str) or not isinstance(
+        comparator_tree, str
+    ):
+        raise GitHubExpansionError(
+            "terminal expansion omits its comparator subject"
+        )
+    try:
+        comparator_raw = cas.read(comparator_digest, max_bytes=MAX_RECORD_BYTES)
+        comparator = json.loads(comparator_raw)
+    except (CASError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise GitHubExpansionError(
+            f"terminal comparator subject is unavailable or invalid: {exc}"
+        ) from exc
+    if canonical_json(comparator) != comparator_raw:
+        raise GitHubExpansionError(
+            "terminal comparator subject must use canonical JSON"
+        )
+    try:
+        validate_subject_manifest(comparator)
+        expanded_subject = sanitize_subject_manifest(normalized_manifest)
+    except WorkerProtocolError as exc:
+        raise GitHubExpansionError(
+            f"terminal comparator subject is invalid: {exc}"
+        ) from exc
+    if (
+        canonical_digest(comparator) != comparator_digest
+        or comparator.get("tree_digest") != comparator_tree
+        or expanded_subject != comparator
+    ):
+        raise GitHubExpansionError(
+            "expanded source manifest does not exactly match retained "
+            "comparator subject"
+        )
+
+    root_digest = expansion.get("root_manifest_digest")
+    if not isinstance(root_digest, str):
+        raise GitHubExpansionError("terminal expansion omits its root manifest")
+    try:
+        root_manifest = load_retained_manifest(cas, root_digest)
+        normalized_root, root_files = _validate_manifest(root_manifest, cas)
+    except (ValueError, CASError) as exc:
+        raise GitHubExpansionError(
+            f"terminal root manifest is invalid: {exc}"
+        ) from exc
+    if (
+        normalized_root["schema"] != "aragorn/github-manifest/v1"
+        or _digest_document(normalized_root) != root_digest
+        or normalized_root["tree_digest"] != expansion.get("root_tree_digest")
+    ):
+        raise GitHubExpansionError(
+            "terminal expansion root manifest binding changed"
+        )
+    source = normalized_root["source"]
+    expansion_source = expansion.get("source")
+    source_fields = (
+        "host",
+        "owner",
+        "repository",
+        "commit",
+        "commit_tree",
+        "skill_path",
+        "api_version",
+    )
+    if not isinstance(expansion_source, dict) or any(
+        source.get(field) != expansion_source.get(field)
+        for field in source_fields
+    ):
+        raise GitHubExpansionError(
+            "terminal expansion source does not match its root manifest"
+        )
+
+    objects = expansion.get("objects")
+    references = expansion.get("references")
+    if not isinstance(objects, list) or not isinstance(references, list):
+        raise GitHubExpansionError(
+            "terminal expansion objects and references must be arrays"
+        )
+    expanded_by_path = {entry["path"]: entry for entry in expanded_files}
+    expected_subject_files = [
+        {
+            "path": entry["path"],
+            "size": entry["size"],
+            "digest": entry["digest"],
+            "executable": False,
+        }
+        for entry in root_files
+    ]
+    targets: dict[tuple[str, str], dict[str, Any]] = {
+        (
+            source["commit"],
+            _repository_path(source["skill_path"], entry["path"]),
+        ): {
+            "path": entry["path"],
+            "digest": entry["digest"],
+            "status": "root_resolved",
+        }
+        for entry in root_files
+    }
+    object_reference_keys: dict[
+        tuple[str, str], set[tuple[str, str, str, int, int, str]]
+    ] = {}
+    for item in objects:
+        if not isinstance(item, dict) or item.get("depth") != 1:
+            raise GitHubExpansionError(
+                "terminal expansion contains a non-terminal object"
+            )
+        identity = (item.get("commit"), item.get("repository_path"))
+        materialized_path = item.get("materialized_path")
+        if (
+            not all(isinstance(value, str) for value in identity)
+            or not isinstance(materialized_path, str)
+            or materialized_path
+            != _materialized_path(
+                source["commit"],
+                identity[0],
+                identity[1],
+            )
+            or identity in targets
+        ):
+            raise GitHubExpansionError(
+                "terminal expansion object identity or materialized path changed"
+            )
+        retained = expanded_by_path.get(materialized_path)
+        expected = {
+            "path": materialized_path,
+            "size": item.get("size"),
+            "digest": item.get("digest"),
+            "executable": False,
+        }
+        if retained != expected:
+            raise GitHubExpansionError(
+                "terminal expansion object does not match re-ingested bytes"
+            )
+        expected_subject_files.append(expected)
+        targets[identity] = {
+            "path": materialized_path,
+            "digest": item["digest"],
+            "status": "expanded",
+        }
+        raw_object_references = item.get("references")
+        if not isinstance(raw_object_references, list):
+            raise GitHubExpansionError(
+                "terminal expansion object references must be an array"
+            )
+        object_reference_keys[identity] = {
+            _terminal_reference_key(reference)
+            for reference in raw_object_references
+            if isinstance(reference, dict)
+        }
+        if len(object_reference_keys[identity]) != len(raw_object_references):
+            raise GitHubExpansionError(
+                "terminal expansion object references are not unique"
+            )
+    expected_subject_files.sort(key=lambda entry: entry["path"])
+    if comparator["files"] != expected_subject_files:
+        raise GitHubExpansionError(
+            "retained comparator subject does not match root and terminal objects"
+        )
+
+    references_by_key: dict[
+        tuple[str, str, str, int, int, str], dict[str, Any]
+    ] = {}
+    expected_object_references: dict[
+        tuple[str, str], set[tuple[str, str, str, int, int, str]]
+    ] = {identity: set() for identity in object_reference_keys}
+    for reference in references:
+        if not isinstance(reference, dict):
+            raise GitHubExpansionError(
+                "terminal expansion reference must be an object"
+            )
+        key = _terminal_reference_key(reference)
+        if (
+            key in references_by_key
+            or reference.get("source_commit") != source["commit"]
+            or reference.get("status") not in {"root_resolved", "expanded"}
+            or reference.get("reason_code") is not None
+        ):
+            raise GitHubExpansionError(
+                "terminal expansion reference identity or status changed"
+            )
+        target_identity = (
+            reference.get("target_commit"),
+            reference.get("target_repository_path"),
+        )
+        target = targets.get(target_identity)
+        if target is None or target["status"] != reference["status"]:
+            raise GitHubExpansionError(
+                "terminal expansion reference target is not retained"
+            )
+        references_by_key[key] = reference
+        if reference["status"] == "expanded":
+            expected_object_references[target_identity].add(key)
+    if expected_object_references != object_reference_keys:
+        raise GitHubExpansionError(
+            "terminal expansion object occurrence binding changed"
+        )
+
+    root_by_path = {entry["path"]: entry for entry in root_files}
+    graph_edges: list[dict[str, Any]] = []
+    consumed: set[tuple[str, str, str, int, int, str]] = set()
+    for entry in root_files:
+        try:
+            content = cas.read(entry["digest"], max_bytes=entry["size"])
+            scanned = _scan_entry(
+                content,
+                source_entry=entry,
+                source=source,
+                source_by_path=root_by_path,
+            )
+        except (CASError, _IncompleteExpansion) as exc:
+            raise GitHubExpansionError(
+                f"terminal root source graph is incomplete: {exc}"
+            ) from exc
+
+        immutable_targets = {
+            (target["commit"], target["path"])
+            for edge in scanned
+            if edge["reference_kind"] == "github_immutable"
+            for target in [parse_immutable_github_reference(edge["literal"])]
+            if target is not None
+        }
+        suppressed_dynamic = {
+            (
+                edge["source_path"],
+                edge["byte_offset"],
+                edge["literal_digest"],
+            )
+            for edge in scanned
+            if edge["reference_kind"] == "dynamic_command"
+            and edge["status"] == "unresolved"
+            for target in [exact_raw_github_fetch_target(edge["literal"])]
+            if target is not None
+            and (target["commit"], target["path"]) in immutable_targets
+            and _same_repository(target, source)
+        }
+        for edge in scanned:
+            if (
+                edge["reference_kind"] == "dynamic_command"
+                and (
+                    edge["source_path"],
+                    edge["byte_offset"],
+                    edge["literal_digest"],
+                )
+                in suppressed_dynamic
+            ):
+                continue
+            graph_edge = {
+                key: value for key, value in edge.items() if key != "literal_size"
+            }
+            if edge["status"] == "non_artifact":
+                graph_edges.append(graph_edge)
+                continue
+            source_repository_path = _repository_path(
+                source["skill_path"], edge["source_path"]
+            )
+            key = (
+                source["commit"],
+                source_repository_path,
+                edge["source_blob_digest"],
+                edge["byte_offset"],
+                edge["literal_size"],
+                edge["literal_digest"],
+            )
+            reference = references_by_key.get(key)
+            if reference is None:
+                raise GitHubExpansionError(
+                    "root source edge has no exact terminal expansion occurrence"
+                )
+            target_commit, target_path = _terminal_edge_target(
+                edge,
+                source=source,
+            )
+            if (
+                target_commit != reference["target_commit"]
+                or target_path != reference["target_repository_path"]
+            ):
+                raise GitHubExpansionError(
+                    "terminal expansion occurrence target changed"
+                )
+            target = targets[(target_commit, target_path)]
+            graph_edge.update(
+                {
+                    "status": "resolved",
+                    "target": {
+                        "path": target["path"],
+                        "digest": target["digest"],
+                    },
+                    "reason_code": None,
+                }
+            )
+            graph_edges.append(graph_edge)
+            consumed.add(key)
+    if consumed != set(references_by_key):
+        raise GitHubExpansionError(
+            "terminal expansion contains an unproved root occurrence"
+        )
+
+    nodes = [
+        {
+            "path": expanded_by_path[entry["path"]]["path"],
+            "size": expanded_by_path[entry["path"]]["size"],
+            "digest": expanded_by_path[entry["path"]]["digest"],
+            "executable": expanded_by_path[entry["path"]]["executable"],
+            "scan_status": "scanned",
+            "opaque_reason": None,
+        }
+        for entry in root_files
+    ]
+    nodes.extend(
+        {
+            "path": item["materialized_path"],
+            "size": item["size"],
+            "digest": item["digest"],
+            "executable": False,
+            "scan_status": "terminal",
+            "opaque_reason": None,
+        }
+        for item in objects
+    )
+    graph_edges.sort(
+        key=lambda item: (
+            item["source_path"],
+            item["byte_offset"],
+            item["literal_digest"],
+            item["reference_kind"],
+            item["status"],
+        )
+    )
+    return {
+        "schema": "aragorn/source-artifact-graph/v1",
+        "profile": TERMINAL_DEPTH_1_PROFILE,
+        "assurance": TERMINAL_DEPTH_1_ASSURANCE,
+        "source_assurance": (
+            "github_api_membership_asserted_blob_identity_reverified"
+        ),
+        "root_manifest_digest": root_manifest_digest,
+        "tree_digest": normalized_manifest["tree_digest"],
+        "nodes": sorted(nodes, key=lambda item: item["path"]),
+        "edges": graph_edges,
+        "closure": {
+            "scope": "source_reference_graph",
+            "profile": TERMINAL_DEPTH_1_PROFILE,
+            "status": "complete",
+            "unresolved": [],
+        },
+    }
+
+
+def _terminal_reference_key(
+    reference: dict[str, Any],
+) -> tuple[str, str, str, int, int, str]:
+    try:
+        return (
+            reference["source_commit"],
+            reference["source_repository_path"],
+            reference["source_blob_digest"],
+            reference["byte_offset"],
+            reference["literal_size"],
+            reference["literal_digest"],
+        )
+    except (KeyError, TypeError) as exc:
+        raise GitHubExpansionError(
+            "terminal expansion reference identity is incomplete"
+        ) from exc
+
+
+def _terminal_edge_target(
+    edge: dict[str, Any],
+    *,
+    source: dict[str, Any],
+) -> tuple[str, str]:
+    literal = edge["literal"]
+    if edge["reference_kind"] == "github_immutable":
+        target = parse_immutable_github_reference(literal)
+        if target is None or not _same_repository(target, source):
+            raise GitHubExpansionError(
+                "terminal GitHub edge has no exact same-repository target"
+            )
+        return target["commit"], target["path"]
+    if edge["reference_kind"] == "local":
+        target_path = canonical_local_reference_target(
+            literal,
+            source_path=edge["source_path"],
+        )
+        if target_path is None:
+            raise GitHubExpansionError(
+                "terminal local edge has no canonical target"
+            )
+        return (
+            source["commit"],
+            _repository_path(source["skill_path"], target_path),
+        )
+    raise GitHubExpansionError(
+        "terminal expansion retained an unsupported artifact edge"
+    )
 
 
 def _stage_root(

@@ -17,8 +17,18 @@
   ],
   "properties": {
     "schema": {"const": "aragorn/source-artifact-graph/v1"},
-    "profile": {"const": "phase0-literal-source-refs/v1"},
-    "assurance": {"const": "evaluation_only_literal_reference_profile"},
+    "profile": {
+      "enum": [
+        "phase0-literal-source-refs/v1",
+        "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+      ]
+    },
+    "assurance": {
+      "enum": [
+        "evaluation_only_literal_reference_profile",
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+      ]
+    },
     "source_assurance": {
       "enum": [
         "local_manifest_reverified",
@@ -43,6 +53,48 @@
     "closure": {"$ref": "#/$defs/closure"}
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": {"const": "phase0-literal-source-refs/v1"}
+        },
+        "required": ["profile"]
+      },
+      "then": {
+        "properties": {
+          "assurance": {"const": "evaluation_only_literal_reference_profile"},
+          "nodes": {
+            "items": {
+              "properties": {
+                "scan_status": {"enum": ["scanned", "opaque"]}
+              }
+            }
+          },
+          "closure": {
+            "properties": {
+              "profile": {"const": "phase0-literal-source-refs/v1"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "assurance": {
+            "const": "evaluation_only_github_api_membership_asserted_blob_identity_reverified_depth_1_targets_terminal_not_reference_scanned"
+          },
+          "source_assurance": {
+            "const": "github_api_membership_asserted_blob_identity_reverified"
+          },
+          "closure": {
+            "properties": {
+              "profile": {
+                "const": "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+              }
+            }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {
@@ -134,7 +186,7 @@
         },
         "digest": {"$ref": "#/$defs/digest"},
         "executable": {"type": "boolean"},
-        "scan_status": {"enum": ["scanned", "opaque"]},
+        "scan_status": {"enum": ["scanned", "opaque", "terminal"]},
         "opaque_reason": {
           "type": ["string", "null"],
           "enum": [
@@ -148,11 +200,11 @@
       "allOf": [
         {
           "if": {
-            "properties": {"scan_status": {"const": "scanned"}},
+            "properties": {"scan_status": {"const": "opaque"}},
             "required": ["scan_status"]
           },
-          "then": {"properties": {"opaque_reason": {"type": "null"}}},
-          "else": {"properties": {"opaque_reason": {"type": "string"}}}
+          "then": {"properties": {"opaque_reason": {"type": "string"}}},
+          "else": {"properties": {"opaque_reason": {"type": "null"}}}
         }
       ]
     },
@@ -272,7 +324,12 @@
       "required": ["scope", "profile", "status", "unresolved"],
       "properties": {
         "scope": {"const": "source_reference_graph"},
-        "profile": {"const": "phase0-literal-source-refs/v1"},
+        "profile": {
+          "enum": [
+            "phase0-literal-source-refs/v1",
+            "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+          ]
+        },
         "status": {"enum": ["complete", "incomplete"]},
         "unresolved": {
           "type": "array",

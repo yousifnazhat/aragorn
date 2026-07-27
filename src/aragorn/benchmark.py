@@ -34,6 +34,7 @@ from .github_expand import (
     PROFILE as GITHUB_EXPANSION_PROFILE,
     TERMINAL_DEPTH_1_ASSURANCE,
     TERMINAL_DEPTH_1_PROFILE,
+    resolve_terminal_source_graph,
 )
 from .oci_worker_protocol import (
     WorkerProtocolError,
@@ -616,6 +617,20 @@ def _evaluate(
             systems=systems,
             manifests=manifests,
         )
+    phase0_expansion_digests = None
+    if (
+        isinstance(phase0_accounting, dict)
+        and phase0_accounting.get("expansion_profile") == TERMINAL_DEPTH_1_PROFILE
+    ):
+        _, plans, _ = _validate_phase0_accounting(
+            phase0_accounting,
+            suite_digest=suite_digest,
+            cases=cases,
+            systems=systems,
+        )
+        phase0_expansion_digests = {
+            case_id: plan["expansion_digest"] for case_id, plan in plans.items()
+        }
     normalized_outcomes = _validate_outcomes(
         tuple(outcomes),
         cases,
@@ -632,6 +647,7 @@ def _evaluate(
             if hidden_binding is not None
             else None
         ),
+        phase0_expansion_digests=phase0_expansion_digests,
     )
     canonical_outcomes = sorted(
         normalized_outcomes,
@@ -1175,6 +1191,7 @@ def _validate_outcomes(
     acceptance_ledger: Path | None,
     require_candidate_composition: bool = False,
     expected_candidate_policy_digest: str | None = None,
+    phase0_expansion_digests: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     if require_candidate_composition and purpose != "evidence_smoke":
         raise BenchmarkError("Phase 0 hidden gate requires evidence_smoke")
@@ -1280,6 +1297,14 @@ def _validate_outcomes(
         }
         if purpose == "evidence_smoke":
             assert evidence_cas is not None
+            phase0_expansion_digest = None
+            if phase0_expansion_digests is not None and system["name"] == "aragorn":
+                if case_id not in phase0_expansion_digests:
+                    raise BenchmarkError(
+                        "terminal Phase 0 accounting has no source context for "
+                        f"candidate case: {case_id}"
+                    )
+                phase0_expansion_digest = phase0_expansion_digests[case_id]
             evidence_binding = _verify_evidence(
                 evidence_cas,
                 normalized_outcome,
@@ -1287,6 +1312,7 @@ def _validate_outcomes(
                 label=label,
                 expected_dispatch_matrix=expected_dispatch_matrix,
                 acceptance_ledger=acceptance_ledger,
+                phase0_expansion_digest=phase0_expansion_digest,
             )
             if evidence_binding is not None:
                 if "evidence_kind" in evidence_binding:
@@ -1899,6 +1925,7 @@ def _verify_candidate_evidence(
     expected_manifest: dict[str, Any],
     label: str,
     envelope: dict[str, Any],
+    phase0_expansion_digest: str | None = None,
 ) -> dict[str, Any]:
     evidence_label = f"{label}.evidence"
     evidence_schema = envelope.get("schema")
@@ -1994,16 +2021,36 @@ def _verify_candidate_evidence(
         f"{evidence_label}.source_graph",
         max_bytes=_MAX_SUITE_BYTES,
     )
-    try:
-        expected_graph = resolve_source_graph(
-            expected_manifest,
-            cas,
-            root_manifest_digest=manifest_digest,
-        )
-    except (ArtifactClosureError, CASError) as exc:
-        raise BenchmarkError(
-            f"{evidence_label}.source_graph cannot be re-derived: {exc}"
-        ) from exc
+    if phase0_expansion_digest is None:
+        try:
+            expected_graph = resolve_source_graph(
+                expected_manifest,
+                cas,
+                root_manifest_digest=manifest_digest,
+            )
+        except (ArtifactClosureError, CASError) as exc:
+            raise BenchmarkError(
+                f"{evidence_label}.source_graph cannot be re-derived: {exc}"
+            ) from exc
+    else:
+        try:
+            expansion = _load_phase0_expansion(
+                cas,
+                phase0_expansion_digest,
+                expected_tree_digest=outcome["tree_digest"],
+                label=f"{evidence_label}.source_context",
+                expected_profile=TERMINAL_DEPTH_1_PROFILE,
+            )
+            expected_graph = resolve_terminal_source_graph(
+                expected_manifest,
+                cas,
+                expansion,
+                root_manifest_digest=manifest_digest,
+            )
+        except (CASError, ValueError) as exc:
+            raise BenchmarkError(
+                f"{evidence_label}.source_graph cannot be re-derived: {exc}"
+            ) from exc
     if (
         source_graph != expected_graph
         or _digest_json(expected_graph) != source_graph_digest
@@ -2097,6 +2144,7 @@ def _verify_evidence(
     ]
     | None = None,
     acceptance_ledger: Path | None = None,
+    phase0_expansion_digest: str | None = None,
 ) -> dict[str, Any] | None:
     envelope = _read_canonical_document(
         cas,
@@ -2104,6 +2152,18 @@ def _verify_evidence(
         f"{label}.evidence",
         max_bytes=_MAX_EVIDENCE_BYTES,
     )
+    if (
+        phase0_expansion_digest is not None
+        and envelope.get("schema")
+        not in {
+            "aragorn/benchmark-candidate-evidence/v1",
+            "aragorn/benchmark-candidate-evidence/v2",
+        }
+    ):
+        raise BenchmarkError(
+            f"{label}.evidence terminal Phase 0 context requires "
+            "candidate-composition evidence"
+        )
     if envelope.get("schema") == "aragorn/benchmark-evidence/v4":
         return _verify_oci_evidence_v4(
             cas,
@@ -2135,6 +2195,7 @@ def _verify_evidence(
             expected_manifest=expected_manifest,
             label=label,
             envelope=envelope,
+            phase0_expansion_digest=phase0_expansion_digest,
         )
     if envelope.get("schema") in {
         "aragorn/benchmark-evidence/v2",

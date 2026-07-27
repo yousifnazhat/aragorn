@@ -26,7 +26,7 @@ from scripts.phase0_acquisition_gate import (
 )
 
 ROOT = Path(__file__).parents[1]
-POLICY = ROOT / "benchmark" / "phase0-candidate-policy-v6.json"
+POLICY = ROOT / "benchmark" / "phase0-candidate-policy-v7.json"
 
 
 def _digest(character: str) -> str:

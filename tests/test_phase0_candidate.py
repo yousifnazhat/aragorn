@@ -30,7 +30,7 @@ _ROOT = Path(__file__).parents[1]
 
 def _policy() -> dict:
     return json.loads(
-        (_ROOT / "benchmark" / "phase0-candidate-policy-v6.json").read_bytes()
+        (_ROOT / "benchmark" / "phase0-candidate-policy-v7.json").read_bytes()
     )
 
 
@@ -101,6 +101,24 @@ class Phase0CandidateTests(unittest.TestCase):
             policy["candidate"]["implementation_digest"],
             candidate_implementation_digest(),
         )
+
+    def test_terminal_graph_requires_github_source_assurance(self) -> None:
+        graph = _source_graph()
+        graph["profile"] = (
+            "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+        )
+        graph["assurance"] = (
+            "evaluation_only_github_api_membership_asserted_blob_identity_"
+            "reverified_depth_1_targets_terminal_not_reference_scanned"
+        )
+        graph["closure"]["profile"] = graph["profile"]
+
+        with self.assertRaisesRegex(CandidateError, "profile is unsupported"):
+            compose_candidate_decision(
+                _policy(),
+                graph,
+                _components(_policy()),
+            )
 
     @patch(
         "aragorn.phase0_candidate.candidate_implementation_digest",

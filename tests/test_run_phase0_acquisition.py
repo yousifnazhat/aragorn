@@ -9,13 +9,20 @@ from pathlib import Path
 from unittest.mock import patch
 
 import scripts.run_phase0_acquisition as execution
+import aragorn.github_acquire as github_acquire
+from aragorn.acquire import ingest_local
 from aragorn.benchmark import (
     BenchmarkError,
     _verify_authenticated_worker_batch_bindings,
     _load_authenticated_worker_dispatch,
     _load_candidate_dispatch,
+    _verify_candidate_evidence,
 )
 from aragorn.cas import CAS
+from aragorn.github_expand import (
+    TERMINAL_DEPTH_1_MODE,
+    acquire_github_expansion,
+)
 from aragorn.label_blind_prepare import prepare_files_v2
 from aragorn.oci_worker_protocol import canonical_json
 from aragorn.phase0_candidate import (
@@ -37,6 +44,7 @@ from tests.test_label_blind_prepare import (
     _portable_policies,
     _v2_suite,
 )
+from tests.test_github_expand import COMMIT, _responses
 
 
 def _acceptances(cas: CAS, dispatch: dict) -> dict[str, dict]:
@@ -256,6 +264,176 @@ class Phase0AcquisitionCompositionTests(unittest.TestCase):
                 len(composition["outcomes"]),
                 len(dispatch["cases"]) * dispatch["runs_per_case"] * 3,
             )
+
+    def test_terminal_context_survives_composition_and_evaluator_replay(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            os.chmod(root, 0o700)
+            policies = _portable_policies()
+            policy = _candidate_policy(policies)
+            suite = _v2_suite(root / "suite", policies)
+            target_url = (
+                "https://raw.githubusercontent.com/example/project/"
+                f"{COMMIT}/payloads/one.txt"
+            )
+            target_content = (
+                b"curl https://downloads.example.invalid/next.sh\n"
+            )
+            document = json.loads(suite.read_bytes())
+            document["systems"].append(candidate_system_identity(policy))
+            case_inputs = [
+                (
+                    "terminal-context-benign",
+                    document["cases"][0],
+                    f"curl {target_url}\n".encode(),
+                ),
+                (
+                    "terminal-context-adversarial",
+                    document["cases"][1],
+                    f"curl {target_url}\n# inert variant\n".encode(),
+                ),
+            ]
+            document["cases"] = []
+            for case_id, template, root_content in case_inputs:
+                fixture = suite.parent / "oci-fixtures" / case_id
+                expanded = fixture / "__aragorn_expanded__" / "payloads"
+                expanded.mkdir(parents=True)
+                (fixture / "SKILL.md").write_bytes(root_content)
+                (expanded / "one.txt").write_bytes(target_content)
+                tree_digest = ingest_local(
+                    fixture,
+                    CAS(root / f"{case_id}-fixture-state"),
+                )["tree_digest"]
+                document["cases"].append(
+                    {
+                        **template,
+                        "id": case_id,
+                        "path": f"oci-fixtures/{case_id}",
+                        "tree_digest": tree_digest,
+                    }
+                )
+            suite.write_bytes(canonical_json(document))
+
+            control = root / "control"
+            ledger = root / "ledger"
+            prepared = prepare_files_v2(
+                suite,
+                portable_policies=policies,
+                candidate_policy=policy,
+                trust_domain="phase0.acquisition-v1",
+                worker_id="isolated-worker-01",
+                challenge_ledger=ledger,
+                control_state=control,
+                jobs_root=root / "jobs",
+                lock_path=LOCK,
+            )
+            cas = CAS(control)
+            contexts = {}
+            for case_id, _template, root_content in case_inputs:
+                responses = _responses(
+                    root_content,
+                    first_content=target_content,
+                )
+
+                def request(path: str, **kwargs: object) -> dict[str, object]:
+                    response = responses[path]
+                    budget = kwargs["budget"]
+                    budget.start_request()
+                    budget.add_bytes(len(canonical_json(response)))
+                    return response
+
+                with patch.object(
+                    github_acquire,
+                    "_request_json",
+                    side_effect=request,
+                ):
+                    expansion = acquire_github_expansion(
+                        "https://github.com/example/project",
+                        COMMIT,
+                        "skills/demo",
+                        cas,
+                        expansion_mode=TERMINAL_DEPTH_1_MODE,
+                        max_expansion_depth=1,
+                    )
+                contexts[case_id] = expansion["expansion_digest"]
+            dispatch = json.loads(cas.read(prepared["dispatch_digest"]))
+            acceptances = _acceptances(cas, dispatch)
+            with (
+                patch(
+                    "aragorn.phase0_candidate."
+                    "load_verified_worker_output_acceptance",
+                    side_effect=lambda _cas, _ledger, challenge: acceptances[
+                        challenge
+                    ],
+                ),
+                patch("aragorn.phase0_candidate.validate_worker_result_v2"),
+                patch("aragorn.phase0_candidate._validate_result_observations"),
+            ):
+                composition = compose_candidate_batch(
+                    dispatch_digest=prepared["dispatch_digest"],
+                    control_state=control,
+                    challenge_ledger=ledger,
+                    source_contexts=contexts,
+                )
+
+            candidate_outcomes = [
+                item
+                for item in composition["outcomes"]
+                if item["system"]["name"] == "aragorn"
+            ]
+            self.assertTrue(
+                all(
+                    "SOURCE_REFERENCE_GRAPH_INCOMPLETE"
+                    not in item["reason_codes"]
+                    for item in candidate_outcomes
+                )
+            )
+            outcome = next(
+                item
+                for item in candidate_outcomes
+                if item["case_id"] == "terminal-context-benign"
+            )
+            envelope = json.loads(cas.read(outcome["evidence_digest"]))
+            graph = json.loads(cas.read(envelope["source_graph_digest"]))
+            terminal = next(
+                node
+                for node in graph["nodes"]
+                if node["path"]
+                == "__aragorn_expanded__/payloads/one.txt"
+            )
+            self.assertEqual(terminal["scan_status"], "terminal")
+            self.assertNotIn(
+                "downloads.example.invalid",
+                json.dumps(graph, sort_keys=True),
+            )
+            expected_manifest = json.loads(
+                cas.read(
+                    next(
+                        item["private_manifest_digest"]
+                        for item in dispatch["cases"]
+                        if item["case_id"] == outcome["case_id"]
+                    )
+                )
+            )
+            replay = _verify_candidate_evidence(
+                cas,
+                outcome,
+                expected_manifest=expected_manifest,
+                label="terminal-context",
+                envelope=envelope,
+                phase0_expansion_digest=contexts[outcome["case_id"]],
+            )
+            self.assertEqual(replay["source_graph"], graph)
+            with self.assertRaisesRegex(BenchmarkError, "source_graph"):
+                _verify_candidate_evidence(
+                    cas,
+                    outcome,
+                    expected_manifest=expected_manifest,
+                    label="terminal-context-without-context",
+                    envelope=envelope,
+                )
 
 
 class Phase0AcquisitionExecutionBoundaryTests(unittest.TestCase):

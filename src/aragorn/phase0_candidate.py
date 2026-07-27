@@ -36,6 +36,12 @@ from .benchmark_protocol_v2 import (
     verify_request_subject_v2,
 )
 from .cas import CAS, CASError
+from .github_expand import (
+    GitHubExpansionError,
+    TERMINAL_DEPTH_1_ASSURANCE,
+    TERMINAL_DEPTH_1_PROFILE,
+    resolve_terminal_source_graph,
+)
 from .oci_worker_protocol import (
     WorkerProtocolError,
     canonical_digest,
@@ -2247,6 +2253,7 @@ def compose_candidate_batch(
     dispatch_digest: str,
     control_state: str | os.PathLike[str],
     challenge_ledger: str | os.PathLike[str],
+    source_contexts: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Compose a complete candidate matrix without reading benchmark labels."""
 
@@ -2307,6 +2314,22 @@ def compose_candidate_batch(
                 "private dispatch does not contain one exact comparator pair per cell"
             )
 
+    case_ids = {case_id for case_id, _run_id in cells}
+    if source_contexts is None:
+        contexts: dict[str, str] = {}
+    elif not isinstance(source_contexts, dict):
+        raise CandidateError("candidate source contexts must be an object")
+    else:
+        contexts = {
+            _identifier(case_id, "candidate source context case"):
+            _digest(digest, "candidate source context digest")
+            for case_id, digest in source_contexts.items()
+        }
+        if set(contexts) != case_ids:
+            raise CandidateError(
+                "candidate source contexts must close the exact case matrix"
+            )
+
     component_outcomes, component_evidence = _authenticated_components(
         dispatch_digest=dispatch_digest,
         dispatch=dispatch,
@@ -2315,27 +2338,51 @@ def compose_candidate_batch(
     )
 
     analyses: dict[
-        str,
+        tuple[str, str | None],
         tuple[str, tuple[str, ...], tuple[Observation, ...]],
     ] = {}
     candidate_outcomes: list[dict[str, Any]] = []
     for cell in sorted(cells):
         entries = cells[cell]
         manifest_digest = entries[0]["private_manifest_digest"]
-        retained = analyses.get(manifest_digest)
+        context_digest = contexts.get(cell[0])
+        analysis_key = (manifest_digest, context_digest)
+        retained = analyses.get(analysis_key)
         if retained is None:
             try:
                 manifest = load_retained_manifest(cas, manifest_digest)
-                graph = resolve_source_graph(
-                    manifest,
-                    cas,
-                    root_manifest_digest=manifest_digest,
-                )
+                if context_digest is None:
+                    graph = resolve_source_graph(
+                        manifest,
+                        cas,
+                        root_manifest_digest=manifest_digest,
+                    )
+                else:
+                    from .benchmark import _load_phase0_expansion
+
+                    expansion = _load_phase0_expansion(
+                        cas,
+                        context_digest,
+                        expected_tree_digest=entries[0]["tree_digest"],
+                        label=f"candidate source context {cell[0]}",
+                        expected_profile=TERMINAL_DEPTH_1_PROFILE,
+                    )
+                    graph = resolve_terminal_source_graph(
+                        manifest,
+                        cas,
+                        expansion,
+                        root_manifest_digest=manifest_digest,
+                    )
                 first_party_observations = detect_first_party_observations(
                     manifest,
                     cas,
                 )
-            except (ArtifactClosureError, CASError) as exc:
+            except (
+                ArtifactClosureError,
+                CASError,
+                GitHubExpansionError,
+                ValueError,
+            ) as exc:
                 raise CandidateError(
                     f"cannot derive candidate analysis: {exc}"
                 ) from exc
@@ -2351,7 +2398,7 @@ def compose_candidate_batch(
                 observation_digests,
                 first_party_observations,
             )
-            analyses[manifest_digest] = retained
+            analyses[analysis_key] = retained
         else:
             graph_digest, observation_digests, first_party_observations = retained
             graph = _read_canonical_document(
@@ -2459,14 +2506,26 @@ def _source_graph(value: object) -> dict[str, Any]:
     if graph["schema"] != "aragorn/source-artifact-graph/v1":
         raise CandidateError("source-reference graph schema is unsupported")
     if (
-        graph["profile"] != SOURCE_GRAPH_PROFILE
-        or graph["assurance"] != SOURCE_GRAPH_ASSURANCE
-        or graph["source_assurance"]
-        not in {
+        graph["profile"],
+        graph["assurance"],
+        graph["source_assurance"],
+    ) not in {
+        (
+            SOURCE_GRAPH_PROFILE,
+            SOURCE_GRAPH_ASSURANCE,
             "local_manifest_reverified",
+        ),
+        (
+            SOURCE_GRAPH_PROFILE,
+            SOURCE_GRAPH_ASSURANCE,
             "github_api_membership_asserted_blob_identity_reverified",
-        }
-    ):
+        ),
+        (
+            TERMINAL_DEPTH_1_PROFILE,
+            TERMINAL_DEPTH_1_ASSURANCE,
+            "github_api_membership_asserted_blob_identity_reverified",
+        ),
+    }:
         raise CandidateError("source-reference graph profile is unsupported")
     _digest(graph["root_manifest_digest"], "source-reference graph root manifest")
     _digest(graph["tree_digest"], "source-reference graph tree")
@@ -2479,7 +2538,7 @@ def _source_graph(value: object) -> dict[str, Any]:
     )
     if (
         closure["scope"] != "source_reference_graph"
-        or closure["profile"] != SOURCE_GRAPH_PROFILE
+        or closure["profile"] != graph["profile"]
         or closure["status"] not in {"complete", "incomplete"}
         or not isinstance(closure["unresolved"], list)
     ):

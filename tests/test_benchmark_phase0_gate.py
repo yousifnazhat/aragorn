@@ -637,6 +637,62 @@ class Phase0GateTests(unittest.TestCase):
                     suite, outcomes, missing_receipt, root, evidence_state=state
                 )
 
+    def test_terminal_accounting_is_validated_and_threaded_before_outcomes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, accounting, root, state = self._harness(Path(temporary))
+            accounting["expansion_profile"] = (
+                benchmark_module.TERMINAL_DEPTH_1_PROFILE
+            )
+            accounting["expansion_assurance"] = (
+                benchmark_module.TERMINAL_DEPTH_1_ASSURANCE
+            )
+            expected = {
+                item["case_id"]: item["expansion_digest"]
+                for item in accounting["cases"]
+            }
+            with (
+                patch.object(
+                    benchmark_module,
+                    "_validate_outcomes",
+                    wraps=benchmark_module._validate_outcomes,
+                ) as validate_outcomes,
+                patch.object(
+                    benchmark_module,
+                    "_phase0_gate_report",
+                    return_value={"passed": True},
+                ),
+            ):
+                evaluate_phase0(
+                    suite,
+                    outcomes,
+                    accounting,
+                    root,
+                    evidence_state=state,
+                )
+            self.assertEqual(
+                validate_outcomes.call_args.kwargs["phase0_expansion_digests"],
+                expected,
+            )
+
+            accounting["cases"].pop()
+            with (
+                patch.object(
+                    benchmark_module,
+                    "_validate_outcomes",
+                    side_effect=AssertionError("outcomes validated first"),
+                ),
+                self.assertRaisesRegex(BenchmarkError, "matrix is incomplete"),
+            ):
+                evaluate_phase0(
+                    suite,
+                    outcomes,
+                    accounting,
+                    root,
+                    evidence_state=state,
+                )
+
     def test_unresolved_opaque_and_budget_burden_are_separate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             suite, outcomes, accounting, root, state = self._harness(

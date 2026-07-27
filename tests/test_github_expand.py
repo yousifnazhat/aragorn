@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 from contextlib import redirect_stdout
 import hashlib
-from io import StringIO
+from io import BytesIO, StringIO
 import json
 from pathlib import Path
 import tempfile
@@ -23,6 +23,7 @@ from aragorn.github_expand import (
     TERMINAL_DEPTH_1_MODE,
     TERMINAL_DEPTH_1_PROFILE,
     acquire_github_expansion,
+    resolve_terminal_source_graph,
 )
 
 
@@ -48,6 +49,26 @@ def _blob_document(content: bytes) -> dict[str, object]:
         "encoding": "base64",
         "content": base64.encodebytes(content).decode("ascii"),
     }
+
+
+def _retain_reingested_manifest(
+    cas: CAS,
+    subject: dict[str, object],
+) -> tuple[dict[str, object], str]:
+    manifest = {
+        "schema": "aragorn/manifest/v1",
+        "source": {"kind": "local", "path": "/reingested-expanded-subject"},
+        "tree_digest": subject["tree_digest"],
+        "files": subject["files"],
+        "closure": {"scope": "source_tree", "status": "complete"},
+    }
+    raw = json.dumps(
+        manifest,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    return manifest, cas.put(BytesIO(raw), max_bytes=len(raw))
 
 
 def _responses(
@@ -591,6 +612,95 @@ class GitHubExpansionTests(unittest.TestCase):
             ["payloads/one.txt", "payloads/two.txt"],
         )
         self.assertIn(second_blob_path, default_calls)
+
+    def test_terminal_source_graph_binds_target_without_scanning_it(self) -> None:
+        target_url = (
+            "https://raw.githubusercontent.com/example/project/"
+            f"{COMMIT}/payloads/one.txt"
+        )
+        target_content = b"curl https://downloads.example.invalid/next.sh\n"
+        result, expansion, cas, _calls, temporary = self.expand(
+            _responses(
+                f"curl {target_url}\n".encode(),
+                first_content=target_content,
+            ),
+            expansion_mode=TERMINAL_DEPTH_1_MODE,
+            max_expansion_depth=1,
+        )
+        self.addCleanup(temporary.cleanup)
+        subject = json.loads(
+            cas.read(result["comparator_subject_manifest_digest"])
+        )
+        manifest, manifest_digest = _retain_reingested_manifest(cas, subject)
+
+        graph = resolve_terminal_source_graph(
+            manifest,
+            cas,
+            expansion,
+            root_manifest_digest=manifest_digest,
+        )
+
+        self.assertEqual(graph["profile"], TERMINAL_DEPTH_1_PROFILE)
+        self.assertEqual(graph["assurance"], TERMINAL_DEPTH_1_ASSURANCE)
+        self.assertEqual(graph["root_manifest_digest"], manifest_digest)
+        self.assertEqual(graph["tree_digest"], subject["tree_digest"])
+        self.assertEqual(graph["closure"]["status"], "complete")
+        self.assertEqual(len(graph["edges"]), 1)
+        self.assertEqual(graph["edges"][0]["reference_kind"], "github_immutable")
+        self.assertEqual(graph["edges"][0]["status"], "resolved")
+        self.assertEqual(
+            graph["edges"][0]["target"]["path"],
+            "__aragorn_expanded__/payloads/one.txt",
+        )
+        terminal = next(
+            node
+            for node in graph["nodes"]
+            if node["path"] == "__aragorn_expanded__/payloads/one.txt"
+        )
+        self.assertEqual(terminal["scan_status"], "terminal")
+        self.assertNotIn(
+            "downloads.example.invalid",
+            json.dumps(graph, sort_keys=True),
+        )
+
+    def test_terminal_source_graph_rejects_reingested_subject_tamper(self) -> None:
+        target_url = (
+            "https://raw.githubusercontent.com/example/project/"
+            f"{COMMIT}/payloads/one.txt"
+        )
+        result, expansion, cas, _calls, temporary = self.expand(
+            _responses(f"curl {target_url}\n".encode()),
+            expansion_mode=TERMINAL_DEPTH_1_MODE,
+            max_expansion_depth=1,
+        )
+        self.addCleanup(temporary.cleanup)
+        subject = json.loads(
+            cas.read(result["comparator_subject_manifest_digest"])
+        )
+        tampered = json.loads(json.dumps(subject))
+        tampered["files"][1]["path"] = (
+            "__aragorn_expanded__/payloads/renamed.txt"
+        )
+        tampered["tree_digest"] = "sha256:" + hashlib.sha256(
+            json.dumps(
+                tampered["files"],
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+        ).hexdigest()
+        manifest, manifest_digest = _retain_reingested_manifest(cas, tampered)
+
+        with self.assertRaisesRegex(
+            GitHubExpansionError,
+            "does not exactly match retained comparator subject",
+        ):
+            resolve_terminal_source_graph(
+                manifest,
+                cas,
+                expansion,
+                root_manifest_digest=manifest_digest,
+            )
 
     def test_terminal_depth_1_requires_exact_depth_budget(self) -> None:
         with self.assertRaisesRegex(

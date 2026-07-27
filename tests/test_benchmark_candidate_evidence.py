@@ -145,6 +145,7 @@ def _verify_candidate(
     envelope: dict,
     *,
     first_party_observations: tuple[Observation, ...] = (),
+    phase0_expansion_digest: str | None = None,
 ) -> dict:
     envelope = deepcopy(envelope)
     envelope["source_graph_digest"] = benchmark._digest_json(
@@ -173,6 +174,21 @@ def _verify_candidate(
     }
     cas = mock.Mock()
     cas.read.side_effect = lambda digest, **_kwargs: observation_bytes[digest]
+    expansion = object()
+
+    def load_expansion(*_args, **kwargs):
+        assert kwargs["expected_profile"] == benchmark.TERMINAL_DEPTH_1_PROFILE
+        return expansion
+
+    def resolve_terminal(
+        manifest, graph_cas, retained_expansion, *, root_manifest_digest
+    ):
+        assert manifest == {}
+        assert graph_cas is cas
+        assert retained_expansion is expansion
+        assert root_manifest_digest == envelope["private_manifest_digest"]
+        return candidate["source_graph"]
+
     with (
         mock.patch.object(
             benchmark,
@@ -198,7 +214,24 @@ def _verify_candidate(
         mock.patch.object(
             benchmark,
             "resolve_source_graph",
-            return_value=candidate["source_graph"],
+            return_value=candidate["source_graph"]
+            if phase0_expansion_digest is None
+            else mock.DEFAULT,
+            side_effect=(
+                None
+                if phase0_expansion_digest is None
+                else AssertionError("terminal context used the generic resolver")
+            ),
+        ),
+        mock.patch.object(
+            benchmark,
+            "_load_phase0_expansion",
+            side_effect=load_expansion,
+        ),
+        mock.patch.object(
+            benchmark,
+            "resolve_terminal_source_graph",
+            side_effect=resolve_terminal,
         ),
         mock.patch(
             "aragorn.phase0_candidate.detect_first_party_observations",
@@ -211,6 +244,7 @@ def _verify_candidate(
             expected_manifest={},
             label="outcome",
             envelope=envelope,
+            phase0_expansion_digest=phase0_expansion_digest,
         )
 
 
@@ -367,12 +401,40 @@ class BenchmarkCandidateEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(BenchmarkError, "is invalid"):
             self._verify_candidate(oversized)
 
+    def test_terminal_acquisition_context_rederives_the_retained_graph(self) -> None:
+        candidate = _bindings()[2]
+
+        verified = _verify_candidate(
+            candidate,
+            candidate["envelope"],
+            phase0_expansion_digest=_digest("a"),
+        )
+
+        self.assertEqual(verified["source_graph"], candidate["source_graph"])
+
+    def test_terminal_context_rejects_non_candidate_evidence(self) -> None:
+        with (
+            mock.patch.object(
+                benchmark,
+                "_read_canonical_document",
+                return_value={"schema": "aragorn/benchmark-evidence/v4"},
+            ),
+            self.assertRaisesRegex(BenchmarkError, "candidate-composition evidence"),
+        ):
+            benchmark._verify_evidence(
+                mock.Mock(),
+                {"evidence_digest": _digest("a")},
+                expected_manifest={},
+                label="outcome",
+                phase0_expansion_digest=_digest("b"),
+            )
+
 
 class BenchmarkCandidateEvidenceV3Tests(unittest.TestCase):
     def test_v3_policy_accepts_v2_evidence_and_rederives_composed_review(
         self,
     ) -> None:
-        bindings = _bindings("phase0-candidate-policy-v6.json")
+        bindings = _bindings("phase0-candidate-policy-v7.json")
         candidate = bindings[2]
         observation = Observation(
             schema="aragorn/observation/v1",

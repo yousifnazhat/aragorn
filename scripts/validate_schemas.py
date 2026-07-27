@@ -867,11 +867,17 @@ def main() -> int:
     validators["benchmark-candidate-policy-v3.schema.json"].validate(
         phase0_candidate_policy_v6
     )
+    phase0_candidate_policy_v7 = load(
+        ROOT / "benchmark" / "phase0-candidate-policy-v7.json"
+    )
+    validators["benchmark-candidate-policy-v3.schema.json"].validate(
+        phase0_candidate_policy_v7
+    )
     if (
-        build_candidate_policy(phase0_candidate_policy_v6)
-        != phase0_candidate_policy_v6
+        build_candidate_policy(phase0_candidate_policy_v7)
+        != phase0_candidate_policy_v7
     ):
-        raise AssertionError("checked v6 candidate policy is not canonical")
+        raise AssertionError("checked v7 candidate policy is not canonical")
     portable_identities = []
     for filename in (
         "phase0-cisco-portable-policy.json",
@@ -2676,6 +2682,32 @@ def main() -> int:
         },
     }
     validators["source-artifact-graph-v1.schema.json"].validate(source_graph)
+    terminal_graph = deepcopy(source_graph)
+    terminal_graph["profile"] = (
+        "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
+    )
+    terminal_graph["assurance"] = (
+        "evaluation_only_github_api_membership_asserted_blob_identity_reverified_"
+        "depth_1_targets_terminal_not_reference_scanned"
+    )
+    terminal_graph["source_assurance"] = (
+        "github_api_membership_asserted_blob_identity_reverified"
+    )
+    terminal_graph["nodes"][0]["scan_status"] = "terminal"
+    terminal_graph["closure"]["profile"] = terminal_graph["profile"]
+    validators["source-artifact-graph-v1.schema.json"].validate(terminal_graph)
+    generic_terminal_graph = deepcopy(source_graph)
+    generic_terminal_graph["nodes"][0]["scan_status"] = "terminal"
+    if validators["source-artifact-graph-v1.schema.json"].is_valid(
+        generic_terminal_graph
+    ):
+        raise AssertionError("generic source graph accepted a terminal node")
+    mismatched_terminal_graph = deepcopy(terminal_graph)
+    mismatched_terminal_graph["closure"]["profile"] = source_graph["profile"]
+    if validators["source-artifact-graph-v1.schema.json"].is_valid(
+        mismatched_terminal_graph
+    ):
+        raise AssertionError("terminal source graph accepted a generic closure")
     validators["resolve-artifacts-result-v1.schema.json"].validate(
         {
             "schema": "aragorn/resolve-artifacts-result/v1",

@@ -25,6 +25,7 @@ from scripts.prepare_hidden_suite import (
     _V3_GATE,
     _V4_GATE,
     _V5_GATE,
+    _V6_GATE,
     PreparationError,
     _committed_document,
     _preflight_suite,
@@ -56,6 +57,10 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
         self.assertEqual(
             _V5_GATE.corpus_lock_path,
             Path("benchmark/phase0-corpus-v5.lock.json"),
+        )
+        self.assertEqual(
+            _V6_GATE.corpus_lock_path,
+            Path("benchmark/phase0-corpus-v6.lock.json"),
         )
         self.assertEqual(_CORPUS_LOCK_PATH, retained_path)
 
@@ -260,6 +265,48 @@ class HiddenPreparationReceiptTests(unittest.TestCase):
             "sha256:be9f50ad5d47c9ada8100ef2dc008d36b57d349e5fe288aa33cd00c57af9bb6a",
         )
         self.assertFalse(_V5_GATE.calibration_only)
+
+    def test_v6_gate_binds_frozen_candidate_and_state(self) -> None:
+        self.assertEqual(
+            (
+                _V6_GATE.freeze_commit,
+                _V6_GATE.freeze_tree,
+                _V6_GATE.lock_digest,
+                _V6_GATE.freeze_receipt_digest,
+                _V6_GATE.suite_digest,
+                _V6_GATE.candidate_policy_digest,
+                _V6_GATE.state_binding_digest,
+            ),
+            (
+                "1ad2b5fd6cba7fb140382596974bf0c72dd6babe",
+                "955d2c431b7897254f1a3a6de9b78bc1a5ec38bd",
+                "sha256:a862f355c21b3ce4e3d996b8cfd155856fa47a66a7e03f37a728e1aec3a99997",
+                "sha256:d0bcb58ea1286e92a519081e31d34ef4062ee0cf6df9449a8f9a37f2fc6dbeb4",
+                "sha256:d1bf6f3a8ce547a94e5e4135a486eee17b2e310d1467e0df9e7ad58e99a8db3f",
+                "sha256:87fcad8e27c6e9c4e2dc68212b1c630211ea8eefa4501d534c327afe398c3175",
+                "sha256:5e477520e56b346b22041862e1936fa0fb11fcd0a19b9d61e86226f5ec71d82f",
+            ),
+        )
+        self.assertEqual(
+            _state_paths(
+                Path(
+                    "/Users/yousi/Documents/Codex/2026-07-26/"
+                    "aragorn-phase0-v6-evaluation-20260726/run-state-v6"
+                ),
+                _V6_GATE,
+            )["outcomes"],
+            Path(
+                "/Users/yousi/Documents/Codex/2026-07-26/"
+                "aragorn-phase0-v6-evaluation-20260726/"
+                "run-state-v6/outcomes.jsonl"
+            ),
+        )
+        self.assertEqual(
+            _V6_GATE.release_manifest_digest,
+            "sha256:710352b1ef15c1cf0b184bec46e90d4b07efae1a77f5989a98d7d0010e036a9f",
+        )
+        self.assertEqual(_V6_GATE.trust_domain, "phase0.hidden-local-v6.0.0")
+        self.assertFalse(_V6_GATE.calibration_only)
 
     def test_v5_release_manifest_input_is_exact_and_fail_closed(self) -> None:
         manifest = {"schema": "example/release-manifest/v1"}

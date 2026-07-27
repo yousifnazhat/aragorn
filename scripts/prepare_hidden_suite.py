@@ -295,9 +295,50 @@ _V5_GATE = PreparationGate(
     ),
 )
 
+_V6_GATE = PreparationGate(
+    name="v6",
+    freeze_commit="1ad2b5fd6cba7fb140382596974bf0c72dd6babe",
+    freeze_tree="955d2c431b7897254f1a3a6de9b78bc1a5ec38bd",
+    corpus_lock_path=Path("benchmark/phase0-corpus-v6.lock.json"),
+    lock_path=Path("benchmark/phase0-hidden-suite-v6.lock.json"),
+    freeze_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-suite-v6-freeze-2026-07-26.json"
+    ),
+    preparation_receipt_path=Path(
+        "benchmark/receipts/phase0-hidden-v6-preparation-2026-07-26.json"
+    ),
+    candidate_policy_path=Path("benchmark/phase0-candidate-policy-v6.json"),
+    portable_policy_paths=(
+        Path("benchmark/phase0-cisco-portable-policy-v2.json"),
+        Path("benchmark/phase0-skillspector-portable-policy-v2.json"),
+    ),
+    lock_digest=(
+        "sha256:a862f355c21b3ce4e3d996b8cfd155856fa47a66a7e03f37a728e1aec3a99997"
+    ),
+    freeze_receipt_digest=(
+        "sha256:d0bcb58ea1286e92a519081e31d34ef4062ee0cf6df9449a8f9a37f2fc6dbeb4"
+    ),
+    suite_digest=(
+        "sha256:d1bf6f3a8ce547a94e5e4135a486eee17b2e310d1467e0df9e7ad58e99a8db3f"
+    ),
+    candidate_policy_digest=(
+        "sha256:87fcad8e27c6e9c4e2dc68212b1c630211ea8eefa4501d534c327afe398c3175"
+    ),
+    state_binding_digest=(
+        "sha256:5e477520e56b346b22041862e1936fa0fb11fcd0a19b9d61e86226f5ec71d82f"
+    ),
+    trust_domain="phase0.hidden-local-v6.0.0",
+    recorded_on="2026-07-26",
+    receipt_schema="aragorn/benchmark-phase0-hidden-preparation-receipt/v5",
+    run_receipt_schema="aragorn/benchmark-phase0-hidden-worker-run-receipt/v5",
+    release_manifest_digest=(
+        "sha256:710352b1ef15c1cf0b184bec46e90d4b07efae1a77f5989a98d7d0010e036a9f"
+    ),
+)
+
 _GATES = {
     gate.name: gate
-    for gate in (_V1_GATE, _V2_GATE, _V3_GATE, _V4_GATE, _V5_GATE)
+    for gate in (_V1_GATE, _V2_GATE, _V3_GATE, _V4_GATE, _V5_GATE, _V6_GATE)
 }
 
 # Compatibility names used by retained v1 validators and tests.
@@ -497,17 +538,19 @@ def _verified_release_manifest(
     gate: PreparationGate = _V1_GATE,
 ) -> dict[str, object] | None:
     gate = _registered_gate(gate)
-    if gate.name != _V5_GATE.name:
+    if gate.release_manifest_digest is None:
         if path is not None:
             raise PreparationError(
-                "release manifest input is only valid for the v5 gate"
+                "release manifest input is only valid for a release-backed gate"
             )
         return None
     if path is None:
-        raise PreparationError("v5 requires its signed public release manifest")
-    _reject_symlink_components(path, "v5 release manifest")
+        raise PreparationError(
+            f"{gate.name} requires its signed public release manifest"
+        )
+    _reject_symlink_components(path, f"{gate.name} release manifest")
     raw = _read(path, max_bytes=_MAX_JSON)
-    manifest = _decode_json(raw, "v5 release manifest")
+    manifest = _decode_json(raw, f"{gate.name} release manifest")
     expected = gate.release_manifest_digest
     try:
         locked = corpus_lock["release_manifest"]
@@ -515,7 +558,7 @@ def _verified_release_manifest(
         receipt_digest = freeze_receipt["release"]["release_manifest_digest"]
     except (KeyError, TypeError) as exc:
         raise PreparationError(
-            "v5 release manifest binding is malformed"
+            f"{gate.name} release manifest binding is malformed"
         ) from exc
     if (
         expected is None
@@ -525,7 +568,7 @@ def _verified_release_manifest(
         or _sha256(raw) != expected
         or canonical_json(manifest) != raw
     ):
-        raise PreparationError("v5 release manifest binding changed")
+        raise PreparationError(f"{gate.name} release manifest binding changed")
     return manifest
 
 

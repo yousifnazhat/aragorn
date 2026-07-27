@@ -1548,19 +1548,13 @@ def main() -> int:
     validators["benchmark-phase0-hidden-suite-freeze-receipt-v6.schema.json"].validate(
         hidden_v6_receipt
     )
-    validate_freeze_receipt_bindings(
-        hidden_v6_receipt,
-        hidden_v6_receipt_raw,
-        hidden_v6_lock,
-        hidden_v6_lock_raw,
-        phase0_corpus_lock_v6,
-        phase0_corpus_lock_v6_raw,
-    )
     if (
         "sha256:" + hashlib.sha256(hidden_v6_lock_raw).hexdigest()
         != _V6_GATE.lock_digest
         or "sha256:" + hashlib.sha256(hidden_v6_receipt_raw).hexdigest()
         != _V6_GATE.freeze_receipt_digest
+        or hidden_v6_lock["corpus_lock_digest"]
+        != "sha256:" + hashlib.sha256(phase0_corpus_lock_v6_raw).hexdigest()
         or hidden_v6_lock["suite_digest"] != _V6_GATE.suite_digest
         or hidden_v6_lock["candidate_policy_digest"]
         != _V6_GATE.candidate_policy_digest

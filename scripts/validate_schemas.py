@@ -910,6 +910,18 @@ def main() -> int:
             / "phase1-openclaw-contained-adm03-probe-2026-07-27.json",
             "NOT_TESTED",
         ),
+        (
+            "openclaw-restart",
+            (
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-restart-probe-2026-07-27.json",
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-restart-environment-2026-07-27.json",
+            ),
+            admission_receipts
+            / "phase1-openclaw-contained-restart-probe-2026-07-27.json",
+            "NOT_TESTED",
+        ),
     )
     for label, evidence_paths, result_path, expected_status in retained_admission_results:
         result = load(result_path)

@@ -217,6 +217,13 @@ def load_retained_manifest(cas: CAS, digest: str) -> dict[str, Any]:
     return document
 
 
+def load_verified_retained_manifest(cas: CAS, digest: str) -> dict[str, Any]:
+    """Read and verify one canonical source manifest and every retained blob."""
+
+    manifest, _ = _validate_manifest(load_retained_manifest(cas, digest), cas)
+    return manifest
+
+
 def resolve_source_graph(
     manifest: object,
     cas: CAS,

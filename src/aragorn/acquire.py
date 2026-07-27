@@ -85,6 +85,30 @@ def ingest_open_directory(
     )
 
 
+def inventory_open_directory(
+    directory_fd: int,
+    *,
+    max_depth: int = 8,
+    max_files: int = 10_000,
+    max_file_size: int = 16 * 1024 * 1024,
+    max_total_bytes: int = 128 * 1024 * 1024,
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Inventory an already-open directory and its exact directory layout."""
+
+    directories: list[str] = []
+    manifest = _inventory_local(
+        "<open-directory>",
+        None,
+        supplied_directory_fd=directory_fd,
+        max_depth=max_depth,
+        max_files=max_files,
+        max_file_size=max_file_size,
+        max_total_bytes=max_total_bytes,
+        observed_directories=directories,
+    )
+    return manifest, tuple(sorted(directories))
+
+
 def _inventory_local(
     skill_root: str | os.PathLike[str],
     cas: CAS | None,
@@ -94,6 +118,7 @@ def _inventory_local(
     max_file_size: int,
     max_total_bytes: int,
     supplied_directory_fd: int | None = None,
+    observed_directories: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build a bounded manifest, optionally ingesting the bytes into *cas*.
 
@@ -183,6 +208,8 @@ def _inventory_local(
             if stat.S_ISLNK(entry_stat.st_mode):
                 raise InventoryError(f"symlink rejected: {relative_path}")
             if stat.S_ISDIR(entry_stat.st_mode):
+                if observed_directories is not None:
+                    observed_directories.append(relative_path)
                 child_depth = len(relative_parts)
                 if child_depth > max_depth:
                     raise InventoryError(f"maximum depth exceeded at {relative_path}")

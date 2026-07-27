@@ -24,6 +24,9 @@ Current status: **private qualified Phase 0 validation milestone complete; Phase
   but no comparator subject.
 - Same-file-descriptor ingestion into a private SHA-256 content-addressed store.
 - Re-verification before reads and materialization.
+- Descriptor-bound comparison of a staged source-tree snapshot against a fully
+  re-verified retained manifest. This snapshot check neither authorizes nor
+  activates the tree.
 - Sanitized execution from an empty control directory, with bounded output, process-group wall-clock supervision, and executable-byte identity.
 - Open-once analyzer ingestion and launch from a private CAS materialization, so later replacement of the original configured file cannot change the staged entrypoint bytes.
 - Byte-exact retention of analyzer stdout and stderr.

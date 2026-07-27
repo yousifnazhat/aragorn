@@ -518,7 +518,9 @@ aragorn/
 ├── aragorn                       # Local executable
 ├── src/aragorn/
 │   ├── acquire.py                # Bounded local inventory and CAS ingestion
+│   ├── admission_conformance.py  # Phase 1 runtime conformance evidence gate
 │   ├── artifact_closure.py       # Evaluation-only literal source-reference graph
+│   ├── materialization.py        # Descriptor-bound staged-tree snapshot check
 │   ├── github_acquire.py         # Evaluation-only immutable public GitHub source
 │   ├── github_expand.py          # Bounded exact same-repository comparator expansion
 │   ├── analyze.py                # JSONL analyzer subprocess runner

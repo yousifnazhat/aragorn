@@ -649,6 +649,265 @@ class AdmissionConformanceTests(unittest.TestCase):
             _canonical_digest(implementation),
         )
 
+    def test_retained_openclaw_adm03_profile_is_partial_and_bound(self) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        probe_raw = (
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-adm03-probe-2026-07-27.json"
+        ).read_bytes()
+        environment_raw = (
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-adm03-environment-2026-07-27.json"
+        ).read_bytes()
+        probe = json.loads(probe_raw)
+        environment = json.loads(environment_raw)
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / "phase1-openclaw-contained-adm03-probe-2026-07-27.json"
+            ).read_bytes()
+        )
+        prior_receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / "phase1-openclaw-contained-profile-probe-2026-07-27.json"
+            ).read_bytes()
+        )
+        prior_environment = json.loads(
+            (
+                evidence_dir
+                / "openclaw-v2026.7.1-contained-profile-environment-2026-07-27.json"
+            ).read_bytes()
+        )
+        evidence_digests = sorted((_sha256(environment_raw), _sha256(probe_raw)))
+        for raw, digest in (
+            (probe_raw, evidence_digests[0]),
+            (environment_raw, evidence_digests[1]),
+        ):
+            self.assertEqual(
+                self.cas.put(BytesIO(raw), max_bytes=len(raw)),
+                digest,
+            )
+
+        self.assertEqual(
+            validate_retained_admission_conformance(
+                receipt,
+                evidence_cas=self.cas,
+            ),
+            "NOT_TESTED",
+        )
+        self.assertEqual(
+            receipt["decision"],
+            {"status": "NOT_TESTED", "installer_work_eligible": False},
+        )
+        formal = {
+            f"{item['id']}/{scenario['id']}": scenario
+            for item in receipt["properties"]
+            for scenario in item["scenarios"]
+        }
+        self.assertEqual(
+            {
+                key
+                for key, scenario in formal.items()
+                if scenario["status"] == "PASS"
+            },
+            {
+                "ADM-02/install",
+                "ADM-02/direct-write",
+                "ADM-02/rename",
+                "ADM-02/symlink",
+                "ADM-02/auto-discovery",
+                "ADM-03/policy-failure",
+                "ADM-03/policy-tampering",
+            },
+        )
+        self.assertEqual(
+            {
+                key: scenario["reason_codes"]
+                for key, scenario in formal.items()
+                if scenario["status"] == "NOT_TESTED"
+            },
+            {
+                "DET-01/identical-canonical-input-replay": [
+                    "IDENTICAL_REPLAY_NOT_TESTED"
+                ],
+                "ADM-01/exact-admitted-bytes": [
+                    "EXACT_ACTIVATED_BYTES_NOT_TESTED"
+                ],
+                "ADM-02/update": ["UPDATE_PATH_NOT_TESTED"],
+                "ADM-02/reload": ["LIVE_RELOAD_NOT_TESTED"],
+                "ADM-02/restart": ["RUNTIME_RESTART_NOT_TESTED"],
+            },
+        )
+        for scenario in formal.values():
+            if scenario["status"] == "PASS":
+                self.assertEqual(scenario["evidence_digests"], evidence_digests)
+
+        self.assertEqual(_sha256(probe_raw), "sha256:8cf42093a592dac5579b5d2de6e208a278994f133f0a7d5ddc7cace92446220a")
+        self.assertEqual(len(probe_raw), 25_977)
+        self.assertEqual(
+            {scenario["id"]: scenario["status"] for scenario in probe["scenarios"]},
+            {
+                "ADM-03/policy-failure": "PASS",
+                "ADM-03/policy-tampering": "PASS",
+            },
+        )
+        self.assertEqual(
+            probe["decision"],
+            {"installer_work_eligible": False, "status": "NOT_TESTED"},
+        )
+        self.assertIn(
+            "TAMPER_RESISTANCE_SCOPED_TO_UNPRIVILEGED_CONTAINER_UID_1000",
+            probe["limitations"],
+        )
+        failure, tampering = probe["scenarios"]
+        self.assertEqual(
+            (failure["command"]["exit_code"], failure["command"]["stderr"]),
+            (
+                1,
+                "install policy failed closed: policy command exited with code 1\n",
+            ),
+        )
+        self.assertTrue(failure["evidence"]["target_absent"])
+        self.assertTrue(
+            all(item["blocked"] for item in tampering["evidence"]["attempts"])
+        )
+        self.assertEqual(
+            tampering["evidence"]["config_digest_before"],
+            tampering["evidence"]["config_digest_after"],
+        )
+        self.assertEqual(
+            tampering["evidence"]["policy_script_digest_before"],
+            tampering["evidence"]["policy_script_digest_after"],
+        )
+        self.assertEqual(
+            (
+                tampering["command"]["exit_code"],
+                tampering["command"]["stderr"],
+                tampering["evidence"]["policy_request"]["request"]["kind"],
+                tampering["evidence"]["target_absent"],
+            ),
+            (
+                1,
+                "blocked by install policy: Aragorn contained profile block\n",
+                "skill-install",
+                True,
+            ),
+        )
+
+        implementation = probe["adapter"]["implementation"]
+        for field, filename in (
+            ("adm03_probe_digest", "adm03-probe.mjs"),
+            ("contained_probe_digest", "contained-probe.mjs"),
+            ("baseline_probe_digest", "probe.mjs"),
+        ):
+            self.assertEqual(
+                implementation[field],
+                _sha256(
+                    (
+                        _ROOT
+                        / "benchmark"
+                        / "admission"
+                        / "openclaw-v2026.7.1"
+                        / filename
+                    ).read_bytes()
+                ),
+            )
+        self.assertEqual(
+            receipt["bindings"]["adapter"]["implementation_digest"],
+            _canonical_digest(implementation),
+        )
+        self.assertEqual(
+            receipt["bindings"]["adapter"]["configuration_digest"],
+            _canonical_digest(probe["adapter"]["configuration"]),
+        )
+        contained = probe["contained_profile"]["evidence"]
+        contained_raw = (
+            json.dumps(
+                contained,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+            + b"\n"
+        )
+        self.assertEqual(probe["contained_profile"]["digest"], _sha256(contained_raw))
+        self.assertEqual(
+            {scenario["status"] for scenario in contained["scenarios"]},
+            {"PASS"},
+        )
+        self.assertEqual(
+            receipt["bindings"]["runtime"],
+            prior_receipt["bindings"]["runtime"],
+        )
+        self.assertEqual(
+            receipt["bindings"]["aragorn"],
+            prior_receipt["bindings"]["aragorn"],
+        )
+
+        self.assertEqual(_sha256(environment_raw), evidence_digests[1])
+        self.assertEqual(
+            environment["container"]["probe_stdout"],
+            {"bytes": len(probe_raw), "digest": _sha256(probe_raw)},
+        )
+        self.assertEqual(
+            environment["os_profile_digest"],
+            _canonical_digest(environment["isolation"]),
+        )
+        self.assertEqual(
+            receipt["bindings"]["environment"],
+            {
+                "os_profile_digest": environment["os_profile_digest"],
+                "worker_digest": environment["container"]["image"][
+                    "platform_manifest_digest"
+                ],
+            },
+        )
+        self.assertEqual(environment["container"]["state"]["exit_code"], 0)
+        self.assertFalse(environment["container"]["state"]["oom_killed"])
+        self.assertEqual(
+            environment["container"]["command"],
+            [
+                "/bin/sh",
+                "-c",
+                "/usr/local/bin/node /probe/contained-probe.mjs > "
+                "/tmp/contained-profile.json && exec /usr/local/bin/node "
+                "/driver/adm03-probe.mjs",
+            ],
+        )
+        self.assertEqual(
+            environment["docker"]["assurance"],
+            "SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED",
+        )
+        self.assertEqual(
+            environment["limitations"],
+            [
+                "CONTAINER_EXIT_DOES_NOT_ESTABLISH_CROSS_HOST_REPRODUCIBILITY",
+                "DOCKER_CONTROL_PLANE_SELF_REPORTED",
+                "ENGINE_CONTAINER_AND_HOST_NOT_INDEPENDENTLY_ATTESTED",
+                "PLATFORM_MANIFEST_DIGEST_RETAINED_NOT_INDEPENDENTLY_REDERIVED",
+            ],
+        )
+        driver_mount = {
+            "destination": "/driver",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-adm03-driver-v1",
+            "type": "volume",
+        }
+        expected_isolation = deepcopy(prior_environment["isolation"])
+        expected_isolation["mounts"] = sorted(
+            [*expected_isolation["mounts"], driver_mount],
+            key=lambda mount: mount["destination"],
+        )
+        self.assertEqual(
+            environment["isolation"],
+            expected_isolation,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

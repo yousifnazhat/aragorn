@@ -873,68 +873,60 @@ def main() -> int:
         if dynamic_reasons != sorted(set(dynamic_reasons)):
             raise AssertionError("dynamic-conformance reasons are not canonical")
 
-    openclaw_evidence_raw = (
-        ROOT
-        / "benchmark"
-        / "evidence"
-        / "openclaw-v2026.7.1-admission-probe-2026-07-27.json"
-    ).read_bytes()
-    openclaw_result = load(
-        ROOT
-        / "benchmark"
-        / "receipts"
-        / "phase1-openclaw-admission-probe-2026-07-27.json"
+    admission_evidence = ROOT / "benchmark" / "evidence"
+    admission_receipts = ROOT / "benchmark" / "receipts"
+    retained_admission_results = (
+        (
+            "openclaw-elimination",
+            (
+                admission_evidence
+                / "openclaw-v2026.7.1-admission-probe-2026-07-27.json",
+            ),
+            admission_receipts
+            / "phase1-openclaw-admission-probe-2026-07-27.json",
+            "FAIL",
+        ),
+        (
+            "openclaw-contained",
+            (
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-profile-environment-2026-07-27.json",
+            ),
+            admission_receipts
+            / "phase1-openclaw-contained-profile-probe-2026-07-27.json",
+            "NOT_TESTED",
+        ),
+        (
+            "openclaw-adm03",
+            (
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-adm03-probe-2026-07-27.json",
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-adm03-environment-2026-07-27.json",
+            ),
+            admission_receipts
+            / "phase1-openclaw-contained-adm03-probe-2026-07-27.json",
+            "NOT_TESTED",
+        ),
     )
-    validators["admission-conformance-result-v1.schema.json"].validate(
-        openclaw_result
-    )
-    with TemporaryDirectory(prefix="aragorn-admission-evidence-") as temporary:
-        evidence_cas = CAS(temporary)
-        evidence_cas.put(
-            BytesIO(openclaw_evidence_raw),
-            max_bytes=len(openclaw_evidence_raw),
-        )
-        if (
-            validate_retained_admission_conformance(
-                openclaw_result,
-                evidence_cas=evidence_cas,
-            )
-            != "FAIL"
-        ):
-            raise AssertionError("OpenClaw elimination result did not fail closed")
-
-    contained_evidence_paths = (
-        ROOT
-        / "benchmark"
-        / "evidence"
-        / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
-        ROOT
-        / "benchmark"
-        / "evidence"
-        / "openclaw-v2026.7.1-contained-profile-environment-2026-07-27.json",
-    )
-    contained_result = load(
-        ROOT
-        / "benchmark"
-        / "receipts"
-        / "phase1-openclaw-contained-profile-probe-2026-07-27.json"
-    )
-    validators["admission-conformance-result-v1.schema.json"].validate(
-        contained_result
-    )
-    with TemporaryDirectory(prefix="aragorn-contained-evidence-") as temporary:
-        evidence_cas = CAS(temporary)
-        for path in contained_evidence_paths:
-            raw = path.read_bytes()
-            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
-        if (
-            validate_retained_admission_conformance(
-                contained_result,
-                evidence_cas=evidence_cas,
-            )
-            != "NOT_TESTED"
-        ):
-            raise AssertionError("contained OpenClaw profile transferred authority")
+    for label, evidence_paths, result_path, expected_status in retained_admission_results:
+        result = load(result_path)
+        validators["admission-conformance-result-v1.schema.json"].validate(result)
+        with TemporaryDirectory(prefix=f"aragorn-{label}-evidence-") as temporary:
+            evidence_cas = CAS(temporary)
+            for path in evidence_paths:
+                raw = path.read_bytes()
+                evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+            if (
+                validate_retained_admission_conformance(
+                    result,
+                    evidence_cas=evidence_cas,
+                )
+                != expected_status
+            ):
+                raise AssertionError(f"{label} has an unexpected admission status")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

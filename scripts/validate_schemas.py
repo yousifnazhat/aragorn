@@ -1339,6 +1339,128 @@ def main() -> int:
             / "phase0-acquisition-gate-report-v1.example.json"
         )
     )
+    acquisition_v7_result_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-acquisition-v7-regression-result-2026-07-27.json"
+    )
+    acquisition_v7_result_raw = acquisition_v7_result_path.read_bytes()
+    acquisition_v7_result = json.loads(acquisition_v7_result_raw)
+    validators[
+        "benchmark-phase0-acquisition-regression-result-receipt-v1.schema.json"
+    ].validate(acquisition_v7_result)
+    if acquisition_v7_result_raw != canonical_json(acquisition_v7_result):
+        raise AssertionError("acquisition v7 result receipt is not canonical JSON")
+    acquisition_worker_run = acquisition_v7_result["worker_run_receipt"]
+    acquisition_gate_report = acquisition_v7_result["gate_report"]
+    acquisition_source = acquisition_v7_result["source"]
+    validators[
+        "benchmark-phase0-acquisition-gate-report-v1.schema.json"
+    ].validate(acquisition_gate_report)
+    if (
+        acquisition_source["worker_run_receipt_digest"]
+        != canonical_digest(acquisition_worker_run)
+        or acquisition_source["gate_report_file_digest"]
+        != canonical_digest(acquisition_gate_report)
+    ):
+        raise AssertionError("acquisition v7 embedded evidence digest drift")
+    expected_acquisition_source = {
+        "candidate_implementation_digest": (
+            "sha256:f42095ad5f4f66e372aceff560bd80b3abdf5e6998f8853014a45e77ebed1895"
+        ),
+        "plan_digest": (
+            "sha256:c739e7f06eff2703ad8e165fcaa0ebd9de7b0bba9bc161b446fc60285acc0906"
+        ),
+        "plan_file_digest": (
+            "sha256:c739e7f06eff2703ad8e165fcaa0ebd9de7b0bba9bc161b446fc60285acc0906"
+        ),
+        "runner_commit": "a5f8c2fbca699c2aafc50f2e32cb619ca131cda9",
+        "runner_digest": (
+            "sha256:06edee39b4c1215dbecae4221ff35ad67f7f49060987bf39b3226d76fb86e66f"
+        ),
+    }
+    if (
+        acquisition_source["evaluator_commit"]
+        != acquisition_worker_run["source"]["runner_commit"]
+        or acquisition_worker_run["source"] != expected_acquisition_source
+        or acquisition_worker_run["totals"]
+        != {"accepted_count": 1792, "outcome_count": 2240}
+        or {
+            arm: (
+                acquisition_worker_run["arms"][arm]["accepted_count"],
+                acquisition_worker_run["arms"][arm]["outcome_count"],
+            )
+            for arm in ("root", "expanded")
+        }
+        != {"root": (896, 896), "expanded": (896, 1344)}
+    ):
+        raise AssertionError("acquisition v7 worker receipt drift")
+    expected_acquisition_gate_bindings = {
+        "oracle_lock_digest": canonical_digest(retained_acquisition_v7_lock),
+        "oracle_digest": retained_acquisition_v7_lock["oracle_digest"],
+        "candidate_policy_digest": retained_acquisition_v7_lock[
+            "candidate_policy_digest"
+        ],
+    }
+    for field, expected in expected_acquisition_gate_bindings.items():
+        if acquisition_gate_report[field] != expected:
+            raise AssertionError(f"acquisition v7 gate report {field} drift")
+    for arm in ("root", "expanded"):
+        if (
+            acquisition_gate_report[f"{arm}_arm"]["suite_digest"]
+            != retained_acquisition_v7_lock[f"{arm}_suite_digest"]
+            or acquisition_gate_report[f"{arm}_arm"]["outcomes_digest"]
+            != acquisition_worker_run["arms"][arm]["outcomes_digest"]
+        ):
+            raise AssertionError(f"acquisition v7 {arm} arm drift")
+    acquisition_accounting = acquisition_gate_report["accounting"]
+    if {
+        field: acquisition_accounting[field]
+        for field in (
+            "cases",
+            "complete_expansions",
+            "incomplete_expansions",
+            "expected_references",
+            "captured_references",
+            "missed_references",
+            "wrong_target_references",
+            "unresolved_expected_references",
+        )
+    } != {
+        "cases": 448,
+        "complete_expansions": 448,
+        "incomplete_expansions": 0,
+        "expected_references": 448,
+        "captured_references": 448,
+        "missed_references": 0,
+        "wrong_target_references": 0,
+        "unresolved_expected_references": 0,
+    }:
+        raise AssertionError("acquisition v7 reference accounting drift")
+    acquisition_comparison = acquisition_gate_report["comparison"]
+    expected_acquisition_candidate = {
+        **phase0_candidate_policy_v7["candidate"],
+        "config_digest": canonical_digest(phase0_candidate_policy_v7),
+    }
+    if (
+        acquisition_v7_result["evaluation_status"]
+        != (
+            "regression_rerun_on_previously_evaluated_acquisition_corpus_"
+            "not_fresh_holdout"
+        )
+        or acquisition_v7_result["phase0_exit_eligible"]
+        or acquisition_comparison["candidate"]["system"]
+        != expected_acquisition_candidate
+        or not acquisition_comparison["evaluable"]
+        or not acquisition_comparison["passed"]
+        or acquisition_comparison["reason_codes"]
+        or acquisition_comparison["attack_flag_delta"]
+        != {"numerator": 1, "denominator": 8, "rate": 0.125}
+        or acquisition_comparison["candidate"]["benign_intervention"]
+        != {"numerator": 0, "denominator": 1, "rate": 0.0}
+    ):
+        raise AssertionError("acquisition v7 result is not retained as regression")
     hidden_lock_path = ROOT / "benchmark" / "phase0-hidden-suite.lock.json"
     hidden_lock_raw = hidden_lock_path.read_bytes()
     hidden_lock = json.loads(hidden_lock_raw)

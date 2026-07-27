@@ -37,6 +37,7 @@ EXPECTED_CONTRACTS = {
     "benchmark-phase0-acquisition-corpus-lock-v1.schema.json": "aragorn/benchmark-phase0-acquisition-corpus-lock/v1",
     "benchmark-phase0-acquisition-oracle-lock-v1.schema.json": "aragorn/benchmark-phase0-acquisition-oracle-lock/v1",
     "benchmark-phase0-acquisition-oracle-v1.schema.json": "aragorn/benchmark-phase0-acquisition-oracle/v1",
+    "benchmark-phase0-acquisition-regression-result-receipt-v1.schema.json": "aragorn/benchmark-phase0-acquisition-regression-result-receipt/v1",
     "benchmark-phase0-accounting-v1.schema.json": "aragorn/benchmark-phase0-accounting/v1",
     "benchmark-phase0-gate-report-v1.schema.json": "aragorn/benchmark-phase0-gate-report/v1",
     "benchmark-phase0-gate-report-v2.schema.json": "aragorn/benchmark-phase0-gate-report/v2",

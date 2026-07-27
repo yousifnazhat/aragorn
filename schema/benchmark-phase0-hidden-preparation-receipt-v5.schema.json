@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-preparation-receipt-v5.schema.json",
-  "title": "Aragorn Phase 0 hidden v5 preparation receipt",
+  "title": "Aragorn Phase 0 hidden v5-compatible preparation receipt",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -44,10 +44,16 @@
       ],
       "properties": {
         "freeze_commit": {
-          "const": "89ac883edd2c8617d310d90f468c502b8c864ff6"
+          "enum": [
+            "89ac883edd2c8617d310d90f468c502b8c864ff6",
+            "1ad2b5fd6cba7fb140382596974bf0c72dd6babe"
+          ]
         },
         "freeze_tree": {
-          "const": "e03e83005e56079cd40d106a41367d978405810d"
+          "enum": [
+            "e03e83005e56079cd40d106a41367d978405810d",
+            "955d2c431b7897254f1a3a6de9b78bc1a5ec38bd"
+          ]
         },
         "freeze_signature_status": {"const": "verified"},
         "preparation_commit": {"$ref": "#/$defs/git_oid"},
@@ -58,10 +64,16 @@
           "const": "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
         },
         "hidden_suite_lock_digest": {
-          "const": "sha256:d96bdbfdd1a8884cbc4dd0293ade0f04708f42627f7f336fb744661b8adbc0c6"
+          "enum": [
+            "sha256:d96bdbfdd1a8884cbc4dd0293ade0f04708f42627f7f336fb744661b8adbc0c6",
+            "sha256:a862f355c21b3ce4e3d996b8cfd155856fa47a66a7e03f37a728e1aec3a99997"
+          ]
         },
         "freeze_receipt_digest": {
-          "const": "sha256:37a3d49ff1cb451fcc4db34fba55f83f07e3f1bdfea6467fffe60d3567646b4c"
+          "enum": [
+            "sha256:37a3d49ff1cb451fcc4db34fba55f83f07e3f1bdfea6467fffe60d3567646b4c",
+            "sha256:d0bcb58ea1286e92a519081e31d34ef4062ee0cf6df9449a8f9a37f2fc6dbeb4"
+          ]
         }
       }
     },
@@ -78,7 +90,10 @@
       "properties": {
         "layout": {"const": "phase0-hidden-run-state/v1"},
         "binding_digest": {
-          "const": "sha256:0de77709907f1ee4aa332802e4da588c5e3a39e90908c7d5a7d43bf677d9a28f"
+          "enum": [
+            "sha256:0de77709907f1ee4aa332802e4da588c5e3a39e90908c7d5a7d43bf677d9a28f",
+            "sha256:5e477520e56b346b22041862e1936fa0fb11fcd0a19b9d61e86226f5ec71d82f"
+          ]
         },
         "fresh_before_prepare": {"const": true},
         "outcomes_absent_after_prepare": {"const": true},
@@ -98,7 +113,10 @@
       ],
       "properties": {
         "trust_domain": {
-          "const": "phase0.hidden-local-v5.0.0"
+          "enum": [
+            "phase0.hidden-local-v5.0.0",
+            "phase0.hidden-local-v6.0.0"
+          ]
         },
         "worker_id": {"const": "isolated-worker-01"},
         "key_id": {"$ref": "#/$defs/digest"},

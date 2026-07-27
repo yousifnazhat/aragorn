@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-result-receipt-v3.schema.json",
+  "title": "Aragorn Phase 0 clean hidden result receipt v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "recorded_on",
+    "evaluation_status",
+    "phase0_exit_eligible",
+    "source",
+    "worker_run_receipt",
+    "gate_report"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-result-receipt/v3"
+    },
+    "assurance": {
+      "const": "aggregate_clean_hidden_evidence_eligible_for_phase0_exit"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "evaluation_status": {
+      "const": "fresh_clean_holdout_passed"
+    },
+    "phase0_exit_eligible": {
+      "const": true
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluator_commit",
+        "worker_run_receipt_digest",
+        "gate_report_file_digest"
+      ],
+      "properties": {
+        "evaluator_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "worker_run_receipt_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "gate_report_file_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "worker_run_receipt": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-worker-run-receipt-v5.schema.json"
+    },
+    "gate_report": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v2.schema.json",
+      "properties": {
+        "comparison": {
+          "properties": {
+            "evaluable": {"const": true},
+            "passed": {"const": true},
+            "reason_codes": {"const": []}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

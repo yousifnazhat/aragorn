@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-worker-run-receipt-v5.schema.json",
-  "title": "Aragorn Phase 0 hidden v5 worker run receipt",
+  "title": "Aragorn Phase 0 hidden v5-compatible worker run receipt",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -42,7 +42,10 @@
       "properties": {
         "layout": {"const": "phase0-hidden-run-state/v1"},
         "binding_digest": {
-          "const": "sha256:0de77709907f1ee4aa332802e4da588c5e3a39e90908c7d5a7d43bf677d9a28f"
+          "enum": [
+            "sha256:0de77709907f1ee4aa332802e4da588c5e3a39e90908c7d5a7d43bf677d9a28f",
+            "sha256:5e477520e56b346b22041862e1936fa0fb11fcd0a19b9d61e86226f5ec71d82f"
+          ]
         }
       }
     },

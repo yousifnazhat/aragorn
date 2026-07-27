@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 not started
+Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 

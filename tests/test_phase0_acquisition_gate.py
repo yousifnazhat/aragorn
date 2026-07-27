@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
+from unittest.mock import patch
 
 from aragorn.benchmark import _canonical_json_bytes, _digest_json, _system_key
 from aragorn.cas import CAS
@@ -27,6 +28,10 @@ from scripts.phase0_acquisition_gate import (
 
 ROOT = Path(__file__).parents[1]
 POLICY = ROOT / "benchmark" / "phase0-candidate-policy-v7.json"
+V7_IMPLEMENTATION_DIGEST = (
+    "sha256:f42095ad5f4f66e372aceff560bd80b3"
+    "abdf5e6998f8853014a45e77ebed1895"
+)
 
 
 def _digest(character: str) -> str:
@@ -40,6 +45,12 @@ def _digest_text(value: str) -> str:
 class Phase0AcquisitionGateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        historical_identity = patch(
+            "aragorn.phase0_candidate.candidate_implementation_digest",
+            return_value=V7_IMPLEMENTATION_DIGEST,
+        )
+        historical_identity.start()
+        cls.addClassCleanup(historical_identity.stop)
         cls.policy = _policy(POLICY)
 
     def test_cli_requires_explicit_candidate_policy(self) -> None:

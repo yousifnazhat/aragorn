@@ -1,0 +1,163 @@
+{
+  "$id": "https://aragorn.dev/schema/admission-conformance-result-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn admission-runtime conformance result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "profile",
+    "recorded_at",
+    "bindings",
+    "properties",
+    "decision"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/admission-conformance-result/v1"},
+    "profile": {"const": "admission-conformant/v1"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "adapter", "environment", "aragorn"],
+      "properties": {
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "version",
+            "repository_url",
+            "commit",
+            "source_tree_digest"
+          ],
+          "properties": {
+            "name": {"$ref": "#/$defs/identifier"},
+            "version": {"type": "string", "minLength": 1, "maxLength": 128},
+            "repository_url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://github\\.com/"
+            },
+            "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "source_tree_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "adapter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "implementation_digest", "configuration_digest"],
+          "properties": {
+            "name": {"$ref": "#/$defs/identifier"},
+            "implementation_digest": {"$ref": "#/$defs/digest"},
+            "configuration_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["worker_digest", "os_profile_digest"],
+          "properties": {
+            "worker_digest": {"$ref": "#/$defs/digest"},
+            "os_profile_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "aragorn": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["implementation_digest", "policy_digest"],
+          "properties": {
+            "implementation_digest": {"$ref": "#/$defs/digest"},
+            "policy_digest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      }
+    },
+    "properties": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "scenarios"],
+        "properties": {
+          "id": {"enum": ["DET-01", "ADM-01", "ADM-02", "ADM-03"]},
+          "status": {"$ref": "#/$defs/status"},
+          "scenarios": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {"$ref": "#/$defs/scenario"}
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "installer_work_eligible"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "installer_work_eligible": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "reason_code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+    },
+    "status": {"enum": ["PASS", "FAIL", "NOT_TESTED"]},
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence_digests", "reason_codes"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "status": {"$ref": "#/$defs/status"},
+        "evidence_digests": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/digest"}
+        },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reason_code"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "PASS"}}},
+          "then": {
+            "properties": {
+              "evidence_digests": {"minItems": 1},
+              "reason_codes": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "FAIL"}}},
+          "then": {
+            "properties": {
+              "evidence_digests": {"minItems": 1},
+              "reason_codes": {"minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "NOT_TESTED"}}},
+          "then": {"properties": {"reason_codes": {"minItems": 1}}}
+        }
+      ]
+    }
+  }
+}

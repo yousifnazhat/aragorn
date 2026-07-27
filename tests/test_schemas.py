@@ -7,6 +7,7 @@ from pathlib import Path
 
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
 EXPECTED_CONTRACTS = {
+    "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",
     "analyzers-v1.schema.json": "aragorn/analyzers/v1",
     "baseline-image-verification-v1.schema.json": "aragorn/baseline-image-verification/v1",
@@ -108,7 +109,7 @@ EXPECTED_CONTRACTS = {
 
 
 class SchemaTests(unittest.TestCase):
-    def test_every_phase_zero_contract_has_a_parseable_schema(self) -> None:
+    def test_every_contract_has_a_parseable_schema(self) -> None:
         self.assertEqual(
             {path.name for path in SCHEMA_DIRECTORY.glob("*.json")},
             set(EXPECTED_CONTRACTS),

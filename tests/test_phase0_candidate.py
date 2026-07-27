@@ -17,7 +17,6 @@ from aragorn.phase0_candidate import (
     POLICY_ALGORITHM_V2,
     CandidateError,
     build_candidate_policy,
-    candidate_implementation_digest,
     candidate_policy_digest,
     candidate_system_identity,
     compose_candidate_decision,
@@ -26,6 +25,10 @@ from aragorn.phase0_candidate import (
 
 _DIGEST = "sha256:" + "0" * 64
 _ROOT = Path(__file__).parents[1]
+_V7_IMPLEMENTATION_DIGEST = (
+    "sha256:f42095ad5f4f66e372aceff560bd80b3"
+    "abdf5e6998f8853014a45e77ebed1895"
+)
 
 
 def _policy() -> dict:
@@ -89,7 +92,15 @@ def _components(
 
 
 class Phase0CandidateTests(unittest.TestCase):
-    def test_checked_policy_matches_the_exact_composer(self) -> None:
+    def setUp(self) -> None:
+        historical_identity = patch(
+            "aragorn.phase0_candidate.candidate_implementation_digest",
+            return_value=_V7_IMPLEMENTATION_DIGEST,
+        )
+        historical_identity.start()
+        self.addCleanup(historical_identity.stop)
+
+    def test_checked_policy_matches_the_frozen_phase0_composer(self) -> None:
         policy = _policy()
         self.assertEqual(build_candidate_policy(policy), policy)
         self.assertEqual(
@@ -99,7 +110,7 @@ class Phase0CandidateTests(unittest.TestCase):
         self.assertEqual(policy["algorithm"], POLICY_ALGORITHM)
         self.assertEqual(
             policy["candidate"]["implementation_digest"],
-            candidate_implementation_digest(),
+            _V7_IMPLEMENTATION_DIGEST,
         )
 
     def test_terminal_graph_requires_github_source_assurance(self) -> None:

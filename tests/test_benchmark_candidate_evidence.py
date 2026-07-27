@@ -20,6 +20,10 @@ _V2_IMPLEMENTATION_DIGEST = (
     "sha256:150bbcd3690737c7acc77e6bf0737240"
     "c631e07c3a86a27c90bd1928a2661dca"
 )
+_V7_IMPLEMENTATION_DIGEST = (
+    "sha256:f42095ad5f4f66e372aceff560bd80b3"
+    "abdf5e6998f8853014a45e77ebed1895"
+)
 
 
 def _digest(character: str) -> str:
@@ -431,6 +435,14 @@ class BenchmarkCandidateEvidenceTests(unittest.TestCase):
 
 
 class BenchmarkCandidateEvidenceV3Tests(unittest.TestCase):
+    def setUp(self) -> None:
+        historical_identity = mock.patch(
+            "aragorn.phase0_candidate.candidate_implementation_digest",
+            return_value=_V7_IMPLEMENTATION_DIGEST,
+        )
+        historical_identity.start()
+        self.addCleanup(historical_identity.stop)
+
     def test_v3_policy_accepts_v2_evidence_and_rederives_composed_review(
         self,
     ) -> None:

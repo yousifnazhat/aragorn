@@ -36,6 +36,10 @@ from prepare_hidden_suite import (
 )
 
 from aragorn.acquire import ingest_local
+from aragorn.admission_conformance import (
+    MANDATORY_ADMISSION_SCENARIOS,
+    validate_admission_conformance,
+)
 from aragorn.artifact_closure import resolve_source_graph
 from aragorn.benchmark import evaluate_files
 from aragorn.benchmark_handoff_v2 import build_handoff_manifest
@@ -56,7 +60,6 @@ from aragorn.cas import CAS
 from aragorn.corpus_audit import audit_suite
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
-from aragorn.phase0_candidate import build_candidate_policy
 from aragorn.standards_gate import validate_standards_gate
 
 
@@ -782,6 +785,60 @@ def main() -> int:
             registry=registry,
         )
 
+    digest = "sha256:" + "0" * 64
+    admission_conformance = {
+        "schema": "aragorn/admission-conformance-result/v1",
+        "profile": "admission-conformant/v1",
+        "recorded_at": "2026-07-27T00:00:00Z",
+        "bindings": {
+            "runtime": {
+                "name": "contract-example",
+                "version": "0",
+                "repository_url": "https://github.com/example/runtime",
+                "commit": "0" * 40,
+                "source_tree_digest": digest,
+            },
+            "adapter": {
+                "name": "contract-example",
+                "implementation_digest": digest,
+                "configuration_digest": digest,
+            },
+            "environment": {
+                "worker_digest": digest,
+                "os_profile_digest": digest,
+            },
+            "aragorn": {
+                "implementation_digest": digest,
+                "policy_digest": digest,
+            },
+        },
+        "properties": [
+            {
+                "id": property_id,
+                "status": "NOT_TESTED",
+                "scenarios": [
+                    {
+                        "id": scenario_id,
+                        "status": "NOT_TESTED",
+                        "evidence_digests": [],
+                        "reason_codes": ["CONTRACT_EXAMPLE_ONLY"],
+                    }
+                    for scenario_id in scenario_ids
+                ],
+            }
+            for property_id, scenario_ids in MANDATORY_ADMISSION_SCENARIOS.items()
+        ],
+        "decision": {
+            "status": "NOT_TESTED",
+            "installer_work_eligible": False,
+        },
+    }
+    validators["admission-conformance-result-v1.schema.json"].validate(
+        admission_conformance
+    )
+    if validate_admission_conformance(admission_conformance) != "NOT_TESTED":
+        raise AssertionError("admission conformance example transferred authority")
+
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)
     phase0_corpus_lock_path = ROOT / "benchmark" / "phase0-corpus.lock.json"
@@ -874,11 +931,15 @@ def main() -> int:
     validators["benchmark-candidate-policy-v3.schema.json"].validate(
         phase0_candidate_policy_v7
     )
+    # Phase 0 evidence is historical. Pin its retained identities instead of
+    # rebinding it to later Phase 1 source files in this checkout.
     if (
-        build_candidate_policy(phase0_candidate_policy_v7)
-        != phase0_candidate_policy_v7
+        canonical_digest(phase0_candidate_policy_v7)
+        != "sha256:8ac99b957e113fa5d02b759b5e5d12201164f1d04bc6f0bb20cd131efbdf8c98"
+        or phase0_candidate_policy_v7["candidate"]["implementation_digest"]
+        != "sha256:f42095ad5f4f66e372aceff560bd80b3abdf5e6998f8853014a45e77ebed1895"
     ):
-        raise AssertionError("checked v7 candidate policy is not canonical")
+        raise AssertionError("checked v7 candidate policy identity drift")
     portable_identities = []
     for filename in (
         "phase0-cisco-portable-policy.json",

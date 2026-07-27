@@ -789,7 +789,7 @@ def _observation(
 def _sorted(observations: list[Observation]) -> tuple[Observation, ...]:
     return tuple(
         sorted(
-            observations,
+            {observation.document_json: observation for observation in observations}.values(),
             key=lambda observation: (
                 observation.reason_code,
                 observation.severity,

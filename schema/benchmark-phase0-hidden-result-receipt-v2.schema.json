@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-result-receipt-v2.schema.json",
+  "title": "Aragorn Phase 0 diagnostic hidden result receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "recorded_on",
+    "evaluation_status",
+    "phase0_exit_eligible",
+    "limitations",
+    "source",
+    "worker_run_receipt",
+    "gate_report"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-result-receipt/v2"
+    },
+    "assurance": {
+      "const": "aggregate_diagnostic_evidence_only_not_clean_hidden_or_phase0_exit_evidence"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "evaluation_status": {
+      "const": "calibration_diagnostic_only_due_to_worker_visible_label_proxy_leakage"
+    },
+    "phase0_exit_eligible": {
+      "const": false
+    },
+    "limitations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worker_visibility",
+        "evaluation_use"
+      ],
+      "properties": {
+        "worker_visibility": {
+          "const": "worker_visible_label_proxy_leakage_invalidates_clean_hidden_assurance"
+        },
+        "evaluation_use": {
+          "const": "calibration_and_diagnostic_only_despite_chronological_freshness"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluator_commit",
+        "worker_run_receipt_digest",
+        "gate_report_file_digest"
+      ],
+      "properties": {
+        "evaluator_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "worker_run_receipt_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "gate_report_file_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "worker_run_receipt": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-worker-run-receipt-v5.schema.json"
+    },
+    "gate_report": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-gate-report-v2.schema.json",
+      "properties": {
+        "comparison": {
+          "properties": {
+            "evaluable": {
+              "const": true
+            },
+            "passed": {
+              "const": false
+            },
+            "reason_codes": {
+              "const": [
+                "ATTACK_FLAG_DELTA_BELOW_10PP"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

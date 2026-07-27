@@ -163,6 +163,29 @@ class CiscoVendorReportTests(unittest.TestCase):
             finding["evidence"]["finding"]["file_path"], "scripts/run.py"
         )
 
+    def test_semantically_duplicate_findings_have_unique_observation_digests(
+        self,
+    ) -> None:
+        report = cisco_report()
+        duplicate = copy.deepcopy(report["findings"][0])
+        duplicate["snippet"] = "different raw evidence, same observation"
+        report["findings"].append(duplicate)
+        report["findings_count"] = 2
+
+        observations = normalize_cisco_report(
+            encode(report), subject_digest=SUBJECT, returncode=0
+        )
+        digests = [
+            hashlib.sha256(observation.document_json.encode("ascii")).digest()
+            for observation in observations
+        ]
+
+        self.assertEqual(len(digests), len(set(digests)))
+        self.assertEqual(
+            [observation.reason_code for observation in observations],
+            ["CISCO_DATA_EXFIL_HTTP_POST", "CISCO_SCAN_COMPLETED"],
+        )
+
     def test_completeness_path_and_unknown_fields_fail_closed(self) -> None:
         variants = []
         missing_analyzer = cisco_report()

@@ -103,6 +103,26 @@
         }
       }
     },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_id",
+        "lock_sha256",
+        "worker_sha256"
+      ],
+      "properties": {
+        "corpus_id": {
+          "$ref": "#/$defs/id"
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "worker_sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
     "freeze": {
       "type": "object",
       "additionalProperties": false,

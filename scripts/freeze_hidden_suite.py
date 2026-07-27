@@ -41,6 +41,7 @@ _OPAQUE_IDS = {
     "independent-v3.0.0": re.compile(r"v3-[0-9a-f]{24}\Z"),
     "local-v4.0.0": re.compile(r"v4-[0-9a-f]{24}\Z"),
     "local-v5.0.0": re.compile(r"v5-[0-9a-f]{24}\Z"),
+    "local-v6.0.0": re.compile(r"v6-[0-9a-f]{24}\Z"),
 }
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -48,6 +49,30 @@ _GIT_OID = re.compile(r"[0-9a-f]{40}\Z")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 _FRONTMATTER_FIELD = re.compile(r"([A-Za-z][A-Za-z0-9_-]*):[ ]*(.*)\Z")
 _SKILL_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+_V6_OPAQUE_NAME = re.compile(r"entry-([0-9a-f]{20})\Z")
+_V6_OPAQUE_DESCRIPTION = re.compile(
+    r"Static inert document ([0-9a-f]{20})\.\Z"
+)
+_V6_WORKER_LABEL_PROXY = re.compile(
+    r"(?i)(?:\badversarial\b|\bbenign\b|\bdefensive\b|"
+    r"\bAF(?:0[1-9]|1[0-4])\b|paired_defensive_benign|ordinary_benign)"
+)
+_V6_FAMILY_TITLES = (
+    "embedded authority redirection",
+    "instruction concealment and reconstruction",
+    "protected-information collection",
+    "unauthorized scope growth",
+    "governance-decision substitution",
+    "false provenance and maintainer identity",
+    "deferred hidden behavior",
+    "tool identity shadowing",
+    "evidence and audit tampering",
+    "fabricated review evidence",
+    "untrusted external instruction adoption",
+    "unsafe tool side effects",
+    "cross-agent propagation",
+    "tool-mediated exfiltration",
+)
 _EMPTY_YAML_SCALAR = re.compile(
     r"(?:~|null|Null|NULL|''|\"\")(?:[ ]+#.*)?\Z|#[^\r\n]*\Z"
 )
@@ -178,6 +203,234 @@ _V5_AUTHORING_CONTRACT = {
         "signed_objects": _V5_SIGNED_OBJECTS,
     },
 }
+_V6_ARTIFACT_PURPOSES = {
+    "worker": (
+        "worker cases and public case manifest; no labels or custody material"
+    ),
+    "evaluator": (
+        "signed encrypted evaluator ledger and exact semantic corpus builder"
+    ),
+    "source": (
+        "signed source history and exact generator; not a worker artifact"
+    ),
+}
+_V6_SIGNED_OBJECTS = [
+    "authoring contract commit",
+    "source commit",
+    "freeze commit",
+    "annotated freeze tag",
+    "label ledger",
+    "evaluator manifest",
+    "release manifest",
+]
+_V6_SIGNER_PRINCIPAL = "aragorn-local-v6-author"
+_V6_SIGNER_FINGERPRINT = (
+    "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
+)
+_V6_ALLOWED_SIGNER = (
+    "aragorn-local-v6-author ssh-ed25519 "
+    "AAAAC3NzaC1lZDI1NTE5AAAAIP+34WpE4lJYYXs96Dbx/j7GMMm0WahOQl267+T2ESDA\n"
+).encode("ascii")
+_V6_AUTHORSHIP = {
+    "authoring_context": (
+        "fresh_context_subagent_with_instruction_boundary_not_os_sandboxed"
+    ),
+    "authoring_input_provenance_retained": True,
+    "candidate_detector_source_provided_to_author": False,
+    "independent_human_authorship": False,
+    "mode": "technical-codex-semantic-corpus-authoring",
+    "operator_case_or_label_authorship": False,
+    "outcomes_used_for_tuning": False,
+    "prior_corpus_bodies_provided_to_author": False,
+    "prior_outcomes_provided_to_author": False,
+    "v6_scanner_evaluations_before_freeze": 0,
+}
+_V6_AUTHORING_INPUTS = {
+    "context": (
+        "fresh_context_subagent_with_instruction_boundary_not_os_sandboxed"
+    ),
+    "prohibited_inputs_provided": False,
+    "prompt": {
+        "commit": "62e74b1510af7489a3a8a6c24ae696d9c888da89",
+        "git_blob_sha1": "194cabededf863c209a6fb83a55ca372d9864ee4",
+        "path": "AUTHORING-PROMPT.txt",
+        "sha256": (
+            "f9479f56ebbf63705b4687487bf52d783ef63d520da2abcc740bc12d446a3edf"
+        ),
+        "source_corpus_id": "local-v5.0.0",
+    },
+    "source_contract": {
+        "commit": "b6e83389076bccd952ceb715f2cb634cbd71313d",
+        "git_blob_sha1": "2266a180ed11f15aef53a2bd3ecb0b059e9a4103",
+        "path": "AUTHORING-CONTRACT.json",
+        "sha256": (
+            "3a5866a2c44baffb2a71ee76d1b0e0fc983ad46ed77eb95d52bd34738bf231c4"
+        ),
+        "source_corpus_id": "local-v5.0.0",
+    },
+    "source_pack": {
+        "commit": "62e74b1510af7489a3a8a6c24ae696d9c888da89",
+        "git_blob_sha1": "980485c96fe769b8736ed5b6a45cee1530a84a81",
+        "path": "STANDARDS-SOURCE-PACK.json",
+        "sha256": (
+            "0a5334b167992afe0a8a43c07f06b5291ea05ba445a12ae04c2ce195ce22a88f"
+        ),
+        "source_corpus_id": "local-v5.0.0",
+    },
+}
+_V6_NOVELTY_POLICY = {
+    "claim": "new-corpus-with-bounded-lexical-novelty-not-semantic-independence",
+    "reference_corpus_id": "local-v5.0.0",
+    "reference_corpus_lock_digest": (
+        "sha256:53ac28e5dc23e9a5a8244d58f5f12860052941d71c0c9ca3e922245c584fa697"
+    ),
+    "reference_worker_archive_digest": (
+        "sha256:e14b49f0f5dcce0814e853143410cd60f4a74780fc3140672823546018d73205"
+    ),
+    "method": "skill-body-nfkc-casefold-alnum-token-5gram-jaccard/v1",
+    "unicode_version": "13.0.0",
+    "maximum_allowed_similarity": {"denominator": 2, "numerator": 1},
+    "required_unique_candidate_body_count": 448,
+    "maximum_exact_reference_body_overlap_count": 0,
+}
+_V6_AUTHOR_OUTPUT_DIGESTS = {
+    "authoring-record.json": (
+        "6ad72147c28c8386f5d29d36bed7e33ff7be449aa6a0bdceeea3deacd2e3c6ec"
+    ),
+    "case_tree_sha256": (
+        "a78f68185c440806404de2e1ea63147bddfbede2b08b922d1e44b6f7bcdbf4d0"
+    ),
+    "labels.jsonl": (
+        "6d84a0201bc10a991b0d5b47aecfe243641310242ede235ea0415bc3cf649ce9"
+    ),
+    "public-manifest.json": (
+        "250093fb2200f5266e6623cfcf61a34e5b29092fdabeb984d5a3f9b9628e0fba"
+    ),
+    "semantic_author.py": (
+        "4059accf53ad6007233629433edefb66fab7b5158b80cf253a0b85a38f6a40b0"
+    ),
+    "snapshot_sha256": (
+        "369b3e2c4ad370371e07aa6533132cc05876686211a86e0968d261eb2d690401"
+    ),
+}
+_V6_REFERENCE_RELEASE = {
+    "corpus_id": "local-v5.0.0",
+    "lock_sha256": _V6_NOVELTY_POLICY["reference_corpus_lock_digest"],
+    "manifest_sha256": (
+        "sha256:be9f50ad5d47c9ada8100ef2dc008d36b57d349e5fe288aa33cd00c57af9bb6a"
+    ),
+    "worker_sha256": _V6_NOVELTY_POLICY["reference_worker_archive_digest"],
+}
+_V6_WORKER_VISIBLE_LEAKAGE = {
+    "class_linked_frontmatter_prefixes": 0,
+    "explicit_class_or_family_tokens": 0,
+    "frontmatter_domain_labels": 0,
+    "frontmatter_scheme": "entry-sha256-20hex-neutral/v1",
+    "opaque_unique_names": 448,
+    "worker_public_fields": ["id", "path", "sha256", "size"],
+}
+_V6_AUTHORING_CONTRACT = {
+    "author_output": {
+        "case_tree_sha256": _V6_AUTHOR_OUTPUT_DIGESTS["case_tree_sha256"],
+        "files": {
+            field: _V6_AUTHOR_OUTPUT_DIGESTS[field]
+            for field in (
+                "authoring-record.json",
+                "labels.jsonl",
+                "public-manifest.json",
+                "semantic_author.py",
+            )
+        },
+        "snapshot_sha256": _V6_AUTHOR_OUTPUT_DIGESTS["snapshot_sha256"],
+    },
+    "authoring_inputs": _V6_AUTHORING_INPUTS,
+    "authorship": _V6_AUTHORSHIP,
+    "case_count": 448,
+    "class_counts": {"adversarial": 112, "benign": 336},
+    "corpus_id": "local-v6.0.0",
+    "novelty": _V6_NOVELTY_POLICY,
+    "release": {
+        "artifact_purposes": _V6_ARTIFACT_PURPOSES,
+        "evaluator_encryption": {
+            "iterations": 600000,
+            "profile": "openssl-aes-256-cbc-pbkdf2-sha256/v1",
+        },
+        "manifest_schema_version": "2.0",
+        "provenance_lock_schema": "aragorn/benchmark-corpus-provenance-lock/v2",
+        "signed_objects": _V6_SIGNED_OBJECTS,
+    },
+    "schema": "aragorn/corpus-authoring-contract/v1",
+    "version_adaptation": {
+        "output_case_id_prefix": "v6-",
+        "output_corpus_id": "local-v6.0.0",
+        "source_prompt_version": "local-v5.0.0",
+    },
+}
+_V6_SIGNED_CHAIN = {
+    "authoring_contract_commit": "2b3370d5f553b6d82a8a69a165aea01d3b8066da",
+    "authoring_contract_sha256": (
+        "e653f50b049a08e94f14c9b75c0dfaf38678888fb81253f59033648a1fd89293"
+    ),
+    "source_commit": "33e10a700f4761b381485548ec0297a5a21349b7",
+    "freeze_commit": "4b917c07976270b291f975f4bcdf2ad7a9a4e4e7",
+    "freeze_tag": "local-v6.0.0",
+    "freeze_tag_object": "26d013f5f097c5951bdeaad75b964ad20cce9d51",
+    "release_manifest_digest": (
+        "sha256:710352b1ef15c1cf0b184bec46e90d4b07efae1a77f5989a98d7d0010e036a9f"
+    ),
+}
+_SEMANTIC_RELEASE_PROFILES = {
+    "local-v5.0.0": {
+        "artifact_purposes": _V5_ARTIFACT_PURPOSES,
+        "authoring_contract": _V5_AUTHORING_CONTRACT,
+        "authoring_inputs": (
+            (_V5_AUTHORING_INPUTS["prompt"], _V5_AUTHORING_INPUTS["prompt"]["path"]),
+            (
+                _V5_AUTHORING_INPUTS["source_pack"],
+                _V5_AUTHORING_INPUTS["source_pack"]["path"],
+            ),
+        ),
+        "authorship": _V5_AUTHORSHIP,
+        "novelty": _V5_NOVELTY_POLICY,
+        "receipt_schema": (
+            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5"
+        ),
+        "reference_lock_repository_path": "benchmark/phase0-corpus-v4.lock.json",
+        "signed_objects": _V5_SIGNED_OBJECTS,
+        "signer_principal": _V5_SIGNER_PRINCIPAL,
+        "signer_fingerprint": _V5_SIGNER_FINGERPRINT,
+        "allowed_signer": _V5_ALLOWED_SIGNER,
+    },
+    "local-v6.0.0": {
+        "artifact_purposes": _V6_ARTIFACT_PURPOSES,
+        "authoring_contract": _V6_AUTHORING_CONTRACT,
+        "authoring_inputs": (
+            (_V6_AUTHORING_INPUTS["prompt"], "AUTHORING-PROMPT.txt"),
+            (
+                _V6_AUTHORING_INPUTS["source_contract"],
+                "SOURCE-AUTHORING-CONTRACT.json",
+            ),
+            (_V6_AUTHORING_INPUTS["source_pack"], "STANDARDS-SOURCE-PACK.json"),
+        ),
+        "authorship": _V6_AUTHORSHIP,
+        "novelty": _V6_NOVELTY_POLICY,
+        "receipt_schema": (
+            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v6"
+        ),
+        "reference_lock_release_path": (
+            "release/local-v5.0.0-provenance.lock.json"
+        ),
+        "signed_objects": _V6_SIGNED_OBJECTS,
+        "signed_chain": _V6_SIGNED_CHAIN,
+        "signer_principal": _V6_SIGNER_PRINCIPAL,
+        "signer_fingerprint": _V6_SIGNER_FINGERPRINT,
+        "allowed_signer": _V6_ALLOWED_SIGNER,
+        "author_output_digests": _V6_AUTHOR_OUTPUT_DIGESTS,
+        "reference_release": _V6_REFERENCE_RELEASE,
+        "worker_visible_leakage": _V6_WORKER_VISIBLE_LEAKAGE,
+        "keychain_account_prefix": "aragorn-local-v6-author.",
+    },
+}
 _SAFE_EXECUTABLE_ROOTS = (
     Path("/usr/bin"),
     Path("/bin"),
@@ -246,8 +499,9 @@ def _fresh_openssl_receipt_schema(corpus_id: str) -> str:
         return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3"
     if corpus_id == "local-v4.0.0":
         return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v4"
-    if corpus_id == "local-v5.0.0":
-        return "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5"
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
+    if profile is not None:
+        return profile["receipt_schema"]
     raise FreezeError("fresh OpenSSL corpus does not have a receipt schema")
 
 
@@ -363,6 +617,41 @@ def _run(
         detail = completed.stderr.decode("utf-8", "replace").strip()
         raise FreezeError(f"{arguments[0]} verification failed: {detail}")
     return completed.stdout.decode("utf-8", "strict").strip()
+
+
+def _run_bytes(arguments: list[str], *, cwd: Path | None = None) -> bytes:
+    arguments = [_executable(arguments[0]), *arguments[1:]]
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(
+            ("DYLD_", "GIT_CONFIG_", "GIT_SSH", "GNUPG", "GPG_AGENT", "LD_")
+        )
+    }
+    environment.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_TERMINAL_PROMPT": "0",
+            "PATH": os.pathsep.join(str(path) for path in _SAFE_EXECUTABLE_ROOTS),
+        }
+    )
+    try:
+        completed = subprocess.run(
+            arguments,
+            cwd=cwd,
+            capture_output=True,
+            check=False,
+            timeout=60,
+            env=environment,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise FreezeError(f"cannot execute {arguments[0]}: {exc}") from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", "replace").strip()
+        raise FreezeError(f"{arguments[0]} verification failed: {detail}")
+    return completed.stdout
 
 
 def _verified_gpg_closure() -> tuple[str, str, str]:
@@ -507,10 +796,15 @@ def _artifact_map(
     release: dict[str, object],
     corpus_lock: dict[str, object],
 ) -> dict[str, dict[str, object]]:
-    purposes = {
-        "local-v4.0.0": _V4_ARTIFACT_PURPOSES,
-        "local-v5.0.0": _V5_ARTIFACT_PURPOSES,
-    }.get(corpus_lock.get("corpus_id"), _ARTIFACT_PURPOSES)
+    corpus_id = corpus_lock.get("corpus_id")
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
+    purposes = (
+        profile["artifact_purposes"]
+        if profile is not None
+        else _V4_ARTIFACT_PURPOSES
+        if corpus_id == "local-v4.0.0"
+        else _ARTIFACT_PURPOSES
+    )
     artifacts = release.get("artifacts")
     if not isinstance(artifacts, list) or len(artifacts) != 3:
         raise FreezeError("release manifest must name exactly three artifacts")
@@ -564,6 +858,8 @@ def _verify_source_freeze(
     source_commit: str | None = None,
     authoring_contract: dict[str, object] | None = None,
 ) -> None:
+    corpus_id = freeze.get("tag")
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
     with tempfile.TemporaryDirectory(prefix="aragorn-corpus-freeze-") as temporary:
         temporary_root = Path(temporary)
         bundle_path = temporary_root / "corpus.bundle"
@@ -677,21 +973,34 @@ def _verify_source_freeze(
             )
             if (
                 contract_size != str(len(contract_raw))
-                or contract_raw != canonical_json(_V5_AUTHORING_CONTRACT)
+                or profile is None
+                or contract_raw != canonical_json(profile["authoring_contract"])
                 or hashlib.sha256(contract_raw).hexdigest()
                 != authoring_contract["sha256"]
             ):
                 raise FreezeError("signed authoring contract changed")
-            for authoring_input in (
-                _V5_AUTHORING_INPUTS["prompt"],
-                _V5_AUTHORING_INPUTS["source_pack"],
-            ):
-                input_raw = _read(
-                    ROOT / authoring_input["repository_path"],
-                    max_bytes=_MAX_JSON,
-                )
+            for authoring_input, retained_path in profile["authoring_inputs"]:
+                repository_path = authoring_input.get("repository_path")
+                if repository_path is None:
+                    input_raw = _run_bytes(
+                        [
+                            "git",
+                            "-C",
+                            str(repository),
+                            "cat-file",
+                            "blob",
+                            f"{source_commit}:{retained_path}",
+                        ]
+                    )
+                else:
+                    input_raw = _read(
+                        ROOT / repository_path,
+                        max_bytes=_MAX_JSON,
+                    )
                 blob_header = f"blob {len(input_raw)}\0".encode("ascii")
                 if (
+                    not 0 < len(input_raw) <= _MAX_JSON
+                    or
                     hashlib.sha256(input_raw).hexdigest()
                     != authoring_input["sha256"]
                     or hashlib.sha1(
@@ -710,12 +1019,12 @@ def _verify_source_freeze(
                         "--full-name",
                         source_commit,
                         "--",
-                        authoring_input["path"],
+                        retained_path,
                     ]
                 )
                 if tree_entry != (
                     f"100644 blob {authoring_input['git_blob_sha1']}\t"
-                    f"{authoring_input['path']}"
+                    f"{retained_path}"
                 ):
                     raise FreezeError(
                         "source commit retained authoring input changed"
@@ -731,56 +1040,67 @@ def _verify_source_freeze(
             raise FreezeError("signed source freeze object identities changed")
 
 
-def _validate_v5_novelty_declaration(value: object) -> dict[str, object]:
+def _validate_semantic_novelty_declaration(
+    corpus_id: str,
+    value: object,
+) -> dict[str, object]:
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
+    if profile is None:
+        raise FreezeError(f"{corpus_id} has no semantic release profile")
+    version = corpus_id.removeprefix("local-").split(".", 1)[0]
+    policy = profile["novelty"]
     if not isinstance(value, dict):
-        raise FreezeError("v5 novelty declaration must be an object")
+        raise FreezeError(f"{version} novelty declaration must be an object")
     _exact(
         value,
         {
-            *_V5_NOVELTY_POLICY,
+            *policy,
             "candidate_unique_body_count",
             "exact_reference_body_overlap_count",
             "maximum_observed_similarity",
         },
-        "v5 novelty declaration",
+        f"{version} novelty declaration",
     )
-    if {
-        field: value[field] for field in _V5_NOVELTY_POLICY
-    } != _V5_NOVELTY_POLICY:
-        raise FreezeError("v5 novelty policy changed")
+    if {field: value[field] for field in policy} != policy:
+        raise FreezeError(f"{version} novelty policy changed")
     observed = value["maximum_observed_similarity"]
     if not isinstance(observed, dict):
-        raise FreezeError("v5 novelty similarity must be an object")
+        raise FreezeError(f"{version} novelty similarity must be an object")
     _exact(
         observed,
         {"candidate_case_id", "reference_case_id", "numerator", "denominator"},
-        "v5 novelty similarity",
+        f"{version} novelty similarity",
     )
     numerator = observed["numerator"]
     denominator = observed["denominator"]
+    maximum = policy["maximum_allowed_similarity"]
+    reference_id = policy["reference_corpus_id"]
     if (
-        value["candidate_unique_body_count"] != 448
-        or value["exact_reference_body_overlap_count"] != 0
+        value["candidate_unique_body_count"]
+        != policy["required_unique_candidate_body_count"]
+        or value["exact_reference_body_overlap_count"]
+        != policy["maximum_exact_reference_body_overlap_count"]
         or not isinstance(observed["candidate_case_id"], str)
-        or _OPAQUE_IDS["local-v5.0.0"].fullmatch(
-            observed["candidate_case_id"]
-        )
-        is None
+        or _OPAQUE_IDS[corpus_id].fullmatch(observed["candidate_case_id"]) is None
         or not isinstance(observed["reference_case_id"], str)
-        or _OPAQUE_IDS["local-v4.0.0"].fullmatch(
-            observed["reference_case_id"]
-        )
-        is None
+        or _OPAQUE_IDS[reference_id].fullmatch(observed["reference_case_id"]) is None
         or isinstance(numerator, bool)
         or not isinstance(numerator, int)
         or numerator < 0
         or isinstance(denominator, bool)
         or not isinstance(denominator, int)
         or denominator < 1
-        or 2 * numerator > denominator
+        or numerator * maximum["denominator"]
+        > denominator * maximum["numerator"]
     ):
-        raise FreezeError("v5 novelty declaration does not meet its frozen policy")
+        raise FreezeError(
+            f"{version} novelty declaration does not meet its frozen policy"
+        )
     return value
+
+
+def _validate_v5_novelty_declaration(value: object) -> dict[str, object]:
+    return _validate_semantic_novelty_declaration("local-v5.0.0", value)
 
 
 def _verify_release_v2(
@@ -792,11 +1112,13 @@ def _verify_release_v2(
         "independent-v3.0.0",
         "local-v4.0.0",
         "local-v5.0.0",
+        "local-v6.0.0",
     }:
         raise FreezeError("v2 release corpus is unsupported")
     is_v4 = corpus_id == "local-v4.0.0"
-    is_v5 = corpus_id == "local-v5.0.0"
-    is_local = is_v4 or is_v5
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
+    is_semantic = profile is not None
+    is_local = is_v4 or is_semantic
     principal = corpus_lock["signing"]["principal"]
     fingerprint = corpus_lock["signing"]["fingerprint"]
     allowed = release_root / "signing" / f"{corpus_id}-allowed-signers"
@@ -805,12 +1127,14 @@ def _verify_release_v2(
         principal=principal,
         fingerprint=fingerprint,
     )
-    if is_v5 and (
-        principal != _V5_SIGNER_PRINCIPAL
-        or fingerprint != _V5_SIGNER_FINGERPRINT
-        or allowed_raw != _V5_ALLOWED_SIGNER
+    if is_semantic and (
+        principal != profile["signer_principal"]
+        or fingerprint != profile["signer_fingerprint"]
+        or allowed_raw != profile["allowed_signer"]
     ):
-        raise FreezeError("v5 signer identity does not match the pinned Aragorn key")
+        raise FreezeError(
+            f"{corpus_id} signer identity does not match the pinned Aragorn key"
+        )
     manifest_path = release_root / "release" / f"{corpus_id}-release-manifest.json"
     release_raw = _read(manifest_path, max_bytes=_MAX_JSON)
     if _sha256(release_raw) != corpus_lock["release_manifest"]["sha256"]:
@@ -822,8 +1146,8 @@ def _verify_release_v2(
         principal=principal,
     )
     release = _decode_json(release_raw, "release manifest")
-    if is_v5 and release_raw != canonical_json(release):
-        raise FreezeError("v5 release manifest must be canonical JSON")
+    if is_semantic and release_raw != canonical_json(release):
+        raise FreezeError(f"{corpus_id} release manifest must be canonical JSON")
     release_fields = {
         "aggregate_counts",
         "artifacts",
@@ -835,8 +1159,14 @@ def _verify_release_v2(
     }
     if is_v4:
         release_fields |= {"authorship", "repair_scope", "source_corpus_version"}
-    elif is_v5:
+    elif is_semantic:
         release_fields |= {"authoring_contract", "authorship", "novelty"}
+        if corpus_id == "local-v6.0.0":
+            release_fields |= {
+                "author_output_digests",
+                "reference_release",
+                "worker_visible_leakage",
+            }
     _exact(release, release_fields, "release manifest")
     if not isinstance(release["custody"], dict) or not isinstance(
         release["signing"], dict
@@ -862,7 +1192,7 @@ def _verify_release_v2(
         "release signing",
     )
     authoring_contract = None
-    if is_v5:
+    if is_semantic:
         authoring_contract = release["authoring_contract"]
         if not isinstance(authoring_contract, dict):
             raise FreezeError("authoring contract must be an object")
@@ -871,13 +1201,13 @@ def _verify_release_v2(
             {"commit", "path", "sha256"},
             "authoring contract",
         )
-        _validate_v5_novelty_declaration(release["novelty"])
+        _validate_semantic_novelty_declaration(corpus_id, release["novelty"])
     custody = release["custody"]
     escaped_corpus_id = re.escape(corpus_id)
     expected_signed_objects = [
         *(
-            _V5_SIGNED_OBJECTS[:2]
-            if is_v5
+            profile["signed_objects"][:2]
+            if is_semantic
             else ["source commit"]
             if is_v4
             else []
@@ -889,7 +1219,7 @@ def _verify_release_v2(
         "release manifest",
     ]
     if (
-        release["schema_version"] != ("2.0" if is_v5 else "1.0")
+        release["schema_version"] != ("2.0" if is_semantic else "1.0")
         or release["corpus_id"] != corpus_id
         or release["corpus_version"] != corpus_id
         or release["aggregate_counts"]
@@ -911,11 +1241,23 @@ def _verify_release_v2(
         )
         is None
         or not isinstance(custody["keychain_account"], str)
-        or re.fullmatch(
-            rf"aragorn-{escaped_corpus_id}-author\.[A-Za-z0-9._-]{{1,96}}",
-            custody["keychain_account"],
+        or (
+            re.fullmatch(
+                (
+                    re.escape(
+                        profile.get(
+                            "keychain_account_prefix",
+                            f"aragorn-{corpus_id}-author.",
+                        )
+                        if is_semantic
+                        else f"aragorn-{corpus_id}-author."
+                    )
+                    + r"[A-Za-z0-9._-]{1,96}"
+                ),
+                custody["keychain_account"],
+            )
+            is None
         )
-        is None
         or release["signing"]["identity"] != principal
         or release["signing"]["public_key_fingerprint"] != fingerprint
         or release["signing"]["signed_objects"] != expected_signed_objects
@@ -929,14 +1271,48 @@ def _verify_release_v2(
             )
         )
         or (
-            is_v5
+            is_semantic
             and (
-                release["authorship"] != _V5_AUTHORSHIP
+                release["authorship"] != profile["authorship"]
                 or authoring_contract["path"] != "AUTHORING-CONTRACT.json"
                 or not isinstance(authoring_contract["commit"], str)
                 or _GIT_OID.fullmatch(authoring_contract["commit"]) is None
                 or not isinstance(authoring_contract["sha256"], str)
                 or _HEX_DIGEST.fullmatch(authoring_contract["sha256"]) is None
+            )
+        )
+        or (
+            corpus_id == "local-v6.0.0"
+            and (
+                release["author_output_digests"]
+                != profile["author_output_digests"]
+                or release["reference_release"] != profile["reference_release"]
+                or release["worker_visible_leakage"]
+                != profile["worker_visible_leakage"]
+                or authoring_contract["commit"]
+                != profile["signed_chain"]["authoring_contract_commit"]
+                or authoring_contract["sha256"]
+                != profile["signed_chain"]["authoring_contract_sha256"]
+                or custody["source_commit"]
+                != profile["signed_chain"]["source_commit"]
+                or custody["freeze_commit"]
+                != profile["signed_chain"]["freeze_commit"]
+                or custody["freeze_tag"]
+                != profile["signed_chain"]["freeze_tag"]
+                or custody["tag_object"]
+                != profile["signed_chain"]["freeze_tag_object"]
+                or corpus_lock["release_manifest"]["sha256"]
+                != profile["signed_chain"]["release_manifest_digest"]
+                or corpus_lock.get("reference")
+                != {
+                    "corpus_id": profile["novelty"]["reference_corpus_id"],
+                    "lock_sha256": profile["novelty"][
+                        "reference_corpus_lock_digest"
+                    ],
+                    "worker_sha256": profile["novelty"][
+                        "reference_worker_archive_digest"
+                    ],
+                }
             )
         )
     ):
@@ -973,6 +1349,17 @@ def _verify_release_v2(
         corpus_lock["freeze"],
         **source_verification,
     )
+    if corpus_id == "local-v6.0.0":
+        public_raw, public_entries = _worker_public_manifest(
+            artifacts_raw["worker"],
+            corpus_lock,
+        )
+        _verified_worker_content(
+            artifacts_raw["worker"],
+            public_raw,
+            public_entries,
+            corpus_id=corpus_id,
+        )
     return {
         "release_manifest_digest": _sha256(release_raw),
         "release_manifest": release,
@@ -1217,9 +1604,10 @@ def verify_evaluator_package(
         "freeze_tag",
         "source_commit",
     }
+    semantic_profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_lock["corpus_id"])
     if corpus_lock["corpus_id"] == "local-v4.0.0":
         manifest_fields.add("source_corpus_version")
-    elif corpus_lock["corpus_id"] == "local-v5.0.0":
+    elif semantic_profile is not None:
         manifest_fields.add("authoring_contract_commit")
     _exact(manifest, manifest_fields, "evaluator manifest")
     expected_source_commit = (
@@ -1230,7 +1618,7 @@ def verify_evaluator_package(
     )
     if (
         manifest["schema_version"]
-        != ("2.0" if corpus_lock["corpus_id"] == "local-v5.0.0" else "1.0")
+        != ("2.0" if semantic_profile is not None else "1.0")
         or manifest["corpus_version"] != corpus_lock["corpus_id"]
         or manifest["freeze_tag"] != corpus_lock["freeze"]["tag"]
         or manifest["source_commit"] != expected_source_commit
@@ -1239,7 +1627,7 @@ def verify_evaluator_package(
             and manifest["source_corpus_version"] != "independent-v3.0.0"
         )
         or (
-            corpus_lock["corpus_id"] == "local-v5.0.0"
+            semantic_profile is not None
             and manifest["authoring_contract_commit"]
             != release["release_manifest"]["authoring_contract"]["commit"]
         )
@@ -1423,17 +1811,71 @@ def _validate_skill_frontmatter(raw: bytes, case_id: str) -> None:
         )
 
 
+def _validate_v6_worker_visible_case(raw: bytes, case_id: str) -> str:
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise FreezeError(f"{case_id}: v6 worker case is not UTF-8") from exc
+    match = re.fullmatch(
+        (
+            r"---\nname: ([a-z0-9-]+)\n"
+            r"description: ([^\n]+)\n---\n\n(.+)\n"
+        ),
+        text,
+        re.DOTALL,
+    )
+    if match is None:
+        raise FreezeError(
+            f"{case_id}: v6 frontmatter must contain exact name and description"
+        )
+    name, description, body = match.groups()
+    name_match = _V6_OPAQUE_NAME.fullmatch(name)
+    description_match = _V6_OPAQUE_DESCRIPTION.fullmatch(description)
+    if (
+        name_match is None
+        or description_match is None
+        or name_match.group(1) != description_match.group(1)
+    ):
+        raise FreezeError(f"{case_id}: v6 frontmatter is not neutral and opaque")
+    expected_token = hashlib.sha256(
+        b"opaque-frontmatter-v1\0" + body.encode("utf-8")
+    ).hexdigest()[:20]
+    if name_match.group(1) != expected_token:
+        raise FreezeError(
+            f"{case_id}: v6 frontmatter token is not derived from its body"
+        )
+    folded = text.casefold()
+    if _V6_WORKER_LABEL_PROXY.search(text) or any(
+        title in folded for title in _V6_FAMILY_TITLES
+    ):
+        raise FreezeError(f"{case_id}: v6 worker-visible label proxy leakage")
+    return name
+
+
 def _semantic_body_profile(
     raw: bytes,
     case_id: str,
+    *,
+    corpus_id: str = "local-v5.0.0",
 ) -> tuple[str, frozenset[tuple[str, ...]]]:
-    if unicodedata.unidata_version != _V5_NOVELTY_POLICY["unicode_version"]:
-        raise FreezeError("v5 novelty Unicode database version changed")
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
+    if profile is None:
+        raise FreezeError(f"{corpus_id} has no semantic release profile")
+    expected_unicode = profile["novelty"]["unicode_version"]
+    version = corpus_id.removeprefix("local-").split(".", 1)[0]
     _validate_skill_frontmatter(raw, case_id)
     text = raw.decode("utf-8")
     lines = text.split("\n")
     closing = lines.index("---", 1)
-    normalized = unicodedata.normalize("NFKC", "\n".join(lines[closing + 1 :])).casefold()
+    body = "\n".join(lines[closing + 1 :])
+    if (
+        unicodedata.unidata_version != expected_unicode
+        and any(ord(character) > 0x7F for character in body)
+    ):
+        raise FreezeError(
+            f"{version} novelty Unicode database version changed for non-ASCII input"
+        )
+    normalized = unicodedata.normalize("NFKC", body).casefold()
     tokens = []
     token = []
     for character in normalized:
@@ -1454,27 +1896,45 @@ def _semantic_body_profile(
     return normalized_digest, shingles
 
 
-def _measure_v5_novelty(
+def _measure_semantic_novelty(
+    corpus_id: str,
     candidate: dict[str, bytes],
     reference: dict[str, bytes],
 ) -> dict[str, object]:
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
+    if profile is None:
+        raise FreezeError(f"{corpus_id} has no semantic release profile")
+    policy = profile["novelty"]
+    reference_id = policy["reference_corpus_id"]
+    version = corpus_id.removeprefix("local-").split(".", 1)[0]
     if len(candidate) != 448 or len(reference) != 448:
-        raise FreezeError("v5 novelty comparison requires two complete corpora")
+        raise FreezeError(
+            f"{version} novelty comparison requires two complete corpora"
+        )
+    if any(_OPAQUE_IDS[corpus_id].fullmatch(case_id) is None for case_id in candidate):
+        raise FreezeError(f"{version} candidate case identity changed")
+    if any(
+        _OPAQUE_IDS[reference_id].fullmatch(case_id) is None
+        for case_id in reference
+    ):
+        raise FreezeError(f"{version} reference case identity changed")
     candidate_profiles = {
-        case_id: _semantic_body_profile(raw, case_id)
+        case_id: _semantic_body_profile(raw, case_id, corpus_id=corpus_id)
         for case_id, raw in sorted(candidate.items())
     }
     reference_profiles = {
-        case_id: _semantic_body_profile(raw, case_id)
+        case_id: _semantic_body_profile(raw, case_id, corpus_id=corpus_id)
         for case_id, raw in sorted(reference.items())
     }
     candidate_digests = [profile[0] for profile in candidate_profiles.values()]
     if len(set(candidate_digests)) != 448:
-        raise FreezeError("v5 semantic bodies are not unique")
+        raise FreezeError(f"{version} semantic bodies are not unique")
     reference_digests = {profile[0] for profile in reference_profiles.values()}
     exact_overlap = sum(digest in reference_digests for digest in candidate_digests)
     if exact_overlap:
-        raise FreezeError("v5 reuses a normalized v4 semantic body")
+        raise FreezeError(
+            f"{version} reuses a normalized {reference_id} semantic body"
+        )
 
     best: tuple[int, int, str, str] | None = None
     for candidate_id, (_, candidate_shingles) in candidate_profiles.items():
@@ -1493,10 +1953,11 @@ def _measure_v5_novelty(
                 best = observed
     assert best is not None
     numerator, denominator, candidate_id, reference_id = best
-    if 2 * numerator > denominator:
-        raise FreezeError("v5 semantic body similarity exceeds one half")
+    maximum = policy["maximum_allowed_similarity"]
+    if numerator * maximum["denominator"] > denominator * maximum["numerator"]:
+        raise FreezeError(f"{version} semantic body similarity exceeds one half")
     return {
-        **_V5_NOVELTY_POLICY,
+        **policy,
         "candidate_unique_body_count": len(set(candidate_digests)),
         "exact_reference_body_overlap_count": exact_overlap,
         "maximum_observed_similarity": {
@@ -1508,16 +1969,40 @@ def _measure_v5_novelty(
     }
 
 
+def _measure_v5_novelty(
+    candidate: dict[str, bytes],
+    reference: dict[str, bytes],
+) -> dict[str, object]:
+    return _measure_semantic_novelty("local-v5.0.0", candidate, reference)
+
+
+def _verify_semantic_novelty(
+    corpus_id: str,
+    candidate: dict[str, bytes],
+    reference: dict[str, bytes],
+    declaration: object,
+) -> dict[str, object]:
+    version = corpus_id.removeprefix("local-").split(".", 1)[0]
+    declared = _validate_semantic_novelty_declaration(corpus_id, declaration)
+    measured = _measure_semantic_novelty(corpus_id, candidate, reference)
+    if declared != measured:
+        raise FreezeError(
+            f"{version} novelty declaration does not match recomputation"
+        )
+    return measured
+
+
 def _verify_v5_novelty(
     candidate: dict[str, bytes],
     reference: dict[str, bytes],
     declaration: object,
 ) -> dict[str, object]:
-    declared = _validate_v5_novelty_declaration(declaration)
-    measured = _measure_v5_novelty(candidate, reference)
-    if declared != measured:
-        raise FreezeError("v5 novelty declaration does not match recomputation")
-    return measured
+    return _verify_semantic_novelty(
+        "local-v5.0.0",
+        candidate,
+        reference,
+        declaration,
+    )
 
 
 def _worker_public_manifest(
@@ -1542,32 +2027,61 @@ def _worker_public_manifest(
     return raw, entries
 
 
-def _verified_v5_reference_content(release_root: Path) -> dict[str, bytes]:
-    lock_raw = _read(
-        ROOT / "benchmark" / "phase0-corpus-v4.lock.json",
-        max_bytes=_MAX_JSON,
+def _verified_reference_content(
+    corpus_id: str,
+    release_root: Path,
+) -> dict[str, bytes]:
+    profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_id)
+    if profile is None:
+        raise FreezeError(f"{corpus_id} has no semantic release profile")
+    policy = profile["novelty"]
+    version = corpus_id.removeprefix("local-").split(".", 1)[0]
+    repository_path = profile.get("reference_lock_repository_path")
+    release_path = profile.get("reference_lock_release_path")
+    if (repository_path is None) == (release_path is None):
+        raise FreezeError(f"{version} novelty reference lock source is invalid")
+    lock_path = (
+        ROOT / repository_path
+        if repository_path is not None
+        else release_root.joinpath(*PurePosixPath(release_path).parts)
     )
-    if _sha256(lock_raw) != _V5_NOVELTY_POLICY["reference_corpus_lock_digest"]:
-        raise FreezeError("v5 novelty reference lock changed")
-    lock = _decode_json(lock_raw, "v5 novelty reference corpus lock")
+    lock_raw = _read(lock_path, max_bytes=_MAX_JSON)
+    if _sha256(lock_raw) != policy["reference_corpus_lock_digest"]:
+        raise FreezeError(f"{version} novelty reference lock changed")
+    lock = _decode_json(lock_raw, f"{version} novelty reference corpus lock")
     if (
         lock.get("schema") != "aragorn/benchmark-corpus-provenance-lock/v2"
-        or lock.get("corpus_id") != _V5_NOVELTY_POLICY["reference_corpus_id"]
+        or lock.get("corpus_id") != policy["reference_corpus_id"]
         or lock.get("worker_archive", {}).get("sha256")
-        != _V5_NOVELTY_POLICY["reference_worker_archive_digest"]
+        != policy["reference_worker_archive_digest"]
     ):
-        raise FreezeError("v5 novelty reference corpus identity changed")
+        raise FreezeError(f"{version} novelty reference corpus identity changed")
     release = verify_release(release_root, lock)
+    expected_reference = profile.get("reference_release")
+    if expected_reference is not None and (
+        release["release_manifest_digest"]
+        != expected_reference["manifest_sha256"]
+        or release["worker_archive_digest"]
+        != expected_reference["worker_sha256"]
+    ):
+        raise FreezeError(f"{version} authenticated reference release changed")
     public_raw, entries = _worker_public_manifest(release["worker_archive"], lock)
     return _verified_worker_content(release["worker_archive"], public_raw, entries)
+
+
+def _verified_v5_reference_content(release_root: Path) -> dict[str, bytes]:
+    return _verified_reference_content("local-v5.0.0", release_root)
 
 
 def _verified_worker_content(
     archive: bytes,
     public_raw: bytes,
     public_entries: dict[str, dict[str, object]],
+    *,
+    corpus_id: str | None = None,
 ) -> dict[str, bytes]:
     content_by_id = {}
+    v6_names: set[str] = set()
     total = 0
     with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as source:
         members = source.getmembers()
@@ -1623,7 +2137,14 @@ def _verified_worker_content(
             ):
                 raise FreezeError("worker case content changed or exceeds budget")
             _validate_skill_frontmatter(raw, case_id)
+            if corpus_id == "local-v6.0.0":
+                name = _validate_v6_worker_visible_case(raw, case_id)
+                if name in v6_names:
+                    raise FreezeError("v6 worker frontmatter names are not unique")
+                v6_names.add(name)
             content_by_id[case_id] = raw
+    if corpus_id == "local-v6.0.0" and len(v6_names) != 448:
+        raise FreezeError("v6 worker leakage-check coverage changed")
     return content_by_id
 
 
@@ -1918,23 +2439,37 @@ def validate_freeze_receipt_bindings(
             raise FreezeError("public manifest binding does not match lock")
         if receipt["evaluator"]["label_ledger_digest"] != lock["label_ledger_digest"]:
             raise FreezeError("label ledger digest does not match lock")
-        if receipt.get("schema") == (
-            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5"
-        ):
+        receipt_profile = next(
+            (
+                (corpus_id, profile)
+                for corpus_id, profile in _SEMANTIC_RELEASE_PROFILES.items()
+                if receipt.get("schema") == profile["receipt_schema"]
+            ),
+            None,
+        )
+        if receipt_profile is not None:
+            receipt_corpus_id, profile = receipt_profile
+            version = receipt_corpus_id.removeprefix("local-").split(".", 1)[0]
             if not isinstance(release_manifest, dict):
-                raise FreezeError("v5 receipt requires its verified release manifest")
+                raise FreezeError(
+                    f"{version} receipt requires its verified release manifest"
+                )
             if (
                 _sha256(canonical_json(release_manifest))
                 != receipt["release"]["release_manifest_digest"]
             ):
-                raise FreezeError("v5 verified release manifest digest changed")
-            if receipt["release"]["authorship"] != _V5_AUTHORSHIP:
-                raise FreezeError("v5 receipt authorship declaration changed")
+                raise FreezeError(
+                    f"{version} verified release manifest digest changed"
+                )
+            if receipt["release"]["authorship"] != profile["authorship"]:
+                raise FreezeError(
+                    f"{version} receipt authorship declaration changed"
+                )
             authoring_contract = receipt["release"]["authoring_contract"]
             _exact(
                 authoring_contract,
                 {"commit", "path", "sha256", "signature_status"},
-                "v5 receipt authoring contract",
+                f"{version} receipt authoring contract",
             )
             if (
                 authoring_contract["path"] != "AUTHORING-CONTRACT.json"
@@ -1944,11 +2479,11 @@ def validate_freeze_receipt_bindings(
                 or not isinstance(authoring_contract["sha256"], str)
                 or _HEX_DIGEST.fullmatch(authoring_contract["sha256"]) is None
             ):
-                raise FreezeError("v5 receipt authoring contract changed")
+                raise FreezeError(f"{version} receipt authoring contract changed")
             novelty = dict(receipt["release"]["novelty"])
             if novelty.pop("verification_status", None) != "passed":
-                raise FreezeError("v5 receipt novelty was not verified")
-            _validate_v5_novelty_declaration(novelty)
+                raise FreezeError(f"{version} receipt novelty was not verified")
+            _validate_semantic_novelty_declaration(receipt_corpus_id, novelty)
             if (
                 release_manifest.get("authoring_contract")
                 != {
@@ -1960,8 +2495,31 @@ def validate_freeze_receipt_bindings(
                 or release_manifest.get("novelty") != novelty
             ):
                 raise FreezeError(
-                    "v5 receipt declarations do not match the verified release manifest"
+                    f"{version} receipt declarations do not match the "
+                    "verified release manifest"
                 )
+            if receipt_corpus_id == "local-v6.0.0":
+                leakage = dict(receipt["release"]["worker_visible_leakage"])
+                if leakage.pop("verification_status", None) != "passed":
+                    raise FreezeError(
+                        "v6 receipt worker-visible leakage was not verified"
+                    )
+                if (
+                    receipt["release"]["author_output_digests"]
+                    != release_manifest.get("author_output_digests")
+                    or receipt["release"]["reference_release"]
+                    != release_manifest.get("reference_release")
+                    or leakage != release_manifest.get("worker_visible_leakage")
+                    or receipt["release"]["author_output_digests"]
+                    != profile["author_output_digests"]
+                    or receipt["release"]["reference_release"]
+                    != profile["reference_release"]
+                    or leakage != profile["worker_visible_leakage"]
+                ):
+                    raise FreezeError(
+                        "v6 receipt declarations do not match the verified "
+                        "release manifest"
+                    )
         for field in (
             "suite_digest",
             "candidate_policy_digest",
@@ -2197,18 +2755,25 @@ def freeze(
         raise FreezeError("corpus lock identity is inconsistent")
     release = verify_release(release_dir, corpus_lock)
     reference_content = None
-    if corpus_lock["corpus_id"] == "local-v5.0.0":
+    semantic_profile = _SEMANTIC_RELEASE_PROFILES.get(corpus_lock["corpus_id"])
+    if semantic_profile is not None:
+        version = corpus_lock["corpus_id"].removeprefix("local-").split(".", 1)[0]
         if novelty_reference_release_dir is None:
-            raise FreezeError("v5 requires its signed v4 novelty reference release")
+            raise FreezeError(
+                f"{version} requires its signed novelty reference release"
+            )
         _reject_symlink_components(
             novelty_reference_release_dir,
-            "v5 novelty reference release",
+            f"{version} novelty reference release",
         )
-        reference_content = _verified_v5_reference_content(
+        reference_content = _verified_reference_content(
+            corpus_lock["corpus_id"],
             novelty_reference_release_dir
         )
     elif novelty_reference_release_dir is not None:
-        raise FreezeError("novelty reference release is only valid for v5")
+        raise FreezeError(
+            "novelty reference release is only valid for semantic corpora"
+        )
     prior = None
     gpg_executable = None
     gpg_agent_executable = None
@@ -2286,9 +2851,11 @@ def freeze(
             release["worker_archive"],
             evaluator["public_manifest_raw"],
             evaluator["public_entries"],
+            corpus_id=corpus_lock["corpus_id"],
         )
         if reference_content is not None:
-            _verify_v5_novelty(
+            _verify_semantic_novelty(
+                corpus_lock["corpus_id"],
                 content,
                 reference_content,
                 release["release_manifest"]["novelty"],
@@ -2427,7 +2994,7 @@ def freeze(
                     "not_same_uid_or_hardware_attested"
                 ),
             }
-            if corpus_lock["corpus_id"] == "local-v5.0.0":
+            if semantic_profile is not None:
                 limitations = {
                     **limitations,
                     "ordering": (
@@ -2502,7 +3069,7 @@ def freeze(
             "freeze_tag": corpus_lock["freeze"]["tag"],
             "freeze_tag_object": corpus_lock["freeze"]["tag_object"],
         }
-        if corpus_lock["corpus_id"] == "local-v5.0.0":
+        if semantic_profile is not None:
             release_receipt.update(
                 {
                     "authoring_contract": {
@@ -2516,6 +3083,23 @@ def freeze(
                     },
                 }
             )
+            if corpus_lock["corpus_id"] == "local-v6.0.0":
+                release_receipt.update(
+                    {
+                        "author_output_digests": release["release_manifest"][
+                            "author_output_digests"
+                        ],
+                        "reference_release": release["release_manifest"][
+                            "reference_release"
+                        ],
+                        "worker_visible_leakage": {
+                            **release["release_manifest"][
+                                "worker_visible_leakage"
+                            ],
+                            "verification_status": "passed",
+                        },
+                    }
+                )
         receipt = {
             "schema": receipt_schema,
             "recorded_on": recorded_on,

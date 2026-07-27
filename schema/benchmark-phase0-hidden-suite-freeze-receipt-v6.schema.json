@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v6.schema.json",
+  "title": "Aragorn Phase 0 local v6 fresh OpenSSL hidden-suite freeze receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_on",
+    "assurance",
+    "release",
+    "evaluator",
+    "suite",
+    "lock",
+    "pre_outcome",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v6"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "assurance": {
+      "const": "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_manifest_digest",
+        "signature_status",
+        "principal",
+        "fingerprint",
+        "worker_archive_digest",
+        "evaluator_ciphertext_digest",
+        "source_bundle_digest",
+        "freeze_commit",
+        "freeze_tag",
+        "freeze_tag_object",
+        "authoring_contract",
+        "authorship",
+        "novelty",
+        "author_output_digests",
+        "reference_release",
+        "worker_visible_leakage"
+      ],
+      "properties": {
+        "release_manifest_digest": {
+          "const": "sha256:710352b1ef15c1cf0b184bec46e90d4b07efae1a77f5989a98d7d0010e036a9f"
+        },
+        "signature_status": {"const": "verified"},
+        "principal": {"const": "aragorn-local-v6-author"},
+        "fingerprint": {
+          "const": "SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk"
+        },
+        "worker_archive_digest": {
+          "const": "sha256:7a810cf543f17e7e4441b385771edad58a1e360793345870c06998925e9d9c60"
+        },
+        "evaluator_ciphertext_digest": {
+          "const": "sha256:48e43c2631511beb1d9ff962ca682ca4cb2078ed1ebedbade9e94cb25b7e981e"
+        },
+        "source_bundle_digest": {
+          "const": "sha256:c6a4146bfa11451bc7ca30017df64b04a73b6b50d8964dd7525f6266d7ddde22"
+        },
+        "freeze_commit": {
+          "const": "4b917c07976270b291f975f4bcdf2ad7a9a4e4e7"
+        },
+        "freeze_tag": {"const": "local-v6.0.0"},
+        "freeze_tag_object": {
+          "const": "26d013f5f097c5951bdeaad75b964ad20cce9d51"
+        },
+        "authoring_contract": {
+          "const": {
+            "commit": "2b3370d5f553b6d82a8a69a165aea01d3b8066da",
+            "path": "AUTHORING-CONTRACT.json",
+            "sha256": "e653f50b049a08e94f14c9b75c0dfaf38678888fb81253f59033648a1fd89293",
+            "signature_status": "verified"
+          }
+        },
+        "authorship": {
+          "const": {
+            "authoring_context": "fresh_context_subagent_with_instruction_boundary_not_os_sandboxed",
+            "authoring_input_provenance_retained": true,
+            "candidate_detector_source_provided_to_author": false,
+            "independent_human_authorship": false,
+            "mode": "technical-codex-semantic-corpus-authoring",
+            "operator_case_or_label_authorship": false,
+            "outcomes_used_for_tuning": false,
+            "prior_corpus_bodies_provided_to_author": false,
+            "prior_outcomes_provided_to_author": false,
+            "v6_scanner_evaluations_before_freeze": 0
+          }
+        },
+        "novelty": {"$ref": "#/$defs/novelty"},
+        "author_output_digests": {
+          "const": {
+            "authoring-record.json": "6ad72147c28c8386f5d29d36bed7e33ff7be449aa6a0bdceeea3deacd2e3c6ec",
+            "case_tree_sha256": "a78f68185c440806404de2e1ea63147bddfbede2b08b922d1e44b6f7bcdbf4d0",
+            "labels.jsonl": "6d84a0201bc10a991b0d5b47aecfe243641310242ede235ea0415bc3cf649ce9",
+            "public-manifest.json": "250093fb2200f5266e6623cfcf61a34e5b29092fdabeb984d5a3f9b9628e0fba",
+            "semantic_author.py": "4059accf53ad6007233629433edefb66fab7b5158b80cf253a0b85a38f6a40b0",
+            "snapshot_sha256": "369b3e2c4ad370371e07aa6533132cc05876686211a86e0968d261eb2d690401"
+          }
+        },
+        "reference_release": {
+          "const": {
+            "corpus_id": "local-v5.0.0",
+            "lock_sha256": "sha256:53ac28e5dc23e9a5a8244d58f5f12860052941d71c0c9ca3e922245c584fa697",
+            "manifest_sha256": "sha256:be9f50ad5d47c9ada8100ef2dc008d36b57d349e5fe288aa33cd00c57af9bb6a",
+            "worker_sha256": "sha256:e14b49f0f5dcce0814e853143410cd60f4a74780fc3140672823546018d73205"
+          }
+        },
+        "worker_visible_leakage": {
+          "const": {
+            "class_linked_frontmatter_prefixes": 0,
+            "explicit_class_or_family_tokens": 0,
+            "frontmatter_domain_labels": 0,
+            "frontmatter_scheme": "entry-sha256-20hex-neutral/v1",
+            "opaque_unique_names": 448,
+            "verification_status": "passed",
+            "worker_public_fields": ["id", "path", "sha256", "size"]
+          }
+        }
+      }
+    },
+    "evaluator": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v5.schema.json#/properties/evaluator"
+    },
+    "suite": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/suite"
+    },
+    "lock": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/lock"
+    },
+    "pre_outcome": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json#/properties/pre_outcome"
+    },
+    "limitations": {
+      "$ref": "https://aragorn.dev/schema/benchmark-phase0-hidden-suite-freeze-receipt-v5.schema.json#/properties/limitations"
+    }
+  },
+  "$defs": {
+    "novelty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "reference_corpus_id",
+        "reference_corpus_lock_digest",
+        "reference_worker_archive_digest",
+        "method",
+        "unicode_version",
+        "maximum_allowed_similarity",
+        "required_unique_candidate_body_count",
+        "maximum_exact_reference_body_overlap_count",
+        "candidate_unique_body_count",
+        "exact_reference_body_overlap_count",
+        "maximum_observed_similarity",
+        "verification_status"
+      ],
+      "properties": {
+        "claim": {
+          "const": "new-corpus-with-bounded-lexical-novelty-not-semantic-independence"
+        },
+        "reference_corpus_id": {"const": "local-v5.0.0"},
+        "reference_corpus_lock_digest": {
+          "const": "sha256:53ac28e5dc23e9a5a8244d58f5f12860052941d71c0c9ca3e922245c584fa697"
+        },
+        "reference_worker_archive_digest": {
+          "const": "sha256:e14b49f0f5dcce0814e853143410cd60f4a74780fc3140672823546018d73205"
+        },
+        "method": {
+          "const": "skill-body-nfkc-casefold-alnum-token-5gram-jaccard/v1"
+        },
+        "unicode_version": {"const": "13.0.0"},
+        "maximum_allowed_similarity": {
+          "const": {"denominator": 2, "numerator": 1}
+        },
+        "required_unique_candidate_body_count": {"const": 448},
+        "maximum_exact_reference_body_overlap_count": {"const": 0},
+        "candidate_unique_body_count": {"const": 448},
+        "exact_reference_body_overlap_count": {"const": 0},
+        "maximum_observed_similarity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_case_id",
+            "reference_case_id",
+            "numerator",
+            "denominator"
+          ],
+          "properties": {
+            "candidate_case_id": {
+              "type": "string",
+              "pattern": "^v6-[0-9a-f]{24}$"
+            },
+            "reference_case_id": {
+              "type": "string",
+              "pattern": "^v5-[0-9a-f]{24}$"
+            },
+            "numerator": {"type": "integer", "minimum": 0},
+            "denominator": {"type": "integer", "minimum": 1}
+          }
+        },
+        "verification_status": {"const": "passed"}
+      }
+    }
+  }
+}

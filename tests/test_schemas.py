@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -42,11 +43,13 @@ EXPECTED_CONTRACTS = {
     "benchmark-phase0-hidden-calibration-result-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v1",
     "benchmark-phase0-hidden-calibration-result-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v2",
     "benchmark-phase0-hidden-result-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-result-receipt/v1",
+    "benchmark-phase0-hidden-result-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-result-receipt/v2",
     "benchmark-phase0-hidden-suite-freeze-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v1",
     "benchmark-phase0-hidden-suite-freeze-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v2",
     "benchmark-phase0-hidden-suite-freeze-receipt-v3.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v3",
     "benchmark-phase0-hidden-suite-freeze-receipt-v4.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v4",
     "benchmark-phase0-hidden-suite-freeze-receipt-v5.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5",
+    "benchmark-phase0-hidden-suite-freeze-receipt-v6.schema.json": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v6",
     "benchmark-phase0-hidden-preparation-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v1",
     "benchmark-phase0-hidden-preparation-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v2",
     "benchmark-phase0-hidden-preparation-receipt-v3.schema.json": "aragorn/benchmark-phase0-hidden-preparation-receipt/v3",
@@ -111,6 +114,44 @@ class SchemaTests(unittest.TestCase):
                     "https://json-schema.org/draft/2020-12/schema",
                 )
                 self.assertEqual(document["properties"]["schema"]["const"], identifier)
+
+    def test_v6_corpus_and_freeze_schema_pin_external_reference(self) -> None:
+        root = SCHEMA_DIRECTORY.parent
+        lock_raw = (root / "benchmark" / "phase0-corpus-v6.lock.json").read_bytes()
+        self.assertEqual(
+            hashlib.sha256(lock_raw).hexdigest(),
+            "12bda81360181b5c81a9483d861c681efd40083913d3e4c6c4d835814d6c192d",
+        )
+        lock = json.loads(lock_raw)
+        self.assertEqual(
+            lock["reference"],
+            {
+                "corpus_id": "local-v5.0.0",
+                "lock_sha256": (
+                    "sha256:"
+                    "53ac28e5dc23e9a5a8244d58f5f12860052941d71c0c9ca3e922245c584fa697"
+                ),
+                "worker_sha256": (
+                    "sha256:"
+                    "e14b49f0f5dcce0814e853143410cd60f4a74780fc3140672823546018d73205"
+                ),
+            },
+        )
+        receipt_schema = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "benchmark-phase0-hidden-suite-freeze-receipt-v6.schema.json"
+            ).read_text()
+        )
+        release = receipt_schema["properties"]["release"]["properties"]
+        self.assertEqual(release["principal"]["const"], "aragorn-local-v6-author")
+        self.assertEqual(release["freeze_tag"]["const"], "local-v6.0.0")
+        self.assertEqual(
+            receipt_schema["$defs"]["novelty"]["properties"][
+                "reference_corpus_lock_digest"
+            ]["const"],
+            lock["reference"]["lock_sha256"],
+        )
 
     def test_baseline_lock_binds_closure_candidates_but_not_runner_attestation(
         self,

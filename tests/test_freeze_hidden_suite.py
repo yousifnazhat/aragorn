@@ -14,23 +14,35 @@ sys.path.insert(0, str(ROOT))
 
 from aragorn.oci_worker_protocol import canonical_json
 from scripts.freeze_hidden_suite import (
-    FreezeError,
+    _V5_ALLOWED_SIGNER,
     _V5_ARTIFACT_PURPOSES,
     _V5_AUTHORING_CONTRACT,
     _V5_AUTHORING_INPUTS,
     _V5_AUTHORSHIP,
     _V5_NOVELTY_POLICY,
-    _V5_ALLOWED_SIGNER,
     _V5_SIGNER_FINGERPRINT,
     _V5_SIGNER_PRINCIPAL,
+    _V6_ALLOWED_SIGNER,
+    _V6_AUTHORING_CONTRACT,
+    _V6_AUTHORING_INPUTS,
+    _V6_AUTHORSHIP,
+    _V6_NOVELTY_POLICY,
+    _V6_SIGNED_CHAIN,
+    _V6_SIGNER_FINGERPRINT,
+    _V6_SIGNER_PRINCIPAL,
+    _V6_WORKER_VISIBLE_LEAKAGE,
+    FreezeError,
     _artifact_map,
     _fresh_openssl_receipt_schema,
     _match_prior_freeze,
+    _measure_semantic_novelty,
     _measure_v5_novelty,
     _validate_skill_frontmatter,
-    _verify_v5_novelty,
+    _validate_v6_worker_visible_case,
     _verify_release_v2,
+    _verify_semantic_novelty,
     _verify_source_freeze,
+    _verify_v5_novelty,
     freeze,
     validate_freeze_receipt_bindings,
 )
@@ -49,6 +61,10 @@ class FreezeReceiptTests(unittest.TestCase):
         self.assertEqual(
             _fresh_openssl_receipt_schema("local-v5.0.0"),
             "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v5",
+        )
+        self.assertEqual(
+            _fresh_openssl_receipt_schema("local-v6.0.0"),
+            "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v6",
         )
         with self.assertRaises(FreezeError):
             _fresh_openssl_receipt_schema("unknown")
@@ -98,6 +114,64 @@ class FreezeReceiptTests(unittest.TestCase):
                 "frontmatter",
             ):
                 _validate_skill_frontmatter(raw, label)
+
+    def test_local_v6_frontmatter_is_neutral_and_body_derived(self) -> None:
+        def skill(body: str, *, token: str | None = None) -> bytes:
+            derived = hashlib.sha256(
+                b"opaque-frontmatter-v1\0" + body.encode()
+            ).hexdigest()[:20]
+            selected = derived if token is None else token
+            return (
+                "---\n"
+                f"name: entry-{selected}\n"
+                f"description: Static inert document {selected}.\n"
+                "---\n\n"
+                f"{body}\n"
+            ).encode()
+
+        body = "Review the inert local fixture and summarize its static wording."
+        name = _validate_v6_worker_visible_case(skill(body), "v6-test")
+        self.assertTrue(name.startswith("entry-"))
+
+        with self.assertRaisesRegex(FreezeError, "derived from its body"):
+            _validate_v6_worker_visible_case(
+                skill(body, token="0" * 20),
+                "v6-wrong-token",
+            )
+        with self.assertRaisesRegex(FreezeError, "exact name and description"):
+            _validate_v6_worker_visible_case(
+                skill(body).replace(b"---\n\n", b"license: private\n---\n\n"),
+                "v6-extra-frontmatter",
+            )
+        leaking_body = "This adversarial label must not be worker visible."
+        with self.assertRaisesRegex(FreezeError, "label proxy leakage"):
+            _validate_v6_worker_visible_case(
+                skill(leaking_body),
+                "v6-label-proxy",
+            )
+        family_body = "The phrase tool-mediated exfiltration is a family title."
+        with self.assertRaisesRegex(FreezeError, "label proxy leakage"):
+            _validate_v6_worker_visible_case(
+                skill(family_body),
+                "v6-family-proxy",
+            )
+
+    def test_local_v6_contract_and_external_lock_are_exactly_pinned(self) -> None:
+        contract_raw = canonical_json(_V6_AUTHORING_CONTRACT)
+        self.assertEqual(
+            hashlib.sha256(contract_raw).hexdigest(),
+            _V6_SIGNED_CHAIN["authoring_contract_sha256"],
+        )
+        self.assertEqual(
+            _V6_AUTHORING_CONTRACT["authoring_inputs"],
+            _V6_AUTHORING_INPUTS,
+        )
+        lock_raw = (ROOT / "benchmark" / "phase0-corpus-v6.lock.json").read_bytes()
+        self.assertEqual(
+            hashlib.sha256(lock_raw).hexdigest(),
+            "12bda81360181b5c81a9483d861c681efd40083913d3e4c6c4d835814d6c192d",
+        )
+        self.assertFalse(lock_raw.endswith(b"\n"))
 
     def test_release_artifacts_are_selected_by_signed_role_not_v1_name(self) -> None:
         release = {
@@ -567,6 +641,83 @@ class FreezeReceiptTests(unittest.TestCase):
                 authoring_input["git_blob_sha1"],
             )
 
+    def test_local_v6_signed_chain_retains_exact_source_inputs(self) -> None:
+        contract_raw = canonical_json(_V6_AUTHORING_CONTRACT)
+        source_inputs = {
+            "AUTHORING-PROMPT.txt": (
+                ROOT / "benchmark" / "phase0-v5-authoring-prompt.txt"
+            ).read_bytes(),
+            "SOURCE-AUTHORING-CONTRACT.json": canonical_json(
+                _V5_AUTHORING_CONTRACT
+            ),
+            "STANDARDS-SOURCE-PACK.json": (
+                ROOT / "benchmark" / "phase0-v5-authoring-source-pack.json"
+            ).read_bytes(),
+        }
+        input_records = {
+            "AUTHORING-PROMPT.txt": _V6_AUTHORING_INPUTS["prompt"],
+            "SOURCE-AUTHORING-CONTRACT.json": _V6_AUTHORING_INPUTS[
+                "source_contract"
+            ],
+            "STANDARDS-SOURCE-PACK.json": _V6_AUTHORING_INPUTS["source_pack"],
+        }
+
+        def run(arguments: list[str], **_: object) -> str:
+            if "--format=%P" in arguments:
+                return (
+                    _V6_SIGNED_CHAIN["source_commit"]
+                    if arguments[-1] == _V6_SIGNED_CHAIN["freeze_commit"]
+                    else _V6_SIGNED_CHAIN["authoring_contract_commit"]
+                )
+            if "ls-tree" in arguments:
+                if "--name-only" in arguments:
+                    return "AUTHORING-CONTRACT.json"
+                retained_path = arguments[-1]
+                record = input_records[retained_path]
+                return (
+                    f"100644 blob {record['git_blob_sha1']}\t{retained_path}"
+                )
+            if "cat-file" in arguments and "-s" in arguments:
+                return str(len(contract_raw))
+            if arguments[-1] == (
+                f"{_V6_SIGNED_CHAIN['authoring_contract_commit']}:"
+                "AUTHORING-CONTRACT.json"
+            ):
+                return contract_raw.decode()
+            if arguments[-1] == "refs/tags/local-v6.0.0":
+                return _V6_SIGNED_CHAIN["freeze_tag_object"]
+            if arguments[-1] == "local-v6.0.0^{}":
+                return _V6_SIGNED_CHAIN["freeze_commit"]
+            return ""
+
+        def run_bytes(arguments: list[str], **_: object) -> bytes:
+            return source_inputs[arguments[-1].split(":", 1)[1]]
+
+        with (
+            patch("scripts.freeze_hidden_suite._run", side_effect=run),
+            patch(
+                "scripts.freeze_hidden_suite._run_bytes",
+                side_effect=run_bytes,
+            ),
+        ):
+            _verify_source_freeze(
+                b"bundle",
+                _V6_ALLOWED_SIGNER,
+                {
+                    "commit": _V6_SIGNED_CHAIN["freeze_commit"],
+                    "tag": _V6_SIGNED_CHAIN["freeze_tag"],
+                    "tag_object": _V6_SIGNED_CHAIN["freeze_tag_object"],
+                },
+                source_commit=_V6_SIGNED_CHAIN["source_commit"],
+                authoring_contract={
+                    "commit": _V6_SIGNED_CHAIN["authoring_contract_commit"],
+                    "path": "AUTHORING-CONTRACT.json",
+                    "sha256": _V6_SIGNED_CHAIN[
+                        "authoring_contract_sha256"
+                    ],
+                },
+            )
+
     def test_local_v5_corpus_lock_requires_an_exact_checked_pin(self) -> None:
         with TemporaryDirectory(dir=ROOT.parent) as temporary:
             root = Path(temporary)
@@ -654,6 +805,57 @@ class FreezeReceiptTests(unittest.TestCase):
         similar_candidate["v5-" + "0" * 24] = near.encode()
         with self.assertRaisesRegex(FreezeError, "exceeds one half"):
             _measure_v5_novelty(similar_candidate, similar_reference)
+
+    def test_local_v6_novelty_uses_authenticated_v5_identity(self) -> None:
+        def skill(prefix: str, index: int) -> bytes:
+            body = " ".join(
+                f"{prefix}{index}{suffix}" for suffix in "abcdefgh"
+            )
+            return (
+                "---\n"
+                f"name: {prefix}-{index}\n"
+                f"description: Inert {prefix} fixture {index}.\n"
+                "---\n\n"
+                f"{body}\n"
+            ).encode()
+
+        candidate = {
+            f"v6-{index:024x}": skill("candidate", index)
+            for index in range(448)
+        }
+        reference = {
+            f"v5-{index:024x}": skill("reference", index)
+            for index in range(448)
+        }
+        measured = _measure_semantic_novelty(
+            "local-v6.0.0",
+            candidate,
+            reference,
+        )
+        self.assertEqual(
+            {
+                field: measured[field]
+                for field in _V6_NOVELTY_POLICY
+            },
+            _V6_NOVELTY_POLICY,
+        )
+        _verify_semantic_novelty(
+            "local-v6.0.0",
+            candidate,
+            reference,
+            measured,
+        )
+        changed = deepcopy(measured)
+        changed["maximum_observed_similarity"]["reference_case_id"] = (
+            "v5-" + "f" * 24
+        )
+        with self.assertRaisesRegex(FreezeError, "does not match recomputation"):
+            _verify_semantic_novelty(
+                "local-v6.0.0",
+                candidate,
+                reference,
+                changed,
+            )
 
     def test_preserved_evaluator_source_is_exclusive_and_bound(self) -> None:
         arguments = {
@@ -938,6 +1140,150 @@ class FreezeReceiptTests(unittest.TestCase):
                         changed_corpus_lock_raw,
                         release_manifest=changed_manifest,
                     )
+
+    def test_local_v6_receipt_binds_leakage_and_reference_declarations(
+        self,
+    ) -> None:
+        novelty = {
+            **_V6_NOVELTY_POLICY,
+            "candidate_unique_body_count": 448,
+            "exact_reference_body_overlap_count": 0,
+            "maximum_observed_similarity": {
+                "candidate_case_id": "v6-" + "1" * 24,
+                "reference_case_id": "v5-" + "2" * 24,
+                "numerator": 4,
+                "denominator": 98,
+            },
+        }
+        authoring_contract = {
+            "commit": _V6_SIGNED_CHAIN["authoring_contract_commit"],
+            "path": "AUTHORING-CONTRACT.json",
+            "sha256": _V6_SIGNED_CHAIN["authoring_contract_sha256"],
+        }
+        author_output = _V6_AUTHORING_CONTRACT["author_output"]
+        author_output_digests = {
+            **author_output["files"],
+            "case_tree_sha256": author_output["case_tree_sha256"],
+            "snapshot_sha256": author_output["snapshot_sha256"],
+        }
+        reference_release = {
+            "corpus_id": "local-v5.0.0",
+            "lock_sha256": _V6_NOVELTY_POLICY[
+                "reference_corpus_lock_digest"
+            ],
+            "manifest_sha256": (
+                "sha256:"
+                "be9f50ad5d47c9ada8100ef2dc008d36b57d349e5fe288aa33cd00c57af9bb6a"
+            ),
+            "worker_sha256": _V6_NOVELTY_POLICY[
+                "reference_worker_archive_digest"
+            ],
+        }
+        release_manifest = {
+            "authoring_contract": authoring_contract,
+            "authorship": _V6_AUTHORSHIP,
+            "novelty": novelty,
+            "author_output_digests": author_output_digests,
+            "reference_release": reference_release,
+            "worker_visible_leakage": _V6_WORKER_VISIBLE_LEAKAGE,
+        }
+        release_digest = "sha256:" + hashlib.sha256(
+            canonical_json(release_manifest)
+        ).hexdigest()
+        corpus_lock = {
+            "release_manifest": {"sha256": release_digest},
+            "worker_archive": {"sha256": "sha256:" + "3" * 64},
+            "evaluator_archive": {"sha256": "sha256:" + "4" * 64},
+            "public_manifest": {"sha256": "sha256:" + "5" * 64},
+            "signing": {
+                "principal": _V6_SIGNER_PRINCIPAL,
+                "fingerprint": _V6_SIGNER_FINGERPRINT,
+            },
+            "freeze": {
+                "commit": _V6_SIGNED_CHAIN["freeze_commit"],
+                "tag": _V6_SIGNED_CHAIN["freeze_tag"],
+                "tag_object": _V6_SIGNED_CHAIN["freeze_tag_object"],
+            },
+        }
+        corpus_lock_raw = canonical_json(corpus_lock)
+        suite = {
+            "suite_digest": "sha256:" + "8" * 64,
+            "candidate_policy_digest": "sha256:" + "9" * 64,
+            "case_count": 448,
+            "class_counts": {"benign": 336, "adversarial": 112},
+            "runs_per_case": 1,
+            "split": "hidden",
+            "systems": ["baseline", "candidate"],
+        }
+        lock = {
+            "corpus_lock_digest": (
+                "sha256:" + hashlib.sha256(corpus_lock_raw).hexdigest()
+            ),
+            "worker_archive_digest": corpus_lock["worker_archive"]["sha256"],
+            "evaluator_archive_digest": corpus_lock["evaluator_archive"]["sha256"],
+            "public_manifest_digest": corpus_lock["public_manifest"]["sha256"],
+            "label_ledger_digest": "sha256:" + "a" * 64,
+            **suite,
+        }
+        lock_raw = canonical_json(lock)
+        receipt = {
+            "schema": "aragorn/benchmark-phase0-hidden-suite-freeze-receipt/v6",
+            "release": {
+                "release_manifest_digest": release_digest,
+                "worker_archive_digest": lock["worker_archive_digest"],
+                "evaluator_ciphertext_digest": lock["evaluator_archive_digest"],
+                "principal": _V6_SIGNER_PRINCIPAL,
+                "fingerprint": _V6_SIGNER_FINGERPRINT,
+                "freeze_commit": corpus_lock["freeze"]["commit"],
+                "freeze_tag": corpus_lock["freeze"]["tag"],
+                "freeze_tag_object": corpus_lock["freeze"]["tag_object"],
+                "authoring_contract": {
+                    **authoring_contract,
+                    "signature_status": "verified",
+                },
+                "authorship": _V6_AUTHORSHIP,
+                "novelty": {**novelty, "verification_status": "passed"},
+                "author_output_digests": author_output_digests,
+                "reference_release": reference_release,
+                "worker_visible_leakage": {
+                    **_V6_WORKER_VISIBLE_LEAKAGE,
+                    "verification_status": "passed",
+                },
+            },
+            "evaluator": {
+                "public_manifest_digest": lock["public_manifest_digest"],
+                "label_ledger_digest": lock["label_ledger_digest"],
+            },
+            "suite": suite,
+            "lock": {
+                "lock_digest": (
+                    "sha256:" + hashlib.sha256(lock_raw).hexdigest()
+                )
+            },
+        }
+        validate_freeze_receipt_bindings(
+            receipt,
+            canonical_json(receipt),
+            lock,
+            lock_raw,
+            corpus_lock,
+            corpus_lock_raw,
+            release_manifest=release_manifest,
+        )
+        changed = deepcopy(receipt)
+        changed["release"]["worker_visible_leakage"][
+            "frontmatter_domain_labels"
+        ] = 1
+        with self.assertRaisesRegex(FreezeError, "v6 receipt declarations"):
+            validate_freeze_receipt_bindings(
+                changed,
+                canonical_json(changed),
+                lock,
+                lock_raw,
+                corpus_lock,
+                corpus_lock_raw,
+                release_manifest=release_manifest,
+            )
 
     def test_schema_valid_label_digest_substitution_is_rejected(self) -> None:
         lock_raw = (ROOT / "benchmark" / "phase0-hidden-suite.lock.json").read_bytes()

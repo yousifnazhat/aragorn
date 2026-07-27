@@ -119,6 +119,14 @@ _PHASE0_CORPUS_LOCKS = {
         "local-v5.0.0",
         re.compile(r"v5-[0-9a-f]{24}\Z"),
     ),
+    (
+        "sha256:"
+        "12bda81360181b5c81a9483d861c681efd40083913d3e4c6c4d835814d6c192d"
+    ): (
+        "aragorn/benchmark-corpus-provenance-lock/v2",
+        "local-v6.0.0",
+        re.compile(r"v6-[0-9a-f]{24}\Z"),
+    ),
 }
 _CONTAINER_ID = re.compile(r"[0-9a-f]{64}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -5078,6 +5086,8 @@ def _validate_phase0_hidden_binding(
     }
     if expected_schema == "aragorn/benchmark-corpus-provenance-lock/v2":
         corpus_lock_keys.update({"evaluator_encryption", "release_manifest"})
+        if expected_corpus_id == "local-v6.0.0":
+            corpus_lock_keys.add("reference")
     _exact_keys(
         corpus_lock,
         corpus_lock_keys,
@@ -5098,6 +5108,18 @@ def _validate_phase0_hidden_binding(
         }
     ):
         raise BenchmarkError("Phase 0 hidden gate corpus encryption is unsupported")
+    if expected_corpus_id == "local-v6.0.0" and corpus_lock["reference"] != {
+        "corpus_id": "local-v5.0.0",
+        "lock_sha256": (
+            "sha256:"
+            "53ac28e5dc23e9a5a8244d58f5f12860052941d71c0c9ca3e922245c584fa697"
+        ),
+        "worker_sha256": (
+            "sha256:"
+            "e14b49f0f5dcce0814e853143410cd60f4a74780fc3140672823546018d73205"
+        ),
+    }:
+        raise BenchmarkError("Phase 0 hidden gate v6 reference identity changed")
 
     public_manifest_raw = _read_bounded(public_manifest_path)
     public_manifest_digest = _digest_bytes(public_manifest_raw)

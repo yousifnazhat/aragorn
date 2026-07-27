@@ -93,9 +93,13 @@ _REQUIRED_COMPARATORS = (
 )
 _NVIDIA_INCOMPLETE = "NVIDIA_ANALYSIS_INCOMPLETE"
 _FIRST_PARTY_ANALYZER = "aragorn-agent-skill-threats"
-_FIRST_PARTY_ALGORITHM = "imperative-agent-integrity-clusters/v2"
+_FIRST_PARTY_ALGORITHM = "bounded-behavior-role-correlation/v3"
 _FIRST_PARTY_TEXT_LIMIT = 8 * 1024 * 1024
 _FIRST_PARTY_SEGMENT_LIMIT = 4096
+_RELATION_ACTIVE_SEGMENT_LIMIT = 3
+_RELATION_SECTION_LIMIT = 3
+_RELATION_LINE_LIMIT = 12
+_RELATION_TEXT_LIMIT = 1024
 _BASE64_TEXT_LIMIT = 64 * 1024
 _BASE64_TOKEN_LIMIT = 4 * ((_BASE64_TEXT_LIMIT + 2) // 3)
 _BASE64_MAX_DEPTH = 2
@@ -109,6 +113,9 @@ _BASE64_SPACED = re.compile(
     r"(?:[A-Za-z0-9+/_-]{4,}={0,2}[ \t]+){1,}"
     r"[A-Za-z0-9+/_-]{4,}={0,2}"
     r"(?![A-Za-z0-9+/_=-])"
+)
+_STRUCTURAL_SECTION_LABEL = re.compile(
+    r"(?:#{1,6}\s+\S[^\r\n]{0,120}|\*\*[^*\r\n]{1,120}\*\*)\Z"
 )
 _HTML_COMMENT = re.compile(
     r"<!--[\s\S]{0,4096}?-->"
@@ -193,10 +200,14 @@ _DEFENSIVE_SENSITIVE_REFERENCE = re.compile(
     re.IGNORECASE,
 )
 _DEFENSIVE_CONTEXT = re.compile(
-    r"\b(?:never|do not|must not|cannot|can't)\s+"
+    r"\b(?:never|do not|don't|must not|should not|shall not|cannot|can't|"
+    r"prohibited from)\s+"
     r"(?:read|fetch|download|execute|run|launch|invoke|inspect|contact|grant|"
     r"send|post|upload|transmit|make\s+network|attach|write|delete|remove|"
-    r"modify|source|follow|forward|install)\b|"
+    r"modify|source|follow|forward|install|access|add|adopt|apply|assemble|"
+    r"broadcast|broaden|collect|copy|decode|disable|embed|enable|expand|"
+    r"fabricate|gather|include|join|mark|obey|populate|reconstruct|register|"
+    r"replace|reproduce|rewrite|store|submit|teach)\b|"
     r"\b(?:for display only|as data|classification data|indicators? to discuss|"
     r"flag quoted|identify prompt|dry[- ]run|require explicit confirmation|"
     r"reject absolute paths|review .* as data)\b",
@@ -218,10 +229,14 @@ _QUOTED_DATA_SPAN = re.compile(
     r"‘[^’]{0,1024}’|"
     r"`[^`]{0,1024}`"
 )
-_EXPLANATION_GOVERNOR = re.compile(
+_EXPLANATION_GOVERNOR_SPAN = re.compile(
     r"\b(?:agents?|developers?|users?|operators?|systems?|you|they)\s+"
     r"(?:must|should|can|cannot|can't|need\s+to|are\s+required\s+to)\s+"
-    r"(?:never\s+|not\s+)?\Z",
+    r"(?:never\s+|not\s+)?",
+    re.IGNORECASE,
+)
+_EXPLANATION_CONTRAST = re.compile(
+    r"\b(?:although|but|however|instead|notwithstanding|while|yet)\b",
     re.IGNORECASE,
 )
 _DECODE_BRIDGE = re.compile(
@@ -308,10 +323,10 @@ _EXECUTION_SINK = re.compile(
 )
 _DESTRUCTIVE_ACTION = re.compile(
     r"\b(?:recursively delete|delete|remove|erase|wipe)\b.{0,120}"
-    r"\b(?:workspace|project|repository|version history|history|backup|"
+    r"\b(?:workspace|project|repository|version history|revisions?|backup|"
     r"recovery)\b|"
     r"\brm\s+(?:-[A-Za-z]*r[A-Za-z]*f|-rf|-fr)\b.{0,120}"
-    r"\b(?:workspace|project|repository|version history|history|backup|"
+    r"\b(?:workspace|project|repository|version history|revisions?|backup|"
     r"recovery)\b",
     re.IGNORECASE | re.DOTALL,
 )
@@ -330,6 +345,340 @@ _AGENT_PROPAGATION = re.compile(
     r"\b(?:agent|handoff)\b",
     re.IGNORECASE | re.DOTALL,
 )
+_AUTHORITY_ADOPTION = re.compile(
+    r"\b(?:adopt|accept|apply|follow|interpret|let|obey|promote|use|treat|"
+    r"regard)\b",
+    re.IGNORECASE,
+)
+_EMBEDDED_OR_UNTRUSTED_SOURCE = re.compile(
+    r"\b(?:alleged|embedded|external|imported|inside|internal|marginal|"
+    r"purported|quoted|supposed|third[- ]party|unattributed|unnamed|"
+    r"untrusted|unchecked|unsigned|unverified|within|downloaded)\b.{0,100}"
+    r"\b(?:annotation|commentary|content|dialogue|directive|document|footer|"
+    r"instruction|label|message|note|paragraph|policy|procedure|source|"
+    r"text|workflow)\b|"
+    r"\b(?:annotation|commentary|content|dialogue|directive|document|footer|"
+    r"instruction|label|message|note|paragraph|policy|procedure|source|"
+    r"text|workflow)\b.{0,100}"
+    r"\b(?:alleged|embedded|external|imported|inside|internal|marginal|"
+    r"purported|quoted|supposed|third[- ]party|unattributed|unnamed|"
+    r"untrusted|unchecked|unsigned|unverified|within|downloaded)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_AUTHORITY_CONFLICT = re.compile(
+    r"\b(?:above|ahead of|conflict|controlling|differ|disregard|instead of|"
+    r"over|overrule|redefine|replace|supersede|override|set aside|"
+    r"higher priority than)\w*\b.{0,120}"
+    r"\b(?:approved|assignment|constraint|criteria|direction|instruction|"
+    r"limitation|operator|owner|policy|request|requester|rubric|rules?|"
+    r"signed|stated|system|trusted|verified)\w*\b|"
+    r"\b(?:approved|assignment|constraint|criteria|direction|instruction|"
+    r"limitation|operator|owner|policy|request|requester|rubric|rules?|"
+    r"signed|stated|system|trusted|verified)\w*\b.{0,120}"
+    r"\b(?:conflict|differ|disregard|overrule|redefine|replace|supersede|"
+    r"override|set aside)\w*\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_WITHOUT_SOURCE_REVIEW = re.compile(
+    r"\b(?:automatically|directly|immediately|without)\b.{0,80}"
+    r"\b(?:checking|inspection|review|verification|verifying)\b|"
+    r"\b(?:no|skip|bypass)\b.{0,60}"
+    r"\b(?:checking|inspection|review|verification)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_CONCEALED_OR_FRAGMENTED_CONTENT = re.compile(
+    r"\b(?:concealed|encoded|fragmented|hidden|obfuscated|scattered|"
+    r"split|numbered)\b.{0,80}"
+    r"\b(?:content|directive|fragments?|instruction|legend|message|pieces?|"
+    r"tokens?)\b|"
+    r"\b(?:acrostic|ciphertext|code words?)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_RECONSTRUCT_ACTION = re.compile(
+    r"\b(?:assemble|combine|decode|extract|join|reconstruct|recover|"
+    r"reorder|resolve)\b",
+    re.IGNORECASE,
+)
+_ACT_ON_RECOVERED = re.compile(
+    r"\b(?:act on|apply|carry out|execute|follow|obey|perform|run|use)\b"
+    r".{0,80}\b(?:decoded|extracted|joined|reconstructed|recovered|"
+    r"resolved|resulting|that|it)\b|"
+    r"\b(?:decoded|extracted|joined|reconstructed|recovered|resolved|"
+    r"resulting)\b.{0,80}"
+    r"\b(?:directive|instruction|message)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_PROTECTED_COLLECTION_ACTION = re.compile(
+    r"\b(?:access|add|collect|copy|extract|gather|include|inspect|obtain|"
+    r"populate|reproduce)\b",
+    re.IGNORECASE,
+)
+_PROTECTED_DATA_OBJECT = re.compile(
+    r"\b(?:(?:private|protected|confidential|restricted)\s+"
+    r"(?:account|authentication|identity|recovery|user)\s*"
+    r"(?:data|details?|markers?|records?|values?)?|"
+    r"account\s+recovery\s+(?:codes?|values?)|"
+    r"authentication\s+(?:material|values?))\b",
+    re.IGNORECASE,
+)
+_UNAUTHORIZED_ACCESS = re.compile(
+    r"\bwithout\b.{0,80}\b(?:approval|authorization|confirmation|consent|"
+    r"owner|operator|permission|review)\b|"
+    r"\b(?:bypass|ignore|skip)\b.{0,60}\b(?:approval|authorization|"
+    r"confirmation|consent|permission|review)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_SCOPE_EXPANSION_ACTION = re.compile(
+    r"\b(?:broaden|crawl|enumerate|examine|expand|extend|inspect|open|"
+    r"review|search)\b",
+    re.IGNORECASE,
+)
+_SCOPE_BOUNDARY = re.compile(
+    r"\b(?:assigned|approved|authorized|current|limited|named|narrow|"
+    r"requested|selected|stated)\b.{0,70}"
+    r"\b(?:account|artifact|file|record|repository|resource|scope|task)\w*\b|"
+    r"\b(?:only|solely|just)\b.{0,50}"
+    r"\b(?:account|artifact|file|record|repository|resource|task)\w*\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_OUTSIDE_SCOPE_TARGET = re.compile(
+    r"\b(?:all|another|every|neighboring|other|outside|unrelated)\b.{0,70}"
+    r"\b(?:accounts?|artifacts?|files?|records?|repositories|resources?|"
+    r"systems?|workspaces?)\b|"
+    r"\b(?:beyond|outside)\b.{0,60}\b(?:scope|task|request)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_GOVERNANCE_ASSERTION = re.compile(
+    r"\b(?:apply|assert|attribute|certify|claim|declare|describe|label|list|"
+    r"mark|present|repeat|represent|self[- ]certify|state)\b"
+    r"(?:(?!\b(?:not|pending|unconfirmed|unknown|unless|until|unverified|"
+    r"without)\b).){0,100}"
+    r"\b(?:approved|assured|complete|confirmed|current|endorsed|integrity[- ]"
+    r"verified|maintained|official|passed|publisher|reviewed|signed|trusted|"
+    r"verified)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_GOVERNANCE_GAP = re.compile(
+    r"\b(?:absent|missing|pending|unavailable|unrecorded|unresolved|"
+    r"unsigned|unverified|without|no)\b.{0,110}"
+    r"\b(?:approval|authorship|custody|decision|evidence|lineage|maintainer|"
+    r"maintenance|owner|provenance|publisher|record|review|reviewer|"
+    r"signature|signoff|source)\b|"
+    r"\b(?:approval|authorship|custody|decision|evidence|lineage|maintainer|"
+    r"maintenance|owner|provenance|publisher|record|review|reviewer|"
+    r"signature|signoff|source)\b.{0,110}"
+    r"\b(?:absent|missing|pending|unavailable|unrecorded|unresolved|"
+    r"unsigned|unverified)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_LATENT_BEHAVIOR = re.compile(
+    r"\b(?:cached|deferred|dormant|hidden|latent|retained|stored)\b.{0,70}"
+    r"\b(?:behavior|branch|condition|directive|instruction|meaning|note|"
+    r"paragraph|phrase|policy|rule|state|trigger)\b|"
+    r"\b(?:cache|carry|embed|hide|keep|preserve|remember|retain|store)\w*\b"
+    r".{0,90}\b(?:behavior|branch|condition|directive|instruction|meaning|"
+    r"note|paragraph|phrase|policy|rule|state|trigger)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_FUTURE_TRIGGER = re.compile(
+    r"\b(?:after|at|during|later|next|on|once|until|when)\b.{0,80}"
+    r"\b(?:agenda|assignment|category|change|condition|count|date|edit|"
+    r"event|handoff|instructor|meeting|recipient|release|session|task|time|"
+    r"update|version|workspace)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_LATENT_ACTIVATION = re.compile(
+    r"\b(?:activate|apply|change|detect|enable|perform|persist|replace|restore|"
+    r"resume|run|switch|trigger)\b",
+    re.IGNORECASE,
+)
+_CONCEALED_ACTIVATION = re.compile(
+    r"\b(?:concealed|hidden|out of view|outside the visible|private|quietly|"
+    r"silently|unannounced|without)\b.{0,100}"
+    r"\b(?:approval|disclosure|notifying|notice|reporting|review|showing|"
+    r"visible)\w*\b|"
+    r"\b(?:concealed|hidden|out of view|outside the visible|private|quietly|"
+    r"silently|unannounced)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_TOOL_IDENTITY_ACTION = re.compile(
+    r"\b(?:advertise|alias|bind|call|define|give|introduce|label|name|"
+    r"present|register|rename|reuse|shadow)\w*\b.{0,100}"
+    r"\b(?:assistant|brand|command|component|connector|helper|identity|name|"
+    r"title|tool|workflow)\b|"
+    r"\b(?:assistant|brand|command|component|connector|helper|identity|name|"
+    r"title|tool|workflow)\b.{0,100}"
+    r"\b(?:alias|bind|duplicate|matching|register|rename|reuse|same|shadow)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_TOOL_EFFECT_MISMATCH = re.compile(
+    r"\b(?:broader|different|extra|mismatched|substitute|unapproved|"
+    r"unchecked|unreviewed)\b.{0,80}"
+    r"\b(?:access|behavior|capabilit|effect|implementation|permission|"
+    r"privilege|writer)\w*\b|"
+    r"\b(?:access|behavior|capabilit|effect|implementation|permission|"
+    r"privilege|writer)\w*\b.{0,80}"
+    r"\b(?:broader|different|extra|mismatched|substitute|unapproved|"
+    r"unchecked|unreviewed)\b|"
+    r"\b(?:alter|change|control|edit|make|modify|overwrite|reallocate|revise|"
+    r"rewrite|send|suppress|update)\w*\b.{0,100}"
+    r"\b(?:decision|document|entry|invitation|item|metadata|record|source|"
+    r"status)\w*\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_TOOL_PRIVILEGE_ADOPTION = re.compile(
+    r"\b(?:activate|allow|assign|grant|inherit|let|register|resolve|use)\b",
+    re.IGNORECASE,
+)
+_EVIDENCE_MUTATION_ACTION = re.compile(
+    r"\b(?:alter|conceal|delete|drop|omit|remove|replace|rewrite|suppress)\b",
+    re.IGNORECASE,
+)
+_EVIDENCE_ARTIFACT = re.compile(
+    r"\b(?:approval|attachment|audit|count|evidence|log|measurement|record|"
+    r"result|review|signoff|timestamp|vote)\w*\b",
+    re.IGNORECASE,
+)
+_REVIEW_EVIDENCE_ARTIFACT = re.compile(
+    r"\b(?:approval|gate|measurement|reviewer|signoff|"
+    r"test\s+result|vote)\w*\b",
+    re.IGNORECASE,
+)
+_OUTCOME_PRESSURE = re.compile(
+    r"\b(?:so|to)\b.{0,100}\b(?:appear|become|make|show)\w*\b.{0,70}"
+    r"\b(?:approved|clean|favorable|passed|passing|successful)\b|"
+    r"\b(?:conflict|contradict|disagree|fail|failure|undermine)\w*\b"
+    r".{0,110}\b(?:chosen|desired|favored|preferred)\b|"
+    r"\b(?:chosen|desired|favored|preferred)\b.{0,110}"
+    r"\b(?:conclusion|explanation|outcome|record|result|review|state)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_FABRICATION_ACTION = re.compile(
+    r"\b(?:fabricate|forge|invent|manufacture)\b",
+    re.IGNORECASE,
+)
+_UNSAFE_MUTATION_ACTION = re.compile(
+    r"\b(?:alter|broadcast|cancel|change|close|delete|disable|enable|grant|"
+    r"invoke|notify|overwrite|persist|reallocat|reassign|remove|revoke|send|"
+    r"trigger|update|write)\w*\b",
+    re.IGNORECASE,
+)
+_MUTATION_TARGET = re.compile(
+    r"\b(?:account|access|assignment|attendee|channel|configuration|document|"
+    r"entitlement|event|file|item|job|message|participant|permission|profile|"
+    r"queue|record|repository|revision|role|schedule|status|task|ticket|user|"
+    r"workspace)\w*\b",
+    re.IGNORECASE,
+)
+_TASK_MISMATCH = re.compile(
+    r"\b(?:ask|assign|instruction|request|task|work)\w*\b.{0,90}"
+    r"\b(?:clarify|count|describe|edit|explain|format|improve|read|report|"
+    r"review|summarize)\w*\b|"
+    r"\b(?:outside|unrelated to|not requested by|without)\b.{0,80}"
+    r"\b(?:approval|authorization|confirmation|request|task)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNAUTHORIZED_EFFECT = re.compile(
+    r"\b(?:before|without)\b.{0,100}"
+    r"\b(?:approval|authorization|confirmation|owner|organizer|permission|"
+    r"review|asking)\b|"
+    r"\b(?:no|not|unapproved)\b.{0,80}"
+    r"\b(?:authorized|approved|confirmation|effect|mutation|permission|"
+    r"requested|reviewed)\b|"
+    r"\b(?:all|bulk|every|external|irreversible|permanent)\w*\b.{0,80}"
+    r"\b(?:account|delivery|event|file|item|participant|profile|recipient|"
+    r"record|revision|role|user)\w*\b|"
+    r"\b(?:infer|inferred|extension)\w*\b.{0,80}"
+    r"\b(?:authority|permission|request|task)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_PROPAGATION_ACTION = re.compile(
+    r"\b(?:copy|embed|forward|install|pass|propagate|register|repeat|"
+    r"replicate|reproduce|teach)\b",
+    re.IGNORECASE,
+)
+_AGENT_RECIPIENT = re.compile(
+    r"\b(?:agents?|assistants?|collaborators?|downstream|handoffs?|"
+    r"recipients?|workspaces?)\b",
+    re.IGNORECASE,
+)
+_PERSISTENT_OR_BROAD_PROPAGATION = re.compile(
+    r"\b(?:all|chain|default|downstream|each|every|future|inherit|persistent|"
+    r"repeat)\b",
+    re.IGNORECASE,
+)
+_EXTERNAL_EGRESS_ACTION = re.compile(
+    r"\b(?:attach|broadcast|export|forward|message|post|send|submit|"
+    r"transmit|upload)\b",
+    re.IGNORECASE,
+)
+_EXTERNAL_DESTINATION = re.compile(
+    r"\b(?:connector|endpoint|external|outside|recipient|remote|service|"
+    r"third[- ]party|webhook)\b|https?://",
+    re.IGNORECASE,
+)
+_INTEGRITY_ROLE_RULES = (
+    (
+        _AUTHORITY_ADOPTION,
+        _EMBEDDED_OR_UNTRUSTED_SOURCE,
+        _AUTHORITY_CONFLICT,
+    ),
+    (
+        _AUTHORITY_ADOPTION,
+        _EMBEDDED_OR_UNTRUSTED_SOURCE,
+        _WITHOUT_SOURCE_REVIEW,
+    ),
+    (
+        _CONCEALED_OR_FRAGMENTED_CONTENT,
+        _RECONSTRUCT_ACTION,
+        _ACT_ON_RECOVERED,
+    ),
+    (
+        _PROTECTED_COLLECTION_ACTION,
+        _PROTECTED_DATA_OBJECT,
+        _UNAUTHORIZED_ACCESS,
+    ),
+    (_SCOPE_EXPANSION_ACTION, _SCOPE_BOUNDARY, _OUTSIDE_SCOPE_TARGET),
+    (_GOVERNANCE_ASSERTION, _GOVERNANCE_GAP),
+    (
+        _LATENT_BEHAVIOR,
+        _FUTURE_TRIGGER,
+        _LATENT_ACTIVATION,
+        _CONCEALED_ACTIVATION,
+    ),
+    (
+        _TOOL_IDENTITY_ACTION,
+        _TOOL_EFFECT_MISMATCH,
+        _TOOL_PRIVILEGE_ADOPTION,
+    ),
+    (
+        _EVIDENCE_MUTATION_ACTION,
+        _EVIDENCE_ARTIFACT,
+        _OUTCOME_PRESSURE,
+    ),
+    (_FABRICATION_ACTION, _REVIEW_EVIDENCE_ARTIFACT),
+)
+_UNSAFE_ROLE_RULES = (
+    (
+        _UNSAFE_MUTATION_ACTION,
+        _MUTATION_TARGET,
+        _TASK_MISMATCH,
+        _UNAUTHORIZED_EFFECT,
+    ),
+    (
+        _PROPAGATION_ACTION,
+        _AGENT_RECIPIENT,
+        _PERSISTENT_OR_BROAD_PROPAGATION,
+    ),
+)
+_EXFILTRATION_ROLE_RULES = (
+    (
+        _PROTECTED_COLLECTION_ACTION,
+        _PROTECTED_DATA_OBJECT,
+        _EXTERNAL_EGRESS_ACTION,
+        _EXTERNAL_DESTINATION,
+    ),
+)
 _SIGNAL_NAMES = {
     _PROMPT_OVERRIDE: "prompt_override",
     _AGENT_INTEGRITY_ABUSE: "agent_integrity_abuse",
@@ -342,6 +691,42 @@ _SIGNAL_NAMES = {
     _DESTRUCTIVE_ACTION: "destructive_action",
     _PERSISTENCE_ACTION: "persistence_action",
     _AGENT_PROPAGATION: "agent_propagation",
+    _AUTHORITY_ADOPTION: "authority_adoption",
+    _EMBEDDED_OR_UNTRUSTED_SOURCE: "untrusted_source",
+    _AUTHORITY_CONFLICT: "authority_conflict",
+    _WITHOUT_SOURCE_REVIEW: "source_review_bypass",
+    _CONCEALED_OR_FRAGMENTED_CONTENT: "concealed_content",
+    _RECONSTRUCT_ACTION: "reconstruct_action",
+    _ACT_ON_RECOVERED: "act_on_recovered",
+    _PROTECTED_COLLECTION_ACTION: "protected_collection",
+    _PROTECTED_DATA_OBJECT: "protected_data",
+    _UNAUTHORIZED_ACCESS: "unauthorized_access",
+    _SCOPE_EXPANSION_ACTION: "scope_expansion",
+    _SCOPE_BOUNDARY: "scope_boundary",
+    _OUTSIDE_SCOPE_TARGET: "outside_scope",
+    _GOVERNANCE_ASSERTION: "governance_assertion",
+    _GOVERNANCE_GAP: "governance_gap",
+    _LATENT_BEHAVIOR: "latent_behavior",
+    _FUTURE_TRIGGER: "future_trigger",
+    _LATENT_ACTIVATION: "latent_activation",
+    _CONCEALED_ACTIVATION: "concealed_activation",
+    _TOOL_IDENTITY_ACTION: "tool_identity",
+    _TOOL_EFFECT_MISMATCH: "tool_effect_mismatch",
+    _TOOL_PRIVILEGE_ADOPTION: "tool_privilege_adoption",
+    _EVIDENCE_MUTATION_ACTION: "evidence_mutation",
+    _EVIDENCE_ARTIFACT: "evidence_artifact",
+    _REVIEW_EVIDENCE_ARTIFACT: "review_evidence",
+    _OUTCOME_PRESSURE: "outcome_pressure",
+    _FABRICATION_ACTION: "fabrication",
+    _UNSAFE_MUTATION_ACTION: "unsafe_mutation",
+    _MUTATION_TARGET: "mutation_target",
+    _TASK_MISMATCH: "task_mismatch",
+    _UNAUTHORIZED_EFFECT: "unauthorized_effect",
+    _PROPAGATION_ACTION: "propagation",
+    _AGENT_RECIPIENT: "agent_recipient",
+    _PERSISTENT_OR_BROAD_PROPAGATION: "broad_propagation",
+    _EXTERNAL_EGRESS_ACTION: "external_egress",
+    _EXTERNAL_DESTINATION: "external_destination",
 }
 _FIRST_PARTY_ACTIONABLE = {
     "ARAGORN_AGENT_INTEGRITY_ABUSE",
@@ -603,15 +988,22 @@ def detect_first_party_observations(
         findings["ARAGORN_ANALYSIS_INCOMPLETE"] = incomplete
 
     windows = tuple(_relation_windows(segments))
-    integrity_windows = [
+    legacy_integrity_windows = [
         window
         for window in windows
         if _AGENT_INTEGRITY_ABUSE.search(_window_text(window))
     ]
-    if integrity_windows:
-        findings["ARAGORN_AGENT_INTEGRITY_ABUSE"] = _matching_locations(
-            integrity_windows,
-            (_AGENT_INTEGRITY_ABUSE,),
+    role_integrity_matches = _matching_rule_windows(
+        windows,
+        _INTEGRITY_ROLE_RULES,
+    )
+    if legacy_integrity_windows or role_integrity_matches:
+        findings["ARAGORN_AGENT_INTEGRITY_ABUSE"] = _merge_locations(
+            _matching_locations(
+                legacy_integrity_windows,
+                (_AGENT_INTEGRITY_ABUSE,),
+            ),
+            _matching_rule_locations(role_integrity_matches),
         )
 
     prompt_windows = [
@@ -637,19 +1029,26 @@ def detect_first_party_observations(
             ),
         )
 
-    exfil_windows = [
+    legacy_exfil_windows = [
         window
         for window in windows
         if _SENSITIVE_ACCESS.search(_window_text(window))
         and _TRANSFER_SINK.search(_window_text(window))
     ]
-    if exfil_windows:
-        findings["ARAGORN_CREDENTIAL_EXFILTRATION"] = _matching_locations(
-            exfil_windows,
-            (_SENSITIVE_ACCESS, _TRANSFER_SINK),
+    role_exfil_matches = _matching_rule_windows(
+        windows,
+        _EXFILTRATION_ROLE_RULES,
+    )
+    if legacy_exfil_windows or role_exfil_matches:
+        findings["ARAGORN_CREDENTIAL_EXFILTRATION"] = _merge_locations(
+            _matching_locations(
+                legacy_exfil_windows,
+                (_SENSITIVE_ACCESS, _TRANSFER_SINK),
+            ),
+            _matching_rule_locations(role_exfil_matches),
         )
 
-    unsafe_windows = [
+    legacy_unsafe_windows = [
         window
         for window in windows
         if (
@@ -660,16 +1059,23 @@ def detect_first_party_observations(
         or _PERSISTENCE_ACTION.search(_window_text(window))
         or _AGENT_PROPAGATION.search(_window_text(window))
     ]
-    if unsafe_windows:
-        findings["ARAGORN_UNSAFE_EXECUTION_CHAIN"] = _matching_locations(
-            unsafe_windows,
-            (
-                _FETCH_OR_DECODE,
-                _EXECUTION_SINK,
-                _DESTRUCTIVE_ACTION,
-                _PERSISTENCE_ACTION,
-                _AGENT_PROPAGATION,
+    role_unsafe_matches = _matching_rule_windows(
+        windows,
+        _UNSAFE_ROLE_RULES,
+    )
+    if legacy_unsafe_windows or role_unsafe_matches:
+        findings["ARAGORN_UNSAFE_EXECUTION_CHAIN"] = _merge_locations(
+            _matching_locations(
+                legacy_unsafe_windows,
+                (
+                    _FETCH_OR_DECODE,
+                    _EXECUTION_SINK,
+                    _DESTRUCTIVE_ACTION,
+                    _PERSISTENCE_ACTION,
+                    _AGENT_PROPAGATION,
+                ),
             ),
+            _matching_rule_locations(role_unsafe_matches),
         )
 
     observations = []
@@ -766,7 +1172,29 @@ def _decoded_text_segments(
                 remainder = len(token) % 4
                 if token in seen:
                     continue
-                if remainder == 1 or len(token) > _BASE64_TOKEN_LIMIT:
+                if remainder == 1:
+                    if _base64_candidate_is_carrier(
+                        carrier_text,
+                        start,
+                    ):
+                        line = (
+                            inherited_line
+                            if inherited_line is not None
+                            else carrier_lines[start]
+                            if carrier_lines is not None
+                            else carrier_text.count("\n", 0, start) + 1
+                        )
+                        yield (
+                            "",
+                            path,
+                            digest,
+                            line,
+                            "analysis_incomplete:base64_token_length",
+                            (inherited_scope or start + 1, 0),
+                            None,
+                        )
+                    continue
+                if len(token) > _BASE64_TOKEN_LIMIT:
                     line = (
                         inherited_line
                         if inherited_line is not None
@@ -876,11 +1304,17 @@ def _base64_candidates(text: str) -> Iterable[tuple[str, int]]:
         yield candidate
 
     for match in _BASE64_SPACED.finditer(text):
+        chunks = re.findall(r"[A-Za-z0-9+/_-]{4,}={0,2}", match.group(0))
+        if not _base64_wrapped_chunks(chunks):
+            continue
         candidate = (
-            re.sub(r"[ \t]+", "", match.group(0)),
+            "".join(chunks),
             match.start(),
         )
-        if len(candidate[0]) >= 32 and candidate not in seen:
+        if (
+            len(candidate[0]) >= 32
+            and candidate not in seen
+        ):
             seen.add(candidate)
             yield candidate
 
@@ -894,9 +1328,12 @@ def _base64_candidates(text: str) -> Iterable[tuple[str, int]]:
                 start = offset + len(line) - len(line.lstrip(" \t"))
             chunks.append(stripped)
         else:
-            if len(chunks) >= 2:
+            if _base64_wrapped_chunks(chunks):
                 candidate = ("".join(chunks), start)
-                if len(candidate[0]) >= 32 and candidate not in seen:
+                if (
+                    len(candidate[0]) >= 32
+                    and candidate not in seen
+                ):
                     yield candidate
             chunks = []
             suffix = re.search(
@@ -908,10 +1345,28 @@ def _base64_candidates(text: str) -> Iterable[tuple[str, int]]:
                 chunks = [suffix.group(1)]
                 start = offset + suffix.start(1)
         offset += len(line)
-    if len(chunks) >= 2:
+    if _base64_wrapped_chunks(chunks):
         candidate = ("".join(chunks), start)
-        if len(candidate[0]) >= 32 and candidate not in seen:
+        if (
+            len(candidate[0]) >= 32
+            and candidate not in seen
+        ):
             yield candidate
+
+
+def _base64_wrapped_chunks(chunks: Iterable[str]) -> bool:
+    retained = tuple(chunks)
+    if len(retained) < 2:
+        return False
+    return len({len(chunk.rstrip("=")) for chunk in retained[:-1]}) == 1
+
+
+def _base64_candidate_is_carrier(text: str, start: int) -> bool:
+    return any(
+        re.search(r"\bbase64\b", match.group(0), re.IGNORECASE)
+        is not None
+        for match in _DECODE_BRIDGE.finditer(text, 0, start)
+    )
 
 
 def _normalize_text(text: str) -> str:
@@ -1203,7 +1658,6 @@ def _defensive_sensitive_replacement(match: re.Match[str]) -> str:
 
 
 def _clauses(text: str) -> Iterable[tuple[str, int]]:
-    start = 0
     boundary = re.compile(
         r"(?:[.!?;](?=\s|$)|(?:[,:\u2013\u2014]\s*|\s+-\s+)"
         r"(?=(?:(?:but|instead|however|then|yet)\s+)?"
@@ -1221,15 +1675,41 @@ def _clauses(text: str) -> Iterable[tuple[str, int]]:
         r"copy|install)\b))",
         re.IGNORECASE,
     )
-    for match in boundary.finditer(text):
-        end = match.end()
-        clause = text[start:end].strip()
+
+    def plain(part: str, base: int) -> Iterable[tuple[str, int]]:
+        start = 0
+        for match in boundary.finditer(part):
+            end = match.end()
+            clause = part[start:end].strip()
+            if clause:
+                leading = len(part[start:end]) - len(part[start:end].lstrip())
+                yield clause, base + start + leading
+            start = end
+        clause = part[start:].strip()
         if clause:
-            yield clause, start + len(text[start:end]) - len(text[start:end].lstrip())
-        start = end
-    clause = text[start:].strip()
-    if clause:
-        yield clause, start + len(text[start:]) - len(text[start:].lstrip())
+            leading = len(part[start:]) - len(part[start:].lstrip())
+            yield clause, base + start + leading
+
+    cursor = 0
+    fence: tuple[str, int] | None = None
+    for line in re.finditer(r"(?m)^[^\r\n]+$", text):
+        marker = re.match(r"\s*(`{3,}|~{3,})", line.group(0))
+        if marker is not None:
+            token = marker.group(1)
+            if fence is None:
+                fence = (token[0], len(token))
+            elif token[0] == fence[0] and len(token) >= fence[1]:
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        if _STRUCTURAL_SECTION_LABEL.fullmatch(line.group(0).strip()) is None:
+            continue
+        yield from plain(text[cursor : line.start()], cursor)
+        leading = len(line.group(0)) - len(line.group(0).lstrip())
+        yield line.group(0).strip(), line.start() + leading
+        cursor = line.end()
+    yield from plain(text[cursor:], cursor)
 
 
 def _analysis_only(text: str) -> bool:
@@ -1243,6 +1723,21 @@ def _analysis_only(text: str) -> bool:
         )
     ):
         return False
+    quoted = tuple(_QUOTED_DATA_SPAN.finditer(text))
+
+    def in_quote(match: re.Match[str]) -> bool:
+        return any(
+            span.start() <= match.start() < span.end()
+            for span in quoted
+        )
+
+    def explanation_governed(match: re.Match[str]) -> bool:
+        prefix = text[directive.end() : match.start()]
+        contrasts = tuple(_EXPLANATION_CONTRAST.finditer(prefix))
+        if contrasts:
+            prefix = prefix[contrasts[-1].end() :]
+        return _EXPLANATION_GOVERNOR_SPAN.search(prefix) is not None
+
     matches = [
         match
         for pattern in (
@@ -1257,34 +1752,100 @@ def _analysis_only(text: str) -> bool:
             _PERSISTENCE_ACTION,
             _AGENT_PROPAGATION,
         )
-        if (match := pattern.search(text, directive.end())) is not None
+        for match in pattern.finditer(text, directive.end())
     ]
-    quoted = tuple(_QUOTED_DATA_SPAN.finditer(text))
+    for rules in (
+        _INTEGRITY_ROLE_RULES,
+        _UNSAFE_ROLE_RULES,
+        _EXFILTRATION_ROLE_RULES,
+    ):
+        for rule in rules:
+            role_matches = [
+                tuple(pattern.finditer(text, directive.end()))
+                for pattern in rule
+            ]
+            if all(role_matches):
+                matches.extend(
+                    match
+                    for pattern_matches in role_matches
+                    for match in pattern_matches
+                )
     return not matches or all(
-        any(span.start() <= match.start() < span.end() for span in quoted)
-        or _EXPLANATION_GOVERNOR.search(
-            text[directive.end() : match.start()]
-        ) is not None
+        in_quote(match)
+        or explanation_governed(match)
         for match in matches
+    )
+
+
+def _matching_rule_windows(
+    windows: Iterable[_Window],
+    rules: Iterable[tuple[re.Pattern[str], ...]],
+) -> list[tuple[_Window, tuple[re.Pattern[str], ...]]]:
+    retained_rules = tuple(rules)
+    matches = []
+    for window in windows:
+        text = _window_text(window)
+        matches.extend(
+            (window, rule)
+            for rule in retained_rules
+            if all(pattern.search(text) for pattern in rule)
+        )
+    return matches
+
+
+def _matching_rule_locations(
+    matches: Iterable[tuple[_Window, tuple[re.Pattern[str], ...]]],
+) -> list[dict[str, Any]]:
+    return _merge_locations(
+        *(
+            _matching_locations((window,), patterns)
+            for window, patterns in matches
+        )
     )
 
 
 def _relation_windows(segments: Iterable[_Segment]) -> Iterable[_Window]:
     retained = tuple(segments)
     for index, first in enumerate(retained):
-        yield (first,)
-        for width in (2, 3):
-            window = retained[index : index + width]
-            if len(window) != width:
-                continue
-            if all(
+        window: list[_Segment] = []
+        active_segments = 0
+        sections: set[tuple[int, int]] = set()
+        first_line = first[3]
+        text_size = 0
+        for segment in retained[index:]:
+            same_carrier = (
                 first[1] == segment[1]
                 and first[2] == segment[2]
                 and first[4] == segment[4]
-                and first[5] == segment[5]
-                for segment in window[1:]
+                and first[5][0] == segment[5][0]
+            )
+            if not same_carrier:
+                break
+            text_size += len(segment[0]) + 1
+            if (
+                segment[3] - first_line > _RELATION_LINE_LIMIT
+                or text_size > _RELATION_TEXT_LIMIT
             ):
-                yield window
+                break
+            structural = (
+                _STRUCTURAL_SECTION_LABEL.fullmatch(segment[0].strip())
+                is not None
+            )
+            if structural:
+                if window:
+                    break
+                continue
+            if not structural:
+                active_segments += 1
+                sections.add(segment[5])
+            if (
+                active_segments > _RELATION_ACTIVE_SEGMENT_LIMIT
+                or len(sections) > _RELATION_SECTION_LIMIT
+            ):
+                break
+            window.append(segment)
+            if active_segments:
+                yield tuple(window)
 
 
 def _window_text(window: _Window) -> str:
@@ -1331,6 +1892,28 @@ def _matching_locations(
             if len(locations) >= 16:
                 return locations
     return locations
+
+
+def _merge_locations(
+    *groups: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int, str]] = set()
+    for group in groups:
+        for location in group:
+            key = (
+                location["path"],
+                location["blob_digest"],
+                location["line"],
+                location["signal"],
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(location)
+            if len(merged) >= 16:
+                return merged
+    return merged
 
 
 def compose_candidate_decision(

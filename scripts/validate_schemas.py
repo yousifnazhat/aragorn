@@ -806,6 +806,17 @@ def main() -> int:
     validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
         phase0_corpus_lock_v5
     )
+    phase0_corpus_lock_v6_path = ROOT / "benchmark" / "phase0-corpus-v6.lock.json"
+    phase0_corpus_lock_v6_raw = phase0_corpus_lock_v6_path.read_bytes()
+    phase0_corpus_lock_v6 = json.loads(phase0_corpus_lock_v6_raw)
+    validators["benchmark-corpus-provenance-lock-v2.schema.json"].validate(
+        phase0_corpus_lock_v6
+    )
+    if (
+        hashlib.sha256(phase0_corpus_lock_v6_raw).hexdigest()
+        != "12bda81360181b5c81a9483d861c681efd40083913d3e4c6c4d835814d6c192d"
+    ):
+        raise AssertionError("checked v6 corpus lock does not match external bytes")
     validators["benchmark-phase0-acquisition-corpus-lock-v1.schema.json"].validate(
         load(ROOT / "benchmark" / "phase0-acquisition-corpus.lock.json")
     )
@@ -849,11 +860,17 @@ def main() -> int:
     validators["benchmark-candidate-policy-v3.schema.json"].validate(
         phase0_candidate_policy_v5
     )
+    phase0_candidate_policy_v6 = load(
+        ROOT / "benchmark" / "phase0-candidate-policy-v6.json"
+    )
+    validators["benchmark-candidate-policy-v3.schema.json"].validate(
+        phase0_candidate_policy_v6
+    )
     if (
-        build_candidate_policy(phase0_candidate_policy_v5)
-        != phase0_candidate_policy_v5
+        build_candidate_policy(phase0_candidate_policy_v6)
+        != phase0_candidate_policy_v6
     ):
-        raise AssertionError("checked v5 candidate policy is not canonical")
+        raise AssertionError("checked v6 candidate policy is not canonical")
     portable_identities = []
     for filename in (
         "phase0-cisco-portable-policy.json",
@@ -1733,6 +1750,99 @@ def main() -> int:
         if gate_report["comparison"]["passed"]:
             raise AssertionError(
                 "retained hidden v4 calibration result unexpectedly passed"
+            )
+    hidden_v5_result_path = (
+        ROOT
+        / "benchmark"
+        / "receipts"
+        / "phase0-hidden-v5-result-2026-07-26.json"
+    )
+    if hidden_v5_result_path.exists():
+        if not hidden_v5_preparation_path.exists():
+            raise AssertionError(
+                "hidden v5 result requires its retained preparation receipt"
+            )
+        hidden_v5_result_raw = hidden_v5_result_path.read_bytes()
+        hidden_v5_result = json.loads(hidden_v5_result_raw)
+        validators[
+            "benchmark-phase0-hidden-result-receipt-v2.schema.json"
+        ].validate(hidden_v5_result)
+        if hidden_v5_result_raw != canonical_json(hidden_v5_result):
+            raise AssertionError("hidden v5 result receipt is not canonical JSON")
+        worker_run = hidden_v5_result["worker_run_receipt"]
+        gate_report = hidden_v5_result["gate_report"]
+        source = hidden_v5_result["source"]
+        worker_run_digest = (
+            "sha256:" + hashlib.sha256(canonical_json(worker_run)).hexdigest()
+        )
+        gate_report_file_digest = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(gate_report, sort_keys=True).encode("ascii") + b"\n"
+            ).hexdigest()
+        )
+        preparation_digest = (
+            "sha256:" + hashlib.sha256(hidden_v5_preparation_raw).hexdigest()
+        )
+        hidden_v5_lock_digest = (
+            "sha256:" + hashlib.sha256(hidden_v5_lock_raw).hexdigest()
+        )
+        if source["worker_run_receipt_digest"] != worker_run_digest:
+            raise AssertionError("hidden v5 worker receipt digest drift")
+        if source["gate_report_file_digest"] != gate_report_file_digest:
+            raise AssertionError("hidden v5 gate report file digest drift")
+        if (
+            source["evaluator_commit"]
+            != worker_run["source"]["runner_commit"]
+            or source["evaluator_commit"]
+            != "b9cc81a8f18630fb62993f3d94de5b18a246624e"
+        ):
+            raise AssertionError("hidden v5 evaluator commit drift")
+        if worker_run["source"]["preparation_receipt_digest"] != preparation_digest:
+            raise AssertionError("hidden v5 preparation receipt digest drift")
+        if worker_run["state"]["binding_digest"] != _V5_GATE.state_binding_digest:
+            raise AssertionError("hidden v5 run state binding drift")
+        if (
+            worker_run["composition"]["outcomes_digest"]
+            != gate_report["outcomes_digest"]
+        ):
+            raise AssertionError("hidden v5 outcome digest drift")
+        expected_gate_bindings = {
+            "corpus_lock_digest": hidden_v5_lock["corpus_lock_digest"],
+            "public_manifest_digest": hidden_v5_lock["public_manifest_digest"],
+            "hidden_suite_lock_digest": hidden_v5_lock_digest,
+            "candidate_policy_digest": hidden_v5_lock[
+                "candidate_policy_digest"
+            ],
+            "label_ledger_digest": hidden_v5_lock["label_ledger_digest"],
+            "suite_digest": hidden_v5_lock["suite_digest"],
+        }
+        for field, expected in expected_gate_bindings.items():
+            if gate_report[field] != expected:
+                raise AssertionError(f"hidden v5 gate report {field} drift")
+        comparison = gate_report["comparison"]
+        if (
+            hidden_v5_result["evaluation_status"]
+            != "calibration_diagnostic_only_due_to_worker_visible_label_proxy_leakage"
+            or hidden_v5_result["phase0_exit_eligible"]
+            or hidden_v5_result["limitations"]
+            != {
+                "worker_visibility": (
+                    "worker_visible_label_proxy_leakage_"
+                    "invalidates_clean_hidden_assurance"
+                ),
+                "evaluation_use": (
+                    "calibration_and_diagnostic_only_despite_"
+                    "chronological_freshness"
+                ),
+            }
+            or not comparison["evaluable"]
+            or comparison["passed"]
+            or comparison["reason_codes"]
+            != ["ATTACK_FLAG_DELTA_BELOW_10PP"]
+        ):
+            raise AssertionError(
+                "hidden v5 result is not retained as failed diagnostic evidence"
             )
     validators["benchmark-phase0-hidden-worker-run-receipt-v1.schema.json"].validate(
         {

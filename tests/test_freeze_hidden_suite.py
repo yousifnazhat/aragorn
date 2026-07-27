@@ -171,6 +171,8 @@ class FreezeReceiptTests(unittest.TestCase):
                         "id": left,
                         "label": "adversarial",
                         "pair_id": right,
+                        "sha256": "0" * 64,
+                        "size": 1,
                         "standards": standards,
                     },
                     {
@@ -178,6 +180,8 @@ class FreezeReceiptTests(unittest.TestCase):
                         "id": right,
                         "label": "benign",
                         "pair_id": left,
+                        "sha256": "0" * 64,
+                        "size": 1,
                         "standards": standards,
                     },
                 )
@@ -188,6 +192,8 @@ class FreezeReceiptTests(unittest.TestCase):
                 "id": f"v6-{index:024x}",
                 "label": "benign",
                 "pair_id": None,
+                "sha256": "0" * 64,
+                "size": 1,
                 "standards": [],
             }
             for index in range(224, 448)

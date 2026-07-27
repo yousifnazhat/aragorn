@@ -1736,7 +1736,15 @@ def _verified_labels(
 ) -> tuple[dict[str, str], dict[str, int]]:
     label_rows = []
     row_fields = (
-        {"id", "label", "family", "pair_id", "standards"}
+        {
+            "id",
+            "label",
+            "family",
+            "pair_id",
+            "standards",
+            "sha256",
+            "size",
+        }
         if corpus_id == "local-v6.0.0"
         else {"id", "label", "sha256", "size"}
     )
@@ -1758,13 +1766,8 @@ def _verified_labels(
             public is None
             or case_id in labels_by_id
             or row["label"] not in {"benign", "adversarial"}
-            or (
-                corpus_id != "local-v6.0.0"
-                and (
-                    row["sha256"] != public["sha256"]
-                    or row["size"] != public["size"]
-                )
-            )
+            or row["sha256"] != public["sha256"]
+            or row["size"] != public["size"]
         ):
             raise FreezeError("label ledger does not join exactly to public manifest")
         labels_by_id[case_id] = row["label"]

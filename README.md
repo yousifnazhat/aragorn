@@ -69,6 +69,12 @@ workspace skill writes externally or evaluate another harness.
   references across retained text carriers, with opaque, mutable, dynamic, and
   unsupported cases recorded fail closed in a digest-bound source-reference
   graph.
+- A distinct evidence-only admission `artifact_graph` for the first supported
+  profile: self-contained local Markdown. Its verifier replays the retained
+  manifest and bounded literal references independently and binds its expected
+  implementation identity; scripts, executables, binaries, external or dynamic
+  acquisition, unsupported Markdown references, and opaque carriers remain
+  incomplete. Decision and publisher wiring are not yet enabled.
 - Evaluation-only recursive acquisition of supported exact same-repository
   GitHub blob references, including references to another immutable commit,
   under shared request, byte, object, depth, reference, and deadline budgets.

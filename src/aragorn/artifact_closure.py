@@ -37,11 +37,21 @@ _URI = re.compile(
     r"[a-z][a-z0-9+.-]{1,31}://[^\s<>\"'`]{1,4096}",
     re.IGNORECASE,
 )
-_FETCH_COMMAND = re.compile(
+_ACQUISITION_COMMAND = re.compile(
     r"(?<![a-z0-9_./-])(?:sudo[ \t]+|run[ \t]+)?"
     r"(?:(?:/[a-z0-9._-]+)*/)?"
     r"(?:curl|wget|invoke-webrequest|invoke-restmethod|"
-    r"iwr|irm|git[ \t]+clone)\b",
+    r"iwr|irm|git[ \t]+clone|"
+    r"(?:python(?:[0-9]+(?:\.[0-9]+)?)?[ \t]+-m[ \t]+)?"
+    r"pip(?:[0-9]+(?:\.[0-9]+)?)?[ \t]+install|"
+    r"uv[ \t]+(?:add|pip[ \t]+install|tool[ \t]+install)|"
+    r"poetry[ \t]+add|"
+    r"(?:npm|pnpm|yarn|bun)[ \t]+(?:add|ci|i|install)|"
+    r"(?:npx|pnpx|yarn[ \t]+dlx|bunx)|"
+    r"(?:gem|cargo|nuget)[ \t]+install|"
+    r"go[ \t]+(?:get|install)|composer[ \t]+require|"
+    r"(?:apt|apt-get|dnf|yum|zypper|brew)[ \t]+install|"
+    r"apk[ \t]+add)\b",
     re.IGNORECASE,
 )
 _GIT_ACQUISITION = re.compile(
@@ -93,6 +103,12 @@ _SINGLE_LITERAL_FETCH = re.compile(
     r"^(?:curl|wget|invoke-webrequest|invoke-restmethod|iwr|irm)"
     r"[ \t]+(?P<quote>[\"']?)(?P<url>https?://[^\s\"'`]+)"
     r"(?P=quote)[ \t]*$",
+    re.IGNORECASE,
+)
+_UNSUPPORTED_MARKDOWN_REFERENCE = re.compile(
+    r"(?:\[[^\]\r\n]{0,4096}\]\[[^\]\r\n]{0,4096}\]|"
+    r"^[ \t]{0,3}\[[^\]\r\n]{0,4096}\]:[ \t]*\S|"
+    r"<[/]?[a-z][a-z0-9-]*(?=[ \t/>]|$))",
     re.IGNORECASE,
 )
 _SHELL_JOIN = r"(?:\\\r?\n|''|\"\")*"
@@ -625,14 +641,17 @@ def _scan_text(
             raw_content
         )
         stripped = line.lstrip()
-        fetch_command = (
-            _FETCH_COMMAND.search(stripped) is not None
+        acquisition_command = (
+            _ACQUISITION_COMMAND.search(stripped) is not None
             or _GIT_ACQUISITION.search(stripped) is not None
         )
         matches: list[tuple[int, str]] = []
         claimed_spans: list[tuple[int, int]] = []
         inert_references: set[tuple[int, str]] = set()
         markdown_matches, unsupported_markdown = _markdown_references(line)
+        unsupported_markdown.extend(
+            match.start() for match in _UNSUPPORTED_MARKDOWN_REFERENCE.finditer(line)
+        )
         for start, literal in markdown_matches:
             matches.append((start, literal))
             claimed_spans.append((start, start + len(literal)))
@@ -676,7 +695,7 @@ def _scan_text(
             or _OPTION_WRAPPED_INTERPRETER_COMMAND.match(line) is not None
         )
 
-        for delimiter_offset in unsupported_markdown:
+        for delimiter_offset in sorted(set(unsupported_markdown)):
             raw_start = source_characters[delimiter_offset]
             raw_end = source_characters[delimiter_offset + 1] + 1
             add_edge(
@@ -723,7 +742,7 @@ def _scan_text(
                     "github_immutable",
                     (
                         "FETCH_ENDPOINT_BYTES_UNMODELED"
-                        if fetch_command and not _is_direct_raw_github(literal)
+                        if acquisition_command and not _is_direct_raw_github(literal)
                         else "BARE_IMMUTABLE_REFERENCE_CONTEXT_UNSUPPORTED"
                     ),
                 )
@@ -738,7 +757,7 @@ def _scan_text(
                     "EXTERNAL_REFERENCE_UNSUPPORTED",
                 )
             if (
-                fetch_command
+                acquisition_command
                 and literal.casefold().startswith(("http://", "https://"))
                 and classification["status"] == "non_artifact"
             ):
@@ -747,7 +766,7 @@ def _scan_text(
                     "EXTERNAL_REFERENCE_UNSUPPORTED",
                 )
             if (
-                fetch_command
+                acquisition_command
                 and classification["reference_kind"] == "github_immutable"
                 and classification["status"] == "resolved"
                 and not _is_direct_raw_github(literal)
@@ -768,7 +787,7 @@ def _scan_text(
                 **classification,
             )
 
-        fetch_requires_dynamic = fetch_command and (
+        fetch_requires_dynamic = acquisition_command and (
             not supported_immutable
             or _SINGLE_LITERAL_FETCH.fullmatch(stripped) is None
             or line != raw_content

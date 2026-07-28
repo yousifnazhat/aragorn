@@ -13,6 +13,7 @@ from aragorn.admission_routes import (
 
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
 EXPECTED_CONTRACTS = {
+    "admission-artifact-graph-v1.schema.json": "aragorn/admission-artifact-graph/v1",
     "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
     "admission-runtime-candidate-lock-v1.schema.json": "aragorn/admission-runtime-candidate-lock/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",

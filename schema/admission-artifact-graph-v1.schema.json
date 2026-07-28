@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/admission-artifact-graph-v1.schema.json",
+  "title": "Aragorn admission artifact graph v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "verifier",
+    "profile",
+    "root_manifest_digest",
+    "tree_digest",
+    "artifacts",
+    "edges",
+    "closure"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/admission-artifact-graph/v1"},
+    "authority": {"const": "CLOSURE_EVIDENCE_ONLY_NOT_INSTALLER_AUTHORITY"},
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest"],
+      "properties": {
+        "name": {"const": "aragorn/admission-artifact-graph-verifier"},
+        "version": {"const": "1"},
+        "implementation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "profile": {"const": "self-contained-local-markdown/v1"},
+    "root_manifest_digest": {"$ref": "#/$defs/digest"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "size", "digest", "executable"],
+        "properties": {
+          "path": {"$ref": "#/$defs/path"},
+          "size": {"type": "integer", "minimum": 0, "maximum": 16777216},
+          "digest": {"$ref": "#/$defs/digest"},
+          "executable": {"type": "boolean"}
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {
+        "allOf": [
+          {
+            "$ref": "https://aragorn.dev/schema/source-artifact-graph-v1.schema.json#/$defs/edge"
+          },
+          {
+            "if": {
+              "properties": {"status": {"const": "resolved"}},
+              "required": ["status"]
+            },
+            "then": {
+              "properties": {"reference_kind": {"const": "local"}}
+            }
+          }
+        ]
+      }
+    },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "profile", "status", "unresolved"],
+      "properties": {
+        "scope": {"const": "artifact_graph"},
+        "profile": {"const": "self-contained-local-markdown/v1"},
+        "status": {"enum": ["complete", "incomplete"]},
+        "unresolved": {
+          "type": "array",
+          "maxItems": 30000,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 4352}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "complete"}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"unresolved": {"maxItems": 0}}},
+          "else": {"properties": {"unresolved": {"minItems": 1}}}
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "closure": {
+            "properties": {"status": {"const": "complete"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["closure"]
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "properties": {
+                "path": {"pattern": "\\.[mM][dD]$"},
+                "executable": {"const": false}
+              }
+            }
+          },
+          "edges": {
+            "not": {
+              "contains": {
+                "properties": {"status": {"const": "unresolved"}},
+                "required": ["status"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    }
+  }
+}

@@ -468,9 +468,14 @@ Canonical acceptance additionally requires the reference validator's bounded
 decoding, Unicode normalization, ordering, collision, digest, and cross-record
 rules; another implementation must pass the same negative test vectors before
 it is trusted. Start contracts at version 1 and keep evidence separate from
-decisions. Phase 1 will introduce a distinct admission `artifact_graph`
-contract; it will not reinterpret `aragorn/source-artifact-graph/v1` or its
-`source_reference_graph` scope.
+decisions. Phase 1 now has a distinct evidence-only admission `artifact_graph`
+contract for self-contained local Markdown. It independently reuses the
+bounded retained-text scanner instead of reinterpreting
+`aragorn/source-artifact-graph/v1`; unsupported carriers, executables, external
+or dynamic acquisition, unsupported Markdown references, and unresolved
+references remain incomplete. Replay also requires a protected expected
+verifier implementation identity. Decision authority and publication wiring
+remain separate.
 
 ### Acquisition manifest
 
@@ -601,6 +606,7 @@ aragorn/
 ├── aragorn                       # Local executable
 ├── src/aragorn/
 │   ├── acquire.py                # Bounded local inventory and CAS ingestion
+│   ├── admission_artifact_graph.py # Narrow self-contained Markdown closure
 │   ├── admission_conformance.py  # Phase 1 scenario aggregation
 │   ├── admission_decision.py     # Runtime-bound deterministic policy authority
 │   ├── admission_evidence.py     # Exact partial-claim semantic verification

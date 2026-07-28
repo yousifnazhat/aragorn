@@ -6,11 +6,13 @@ import base64
 import binascii
 import hashlib
 import http.client
+import ipaddress
 from io import BytesIO
 import json
 import math
 import os
 import re
+import socket
 import ssl
 import time
 from typing import Any
@@ -30,6 +32,10 @@ _MAX_API_REQUESTS = 20_050
 _MAX_API_BYTES = 384 * 1024 * 1024
 _MAX_ACQUISITION_SECONDS = 600.0
 _MAX_BEARER_TOKEN_BYTES = 1024
+_MAX_PINNED_ENDPOINTS = 16
+_HTTPS_PORT = 443
+
+_Endpoint = tuple[int, int, int, tuple[Any, ...]]
 
 
 class GitHubAcquisitionError(ValueError):
@@ -58,6 +64,18 @@ class _BearerToken:
         return "_BearerToken(<redacted>)"
 
     __str__ = __repr__
+
+
+class _PinnedEndpoints:
+    """Resolve the fixed API host once and retain only public addresses."""
+
+    def __init__(self) -> None:
+        self._value: tuple[_Endpoint, ...] | None = None
+
+    def get(self) -> tuple[_Endpoint, ...]:
+        if self._value is None:
+            self._value = _resolve_public_api_endpoints()
+        return self._value
 
 
 class GitHubAcquisitionSession:
@@ -97,6 +115,7 @@ class GitHubAcquisitionSession:
         self._authorization = authorization
         self._budget = _RequestBudget(max_api_requests, max_api_bytes)
         self._deadline = time.monotonic() + float(timeout_seconds)
+        self._endpoints = _PinnedEndpoints()
         self._tree_cache: dict[str, tuple[dict[str, Any], ...]] = {}
 
         algorithm = self._request(
@@ -127,6 +146,7 @@ class GitHubAcquisitionSession:
         session._authorization = self._authorization
         session._budget = self._budget
         session._deadline = self._deadline
+        session._endpoints = self._endpoints
         session._tree_cache = {}
         session._load_commit(commit)
         return session
@@ -230,6 +250,7 @@ class GitHubAcquisitionSession:
                 budget=self._budget,
                 deadline=self._deadline,
                 authorization=self._authorization,
+                endpoints=self._endpoints,
             )
             if _is_lfs_pointer(content):
                 raise GitHubAcquisitionError(f"Git LFS pointer rejected: {path}")
@@ -280,6 +301,7 @@ class GitHubAcquisitionSession:
             budget=self._budget,
             deadline=self._deadline,
             authorization=self._authorization,
+            endpoints=self._endpoints,
         )
 
 
@@ -610,6 +632,7 @@ def _read_blob(
     budget: _RequestBudget,
     deadline: float,
     authorization: _BearerToken | None,
+    endpoints: _PinnedEndpoints,
 ) -> bytes:
     document = _request_before_deadline(
         f"{prefix}/git/blobs/{sha}",
@@ -617,6 +640,7 @@ def _read_blob(
         budget=budget,
         deadline=deadline,
         authorization=authorization,
+        endpoints=endpoints,
     )
     if document.get("sha") != sha:
         raise GitHubAcquisitionError("GitHub returned a different blob identity")
@@ -695,6 +719,105 @@ def _server_tls_context() -> ssl.SSLContext:
     return context
 
 
+def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
+    try:
+        records = socket.getaddrinfo(
+            API_HOST,
+            _HTTPS_PORT,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+    except socket.gaierror as exc:
+        raise GitHubAcquisitionError(
+            f"cannot resolve the fixed GitHub API host: {exc}"
+        ) from exc
+
+    endpoints: list[_Endpoint] = []
+    seen: set[tuple[int, str, int, int, int]] = set()
+    for family, socket_type, protocol, _canonical_name, socket_address in records:
+        if family not in {socket.AF_INET, socket.AF_INET6}:
+            continue
+        if socket_type != socket.SOCK_STREAM or protocol != socket.IPPROTO_TCP:
+            continue
+        try:
+            address = ipaddress.ip_address(socket_address[0].partition("%")[0])
+        except ValueError as exc:
+            raise GitHubAcquisitionError(
+                "fixed GitHub API host resolved to an invalid address"
+            ) from exc
+        if (
+            not address.is_global
+            or address.is_multicast
+            or address.is_reserved
+            or address.is_unspecified
+            or address.is_loopback
+            or address.is_link_local
+            or getattr(address, "is_site_local", False)
+        ):
+            raise GitHubAcquisitionError(
+                "fixed GitHub API host resolved to a non-global or non-unicast address"
+            )
+        port = socket_address[1]
+        flow = socket_address[2] if family == socket.AF_INET6 else 0
+        scope = socket_address[3] if family == socket.AF_INET6 else 0
+        identity = (family, address.compressed, port, flow, scope)
+        if port != _HTTPS_PORT or identity in seen:
+            continue
+        if len(endpoints) >= _MAX_PINNED_ENDPOINTS:
+            raise GitHubAcquisitionError(
+                "fixed GitHub API host returned too many addresses"
+            )
+        seen.add(identity)
+        endpoints.append((family, socket_type, protocol, socket_address))
+    if not endpoints:
+        raise GitHubAcquisitionError(
+            "fixed GitHub API host has no usable public address"
+        )
+    return tuple(endpoints)
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(
+        self,
+        endpoints: tuple[_Endpoint, ...],
+        *,
+        timeout: float,
+        context: ssl.SSLContext,
+    ) -> None:
+        super().__init__(API_HOST, timeout=timeout, context=context)
+        self._endpoints = endpoints
+
+    def connect(self) -> None:
+        if self._tunnel_host is not None:
+            raise OSError("proxy tunnels are unsupported")
+        deadline = time.monotonic() + float(self.timeout)
+        last_error: OSError | None = None
+        for family, socket_type, protocol, socket_address in self._endpoints:
+            raw_socket: socket.socket | None = None
+            try:
+                raw_socket = socket.socket(family, socket_type, protocol)
+                raw_socket.settimeout(_remaining_connect_seconds(deadline))
+                raw_socket.connect(socket_address)
+                raw_socket.settimeout(_remaining_connect_seconds(deadline))
+                self.sock = self._context.wrap_socket(
+                    raw_socket,
+                    server_hostname=API_HOST,
+                )
+                return
+            except OSError as exc:
+                last_error = exc
+                if raw_socket is not None:
+                    raw_socket.close()
+        raise OSError("cannot connect to a pinned GitHub API address") from last_error
+
+
+def _remaining_connect_seconds(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise OSError("pinned GitHub API connection deadline exceeded")
+    return remaining
+
+
 def _request_json(
     path: str,
     *,
@@ -702,6 +825,7 @@ def _request_json(
     timeout_seconds: float,
     budget: _RequestBudget,
     authorization: _BearerToken | None = None,
+    endpoints: _PinnedEndpoints | None = None,
 ) -> dict[str, Any]:
     """GET one bounded GitHub API object without ambient auth or proxies."""
 
@@ -711,8 +835,18 @@ def _request_json(
         raise GitHubAcquisitionError("invalid internal GitHub authorization")
     budget.start_request()
     context = _server_tls_context()
-    connection = http.client.HTTPSConnection(
-        API_HOST, timeout=timeout_seconds, context=context
+    connection = (
+        http.client.HTTPSConnection(
+            API_HOST,
+            timeout=timeout_seconds,
+            context=context,
+        )
+        if endpoints is None
+        else _PinnedHTTPSConnection(
+            endpoints.get(),
+            timeout=timeout_seconds,
+            context=context,
+        )
     )
     connection.set_debuglevel(0)
     try:
@@ -818,6 +952,7 @@ def _request_before_deadline(
     budget: _RequestBudget,
     deadline: float,
     authorization: _BearerToken | None,
+    endpoints: _PinnedEndpoints,
 ) -> dict[str, Any]:
     document = _request_json(
         path,
@@ -825,6 +960,7 @@ def _request_before_deadline(
         timeout_seconds=_remaining_seconds(deadline),
         budget=budget,
         authorization=authorization,
+        endpoints=endpoints,
     )
     _remaining_seconds(deadline)
     return document

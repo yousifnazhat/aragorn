@@ -281,10 +281,13 @@ validated. The client rejects ambient `SSL_CERT_FILE` and `SSL_CERT_DIR`
 overrides and loads only the Python/OpenSSL runtime's compiled CA paths. Commit
 and tree identities are assertions from the authenticated GitHub API response;
 Aragorn does not receive or independently hash their raw Git object bytes. One
-monotonic deadline covers the acquisition. A dedicated fetch gateway is still
-required before this becomes a supported production acquisition boundary: the
-direct Phase 0 HTTP client's read timeout is a best-effort transport bound, not
-a hard wall against a peer that continuously trickles bytes.
+monotonic deadline covers the acquisition. The client resolves the fixed API
+host once per session, rejects any non-global result, and connects only to that
+frozen address set while retaining GitHub hostname verification. A dedicated
+fetch gateway is still required before this becomes a supported production
+acquisition boundary: the direct Phase 0 HTTP client's read timeout is a
+best-effort transport bound, not a hard wall against a peer that continuously
+trickles bytes, and it still runs with the operator's UID.
 
 Recursively retain supported exact same-repository blob references for Phase 0
 comparator evaluation:

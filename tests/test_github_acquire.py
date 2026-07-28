@@ -639,6 +639,131 @@ class GitHubTransportTests(unittest.TestCase):
         connection.set_debuglevel.assert_called_once_with(0)
         connection.close.assert_called_once()
 
+    def test_dns_is_public_only_and_resolved_once_per_session(self) -> None:
+        public = (
+            github_acquire.socket.AF_INET,
+            github_acquire.socket.SOCK_STREAM,
+            github_acquire.socket.IPPROTO_TCP,
+            "",
+            ("140.82.112.6", 443),
+        )
+        private = (
+            github_acquire.socket.AF_INET,
+            github_acquire.socket.SOCK_STREAM,
+            github_acquire.socket.IPPROTO_TCP,
+            "",
+            ("127.0.0.1", 443),
+        )
+        multicast = (
+            github_acquire.socket.AF_INET,
+            github_acquire.socket.SOCK_STREAM,
+            github_acquire.socket.IPPROTO_TCP,
+            "",
+            ("224.0.0.1", 443),
+        )
+        for unsafe in (private, multicast):
+            with self.subTest(address=unsafe[4][0]), patch.object(
+                github_acquire.socket,
+                "getaddrinfo",
+                return_value=[public, unsafe],
+            ):
+                with self.assertRaisesRegex(
+                    GitHubAcquisitionError,
+                    "non-global or non-unicast",
+                ):
+                    github_acquire._resolve_public_api_endpoints()
+
+        endpoints = github_acquire._PinnedEndpoints()
+        with patch.object(
+            github_acquire.socket,
+            "getaddrinfo",
+            return_value=[public, public],
+        ) as resolve:
+            self.assertEqual(
+                endpoints.get(),
+                (
+                    (
+                        github_acquire.socket.AF_INET,
+                        github_acquire.socket.SOCK_STREAM,
+                        github_acquire.socket.IPPROTO_TCP,
+                        ("140.82.112.6", 443),
+                    ),
+                ),
+            )
+            self.assertIs(endpoints.get(), endpoints.get())
+        resolve.assert_called_once()
+
+        too_many = [
+            (*public[:4], (f"8.8.8.{index}", 443))
+            for index in range(1, github_acquire._MAX_PINNED_ENDPOINTS + 2)
+        ]
+        with patch.object(
+            github_acquire.socket,
+            "getaddrinfo",
+            return_value=too_many,
+        ):
+            with self.assertRaisesRegex(
+                GitHubAcquisitionError,
+                "too many addresses",
+            ):
+                github_acquire._resolve_public_api_endpoints()
+
+    def test_pinned_connection_uses_numeric_peer_and_github_sni(self) -> None:
+        first_endpoint = (
+            github_acquire.socket.AF_INET,
+            github_acquire.socket.SOCK_STREAM,
+            github_acquire.socket.IPPROTO_TCP,
+            ("140.82.112.6", 443),
+        )
+        second_endpoint = (*first_endpoint[:3], ("140.82.112.7", 443))
+        first_socket = MagicMock()
+        first_socket.connect.side_effect = OSError("unreachable")
+        second_socket = MagicMock()
+        tls_socket = MagicMock()
+        context = MagicMock()
+        context.wrap_socket.return_value = tls_socket
+        with patch.object(
+            github_acquire.socket,
+            "socket",
+            side_effect=(first_socket, second_socket),
+        ) as constructor, patch.object(
+            github_acquire.time,
+            "monotonic",
+            side_effect=(10.0, 10.0, 10.4, 10.5),
+        ):
+            connection = github_acquire._PinnedHTTPSConnection(
+                (first_endpoint, second_endpoint),
+                timeout=1.0,
+                context=context,
+            )
+            connection.connect()
+
+        self.assertEqual(
+            [item.args for item in constructor.call_args_list],
+            [first_endpoint[:3], second_endpoint[:3]],
+        )
+        self.assertAlmostEqual(first_socket.settimeout.call_args.args[0], 1.0)
+        self.assertEqual(
+            len(second_socket.settimeout.call_args_list),
+            2,
+        )
+        self.assertAlmostEqual(
+            second_socket.settimeout.call_args_list[0].args[0],
+            0.6,
+        )
+        self.assertAlmostEqual(
+            second_socket.settimeout.call_args_list[1].args[0],
+            0.5,
+        )
+        first_socket.connect.assert_called_once_with(first_endpoint[3])
+        first_socket.close.assert_called_once()
+        second_socket.connect.assert_called_once_with(second_endpoint[3])
+        context.wrap_socket.assert_called_once_with(
+            second_socket,
+            server_hostname=API_HOST,
+        )
+        self.assertIs(connection.sock, tls_socket)
+
     def test_explicit_bearer_token_is_sent_only_to_the_fixed_transport(self) -> None:
         token = "github_pat_private-transport-token"
         authorization = github_acquire._validate_bearer_token(token)

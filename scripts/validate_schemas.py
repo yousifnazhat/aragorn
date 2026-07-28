@@ -40,6 +40,7 @@ from aragorn.acquire import ingest_local
 from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
 )
+from aragorn.admission_evidence import verify_openclaw_restart_evidence
 from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.artifact_closure import resolve_source_graph
 from aragorn.benchmark import evaluate_files
@@ -939,6 +940,11 @@ def main() -> int:
                 != expected_status
             ):
                 raise AssertionError(f"{label} has an unexpected admission status")
+            if label == "openclaw-restart":
+                verify_openclaw_restart_evidence(
+                    result,
+                    evidence_cas=evidence_cas,
+                )
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

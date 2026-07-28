@@ -4,11 +4,11 @@ import hashlib
 import json
 import unittest
 from copy import deepcopy
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import aragorn.admission_evidence as admission_evidence
 from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
     AdmissionConformanceError,
@@ -909,348 +909,139 @@ class AdmissionConformanceTests(unittest.TestCase):
             expected_isolation,
         )
 
-    def test_retained_openclaw_restart_profile_is_partial_and_bound(self) -> None:
+    def test_retained_openclaw_restart_evidence_is_authority_disabled(self) -> None:
         evidence_dir = _ROOT / "benchmark" / "evidence"
-        receipt_dir = _ROOT / "benchmark" / "receipts"
-        files = {
-            "probe": evidence_dir / "openclaw-v2026.7.1-contained-restart-probe-2026-07-27.json",
-            "environment": evidence_dir / "openclaw-v2026.7.1-contained-restart-environment-2026-07-27.json",
-        }
-        raw = {name: path.read_bytes() for name, path in files.items()}
-        probe, environment = (json.loads(raw[name]) for name in ("probe", "environment"))
         receipt = json.loads(
-            (receipt_dir / "phase1-openclaw-contained-restart-probe-2026-07-27.json").read_bytes()
-        )
-        prior = json.loads(
-            (receipt_dir / "phase1-openclaw-contained-adm03-probe-2026-07-27.json").read_bytes()
-        )
-        digests = sorted(_sha256(value) for value in raw.values())
-        for value in raw.values():
-            self.assertEqual(self.cas.put(BytesIO(value), max_bytes=len(value)), _sha256(value))
-        self.assertEqual(
-            validate_retained_admission_conformance(receipt, evidence_cas=self.cas),
-            "NOT_TESTED",
-        )
-        self.assertEqual(
-            receipt["decision"],
-            {"status": "NOT_TESTED", "installer_work_eligible": False},
-        )
-
-        formal = {
-            f"{item['id']}/{scenario['id']}": scenario
-            for item in receipt["properties"]
-            for scenario in item["scenarios"]
-        }
-        self.assertEqual(
-            {key: item["status"] for key, item in formal.items()},
-            {
-                "DET-01/identical-canonical-input-replay": "NOT_TESTED",
-                "ADM-01/exact-admitted-bytes": "NOT_TESTED",
-                "ADM-02/install": "PASS",
-                "ADM-02/update": "NOT_TESTED",
-                "ADM-02/direct-write": "PASS",
-                "ADM-02/rename": "PASS",
-                "ADM-02/symlink": "PASS",
-                "ADM-02/auto-discovery": "PASS",
-                "ADM-02/reload": "NOT_TESTED",
-                "ADM-02/restart": "PASS",
-                "ADM-03/policy-failure": "PASS",
-                "ADM-03/policy-tampering": "PASS",
-            },
-        )
-        self.assertEqual(
-            {
-                key: item["reason_codes"]
-                for key, item in formal.items()
-                if item["status"] == "NOT_TESTED"
-            },
-            {
-                "DET-01/identical-canonical-input-replay": ["IDENTICAL_REPLAY_NOT_TESTED"],
-                "ADM-01/exact-admitted-bytes": ["EXACT_ACTIVATED_BYTES_NOT_TESTED"],
-                "ADM-02/update": ["UPDATE_PATH_NOT_TESTED"],
-                "ADM-02/reload": ["LIVE_RELOAD_NOT_TESTED"],
-            },
-        )
-        self.assertTrue(
-            all(item["evidence_digests"] == digests for item in formal.values() if item["status"] == "PASS")
-        )
-
-        implementation_paths = {
-            "adm03_probe_digest": "adm03-probe.mjs",
-            "baseline_probe_digest": "probe.mjs",
-            "contained_probe_digest": "contained-probe.mjs",
-            "restart_probe_digest": "restart-probe.mjs",
-        }
-        admission_dir = _ROOT / "benchmark" / "admission" / "openclaw-v2026.7.1"
-        implementation = {
-            field: _sha256((admission_dir / filename).read_bytes())
-            for field, filename in implementation_paths.items()
-        }
-        self.assertEqual(probe["adapter"]["implementation"], implementation)
-        self.assertEqual(
-            receipt["bindings"]["adapter"],
-            {
-                "name": "openclaw-contained-profile-restart",
-                "implementation_digest": _canonical_digest(implementation),
-                "configuration_digest": _canonical_digest(probe["adapter"]["configuration"]),
-            },
-        )
-        self.assertEqual(
-            (receipt["bindings"]["runtime"], receipt["bindings"]["aragorn"]),
-            (prior["bindings"]["runtime"], prior["bindings"]["aragorn"]),
-        )
-        self.assertEqual(receipt["recorded_at"], probe["recorded_at"])
-
-        adm03 = probe["adm03_profile"]["evidence"]
-        self.assertEqual(probe["runtime"], adm03["runtime"])
-        self.assertEqual(
-            receipt["bindings"]["runtime"],
-            {
-                "name": probe["runtime"]["name"],
-                "version": probe["runtime"]["version"],
-                "repository_url": prior["bindings"]["runtime"]["repository_url"],
-                "commit": probe["runtime"]["commit"],
-                "source_tree_digest": probe["runtime"]["runtime_tree"]["tree_digest"],
-            },
-        )
-        adm03_raw = (
-            json.dumps(adm03, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("ascii")
-            + b"\n"
-        )
-        self.assertEqual(probe["adm03_profile"]["digest"], _sha256(adm03_raw))
-        self.assertEqual(
-            [(item["id"], item["status"]) for item in adm03["scenarios"]],
-            [
-                ("ADM-03/policy-failure", "PASS"),
-                ("ADM-03/policy-tampering", "PASS"),
-            ],
-        )
-        self.assertEqual(
-            [
-                (item["id"], item["status"])
-                for item in adm03["contained_profile"]["evidence"]["scenarios"]
-            ],
-            [
-                ("ADM-01/exact-admitted-bytes", "PASS"),
-                ("ADM-02/install", "PASS"),
-                ("ADM-02/direct-write", "PASS"),
-                ("ADM-02/rename", "PASS"),
-                ("ADM-02/symlink", "PASS"),
-                ("ADM-02/auto-discovery", "PASS"),
-                ("ADM-02/restart", "PASS"),
-            ],
-        )
-
-        scenario = probe["scenarios"][0]
-        self.assertEqual(
-            (scenario["id"], scenario["status"], probe["decision"]),
             (
-                "ADM-02/restart",
-                "PASS",
-                {"installer_work_eligible": False, "status": "NOT_TESTED"},
-            ),
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / "phase1-openclaw-contained-restart-probe-2026-07-27.json"
+            ).read_bytes()
         )
-        evidence = scenario["evidence"]
-        restart = evidence["restart_response"]
-        self.assertEqual(
-            (
-                restart["ok"],
-                restart["result"],
-                restart["preflight"]["safe"],
-                restart["preflight"]["blockers"],
-                set(restart["preflight"]["counts"].values()),
-                {key: restart["restart"][key] for key in ("ok", "pid", "signal", "reason", "mode")},
-            ),
-            (
-                True,
-                "scheduled",
-                True,
-                [],
-                {0},
-                {"ok": True, "pid": 1, "signal": "SIGUSR1", "reason": "gateway.restart.safe", "mode": "emit"},
-            ),
+        evidence_paths = (
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-restart-probe-2026-07-27.json",
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-restart-environment-2026-07-27.json",
         )
-
-        lifecycle = evidence["lifecycle"]
-        order = ("first_ready", "signal", "restarting", "shutdown", "restart_mode", "second_ready")
-        self.assertEqual(
-            [lifecycle[key]["offset"] for key in order],
-            sorted(lifecycle[key]["offset"] for key in order),
-        )
-        self.assertEqual(
-            [lifecycle[key]["message"] for key in ("first_ready", "signal", "restarting", "second_ready")],
-            ["gateway ready", "signal SIGUSR1 received", "received SIGUSR1; restarting", "gateway ready"],
-        )
-        self.assertTrue(lifecycle["shutdown"]["message"].startswith("shutdown completed cleanly "))
-        self.assertTrue(lifecycle["restart_mode"]["message"].startswith("restart mode: in-process restart "))
-        self.assertEqual(lifecycle["process_before"], lifecycle["process_after"])
-        self.assertEqual(
-            (lifecycle["process_before"]["pid"], lifecycle["process_before"]["cmdline"]),
-            (1, ["openclaw-gateway"]),
-        )
-
-        commands = scenario["commands"]
-        clients = evidence["rpc_clients"]
-        parse_time = lambda value: datetime.fromisoformat(value.replace("Z", "+00:00"))
-        self.assertNotEqual(clients["skills_before"]["pid"], clients["skills_after"]["pid"])
-        self.assertLessEqual(
-            parse_time(clients["skills_before"]["completed_at"]),
-            parse_time(commands["restart"]["started_at"]),
-        )
-        self.assertGreaterEqual(
-            parse_time(clients["skills_after"]["started_at"]),
-            parse_time(lifecycle["second_ready"]["time"]),
-        )
-        self.assertEqual(commands["skills_before"]["argv"], commands["skills_after"]["argv"])
-        self.assertEqual(
-            commands["skills_before"]["argv"][2:],
-            [
-                "gateway", "call", "skills.status", "--json", "--timeout", "5000",
-                "--params", '{"agentId":"main"}',
-            ],
-        )
-        self.assertEqual(
-            (
-                commands["skills_before"]["exit_code"],
-                commands["skills_after"]["exit_code"],
-                commands["skills_before"]["stdout_bytes"] > 0,
-                commands["skills_before"]["stdout_bytes"] == commands["skills_after"]["stdout_bytes"],
-                commands["skills_before"]["stdout_digest"] == commands["skills_after"]["stdout_digest"],
-            ),
-            (0, 0, True, True, True),
-        )
-        for key in ("authentication_before", "authentication_after"):
-            authentication = commands[key]
-            self.assertEqual(
-                (
-                    authentication["status"],
-                    authentication["command"]["exit_code"],
-                    authentication["response"]["error"]["code"],
-                ),
-                ("PASS", 1, 1008),
+        evidence_digests = []
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            evidence_digests.append(
+                self.cas.put(BytesIO(raw), max_bytes=len(raw))
             )
+        evidence_digests.sort()
 
-        skills = evidence["skills"]
-        self.assertTrue(skills["raw_bytes_equal"])
-        self.assertEqual(skills["projection_before"], skills["projection_after"])
-        projection = skills["projection_after"]
-        effective = [
-            item
-            for item in projection["skills"]
-            if not item["disabled"]
-            and not item["blocked_by_allowlist"]
-            and not item["blocked_by_agent_filter"]
-            and (item["eligible"] or item["model_visible"] or item["command_visible"])
-        ]
-        self.assertEqual(len(effective), 1)
-        admitted = effective[0]
-        self.assertEqual(
-            (
-                admitted["name"], admitted["source"], admitted["file_path"], admitted["base_dir"],
-                admitted["eligible"], admitted["model_visible"], admitted["command_visible"],
-            ),
-            (
-                "aragorn-admitted", "openclaw-managed",
-                "/profile/state/skills/aragorn-admitted/SKILL.md",
-                "/profile/state/skills/aragorn-admitted", True, True, True,
-            ),
-        )
-        self.assertTrue(
-            all(
-                item["blocked_by_agent_filter"] and not item["model_visible"] and not item["command_visible"]
-                for item in projection["skills"]
-                if item["name"] != "aragorn-admitted"
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_restart_evidence(
+                receipt,
+                evidence_cas=self.cas,
             )
         )
-        self.assertEqual(evidence["protected_state_before"], evidence["protected_state_after"])
-        protected = evidence["protected_state_before"]
-        self.assertEqual(
-            (protected["admitted_digest"], protected["implementation"], protected["policy_digest"]),
-            (
-                "sha256:5a951f65ad92bc209f9a00139fb88e38015fab9b5ac3035407a027a7d502853d",
-                implementation,
-                implementation["contained_probe_digest"],
-            ),
-        )
 
-        log = evidence["gateway_log"]
-        log_raw = ("\n".join(log["lines"]) + "\n").encode("utf-8")
-        self.assertEqual((len(log_raw), _sha256(log_raw)), (log["bytes"], log["digest"]))
-        self.assertNotIn(b"aragorn-contained-restart-token-v1", log_raw)
-        self.assertNotIn(b"aragorn-invalid-test-token-v1", log_raw)
-        offset = 0
-        records = {}
-        for line in log["lines"]:
-            records[offset] = json.loads(line)
-            offset += len(line.encode("utf-8")) + 1
-        self.assertEqual(offset, log["bytes"])
-        self.assertTrue(
-            all(records[lifecycle[key]["offset"]]["message"] == lifecycle[key]["message"] for key in order)
+        promoted = deepcopy(receipt)
+        scenario = promoted["properties"][1]["scenarios"][0]
+        scenario.update(
+            status="PASS",
+            evidence_digests=evidence_digests,
+            reason_codes=[],
         )
+        promoted["properties"][1]["status"] = "PASS"
 
-        probe_exec = environment["container"]["probe_exec"]
-        self.assertEqual(
-            (
-                probe_exec["command"], probe_exec["exit_code"], probe_exec["recorded_at"],
-                probe_exec["stdout"], probe_exec["user"],
-            ),
-            (
-                ["/usr/local/bin/node", "/probe/restart-probe.mjs"], 0, probe["recorded_at"],
-                {"bytes": len(raw["probe"]), "digest": _sha256(raw["probe"])}, "1000:1000",
-            ),
-        )
-        state = environment["container"]["state"]
-        self.assertEqual((state["status"], state["exit_code"], state["oom_killed"]), ("exited", 0, False))
-        command = environment["container"]["command"]
-        self.assertEqual(command[:2], ["/bin/sh", "-c"])
-        for required in (
-            "/probe/contained-probe.mjs", "/probe/adm03-probe.mjs", "gateway run",
-            "--auth token", "--bind loopback", "--tailscale off", "--ws-log full",
+        authority = deepcopy(receipt)
+        for item in authority["properties"]:
+            item["status"] = "PASS"
+            for candidate in item["scenarios"]:
+                candidate.update(
+                    status="PASS",
+                    evidence_digests=evidence_digests,
+                    reason_codes=[],
+                )
+        authority["decision"] = {
+            "status": "PASS",
+            "installer_work_eligible": True,
+        }
+
+        drifted = deepcopy(receipt)
+        drifted["bindings"]["adapter"]["name"] = "unbound-adapter"
+        for label, mutation in (
+            ("scenario promotion", promoted),
+            ("installer authority", authority),
+            ("binding drift", drifted),
         ):
-            self.assertIn(required, command[2])
-        self.assertNotIn("--force", command[2])
+            with self.subTest(label), self.assertRaises(
+                admission_evidence.AdmissionEvidenceError
+            ):
+                admission_evidence.verify_openclaw_restart_evidence(
+                    mutation,
+                    evidence_cas=self.cas,
+                )
 
-        isolation = environment["isolation"]
-        self.assertEqual(environment["os_profile_digest"], _canonical_digest(isolation))
-        self.assertEqual(
-            receipt["bindings"]["environment"],
-            {
-                "os_profile_digest": environment["os_profile_digest"],
-                "worker_digest": environment["container"]["image"]["platform_manifest_digest"],
-            },
+        probe = json.loads(evidence_paths[0].read_bytes())
+        environment = json.loads(evidence_paths[1].read_bytes())
+        restart_mutations = {}
+
+        timing = deepcopy(probe)
+        timing["scenarios"][0]["evidence"]["lifecycle"]["signal"]["time"] = (
+            "2026-07-27T22:27:40.000Z"
         )
-        self.assertEqual(
-            (
-                isolation["cap_drop"], isolation["devices"], isolation["memory_bytes"],
-                isolation["memory_swap_bytes"], isolation["nano_cpus"], isolation["network_mode"],
-                isolation["no_new_privileges"], isolation["pids_limit"], isolation["privileged"],
-                isolation["read_only_rootfs"], isolation["user"],
-            ),
-            (
-                ["ALL"], [], 1_073_741_824, 1_073_741_824, 1_000_000_000, "none",
-                True, 128, False, True, "1000:1000",
-            ),
+        restart_mutations["lifecycle timing"] = timing
+
+        log_binding = deepcopy(probe)
+        log_binding["scenarios"][0]["evidence"]["lifecycle"]["signal"]["time"] = (
+            "2026-07-27T22:27:50.127+00:00"
         )
-        self.assertEqual(
-            isolation["environment"]["OPENCLAW_GATEWAY_TOKEN"],
-            "aragorn-contained-restart-token-v1",
+        restart_mutations["log timestamp binding"] = log_binding
+
+        projection = deepcopy(probe)
+        for key in ("projection_before", "projection_after"):
+            unadmitted = projection["scenarios"][0]["evidence"]["skills"][key][
+                "skills"
+            ][0]
+            unadmitted["blocked_by_agent_filter"] = False
+            unadmitted["model_visible"] = True
+        restart_mutations["skill projection"] = projection
+
+        admitted = deepcopy(probe)
+        for key in ("projection_before", "projection_after"):
+            current = admitted["scenarios"][0]["evidence"]["skills"][key]
+            current["workspace_dir"] = "/unbound-workspace"
+            next(
+                item
+                for item in current["skills"]
+                if item["name"] == "aragorn-admitted"
+            )["user_invocable"] = False
+        restart_mutations["admitted profile"] = admitted
+
+        protected = deepcopy(probe)
+        protected["scenarios"][0]["evidence"]["protected_state_after"][
+            "admitted_digest"
+        ] = "sha256:" + "0" * 64
+        restart_mutations["protected state"] = protected
+
+        for label, mutation in restart_mutations.items():
+            with self.subTest(label), self.assertRaises(
+                admission_evidence.AdmissionEvidenceError
+            ):
+                admission_evidence._verify_restart(mutation)
+
+        isolation = deepcopy(environment)
+        isolation["isolation"]["mounts"][0]["source"] = "unbound-volume"
+        with self.subTest("isolation policy"), self.assertRaises(
+            admission_evidence.AdmissionEvidenceError
+        ):
+            admission_evidence._verify_environment(probe, isolation)
+
+        duplicate_mount = deepcopy(environment)
+        duplicate_mount["isolation"]["mounts"].append(
+            deepcopy(duplicate_mount["isolation"]["mounts"][0])
         )
-        mounts = {item["destination"]: item for item in isolation["mounts"]}
-        self.assertEqual(
-            set(mounts),
-            {
-                "/acquisition", "/probe", "/profile/config", "/profile/home/.agents",
-                "/profile/state/plugin-skills", "/profile/state/skills",
-                "/profile/workspace/.agents", "/profile/workspace/skills", "/runtime",
-            },
-        )
-        self.assertTrue(all(item["read_only"] for item in mounts.values()))
-        self.assertEqual(mounts["/probe"]["source"], "aragorn-openclaw-2026-7-1-contained-probe-v7")
-        self.assertEqual(
-            environment["docker"]["platform_manifest_resolution"]["digest"],
-            environment["container"]["image"]["platform_manifest_digest"],
-        )
-        self.assertEqual(environment["docker"]["assurance"], "SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED")
+        with self.subTest("duplicate mount"), self.assertRaises(
+            admission_evidence.AdmissionEvidenceError
+        ):
+            admission_evidence._verify_environment(probe, duplicate_mount)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -304,6 +304,10 @@ from the protected CAS. This proves blob identity and availability, not the
 truth of individual scenario claims. Positive `PASS` remains
 installer-ineligible until a semantic evidence verifier binds every scenario
 claim to the runtime and environment bindings.
+The fixed OpenClaw restart pair now has an exact `ADM-02/restart` evidence
+verifier; carried scenario claims remain retention-only. It rejects claim
+promotion and aggregate `PASS`, grants no installer authority, and is not the
+future general positive-evidence verifier.
 
 The first private bake-off target is OpenClaw because it exposes the clearest operator-owned pre-install policy boundary; Pi is the comparison target because its tool-call hook documents blocking on hook errors; Hermes remains a useful contained workload/detonation candidate but its hook failure behavior is not suitable for fail-closed authority. This ordering is not a runtime selection. A candidate is eliminated as soon as one mandatory scenario fails; a candidate can be chosen only after `DET-01`, `ADM-01`, `ADM-02`, and `ADM-03` all pass against an immutable runtime version. Runtime prevention additionally requires `RUN-01` and `RUN-02` with an external OS-level broker/sensor.
 

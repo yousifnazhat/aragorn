@@ -258,6 +258,34 @@ def verify_analyzer_run(
         ) from exc
 
 
+def summarize_analyzer_run(
+    result: AnalyzerResult,
+    *,
+    run_receipt_digest: str,
+) -> dict[str, Any]:
+    """Return the exact decision/v2 summary for one retained run."""
+
+    record: dict[str, Any] = {
+        "name": result.name,
+        "version": result.version,
+        "config_digest": result.config_digest,
+        "executable_digest": result.executable_digest,
+        "status": result.status,
+        "run_receipt_digest": _digest(run_receipt_digest, "run receipt digest"),
+        "observation_digests": [
+            _raw_digest(observation.document_json.encode("ascii"))
+            for observation in result.observations
+        ],
+        "stdout_digest": _raw_digest(result.raw_stdout),
+        "stderr_digest": _raw_digest(result.raw_stderr),
+    }
+    if result.error_code is not None:
+        record["error_code"] = result.error_code
+    if result.returncode is not None:
+        record["returncode"] = result.returncode
+    return record
+
+
 def _request(raw: bytes) -> dict[str, Any]:
     if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_REQUEST_BYTES:
         raise AnalyzerReceiptError("analyzer request bytes are missing or oversized")

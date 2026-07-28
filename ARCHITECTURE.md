@@ -369,9 +369,13 @@ re-parses successful JSONL output, and rejects configuration, verifier,
 subject, or evidence mismatch. The receipt is explicitly evidence-only:
 authenticity still depends on a future broker-owned CAS and same-process
 execution, so it cannot authorize the publisher.
-`aragorn/decision/v2` requires each run-receipt digest but remains an
-evidence summary; the future broker must replay those receipts, compare every
-summary field, and re-derive policy before publication.
+`aragorn/decision/v2` requires each run-receipt digest but remains an evidence
+summary. Its verifier reloads the retained policy and manifest, replays every
+run receipt, reconstructs the complete decision, and rejects any summary or
+verdict drift. Current inspection still has only `source_tree` closure, so
+faithful replay returns `ERROR`; a future broker must also bind supported
+`artifact_graph` closure, runtime, destination, expiry, and revocation before
+publication.
 
 The source-screen-only Git identities and commit-pinned evidence anchors are
 frozen in `benchmark/admission-runtime-candidates-v1.lock.json`; that immutable
@@ -603,6 +607,7 @@ aragorn/
 │   ├── admission_gate.py         # Retained-evidence pre-gate
 │   ├── admission_retained.py     # Retained inputs for policy-only decisions
 │   ├── artifact_closure.py       # Evaluation-only literal source-reference graph
+│   ├── decision_receipt.py       # Semantic replay of decision/v2 evidence
 │   ├── materialization.py        # Staged-tree verification and private fresh publication
 │   ├── github_acquire.py         # Evaluation-only immutable public GitHub source
 │   ├── github_expand.py          # Bounded exact same-repository comparator expansion

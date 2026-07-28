@@ -17,8 +17,8 @@ import tempfile
 from typing import Any, Iterator, Sequence
 
 from .acquire import InventoryError, ingest_open_directory
-from .analyze import MAX_ANALYZER_OUTPUT_BYTES, AnalyzerResult, run_analyzer
-from .analyzer_receipt import retain_analyzer_run
+from .analyze import MAX_ANALYZER_OUTPUT_BYTES, run_analyzer
+from .analyzer_receipt import retain_analyzer_run, summarize_analyzer_run
 from .artifact_closure import (
     MAX_GRAPH_BYTES,
     load_retained_manifest,
@@ -46,7 +46,7 @@ _DEFAULT_POLICY_DOCUMENT = {
         "KNOWN_BAD_DIGEST",
         "MALWARE",
     ],
-    "review_severities": ["medium", "high", "critical"],
+    "review_severities": ["critical", "high", "medium"],
 }
 
 
@@ -313,6 +313,12 @@ def _inspect(args: argparse.Namespace) -> int:
         ),
         review_severities=frozenset(_DEFAULT_POLICY_DOCUMENT["review_severities"]),
     )
+    policy_digest = _put_json(
+        cas,
+        _DEFAULT_POLICY_DOCUMENT,
+        max_bytes=_MAX_CONFIG_BYTES,
+        record_name="policy",
+    )
     decision = evaluate_policy(policy, closure=manifest["closure"], results=results)
 
     analyzer_records = []
@@ -321,21 +327,15 @@ def _inspect(args: argparse.Namespace) -> int:
 
         verifier_implementation_digest = candidate_implementation_digest()
     for result in results:
-        observation_digests = tuple(
-            _put_bytes(cas, observation.document_json.encode("ascii"))
-            for observation in result.observations
+        run_receipt_digest = retain_analyzer_run(
+            cas,
+            result,
+            verifier_implementation_digest=verifier_implementation_digest,
         )
         analyzer_records.append(
-            _result_record(
+            summarize_analyzer_run(
                 result,
-                observation_digests,
-                run_receipt_digest=retain_analyzer_run(
-                    cas,
-                    result,
-                    verifier_implementation_digest=verifier_implementation_digest,
-                ),
-                stdout_digest=_put_bytes(cas, result.raw_stdout),
-                stderr_digest=_put_bytes(cas, result.raw_stderr),
+                run_receipt_digest=run_receipt_digest,
             )
         )
 
@@ -349,7 +349,7 @@ def _inspect(args: argparse.Namespace) -> int:
         "policy": {
             "id": _DEFAULT_POLICY_DOCUMENT["id"],
             "version": _DEFAULT_POLICY_DOCUMENT["version"],
-            "digest": _digest_json(_DEFAULT_POLICY_DOCUMENT),
+            "digest": policy_digest,
         },
         "analyzers": sorted(analyzer_records, key=lambda record: record["name"]),
         "reason_codes": list(decision.reason_codes),
@@ -562,32 +562,6 @@ def _safe_relative_path(value: object) -> PurePosixPath:
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise ConfigurationError("manifest file path escapes the workspace")
     return path
-
-
-def _result_record(
-    result: AnalyzerResult,
-    observation_digests: tuple[str, ...],
-    *,
-    run_receipt_digest: str,
-    stdout_digest: str,
-    stderr_digest: str,
-) -> dict[str, Any]:
-    record: dict[str, Any] = {
-        "name": result.name,
-        "version": result.version,
-        "config_digest": result.config_digest,
-        "executable_digest": result.executable_digest,
-        "status": result.status,
-        "run_receipt_digest": run_receipt_digest,
-        "observation_digests": list(observation_digests),
-        "stdout_digest": stdout_digest,
-        "stderr_digest": stderr_digest,
-    }
-    if result.error_code is not None:
-        record["error_code"] = result.error_code
-    if result.returncode is not None:
-        record["returncode"] = result.returncode
-    return record
 
 
 def _read_json_object(

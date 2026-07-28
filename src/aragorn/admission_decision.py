@@ -54,7 +54,7 @@ def evaluate_admission(document: object) -> dict[str, Any]:
 
     manifest = _manifest(request["manifest"])
     evidence, results = _evidence(request["evidence"], manifest["tree_digest"])
-    policy_document, policy = _policy(request["policy"])
+    policy_document, policy = parse_policy(request["policy"])
     target_runtime = _target_runtime(request["target_runtime"])
     decision = evaluate_policy(
         policy,
@@ -247,7 +247,7 @@ def _observation(value: object, tree_digest: str) -> Observation:
     )
 
 
-def _policy(value: object) -> tuple[dict[str, Any], Policy]:
+def parse_policy(value: object) -> tuple[dict[str, Any], Policy]:
     document = _exact_object(
         value,
         {

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from contextlib import redirect_stderr, redirect_stdout
-from io import StringIO
+from io import BytesIO, StringIO
 import json
 import os
 from pathlib import Path
@@ -20,6 +21,8 @@ from aragorn.acquire import inventory_local
 from aragorn.analyzer_receipt import verify_analyzer_run
 from aragorn.cas import CAS
 from aragorn.cli import main
+from aragorn.decision_receipt import DecisionReceiptError, verify_decision_v2
+from aragorn.oci_worker_protocol import canonical_json
 from aragorn.phase0_candidate import candidate_implementation_digest
 
 
@@ -130,18 +133,59 @@ class CLITests(unittest.TestCase):
                     for analyzer in receipt["analyzers"]
                 )
             )
+            verifier_digest = candidate_implementation_digest()
             self.assertTrue(
                 all(
                     verify_analyzer_run(
                         CAS(root / "state"),
                         analyzer["run_receipt_digest"],
                         expected_subject_digest=receipt["tree_digest"],
-                        expected_verifier_digest=candidate_implementation_digest(),
+                        expected_verifier_digest=verifier_digest,
                     ).ok
                     for analyzer in receipt["analyzers"]
                 )
             )
             self.assertRegex(result["decision_digest"], r"^sha256:[0-9a-f]{64}$")
+            self.assertEqual(
+                verify_decision_v2(
+                    CAS(root / "state", read_only=True),
+                    result["decision_digest"],
+                    expected_manifest_digest=receipt["manifest_digest"],
+                    expected_policy_digest=receipt["policy"]["digest"],
+                    expected_analyzer_verifier_digest=verifier_digest,
+                ),
+                receipt,
+            )
+
+            changed_verdict = deepcopy(receipt)
+            changed_verdict["verdict"] = "ALLOW"
+            changed_artifacts = deepcopy(receipt)
+            changed_artifacts["artifact_digests"] = []
+            changed_analyzer = deepcopy(receipt)
+            changed_analyzer["analyzers"][0]["stdout_digest"] = "sha256:" + "0" * 64
+            changed_reasons = deepcopy(receipt)
+            changed_reasons["reason_codes"] = []
+            changed_policy = deepcopy(receipt)
+            changed_policy["policy"]["digest"] = "sha256:" + "0" * 64
+            cas = CAS(root / "state")
+            for label, changed in (
+                ("verdict", changed_verdict),
+                ("artifacts", changed_artifacts),
+                ("analyzer", changed_analyzer),
+                ("reasons", changed_reasons),
+                ("policy", changed_policy),
+            ):
+                with self.subTest(changed=label):
+                    raw = canonical_json(changed)
+                    changed_digest = cas.put(BytesIO(raw), max_bytes=len(raw))
+                    with self.assertRaises(DecisionReceiptError):
+                        verify_decision_v2(
+                            CAS(root / "state", read_only=True),
+                            changed_digest,
+                            expected_manifest_digest=receipt["manifest_digest"],
+                            expected_policy_digest=receipt["policy"]["digest"],
+                            expected_analyzer_verifier_digest=verifier_digest,
+                        )
 
     def test_state_inside_source_is_rejected_before_ingestion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

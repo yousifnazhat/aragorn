@@ -93,6 +93,10 @@ workspace skill writes externally or evaluate another harness.
   streams, execution state, and canonical observations; replay rejects
   mismatched or missing CAS evidence. These receipts are not installer
   authority.
+- Semantic replay of `decision/v2`: the verifier reloads the retained policy
+  and manifest, replays every analyzer receipt, rebuilds each summary, and
+  re-derives the verdict. Current source-tree-only inspection still fails
+  closed and the replay grants no installer authority.
 - Strict JSON Lines observations bound to the exact tree digest.
 - Deterministic `ALLOW | REVIEW | DENY | ERROR` policy evaluation.
 - Fail-closed handling of missing analyzers, malformed evidence, timeouts, output limits, and incomplete artifact closure.

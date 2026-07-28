@@ -1443,6 +1443,169 @@ class AdmissionConformanceTests(unittest.TestCase):
                 runtime_environment,
             )
 
+    def test_retained_openclaw_model_activation_binds_exact_tool_bytes(  # noqa: PLR0915
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / (
+                    "phase1-openclaw-contained-model-activation-"
+                    "probe-2026-07-28.json"
+                )
+            ).read_bytes()
+        )
+        evidence_paths = (
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-model-activation-"
+                "probe-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-model-activation-"
+                "environment-2026-07-28.json"
+            ),
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+        )
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_model_activation_evidence(
+                receipt,
+                evidence_cas=self.cas,
+            )
+        )
+        probe_path = (
+            _ROOT
+            / "benchmark"
+            / "admission"
+            / "openclaw-v2026.7.1"
+            / "model-activation-probe.mjs"
+        )
+        self.assertEqual(
+            _sha256(probe_path.read_bytes()),
+            receipt["bindings"]["adapter"]["implementation_digest"],
+        )
+
+        promoted = deepcopy(receipt)
+        install = promoted["properties"][2]["scenarios"][0]
+        install.update(
+            status="PASS",
+            reason_codes=[],
+            evidence_digests=receipt["properties"][1]["scenarios"][0][
+                "evidence_digests"
+            ],
+        )
+        with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+            admission_evidence.verify_openclaw_model_activation_evidence(
+                promoted,
+                evidence_cas=self.cas,
+            )
+
+        probe = json.loads(evidence_paths[0].read_bytes())
+        environment = json.loads(evidence_paths[1].read_bytes())
+
+        def rebind_request(document: dict[str, object], index: int) -> None:
+            record = document["provider"]["records"][index]
+            raw = json.dumps(
+                record["body"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            raw_bytes = raw.encode()
+            record["body_raw"] = raw
+            record["body_bytes"] = len(raw_bytes)
+            record["body_digest"] = _sha256(raw_bytes)
+
+        raw_mismatch = deepcopy(probe)
+        raw_mismatch["provider"]["records"][0]["body_raw"] += " "
+
+        prompt = deepcopy(probe)
+        prompt_body = prompt["provider"]["records"][0]["body"]
+        prompt_body["messages"][0]["content"] = prompt_body["messages"][0][
+            "content"
+        ].replace(
+            "sha256:5a951f65ad92bc20",
+            "sha256:0000000000000000",
+        )
+        rebind_request(prompt, 0)
+
+        tool_result = deepcopy(probe)
+        tool_result["provider"]["records"][1]["body"]["messages"][3][
+            "content"
+        ] += "changed"
+        rebind_request(tool_result, 1)
+
+        extra_request = deepcopy(probe)
+        extra_request["provider"]["records"].append(
+            deepcopy(extra_request["provider"]["records"][-1])
+        )
+        extra_request["provider"]["records"][-1]["sequence"] = 3
+        extra_request["provider"]["request_count"] = 3
+
+        target = deepcopy(probe)
+        target["scenario"]["evidence"]["target_after"][1]["digest"] = (
+            "sha256:" + "0" * 64
+        )
+
+        history = deepcopy(probe)
+        history["scenario"]["evidence"]["history"]["response"]["messages"][-1][
+            "content"
+        ][0]["text"] = "stale success"
+
+        restarted = deepcopy(probe)
+        restarted["gateway"]["log_after"]["restart_count"] = 1
+
+        for label, mutation in (
+            ("raw request", raw_mismatch),
+            ("skill version", prompt),
+            ("tool result", tool_result),
+            ("extra request", extra_request),
+            ("target", target),
+            ("history", history),
+            ("restart", restarted),
+        ):
+            with (
+                self.subTest(label),
+                self.assertRaises(admission_evidence.AdmissionEvidenceError),
+            ):
+                admission_evidence._verify_model_activation_probe(mutation)
+
+        writable = deepcopy(environment)
+        next(
+            item
+            for item in writable["isolation"]["mounts"]
+            if item["destination"] == "/profile/state/skills"
+        )["read_only"] = False
+        networked = deepcopy(environment)
+        networked["isolation"]["network_mode"] = "bridge"
+        extra_writable = deepcopy(environment)
+        next(
+            item
+            for item in extra_writable["isolation"]["mounts"]
+            if item["destination"] == "/probe"
+        )["read_only"] = False
+        for label, mutation in (
+            ("writable admitted mount", writable),
+            ("network", networked),
+            ("writable probe", extra_writable),
+        ):
+            with (
+                self.subTest(label),
+                self.assertRaises(admission_evidence.AdmissionEvidenceError),
+            ):
+                admission_evidence._verify_model_activation_environment(
+                    probe,
+                    mutation,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

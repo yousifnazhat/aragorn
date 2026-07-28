@@ -1,9 +1,10 @@
-"""Semantic verification for one retained OpenClaw runtime-restart claim."""
+"""Semantic verification for retained partial OpenClaw admission claims."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
@@ -52,10 +53,67 @@ _REASONS = {
     "ADM-02/update": ["UPDATE_PATH_NOT_TESTED"],
     "ADM-02/reload": ["LIVE_RELOAD_NOT_TESTED"],
 }
+_UPDATE_PROBE_SCHEMA = "aragorn/openclaw-contained-update-probe-evidence/v1"
+_UPDATE_ENV_SCHEMA = "aragorn/openclaw-contained-update-environment-evidence/v1"
+_UPDATE_PROBE_DIGEST = (
+    "sha256:2a6cbc2bbd6fa46b4addca029377d5d4265d698e2aa376858e32b80319310cdb"
+)
+_UPDATE_ENV_DIGEST = (
+    "sha256:1c5fa32556e4d6d19b7bb54e92f1da5702c1700c0331b53fd380174e28e590aa"
+)
+_UPDATE_EVIDENCE_PAIR = sorted((_UPDATE_ENV_DIGEST, _UPDATE_PROBE_DIGEST))
+_UPDATE_SCENARIO = "ADM-02/update"
+_UPDATE_ROUTE = "ADM-02/update/archive-source-force-replacement"
+_UPDATE_REASON = ["UPDATE_ROUTE_COVERAGE_INCOMPLETE"]
+_OUTSIDE_UPDATE_REASON = ["SCENARIO_OUTSIDE_UPDATE_SLICE"]
+_UPDATE_RECEIPT_REASONS = {
+    "DET-01/identical-canonical-input-replay": ["IDENTICAL_REPLAY_NOT_TESTED"],
+    "ADM-01/exact-admitted-bytes": ["EXACT_ACTIVATED_BYTES_NOT_TESTED"],
+    "ADM-02/install": _OUTSIDE_UPDATE_REASON,
+    _UPDATE_SCENARIO: _UPDATE_REASON,
+    "ADM-02/direct-write": _OUTSIDE_UPDATE_REASON,
+    "ADM-02/rename": _OUTSIDE_UPDATE_REASON,
+    "ADM-02/symlink": _OUTSIDE_UPDATE_REASON,
+    "ADM-02/auto-discovery": _OUTSIDE_UPDATE_REASON,
+    "ADM-02/reload": _OUTSIDE_UPDATE_REASON,
+    "ADM-02/restart": _OUTSIDE_UPDATE_REASON,
+    "ADM-03/policy-failure": _OUTSIDE_UPDATE_REASON,
+    "ADM-03/policy-tampering": _OUTSIDE_UPDATE_REASON,
+}
+_UPDATE_IMPLEMENTATION = {
+    "contained_policy_probe_digest": (
+        "sha256:da45089c199c5f749c94c88d19858fcb1b2c41236d965961782496b57fafe985"
+    ),
+    "route_inventory_digest": (
+        "sha256:a5d2e53d14d0b56a2e4f335eeaf034f31f7c787bd8bfa09e4fe442d9f6363a6a"
+    ),
+    "update_probe_digest": (
+        "sha256:12897fd5b4bea78161acf6f189ff71f768d5823c916b284c42bf7790c4528515"
+    ),
+}
+_UPDATE_ADAPTER_IMPLEMENTATION_DIGEST = (
+    "sha256:40c42f2908761ac5eda46d3d082546656926a8fe5cccfdc7ee92d62ce7b6267b"
+)
+_UPDATE_CONFIG_DIGEST = (
+    "sha256:be5741ac8aa25f91c66d743ecee5c9722cb9934fdf8a3b2ba4a90120b239c79a"
+)
+_UPDATE_OS_PROFILE_DIGEST = (
+    "sha256:53e934f187ae1da7bd8be41ba2e5d8d063e1e1e2784a234144cbedfe2213f256"
+)
+_OPENCLAW_COMMIT = "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4"
+_OPENCLAW_RUNTIME_TREE = (
+    "sha256:475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c"
+)
+_OPENCLAW_PLATFORM_MANIFEST = (
+    "sha256:1df790a7d590f617d0d3c2cd84cbe18b5400ff972dd9701670f7e5a4f1634e52"
+)
+_RFC3339_EXTRA_PRECISION = re.compile(
+    r"(\.[0-9]{6})[0-9]+(?=Z$|[+-][0-9]{2}:[0-9]{2}$)"
+)
 
 
 class AdmissionEvidenceError(AdmissionConformanceError):
-    """The retained OpenClaw restart evidence is invalid."""
+    """Retained partial OpenClaw admission evidence is invalid."""
 
 
 def verify_openclaw_restart_evidence(
@@ -108,6 +166,67 @@ def verify_openclaw_restart_evidence(
     ) as exc:
         raise AdmissionEvidenceError(
             f"invalid partial admission semantic closure: {exc}"
+        ) from exc
+
+
+def verify_openclaw_update_slice_evidence(
+    document: Mapping[str, Any], *, evidence_cas: CAS
+) -> None:
+    """Verify one denied update route without promoting formal ADM-02/update."""
+
+    try:
+        if (
+            validate_admission_conformance(document) != "NOT_TESTED"
+            or document["decision"]
+            != {"status": "NOT_TESTED", "installer_work_eligible": False}
+        ):
+            raise AdmissionEvidenceError(
+                "update slice cannot grant installer authority"
+            )
+        formal = {
+            f"{item['id']}/{scenario['id']}": scenario
+            for item in document["properties"]
+            for scenario in item["scenarios"]
+        }
+        if (
+            set(formal) != set(_UPDATE_RECEIPT_REASONS)
+            or any(item["status"] != "NOT_TESTED" for item in formal.values())
+            or {
+                key: item["reason_codes"] for key, item in formal.items()
+            }
+            != _UPDATE_RECEIPT_REASONS
+        ):
+            raise AdmissionEvidenceError("update-slice formal claim set changed")
+        for key, scenario in formal.items():
+            expected = _UPDATE_EVIDENCE_PAIR if key == _UPDATE_SCENARIO else []
+            if scenario["evidence_digests"] != expected:
+                raise AdmissionEvidenceError(
+                    f"{key} does not bind the exact update-slice evidence"
+                )
+        probe = _read_exact(
+            evidence_cas,
+            _UPDATE_PROBE_DIGEST,
+            _UPDATE_PROBE_SCHEMA,
+        )
+        environment = _read_exact(
+            evidence_cas,
+            _UPDATE_ENV_DIGEST,
+            _UPDATE_ENV_SCHEMA,
+        )
+        _verify_update_bindings(document, probe, environment)
+        _verify_update_probe(probe)
+        _verify_update_environment(probe, environment)
+    except AdmissionEvidenceError:
+        raise
+    except (
+        AdmissionConformanceError,
+        CASError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AdmissionEvidenceError(
+            f"invalid retained update-slice evidence: {exc}"
         ) from exc
 
 
@@ -605,6 +724,413 @@ def _verify_environment(
         raise AdmissionEvidenceError("contained isolation proof changed")
 
 
+def _verify_update_bindings(
+    receipt: Mapping[str, Any],
+    probe: Mapping[str, Any],
+    environment: Mapping[str, Any],
+) -> None:
+    if (
+        receipt["recorded_at"] != probe["recorded_at"]
+        or environment["recorded_at"] != probe["recorded_at"]
+    ):
+        raise AdmissionEvidenceError("update evidence timestamps differ")
+    if receipt["bindings"] != {
+        "runtime": {
+            "name": "openclaw-contained",
+            "version": "2026.7.1",
+            "repository_url": "https://github.com/openclaw/openclaw",
+            "commit": _OPENCLAW_COMMIT,
+            "source_tree_digest": _OPENCLAW_RUNTIME_TREE,
+        },
+        "adapter": {
+            "name": "openclaw-contained-update-slice",
+            "implementation_digest": _UPDATE_ADAPTER_IMPLEMENTATION_DIGEST,
+            "configuration_digest": _UPDATE_CONFIG_DIGEST,
+        },
+        "environment": {
+            "worker_digest": _OPENCLAW_PLATFORM_MANIFEST,
+            "os_profile_digest": _UPDATE_OS_PROFILE_DIGEST,
+        },
+        "aragorn": _ARAGORN_BINDING,
+    }:
+        raise AdmissionEvidenceError("update receipt bindings changed")
+    adapter = probe["adapter"]
+    if (
+        adapter["configuration_digest"]
+        != canonical_digest(adapter["configuration"])
+        or adapter["configuration_digest"] != _UPDATE_CONFIG_DIGEST
+        or adapter["implementation"] != _UPDATE_IMPLEMENTATION
+        or adapter["implementation_digest"]
+        != canonical_digest(adapter["implementation"])
+        or adapter["implementation_digest"]
+        != _UPDATE_ADAPTER_IMPLEMENTATION_DIGEST
+    ):
+        raise AdmissionEvidenceError("update adapter binding changed")
+
+
+def _expected_update_policy_request() -> dict[str, Any]:
+    source = "/profile/workspace/update-source"
+    return {
+        "openclawVersion": "2026.7.1",
+        "origin": {"spec": source, "type": "path"},
+        "protocolVersion": 1,
+        "request": {
+            "kind": "skill-install",
+            "mode": "update",
+            "requestedSpecifier": source,
+        },
+        "skill": {"installId": "path"},
+        "source": {
+            "authority": "user",
+            "kind": "local-path",
+            "mutable": True,
+            "network": False,
+        },
+        "sourcePath": source,
+        "sourcePathKind": "directory",
+        "targetName": "aragorn-admitted",
+        "targetType": "skill",
+    }
+
+
+def _verify_update_probe(probe: Mapping[str, Any]) -> None:
+    if (
+        probe["decision"]
+        != {"installer_work_eligible": False, "status": "NOT_TESTED"}
+        or probe["limitations"]
+        != [
+            "ONLY_LOCAL_DIRECTORY_GLOBAL_FORCE_REPLACEMENT_EXECUTED",
+            "OTHER_UPDATE_PATHS_AND_LIVE_RELOAD_REMAIN_NOT_TESTED",
+            "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
+        ]
+    ):
+        raise AdmissionEvidenceError("update claim boundary changed")
+    runtime = probe["runtime"]
+    if (
+        runtime["commit"] != _OPENCLAW_COMMIT
+        or runtime["name"] != "openclaw-contained"
+        or runtime["version"] != "2026.7.1"
+        or runtime["runtime_tree"]
+        != {
+            "algorithm": "aragorn/runtime-tree/v1",
+            "entry_count": 45856,
+            "file_count": 45837,
+            "symlink_count": 19,
+            "total_bytes": 369317461,
+            "tree_digest": _OPENCLAW_RUNTIME_TREE,
+        }
+        or runtime["source_tree"]
+        != {
+            "file_count": 8550,
+            "total_bytes": 87679175,
+            "tree_digest": (
+                "sha256:"
+                "f70f3b603e6ddb616e2d986a73d658b7b8b01795fa98db89355d06ba6776cea3"
+            ),
+        }
+    ):
+        raise AdmissionEvidenceError("update runtime binding changed")
+    version = runtime["version_command"]
+    if (
+        version["argv"]
+        != [
+            "/usr/local/bin/node",
+            "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+            "--version",
+        ]
+        or version["exit_code"] != 0
+        or version["signal"] is not None
+        or version["error"] is not None
+        or version["stderr"] != ""
+        or version["stdout"] != "OpenClaw 2026.7.1 (2d2ddc4)\n"
+        or not isinstance(version["pid"], int)
+        or version["pid"] <= 1
+    ):
+        raise AdmissionEvidenceError("update runtime execution changed")
+
+    scenario = probe["scenario"]
+    command = scenario["command"]
+    expected_request = _expected_update_policy_request()
+    expected_argv = [
+        "/usr/local/bin/node",
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+        "skills",
+        "install",
+        "/profile/workspace/update-source",
+        "--as",
+        "aragorn-admitted",
+        "--force",
+        "--global",
+    ]
+    if (
+        scenario["id"] != _UPDATE_ROUTE
+        or scenario["status"] != "PASS"
+        or command["argv"] != expected_argv
+        or command["exit_code"] != 1
+        or command["signal"] is not None
+        or command["error"] is not None
+        or command["stdout"]
+        != (
+            "Install policy target=skill:aragorn-admitted "
+            "request=skill-install/update origin=path pathKind=directory "
+            "source=local-path/user: blocked by install policy: "
+            "Aragorn contained profile block\n"
+        )
+        or command["stderr"]
+        != "blocked by install policy: Aragorn contained profile block\n"
+        or not isinstance(command["pid"], int)
+        or command["pid"] <= 1
+        or command["pid"] == version["pid"]
+    ):
+        raise AdmissionEvidenceError("forced update denial changed")
+    evidence = scenario["evidence"]
+    managed = [
+        {
+            "gid": 1000,
+            "mode": "700",
+            "nlink": 3,
+            "path": ".",
+            "size": 60,
+            "type": "directory",
+            "uid": 1000,
+        },
+        {
+            "gid": 1000,
+            "mode": "700",
+            "nlink": 2,
+            "path": "aragorn-admitted",
+            "size": 60,
+            "type": "directory",
+            "uid": 1000,
+        },
+        {
+            "digest": (
+                "sha256:"
+                "5a951f65ad92bc209f9a00139fb88e38015fab9b5ac3035407a027a7d502853d"
+            ),
+            "gid": 1000,
+            "mode": "600",
+            "nlink": 1,
+            "path": "aragorn-admitted/SKILL.md",
+            "size": 104,
+            "type": "file",
+            "uid": 1000,
+        },
+    ]
+    source = [
+        {
+            "gid": 1000,
+            "mode": "700",
+            "nlink": 2,
+            "path": ".",
+            "size": 60,
+            "type": "directory",
+            "uid": 1000,
+        },
+        {
+            "digest": (
+                "sha256:"
+                "352a0bc83299c00b4729de03c3dd6fc8a15d70096fe72a40184ce5352c55fba7"
+            ),
+            "gid": 1000,
+            "mode": "600",
+            "nlink": 1,
+            "path": "SKILL.md",
+            "size": 128,
+            "type": "file",
+            "uid": 1000,
+        },
+    ]
+    if (
+        evidence["expected_policy_request"] != expected_request
+        or evidence["policy_request"] != expected_request
+        or evidence["managed_before"] != managed
+        or evidence["managed_after"] != managed
+        or evidence["source_before"] != source
+        or evidence["source_after"] != source
+        or evidence["write_preflight"]
+        != {
+            "digest": (
+                "sha256:"
+                "e9edf18672cae394a185c2bdf7ea294f89eec18ede9b36e1a71bbd13336a22dc"
+            ),
+            "path": "/profile/state/skills/aragorn-admitted/.write-proof",
+            "removed": True,
+        }
+    ):
+        raise AdmissionEvidenceError(
+            "update request or writable managed-root identity changed"
+        )
+    if not (
+        _time(version["started_at"])
+        <= _time(version["completed_at"])
+        <= _time(command["started_at"])
+        <= _time(command["completed_at"])
+        <= _time(probe["recorded_at"])
+    ):
+        raise AdmissionEvidenceError("update execution timing is not causal")
+
+
+def _verify_update_environment(
+    probe: Mapping[str, Any],
+    environment: Mapping[str, Any],
+) -> None:
+    container = environment["container"]
+    execution = container["probe_exec"]
+    state = container["state"]
+    image = container["image"]
+    if (
+        environment["recorded_at"] != probe["recorded_at"]
+        or execution
+        != {
+            "command": ["/usr/local/bin/node", "/probe/update-probe.mjs"],
+            "exit_code": 0,
+            "mode": "container-command",
+            "recorded_at": probe["recorded_at"],
+            "stdout": {
+                "bytes": 5433,
+                "digest": _UPDATE_PROBE_DIGEST,
+            },
+            "user": "1000:1000",
+        }
+        or container["command"] != execution["command"]
+        or container["name"] != "aragorn-openclaw-contained-update-v1"
+        or container["working_dir"] != "/profile/workspace"
+        or state["status"] != "exited"
+        or state["exit_code"] != 0
+        or state["running"]
+        or state["paused"]
+        or state["restarting"]
+        or state["oom_killed"]
+        or state["dead"]
+        or state["error"] != ""
+    ):
+        raise AdmissionEvidenceError("update probe execution environment changed")
+    expected_image = {
+        "id": (
+            "sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+        "index_digest": (
+            "sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+        "platform": {"architecture": "arm64", "os": "linux", "variant": "v8"},
+        "platform_manifest_digest": _OPENCLAW_PLATFORM_MANIFEST,
+        "reference": (
+            "node@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+    }
+    if image != expected_image:
+        raise AdmissionEvidenceError("update container image changed")
+    isolation = environment["isolation"]
+    expected_mounts = [
+        {
+            "destination": "/probe",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-update-probe-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/config",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-profile-config-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/runtime",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-runtime",
+            "type": "volume",
+        },
+        {
+            "destination": "/seed",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-admitted-v1",
+            "type": "volume",
+        },
+    ]
+    expected_tmpfs = {
+        "/profile/home": (
+            "rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/profile/state": (
+            "rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/profile/workspace": (
+            "rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/tmp": "rw,noexec,nosuid,nodev,size=256m,mode=1777",
+    }
+    controls = {
+        "cap_drop": ["ALL"],
+        "cgroupns_mode": "private",
+        "devices": [],
+        "ipc_mode": "private",
+        "memory_bytes": 805306368,
+        "memory_swap_bytes": 805306368,
+        "mounts": expected_mounts,
+        "nano_cpus": 1000000000,
+        "network_mode": "none",
+        "no_new_privileges": True,
+        "pids_limit": 128,
+        "privileged": False,
+        "read_only_rootfs": True,
+        "runtime": "runc",
+        "tmpfs": expected_tmpfs,
+        "ulimits": [{"hard": 256, "name": "nofile", "soft": 256}],
+        "user": "1000:1000",
+        "working_dir": "/profile/workspace",
+    }
+    if (
+        {key: isolation[key] for key in controls} != controls
+        or isolation["environment"]
+        != {
+            "HOME": "/profile/home",
+            "NODE_VERSION": "24.16.0",
+            "OPENCLAW_CONFIG_PATH": "/profile/config/openclaw.json",
+            "OPENCLAW_STATE_DIR": "/profile/state",
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "YARN_VERSION": "1.22.22",
+        }
+    ):
+        raise AdmissionEvidenceError("update isolation controls changed")
+    docker = environment["docker"]
+    os_profile = {
+        "image": image,
+        "isolation": isolation,
+        "server": docker["server"],
+    }
+    if (
+        environment["os_profile_digest"] != canonical_digest(os_profile)
+        or environment["os_profile_digest"] != _UPDATE_OS_PROFILE_DIGEST
+        or docker["assurance"] != "SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED"
+        or docker["context"]
+        != {
+            "endpoint": "unix:///Users/yousi/.colima/aragorn-bakeoff/docker.sock",
+            "name": "colima-aragorn-bakeoff",
+            "skip_tls_verify": False,
+            "tls_material_count": 0,
+        }
+        or docker["server"]["security_options"]
+        != ["name=apparmor", "name=cgroupns", "name=seccomp,profile=builtin"]
+        or environment["limitations"]
+        != [
+            "CONTAINER_EXIT_DOES_NOT_ESTABLISH_CROSS_HOST_REPRODUCIBILITY",
+            "DOCKER_CONTROL_PLANE_SELF_REPORTED",
+            "ENGINE_CONTAINER_AND_HOST_NOT_INDEPENDENTLY_ATTESTED",
+            "PLATFORM_MANIFEST_DIGEST_RETAINED_NOT_INDEPENDENTLY_REDERIVED",
+        ]
+    ):
+        raise AdmissionEvidenceError("update environment binding changed")
+    if not (
+        _time(container["created_at"])
+        <= _time(state["started_at"])
+        <= _time(probe["runtime"]["version_command"]["started_at"])
+        <= _time(probe["recorded_at"])
+        <= _time(state["finished_at"])
+    ):
+        raise AdmissionEvidenceError("update container timing is not causal")
+
+
 def _line_digest(document: object) -> str:
     return "sha256:" + hashlib.sha256(_canonical_bytes(document) + b"\n").hexdigest()
 
@@ -622,7 +1148,8 @@ def _canonical_bytes(document: object) -> bytes:
 def _time(value: object) -> datetime:
     if not isinstance(value, str):
         raise AdmissionEvidenceError("timestamp is not a string")
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    normalized = _RFC3339_EXTRA_PRECISION.sub(r"\1", value)
+    parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         raise AdmissionEvidenceError("timestamp lacks timezone")
     return parsed

@@ -89,6 +89,13 @@ def _result(status: str = "PASS") -> dict[str, object]:
 
 
 class AdmissionConformanceTests(unittest.TestCase):
+    def test_docker_nanosecond_timestamp_is_portable(self) -> None:
+        parsed = admission_evidence._time("2026-07-28T02:57:06.663894352Z")
+        self.assertEqual(
+            parsed.isoformat(),
+            "2026-07-28T02:57:06.663894+00:00",
+        )
+
     def setUp(self) -> None:
         self.temporary = TemporaryDirectory(prefix="aragorn-admission-gate-test-")
         self.addCleanup(self.temporary.cleanup)
@@ -1041,6 +1048,68 @@ class AdmissionConformanceTests(unittest.TestCase):
             admission_evidence.AdmissionEvidenceError
         ):
             admission_evidence._verify_environment(probe, duplicate_mount)
+
+    def test_retained_openclaw_update_slice_is_bound_and_non_authoritative(
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / "phase1-openclaw-contained-update-probe-2026-07-27.json"
+            ).read_bytes()
+        )
+        evidence_paths = (
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-update-probe-2026-07-27.json",
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-update-environment-2026-07-27.json",
+        )
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_update_slice_evidence(
+                receipt,
+                evidence_cas=self.cas,
+            )
+        )
+
+        promoted = deepcopy(receipt)
+        update = promoted["properties"][2]["scenarios"][1]
+        update.update(status="PASS", reason_codes=[])
+        with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+            admission_evidence.verify_openclaw_update_slice_evidence(
+                promoted,
+                evidence_cas=self.cas,
+            )
+
+        probe = json.loads(evidence_paths[0].read_bytes())
+        environment = json.loads(evidence_paths[1].read_bytes())
+        request = deepcopy(probe)
+        request["scenario"]["evidence"]["policy_request"]["request"]["mode"] = (
+            "install"
+        )
+        managed = deepcopy(probe)
+        managed["scenario"]["evidence"]["managed_after"][2]["digest"] = (
+            "sha256:" + "0" * 64
+        )
+        for label, mutation in (
+            ("policy request", request),
+            ("managed root", managed),
+        ):
+            with self.subTest(label), self.assertRaises(
+                admission_evidence.AdmissionEvidenceError
+            ):
+                admission_evidence._verify_update_probe(mutation)
+
+        isolation = deepcopy(environment)
+        isolation["isolation"]["network_mode"] = "bridge"
+        with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+            admission_evidence._verify_update_environment(probe, isolation)
 
 
 if __name__ == "__main__":

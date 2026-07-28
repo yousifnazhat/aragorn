@@ -40,7 +40,10 @@ from aragorn.acquire import ingest_local
 from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
 )
-from aragorn.admission_evidence import verify_openclaw_restart_evidence
+from aragorn.admission_evidence import (
+    verify_openclaw_restart_evidence,
+    verify_openclaw_update_slice_evidence,
+)
 from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.artifact_closure import resolve_source_graph
@@ -935,6 +938,18 @@ def main() -> int:
             / "phase1-openclaw-contained-restart-probe-2026-07-27.json",
             "NOT_TESTED",
         ),
+        (
+            "openclaw-update-slice",
+            (
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-update-probe-2026-07-27.json",
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-update-environment-2026-07-27.json",
+            ),
+            admission_receipts
+            / "phase1-openclaw-contained-update-probe-2026-07-27.json",
+            "NOT_TESTED",
+        ),
     )
     for label, evidence_paths, result_path, expected_status in retained_admission_results:
         result = load(result_path)
@@ -954,6 +969,11 @@ def main() -> int:
                 raise AssertionError(f"{label} has an unexpected admission status")
             if label == "openclaw-restart":
                 verify_openclaw_restart_evidence(
+                    result,
+                    evidence_cas=evidence_cas,
+                )
+            if label == "openclaw-update-slice":
+                verify_openclaw_update_slice_evidence(
                     result,
                     evidence_cas=evidence_cas,
                 )

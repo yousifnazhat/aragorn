@@ -41,6 +41,7 @@ from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
 )
 from aragorn.admission_evidence import (
+    verify_openclaw_config_activation_slice_evidence,
     verify_openclaw_live_reload_slice_evidence,
     verify_openclaw_restart_evidence,
     verify_openclaw_update_slice_evidence,
@@ -963,6 +964,26 @@ def main() -> int:
             / "phase1-openclaw-contained-live-reload-probe-2026-07-27.json",
             "NOT_TESTED",
         ),
+        (
+            "openclaw-config-activation-slice",
+            (
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-config-activation-"
+                    "probe-2026-07-27.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-config-activation-"
+                    "environment-2026-07-27.json"
+                ),
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+            ),
+            admission_receipts
+            / ("phase1-openclaw-contained-config-activation-probe-2026-07-27.json"),
+            "NOT_TESTED",
+        ),
     )
     for label, evidence_paths, result_path, expected_status in retained_admission_results:
         result = load(result_path)
@@ -992,6 +1013,11 @@ def main() -> int:
                 )
             if label == "openclaw-live-reload-slice":
                 verify_openclaw_live_reload_slice_evidence(
+                    result,
+                    evidence_cas=evidence_cas,
+                )
+            if label == "openclaw-config-activation-slice":
+                verify_openclaw_config_activation_slice_evidence(
                     result,
                     evidence_cas=evidence_cas,
                 )

@@ -1174,5 +1174,128 @@ class AdmissionConformanceTests(unittest.TestCase):
             admission_evidence._verify_live_reload_environment(probe, isolation)
 
 
+    def test_retained_openclaw_config_activation_is_read_only_and_non_authoritative(
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / ("phase1-openclaw-contained-config-activation-probe-2026-07-27.json")
+            ).read_bytes()
+        )
+        evidence_paths = (
+            evidence_dir
+            / ("openclaw-v2026.7.1-contained-config-activation-probe-2026-07-27.json"),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-config-activation-"
+                "environment-2026-07-27.json"
+            ),
+            evidence_dir / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+        )
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_config_activation_slice_evidence(
+                receipt,
+                evidence_cas=self.cas,
+            )
+        )
+
+        for scenario_index in (1, 6):
+            promoted = deepcopy(receipt)
+            scenario = promoted["properties"][2]["scenarios"][scenario_index]
+            scenario.update(status="PASS", reason_codes=[])
+            with (
+                self.subTest(scenario=scenario["id"]),
+                self.assertRaises(admission_evidence.AdmissionEvidenceError),
+            ):
+                admission_evidence.verify_openclaw_config_activation_slice_evidence(
+                    promoted,
+                    evidence_cas=self.cas,
+                )
+
+        probe = json.loads(evidence_paths[0].read_bytes())
+        environment = json.loads(evidence_paths[1].read_bytes())
+        write_guard = deepcopy(probe)
+        write_guard["scenarios"][0]["evidence"]["write_guard"]["blocked"] = False
+        target = deepcopy(probe)
+        target["scenarios"][0]["evidence"]["target_after"][1]["digest"] = (
+            "sha256:" + "0" * 64
+        )
+        session = deepcopy(probe)
+        session["scenarios"][1]["evidence"]["disabled"]["snapshot"]["session_id"] = (
+            "unbound-session"
+        )
+        version = deepcopy(probe)
+        reload_evidence = version["scenarios"][1]["evidence"]
+        reload_evidence["disabled"]["snapshot"]["version"] = reload_evidence[
+            "initial_snapshot"
+        ]["version"]
+        marker = deepcopy(probe)
+        marker["scenarios"][1]["evidence"]["enabled"]["snapshot"]["marker_present"] = (
+            False
+        )
+        for label, mutation in (
+            ("write guard", write_guard),
+            ("target digest", target),
+            ("session", session),
+            ("version", version),
+            ("marker", marker),
+        ):
+            with (
+                self.subTest(label),
+                self.assertRaises(admission_evidence.AdmissionEvidenceError),
+            ):
+                admission_evidence._verify_config_activation_probe(mutation)
+
+        writable = deepcopy(environment)
+        next(
+            item
+            for item in writable["isolation"]["mounts"]
+            if item["destination"] == "/profile/state/skills"
+        )["read_only"] = False
+        networked = deepcopy(environment)
+        networked["isolation"]["network_mode"] = "bridge"
+        runtime_identity = deepcopy(probe)
+        runtime_identity["gateway"]["info"]["diskPath"] = "/unbound-state"
+        runtime_environment = deepcopy(environment)
+        runtime_raw = (
+            json.dumps(
+                runtime_identity,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+            + b"\n"
+        )
+        runtime_environment["container"]["probe_exec"]["stdout"] = {
+            "bytes": len(runtime_raw),
+            "digest": _sha256(runtime_raw),
+        }
+        for label, mutation in (
+            ("writable admitted mount", writable),
+            ("network", networked),
+        ):
+            with (
+                self.subTest(label),
+                self.assertRaises(admission_evidence.AdmissionEvidenceError),
+            ):
+                admission_evidence._verify_config_activation_environment(
+                    probe,
+                    mutation,
+                )
+        with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+            admission_evidence._verify_config_activation_environment(
+                runtime_identity,
+                runtime_environment,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

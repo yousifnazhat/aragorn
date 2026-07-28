@@ -135,6 +135,47 @@ _LIVE_CONFIG_DIGEST = (
 _LIVE_OS_PROFILE_DIGEST = (
     "sha256:b149a14989574cd8735d9a5033ab9da215a5f2e6ffd37c1e41d9f0f779ed6c60"
 )
+_CONFIG_PROBE_SCHEMA = "aragorn/openclaw-contained-config-activation-probe-evidence/v1"
+_CONFIG_ENV_SCHEMA = (
+    "aragorn/openclaw-contained-config-activation-environment-evidence/v1"
+)
+_CONFIG_PROBE_DIGEST = (
+    "sha256:a02ccd57bf98dd3035405511610604a3796d3d1e038ffdad0ba6a64344cfd29c"
+)
+_CONFIG_ENV_DIGEST = (
+    "sha256:92fe0300aee9d2d23b1ccb7ac4e585bbda5c98c5406bccb8e3e192091a88c357"
+)
+_CONFIG_PRIOR_ADMISSION_DIGEST = (
+    "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af"
+)
+_CONFIG_EVIDENCE_SET = sorted(
+    (
+        _CONFIG_ENV_DIGEST,
+        _CONFIG_PRIOR_ADMISSION_DIGEST,
+        _CONFIG_PROBE_DIGEST,
+    )
+)
+_OUTSIDE_CONFIG_REASON = ["SCENARIO_OUTSIDE_CONFIG_ACTIVATION_SLICE"]
+_CONFIG_RECEIPT_REASONS = {
+    "DET-01/identical-canonical-input-replay": ["IDENTICAL_REPLAY_NOT_TESTED"],
+    "ADM-01/exact-admitted-bytes": ["EXACT_ACTIVATED_BYTES_NOT_TESTED"],
+    "ADM-02/install": _OUTSIDE_CONFIG_REASON,
+    "ADM-02/update": ["UPDATE_ROUTE_COVERAGE_INCOMPLETE"],
+    "ADM-02/direct-write": _OUTSIDE_CONFIG_REASON,
+    "ADM-02/rename": _OUTSIDE_CONFIG_REASON,
+    "ADM-02/symlink": _OUTSIDE_CONFIG_REASON,
+    "ADM-02/auto-discovery": _OUTSIDE_CONFIG_REASON,
+    "ADM-02/reload": ["RELOAD_ROUTE_COVERAGE_INCOMPLETE"],
+    "ADM-02/restart": _OUTSIDE_CONFIG_REASON,
+    "ADM-03/policy-failure": _OUTSIDE_CONFIG_REASON,
+    "ADM-03/policy-tampering": _OUTSIDE_CONFIG_REASON,
+}
+_CONFIG_IMPLEMENTATION_DIGEST = (
+    "sha256:9690cda8f542fa5652e1d45b8bc7bc0e0248d2485a60b4918d27ab9265f635a1"
+)
+_CONFIG_OS_PROFILE_DIGEST = (
+    "sha256:f896b6f732dd4c4bc479821e6fca0d728135e9ae8c483fbcc4f6c600f248cfca"
+)
 _OPENCLAW_COMMIT = "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4"
 _OPENCLAW_RUNTIME_TREE = (
     "sha256:475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c"
@@ -324,6 +365,69 @@ def verify_openclaw_live_reload_slice_evidence(
     ) as exc:
         raise AdmissionEvidenceError(
             f"invalid retained live-reload evidence: {exc}"
+        ) from exc
+
+
+def verify_openclaw_config_activation_slice_evidence(
+    document: Mapping[str, Any], *, evidence_cas: CAS
+) -> None:
+    """Verify one config activation and its same-session invalidation."""
+
+    try:
+        if validate_admission_conformance(document) != "NOT_TESTED" or document[
+            "decision"
+        ] != {"status": "NOT_TESTED", "installer_work_eligible": False}:
+            raise AdmissionEvidenceError(
+                "config-activation slice cannot grant installer authority"
+            )
+        formal = {
+            f"{item['id']}/{scenario['id']}": scenario
+            for item in document["properties"]
+            for scenario in item["scenarios"]
+        }
+        if (
+            set(formal) != set(_CONFIG_RECEIPT_REASONS)
+            or any(item["status"] != "NOT_TESTED" for item in formal.values())
+            or {key: item["reason_codes"] for key, item in formal.items()}
+            != _CONFIG_RECEIPT_REASONS
+        ):
+            raise AdmissionEvidenceError("config-activation formal claim set changed")
+        targeted = {"ADM-02/update", "ADM-02/reload"}
+        for key, scenario in formal.items():
+            expected = _CONFIG_EVIDENCE_SET if key in targeted else []
+            if scenario["evidence_digests"] != expected:
+                raise AdmissionEvidenceError(
+                    f"{key} does not bind the exact config-activation evidence"
+                )
+        probe = _read_exact(
+            evidence_cas,
+            _CONFIG_PROBE_DIGEST,
+            _CONFIG_PROBE_SCHEMA,
+        )
+        environment = _read_exact(
+            evidence_cas,
+            _CONFIG_ENV_DIGEST,
+            _CONFIG_ENV_SCHEMA,
+        )
+        prior = _read_exact(
+            evidence_cas,
+            _CONFIG_PRIOR_ADMISSION_DIGEST,
+            "aragorn/openclaw-contained-profile-probe-evidence/v1",
+        )
+        _verify_config_activation_bindings(document, probe, environment, prior)
+        _verify_config_activation_probe(probe)
+        _verify_config_activation_environment(probe, environment)
+    except AdmissionEvidenceError:
+        raise
+    except (
+        AdmissionConformanceError,
+        CASError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AdmissionEvidenceError(
+            f"invalid retained config-activation evidence: {exc}"
         ) from exc
 
 
@@ -1292,21 +1396,8 @@ def _live_request(source: str) -> dict[str, Any]:
     }
 
 
-def _verify_live_reload_probe(probe: Mapping[str, Any]) -> None:
-    if (
-        probe["decision"]
-        != {"installer_work_eligible": False, "status": "NOT_TESTED"}
-        or probe["limitations"]
-        != [
-            "ONLY_LOCAL_DIRECTORY_GLOBAL_FORCE_REPLACEMENT_EXECUTED",
-            "ONLY_FILESYSTEM_WATCH_EXISTING_CHAT_SESSION_SNAPSHOT_EXECUTED",
-            "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
-            "OTHER_UPDATE_RELOAD_PATHS_REMAIN_NOT_TESTED",
-            "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
-        ]
-    ):
-        raise AdmissionEvidenceError("live-reload claim boundary changed")
-    expected_config = {
+def _expected_live_configuration() -> dict[str, Any]:
+    return {
         "agents": {
             "defaults": {
                 "skills": ["aragorn-admitted"],
@@ -1345,6 +1436,23 @@ def _verify_live_reload_probe(probe: Mapping[str, Any]) -> None:
             }
         },
     }
+
+
+def _verify_live_reload_probe(probe: Mapping[str, Any]) -> None:
+    if (
+        probe["decision"]
+        != {"installer_work_eligible": False, "status": "NOT_TESTED"}
+        or probe["limitations"]
+        != [
+            "ONLY_LOCAL_DIRECTORY_GLOBAL_FORCE_REPLACEMENT_EXECUTED",
+            "ONLY_FILESYSTEM_WATCH_EXISTING_CHAT_SESSION_SNAPSHOT_EXECUTED",
+            "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
+            "OTHER_UPDATE_RELOAD_PATHS_REMAIN_NOT_TESTED",
+            "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
+        ]
+    ):
+        raise AdmissionEvidenceError("live-reload claim boundary changed")
+    expected_config = _expected_live_configuration()
     fixtures = {
         "allowed": {
             "digest": (
@@ -1794,6 +1902,743 @@ def _verify_live_reload_environment(
         <= _time(state["finished_at"])
     ):
         raise AdmissionEvidenceError("live-reload container timing is not causal")
+
+
+def _verify_config_activation_bindings(
+    receipt: Mapping[str, Any],
+    probe: Mapping[str, Any],
+    environment: Mapping[str, Any],
+    prior: Mapping[str, Any],
+) -> None:
+    if (
+        receipt["recorded_at"] != probe["recorded_at"]
+        or environment["recorded_at"] != probe["recorded_at"]
+    ):
+        raise AdmissionEvidenceError("config-activation evidence timestamps differ")
+    if receipt["bindings"] != {
+        "runtime": {
+            "name": "openclaw-contained",
+            "version": "2026.7.1",
+            "repository_url": "https://github.com/openclaw/openclaw",
+            "commit": _OPENCLAW_COMMIT,
+            "source_tree_digest": _OPENCLAW_RUNTIME_TREE,
+        },
+        "adapter": {
+            "name": "openclaw-contained-config-activation-slice",
+            "implementation_digest": _CONFIG_IMPLEMENTATION_DIGEST,
+            "configuration_digest": _LIVE_CONFIG_DIGEST,
+        },
+        "environment": {
+            "worker_digest": _OPENCLAW_PLATFORM_MANIFEST,
+            "os_profile_digest": _CONFIG_OS_PROFILE_DIGEST,
+        },
+        "aragorn": _ARAGORN_BINDING,
+    }:
+        raise AdmissionEvidenceError("config-activation receipt bindings changed")
+
+    adapter = probe["adapter"]
+    fixture = adapter["fixture"]
+    if (
+        adapter["configuration"] != _expected_live_configuration()
+        or adapter["configuration_digest"] != canonical_digest(adapter["configuration"])
+        or adapter["configuration_digest"] != _LIVE_CONFIG_DIGEST
+        or adapter["implementation_digest"] != _CONFIG_IMPLEMENTATION_DIGEST
+        or adapter["writable_configuration_path"] != "/profile/state/openclaw.json"
+        or fixture
+        != {
+            "admission_evidence_digest": _CONFIG_PRIOR_ADMISSION_DIGEST,
+            "digest": _ADMITTED_DIGEST,
+            "mount": "/profile/state/skills",
+            "path": "/profile/state/skills/aragorn-admitted",
+            "source_volume": ("aragorn-openclaw-2026-7-1-contained-admitted-v1"),
+        }
+    ):
+        raise AdmissionEvidenceError("config-activation adapter binding changed")
+
+    prior_runtime = prior["runtime"]
+    prior_scenarios = {item["id"]: item for item in prior["scenarios"]}
+    exact = prior_scenarios.get("ADM-01/exact-admitted-bytes")
+    managed = [
+        item for item in prior["profile"]["protected_roots"] if item["id"] == "managed"
+    ]
+    if (
+        prior_runtime["name"] != "openclaw-contained"
+        or prior_runtime["version"] != "2026.7.1"
+        or prior_runtime["commit"] != _OPENCLAW_COMMIT
+        or prior_runtime["runtime_tree"]["tree_digest"] != _OPENCLAW_RUNTIME_TREE
+        or prior["profile"]["admitted"]
+        != {
+            "digest": _ADMITTED_DIGEST,
+            "path": "/profile/state/skills/aragorn-admitted/SKILL.md",
+        }
+        or managed
+        != [
+            {
+                "discovery": "/profile/state/skills",
+                "discovery_realpath": "/profile/state/skills",
+                "id": "managed",
+                "mount": "/profile/state/skills",
+                "mount_realpath": "/profile/state/skills",
+            }
+        ]
+        or exact is None
+        or exact["status"] != "PASS"
+        or exact["evidence"]["admitted_digest"] != _ADMITTED_DIGEST
+        or exact["evidence"]["initial"]["filePath"]
+        != "/profile/state/skills/aragorn-admitted/SKILL.md"
+        or exact["evidence"]["final"] != exact["evidence"]["initial"]
+    ):
+        raise AdmissionEvidenceError("prior exact-admission lineage changed")
+
+
+def _verify_successful_config_command(
+    command: Mapping[str, Any],
+    expected_argv: list[str],
+) -> None:
+    empty_digest = (
+        "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    )
+    if (
+        command["argv"] != expected_argv
+        or command["exit_code"] != 0
+        or command["signal"] is not None
+        or command["error"] is not None
+        or not isinstance(command["pid"], int)
+        or command["pid"] <= 1
+        or command["stderr_bytes"] != 0
+        or command["stderr_digest"] != empty_digest
+        or not isinstance(command["stdout_bytes"], int)
+        or command["stdout_bytes"] <= 0
+        or not isinstance(command["stdout_digest"], str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", command["stdout_digest"]) is None
+        or _time(command["started_at"]) > _time(command["completed_at"])
+    ):
+        raise AdmissionEvidenceError("config-activation RPC evidence changed")
+
+
+def _verify_config_snapshot(
+    snapshot: Mapping[str, Any],
+    enabled: Any,
+    command: Any,
+) -> None:
+    expected = _expected_live_configuration()
+    if enabled is not None:
+        expected = {
+            **expected,
+            "skills": {
+                **expected["skills"],
+                "entries": {"aragorn-admitted": {"enabled": enabled}},
+            },
+        }
+    document = snapshot["document"]
+    configuration = {key: value for key, value in document.items() if key != "meta"}
+    expected_identity = {
+        None: {
+            "digest": (
+                "sha256:ec9e0767ee946f7454d753e294b05b6f"
+                "6924d8d933eae4585dd0739ac075ba09"
+            ),
+            "size": 576,
+        },
+        False: {
+            "digest": (
+                "sha256:165a57a11fef082cd785ac5caebfe0b24"
+                "c793236ccf8b1f5317f795c0c8acce4"
+            ),
+            "size": 1150,
+        },
+        True: {
+            "digest": (
+                "sha256:9b1a29ebe95146b6b89600e05e439e124"
+                "641a3ac5410876b95b35272bb705612"
+            ),
+            "size": 1149,
+        },
+    }[enabled]
+    if (
+        configuration != expected
+        or snapshot["path"] != "/profile/state/openclaw.json"
+        or snapshot["mode"] != "600"
+        or {
+            "digest": snapshot["digest"],
+            "size": snapshot["size"],
+        }
+        != expected_identity
+    ):
+        raise AdmissionEvidenceError("persisted config identity changed")
+    if enabled is None:
+        if "meta" in document or command is not None:
+            raise AdmissionEvidenceError("initial config metadata changed")
+        return
+    meta = document["meta"]
+    if (
+        set(meta) != {"lastTouchedAt", "lastTouchedVersion"}
+        or meta["lastTouchedVersion"] != "2026.7.1"
+        or command is None
+        or not (
+            _time(command["started_at"])
+            <= _time(meta["lastTouchedAt"])
+            <= _time(command["completed_at"])
+        )
+    ):
+        raise AdmissionEvidenceError("persisted config metadata changed")
+
+
+def _verify_config_turn(
+    turn: Mapping[str, Any],
+    label: str,
+    attempt: int,
+) -> None:
+    run_id = f"aragorn-config-activation-{label}-{attempt}"
+    send_params = {
+        "deliver": False,
+        "idempotencyKey": run_id,
+        "message": f"Inert config-activation probe turn {label} {attempt}.",
+        "sessionKey": "agent:main:aragorn-config-activation-v1",
+        "timeoutMs": 5000,
+    }
+    wait_params = {"runId": run_id, "timeoutMs": 10000}
+    prefix = [
+        "/usr/local/bin/node",
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+        "gateway",
+        "call",
+    ]
+    send = turn["send"]
+    wait = turn["wait"]
+    _verify_successful_config_command(
+        send["command"],
+        prefix
+        + [
+            "chat.send",
+            "--json",
+            "--timeout",
+            "5000",
+            "--params",
+            json.dumps(send_params, separators=(",", ":"), sort_keys=True),
+        ],
+    )
+    _verify_successful_config_command(
+        wait["command"],
+        prefix
+        + [
+            "agent.wait",
+            "--json",
+            "--timeout",
+            "12000",
+            "--params",
+            json.dumps(wait_params, separators=(",", ":"), sort_keys=True),
+        ],
+    )
+    if (
+        send["response"] != {"runId": run_id, "status": "started"}
+        or wait["response"]["runId"] != run_id
+        or wait["response"]["status"] != "ok"
+        or not isinstance(wait["response"]["endedAt"], int)
+        or _time(send["command"]["completed_at"]) > _time(wait["command"]["started_at"])
+    ):
+        raise AdmissionEvidenceError("config-activation turn evidence changed")
+
+
+def _verify_config_snapshot_state(
+    snapshot: Mapping[str, Any],
+    *,
+    enabled: bool,
+) -> None:
+    expected = (
+        {
+            "marker_present": True,
+            "prompt_bytes": 698,
+            "prompt_digest": (
+                "sha256:df7b81a0879f2db0f9c81c0866aa1e22"
+                "9064d700fbb54758816c883c4f6eaca8"
+            ),
+            "prompt_storage": "promptRef",
+            "skill_names": ["aragorn-admitted"],
+        }
+        if enabled
+        else {
+            "marker_present": False,
+            "prompt_bytes": 0,
+            "prompt_digest": (
+                "sha256:e3b0c44298fc1c149afbf4c8996fb924"
+                "27ae41e4649b934ca495991b7852b855"
+            ),
+            "prompt_storage": "inline",
+            "skill_names": [],
+        }
+    )
+    if (
+        {key: snapshot[key] for key in expected} != expected
+        or snapshot["run_status"] != "failed"
+        or not isinstance(snapshot["session_id"], str)
+        or not snapshot["session_id"]
+        or not isinstance(snapshot["version"], int)
+        or snapshot["version"] < 0
+        or not isinstance(snapshot["started_at"], int)
+        or not isinstance(snapshot["ended_at"], int)
+        or snapshot["started_at"] > snapshot["ended_at"]
+        or not isinstance(snapshot["runtime_ms"], int)
+        or snapshot["runtime_ms"] < 0
+    ):
+        raise AdmissionEvidenceError("config-activation session snapshot changed")
+
+
+def _verify_config_activation_probe(probe: Mapping[str, Any]) -> None:
+    if probe["decision"] != {
+        "installer_work_eligible": False,
+        "status": "NOT_TESTED",
+    } or probe["limitations"] != [
+        "ONLY_CONFIG_ENTRY_ENABLE_DISABLE_EXECUTED",
+        "ONLY_CONFIG_INVALIDATION_EXISTING_CHAT_SESSION_EXECUTED",
+        "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
+        "CONFIGURATION_COPY_WRITABLE_TO_UNPRIVILEGED_RUNTIME_UID",
+        "ADMITTED_SKILL_ROOT_READ_ONLY_VOLUME",
+        "OTHER_UPDATE_RELOAD_PATHS_REMAIN_NOT_TESTED",
+        "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
+    ]:
+        raise AdmissionEvidenceError("config-activation claim boundary changed")
+
+    runtime = probe["runtime"]
+    version = runtime["version_command"]
+    _verify_successful_config_command(
+        version,
+        [
+            "/usr/local/bin/node",
+            "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+            "--version",
+        ],
+    )
+    if (
+        runtime["commit"] != _OPENCLAW_COMMIT
+        or runtime["name"] != "openclaw-contained"
+        or runtime["version"] != "2026.7.1"
+        or version["stdout_bytes"] != 28
+        or version["stdout_digest"]
+        != "sha256:9e98975ff3973bcd88f224e1820a177c3c881f7a46b51b7dc5ec5d050f72607f"
+    ):
+        raise AdmissionEvidenceError("config-activation runtime identity changed")
+
+    gateway = probe["gateway"]
+    _verify_successful_config_command(
+        gateway["command"],
+        [
+            "/usr/local/bin/node",
+            "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+            "gateway",
+            "call",
+            "system.info",
+            "--json",
+            "--timeout",
+            "5000",
+        ],
+    )
+    if any(
+        gateway["info"][key] != value
+        for key, value in {
+            "arch": "arm64",
+            "nodeVersion": "v24.16.0",
+            "pid": 1,
+            "platform": "linux",
+            "port": 18789,
+        }.items()
+    ):
+        raise AdmissionEvidenceError("config-activation Gateway identity changed")
+
+    scenarios = probe["scenarios"]
+    if [(item["id"], item["status"]) for item in scenarios] != [
+        ("ADM-02/update/config-entry-activation", "PASS"),
+        ("ADM-02/reload/config-invalidation", "PASS"),
+    ]:
+        raise AdmissionEvidenceError("config-activation route claims changed")
+
+    update = scenarios[0]["evidence"]
+    disable = update["disable"]
+    enable = update["enable"]
+    prefix = [
+        "/usr/local/bin/node",
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+        "gateway",
+        "call",
+        "skills.update",
+        "--json",
+        "--timeout",
+        "5000",
+        "--params",
+    ]
+    for action, enabled in ((disable, False), (enable, True)):
+        params = {"enabled": enabled, "skillKey": "aragorn-admitted"}
+        _verify_successful_config_command(
+            action["command"],
+            prefix + [json.dumps(params, separators=(",", ":"), sort_keys=True)],
+        )
+        if action["params"] != params or action["response"] != {
+            "config": {"enabled": enabled},
+            "ok": True,
+            "skillKey": "aragorn-admitted",
+        }:
+            raise AdmissionEvidenceError("config activation RPC result changed")
+
+    status_argv = [
+        "/usr/local/bin/node",
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+        "gateway",
+        "call",
+        "skills.status",
+        "--json",
+        "--timeout",
+        "5000",
+    ]
+    active = {
+        "blocked_by_agent_filter": False,
+        "disabled": False,
+        "eligible": True,
+        "model_visible": True,
+        "source": "openclaw-managed",
+        "user_invocable": True,
+    }
+    disabled = {
+        **active,
+        "disabled": True,
+        "eligible": False,
+        "model_visible": False,
+    }
+    for label, expected in (
+        ("initial_status", active),
+        ("disabled_status", disabled),
+        ("enabled_status", active),
+    ):
+        _verify_successful_config_command(update[label]["command"], status_argv)
+        if update[label]["skill"] != expected:
+            raise AdmissionEvidenceError("config activation status changed")
+
+    _verify_config_snapshot(update["config_before"], None, None)
+    _verify_config_snapshot(update["config_after_disable"], False, disable["command"])
+    _verify_config_snapshot(update["config_after_enable"], True, enable["command"])
+    expected_target = [
+        {
+            "mode": "555",
+            "path": ".",
+            "size": 4096,
+            "type": "directory",
+        },
+        {
+            "digest": _ADMITTED_DIGEST,
+            "mode": "444",
+            "path": "SKILL.md",
+            "size": 104,
+            "type": "file",
+        },
+    ]
+    if (
+        update["policy_record_count_before"] != 0
+        or update["policy_record_count_after"] != 0
+        or update["target_before"] != expected_target
+        or update["target_after"] != expected_target
+        or update["write_guard"]["blocked"] is not True
+        or update["write_guard"]["code"] not in {"EACCES", "EROFS"}
+    ):
+        raise AdmissionEvidenceError("read-only admitted target identity changed")
+
+    reload_evidence = scenarios[1]["evidence"]
+    initial = reload_evidence["initial_snapshot"]
+    disabled_snapshot = reload_evidence["disabled"]["snapshot"]
+    enabled_snapshot = reload_evidence["enabled"]["snapshot"]
+    _verify_config_snapshot_state(initial, enabled=True)
+    _verify_config_snapshot_state(disabled_snapshot, enabled=False)
+    _verify_config_snapshot_state(enabled_snapshot, enabled=True)
+    if len(
+        {
+            initial["session_id"],
+            disabled_snapshot["session_id"],
+            enabled_snapshot["session_id"],
+        }
+    ) != 1 or not (
+        initial["version"] < disabled_snapshot["version"] < enabled_snapshot["version"]
+    ):
+        raise AdmissionEvidenceError("config invalidation session lineage changed")
+
+    _verify_config_turn(reload_evidence["initial_turn"], "initial", 0)
+    for label in ("disabled", "enabled"):
+        turns = reload_evidence[label]["turns"]
+        if not 1 <= len(turns) <= 10:
+            raise AdmissionEvidenceError("config invalidation retry bound changed")
+        for attempt, turn in enumerate(turns, 1):
+            _verify_config_turn(turn, label, attempt)
+
+    process = {
+        "cmdline": ["openclaw-gateway"],
+        "pid": 1,
+        "start_time_ticks": reload_evidence["process_before"]["start_time_ticks"],
+    }
+    before_log = reload_evidence["gateway_log_before"]
+    after_log = reload_evidence["gateway_log_after"]
+    if (
+        not isinstance(process["start_time_ticks"], str)
+        or not process["start_time_ticks"].isdigit()
+        or reload_evidence["process_before"] != process
+        or reload_evidence["process_after"] != process
+        or before_log["ready_count"] != 1
+        or after_log["ready_count"] != 1
+        or before_log["restart_count"] != 0
+        or after_log["restart_count"] != 0
+        or before_log["path"] != after_log["path"]
+        or after_log["bytes"] <= before_log["bytes"]
+    ):
+        raise AdmissionEvidenceError("config invalidation process identity changed")
+
+    initial_turn = reload_evidence["initial_turn"]
+    disabled_turns = reload_evidence["disabled"]["turns"]
+    enabled_turns = reload_evidence["enabled"]["turns"]
+    if not (
+        _time(version["started_at"])
+        <= _time(version["completed_at"])
+        <= _time(gateway["command"]["started_at"])
+        <= _time(gateway["command"]["completed_at"])
+        <= _time(initial_turn["send"]["command"]["started_at"])
+        <= _time(initial_turn["wait"]["command"]["completed_at"])
+        <= _time(update["initial_status"]["command"]["started_at"])
+        <= _time(update["initial_status"]["command"]["completed_at"])
+        <= _time(disable["command"]["started_at"])
+        <= _time(disable["command"]["completed_at"])
+        <= _time(disabled_turns[0]["send"]["command"]["started_at"])
+        <= _time(disabled_turns[-1]["wait"]["command"]["completed_at"])
+        <= _time(update["disabled_status"]["command"]["started_at"])
+        <= _time(update["disabled_status"]["command"]["completed_at"])
+        <= _time(enable["command"]["started_at"])
+        <= _time(enable["command"]["completed_at"])
+        <= _time(enabled_turns[0]["send"]["command"]["started_at"])
+        <= _time(enabled_turns[-1]["wait"]["command"]["completed_at"])
+        <= _time(update["enabled_status"]["command"]["started_at"])
+        <= _time(update["enabled_status"]["command"]["completed_at"])
+        <= _time(probe["recorded_at"])
+    ):
+        raise AdmissionEvidenceError("config-activation timing is not causal")
+
+
+def _verify_config_activation_environment(
+    probe: Mapping[str, Any],
+    environment: Mapping[str, Any],
+) -> None:
+    container = environment["container"]
+    state = container["state"]
+    execution = container["probe_exec"]
+    image = container["image"]
+    expected_image = {
+        "id": (
+            "sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+        "index_digest": (
+            "sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+        "platform": {"architecture": "arm64", "os": "linux", "variant": "v8"},
+        "platform_manifest_digest": _OPENCLAW_PLATFORM_MANIFEST,
+        "reference": (
+            "node@sha256:242549cd46785b480c832479a730f4f2"
+            "a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+    }
+    startup = [
+        "/bin/sh",
+        "-c",
+        "cp /profile/config/openclaw.json /profile/state/openclaw.json && "
+        "chmod 0600 /profile/state/openclaw.json && exec /usr/local/bin/node "
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs gateway run "
+        "--allow-unconfigured --auth token --bind loopback --port 18789 "
+        "--tailscale off --ws-log full",
+    ]
+    probe_raw = _canonical_bytes(probe) + b"\n"
+    if (
+        environment["recorded_at"] != probe["recorded_at"]
+        or image != expected_image
+        or container["command"] != startup
+        or container["name"] != "aragorn-openclaw-contained-config-activation-v1"
+        or container["working_dir"] != "/profile/workspace"
+        or execution
+        != {
+            "command": [
+                "/usr/local/bin/node",
+                "/config-probe/config-activation-probe.mjs",
+            ],
+            "exit_code": 0,
+            "mode": "docker-exec-stdout-capture",
+            "recorded_at": probe["recorded_at"],
+            "stdout": {
+                "bytes": len(probe_raw),
+                "digest": _line_digest(probe),
+            },
+            "target_command": [
+                "/usr/local/bin/node",
+                "/config-probe/config-activation-probe.mjs",
+            ],
+            "user": "1000:1000",
+        }
+        or state["status"] != "exited"
+        or state["exit_code"] != 0
+        or state["running"]
+        or state["paused"]
+        or state["restarting"]
+        or state["restart_count"] != 0
+        or state["oom_killed"]
+        or state["dead"]
+        or state["error"] != ""
+        or re.fullmatch(r"[0-9a-f]{64}", container["id"]) is None
+        or probe["gateway"]["info"]["hostname"] != container["id"][:12]
+        or probe["gateway"]["info"]["machineName"] != container["id"][:12]
+    ):
+        raise AdmissionEvidenceError("config-activation container execution changed")
+
+    expected_mounts = [
+        {
+            "destination": "/config-probe",
+            "read_only": True,
+            "source": (
+                "aragorn-openclaw-2026-7-1-contained-config-activation-probe-v1"
+            ),
+            "type": "volume",
+        },
+        {
+            "destination": "/probe",
+            "read_only": True,
+            "source": ("aragorn-openclaw-2026-7-1-contained-live-reload-probe-v1"),
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/config",
+            "read_only": True,
+            "source": ("aragorn-openclaw-2026-7-1-contained-live-reload-config-v1"),
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/home/.agents",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/state/plugin-skills",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/state/skills",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-admitted-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/workspace/.agents",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/workspace/skills",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/runtime",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-runtime",
+            "type": "volume",
+        },
+    ]
+    expected_tmpfs = {
+        "/profile/home": (
+            "rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/profile/state": (
+            "rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/profile/workspace": (
+            "rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/tmp": "rw,noexec,nosuid,nodev,size=256m,mode=1777",
+    }
+    isolation = environment["isolation"]
+    controls = {
+        "cap_drop": ["ALL"],
+        "cgroupns_mode": "private",
+        "devices": [],
+        "ipc_mode": "private",
+        "memory_bytes": 1_073_741_824,
+        "memory_swap_bytes": 1_073_741_824,
+        "mounts": expected_mounts,
+        "nano_cpus": 1_000_000_000,
+        "network_mode": "none",
+        "no_new_privileges": True,
+        "pids_limit": 128,
+        "privileged": False,
+        "read_only_rootfs": True,
+        "restart_policy": {"maximum_retry_count": 0, "name": "no"},
+        "runtime": "runc",
+        "tmpfs": expected_tmpfs,
+        "ulimits": [{"hard": 256, "name": "nofile", "soft": 256}],
+        "user": "1000:1000",
+        "working_dir": "/profile/workspace",
+    }
+    if (
+        {key: isolation[key] for key in controls} != controls
+        or isolation["environment"]
+        != {
+            "HOME": "/profile/home",
+            "NODE_VERSION": "24.16.0",
+            "OPENCLAW_CONFIG_PATH": "/profile/state/openclaw.json",
+            "OPENCLAW_GATEWAY_TOKEN": ("aragorn-contained-live-reload-token-v1"),
+            "OPENCLAW_STATE_DIR": "/profile/state",
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "YARN_VERSION": "1.22.22",
+        }
+        or len({item["destination"] for item in isolation["mounts"]})
+        != len(expected_mounts)
+        or "/profile/state/skills" in isolation["tmpfs"]
+    ):
+        raise AdmissionEvidenceError("config-activation isolation changed")
+
+    docker = environment["docker"]
+    os_profile = {
+        "image": image,
+        "isolation": isolation,
+        "server": docker["server"],
+    }
+    release = docker["server"]["kernel_version"]
+    gateway_info = probe["gateway"]["info"]
+    if (
+        environment["os_profile_digest"] != canonical_digest(os_profile)
+        or environment["os_profile_digest"] != _CONFIG_OS_PROFILE_DIGEST
+        or gateway_info["diskPath"] != "/profile/state"
+        or gateway_info["release"] != release
+        or gateway_info["osLabel"] != f"Linux {release}"
+        or docker["assurance"] != "SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED"
+        or docker["context"]
+        != {
+            "endpoint": "unix:///Users/yousi/.colima/aragorn-bakeoff/docker.sock",
+            "name": "colima-aragorn-bakeoff",
+            "skip_tls_verify": False,
+            "tls_material_count": 0,
+        }
+        or docker["server"]["security_options"]
+        != ["name=apparmor", "name=cgroupns", "name=seccomp,profile=builtin"]
+        or environment["limitations"]
+        != [
+            "CONTAINER_EXIT_DOES_NOT_ESTABLISH_CROSS_HOST_REPRODUCIBILITY",
+            "DOCKER_CONTROL_PLANE_SELF_REPORTED",
+            "ENGINE_CONTAINER_AND_HOST_NOT_INDEPENDENTLY_ATTESTED",
+            "PLATFORM_MANIFEST_DIGEST_RETAINED_NOT_INDEPENDENTLY_REDERIVED",
+        ]
+    ):
+        raise AdmissionEvidenceError("config-activation environment binding changed")
+    if not (
+        _time(container["created_at"])
+        <= _time(state["started_at"])
+        <= _time(probe["runtime"]["version_command"]["started_at"])
+        <= _time(probe["recorded_at"])
+        <= _time(state["finished_at"])
+    ):
+        raise AdmissionEvidenceError("config-activation container timing is not causal")
 
 
 def _line_digest(document: object) -> str:

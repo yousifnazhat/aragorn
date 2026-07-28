@@ -373,9 +373,12 @@ execution, so it cannot authorize the publisher.
 summary. Its verifier reloads the retained policy and manifest, replays every
 run receipt, reconstructs the complete decision, and rejects any summary or
 verdict drift. Current inspection still has only `source_tree` closure, so
-faithful replay returns `ERROR`; a future broker must also bind supported
-`artifact_graph` closure, runtime, destination, expiry, and revocation before
-publication.
+faithful replay returns `ERROR`. The parallel evidence-only
+`aragorn/decision/v3` retains and replays an admission artifact graph bound to
+caller-held expected identities, including the exact analyzer-run receipts,
+and evaluates only its verified closure; it is not wired to the CLI or
+publisher. A future broker must additionally bind runtime, destination, expiry,
+and revocation before publication.
 
 The source-screen-only Git identities and commit-pinned evidence anchors are
 frozen in `benchmark/admission-runtime-candidates-v1.lock.json`; that immutable
@@ -613,7 +616,7 @@ aragorn/
 │   ├── admission_gate.py         # Retained-evidence pre-gate
 │   ├── admission_retained.py     # Retained inputs for policy-only decisions
 │   ├── artifact_closure.py       # Evaluation-only literal source-reference graph
-│   ├── decision_receipt.py       # Semantic replay of decision/v2 evidence
+│   ├── decision_receipt.py       # Retain/replay decision/v2 and decision/v3 evidence
 │   ├── materialization.py        # Staged-tree verification and private fresh publication
 │   ├── github_acquire.py         # Evaluation-only immutable public GitHub source
 │   ├── github_expand.py          # Bounded exact same-repository comparator expansion

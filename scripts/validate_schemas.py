@@ -3682,6 +3682,14 @@ def main() -> int:
             "decision": decision_v2,
         }
     )
+    validators["decision-v3.schema.json"].validate(
+        {
+            **decision_v2,
+            "schema": "aragorn/decision/v3",
+            "artifact_graph_digest": digest,
+            "artifact_digests": [digest],
+        }
+    )
     validators["analyzer-run-receipt-v1.schema.json"].validate(
         {
             "schema": "aragorn/analyzer-run-receipt/v1",

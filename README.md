@@ -103,6 +103,11 @@ workspace skill writes externally or evaluate another harness.
   and manifest, replays every analyzer receipt, rebuilds each summary, and
   re-derives the verdict. Current source-tree-only inspection still fails
   closed and the replay grants no installer authority.
+- Graph-bound `decision/v3` retention and replay: the verifier requires
+  caller-held expected manifest, graph, policy, exact analyzer-run receipts,
+  graph-verifier, and analyzer-verifier identities before evaluating the
+  verified artifact closure. It remains evidence-only and is not wired to the
+  CLI or publisher.
 - Strict JSON Lines observations bound to the exact tree digest.
 - Deterministic `ALLOW | REVIEW | DENY | ERROR` policy evaluation.
 - Fail-closed handling of missing analyzers, malformed evidence, timeouts, output limits, and incomplete artifact closure.

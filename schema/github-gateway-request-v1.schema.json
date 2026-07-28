@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/github-gateway-request-v1.schema.json",
+  "title": "Aragorn credential-free GitHub gateway request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "owner", "repository", "commit", "skill_path"],
+  "properties": {
+    "schema": {"const": "aragorn/github-gateway-request/v1"},
+    "owner": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+    },
+    "repository": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[a-z0-9_.-]+$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "skill_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    }
+  }
+}

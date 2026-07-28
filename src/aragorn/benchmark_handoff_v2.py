@@ -1,4 +1,4 @@
-"""Bounded, cross-owner CAS handoff for protocol-v2 benchmark jobs."""
+"""Bounded, cross-owner CAS handoff for declared immutable byte closures."""
 
 from __future__ import annotations
 
@@ -38,6 +38,11 @@ _LIMITS = {
         "blobs": 25_000,
         "blob_bytes": 128 * 1024 * 1024,
         "total_bytes": 512 * 1024 * 1024,
+    },
+    "github_source": {
+        "blobs": 10_001,
+        "blob_bytes": 64 * 1024 * 1024,
+        "total_bytes": 192 * 1024 * 1024,
     },
 }
 _MAX_MANIFEST_BYTES = 8 * 1024 * 1024
@@ -673,6 +678,10 @@ def _verify_semantic_manifest_from_cas(
     expected_request_digest: str | None,
     expected_verifier_challenge: str | None,
 ) -> None:
+    if manifest["kind"] == "github_source":
+        raise HandoffError(
+            "github_source supports declared byte transport only"
+        )
     if manifest["kind"] == "worker_input":
         if expected_request_digest is not None:
             raise HandoffError(
@@ -717,6 +726,11 @@ def _verify_semantic_manifest_from_staging(
     expected_request_digest: str | None,
     expected_verifier_challenge: str | None,
 ) -> None:
+    if manifest["kind"] == "github_source":
+        raise HandoffError(
+            "github_source supports declared byte transport only"
+        )
+
     def read_blob(digest: str, maximum: int) -> bytes:
         return _read_named_file(
             staging_fd,

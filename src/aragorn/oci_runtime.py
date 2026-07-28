@@ -780,19 +780,33 @@ def _run_bounded(
     env: dict[str, str] | None,
     stdout_sink: BinaryIO | None = None,
     retain_stdout: bool = True,
+    stdin_bytes: bytes | None = None,
+    cwd: str | os.PathLike[str] = os.path.sep,
+    user: int | None = None,
+    group: int | None = None,
+    extra_groups: Sequence[int] | None = None,
+    umask: int = -1,
 ) -> _ProcessResult:
-    """Run one Docker CLI command with hard pipe-read limits."""
+    """Run one command with hard pipe-read limits."""
 
-    process = subprocess.Popen(
-        tuple(argv),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=os.path.sep,
-        env=env,
-        shell=False,
-        start_new_session=(os.name == "posix"),
-    )
+    popen_options: dict[str, Any] = {
+        "stdin": subprocess.PIPE if stdin_bytes is not None else subprocess.DEVNULL,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "cwd": cwd,
+        "env": env,
+        "shell": False,
+        "close_fds": True,
+        "start_new_session": os.name == "posix",
+    }
+    if user is not None:
+        popen_options.update(
+            user=user,
+            group=group,
+            extra_groups=extra_groups,
+            umask=umask,
+        )
+    process = subprocess.Popen(tuple(argv), **popen_options)
     assert process.stdout is not None
     assert process.stderr is not None
     buffers = {"stdout": bytearray(), "stderr": bytearray()}
@@ -838,6 +852,27 @@ def _run_bounded(
     for reader in readers:
         reader.start()
 
+    writer: threading.Thread | None = None
+    if stdin_bytes is not None:
+        assert process.stdin is not None
+
+        def write_stdin() -> None:
+            try:
+                process.stdin.write(stdin_bytes)
+                process.stdin.flush()
+            except (BrokenPipeError, OSError, ValueError) as exc:
+                with lock:
+                    io_errors.append(f"stdin: {exc}")
+                _kill_process(process)
+            finally:
+                try:
+                    process.stdin.close()
+                except (BrokenPipeError, OSError, ValueError):
+                    pass
+
+        writer = threading.Thread(target=write_stdin, daemon=True)
+        writer.start()
+
     timed_out = False
     termination_failed = False
     try:
@@ -850,6 +885,17 @@ def _run_bounded(
                 process.wait(timeout=1.0)
             except subprocess.TimeoutExpired:
                 termination_failed = True
+        # A successful command may leave children holding the pipes open.
+        # Every caller starts a fresh session, so retire that process group
+        # before collecting the final bounded output.
+        _kill_process(process)
+        if writer is not None:
+            writer.join(timeout=1.0)
+            if writer.is_alive():
+                _kill_process(process)
+                writer.join(timeout=1.0)
+            if writer.is_alive():
+                io_errors.append("command input writer did not stop")
         for reader in readers:
             reader.join(timeout=1.0)
         if any(reader.is_alive() for reader in readers):
@@ -866,6 +912,11 @@ def _run_bounded(
             pass
         raise
     finally:
+        if process.stdin is not None:
+            try:
+                process.stdin.close()
+            except (BrokenPipeError, OSError, ValueError):
+                pass
         process.stdout.close()
         process.stderr.close()
     return _ProcessResult(
@@ -880,18 +931,17 @@ def _run_bounded(
 
 
 def _kill_process(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
     if os.name == "posix":
         try:
-            group = os.getpgid(process.pid)
-            if group == process.pid:
-                os.killpg(group, signal.SIGKILL)
-                return
+            # _run_bounded always starts a fresh session whose PGID is the
+            # leader PID. The leader may already be reaped while descendants
+            # still retain its stdout/stderr descriptors.
+            os.killpg(process.pid, signal.SIGKILL)
         except (OSError, ProcessLookupError):
             pass
     try:
-        process.kill()
+        if process.poll() is None:
+            process.kill()
     except (OSError, ProcessLookupError):
         pass
 

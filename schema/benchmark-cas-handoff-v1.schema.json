@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aragorn.dev/schema/benchmark-cas-handoff-v1.schema.json",
-  "title": "Aragorn protocol-v2 cross-owner CAS handoff v1",
+  "title": "Aragorn cross-owner CAS handoff v1",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "kind", "root_digest", "blobs", "total_bytes"],
   "properties": {
     "schema": {"const": "aragorn/benchmark-cas-handoff/v1"},
-    "kind": {"enum": ["worker_input", "worker_output"]},
+    "kind": {"enum": ["github_source", "worker_input", "worker_output"]},
     "root_digest": {"$ref": "#/$defs/digest"},
     "blobs": {
       "type": "array",
@@ -43,6 +43,25 @@
         "properties": {
           "blobs": {"maxItems": 10016},
           "total_bytes": {"maximum": 301989888}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "github_source"}},
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "blobs": {
+            "maxItems": 10001,
+            "items": {
+              "properties": {
+                "size": {"maximum": 67108864}
+              }
+            }
+          },
+          "total_bytes": {"maximum": 201326592}
         }
       }
     }

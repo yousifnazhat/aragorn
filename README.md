@@ -283,11 +283,28 @@ and tree identities are assertions from the authenticated GitHub API response;
 Aragorn does not receive or independently hash their raw Git object bytes. One
 monotonic deadline covers the acquisition. The client resolves the fixed API
 host once per session, rejects any non-global result, and connects only to that
-frozen address set while retaining GitHub hostname verification. A dedicated
-fetch gateway is still required before this becomes a supported production
-acquisition boundary: the direct Phase 0 HTTP client's read timeout is a
-best-effort transport bound, not a hard wall against a peer that continuously
-trickles bytes, and it still runs with the operator's UID.
+frozen address set while retaining GitHub hostname verification.
+
+Phase 1 now includes an internal one-shot gateway worker and broker supervisor.
+Its canonical request has no credential, proxy, CA, state-path, header, or
+caller-controlled limit fields. The privileged broker launches it under a
+configured non-root UID and group, clears supplementary groups, supplies an
+allowlisted environment, closes inherited descriptors, and enforces bounded
+output plus a process-group wall-clock deadline. It then imports the declared
+bytes through Aragorn's cross-owner handoff and independently re-verifies the
+exact manifest, Git blob identities, source binding, and closure in a fresh
+broker-owned quarantine. The returned receipt is explicitly
+`QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY`, with
+`github_api_membership_asserted_blob_identity_reverified` source assurance:
+commit and tree membership still inherit GitHub's authenticated API assertions,
+so this receipt cannot authorize admission, promotion, or installation.
+
+This is an internal primitive, not a command developers repeatedly run. It is
+not yet the supported production acquisition boundary: a protected installation
+of the gateway module, a provisioned dedicated UID/private transfer root,
+service-level descendant containment, control-plane promotion, and install/update
+wiring remain required. The direct `acquire-github` command still runs with the
+operator's UID and remains evaluation-only.
 
 Recursively retain supported exact same-repository blob references for Phase 0
 comparator evaluation:

@@ -108,6 +108,8 @@ EXPECTED_CONTRACTS = {
     "error-v1.schema.json": "aragorn/error/v1",
     "github-expansion-result-v1.schema.json": "aragorn/github-expansion-result/v1",
     "github-expansion-v1.schema.json": "aragorn/github-expansion/v1",
+    "github-gateway-request-v1.schema.json": "aragorn/github-gateway-request/v1",
+    "github-gateway-result-v1.schema.json": "aragorn/github-gateway-result/v1",
     "github-manifest-v1.schema.json": "aragorn/github-manifest/v1",
     "inspect-result-v1.schema.json": "aragorn/inspect-result/v1",
     "inspect-result-v2.schema.json": "aragorn/inspect-result/v2",

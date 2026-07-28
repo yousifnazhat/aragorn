@@ -47,6 +47,7 @@ from aragorn.admission_evidence import (
     verify_openclaw_live_reload_slice_evidence,
     verify_openclaw_model_activation_evidence,
     verify_openclaw_restart_evidence,
+    verify_openclaw_update_reload_coverage,
     verify_openclaw_update_slice_evidence,
 )
 from aragorn.admission_gate import validate_retained_admission_conformance
@@ -883,14 +884,15 @@ def main() -> int:
         if dynamic_reasons != sorted(set(dynamic_reasons)):
             raise AssertionError("dynamic-conformance reasons are not canonical")
 
+    openclaw_route_inventory = load(
+        ROOT
+        / "benchmark"
+        / "admission"
+        / "openclaw-v2026.7.1"
+        / "update-reload-route-inventory-v1.json"
+    )
     validate_openclaw_2026_7_1_route_inventory(
-        load(
-            ROOT
-            / "benchmark"
-            / "admission"
-            / "openclaw-v2026.7.1"
-            / "update-reload-route-inventory-v1.json"
-        ),
+        openclaw_route_inventory,
         runtime_candidates,
     )
 
@@ -1009,6 +1011,51 @@ def main() -> int:
             "NOT_TESTED",
         ),
         (
+            "openclaw-update-reload-route-coverage",
+            (
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-update-reload-route-"
+                    "coverage-2026-07-28.json"
+                ),
+                admission_receipts
+                / (
+                    "phase1-openclaw-contained-live-reload-cron-"
+                    "probe-2026-07-28.json"
+                ),
+                admission_receipts
+                / (
+                    "phase1-openclaw-contained-config-activation-"
+                    "probe-2026-07-27.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-live-reload-cron-"
+                    "probe-2026-07-28.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-live-reload-cron-"
+                    "environment-2026-07-28.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-config-activation-"
+                    "probe-2026-07-27.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-config-activation-"
+                    "environment-2026-07-27.json"
+                ),
+                admission_evidence
+                / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+            ),
+            admission_receipts
+            / "phase1-openclaw-update-reload-route-coverage-2026-07-28.json",
+            "NOT_TESTED",
+        ),
+        (
             "openclaw-model-activation-slice",
             (
                 admission_evidence
@@ -1093,6 +1140,13 @@ def main() -> int:
                 verify_openclaw_config_activation_slice_evidence(
                     result,
                     evidence_cas=evidence_cas,
+                )
+            if label == "openclaw-update-reload-route-coverage":
+                verify_openclaw_update_reload_coverage(
+                    result,
+                    evidence_cas=evidence_cas,
+                    route_inventory=openclaw_route_inventory,
+                    runtime_candidates=runtime_candidates,
                 )
             if label == "openclaw-model-activation-slice":
                 verify_openclaw_model_activation_evidence(

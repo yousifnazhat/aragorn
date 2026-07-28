@@ -1443,6 +1443,182 @@ class AdmissionConformanceTests(unittest.TestCase):
                 runtime_environment,
             )
 
+    def test_retained_update_reload_coverage_is_derived_and_non_authoritative(
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt_dir = _ROOT / "benchmark" / "receipts"
+        receipt = json.loads(
+            (
+                receipt_dir
+                / "phase1-openclaw-update-reload-route-coverage-2026-07-28.json"
+            ).read_bytes()
+        )
+        coverage_path = (
+            evidence_dir
+            / "openclaw-v2026.7.1-update-reload-route-coverage-2026-07-28.json"
+        )
+        coverage = json.loads(coverage_path.read_bytes())
+        inventory = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "admission"
+                / "openclaw-v2026.7.1"
+                / "update-reload-route-inventory-v1.json"
+            ).read_bytes()
+        )
+        candidates = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "admission-runtime-candidates-v1.lock.json"
+            ).read_bytes()
+        )
+        evidence_paths = (
+            coverage_path,
+            receipt_dir
+            / (
+                "phase1-openclaw-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            receipt_dir
+            / (
+                "phase1-openclaw-contained-config-activation-"
+                "probe-2026-07-27.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "environment-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-config-activation-"
+                "probe-2026-07-27.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-config-activation-"
+                "environment-2026-07-27.json"
+            ),
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+        )
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_update_reload_coverage(
+                receipt,
+                evidence_cas=self.cas,
+                route_inventory=inventory,
+                runtime_candidates=candidates,
+            )
+        )
+        passed = [
+            route["id"] for route in coverage["routes"] if route["status"] == "PASS"
+        ]
+        self.assertEqual(
+            (
+                sum("/update/" in route for route in passed),
+                sum("/reload/" in route for route in passed),
+            ),
+            (1, 5),
+        )
+        self.assertEqual(
+            admission_evidence._route_coverage_status(
+                [("PASS", "source-a"), ("FAIL", "source-b")]
+            ),
+            "FAIL",
+        )
+        with TemporaryDirectory() as temporary:
+            incomplete_cas = CAS(temporary)
+            for path in evidence_paths[:3]:
+                raw = path.read_bytes()
+                incomplete_cas.put(BytesIO(raw), max_bytes=len(raw))
+            with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+                admission_evidence.verify_openclaw_update_reload_coverage(
+                    receipt,
+                    evidence_cas=incomplete_cas,
+                    route_inventory=inventory,
+                    runtime_candidates=candidates,
+                )
+
+        promoted = deepcopy(receipt)
+        promoted["properties"][2]["scenarios"][1].update(
+            status="PASS",
+            reason_codes=[],
+        )
+        eligible = deepcopy(receipt)
+        eligible["decision"]["installer_work_eligible"] = True
+        binding = deepcopy(receipt)
+        binding["bindings"]["environment"]["os_profile_digest"] = (
+            "sha256:" + "0" * 64
+        )
+        implementation = deepcopy(receipt)
+        implementation["bindings"]["adapter"]["implementation_digest"] = (
+            "sha256:" + "0" * 64
+        )
+        for label, mutation in (
+            ("formal promotion", promoted),
+            ("installer authority", eligible),
+            ("aggregate binding", binding),
+            ("implementation binding", implementation),
+        ):
+            with (
+                self.subTest(label),
+                self.assertRaises(admission_evidence.AdmissionEvidenceError),
+            ):
+                admission_evidence.verify_openclaw_update_reload_coverage(
+                    mutation,
+                    evidence_cas=self.cas,
+                    route_inventory=inventory,
+                    runtime_candidates=candidates,
+                )
+
+        omitted = deepcopy(coverage)
+        omitted["routes"].pop()
+        duplicate = deepcopy(coverage)
+        duplicate["routes"].append(deepcopy(duplicate["routes"][0]))
+        false_pass = deepcopy(coverage)
+        false_pass["routes"][1].update(
+            status="PASS",
+            source_receipt_digests=[coverage["source_receipt_digests"][0]],
+        )
+        detached = deepcopy(coverage)
+        detached["routes"][2]["source_receipt_digests"] = []
+        umbrella_promotion = deepcopy(coverage)
+        umbrella_promotion["partial_observations"][0][
+            "satisfies_inventory_route"
+        ] = True
+        predates_source = deepcopy(coverage)
+        predates_source["recorded_at"] = "2026-07-28T00:00:00Z"
+        for label, mutation in (
+            ("omitted route", omitted),
+            ("duplicate route", duplicate),
+            ("false pass", false_pass),
+            ("detached proof", detached),
+            ("umbrella promotion", umbrella_promotion),
+            ("causal timestamp", predates_source),
+        ):
+            with (
+                self.subTest(label),
+                self.assertRaises(admission_evidence.AdmissionEvidenceError),
+            ):
+                admission_evidence._verify_update_reload_coverage(
+                    receipt,
+                    mutation,
+                    evidence_cas=self.cas,
+                    route_inventory=inventory,
+                )
+
     def test_retained_openclaw_model_activation_binds_exact_tool_bytes(  # noqa: PLR0915
         self,
     ) -> None:

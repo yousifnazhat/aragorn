@@ -7,6 +7,7 @@ import json
 import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from .admission_conformance import (
@@ -14,6 +15,7 @@ from .admission_conformance import (
     validate_admission_conformance,
 )
 from .admission_decision import evaluate_admission
+from .admission_routes import validate_openclaw_2026_7_1_route_inventory
 from .cas import CAS, CASError
 from .oci_worker_protocol import canonical_digest, canonical_json
 
@@ -200,6 +202,50 @@ _CONFIG_IMPLEMENTATION_DIGEST = (
 _CONFIG_OS_PROFILE_DIGEST = (
     "sha256:cf82ddd73800026ece95e2119079f3f3f31cc934ef699a87880131fc6146ec72"
 )
+_UPDATE_RELOAD_COVERAGE_SCHEMA = (
+    "aragorn/openclaw-update-reload-route-coverage-evidence/v1"
+)
+_UPDATE_RELOAD_COVERAGE_DIGEST = (
+    "sha256:ff2a4a0c83a9c318204cfc5ed812669aa7885c76c05f6d50982f530d5a4af7ef"
+)
+_UPDATE_RELOAD_INVENTORY_DIGEST = (
+    "sha256:c175cd145a0c18d80921edbeb2452e34182188f97ee4e3b8d26176e7e38f5b41"
+)
+_LIVE_CRON_RECEIPT_DIGEST = (
+    "sha256:82d04dbac17f6d3bddf20bb76626be1764aca2c2acf8c4e53a23d6e36e3a9caa"
+)
+_CONFIG_RECEIPT_DIGEST = (
+    "sha256:cabe43b99f6ea301b4f9fe3321b6713ef3a6735ff866539de3b8532d9a586e2f"
+)
+_UPDATE_RELOAD_SOURCE_RECEIPTS = [
+    _LIVE_CRON_RECEIPT_DIGEST,
+    _CONFIG_RECEIPT_DIGEST,
+]
+_PARTIAL_UPDATE_ROUTE = "ADM-02/update/archive-source-force-replacement"
+_PARTIAL_UPDATE_OBSERVATION = {
+    "executed_variant": "local-directory-cli-force-global",
+    "inventory_route_id": _PARTIAL_UPDATE_ROUTE,
+    "source_receipt_digest": _LIVE_CRON_RECEIPT_DIGEST,
+    "status": "PASS",
+    "satisfies_inventory_route": False,
+}
+_OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON = [
+    "SCENARIO_OUTSIDE_UPDATE_RELOAD_COVERAGE_SLICE"
+]
+_UPDATE_RELOAD_COVERAGE_REASONS = {
+    "DET-01/identical-canonical-input-replay": ["IDENTICAL_REPLAY_NOT_TESTED"],
+    "ADM-01/exact-admitted-bytes": ["EXACT_ACTIVATED_BYTES_NOT_TESTED"],
+    "ADM-02/install": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+    "ADM-02/update": ["UPDATE_ROUTE_COVERAGE_INCOMPLETE"],
+    "ADM-02/direct-write": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+    "ADM-02/rename": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+    "ADM-02/symlink": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+    "ADM-02/auto-discovery": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+    "ADM-02/reload": ["RELOAD_ROUTE_COVERAGE_INCOMPLETE"],
+    "ADM-02/restart": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+    "ADM-03/policy-failure": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+    "ADM-03/policy-tampering": _OUTSIDE_UPDATE_RELOAD_COVERAGE_REASON,
+}
 _MODEL_ACTIVATION_PROBE_SCHEMA = (
     "aragorn/openclaw-contained-model-activation-probe-evidence/v1"
 )
@@ -615,6 +661,259 @@ def verify_openclaw_config_activation_slice_evidence(
         raise AdmissionEvidenceError(
             f"invalid retained config-activation evidence: {exc}"
         ) from exc
+
+
+def verify_openclaw_update_reload_coverage(
+    document: Mapping[str, Any],
+    *,
+    evidence_cas: CAS,
+    route_inventory: Mapping[str, Any],
+    runtime_candidates: Mapping[str, Any],
+) -> None:
+    """Derive partial update/reload coverage without granting authority."""
+
+    try:
+        if validate_admission_conformance(document) != "NOT_TESTED" or document[
+            "decision"
+        ] != {"status": "NOT_TESTED", "installer_work_eligible": False}:
+            raise AdmissionEvidenceError(
+                "update/reload coverage cannot grant installer authority"
+            )
+        formal = {
+            f"{item['id']}/{scenario['id']}": scenario
+            for item in document["properties"]
+            for scenario in item["scenarios"]
+        }
+        if (
+            set(formal) != set(_UPDATE_RELOAD_COVERAGE_REASONS)
+            or any(item["status"] != "NOT_TESTED" for item in formal.values())
+            or {key: item["reason_codes"] for key, item in formal.items()}
+            != _UPDATE_RELOAD_COVERAGE_REASONS
+        ):
+            raise AdmissionEvidenceError(
+                "update/reload coverage formal claim set changed"
+            )
+        targeted = {"ADM-02/update", "ADM-02/reload"}
+        for key, scenario in formal.items():
+            expected = [_UPDATE_RELOAD_COVERAGE_DIGEST] if key in targeted else []
+            if scenario["evidence_digests"] != expected:
+                raise AdmissionEvidenceError(
+                    f"{key} does not bind the exact update/reload coverage"
+                )
+        coverage = _read_exact(
+            evidence_cas,
+            _UPDATE_RELOAD_COVERAGE_DIGEST,
+            _UPDATE_RELOAD_COVERAGE_SCHEMA,
+        )
+        validate_openclaw_2026_7_1_route_inventory(
+            route_inventory,
+            runtime_candidates,
+        )
+        _verify_update_reload_coverage(
+            document,
+            coverage,
+            evidence_cas=evidence_cas,
+            route_inventory=route_inventory,
+        )
+    except AdmissionEvidenceError:
+        raise
+    except (
+        AdmissionConformanceError,
+        CASError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AdmissionEvidenceError(
+            f"invalid retained update/reload coverage: {exc}"
+        ) from exc
+
+
+def _verify_update_reload_coverage(
+    receipt: Mapping[str, Any],
+    coverage: Mapping[str, Any],
+    *,
+    evidence_cas: CAS,
+    route_inventory: Mapping[str, Any],
+) -> None:
+    if (
+        set(coverage)
+        != {
+            "assurance",
+            "decision",
+            "partial_observations",
+            "recorded_at",
+            "route_inventory_canonical_digest",
+            "routes",
+            "schema",
+            "source_receipt_digests",
+        }
+        or coverage["schema"] != _UPDATE_RELOAD_COVERAGE_SCHEMA
+        or coverage["assurance"]
+        != "SEMANTICALLY_VERIFIED_PARTIAL_COVERAGE_NOT_INSTALLER_AUTHORITY"
+        or coverage["recorded_at"] != receipt["recorded_at"]
+        or coverage["route_inventory_canonical_digest"]
+        != canonical_digest(route_inventory)
+        or coverage["route_inventory_canonical_digest"]
+        != _UPDATE_RELOAD_INVENTORY_DIGEST
+        or coverage["source_receipt_digests"] != _UPDATE_RELOAD_SOURCE_RECEIPTS
+        or coverage["partial_observations"] != [_PARTIAL_UPDATE_OBSERVATION]
+        or coverage["decision"]
+        != {"status": "NOT_TESTED", "installer_work_eligible": False}
+    ):
+        raise AdmissionEvidenceError("update/reload coverage envelope changed")
+
+    live_receipt = _read_exact(
+        evidence_cas,
+        _LIVE_CRON_RECEIPT_DIGEST,
+        "aragorn/admission-conformance-result/v1",
+    )
+    config_receipt = _read_exact(
+        evidence_cas,
+        _CONFIG_RECEIPT_DIGEST,
+        "aragorn/admission-conformance-result/v1",
+    )
+    verify_openclaw_live_reload_cron_slice_evidence(
+        live_receipt,
+        evidence_cas=evidence_cas,
+    )
+    verify_openclaw_config_activation_slice_evidence(
+        config_receipt,
+        evidence_cas=evidence_cas,
+    )
+    if _time(coverage["recorded_at"]) < max(
+        _time(live_receipt["recorded_at"]),
+        _time(config_receipt["recorded_at"]),
+    ):
+        raise AdmissionEvidenceError("coverage predates a source receipt")
+
+    live_probe = _read_exact(
+        evidence_cas,
+        _LIVE_CRON_PROBE_DIGEST,
+        _LIVE_PROBE_SCHEMA,
+    )
+    config_probe = _read_exact(
+        evidence_cas,
+        _CONFIG_PROBE_DIGEST,
+        _CONFIG_PROBE_SCHEMA,
+    )
+    claims: dict[str, list[tuple[str, str]]] = {}
+    for source_digest, probe, excluded_routes in (
+        (
+            _LIVE_CRON_RECEIPT_DIGEST,
+            live_probe,
+            {_PARTIAL_UPDATE_ROUTE},
+        ),
+        (_CONFIG_RECEIPT_DIGEST, config_probe, set()),
+    ):
+        for scenario in probe["scenarios"]:
+            route_id = scenario["id"]
+            status = scenario["status"]
+            if status not in {"PASS", "FAIL"}:
+                raise AdmissionEvidenceError("source route claim is inconclusive")
+            if route_id in excluded_routes:
+                if status != "PASS":
+                    raise AdmissionEvidenceError(
+                        "partial route observation is not a PASS"
+                    )
+                continue
+            claims.setdefault(route_id, []).append((status, source_digest))
+
+    route_ids = [
+        f"{route['id']}/{path['id']}"
+        for route in route_inventory["routes"]
+        for path in route["paths"]
+    ]
+    route_shape = [
+        (route["id"], len(route["paths"])) for route in route_inventory["routes"]
+    ]
+    if (
+        route_shape != [("ADM-02/update", 9), ("ADM-02/reload", 12)]
+        or len(route_ids) != 21
+        or len(set(route_ids)) != len(route_ids)
+    ):
+        raise AdmissionEvidenceError("update/reload inventory cardinality changed")
+    if not set(claims).issubset(route_ids):
+        raise AdmissionEvidenceError("source proof names an uninventoried route")
+    expected_routes = []
+    for route_id in route_ids:
+        route_claims = claims.get(route_id, [])
+        expected_routes.append(
+            {
+                "id": route_id,
+                "source_receipt_digests": sorted(
+                    source for _, source in route_claims
+                ),
+                "status": _route_coverage_status(route_claims),
+            }
+        )
+    if coverage["routes"] != expected_routes:
+        raise AdmissionEvidenceError(
+            "update/reload route coverage was not derived exactly"
+        )
+
+    if (
+        live_receipt["bindings"]["runtime"] != config_receipt["bindings"]["runtime"]
+        or live_receipt["bindings"]["aragorn"]
+        != config_receipt["bindings"]["aragorn"]
+        or live_receipt["bindings"]["environment"]["worker_digest"]
+        != config_receipt["bindings"]["environment"]["worker_digest"]
+    ):
+        raise AdmissionEvidenceError("source coverage bindings are incompatible")
+    source_bindings = [
+        {
+            "bindings": source["bindings"],
+            "receipt_digest": digest,
+        }
+        for digest, source in (
+            (_LIVE_CRON_RECEIPT_DIGEST, live_receipt),
+            (_CONFIG_RECEIPT_DIGEST, config_receipt),
+        )
+    ]
+    implementation_digest = (
+        "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    )
+    configuration = {
+        "route_inventory_canonical_digest": _UPDATE_RELOAD_INVENTORY_DIGEST,
+        "source_receipt_digests": _UPDATE_RELOAD_SOURCE_RECEIPTS,
+    }
+    source_environments = [
+        item["bindings"]["environment"] for item in source_bindings
+    ]
+    expected_bindings = {
+        "runtime": live_receipt["bindings"]["runtime"],
+        "adapter": {
+            "name": "openclaw-update-reload-route-coverage",
+            "implementation_digest": implementation_digest,
+            "configuration_digest": canonical_digest(configuration),
+        },
+        "environment": {
+            "worker_digest": canonical_digest(
+                [item["worker_digest"] for item in source_environments]
+            ),
+            "os_profile_digest": canonical_digest(source_environments),
+        },
+        "aragorn": {
+            "implementation_digest": canonical_digest(
+                {
+                    "coverage_verifier_digest": implementation_digest,
+                    "source_binding_set": source_bindings,
+                }
+            ),
+            "policy_digest": live_receipt["bindings"]["aragorn"][
+                "policy_digest"
+            ],
+        },
+    }
+    if receipt["bindings"] != expected_bindings:
+        raise AdmissionEvidenceError("update/reload coverage bindings changed")
+
+
+def _route_coverage_status(claims: list[tuple[str, str]]) -> str:
+    if any(status == "FAIL" for status, _ in claims):
+        return "FAIL"
+    return "PASS" if claims else "NOT_TESTED"
 
 
 def verify_openclaw_model_activation_evidence(

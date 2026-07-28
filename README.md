@@ -50,6 +50,14 @@ output across three fresh CPython processes with distinct hash seeds. This
 promotes only `DET-01` in a separate receipt; it does not attest the fixed
 analyzer evidence, compose `ADM-01`, or grant installer authority.
 
+The update/reload coverage verifier derives one canonical 21-route ledger from
+the exact live-reload-cron and config-activation source receipts and their
+transitive evidence. It records 1/9 update and 5/12 reload routes as proven.
+The local-directory CLI replacement remains a partial observation because its
+inventory route also contains unexecuted archive, upload, and gateway variants;
+stored route labels cannot promote formal scenarios or grant installer
+authority.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

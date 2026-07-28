@@ -30,6 +30,7 @@ const ALLOWED_SOURCE = "/sources/allowed-source";
 const POLICY_LOG = join(STATE, "live-reload-policy-requests.jsonl");
 const SESSION_KEY = "agent:main:aragorn-live-reload-v1";
 const SESSION_STORE = join(STATE, "agents", "main", "sessions", "sessions.json");
+const CRON_NAME = "Aragorn isolated cron rescan probe";
 const TEST_TOKEN = "aragorn-contained-live-reload-token-v1";
 const EXPECTED_VERSION = "OpenClaw 2026.7.1 (2d2ddc4)";
 const BLOCK_REASON = "Aragorn live-reload probe blocked source";
@@ -490,6 +491,42 @@ function sessionSnapshot() {
   };
 }
 
+function cronSnapshot(jobId) {
+  const key = `agent:main:cron:${jobId}`;
+  const store = JSON.parse(readFileSync(SESSION_STORE, "utf8"));
+  const entry = store[key];
+  if (
+    !entry?.skillsSnapshot ||
+    typeof entry.lifecycleRevision !== "string" ||
+    !Number.isSafeInteger(entry.updatedAt)
+  ) {
+    throw new Error("expected isolated cron skill snapshot is missing");
+  }
+  const snapshot = entry.skillsSnapshot;
+  const { prompt, storage } = resolveSnapshotPrompt(snapshot);
+  return {
+    label: entry.label,
+    lifecycle_revision: entry.lifecycleRevision,
+    markers: Object.fromEntries(
+      Object.entries(MARKERS).map(([name, marker]) => [
+        name,
+        prompt.includes(marker),
+      ]),
+    ),
+    model: entry.model,
+    model_provider: entry.modelProvider,
+    prompt_bytes: Buffer.byteLength(prompt),
+    prompt_digest: sha256(Buffer.from(prompt)),
+    prompt_storage: storage,
+    session_key: key,
+    skill_filter: snapshot.skillFilter,
+    skill_names: (snapshot.skills ?? []).map((item) => item.name),
+    system_sent: entry.systemSent,
+    updated_at: entry.updatedAt,
+    version: snapshot.version,
+  };
+}
+
 function validSnapshot(snapshot, marker) {
   return (
     typeof snapshot.session_id === "string" &&
@@ -501,6 +538,28 @@ function validSnapshot(snapshot, marker) {
     snapshot.runtime_ms >= 0 &&
     Number.isSafeInteger(snapshot.version) &&
     snapshot.version >= 0 &&
+    canonicalJson(snapshot.skill_names) === `["${NAME}"]` &&
+    snapshot.markers[marker] === true &&
+    Object.entries(snapshot.markers)
+      .filter(([name]) => name !== marker)
+      .every(([, present]) => present === false)
+  );
+}
+
+function validCronSnapshot(snapshot, marker) {
+  return (
+    snapshot.label === `Cron: ${CRON_NAME}` &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      snapshot.lifecycle_revision,
+    ) &&
+    snapshot.model === "gpt-5.5" &&
+    snapshot.model_provider === "openai" &&
+    snapshot.prompt_storage === "promptRef" &&
+    snapshot.system_sent === true &&
+    Number.isSafeInteger(snapshot.updated_at) &&
+    Number.isSafeInteger(snapshot.version) &&
+    snapshot.version >= 0 &&
+    canonicalJson(snapshot.skill_filter) === `["${NAME}"]` &&
     canonicalJson(snapshot.skill_names) === `["${NAME}"]` &&
     snapshot.markers[marker] === true &&
     Object.entries(snapshot.markers)
@@ -538,6 +597,91 @@ async function normalTurn(label, attempt) {
     send: { command: summarized(sendCommand), response: send },
     wait: { command: summarized(waitCommand), response: wait },
   };
+}
+
+async function createCronJob() {
+  const params = {
+    agentId: "main",
+    delivery: { mode: "none" },
+    enabled: true,
+    name: CRON_NAME,
+    payload: {
+      kind: "agentTurn",
+      message: "Inert isolated cron skill rescan probe.",
+      timeoutSeconds: 5,
+    },
+    schedule: { everyMs: 86_400_000, kind: "every" },
+    sessionTarget: "isolated",
+    wakeMode: "now",
+  };
+  const call = gatewayCall("cron.add", params);
+  const response = parseCommand(call, "cron.add");
+  if (
+    typeof response.id !== "string" ||
+    response.name !== CRON_NAME ||
+    response.enabled !== true ||
+    response.sessionTarget !== "isolated" ||
+    response.wakeMode !== "now" ||
+    canonicalJson(response.payload) !== canonicalJson(params.payload) ||
+    canonicalJson(response.delivery) !== canonicalJson(params.delivery)
+  ) {
+    throw new Error("cron.add did not create the exact isolated job");
+  }
+  return { command: summarized(call), params, response };
+}
+
+async function forceCronRun(jobId, attempt) {
+  const params = { id: jobId, mode: "force" };
+  const call = gatewayCall("cron.run", params);
+  const response = parseCommand(call, `cron.run ${attempt}`);
+  if (
+    response.ok !== true ||
+    response.enqueued !== true ||
+    typeof response.runId !== "string"
+  ) {
+    throw new Error(`cron.run ${attempt} was not enqueued`);
+  }
+  let history = null;
+  const polls = [];
+  for (let retry = 1; retry <= 20 && history === null; retry += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const historyParams = { id: jobId, limit: 10 };
+    const historyCall = gatewayCall("cron.runs", historyParams);
+    const historyResponse = parseCommand(historyCall, `cron.runs ${attempt}`);
+    polls.push({
+      command: summarized(historyCall),
+      params: historyParams,
+      response: historyResponse,
+    });
+    if (
+      Array.isArray(historyResponse.entries) &&
+      historyResponse.entries.some((entry) => entry.runId === response.runId)
+    ) {
+      history = polls.at(-1);
+    }
+  }
+  if (history === null) {
+    throw new Error(`cron.run ${attempt} did not finish within the poll bound`);
+  }
+  const result = history.response.entries.find(
+    (entry) => entry.runId === response.runId,
+  );
+  return {
+    history,
+    poll_count: polls.length,
+    result,
+    run: { command: summarized(call), params, response },
+  };
+}
+
+function removeCronJob(jobId) {
+  const params = { id: jobId };
+  const call = gatewayCall("cron.remove", params);
+  const response = parseCommand(call, "cron.remove");
+  if (response.ok !== true || response.removed !== true) {
+    throw new Error("cron.remove did not remove the isolated job");
+  }
+  return { command: summarized(call), params, response };
 }
 
 function gatewayLog() {
@@ -625,6 +769,10 @@ async function runProbe() {
   if (!validSnapshot(v1, "seed")) {
     throw new Error("v1 was not consumed by the first normal session turn");
   }
+  const cronJob = await createCronJob();
+  let cronCleanup = null;
+  const cronBefore = await forceCronRun(cronJob.response.id, 1);
+  const cronSnapshotBefore = cronSnapshot(cronJob.response.id);
 
   const targetBeforeBlock = treeSnapshot(TARGET_DIR);
   const blockedCommand = command([
@@ -695,6 +843,9 @@ async function runProbe() {
     }
   }
 
+  const cronAfter = await forceCronRun(cronJob.response.id, 2);
+  const cronSnapshotAfter = cronSnapshot(cronJob.response.id);
+  cronCleanup = removeCronJob(cronJob.response.id);
   const processAfter = processIdentity();
   const logAfter = gatewayLog();
   const noRestart =
@@ -706,6 +857,37 @@ async function runProbe() {
     watcherPassed &&
     v2.session_id === v1.session_id &&
     v2.prompt_digest !== v1.prompt_digest;
+  const expectedCronResult = (run) =>
+    run.result.jobId === cronJob.response.id &&
+    run.result.action === "finished" &&
+    run.result.status === "error" &&
+    run.result.errorReason === "model_not_found" &&
+    run.result.error === "FailoverError: Unknown model: openai/gpt-5.5" &&
+    run.result.model === "gpt-5.5" &&
+    run.result.provider === "openai" &&
+    run.result.deliveryStatus === "not-requested" &&
+    run.result.jobName === CRON_NAME &&
+    run.result.sessionKey ===
+      `agent:main:cron:${cronJob.response.id}:run:${run.result.sessionId}` &&
+    Number.isSafeInteger(run.result.runAtMs) &&
+    Number.isSafeInteger(run.result.durationMs) &&
+    run.result.durationMs >= 0;
+  const cronPassed =
+    watcherPassed &&
+    expectedCronResult(cronBefore) &&
+    expectedCronResult(cronAfter) &&
+    validCronSnapshot(cronSnapshotBefore, "seed") &&
+    validCronSnapshot(cronSnapshotAfter, "allowed") &&
+    cronBefore.run.response.runId !== cronAfter.run.response.runId &&
+    cronBefore.result.sessionId !== cronAfter.result.sessionId &&
+    cronSnapshotBefore.lifecycle_revision !==
+      cronSnapshotAfter.lifecycle_revision &&
+    cronSnapshotBefore.version < cronSnapshotAfter.version &&
+    cronSnapshotBefore.prompt_digest === v1.prompt_digest &&
+    cronSnapshotAfter.prompt_digest === v2.prompt_digest &&
+    cronSnapshotBefore.prompt_digest !== cronSnapshotAfter.prompt_digest &&
+    cronCleanup.response.ok === true &&
+    noRestart;
   const scenarios = [
     {
       evidence: {
@@ -741,6 +923,18 @@ async function runProbe() {
       id: "ADM-02/reload/chat-session-snapshot-consumer",
       status: sessionPassed ? "PASS" : "FAIL",
     },
+    {
+      evidence: {
+        cleanup: cronCleanup,
+        job: cronJob,
+        run_after: cronAfter,
+        run_before: cronBefore,
+        snapshot_after: cronSnapshotAfter,
+        snapshot_before: cronSnapshotBefore,
+      },
+      id: "ADM-02/reload/cron-rescan",
+      status: cronPassed ? "PASS" : "FAIL",
+    },
   ];
   const failed = scenarios.some((scenario) => scenario.status !== "PASS");
   return {
@@ -769,6 +963,8 @@ async function runProbe() {
     limitations: [
       "ONLY_LOCAL_DIRECTORY_GLOBAL_FORCE_REPLACEMENT_EXECUTED",
       "ONLY_FILESYSTEM_WATCH_EXISTING_CHAT_SESSION_SNAPSHOT_EXECUTED",
+      "ONLY_TWO_FORCED_ISOLATED_CRON_RESCANS_EXECUTED",
+      "CRON_TURNS_STOPPED_AT_MODEL_RESOLUTION_WITHOUT_PROVIDER_EXECUTION",
       "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
       "OTHER_UPDATE_RELOAD_PATHS_REMAIN_NOT_TESTED",
       "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",

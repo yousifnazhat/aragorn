@@ -135,6 +135,22 @@ _LIVE_CONFIG_DIGEST = (
 _LIVE_OS_PROFILE_DIGEST = (
     "sha256:b149a14989574cd8735d9a5033ab9da215a5f2e6ffd37c1e41d9f0f779ed6c60"
 )
+_LIVE_CRON_PROBE_DIGEST = (
+    "sha256:18cb9b9ee5f80aad781dc0c495487d198bb8b9601847f7af65b24ea0a073cbc1"
+)
+_LIVE_CRON_ENV_DIGEST = (
+    "sha256:0def31e7877f8de6d6271987e7146073e2f89b85ca7be323665e4938b6b178b9"
+)
+_LIVE_CRON_EVIDENCE_PAIR = sorted(
+    (_LIVE_CRON_ENV_DIGEST, _LIVE_CRON_PROBE_DIGEST)
+)
+_LIVE_CRON_IMPLEMENTATION_DIGEST = (
+    "sha256:9bda8e8446c9307d2320099d0be8f28179f00bd1507035cae76255f0bc0ad8cc"
+)
+_LIVE_CRON_OS_PROFILE_DIGEST = (
+    "sha256:8bb24cceca24b18602b1bafa97ea61ba9ede5abe3980ee7be73e4bb776a41789"
+)
+_LIVE_CRON_POLL_LIMIT = 20
 _CONFIG_PROBE_SCHEMA = "aragorn/openclaw-contained-config-activation-probe-evidence/v1"
 _CONFIG_ENV_SCHEMA = (
     "aragorn/openclaw-contained-config-activation-environment-evidence/v1"
@@ -312,48 +328,11 @@ def verify_openclaw_live_reload_slice_evidence(
     """Verify one admitted update and two live-reload routes."""
 
     try:
-        if (
-            validate_admission_conformance(document) != "NOT_TESTED"
-            or document["decision"]
-            != {"status": "NOT_TESTED", "installer_work_eligible": False}
-        ):
-            raise AdmissionEvidenceError(
-                "live-reload slice cannot grant installer authority"
-            )
-        formal = {
-            f"{item['id']}/{scenario['id']}": scenario
-            for item in document["properties"]
-            for scenario in item["scenarios"]
-        }
-        if (
-            set(formal) != set(_LIVE_RECEIPT_REASONS)
-            or any(item["status"] != "NOT_TESTED" for item in formal.values())
-            or {
-                key: item["reason_codes"] for key, item in formal.items()
-            }
-            != _LIVE_RECEIPT_REASONS
-        ):
-            raise AdmissionEvidenceError("live-reload formal claim set changed")
-        targeted = {"ADM-02/update", "ADM-02/reload"}
-        for key, scenario in formal.items():
-            expected = _LIVE_EVIDENCE_PAIR if key in targeted else []
-            if scenario["evidence_digests"] != expected:
-                raise AdmissionEvidenceError(
-                    f"{key} does not bind the exact live-reload evidence"
-                )
-        probe = _read_exact(
-            evidence_cas,
-            _LIVE_PROBE_DIGEST,
-            _LIVE_PROBE_SCHEMA,
+        _verify_openclaw_live_reload_slice(
+            document,
+            evidence_cas=evidence_cas,
+            cron=False,
         )
-        environment = _read_exact(
-            evidence_cas,
-            _LIVE_ENV_DIGEST,
-            _LIVE_ENV_SCHEMA,
-        )
-        _verify_live_reload_bindings(document, probe, environment)
-        _verify_live_reload_probe(probe)
-        _verify_live_reload_environment(probe, environment)
     except AdmissionEvidenceError:
         raise
     except (
@@ -366,6 +345,104 @@ def verify_openclaw_live_reload_slice_evidence(
         raise AdmissionEvidenceError(
             f"invalid retained live-reload evidence: {exc}"
         ) from exc
+
+
+def verify_openclaw_live_reload_cron_slice_evidence(
+    document: Mapping[str, Any], *, evidence_cas: CAS
+) -> None:
+    """Verify one admitted update and three distinct live-reload consumers."""
+
+    try:
+        _verify_openclaw_live_reload_slice(
+            document,
+            evidence_cas=evidence_cas,
+            cron=True,
+        )
+    except AdmissionEvidenceError:
+        raise
+    except (
+        AdmissionConformanceError,
+        CASError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AdmissionEvidenceError(
+            f"invalid retained live-reload cron evidence: {exc}"
+        ) from exc
+
+
+def _verify_openclaw_live_reload_slice(
+    document: Mapping[str, Any],
+    *,
+    evidence_cas: CAS,
+    cron: bool,
+) -> None:
+    (
+        probe_digest,
+        environment_digest,
+        evidence_pair,
+    ) = (
+        (
+            _LIVE_CRON_PROBE_DIGEST,
+            _LIVE_CRON_ENV_DIGEST,
+            _LIVE_CRON_EVIDENCE_PAIR,
+        )
+        if cron
+        else (
+            _LIVE_PROBE_DIGEST,
+            _LIVE_ENV_DIGEST,
+            _LIVE_EVIDENCE_PAIR,
+        )
+    )
+    if (
+        validate_admission_conformance(document) != "NOT_TESTED"
+        or document["decision"]
+        != {"status": "NOT_TESTED", "installer_work_eligible": False}
+    ):
+        raise AdmissionEvidenceError(
+            "live-reload slice cannot grant installer authority"
+        )
+    formal = {
+        f"{item['id']}/{scenario['id']}": scenario
+        for item in document["properties"]
+        for scenario in item["scenarios"]
+    }
+    if (
+        set(formal) != set(_LIVE_RECEIPT_REASONS)
+        or any(item["status"] != "NOT_TESTED" for item in formal.values())
+        or {key: item["reason_codes"] for key, item in formal.items()}
+        != _LIVE_RECEIPT_REASONS
+    ):
+        raise AdmissionEvidenceError("live-reload formal claim set changed")
+    targeted = {"ADM-02/update", "ADM-02/reload"}
+    for key, scenario in formal.items():
+        expected = evidence_pair if key in targeted else []
+        if scenario["evidence_digests"] != expected:
+            raise AdmissionEvidenceError(
+                f"{key} does not bind the exact live-reload evidence"
+            )
+    probe = _read_exact(evidence_cas, probe_digest, _LIVE_PROBE_SCHEMA)
+    environment = _read_exact(
+        evidence_cas,
+        environment_digest,
+        _LIVE_ENV_SCHEMA,
+    )
+    _verify_live_reload_bindings(
+        document,
+        probe,
+        environment,
+        cron=cron,
+    )
+    if cron:
+        _verify_live_reload_cron_probe(probe)
+    else:
+        _verify_live_reload_probe(probe)
+    _verify_live_reload_environment(
+        probe,
+        environment,
+        cron=cron,
+    )
 
 
 def verify_openclaw_config_activation_slice_evidence(
@@ -1336,7 +1413,22 @@ def _verify_live_reload_bindings(
     receipt: Mapping[str, Any],
     probe: Mapping[str, Any],
     environment: Mapping[str, Any],
+    *,
+    cron: bool,
 ) -> None:
+    adapter_name = (
+        "openclaw-contained-live-reload-cron-slice"
+        if cron
+        else "openclaw-contained-live-reload-slice"
+    )
+    implementation_digest = (
+        _LIVE_CRON_IMPLEMENTATION_DIGEST
+        if cron
+        else _LIVE_IMPLEMENTATION_DIGEST
+    )
+    os_profile_digest = (
+        _LIVE_CRON_OS_PROFILE_DIGEST if cron else _LIVE_OS_PROFILE_DIGEST
+    )
     if (
         receipt["recorded_at"] != probe["recorded_at"]
         or environment["recorded_at"] != probe["recorded_at"]
@@ -1351,13 +1443,13 @@ def _verify_live_reload_bindings(
             "source_tree_digest": _OPENCLAW_RUNTIME_TREE,
         },
         "adapter": {
-            "name": "openclaw-contained-live-reload-slice",
-            "implementation_digest": _LIVE_IMPLEMENTATION_DIGEST,
+            "name": adapter_name,
+            "implementation_digest": implementation_digest,
             "configuration_digest": _LIVE_CONFIG_DIGEST,
         },
         "environment": {
             "worker_digest": _OPENCLAW_PLATFORM_MANIFEST,
-            "os_profile_digest": _LIVE_OS_PROFILE_DIGEST,
+            "os_profile_digest": os_profile_digest,
         },
         "aragorn": _ARAGORN_BINDING,
     }:
@@ -1367,7 +1459,7 @@ def _verify_live_reload_bindings(
         adapter["configuration_digest"]
         != canonical_digest(adapter["configuration"])
         or adapter["configuration_digest"] != _LIVE_CONFIG_DIGEST
-        or adapter["implementation_digest"] != _LIVE_IMPLEMENTATION_DIGEST
+        or adapter["implementation_digest"] != implementation_digest
     ):
         raise AdmissionEvidenceError("live-reload adapter binding changed")
 
@@ -1696,10 +1788,359 @@ def _verify_live_reload_probe(probe: Mapping[str, Any]) -> None:
         raise AdmissionEvidenceError("live-reload execution timing is not causal")
 
 
+def _verify_live_reload_cron_probe(  # noqa: PLR0915
+    probe: Mapping[str, Any],
+) -> None:
+    expected_limitations = [
+        "ONLY_LOCAL_DIRECTORY_GLOBAL_FORCE_REPLACEMENT_EXECUTED",
+        "ONLY_FILESYSTEM_WATCH_EXISTING_CHAT_SESSION_SNAPSHOT_EXECUTED",
+        "ONLY_TWO_FORCED_ISOLATED_CRON_RESCANS_EXECUTED",
+        "CRON_TURNS_STOPPED_AT_MODEL_RESOLUTION_WITHOUT_PROVIDER_EXECUTION",
+        "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
+        "OTHER_UPDATE_RELOAD_PATHS_REMAIN_NOT_TESTED",
+        "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
+    ]
+    scenarios = probe["scenarios"]
+    if (
+        probe["limitations"] != expected_limitations
+        or [(item["id"], item["status"]) for item in scenarios]
+        != [
+            ("ADM-02/update/archive-source-force-replacement", "PASS"),
+            ("ADM-02/reload/filesystem-watch-invalidation", "PASS"),
+            ("ADM-02/reload/chat-session-snapshot-consumer", "PASS"),
+            ("ADM-02/reload/cron-rescan", "PASS"),
+        ]
+    ):
+        raise AdmissionEvidenceError("live-reload cron claim boundary changed")
+
+    carried = {
+        **probe,
+        "limitations": [
+            "ONLY_LOCAL_DIRECTORY_GLOBAL_FORCE_REPLACEMENT_EXECUTED",
+            "ONLY_FILESYSTEM_WATCH_EXISTING_CHAT_SESSION_SNAPSHOT_EXECUTED",
+            "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
+            "OTHER_UPDATE_RELOAD_PATHS_REMAIN_NOT_TESTED",
+            "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
+        ],
+        "scenarios": scenarios[:3],
+    }
+    _verify_live_reload_probe(carried)
+
+    evidence = scenarios[3]["evidence"]
+    job = evidence["job"]
+    cleanup = evidence["cleanup"]
+    run_before = evidence["run_before"]
+    run_after = evidence["run_after"]
+    snapshot_before = evidence["snapshot_before"]
+    snapshot_after = evidence["snapshot_after"]
+    job_id = job["response"]["id"]
+    uuid4 = (
+        r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-"
+        r"[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+    )
+    if re.fullmatch(uuid4, job_id) is None:
+        raise AdmissionEvidenceError("live-reload cron job identity changed")
+
+    job_params = {
+        "agentId": "main",
+        "delivery": {"mode": "none"},
+        "enabled": True,
+        "name": "Aragorn isolated cron rescan probe",
+        "payload": {
+            "kind": "agentTurn",
+            "message": "Inert isolated cron skill rescan probe.",
+            "timeoutSeconds": 5,
+        },
+        "schedule": {"everyMs": 86_400_000, "kind": "every"},
+        "sessionTarget": "isolated",
+        "wakeMode": "now",
+    }
+    created_at_ms = job["response"]["createdAtMs"]
+    if type(created_at_ms) is not int:  # noqa: E721
+        raise AdmissionEvidenceError("live-reload cron creation time changed")
+    rpc_prefix = [
+        "/usr/local/bin/node",
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+        "gateway",
+        "call",
+    ]
+
+    def rpc_argv(method: str, params: Mapping[str, Any]) -> list[str]:
+        return rpc_prefix + [
+            method,
+            "--json",
+            "--timeout",
+            "5000",
+            "--params",
+            json.dumps(params, separators=(",", ":"), sort_keys=True),
+        ]
+
+    _verify_successful_config_command(
+        job["command"],
+        rpc_argv("cron.add", job_params),
+    )
+    if (
+        job["params"] != job_params
+        or job["response"]
+        != {
+            "agentId": "main",
+            "createdAtMs": created_at_ms,
+            "delivery": {"mode": "none"},
+            "enabled": True,
+            "id": job_id,
+            "name": "Aragorn isolated cron rescan probe",
+            "nextRunAtMs": created_at_ms + 86_400_000,
+            "payload": job_params["payload"],
+            "schedule": {
+                "anchorMs": created_at_ms,
+                "everyMs": 86_400_000,
+                "kind": "every",
+            },
+            "sessionTarget": "isolated",
+            "state": {"nextRunAtMs": created_at_ms + 86_400_000},
+            "updatedAtMs": created_at_ms,
+            "wakeMode": "now",
+        }
+        or not (
+            _epoch_milliseconds(job["command"]["started_at"])
+            <= created_at_ms
+            <= _epoch_milliseconds(job["command"]["completed_at"])
+        )
+    ):
+        raise AdmissionEvidenceError("live-reload cron job creation changed")
+
+    expected_snapshots = (
+        (
+            snapshot_before,
+            {"allowed": False, "blocked": False, "seed": True},
+            698,
+            "sha256:"
+            "df7b81a0879f2db0f9c81c0866aa1e229064d700fbb54758816c883c4f6eaca8",
+        ),
+        (
+            snapshot_after,
+            {"allowed": True, "blocked": False, "seed": False},
+            716,
+            "sha256:"
+            "911e21e4c6ae9f26737475402a2f709675a0c9d47d26e862272c31ec77d4c75f",
+        ),
+    )
+    for snapshot, markers, prompt_bytes, prompt_digest in expected_snapshots:
+        lifecycle = snapshot["lifecycle_revision"]
+        updated_at = snapshot["updated_at"]
+        version = snapshot["version"]
+        if (
+            re.fullmatch(uuid4, lifecycle) is None
+            or type(updated_at) is not int  # noqa: E721
+            or type(version) is not int  # noqa: E721
+            or snapshot
+            != {
+                "label": "Cron: Aragorn isolated cron rescan probe",
+                "lifecycle_revision": lifecycle,
+                "markers": markers,
+                "model": "gpt-5.5",
+                "model_provider": "openai",
+                "prompt_bytes": prompt_bytes,
+                "prompt_digest": prompt_digest,
+                "prompt_storage": "promptRef",
+                "session_key": f"agent:main:cron:{job_id}",
+                "skill_filter": ["aragorn-admitted"],
+                "skill_names": ["aragorn-admitted"],
+                "system_sent": True,
+                "updated_at": updated_at,
+                "version": version,
+            }
+        ):
+            raise AdmissionEvidenceError("live-reload cron snapshot changed")
+
+    def verify_run(
+        run: Mapping[str, Any],
+        *,
+        attempt: int,
+        snapshot: Mapping[str, Any],
+        previous_results: list[Mapping[str, Any]],
+    ) -> Mapping[str, Any]:
+        result = run["result"]
+        run_id = result["runId"]
+        session_id = result["sessionId"]
+        match = re.fullmatch(
+            rf"manual:{re.escape(job_id)}:([0-9]+):{attempt}",
+            run_id,
+        )
+        if (
+            match is None
+            or re.fullmatch(uuid4, session_id) is None
+            or any(
+                type(result[key]) is not int  # noqa: E721
+                for key in (
+                    "durationMs",
+                    "nextRunAtMs",
+                    "runAtMs",
+                    "ts",
+                )
+            )
+            or result["durationMs"] < 0
+            or result["nextRunAtMs"] <= result["ts"]
+        ):
+            raise AdmissionEvidenceError("live-reload cron run identity changed")
+        diagnostic_ts = result["diagnostics"]["entries"][0]["ts"]
+        if type(diagnostic_ts) is not int:  # noqa: E721
+            raise AdmissionEvidenceError("live-reload cron diagnostic time changed")
+        expected_result = {
+            "action": "finished",
+            "deliveryStatus": "not-requested",
+            "diagnostics": {
+                "entries": [
+                    {
+                        "message": "Unknown model: openai/gpt-5.5",
+                        "severity": "error",
+                        "source": "agent-run",
+                        "ts": diagnostic_ts,
+                    }
+                ],
+                "summary": "Unknown model: openai/gpt-5.5",
+            },
+            "durationMs": result["durationMs"],
+            "error": "FailoverError: Unknown model: openai/gpt-5.5",
+            "errorReason": "model_not_found",
+            "jobId": job_id,
+            "jobName": "Aragorn isolated cron rescan probe",
+            "model": "gpt-5.5",
+            "nextRunAtMs": result["nextRunAtMs"],
+            "provider": "openai",
+            "runAtMs": result["runAtMs"],
+            "runId": run_id,
+            "sessionId": session_id,
+            "sessionKey": (
+                f"agent:main:cron:{job_id}:run:{session_id}"
+            ),
+            "status": "error",
+            "ts": result["ts"],
+        }
+        run_params = {"id": job_id, "mode": "force"}
+        history_params = {"id": job_id, "limit": 10}
+        _verify_successful_config_command(
+            run["run"]["command"],
+            rpc_argv("cron.run", run_params),
+        )
+        _verify_successful_config_command(
+            run["history"]["command"],
+            rpc_argv("cron.runs", history_params),
+        )
+        expected_history_entries = [expected_result, *previous_results]
+        if (
+            result != expected_result
+            or run["run"]["params"] != run_params
+            or run["run"]["response"]
+            != {"enqueued": True, "ok": True, "runId": run_id}
+            or run["history"]["params"] != history_params
+            or run["history"]["response"]
+            != {
+                "entries": expected_history_entries,
+                "hasMore": False,
+                "limit": 10,
+                "nextOffset": None,
+                "offset": 0,
+                "total": len(expected_history_entries),
+            }
+            or not 1 <= run["poll_count"] <= _LIVE_CRON_POLL_LIMIT
+        ):
+            raise AdmissionEvidenceError("live-reload cron run result changed")
+        if not (
+            _epoch_milliseconds(run["run"]["command"]["started_at"])
+            <= int(match.group(1))
+            <= result["runAtMs"]
+            <= snapshot["updated_at"]
+            <= diagnostic_ts
+            <= result["ts"]
+            <= _epoch_milliseconds(run["history"]["command"]["started_at"])
+            <= _epoch_milliseconds(run["history"]["command"]["completed_at"])
+        ) or (
+            _time(run["run"]["command"]["completed_at"])
+            > _time(run["history"]["command"]["started_at"])
+        ):
+            raise AdmissionEvidenceError(
+                "live-reload cron run timing is not causal"
+            )
+        return expected_result
+
+    before_result = verify_run(
+        run_before,
+        attempt=1,
+        snapshot=snapshot_before,
+        previous_results=[],
+    )
+    after_result = verify_run(
+        run_after,
+        attempt=2,
+        snapshot=snapshot_after,
+        previous_results=[before_result],
+    )
+    chat_before = scenarios[1]["evidence"]["snapshot_before"]
+    chat_after = scenarios[1]["evidence"]["snapshot_after"]
+    if (
+        snapshot_before["prompt_digest"] != chat_before["prompt_digest"]
+        or snapshot_before["version"] != chat_before["version"]
+        or snapshot_after["prompt_digest"] != chat_after["prompt_digest"]
+        or snapshot_after["version"] != chat_after["version"]
+        or snapshot_before["version"] >= snapshot_after["version"]
+        or snapshot_before["lifecycle_revision"]
+        == snapshot_after["lifecycle_revision"]
+        or before_result["runId"] == after_result["runId"]
+        or before_result["sessionId"] == after_result["sessionId"]
+    ):
+        raise AdmissionEvidenceError("live-reload cron transition changed")
+
+    cleanup_params = {"id": job_id}
+    _verify_successful_config_command(
+        cleanup["command"],
+        rpc_argv("cron.remove", cleanup_params),
+    )
+    if (
+        cleanup["params"] != cleanup_params
+        or cleanup["response"] != {"ok": True, "removed": True}
+    ):
+        raise AdmissionEvidenceError("live-reload cron cleanup changed")
+
+    blocked_command = scenarios[0]["evidence"]["blocked_command"]
+    reload_wait = scenarios[2]["evidence"]["reload_turns"][-1]["wait"]["command"]
+    if not (
+        _time(job["command"]["completed_at"])
+        <= _time(run_before["run"]["command"]["started_at"])
+        and _time(run_before["history"]["command"]["completed_at"])
+        <= _time(blocked_command["started_at"])
+        and _time(reload_wait["completed_at"])
+        <= _time(run_after["run"]["command"]["started_at"])
+        and _time(run_after["history"]["command"]["completed_at"])
+        <= _time(cleanup["command"]["started_at"])
+        <= _time(cleanup["command"]["completed_at"])
+        <= _time(probe["recorded_at"])
+    ):
+        raise AdmissionEvidenceError(
+            "live-reload cron transition timing is not causal"
+        )
+
+
 def _verify_live_reload_environment(
     probe: Mapping[str, Any],
     environment: Mapping[str, Any],
+    *,
+    cron: bool = False,
 ) -> None:
+    probe_digest = _LIVE_CRON_PROBE_DIGEST if cron else _LIVE_PROBE_DIGEST
+    os_profile_digest = (
+        _LIVE_CRON_OS_PROFILE_DIGEST if cron else _LIVE_OS_PROFILE_DIGEST
+    )
+    container_name = (
+        "aragorn-openclaw-contained-live-reload-v2"
+        if cron
+        else "aragorn-openclaw-contained-live-reload-v1"
+    )
+    probe_volume = (
+        "aragorn-openclaw-2026-7-1-contained-live-reload-probe-v2"
+        if cron
+        else "aragorn-openclaw-2026-7-1-contained-live-reload-probe-v1"
+    )
     container = environment["container"]
     execution = container["probe_exec"]
     state = container["state"]
@@ -1727,19 +2168,40 @@ def _verify_live_reload_environment(
         "--allow-unconfigured --auth token --bind loopback --port 18789 "
         "--tailscale off --ws-log full",
     ]
+    target_command = ["/usr/local/bin/node", "/probe/live-reload-probe.mjs"]
+    execution_command = (
+        target_command
+        if cron
+        else [
+            "/bin/sh",
+            "-c",
+            "/usr/local/bin/node /probe/live-reload-probe.mjs > "
+            "/tmp/live-reload-evidence.json; code=$?; "
+            'printf "%s\\n" "$code" > /tmp/live-reload-exit-code; '
+            'exit "$code"',
+        ]
+    )
     if (
         environment["recorded_at"] != probe["recorded_at"]
         or image != expected_image
         or container["command"] != startup
-        or container["name"] != "aragorn-openclaw-contained-live-reload-v1"
+        or container["name"] != container_name
         or container["working_dir"] != "/profile/workspace"
+        or execution["command"] != execution_command
         or execution["exit_code"] != 0
-        or execution["mode"] != "docker-exec-shell-capture"
+        or execution["mode"]
+        != (
+            "docker-exec-stdout-capture"
+            if cron
+            else "docker-exec-shell-capture"
+        )
         or execution["recorded_at"] != probe["recorded_at"]
-        or execution["target_command"]
-        != ["/usr/local/bin/node", "/probe/live-reload-probe.mjs"]
+        or execution["target_command"] != target_command
         or execution["stdout"]
-        != {"bytes": 12780, "digest": _LIVE_PROBE_DIGEST}
+        != {
+            "bytes": len(_canonical_bytes(probe)) + 1,
+            "digest": probe_digest,
+        }
         or execution["user"] != "1000:1000"
         or state["status"] != "exited"
         or state["exit_code"] != 0
@@ -1749,15 +2211,18 @@ def _verify_live_reload_environment(
         or state["oom_killed"]
         or state["dead"]
         or state["error"] != ""
+        or (
+            state.get("restart_count") != 0
+            if cron
+            else "restart_count" in state
+        )
     ):
         raise AdmissionEvidenceError("live-reload container execution changed")
     expected_mounts = [
         {
             "destination": "/probe",
             "read_only": True,
-            "source": (
-                "aragorn-openclaw-2026-7-1-contained-live-reload-probe-v1"
-            ),
+            "source": probe_volume,
             "type": "volume",
         },
         {
@@ -1846,6 +2311,11 @@ def _verify_live_reload_environment(
         "user": "1000:1000",
         "working_dir": "/profile/workspace",
     }
+    if cron:
+        controls["restart_policy"] = {
+            "maximum_retry_count": 0,
+            "name": "no",
+        }
     if (
         {key: isolation[key] for key in controls} != controls
         or isolation["environment"]
@@ -1874,7 +2344,7 @@ def _verify_live_reload_environment(
     }
     if (
         environment["os_profile_digest"] != canonical_digest(os_profile)
-        or environment["os_profile_digest"] != _LIVE_OS_PROFILE_DIGEST
+        or environment["os_profile_digest"] != os_profile_digest
         or docker["assurance"] != "SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED"
         or docker["context"]
         != {

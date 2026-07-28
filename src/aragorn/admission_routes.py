@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from .oci_worker_protocol import canonical_digest
 
 _OPENCLAW_2026_7_1_INVENTORY_DIGEST = (
-    "sha256:a5d2e53d14d0b56a2e4f335eeaf034f31f7c787bd8bfa09e4fe442d9f6363a6a"
+    "sha256:c175cd145a0c18d80921edbeb2452e34182188f97ee4e3b8d26176e7e38f5b41"
 )
 _SOURCE_ANCHOR = re.compile(r"^.+#L([1-9][0-9]*)-L([1-9][0-9]*)$")
 

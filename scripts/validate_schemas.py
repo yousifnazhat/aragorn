@@ -42,6 +42,7 @@ from aragorn.admission_conformance import (
 )
 from aragorn.admission_evidence import (
     verify_openclaw_config_activation_slice_evidence,
+    verify_openclaw_live_reload_cron_slice_evidence,
     verify_openclaw_live_reload_slice_evidence,
     verify_openclaw_restart_evidence,
     verify_openclaw_update_slice_evidence,
@@ -965,6 +966,27 @@ def main() -> int:
             "NOT_TESTED",
         ),
         (
+            "openclaw-live-reload-cron-slice",
+            (
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-live-reload-cron-"
+                    "probe-2026-07-28.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-live-reload-cron-"
+                    "environment-2026-07-28.json"
+                ),
+            ),
+            admission_receipts
+            / (
+                "phase1-openclaw-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            "NOT_TESTED",
+        ),
+        (
             "openclaw-config-activation-slice",
             (
                 admission_evidence
@@ -1013,6 +1035,11 @@ def main() -> int:
                 )
             if label == "openclaw-live-reload-slice":
                 verify_openclaw_live_reload_slice_evidence(
+                    result,
+                    evidence_cas=evidence_cas,
+                )
+            if label == "openclaw-live-reload-cron-slice":
+                verify_openclaw_live_reload_cron_slice_evidence(
                     result,
                     evidence_cas=evidence_cas,
                 )

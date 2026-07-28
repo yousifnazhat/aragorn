@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, one local-directory forced-update denial slice, one admitted forced replacement, filesystem-watch invalidation, same-session snapshot refresh, one config-entry disable/reactivation of previously admitted read-only bytes, and one missing prompt-blob recovery. Exact activation, the remaining update and reload routes, and determinism remain `NOT_TESTED`; host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, one local-directory forced-update denial slice, one admitted forced replacement, filesystem-watch invalidation, same-session snapshot refresh, two forced isolated cron prompt snapshots spanning that replacement, one config-entry disable/reactivation of previously admitted read-only bytes, and one missing prompt-blob recovery. Exact activation, the remaining update and reload routes, and determinism remain `NOT_TESTED`; host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
@@ -16,10 +16,15 @@ replaced after an exact `skill-install/update` policy denial. Formal
 `ADM-02/update` remains `NOT_TESTED` because the other inventoried update routes
 have not executed.
 
-The live-reload-slice verifier proves one admitted forced replacement reached a
-new filesystem-watch snapshot and the same chat session consumed that snapshot
-without a gateway restart. Formal `ADM-02/update` and `ADM-02/reload` remain
-`NOT_TESTED` because their remaining inventoried routes have not executed.
+The live-reload verifiers bind one admitted forced replacement to a new watcher
+snapshot consumed by the same chat session and to two forced isolated cron runs
+that built fresh prompt snapshots on opposite sides of that replacement,
+without a gateway restart. The cron runs used distinct isolated sessions and
+lifecycle revisions but stopped at model resolution before provider execution;
+this proves prompt-snapshot construction, not successful provider completion.
+Formal `ADM-02/update` and `ADM-02/reload` remain `NOT_TESTED` because their
+remaining inventoried routes have not executed, and these route-level
+observations grant no installer authority.
 
 The config-activation-slice verifier proves `skills.update` disabled and
 re-enabled a previously verified skill digest mounted read-only, while the same

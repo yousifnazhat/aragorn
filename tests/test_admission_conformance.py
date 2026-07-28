@@ -1173,6 +1173,108 @@ class AdmissionConformanceTests(unittest.TestCase):
         with self.assertRaises(admission_evidence.AdmissionEvidenceError):
             admission_evidence._verify_live_reload_environment(probe, isolation)
 
+    def test_retained_openclaw_live_reload_cron_is_distinct_and_non_authoritative(
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / (
+                    "phase1-openclaw-contained-live-reload-cron-"
+                    "probe-2026-07-28.json"
+                )
+            ).read_bytes()
+        )
+        evidence_paths = (
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "environment-2026-07-28.json"
+            ),
+        )
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_live_reload_cron_slice_evidence(
+                receipt,
+                evidence_cas=self.cas,
+            )
+        )
+
+        for scenario_index in (1, 6):
+            promoted = deepcopy(receipt)
+            scenario = promoted["properties"][2]["scenarios"][scenario_index]
+            scenario.update(status="PASS", reason_codes=[])
+            with self.subTest(scenario=scenario["id"]), self.assertRaises(
+                admission_evidence.AdmissionEvidenceError
+            ):
+                admission_evidence.verify_openclaw_live_reload_cron_slice_evidence(
+                    promoted,
+                    evidence_cas=self.cas,
+                )
+
+        probe = json.loads(evidence_paths[0].read_bytes())
+        cron = probe["scenarios"][3]["evidence"]
+        prompt = deepcopy(probe)
+        prompt_cron = prompt["scenarios"][3]["evidence"]
+        prompt_cron["snapshot_after"]["prompt_digest"] = prompt_cron[
+            "snapshot_before"
+        ]["prompt_digest"]
+
+        session = deepcopy(probe)
+        session_cron = session["scenarios"][3]["evidence"]
+        before_session = session_cron["run_before"]["result"]["sessionId"]
+        session_cron["run_after"]["result"]["sessionId"] = before_session
+        session_cron["run_after"]["history"]["response"]["entries"][0][
+            "sessionId"
+        ] = before_session
+        before_key = session_cron["run_before"]["result"]["sessionKey"]
+        session_cron["run_after"]["result"]["sessionKey"] = before_key
+        session_cron["run_after"]["history"]["response"]["entries"][0][
+            "sessionKey"
+        ] = before_key
+
+        cleanup = deepcopy(probe)
+        cleanup["scenarios"][3]["evidence"]["cleanup"]["response"]["removed"] = (
+            False
+        )
+
+        timing = deepcopy(probe)
+        timing_cron = timing["scenarios"][3]["evidence"]
+        timing_cron["snapshot_after"]["updated_at"] = (
+            cron["run_after"]["result"]["diagnostics"]["entries"][0]["ts"] + 1
+        )
+
+        for label, mutation in (
+            ("prompt transition", prompt),
+            ("isolated sessions", session),
+            ("cleanup", cleanup),
+            ("causal timing", timing),
+        ):
+            with self.subTest(label), self.assertRaises(
+                admission_evidence.AdmissionEvidenceError
+            ):
+                admission_evidence._verify_live_reload_cron_probe(mutation)
+
+        environment = json.loads(evidence_paths[1].read_bytes())
+        isolation = deepcopy(environment)
+        isolation["isolation"]["restart_policy"]["name"] = "always"
+        with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+            admission_evidence._verify_live_reload_environment(
+                probe,
+                isolation,
+                cron=True,
+            )
 
     def test_retained_openclaw_config_activation_is_read_only_and_non_authoritative(
         self,

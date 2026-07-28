@@ -1111,6 +1111,68 @@ class AdmissionConformanceTests(unittest.TestCase):
         with self.assertRaises(admission_evidence.AdmissionEvidenceError):
             admission_evidence._verify_update_environment(probe, isolation)
 
+    def test_retained_openclaw_live_reload_slice_is_bound_and_non_authoritative(
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / "phase1-openclaw-contained-live-reload-probe-2026-07-27.json"
+            ).read_bytes()
+        )
+        evidence_paths = (
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-live-reload-probe-2026-07-27.json",
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-live-reload-environment-2026-07-27.json",
+        )
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_live_reload_slice_evidence(
+                receipt,
+                evidence_cas=self.cas,
+            )
+        )
+
+        for scenario_index in (1, 6):
+            promoted = deepcopy(receipt)
+            scenario = promoted["properties"][2]["scenarios"][scenario_index]
+            scenario.update(status="PASS", reason_codes=[])
+            with self.subTest(scenario=scenario["id"]), self.assertRaises(
+                admission_evidence.AdmissionEvidenceError
+            ):
+                admission_evidence.verify_openclaw_live_reload_slice_evidence(
+                    promoted,
+                    evidence_cas=self.cas,
+                )
+
+        probe = json.loads(evidence_paths[0].read_bytes())
+        environment = json.loads(evidence_paths[1].read_bytes())
+        policy = deepcopy(probe)
+        policy["scenarios"][0]["evidence"]["policy_records"][0]["decision"] = (
+            "allow"
+        )
+        session = deepcopy(probe)
+        session["scenarios"][1]["evidence"]["snapshot_after"]["session_id"] = (
+            "unbound-session"
+        )
+        for label, mutation in (("policy decision", policy), ("session", session)):
+            with self.subTest(label), self.assertRaises(
+                admission_evidence.AdmissionEvidenceError
+            ):
+                admission_evidence._verify_live_reload_probe(mutation)
+
+        isolation = deepcopy(environment)
+        isolation["isolation"]["network_mode"] = "bridge"
+        with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+            admission_evidence._verify_live_reload_environment(probe, isolation)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, and one local-directory forced-update denial slice. Exact activation, the remaining update routes, reload, and determinism remain `NOT_TESTED`; host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, one local-directory forced-update denial slice, one admitted forced replacement, filesystem-watch invalidation, and same-session snapshot refresh. Exact activation, the remaining update and reload routes, and determinism remain `NOT_TESTED`; host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
@@ -15,6 +15,11 @@ The update-slice verifier proves that one user-writable managed target was not
 replaced after an exact `skill-install/update` policy denial. Formal
 `ADM-02/update` remains `NOT_TESTED` because the other inventoried update routes
 have not executed.
+
+The live-reload-slice verifier proves one admitted forced replacement reached a
+new filesystem-watch snapshot and the same chat session consumed that snapshot
+without a gateway restart. Formal `ADM-02/update` and `ADM-02/reload` remain
+`NOT_TESTED` because their remaining inventoried routes have not executed.
 
 ## What works now
 

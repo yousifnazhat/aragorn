@@ -100,6 +100,41 @@ _UPDATE_CONFIG_DIGEST = (
 _UPDATE_OS_PROFILE_DIGEST = (
     "sha256:53e934f187ae1da7bd8be41ba2e5d8d063e1e1e2784a234144cbedfe2213f256"
 )
+_LIVE_PROBE_SCHEMA = "aragorn/openclaw-contained-live-reload-probe-evidence/v1"
+_LIVE_ENV_SCHEMA = (
+    "aragorn/openclaw-contained-live-reload-environment-evidence/v1"
+)
+_LIVE_PROBE_DIGEST = (
+    "sha256:b974afedbc3ecd12afa52dbc7aaf335c451cc7780ea77d1190c6e687e9d9e47f"
+)
+_LIVE_ENV_DIGEST = (
+    "sha256:643e37646942279d46f1cee783baefe0eabcb3253fe9982ee695490af98b62ad"
+)
+_LIVE_EVIDENCE_PAIR = sorted((_LIVE_ENV_DIGEST, _LIVE_PROBE_DIGEST))
+_OUTSIDE_LIVE_REASON = ["SCENARIO_OUTSIDE_LIVE_RELOAD_SLICE"]
+_LIVE_RECEIPT_REASONS = {
+    "DET-01/identical-canonical-input-replay": ["IDENTICAL_REPLAY_NOT_TESTED"],
+    "ADM-01/exact-admitted-bytes": ["EXACT_ACTIVATED_BYTES_NOT_TESTED"],
+    "ADM-02/install": _OUTSIDE_LIVE_REASON,
+    "ADM-02/update": ["UPDATE_ROUTE_COVERAGE_INCOMPLETE"],
+    "ADM-02/direct-write": _OUTSIDE_LIVE_REASON,
+    "ADM-02/rename": _OUTSIDE_LIVE_REASON,
+    "ADM-02/symlink": _OUTSIDE_LIVE_REASON,
+    "ADM-02/auto-discovery": _OUTSIDE_LIVE_REASON,
+    "ADM-02/reload": ["RELOAD_ROUTE_COVERAGE_INCOMPLETE"],
+    "ADM-02/restart": _OUTSIDE_LIVE_REASON,
+    "ADM-03/policy-failure": _OUTSIDE_LIVE_REASON,
+    "ADM-03/policy-tampering": _OUTSIDE_LIVE_REASON,
+}
+_LIVE_IMPLEMENTATION_DIGEST = (
+    "sha256:9dd8d69ad951d0bcac5abf8a21fd30f8c686f3cc41959fd2935f046d46af64b5"
+)
+_LIVE_CONFIG_DIGEST = (
+    "sha256:091b92e553f39f00cdad9e767238a24433ed853403883d3bcbd9937933bbaaa3"
+)
+_LIVE_OS_PROFILE_DIGEST = (
+    "sha256:b149a14989574cd8735d9a5033ab9da215a5f2e6ffd37c1e41d9f0f779ed6c60"
+)
 _OPENCLAW_COMMIT = "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4"
 _OPENCLAW_RUNTIME_TREE = (
     "sha256:475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c"
@@ -227,6 +262,68 @@ def verify_openclaw_update_slice_evidence(
     ) as exc:
         raise AdmissionEvidenceError(
             f"invalid retained update-slice evidence: {exc}"
+        ) from exc
+
+
+def verify_openclaw_live_reload_slice_evidence(
+    document: Mapping[str, Any], *, evidence_cas: CAS
+) -> None:
+    """Verify one admitted update and two live-reload routes."""
+
+    try:
+        if (
+            validate_admission_conformance(document) != "NOT_TESTED"
+            or document["decision"]
+            != {"status": "NOT_TESTED", "installer_work_eligible": False}
+        ):
+            raise AdmissionEvidenceError(
+                "live-reload slice cannot grant installer authority"
+            )
+        formal = {
+            f"{item['id']}/{scenario['id']}": scenario
+            for item in document["properties"]
+            for scenario in item["scenarios"]
+        }
+        if (
+            set(formal) != set(_LIVE_RECEIPT_REASONS)
+            or any(item["status"] != "NOT_TESTED" for item in formal.values())
+            or {
+                key: item["reason_codes"] for key, item in formal.items()
+            }
+            != _LIVE_RECEIPT_REASONS
+        ):
+            raise AdmissionEvidenceError("live-reload formal claim set changed")
+        targeted = {"ADM-02/update", "ADM-02/reload"}
+        for key, scenario in formal.items():
+            expected = _LIVE_EVIDENCE_PAIR if key in targeted else []
+            if scenario["evidence_digests"] != expected:
+                raise AdmissionEvidenceError(
+                    f"{key} does not bind the exact live-reload evidence"
+                )
+        probe = _read_exact(
+            evidence_cas,
+            _LIVE_PROBE_DIGEST,
+            _LIVE_PROBE_SCHEMA,
+        )
+        environment = _read_exact(
+            evidence_cas,
+            _LIVE_ENV_DIGEST,
+            _LIVE_ENV_SCHEMA,
+        )
+        _verify_live_reload_bindings(document, probe, environment)
+        _verify_live_reload_probe(probe)
+        _verify_live_reload_environment(probe, environment)
+    except AdmissionEvidenceError:
+        raise
+    except (
+        AdmissionConformanceError,
+        CASError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AdmissionEvidenceError(
+            f"invalid retained live-reload evidence: {exc}"
         ) from exc
 
 
@@ -1129,6 +1226,574 @@ def _verify_update_environment(
         <= _time(state["finished_at"])
     ):
         raise AdmissionEvidenceError("update container timing is not causal")
+
+
+def _verify_live_reload_bindings(
+    receipt: Mapping[str, Any],
+    probe: Mapping[str, Any],
+    environment: Mapping[str, Any],
+) -> None:
+    if (
+        receipt["recorded_at"] != probe["recorded_at"]
+        or environment["recorded_at"] != probe["recorded_at"]
+    ):
+        raise AdmissionEvidenceError("live-reload evidence timestamps differ")
+    if receipt["bindings"] != {
+        "runtime": {
+            "name": "openclaw-contained",
+            "version": "2026.7.1",
+            "repository_url": "https://github.com/openclaw/openclaw",
+            "commit": _OPENCLAW_COMMIT,
+            "source_tree_digest": _OPENCLAW_RUNTIME_TREE,
+        },
+        "adapter": {
+            "name": "openclaw-contained-live-reload-slice",
+            "implementation_digest": _LIVE_IMPLEMENTATION_DIGEST,
+            "configuration_digest": _LIVE_CONFIG_DIGEST,
+        },
+        "environment": {
+            "worker_digest": _OPENCLAW_PLATFORM_MANIFEST,
+            "os_profile_digest": _LIVE_OS_PROFILE_DIGEST,
+        },
+        "aragorn": _ARAGORN_BINDING,
+    }:
+        raise AdmissionEvidenceError("live-reload receipt bindings changed")
+    adapter = probe["adapter"]
+    if (
+        adapter["configuration_digest"]
+        != canonical_digest(adapter["configuration"])
+        or adapter["configuration_digest"] != _LIVE_CONFIG_DIGEST
+        or adapter["implementation_digest"] != _LIVE_IMPLEMENTATION_DIGEST
+    ):
+        raise AdmissionEvidenceError("live-reload adapter binding changed")
+
+
+def _live_request(source: str) -> dict[str, Any]:
+    return {
+        "openclawVersion": "2026.7.1",
+        "origin": {"spec": source, "type": "path"},
+        "protocolVersion": 1,
+        "request": {
+            "kind": "skill-install",
+            "mode": "update",
+            "requestedSpecifier": source,
+        },
+        "skill": {"installId": "path"},
+        "source": {
+            "authority": "user",
+            "kind": "local-path",
+            "mutable": True,
+            "network": False,
+        },
+        "sourcePath": source,
+        "sourcePathKind": "directory",
+        "targetName": "aragorn-admitted",
+        "targetType": "skill",
+    }
+
+
+def _verify_live_reload_probe(probe: Mapping[str, Any]) -> None:
+    if (
+        probe["decision"]
+        != {"installer_work_eligible": False, "status": "NOT_TESTED"}
+        or probe["limitations"]
+        != [
+            "ONLY_LOCAL_DIRECTORY_GLOBAL_FORCE_REPLACEMENT_EXECUTED",
+            "ONLY_FILESYSTEM_WATCH_EXISTING_CHAT_SESSION_SNAPSHOT_EXECUTED",
+            "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
+            "OTHER_UPDATE_RELOAD_PATHS_REMAIN_NOT_TESTED",
+            "CONTAINED_DOCKER_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
+        ]
+    ):
+        raise AdmissionEvidenceError("live-reload claim boundary changed")
+    expected_config = {
+        "agents": {
+            "defaults": {
+                "skills": ["aragorn-admitted"],
+                "workspace": "/profile/workspace",
+            },
+            "list": [
+                {
+                    "id": "main",
+                    "skills": ["aragorn-admitted"],
+                    "workspace": "/profile/workspace",
+                }
+            ],
+        },
+        "plugins": {"enabled": False},
+        "security": {
+            "installPolicy": {
+                "enabled": True,
+                "exec": {
+                    "args": ["/probe/live-reload-probe.mjs", "policy"],
+                    "command": "/usr/local/bin/node",
+                    "maxOutputBytes": 4096,
+                    "noOutputTimeoutMs": 5000,
+                    "source": "exec",
+                    "timeoutMs": 5000,
+                    "trustedDirs": ["/probe", "/usr/local/bin"],
+                },
+                "targets": ["skill"],
+            }
+        },
+        "skills": {
+            "load": {
+                "allowSymlinkTargets": [],
+                "extraDirs": [],
+                "watch": True,
+                "watchDebounceMs": 250,
+            }
+        },
+    }
+    fixtures = {
+        "allowed": {
+            "digest": (
+                "sha256:"
+                "494a4ff4168c662b56bf481ada6b17058d75784f99c1c7a7d5fdbe1e9bd0ff63"
+            ),
+            "directory_mode": "555",
+            "file_mode": "444",
+            "path": "/sources/allowed-source",
+        },
+        "blocked": {
+            "digest": (
+                "sha256:"
+                "1b5be1aa3634ebf3e9e803f73706ed4dc0f906d2dece54eda7ef1219356533c0"
+            ),
+            "directory_mode": "555",
+            "file_mode": "444",
+            "path": "/sources/blocked-source",
+        },
+        "seed": {
+            "digest": _ADMITTED_DIGEST,
+            "directory_mode": "755",
+            "file_mode": "644",
+            "path": "/profile/state/skills/aragorn-admitted",
+        },
+    }
+    adapter = probe["adapter"]
+    runtime = probe["runtime"]
+    version = runtime["version_command"]
+    if (
+        adapter["configuration"] != expected_config
+        or adapter["fixtures"] != fixtures
+        or runtime["commit"] != _OPENCLAW_COMMIT
+        or runtime["name"] != "openclaw-contained"
+        or runtime["version"] != "2026.7.1"
+        or version["argv"]
+        != [
+            "/usr/local/bin/node",
+            "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+            "--version",
+        ]
+        or version["exit_code"] != 0
+        or version["signal"] is not None
+        or version["error"] is not None
+        or version["stderr"] != ""
+        or version["stdout"] != "OpenClaw 2026.7.1 (2d2ddc4)\n"
+    ):
+        raise AdmissionEvidenceError("live-reload runtime or fixture identity changed")
+
+    scenarios = probe["scenarios"]
+    expected_ids = [
+        "ADM-02/update/archive-source-force-replacement",
+        "ADM-02/reload/filesystem-watch-invalidation",
+        "ADM-02/reload/chat-session-snapshot-consumer",
+    ]
+    if (
+        [item["id"] for item in scenarios] != expected_ids
+        or any(item["status"] != "PASS" for item in scenarios)
+    ):
+        raise AdmissionEvidenceError("live-reload route claims changed")
+    update = scenarios[0]["evidence"]
+    blocked_command = update["blocked_command"]
+    allowed_command = update["allowed_command"]
+    command_prefix = [
+        "/usr/local/bin/node",
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+        "skills",
+        "install",
+    ]
+    command_suffix = ["--as", "aragorn-admitted", "--force", "--global"]
+    if (
+        blocked_command["argv"]
+        != command_prefix + ["/sources/blocked-source"] + command_suffix
+        or blocked_command["exit_code"] != 1
+        or blocked_command["error"] is not None
+        or blocked_command["signal"] is not None
+        or allowed_command["argv"]
+        != command_prefix + ["/sources/allowed-source"] + command_suffix
+        or allowed_command["exit_code"] != 0
+        or allowed_command["error"] is not None
+        or allowed_command["signal"] is not None
+        or update["target_before_block"] != update["target_after_block"]
+    ):
+        raise AdmissionEvidenceError("live-reload update transition changed")
+    expected_seed = [
+        {
+            "mode": "755",
+            "path": ".",
+            "size": 60,
+            "type": "directory",
+        },
+        {
+            "digest": _ADMITTED_DIGEST,
+            "mode": "644",
+            "path": "SKILL.md",
+            "size": 104,
+            "type": "file",
+        },
+    ]
+    target = update["target_after_allowed"]
+    allowed_digest = fixtures["allowed"]["digest"]
+    if (
+        update["target_before_block"] != expected_seed
+        or target["valid"] is not True
+        or [item["path"] for item in target["snapshot"]]
+        != [".", ".openclaw", ".openclaw/source-origin.json", "SKILL.md"]
+        or target["snapshot"][-1]["digest"] != allowed_digest
+        or target["origin"]["source"] != "path"
+        or target["origin"]["spec"] != "/sources/allowed-source"
+        or target["origin"]["slug"] != "aragorn-admitted"
+        or target["origin"]["version"] != 1
+        or not isinstance(target["origin"]["installedAt"], int)
+    ):
+        raise AdmissionEvidenceError("live-reload allowed target identity changed")
+    records = update["policy_records"]
+    if len(records) != 2:
+        raise AdmissionEvidenceError("live-reload policy record count changed")
+    for record, route, source, decision in (
+        (records[0], "blocked-source", "/sources/blocked-source", "block"),
+        (records[1], "allowed-source", "/sources/allowed-source", "allow"),
+    ):
+        fixture = fixtures["blocked" if decision == "block" else "allowed"]
+        if (
+            record["decision"] != decision
+            or record["route"] != route
+            or record["request"] != _live_request(source)
+            or record["source"] != fixture
+            or record["oversized"] is not False
+            or record["parse_error"] is not None
+            or record["protocol_version"] != 1
+            or record["input_bytes"] <= 0
+        ):
+            raise AdmissionEvidenceError(
+                "live-reload policy decision or source binding changed"
+            )
+
+    reload_evidence = scenarios[1]["evidence"]
+    before = reload_evidence["snapshot_before"]
+    after = reload_evidence["snapshot_after"]
+    expected_before_markers = {
+        "allowed": False,
+        "blocked": False,
+        "seed": True,
+    }
+    expected_after_markers = {
+        "allowed": True,
+        "blocked": False,
+        "seed": False,
+    }
+    if (
+        reload_evidence["process_before"]
+        != {
+            "cmdline": ["openclaw-gateway"],
+            "pid": 1,
+            "start_time_ticks": reload_evidence["process_before"][
+                "start_time_ticks"
+            ],
+        }
+        or reload_evidence["process_after"] != reload_evidence["process_before"]
+        or not isinstance(
+            reload_evidence["process_before"]["start_time_ticks"], str
+        )
+        or not reload_evidence["process_before"]["start_time_ticks"].isdigit()
+        or reload_evidence["gateway_log_before"]["ready_count"] != 1
+        or reload_evidence["gateway_log_after"]["ready_count"] != 1
+        or reload_evidence["gateway_log_before"]["restart_count"] != 0
+        or reload_evidence["gateway_log_after"]["restart_count"] != 0
+        or reload_evidence["gateway_log_after"]["path"]
+        != reload_evidence["gateway_log_before"]["path"]
+        or reload_evidence["gateway_log_after"]["bytes"]
+        <= reload_evidence["gateway_log_before"]["bytes"]
+        or not 1 <= reload_evidence["retries"] <= 10
+        or before["session_id"] != after["session_id"]
+        or before["version"] >= after["version"]
+        or before["markers"] != expected_before_markers
+        or after["markers"] != expected_after_markers
+        or before["skill_names"] != ["aragorn-admitted"]
+        or after["skill_names"] != ["aragorn-admitted"]
+        or before["prompt_storage"] != "promptRef"
+        or after["prompt_storage"] != "promptRef"
+        or before["prompt_digest"]
+        != "sha256:df7b81a0879f2db0f9c81c0866aa1e229064d700fbb54758816c883c4f6eaca8"
+        or after["prompt_digest"]
+        != "sha256:911e21e4c6ae9f26737475402a2f709675a0c9d47d26e862272c31ec77d4c75f"
+        or any(
+            snapshot["run_status"] != "failed"
+            or snapshot["runtime_ms"] < 0
+            or snapshot["started_at"] > snapshot["ended_at"]
+            for snapshot in (before, after)
+        )
+    ):
+        raise AdmissionEvidenceError("live-reload watcher or snapshot proof changed")
+
+    consumer = scenarios[2]["evidence"]
+    turns = [consumer["v1_turn"], consumer["blocked_turn"], *consumer["reload_turns"]]
+    if len(consumer["reload_turns"]) != reload_evidence["retries"]:
+        raise AdmissionEvidenceError("live-reload retry evidence is inconsistent")
+    expected_runs = [
+        "aragorn-live-reload-v1-0",
+        "aragorn-live-reload-blocked-0",
+        *[
+            f"aragorn-live-reload-v2-{index}"
+            for index in range(1, len(consumer["reload_turns"]) + 1)
+        ],
+    ]
+    for turn, run_id in zip(turns, expected_runs):
+        send = turn["send"]
+        wait = turn["wait"]
+        if (
+            send["response"] != {"runId": run_id, "status": "started"}
+            or wait["response"]["runId"] != run_id
+            or wait["response"]["status"] != "ok"
+            or not isinstance(wait["response"]["endedAt"], int)
+            or send["command"]["exit_code"] != 0
+            or wait["command"]["exit_code"] != 0
+            or send["command"]["error"] is not None
+            or wait["command"]["error"] is not None
+            or send["command"]["signal"] is not None
+            or wait["command"]["signal"] is not None
+            or send["command"]["argv"][2:5] != ["gateway", "call", "chat.send"]
+            or wait["command"]["argv"][2:5] != ["gateway", "call", "agent.wait"]
+        ):
+            raise AdmissionEvidenceError("live-reload session turn proof changed")
+    if not (
+        _time(version["started_at"])
+        <= _time(version["completed_at"])
+        <= _time(probe["gateway"]["readiness_command"]["started_at"])
+        <= _time(probe["gateway"]["readiness_command"]["completed_at"])
+        <= _time(turns[0]["send"]["command"]["started_at"])
+        <= _time(turns[0]["wait"]["command"]["completed_at"])
+        <= _time(blocked_command["started_at"])
+        <= _time(blocked_command["completed_at"])
+        <= _time(turns[1]["send"]["command"]["started_at"])
+        <= _time(turns[1]["wait"]["command"]["completed_at"])
+        <= _time(allowed_command["started_at"])
+        <= _time(allowed_command["completed_at"])
+        <= _time(turns[2]["send"]["command"]["started_at"])
+        <= _time(turns[-1]["wait"]["command"]["completed_at"])
+        <= _time(probe["recorded_at"])
+    ):
+        raise AdmissionEvidenceError("live-reload execution timing is not causal")
+
+
+def _verify_live_reload_environment(
+    probe: Mapping[str, Any],
+    environment: Mapping[str, Any],
+) -> None:
+    container = environment["container"]
+    execution = container["probe_exec"]
+    state = container["state"]
+    image = container["image"]
+    expected_image = {
+        "id": (
+            "sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+        "index_digest": (
+            "sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+        "platform": {"architecture": "arm64", "os": "linux", "variant": "v8"},
+        "platform_manifest_digest": _OPENCLAW_PLATFORM_MANIFEST,
+        "reference": (
+            "node@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf"
+        ),
+    }
+    startup = [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /profile/state/skills && cp -R /seed/. "
+        "/profile/state/skills/ && chmod -R u+rwX /profile/state/skills && "
+        "exec /usr/local/bin/node "
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs gateway run "
+        "--allow-unconfigured --auth token --bind loopback --port 18789 "
+        "--tailscale off --ws-log full",
+    ]
+    if (
+        environment["recorded_at"] != probe["recorded_at"]
+        or image != expected_image
+        or container["command"] != startup
+        or container["name"] != "aragorn-openclaw-contained-live-reload-v1"
+        or container["working_dir"] != "/profile/workspace"
+        or execution["exit_code"] != 0
+        or execution["mode"] != "docker-exec-shell-capture"
+        or execution["recorded_at"] != probe["recorded_at"]
+        or execution["target_command"]
+        != ["/usr/local/bin/node", "/probe/live-reload-probe.mjs"]
+        or execution["stdout"]
+        != {"bytes": 12780, "digest": _LIVE_PROBE_DIGEST}
+        or execution["user"] != "1000:1000"
+        or state["status"] != "exited"
+        or state["exit_code"] != 0
+        or state["running"]
+        or state["paused"]
+        or state["restarting"]
+        or state["oom_killed"]
+        or state["dead"]
+        or state["error"] != ""
+    ):
+        raise AdmissionEvidenceError("live-reload container execution changed")
+    expected_mounts = [
+        {
+            "destination": "/probe",
+            "read_only": True,
+            "source": (
+                "aragorn-openclaw-2026-7-1-contained-live-reload-probe-v1"
+            ),
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/config",
+            "read_only": True,
+            "source": (
+                "aragorn-openclaw-2026-7-1-contained-live-reload-config-v1"
+            ),
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/home/.agents",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/state/plugin-skills",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/workspace/.agents",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/profile/workspace/skills",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-guard-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/runtime",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-runtime",
+            "type": "volume",
+        },
+        {
+            "destination": "/seed",
+            "read_only": True,
+            "source": "aragorn-openclaw-2026-7-1-contained-admitted-v1",
+            "type": "volume",
+        },
+        {
+            "destination": "/sources",
+            "read_only": True,
+            "source": (
+                "aragorn-openclaw-2026-7-1-contained-live-reload-source-v1"
+            ),
+            "type": "volume",
+        },
+    ]
+    expected_tmpfs = {
+        "/profile/home": (
+            "rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/profile/state": (
+            "rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/profile/workspace": (
+            "rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=1000,gid=1000"
+        ),
+        "/tmp": "rw,noexec,nosuid,nodev,size=256m,mode=1777",
+    }
+    isolation = environment["isolation"]
+    controls = {
+        "cap_drop": ["ALL"],
+        "cgroupns_mode": "private",
+        "devices": [],
+        "ipc_mode": "private",
+        "memory_bytes": 1_073_741_824,
+        "memory_swap_bytes": 1_073_741_824,
+        "mounts": expected_mounts,
+        "nano_cpus": 1_000_000_000,
+        "network_mode": "none",
+        "no_new_privileges": True,
+        "pids_limit": 128,
+        "privileged": False,
+        "read_only_rootfs": True,
+        "runtime": "runc",
+        "tmpfs": expected_tmpfs,
+        "ulimits": [{"hard": 256, "name": "nofile", "soft": 256}],
+        "user": "1000:1000",
+        "working_dir": "/profile/workspace",
+    }
+    if (
+        {key: isolation[key] for key in controls} != controls
+        or isolation["environment"]
+        != {
+            "HOME": "/profile/home",
+            "NODE_VERSION": "24.16.0",
+            "OPENCLAW_CONFIG_PATH": "/profile/config/openclaw.json",
+            "OPENCLAW_GATEWAY_TOKEN": (
+                "aragorn-contained-live-reload-token-v1"
+            ),
+            "OPENCLAW_STATE_DIR": "/profile/state",
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "YARN_VERSION": "1.22.22",
+        }
+        or any(
+            item["destination"] == "/profile/state/skills"
+            for item in isolation["mounts"]
+        )
+    ):
+        raise AdmissionEvidenceError("live-reload isolation controls changed")
+    docker = environment["docker"]
+    os_profile = {
+        "image": image,
+        "isolation": isolation,
+        "server": docker["server"],
+    }
+    if (
+        environment["os_profile_digest"] != canonical_digest(os_profile)
+        or environment["os_profile_digest"] != _LIVE_OS_PROFILE_DIGEST
+        or docker["assurance"] != "SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED"
+        or docker["context"]
+        != {
+            "endpoint": "unix:///Users/yousi/.colima/aragorn-bakeoff/docker.sock",
+            "name": "colima-aragorn-bakeoff",
+            "skip_tls_verify": False,
+            "tls_material_count": 0,
+        }
+        or docker["server"]["security_options"]
+        != ["name=apparmor", "name=cgroupns", "name=seccomp,profile=builtin"]
+        or environment["limitations"]
+        != [
+            "CONTAINER_EXIT_DOES_NOT_ESTABLISH_CROSS_HOST_REPRODUCIBILITY",
+            "DOCKER_CONTROL_PLANE_SELF_REPORTED",
+            "ENGINE_CONTAINER_AND_HOST_NOT_INDEPENDENTLY_ATTESTED",
+            "PLATFORM_MANIFEST_DIGEST_RETAINED_NOT_INDEPENDENTLY_REDERIVED",
+        ]
+    ):
+        raise AdmissionEvidenceError("live-reload environment binding changed")
+    if not (
+        _time(container["created_at"])
+        <= _time(state["started_at"])
+        <= _time(probe["runtime"]["version_command"]["started_at"])
+        <= _time(probe["recorded_at"])
+        <= _time(state["finished_at"])
+    ):
+        raise AdmissionEvidenceError("live-reload container timing is not causal")
 
 
 def _line_digest(document: object) -> str:

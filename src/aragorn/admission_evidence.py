@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from .admission_conformance import (
@@ -140,10 +140,10 @@ _CONFIG_ENV_SCHEMA = (
     "aragorn/openclaw-contained-config-activation-environment-evidence/v1"
 )
 _CONFIG_PROBE_DIGEST = (
-    "sha256:a02ccd57bf98dd3035405511610604a3796d3d1e038ffdad0ba6a64344cfd29c"
+    "sha256:c4da4d5c2fc09b211d3a2174648fca32e225bcbe42c592e2045c7aee5c74c56b"
 )
 _CONFIG_ENV_DIGEST = (
-    "sha256:92fe0300aee9d2d23b1ccb7ac4e585bbda5c98c5406bccb8e3e192091a88c357"
+    "sha256:9136db0c40dc4054b5a77044ccf85070623b04b49b3627f3fbeefe316e81eb0b"
 )
 _CONFIG_PRIOR_ADMISSION_DIGEST = (
     "sha256:a81138e1bec12e0471068aafe4eee0b625635de5d39ba6bc3665d8251b76f6af"
@@ -171,10 +171,10 @@ _CONFIG_RECEIPT_REASONS = {
     "ADM-03/policy-tampering": _OUTSIDE_CONFIG_REASON,
 }
 _CONFIG_IMPLEMENTATION_DIGEST = (
-    "sha256:9690cda8f542fa5652e1d45b8bc7bc0e0248d2485a60b4918d27ab9265f635a1"
+    "sha256:4cbc285e65d7cd5e7ec2cea1651578cd93ed64a7a5b96f5e180dd498b488a8fe"
 )
 _CONFIG_OS_PROFILE_DIGEST = (
-    "sha256:f896b6f732dd4c4bc479821e6fca0d728135e9ae8c483fbcc4f6c600f248cfca"
+    "sha256:cf82ddd73800026ece95e2119079f3f3f31cc934ef699a87880131fc6146ec72"
 )
 _OPENCLAW_COMMIT = "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4"
 _OPENCLAW_RUNTIME_TREE = (
@@ -371,7 +371,7 @@ def verify_openclaw_live_reload_slice_evidence(
 def verify_openclaw_config_activation_slice_evidence(
     document: Mapping[str, Any], *, evidence_cas: CAS
 ) -> None:
-    """Verify one config activation and its same-session invalidation."""
+    """Verify config activation, invalidation, and one missing-blob rebuild."""
 
     try:
         if validate_admission_conformance(document) != "NOT_TESTED" or document[
@@ -2042,15 +2042,15 @@ def _verify_config_snapshot(
         },
         False: {
             "digest": (
-                "sha256:165a57a11fef082cd785ac5caebfe0b24"
-                "c793236ccf8b1f5317f795c0c8acce4"
+                "sha256:0118f067ca56d23e8c9c8724565dc021"
+                "7db140733490fcedb1352b37f6870cb3"
             ),
             "size": 1150,
         },
         True: {
             "digest": (
-                "sha256:9b1a29ebe95146b6b89600e05e439e124"
-                "641a3ac5410876b95b35272bb705612"
+                "sha256:a553600acf2066a5e4c80a2f53199326"
+                "be4d28b40f6d929f453f497882f8eb6b"
             ),
             "size": 1149,
         },
@@ -2191,6 +2191,8 @@ def _verify_config_activation_probe(probe: Mapping[str, Any]) -> None:
     } or probe["limitations"] != [
         "ONLY_CONFIG_ENTRY_ENABLE_DISABLE_EXECUTED",
         "ONLY_CONFIG_INVALIDATION_EXISTING_CHAT_SESSION_EXECUTED",
+        "ONLY_ONE_MISSING_PROMPT_BLOB_REBUILD_EXECUTED",
+        "SESSION_STORE_MTIME_CHANGED_WITH_IDENTICAL_BYTES_TO_FORCE_CACHE_MISS",
         "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
         "CONFIGURATION_COPY_WRITABLE_TO_UNPRIVILEGED_RUNTIME_UID",
         "ADMITTED_SKILL_ROOT_READ_ONLY_VOLUME",
@@ -2249,6 +2251,7 @@ def _verify_config_activation_probe(probe: Mapping[str, Any]) -> None:
     if [(item["id"], item["status"]) for item in scenarios] != [
         ("ADM-02/update/config-entry-activation", "PASS"),
         ("ADM-02/reload/config-invalidation", "PASS"),
+        ("ADM-02/reload/missing-prompt-blob-rebuild", "PASS"),
     ]:
         raise AdmissionEvidenceError("config-activation route claims changed")
 
@@ -2387,6 +2390,130 @@ def _verify_config_activation_probe(probe: Mapping[str, Any]) -> None:
     ):
         raise AdmissionEvidenceError("config invalidation process identity changed")
 
+    blob_evidence = scenarios[2]["evidence"]
+    blob_before = blob_evidence["blob_before"]
+    blob_after = blob_evidence["blob_after"]
+    rebuild_turn = blob_evidence["rebuild_turn"]
+    prompt_hash = (
+        "df7b81a0879f2db0f9c81c0866aa1e229064d700fbb54758816c883c4f6eaca8"
+    )
+    prompt_ref = {
+        "algorithm": "sha256",
+        "bytes": 698,
+        "hash": prompt_hash,
+        "version": 1,
+    }
+    blob_path = (
+        "/profile/state/agents/main/sessions/skills-prompts/sha256/df/"
+        f"{prompt_hash}.txt"
+    )
+    for blob in (blob_before, blob_after):
+        mtime_ns = blob.get("mtime_ns")
+        if (
+            not isinstance(mtime_ns, str)
+            or not mtime_ns.isdigit()
+            or blob
+            != {
+                "bytes": 698,
+                "digest": f"sha256:{prompt_hash}",
+                "mode": "600",
+                "mtime_ns": mtime_ns,
+                "nlink": 1,
+                "path": blob_path,
+                "prompt_ref": prompt_ref,
+            }
+        ):
+            raise AdmissionEvidenceError("prompt blob identity changed")
+
+    invalidation = blob_evidence["invalidation"]
+    store_before = invalidation["store_before"]
+    store_after = invalidation["store_after_rewrite"]
+    store_path = "/profile/state/agents/main/sessions/sessions.json"
+    store_digest = (
+        "sha256:c75291d09ffcc49a678d0a0e9bf6a64c"
+        "d5ca163ceedd8c794b246af8c4945501"
+    )
+    for store in (store_before, store_after):
+        mtime_ns = store.get("mtime_ns")
+        if (
+            not isinstance(mtime_ns, str)
+            or not mtime_ns.isdigit()
+            or store
+            != {
+                "bytes": 1255,
+                "digest": store_digest,
+                "mode": "600",
+                "mtime_ns": mtime_ns,
+                "nlink": 1,
+                "path": store_path,
+            }
+        ):
+            raise AdmissionEvidenceError("session-store identity changed")
+    if (
+        invalidation
+        != {
+            "blob_exists_after_unlink": False,
+            "completed_at": invalidation["completed_at"],
+            "started_at": invalidation["started_at"],
+            "store_after_rewrite": store_after,
+            "store_before": store_before,
+        }
+        or int(store_after["mtime_ns"]) <= int(store_before["mtime_ns"])
+        or int(blob_after["mtime_ns"]) <= int(blob_before["mtime_ns"])
+        or int(blob_after["mtime_ns"]) <= int(store_after["mtime_ns"])
+        or _time(invalidation["started_at"]) > _time(invalidation["completed_at"])
+    ):
+        raise AdmissionEvidenceError("missing prompt blob invalidation changed")
+
+    _verify_config_turn(rebuild_turn, "prompt-rebuild", 0)
+    rebuilt_snapshot = blob_evidence["rebuilt_snapshot"]
+    _verify_config_snapshot_state(rebuilt_snapshot, enabled=True)
+    stable_snapshot = (
+        "session_id",
+        "version",
+        "marker_present",
+        "prompt_bytes",
+        "prompt_digest",
+        "prompt_storage",
+        "skill_names",
+    )
+    before_blob_ms = int(blob_before["mtime_ns"]) // 1_000_000
+    after_blob_ms = int(blob_after["mtime_ns"]) // 1_000_000
+    before_store_ms = int(store_before["mtime_ns"]) // 1_000_000
+    after_store_ms = int(store_after["mtime_ns"]) // 1_000_000
+    invalidation_started_ms = _epoch_milliseconds(invalidation["started_at"])
+    send_started_ms = _epoch_milliseconds(
+        rebuild_turn["send"]["command"]["started_at"]
+    )
+    wait_ended_ms = rebuild_turn["wait"]["response"]["endedAt"]
+    wait_completed_ms = _epoch_milliseconds(
+        rebuild_turn["wait"]["command"]["completed_at"]
+    )
+    recorded_ms = _epoch_milliseconds(probe["recorded_at"])
+    if (
+        {key: rebuilt_snapshot[key] for key in stable_snapshot}
+        != {key: enabled_snapshot[key] for key in stable_snapshot}
+        or rebuilt_snapshot["started_at"] <= enabled_snapshot["ended_at"]
+        or not (
+            enabled_snapshot["ended_at"]
+            <= before_store_ms
+            <= invalidation_started_ms
+            and enabled_snapshot["ended_at"]
+            <= before_blob_ms
+            <= invalidation_started_ms
+            <= after_store_ms
+            <= send_started_ms + 1
+            and send_started_ms
+            <= rebuilt_snapshot["started_at"]
+            <= rebuilt_snapshot["ended_at"]
+            <= after_blob_ms
+            <= wait_ended_ms
+            <= wait_completed_ms
+            <= recorded_ms
+        )
+    ):
+        raise AdmissionEvidenceError("rebuilt prompt snapshot lineage changed")
+
     initial_turn = reload_evidence["initial_turn"]
     disabled_turns = reload_evidence["disabled"]["turns"]
     enabled_turns = reload_evidence["enabled"]["turns"]
@@ -2411,6 +2538,10 @@ def _verify_config_activation_probe(probe: Mapping[str, Any]) -> None:
         <= _time(enabled_turns[-1]["wait"]["command"]["completed_at"])
         <= _time(update["enabled_status"]["command"]["started_at"])
         <= _time(update["enabled_status"]["command"]["completed_at"])
+        <= _time(invalidation["started_at"])
+        <= _time(invalidation["completed_at"])
+        <= _time(rebuild_turn["send"]["command"]["started_at"])
+        <= _time(rebuild_turn["wait"]["command"]["completed_at"])
         <= _time(probe["recorded_at"])
     ):
         raise AdmissionEvidenceError("config-activation timing is not causal")
@@ -2452,7 +2583,7 @@ def _verify_config_activation_environment(
         environment["recorded_at"] != probe["recorded_at"]
         or image != expected_image
         or container["command"] != startup
-        or container["name"] != "aragorn-openclaw-contained-config-activation-v1"
+        or container["name"] != "aragorn-openclaw-contained-config-activation-v2"
         or container["working_dir"] != "/profile/workspace"
         or execution
         != {
@@ -2493,7 +2624,7 @@ def _verify_config_activation_environment(
             "destination": "/config-probe",
             "read_only": True,
             "source": (
-                "aragorn-openclaw-2026-7-1-contained-config-activation-probe-v1"
+                "aragorn-openclaw-2026-7-1-contained-config-activation-probe-v2"
             ),
             "type": "volume",
         },
@@ -2663,6 +2794,16 @@ def _time(value: object) -> datetime:
     if parsed.tzinfo is None:
         raise AdmissionEvidenceError("timestamp lacks timezone")
     return parsed
+
+
+def _epoch_milliseconds(value: object) -> int:
+    parsed = _time(value).astimezone(timezone.utc)
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    elapsed = parsed - epoch
+    return (
+        (elapsed.days * 86_400 + elapsed.seconds) * 1_000
+        + elapsed.microseconds // 1_000
+    )
 
 
 def _reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

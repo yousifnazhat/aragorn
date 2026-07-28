@@ -9,6 +9,9 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -304,11 +307,7 @@ function policyRecordCount() {
   return lines.length;
 }
 
-function resolvePrompt(snapshot) {
-  if (typeof snapshot.prompt === "string") {
-    return { prompt: snapshot.prompt, storage: "inline" };
-  }
-  const ref = snapshot.promptRef;
+function resolvePromptBlobPath(ref) {
   if (
     ref?.version !== 1 ||
     ref?.algorithm !== "sha256" ||
@@ -318,13 +317,21 @@ function resolvePrompt(snapshot) {
   ) {
     throw new Error("session snapshot has no valid prompt or promptRef");
   }
-  const path = join(
+  return join(
     dirname(SESSION_STORE),
     "skills-prompts",
     "sha256",
     ref.hash.slice(0, 2),
     `${ref.hash}.txt`,
   );
+}
+
+function resolvePrompt(snapshot) {
+  if (typeof snapshot.prompt === "string") {
+    return { prompt: snapshot.prompt, storage: "inline" };
+  }
+  const ref = snapshot.promptRef;
+  const path = resolvePromptBlobPath(ref);
   const stat = lstatSync(path);
   const raw = readFileSync(path);
   if (
@@ -359,6 +366,88 @@ function sessionSnapshot() {
     skill_names: (snapshot.skills ?? []).map((item) => item.name),
     started_at: entry.startedAt,
     version: snapshot.version,
+  };
+}
+
+function promptBlobProof() {
+  const store = JSON.parse(readFileSync(SESSION_STORE, "utf8"));
+  const ref = store[SESSION_KEY]?.skillsSnapshot?.promptRef;
+  const path = resolvePromptBlobPath(ref);
+  const stat = lstatSync(path, { bigint: true });
+  const raw = readFileSync(path);
+  const digest = sha256(raw);
+  if (
+    !stat.isFile() ||
+    stat.isSymbolicLink() ||
+    stat.nlink !== 1n ||
+    (stat.mode & 0o777n) !== 0o600n ||
+    raw.length !== ref.bytes ||
+    digest !== `sha256:${ref.hash}`
+  ) {
+    throw new Error("persisted prompt blob identity changed");
+  }
+  return {
+    bytes: raw.length,
+    digest,
+    mode: "600",
+    mtime_ns: stat.mtimeNs.toString(),
+    nlink: 1,
+    path,
+    prompt_ref: ref,
+  };
+}
+
+function sessionStoreProof(raw, stat) {
+  return {
+    bytes: raw.length,
+    digest: sha256(raw),
+    mode: (Number(stat.mode) & 0o777).toString(8).padStart(3, "0"),
+    mtime_ns: stat.mtimeNs.toString(),
+    nlink: Number(stat.nlink),
+    path: SESSION_STORE,
+  };
+}
+
+async function invalidatePromptBlob(blob) {
+  const startedAt = new Date().toISOString();
+  const rawBefore = readFileSync(SESSION_STORE);
+  const statBefore = lstatSync(SESSION_STORE, { bigint: true });
+  const storeBefore = sessionStoreProof(rawBefore, statBefore);
+  const current = promptBlobProof();
+  if (
+    canonicalJson(current.prompt_ref) !== canonicalJson(blob.prompt_ref) ||
+    current.path !== blob.path
+  ) {
+    throw new Error("prompt blob changed before invalidation");
+  }
+  unlinkSync(blob.path);
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  writeFileSync(SESSION_STORE, rawBefore);
+  let statAfter = lstatSync(SESSION_STORE, { bigint: true });
+  if (statAfter.mtimeNs === statBefore.mtimeNs) {
+    const changed = new Date(Number(statBefore.mtimeNs / 1_000_000n) + 1);
+    utimesSync(SESSION_STORE, changed, changed);
+    statAfter = lstatSync(SESSION_STORE, { bigint: true });
+  }
+  const rawAfter = readFileSync(SESSION_STORE);
+  const storeAfter = sessionStoreProof(rawAfter, statAfter);
+  if (
+    !rawBefore.equals(rawAfter) ||
+    statAfter.mtimeNs <= statBefore.mtimeNs ||
+    existsSync(blob.path) ||
+    storeBefore.mode !== "600" ||
+    storeBefore.nlink !== 1 ||
+    storeAfter.mode !== "600" ||
+    storeAfter.nlink !== 1
+  ) {
+    throw new Error("failed to force an exact missing-blob cache miss");
+  }
+  return {
+    blob_exists_after_unlink: false,
+    completed_at: new Date().toISOString(),
+    started_at: startedAt,
+    store_after_rewrite: storeAfter,
+    store_before: storeBefore,
   };
 }
 
@@ -511,6 +600,11 @@ async function runProbe() {
       ? { snapshot: null, turns: [] }
       : await waitForSnapshot("enabled", disabledReload.snapshot, true);
   const enabledStatus = skillStatus();
+  const blobBefore = promptBlobProof();
+  const invalidation = await invalidatePromptBlob(blobBefore);
+  const rebuildTurn = await normalTurn("prompt-rebuild", 0);
+  const rebuiltSnapshot = sessionSnapshot();
+  const blobAfter = promptBlobProof();
   const targetAfter = treeSnapshot(TARGET);
   const processAfter = processIdentity();
   const logAfter = gatewayLog();
@@ -534,6 +628,24 @@ async function runProbe() {
     disabledReload.snapshot.version > initialSnapshot.version &&
     enabledReload.snapshot.version > disabledReload.snapshot.version &&
     noRestart;
+  const blobRebuildPassed =
+    reloadPassed &&
+    validSnapshot(rebuiltSnapshot, true) &&
+    rebuiltSnapshot.session_id === enabledReload.snapshot.session_id &&
+    rebuiltSnapshot.version === enabledReload.snapshot.version &&
+    rebuiltSnapshot.prompt_digest === enabledReload.snapshot.prompt_digest &&
+    rebuiltSnapshot.prompt_bytes === enabledReload.snapshot.prompt_bytes &&
+    rebuiltSnapshot.prompt_storage === enabledReload.snapshot.prompt_storage &&
+    rebuiltSnapshot.marker_present === enabledReload.snapshot.marker_present &&
+    canonicalJson(rebuiltSnapshot.skill_names) ===
+      canonicalJson(enabledReload.snapshot.skill_names) &&
+    rebuiltSnapshot.started_at > enabledReload.snapshot.ended_at &&
+    canonicalJson(blobAfter.prompt_ref) ===
+      canonicalJson(blobBefore.prompt_ref) &&
+    blobAfter.digest === blobBefore.digest &&
+    blobAfter.bytes === blobBefore.bytes &&
+    BigInt(blobAfter.mtime_ns) >
+      BigInt(invalidation.store_after_rewrite.mtime_ns);
   const scenarios = [
     {
       evidence: {
@@ -568,6 +680,17 @@ async function runProbe() {
       id: "ADM-02/reload/config-invalidation",
       status: reloadPassed ? "PASS" : "FAIL",
     },
+    {
+      evidence: {
+        blob_after: blobAfter,
+        blob_before: blobBefore,
+        invalidation,
+        rebuild_turn: rebuildTurn,
+        rebuilt_snapshot: rebuiltSnapshot,
+      },
+      id: "ADM-02/reload/missing-prompt-blob-rebuild",
+      status: blobRebuildPassed ? "PASS" : "FAIL",
+    },
   ];
   const failed = scenarios.some((scenario) => scenario.status !== "PASS");
   return {
@@ -595,6 +718,8 @@ async function runProbe() {
     limitations: [
       "ONLY_CONFIG_ENTRY_ENABLE_DISABLE_EXECUTED",
       "ONLY_CONFIG_INVALIDATION_EXISTING_CHAT_SESSION_EXECUTED",
+      "ONLY_ONE_MISSING_PROMPT_BLOB_REBUILD_EXECUTED",
+      "SESSION_STORE_MTIME_CHANGED_WITH_IDENTICAL_BYTES_TO_FORCE_CACHE_MISS",
       "NORMAL_TURNS_INTENTIONALLY_FAIL_WITHOUT_PROVIDER_CREDENTIALS",
       "CONFIGURATION_COPY_WRITABLE_TO_UNPRIVILEGED_RUNTIME_UID",
       "ADMITTED_SKILL_ROOT_READ_ONLY_VOLUME",

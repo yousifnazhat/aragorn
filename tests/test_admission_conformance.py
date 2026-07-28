@@ -1241,12 +1241,57 @@ class AdmissionConformanceTests(unittest.TestCase):
         marker["scenarios"][1]["evidence"]["enabled"]["snapshot"]["marker_present"] = (
             False
         )
+        blob_not_deleted = deepcopy(probe)
+        blob_not_deleted["scenarios"][2]["evidence"]["invalidation"][
+            "blob_exists_after_unlink"
+        ] = True
+        store_changed = deepcopy(probe)
+        store_changed["scenarios"][2]["evidence"]["invalidation"][
+            "store_after_rewrite"
+        ]["digest"] = "sha256:" + "0" * 64
+        blob_changed = deepcopy(probe)
+        blob_changed["scenarios"][2]["evidence"]["blob_after"]["digest"] = (
+            "sha256:" + "0" * 64
+        )
+        rebuilt_session = deepcopy(probe)
+        rebuilt_session["scenarios"][2]["evidence"]["rebuilt_snapshot"][
+            "session_id"
+        ] = "unbound-session"
+        rebuild_timing = deepcopy(probe)
+        rebuild_timing["scenarios"][2]["evidence"]["invalidation"]["completed_at"] = (
+            "2026-07-28T04:44:00.000Z"
+        )
+        rebuilt_timestamp = deepcopy(probe)
+        rebuilt = rebuilt_timestamp["scenarios"][2]["evidence"]["rebuilt_snapshot"]
+        rebuilt["started_at"] = rebuilt["ended_at"] = 9_999_999_999_999
+        future_mtimes = deepcopy(probe)
+        future_evidence = future_mtimes["scenarios"][2]["evidence"]
+        future_evidence["invalidation"]["store_before"]["mtime_ns"] = (
+            "9999999999996000000"
+        )
+        future_evidence["blob_before"]["mtime_ns"] = "9999999999997000000"
+        future_evidence["invalidation"]["store_after_rewrite"]["mtime_ns"] = (
+            "9999999999998000000"
+        )
+        future_evidence["blob_after"]["mtime_ns"] = "9999999999999000000"
+        restarted = deepcopy(probe)
+        restarted["scenarios"][1]["evidence"]["gateway_log_after"][
+            "restart_count"
+        ] = 1
         for label, mutation in (
             ("write guard", write_guard),
             ("target digest", target),
             ("session", session),
             ("version", version),
             ("marker", marker),
+            ("blob not deleted", blob_not_deleted),
+            ("session store changed", store_changed),
+            ("blob changed", blob_changed),
+            ("rebuilt session", rebuilt_session),
+            ("rebuild timing", rebuild_timing),
+            ("rebuilt timestamp", rebuilt_timestamp),
+            ("future mtimes", future_mtimes),
+            ("post-route restart", restarted),
         ):
             with (
                 self.subTest(label),

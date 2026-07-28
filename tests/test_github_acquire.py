@@ -708,6 +708,87 @@ class GitHubTransportTests(unittest.TestCase):
             ):
                 github_acquire._resolve_public_api_endpoints()
 
+    def test_exact_pinned_addresses_are_normalized_without_dns(self) -> None:
+        responses = valid_responses()
+        observed: list[tuple[github_acquire._Endpoint, ...]] = []
+
+        def request(path: str, **kwargs: object) -> dict[str, object]:
+            endpoints = kwargs["endpoints"]
+            assert isinstance(endpoints, github_acquire._PinnedEndpoints)
+            observed.append(endpoints.get())
+            return responses[path]
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+            github_acquire.socket,
+            "getaddrinfo",
+        ) as resolve, patch.object(
+            github_acquire,
+            "_request_json",
+            side_effect=request,
+        ):
+            acquire_github_commit(
+                "https://github.com/example/project",
+                COMMIT,
+                "skills/demo",
+                CAS(Path(temporary) / "state"),
+                _pinned_addresses=[
+                    "2606:4700:4700::1111",
+                    "8.8.8.8",
+                    "1.1.1.1",
+                    "8.8.8.8",
+                ],
+            )
+
+        expected = (
+            (
+                github_acquire.socket.AF_INET,
+                github_acquire.socket.SOCK_STREAM,
+                github_acquire.socket.IPPROTO_TCP,
+                ("1.1.1.1", 443),
+            ),
+            (
+                github_acquire.socket.AF_INET,
+                github_acquire.socket.SOCK_STREAM,
+                github_acquire.socket.IPPROTO_TCP,
+                ("8.8.8.8", 443),
+            ),
+            (
+                github_acquire.socket.AF_INET6,
+                github_acquire.socket.SOCK_STREAM,
+                github_acquire.socket.IPPROTO_TCP,
+                ("2606:4700:4700::1111", 443, 0, 0),
+            ),
+        )
+        self.assertTrue(observed)
+        self.assertTrue(all(item == expected for item in observed))
+        resolve.assert_not_called()
+
+    def test_exact_pinned_addresses_fail_closed_before_network(self) -> None:
+        cases = (
+            ((), "between 1 and 16"),
+            (("8.8.8.8",) * 17, "between 1 and 16"),
+            ((1,), "canonical IPv4 or IPv6"),
+            (("8.8.8.8 ",), "canonical IPv4 or IPv6"),
+            (("2001:4860:4860:0:0:0:0:8888",), "canonical IPv4 or IPv6"),
+            (("127.0.0.1",), "global unicast"),
+            (("::ffff:8.8.8.8",), "global unicast"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            for index, (addresses, message) in enumerate(cases):
+                with self.subTest(addresses=addresses), patch.object(
+                    github_acquire,
+                    "_request_json",
+                ) as request:
+                    with self.assertRaisesRegex(GitHubAcquisitionError, message):
+                        acquire_github_commit(
+                            "https://github.com/example/project",
+                            COMMIT,
+                            "skills/demo",
+                            CAS(Path(temporary) / f"state-{index}"),
+                            _pinned_addresses=addresses,
+                        )
+                    request.assert_not_called()
+
     def test_pinned_connection_uses_numeric_peer_and_github_sni(self) -> None:
         first_endpoint = (
             github_acquire.socket.AF_INET,

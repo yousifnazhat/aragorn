@@ -12,7 +12,8 @@ import secrets
 import shutil
 import stat
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -31,12 +32,20 @@ from .github_acquire import (
     _OWNER,
     _REPOSITORY,
     _parse_skill_path,
+    _resolve_public_api_addresses,
+    _validate_pinned_addresses,
     acquire_github_commit,
 )
-from .oci_runtime import _ProcessResult, _run_bounded
+from .oci_runtime import (
+    VerificationError,
+    _hash_regular_file,
+    _ProcessResult,
+    _run_bounded,
+)
 
 REQUEST_SCHEMA = "aragorn/github-gateway-request/v1"
 RESULT_SCHEMA = "aragorn/github-gateway-result/v1"
+ADDRESS_RESULT_SCHEMA = "aragorn/github-gateway-address-result/v1"
 QUARANTINE_AUTHORITY = "QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY"
 SOURCE_ASSURANCE = "github_api_membership_asserted_blob_identity_reverified"
 _REQUEST_KEYS = {"schema", "owner", "repository", "commit", "skill_path"}
@@ -46,11 +55,17 @@ _RESULT_KEYS = {
     "manifest_digest",
     "handoff_manifest_digest",
 }
+_ADDRESS_RESULT_KEYS = {"schema", "addresses"}
 _MAX_WIRE_BYTES = 64 * 1024
 _MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 _MAX_GATEWAY_SECONDS = 180.0
+_MAX_RESOLUTION_SECONDS = 10.0
 _MAX_PACKAGE_ENTRIES = 1_000
+_MAX_PROCESS_CENSUS_BYTES = 1024 * 1024
+_MAX_PROCESS_CENSUS_EXECUTABLE_BYTES = 4 * 1024 * 1024
 _DEFAULT_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+_PROCESS_CENSUS_PATH = Path("/bin/ps")
+_UID_LEASE_ROOT = Path("/var/run/aragorn-gateway")
 _ISOLATED_ENTRYPOINT = """\
 import errno
 import os
@@ -137,6 +152,8 @@ def build_gateway_request(
 def run_worker(
     request: object,
     job_root: str | os.PathLike[str],
+    *,
+    pinned_addresses: list[str] | tuple[str, ...],
 ) -> dict[str, str]:
     """Acquire one exact public source and export its declared byte closure."""
 
@@ -144,13 +161,17 @@ def run_worker(
     request_digest = _digest(canonical_json(frozen))
     root = _create_job_root(job_root)
     source_cas = CAS(root / "state")
+    acquisition_options: dict[str, object] = {
+        **_FIXED_LIMITS,
+        "bearer_token": None,
+        "_pinned_addresses": pinned_addresses,
+    }
     manifest = acquire_github_commit(
         _repository_url(frozen),
         frozen["commit"],
         frozen["skill_path"],
         source_cas,
-        **_FIXED_LIMITS,
-        bearer_token=None,
+        **acquisition_options,
     )
     raw_manifest = canonical_json(manifest)
     if len(raw_manifest) > _MAX_MANIFEST_BYTES:
@@ -213,15 +234,6 @@ def quarantine_through_gateway(
     executable = _trusted_python_executable(python_executable)
     protected_package = _trusted_package_root(package_root)
     job_root = gateway / f"job-{secrets.token_hex(16)}"
-    command = _gateway_command(
-        executable,
-        protected_package,
-        worker_uid,
-        worker_gid,
-        "worker",
-        "--job-root",
-        os.fspath(job_root),
-    )
     environment = {
         "HOME": os.fspath(gateway),
         "LANG": "C",
@@ -230,36 +242,67 @@ def quarantine_through_gateway(
         "PYTHONDONTWRITEBYTECODE": "1",
         "TZ": "UTC",
     }
-    try:
+    with _exclusive_uid_lease(_UID_LEASE_ROOT, worker_uid):
         try:
-            process = _run_bounded(
-                command,
-                timeout=float(process_timeout_seconds),
-                stdout_limit=_MAX_WIRE_BYTES,
-                stderr_limit=_MAX_WIRE_BYTES,
-                shared_limit=2 * _MAX_WIRE_BYTES,
-                env=environment,
-                stdin_bytes=raw_request + b"\n",
-                cwd=os.path.sep,
-                user=worker_uid,
-                group=worker_gid,
-                extra_groups=(),
-                umask=0o077,
+            _require_idle_uid(worker_uid, "before launch")
+            try:
+                resolver = _run_gateway_process(
+                    _gateway_command(
+                        executable,
+                        protected_package,
+                        worker_uid,
+                        worker_gid,
+                        "resolve",
+                    ),
+                    timeout=min(
+                        float(process_timeout_seconds),
+                        _MAX_RESOLUTION_SECONDS,
+                    ),
+                    environment=environment,
+                    worker_uid=worker_uid,
+                    worker_gid=worker_gid,
+                    postflight_stage="after resolver shutdown",
+                )
+                pinned_addresses = _require_address_result(resolver)
+                command = _gateway_command(
+                    executable,
+                    protected_package,
+                    worker_uid,
+                    worker_gid,
+                    "worker",
+                    "--job-root",
+                    os.fspath(job_root),
+                    *(
+                        item
+                        for address in pinned_addresses
+                        for item in ("--endpoint", address)
+                    ),
+                )
+                process = _run_gateway_process(
+                    command,
+                    timeout=float(process_timeout_seconds),
+                    environment=environment,
+                    worker_uid=worker_uid,
+                    worker_gid=worker_gid,
+                    postflight_stage="after worker shutdown",
+                    stdin_bytes=raw_request + b"\n",
+                )
+            except GitHubGatewayError:
+                raise
+            except (OSError, TypeError, ValueError) as exc:
+                raise GitHubGatewayError(
+                    f"cannot launch acquisition gateway: {exc}"
+                ) from exc
+            result = _require_success_result(process)
+            return _accept_gateway_output(
+                frozen,
+                result,
+                job_root=job_root,
+                quarantine_state=quarantine,
+                worker_uid=worker_uid,
             )
-        except (OSError, TypeError, ValueError) as exc:
-            raise GitHubGatewayError(
-                f"cannot launch acquisition gateway: {exc}"
-            ) from exc
-        result = _require_success_result(process)
-        return _accept_gateway_output(
-            frozen,
-            result,
-            job_root=job_root,
-            quarantine_state=quarantine,
-            worker_uid=worker_uid,
-        )
-    finally:
-        _remove_worker_job(job_root, expected_uid=worker_uid)
+        finally:
+            _remove_worker_job(job_root, expected_uid=worker_uid)
 
 
 def _accept_gateway_output(
@@ -418,6 +461,26 @@ def _decode_result_line(raw: bytes) -> dict[str, str]:
     return document
 
 
+def _decode_address_result_line(raw: bytes) -> tuple[str, ...]:
+    document = _decode_canonical_line(raw, "gateway address result")
+    if (
+        set(document) != _ADDRESS_RESULT_KEYS
+        or document.get("schema") != ADDRESS_RESULT_SCHEMA
+        or not isinstance(document.get("addresses"), list)
+    ):
+        raise GitHubGatewayError("gateway address result is invalid")
+    addresses = document["addresses"]
+    try:
+        canonical = tuple(
+            endpoint[3][0] for endpoint in _validate_pinned_addresses(addresses)
+        )
+    except ValueError as exc:
+        raise GitHubGatewayError(f"gateway address result is invalid: {exc}") from exc
+    if tuple(addresses) != canonical:
+        raise GitHubGatewayError("gateway address result is not canonical")
+    return canonical
+
+
 def _decode_canonical_line(raw: bytes, label: str) -> dict[str, Any]:
     if (
         not isinstance(raw, bytes)
@@ -475,6 +538,14 @@ def _require_requested_source(
 
 
 def _require_success_result(process: _ProcessResult) -> dict[str, str]:
+    return _decode_result_line(_require_success_output(process))
+
+
+def _require_address_result(process: _ProcessResult) -> tuple[str, ...]:
+    return _decode_address_result_line(_require_success_output(process))
+
+
+def _require_success_output(process: _ProcessResult) -> bytes:
     if process.termination_failed:
         raise GitHubGatewayError("gateway did not terminate after forced shutdown")
     if process.output_exceeded:
@@ -491,7 +562,7 @@ def _require_success_result(process: _ProcessResult) -> dict[str, str]:
         )
     if process.stderr:
         raise GitHubGatewayError("successful gateway wrote to standard error")
-    return _decode_result_line(process.stdout)
+    return process.stdout
 
 
 def _require_distinct_principal(worker_uid: int, worker_gid: int) -> None:
@@ -529,6 +600,193 @@ def _prepare_paths(
     if _paths_overlap(gateway, quarantine):
         raise GitHubGatewayError("gateway root and broker quarantine must not overlap")
     return gateway, quarantine
+
+
+@contextmanager
+def _exclusive_uid_lease(control_root: Path, worker_uid: int) -> Iterator[None]:
+    try:
+        import fcntl
+    except ImportError as exc:  # pragma: no cover - non-POSIX import guard
+        raise GitHubGatewayError("gateway UID locking is unsupported") from exc
+
+    root = _require_private_directory(
+        control_root,
+        expected_uid=_broker_euid(),
+        label="gateway control root",
+    )
+    root_fd = -1
+    lock_fd = -1
+    try:
+        try:
+            root_fd = os.open(
+                root,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            )
+            opened_root = os.fstat(root_fd)
+            if (
+                not stat.S_ISDIR(opened_root.st_mode)
+                or opened_root.st_uid != _broker_euid()
+                or stat.S_IMODE(opened_root.st_mode) & 0o077
+            ):
+                raise GitHubGatewayError("gateway control root changed while opened")
+            lock_fd = os.open(
+                f".uid-{worker_uid}.lock",
+                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+                dir_fd=root_fd,
+            )
+            lock = os.fstat(lock_fd)
+            if (
+                not stat.S_ISREG(lock.st_mode)
+                or lock.st_uid != _broker_euid()
+                or stat.S_IMODE(lock.st_mode) != 0o600
+                or lock.st_nlink != 1
+            ):
+                raise GitHubGatewayError("gateway UID lock is not a protected file")
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise GitHubGatewayError(
+                    f"gateway worker UID {worker_uid} is already leased"
+                ) from exc
+        except GitHubGatewayError:
+            raise
+        except OSError as exc:
+            raise GitHubGatewayError(f"cannot lock gateway worker UID: {exc}") from exc
+        yield
+    finally:
+        if lock_fd >= 0:
+            os.close(lock_fd)
+        if root_fd >= 0:
+            os.close(root_fd)
+
+
+def _require_idle_uid(worker_uid: int, stage: str) -> None:
+    peers = _uid_processes(worker_uid)
+    if peers:
+        raise GitHubGatewayError(
+            f"gateway worker UID {worker_uid} has peer processes "
+            f"{stage}: {','.join(map(str, peers))}"
+        )
+
+
+def _run_gateway_process(
+    command: Sequence[str],
+    *,
+    timeout: float,
+    environment: dict[str, str],
+    worker_uid: int,
+    worker_gid: int,
+    postflight_stage: str,
+    stdin_bytes: bytes | None = None,
+) -> _ProcessResult:
+    try:
+        return _run_bounded(
+            command,
+            timeout=timeout,
+            stdout_limit=_MAX_WIRE_BYTES,
+            stderr_limit=_MAX_WIRE_BYTES,
+            shared_limit=2 * _MAX_WIRE_BYTES,
+            env=environment,
+            stdin_bytes=stdin_bytes,
+            cwd=os.path.sep,
+            user=worker_uid,
+            group=worker_gid,
+            extra_groups=(),
+            umask=0o077,
+        )
+    finally:
+        _require_idle_uid(worker_uid, postflight_stage)
+
+
+def _uid_processes(worker_uid: int) -> tuple[int, ...]:
+    executable, expected = _trusted_process_census_executable()
+    process = _run_bounded(
+        (os.fspath(executable), "-A", "-o", "pid=", "-o", "ruid="),
+        timeout=2.0,
+        stdout_limit=_MAX_PROCESS_CENSUS_BYTES,
+        stderr_limit=4 * 1024,
+        shared_limit=_MAX_PROCESS_CENSUS_BYTES + 4 * 1024,
+        env={"LANG": "C", "LC_ALL": "C", "PATH": os.defpath},
+        cwd=os.path.sep,
+    )
+    if (
+        process.timed_out
+        or process.output_exceeded
+        or process.termination_failed
+        or process.io_error is not None
+        or process.returncode != 0
+        or process.stderr
+    ):
+        raise GitHubGatewayError("gateway worker UID census failed closed")
+    try:
+        observed = _hash_regular_file(
+            executable,
+            _MAX_PROCESS_CENSUS_EXECUTABLE_BYTES,
+            "process census executable",
+        )
+    except (OSError, VerificationError) as exc:
+        raise GitHubGatewayError(
+            f"cannot reverify process census executable: {exc}"
+        ) from exc
+    if observed[:2] != expected:
+        raise GitHubGatewayError("process census executable changed during use")
+    return _parse_uid_census(process.stdout, worker_uid)
+
+
+def _trusted_process_census_executable() -> tuple[
+    Path, tuple[str, tuple[int, int, int, int]]
+]:
+    try:
+        path = _PROCESS_CENSUS_PATH.resolve(strict=True)
+        metadata = os.lstat(path)
+        digest, identity, _mode = _hash_regular_file(
+            path,
+            _MAX_PROCESS_CENSUS_EXECUTABLE_BYTES,
+            "process census executable",
+        )
+    except (OSError, RuntimeError, VerificationError) as exc:
+        raise GitHubGatewayError(f"invalid process census executable: {exc}") from exc
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != _broker_euid()
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+        or not os.access(path, os.X_OK)
+    ):
+        raise GitHubGatewayError("process census executable is not protected")
+    _require_protected_ancestors(path)
+    return path, (digest, identity)
+
+
+def _parse_uid_census(raw: bytes, worker_uid: int) -> tuple[int, ...]:
+    try:
+        lines = raw.decode("ascii").splitlines()
+    except UnicodeDecodeError as exc:
+        raise GitHubGatewayError("process census is not ASCII") from exc
+    if not lines or len(lines) > 65_536:
+        raise GitHubGatewayError("process census row count is invalid")
+    seen: set[int] = set()
+    matches: list[int] = []
+    for line in lines:
+        fields = line.split()
+        uid_text = fields[1] if len(fields) == 2 else ""
+        if (
+            len(fields) != 2
+            or not fields[0].isdigit()
+            or not (uid_text.isdigit() or uid_text in {"-1", "-2"})
+            or int(fields[0]) <= 0
+            or int(fields[1]) >= 2**31
+        ):
+            raise GitHubGatewayError("process census row is invalid")
+        pid, uid = map(int, fields)
+        if pid in seen:
+            raise GitHubGatewayError("process census repeats a PID")
+        seen.add(pid)
+        if uid == worker_uid:
+            matches.append(pid)
+    if 1 not in seen:
+        raise GitHubGatewayError("process census does not contain PID 1")
+    return tuple(sorted(matches))
 
 
 def _require_private_directory(
@@ -861,15 +1119,30 @@ def _parser() -> ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     worker = commands.add_parser("worker")
     worker.add_argument("--job-root", type=Path, required=True)
+    worker.add_argument("--endpoint", action="append", required=True)
     worker.set_defaults(action=_worker_command)
+    resolver = commands.add_parser("resolve")
+    resolver.set_defaults(action=_resolver_command)
     return parser
 
 
 def _worker_command(args: argparse.Namespace) -> dict[str, str]:
+    _require_worker_process_limit()
+    request = _decode_request_line(sys.stdin.buffer.read(_MAX_WIRE_BYTES + 1))
+    return run_worker(request, args.job_root, pinned_addresses=args.endpoint)
+
+
+def _resolver_command(_args: argparse.Namespace) -> dict[str, object]:
+    _require_worker_process_limit()
+    return {
+        "schema": ADDRESS_RESULT_SCHEMA,
+        "addresses": list(_resolve_public_api_addresses()),
+    }
+
+
+def _require_worker_process_limit() -> None:
     if resource.getrlimit(resource.RLIMIT_NPROC) != (1, 1):
         raise GitHubGatewayError("gateway worker process limit is not enforced")
-    request = _decode_request_line(sys.stdin.buffer.read(_MAX_WIRE_BYTES + 1))
-    return run_worker(request, args.job_root)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

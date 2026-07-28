@@ -69,8 +69,13 @@ class _BearerToken:
 class _PinnedEndpoints:
     """Resolve the fixed API host once and retain only public addresses."""
 
-    def __init__(self) -> None:
-        self._value: tuple[_Endpoint, ...] | None = None
+    def __init__(
+        self,
+        addresses: list[str] | tuple[str, ...] | None = None,
+    ) -> None:
+        self._value = (
+            None if addresses is None else _validate_pinned_addresses(addresses)
+        )
 
     def get(self) -> tuple[_Endpoint, ...]:
         if self._value is None:
@@ -90,6 +95,7 @@ class GitHubAcquisitionSession:
         max_api_bytes: int = _MAX_API_BYTES,
         timeout_seconds: float = 120.0,
         bearer_token: str | None = None,
+        _pinned_addresses: list[str] | tuple[str, ...] | None = None,
     ) -> None:
         owner, repository = _parse_repository_url(repository_url)
         if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
@@ -115,7 +121,7 @@ class GitHubAcquisitionSession:
         self._authorization = authorization
         self._budget = _RequestBudget(max_api_requests, max_api_bytes)
         self._deadline = time.monotonic() + float(timeout_seconds)
-        self._endpoints = _PinnedEndpoints()
+        self._endpoints = _PinnedEndpoints(_pinned_addresses)
         self._tree_cache: dict[str, tuple[dict[str, Any], ...]] = {}
 
         algorithm = self._request(
@@ -319,6 +325,7 @@ def acquire_github_commit(
     max_api_bytes: int = _MAX_API_BYTES,
     timeout_seconds: float = 120.0,
     bearer_token: str | None = None,
+    _pinned_addresses: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """Acquire exact file bytes from one public GitHub SHA-1 commit.
 
@@ -355,6 +362,7 @@ def acquire_github_commit(
         max_api_bytes=max_api_bytes,
         timeout_seconds=timeout_seconds,
         bearer_token=bearer_token,
+        _pinned_addresses=_pinned_addresses,
     )
     root_tree_sha = session.root_tree_sha
     skill_tree_sha, _ = session.resolve_tree(skill_path)
@@ -719,6 +727,56 @@ def _server_tls_context() -> ssl.SSLContext:
     return context
 
 
+def _validate_pinned_addresses(value: object) -> tuple[_Endpoint, ...]:
+    if (
+        not isinstance(value, (list, tuple))
+        or not value
+        or len(value) > _MAX_PINNED_ENDPOINTS
+    ):
+        raise GitHubAcquisitionError(
+            "pinned addresses must contain between 1 and 16 entries"
+        )
+
+    addresses: dict[tuple[int, int], str] = {}
+    for item in value:
+        if type(item) is not str:
+            raise GitHubAcquisitionError(
+                "pinned address is not canonical IPv4 or IPv6"
+            )
+        try:
+            address = ipaddress.ip_address(item)
+        except ValueError as exc:
+            raise GitHubAcquisitionError(
+                "pinned address is not canonical IPv4 or IPv6"
+            ) from exc
+        if item != address.compressed:
+            raise GitHubAcquisitionError(
+                "pinned address is not canonical IPv4 or IPv6"
+            )
+        if (
+            not address.is_global
+            or address.is_multicast
+            or address.is_reserved
+            or address.is_unspecified
+            or address.is_loopback
+            or address.is_link_local
+            or getattr(address, "ipv4_mapped", None) is not None
+            or getattr(address, "is_site_local", False)
+        ):
+            raise GitHubAcquisitionError("pinned address is not global unicast")
+        addresses[(address.version, int(address))] = address.compressed
+
+    return tuple(
+        (
+            socket.AF_INET if version == 4 else socket.AF_INET6,
+            socket.SOCK_STREAM,
+            socket.IPPROTO_TCP,
+            (text, _HTTPS_PORT) if version == 4 else (text, _HTTPS_PORT, 0, 0),
+        )
+        for (version, _numeric), text in sorted(addresses.items())
+    )
+
+
 def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
     try:
         records = socket.getaddrinfo(
@@ -774,6 +832,15 @@ def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
             "fixed GitHub API host has no usable public address"
         )
     return tuple(endpoints)
+
+
+def _resolve_public_api_addresses() -> tuple[str, ...]:
+    return tuple(
+        endpoint[3][0]
+        for endpoint in _validate_pinned_addresses(
+            [endpoint[3][0] for endpoint in _resolve_public_api_endpoints()]
+        )
+    )
 
 
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):

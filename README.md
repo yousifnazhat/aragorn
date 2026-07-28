@@ -290,13 +290,23 @@ Its canonical request has no credential, proxy, CA, state-path, header, or
 caller-controlled limit fields. The privileged broker launches it under a
 configured non-root UID and group, clears supplementary groups, supplies an
 allowlisted environment, closes inherited descriptors, and enforces bounded
-output plus a process-group wall-clock deadline. Before importing any Aragorn
-module, the isolated bootstrap fixes the worker's soft and hard `RLIMIT_NPROC`
-at one and fails closed unless a fork probe is denied. This is defense in depth,
-not a replacement for sealed service-level containment. The broker then imports
-the declared bytes through Aragorn's cross-owner handoff and independently
-re-verifies the exact manifest, Git blob identities, source binding, and closure
-in a fresh broker-owned quarantine. The returned receipt is explicitly
+output plus process-group wall-clock deadlines. A bounded isolated resolver
+under that UID resolves the fixed GitHub API host once; the broker rejects
+non-global or noncanonical results and passes only the exact numeric set to the
+acquisition worker, which performs no DNS resolution. A fixed, root-protected
+per-UID lock serializes cooperating brokers that share the host control root
+and namespaces; bounded pre- and post-run process censuses reject a pre-existing
+or surviving real-UID peer.
+Before importing any Aragorn module, each isolated process fixes its soft and
+hard `RLIMIT_NPROC` at one and fails closed unless a fork probe is denied. These
+are defense in depth under the provisioned exclusive non-login UID, shared host
+PID/mount namespaces, trusted-root, and protected Darwin/procps-compatible
+`/bin/ps` assumptions, not a replacement for sealed service-level containment.
+The broker then imports the declared bytes through Aragorn's cross-owner handoff
+and
+independently re-verifies the exact manifest, Git blob identities, source
+binding, and closure in a fresh broker-owned quarantine. The returned receipt is
+explicitly
 `QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY`, with
 `github_api_membership_asserted_blob_identity_reverified` source assurance:
 commit and tree membership still inherit GitHub's authenticated API assertions,

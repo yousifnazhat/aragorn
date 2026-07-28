@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import nullcontext
 from io import BytesIO
 from pathlib import Path
 from unittest import mock
@@ -47,7 +48,11 @@ class GitHubGatewayTests(unittest.TestCase):
             "acquire_github_commit",
             side_effect=self._fake_acquire,
         ) as acquire:
-            result = run_worker(self.request, job)
+            result = run_worker(
+                self.request,
+                job,
+                pinned_addresses=("1.1.1.1",),
+            )
 
         acquire.assert_called_once()
         positional, keywords = acquire.call_args
@@ -61,6 +66,7 @@ class GitHubGatewayTests(unittest.TestCase):
             {
                 **github_gateway._FIXED_LIMITS,
                 "bearer_token": None,
+                "_pinned_addresses": ("1.1.1.1",),
             },
         )
         self.assertEqual(
@@ -133,7 +139,11 @@ class GitHubGatewayTests(unittest.TestCase):
             "acquire_github_commit",
             side_effect=acquire_other,
         ):
-            result = run_worker(other, job)
+            result = run_worker(
+                other,
+                job,
+                pinned_addresses=("1.1.1.1",),
+            )
         forged = {
             **result,
             "request_digest": github_gateway._digest(canonical_json(self.request)),
@@ -160,6 +170,17 @@ class GitHubGatewayTests(unittest.TestCase):
         }
         process = _ProcessResult(
             canonical_json(result) + b"\n",
+            b"",
+            0,
+        )
+        resolver_process = _ProcessResult(
+            canonical_json(
+                {
+                    "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
+                    "addresses": ["1.1.1.1", "2606:4700:4700::1111"],
+                }
+            )
+            + b"\n",
             b"",
             0,
         )
@@ -192,6 +213,12 @@ class GitHubGatewayTests(unittest.TestCase):
                 return_value=Path("/opt/aragorn-gateway"),
             ),
             mock.patch.object(
+                github_gateway,
+                "_exclusive_uid_lease",
+                return_value=nullcontext(),
+            ) as lease,
+            mock.patch.object(github_gateway, "_require_idle_uid") as idle_uid,
+            mock.patch.object(
                 github_gateway.secrets,
                 "token_hex",
                 return_value="f" * 32,
@@ -199,7 +226,12 @@ class GitHubGatewayTests(unittest.TestCase):
             mock.patch.object(
                 github_gateway,
                 "_run_bounded",
-                return_value=process,
+                side_effect=(
+                    resolver_process,
+                    process,
+                    resolver_process,
+                    _ProcessResult(b"", b"", -9, timed_out=True),
+                ),
             ) as launch,
             mock.patch.object(
                 github_gateway,
@@ -217,9 +249,36 @@ class GitHubGatewayTests(unittest.TestCase):
                 python_executable="/usr/bin/python3",
                 package_root="/opt/aragorn-gateway",
             )
+            with self.assertRaisesRegex(
+                GitHubGatewayError,
+                "process-group wall-clock",
+            ):
+                quarantine_through_gateway(
+                    self.request,
+                    gateway_root="/gateway",
+                    quarantine_state="/broker/quarantine",
+                    worker_uid=501,
+                    worker_gid=20,
+                    python_executable="/usr/bin/python3",
+                    package_root="/opt/aragorn-gateway",
+                )
 
         self.assertEqual(observed, accepted)
         arguments, options = launch.call_args
+        self.assertEqual(
+            launch.call_args_list[0].args[0],
+            (
+                "/usr/bin/python3",
+                "-I",
+                "-S",
+                "-c",
+                github_gateway._ISOLATED_ENTRYPOINT,
+                "501",
+                "20",
+                "/opt/aragorn-gateway",
+                "resolve",
+            ),
+        )
         self.assertEqual(
             arguments[0],
             (
@@ -234,6 +293,10 @@ class GitHubGatewayTests(unittest.TestCase):
                 "worker",
                 "--job-root",
                 "/gateway/job-" + "f" * 32,
+                "--endpoint",
+                "1.1.1.1",
+                "--endpoint",
+                "2606:4700:4700::1111",
             ),
         )
         self.assertEqual(options["user"], 501)
@@ -245,9 +308,49 @@ class GitHubGatewayTests(unittest.TestCase):
             set(options["env"]),
             {"HOME", "LANG", "LC_ALL", "PATH", "PYTHONDONTWRITEBYTECODE", "TZ"},
         )
+        self.assertEqual(launch.call_count, 4)
+        self.assertEqual(
+            lease.call_args_list,
+            [
+                mock.call(github_gateway._UID_LEASE_ROOT, 501),
+                mock.call(github_gateway._UID_LEASE_ROOT, 501),
+            ],
+        )
         self.assertNotIn("SSL_CERT_FILE", options["env"])
         self.assertNotIn("HTTPS_PROXY", options["env"])
+        self.assertEqual(
+            idle_uid.call_args_list,
+            [
+                mock.call(501, "before launch"),
+                mock.call(501, "after resolver shutdown"),
+                mock.call(501, "after worker shutdown"),
+                mock.call(501, "before launch"),
+                mock.call(501, "after resolver shutdown"),
+                mock.call(501, "after worker shutdown"),
+            ],
+        )
         accept.assert_called_once()
+
+    def test_broker_rejects_untrusted_resolver_output(self) -> None:
+        for addresses in (
+            ["127.0.0.1"],
+            ["1.1.1.1", "1.1.1.1"],
+            ["2606:4700:4700::1111", "1.1.1.1"],
+        ):
+            raw = (
+                canonical_json(
+                    {
+                        "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
+                        "addresses": addresses,
+                    }
+                )
+                + b"\n"
+            )
+            with (
+                self.subTest(addresses=addresses),
+                self.assertRaises(GitHubGatewayError),
+            ):
+                github_gateway._decode_address_result_line(raw)
 
     def test_isolated_entrypoint_imports_without_cwd_or_pythonpath(self) -> None:
         package_root = Path(github_gateway.__file__).resolve().parents[1]
@@ -272,6 +375,8 @@ class GitHubGatewayTests(unittest.TestCase):
                 "worker",
                 "--job-root",
                 os.fspath(self.root / "unused-job"),
+                "--endpoint",
+                "1.1.1.1",
             )
         )
         self.assertEqual(worker.returncode, 4)
@@ -294,6 +399,8 @@ class GitHubGatewayTests(unittest.TestCase):
                 "worker",
                 "--job-root",
                 os.fspath(self.root / "unused-job"),
+                "--endpoint",
+                "1.1.1.1",
             )
         )
         self.assertEqual(unconfined.returncode, 4)
@@ -353,6 +460,71 @@ class GitHubGatewayTests(unittest.TestCase):
             )
         )
         self.assertEqual(mismatch.returncode, 70)
+
+    def test_worker_uid_lease_and_process_census_fail_closed(self) -> None:
+        self.assertEqual(
+            github_gateway._parse_uid_census(
+                b"  3   501\n  1     0\n  4    -2\n  2   501\n",
+                501,
+            ),
+            (2, 3),
+        )
+        for raw in (
+            b"",
+            b"2 501\n",
+            b"1 0\n1 501\n",
+            b"1 root\n",
+            b"\xff\n",
+        ):
+            with (
+                self.subTest(raw=raw),
+                self.assertRaises(GitHubGatewayError),
+            ):
+                github_gateway._parse_uid_census(raw, 501)
+
+        with (
+            mock.patch.object(
+                github_gateway,
+                "_broker_euid",
+                return_value=os.geteuid(),
+            ),
+            github_gateway._exclusive_uid_lease(self.root, 501),
+            self.assertRaisesRegex(GitHubGatewayError, "already leased"),
+            github_gateway._exclusive_uid_lease(self.root, 501),
+        ):
+            pass
+
+        with (
+            mock.patch.object(
+                github_gateway,
+                "_uid_processes",
+                return_value=(123,),
+            ),
+            self.assertRaisesRegex(GitHubGatewayError, "123"),
+        ):
+            github_gateway._require_idle_uid(501, "before launch")
+
+    def test_process_census_rejects_executable_identity_change(self) -> None:
+        process = _ProcessResult(b"1 0\n", b"", 0)
+        with (
+            mock.patch.object(
+                github_gateway,
+                "_trusted_process_census_executable",
+                return_value=(Path("/bin/ps"), ("sha256:" + "1" * 64, (1, 2, 3, 4))),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_run_bounded",
+                return_value=process,
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_hash_regular_file",
+                return_value=("sha256:" + "2" * 64, (1, 2, 3, 4), 0o100755),
+            ),
+            self.assertRaisesRegex(GitHubGatewayError, "changed during use"),
+        ):
+            github_gateway._uid_processes(501)
 
     def test_supervisor_refuses_same_privilege_and_failed_processes(self) -> None:
         with (

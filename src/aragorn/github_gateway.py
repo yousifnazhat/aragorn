@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
+import resource
 import secrets
 import shutil
 import stat
@@ -49,12 +51,41 @@ _MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 _MAX_GATEWAY_SECONDS = 180.0
 _MAX_PACKAGE_ENTRIES = 1_000
 _DEFAULT_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-_ISOLATED_ENTRYPOINT = (
-    "import sys;"
-    "sys.path.insert(0,sys.argv.pop(1));"
-    "from aragorn.github_gateway import main;"
-    "raise SystemExit(main())"
+_ISOLATED_ENTRYPOINT = """\
+import errno
+import os
+import resource
+import sys
+
+expected_uid = int(sys.argv.pop(1))
+expected_gid = int(sys.argv.pop(1))
+identity = (
+    os.getuid(),
+    os.geteuid(),
+    os.getgid(),
+    os.getegid(),
 )
+if (
+    not sys.flags.isolated
+    or not sys.flags.no_site
+    or identity != (expected_uid, expected_uid, expected_gid, expected_gid)
+):
+    raise SystemExit(70)
+resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
+try:
+    child = os.fork()
+except OSError as exc:
+    if exc.errno != errno.EAGAIN:
+        raise
+else:
+    if child == 0:
+        os._exit(70)
+    os.waitpid(child, 0)
+    raise SystemExit(70)
+sys.path.insert(0, sys.argv.pop(1))
+from aragorn.github_gateway import main
+raise SystemExit(main())
+"""
 _FIXED_LIMITS = {
     "max_depth": 8,
     "max_files": 10_000,
@@ -185,6 +216,8 @@ def quarantine_through_gateway(
     command = _gateway_command(
         executable,
         protected_package,
+        worker_uid,
+        worker_gid,
         "worker",
         "--job-root",
         os.fspath(job_root),
@@ -587,14 +620,16 @@ def _trusted_python_executable(value: str | os.PathLike[str]) -> Path:
         stat.S_ISLNK(metadata.st_mode)
         or not stat.S_ISREG(metadata.st_mode)
         or metadata.st_uid != _broker_euid()
+        or metadata.st_mode & (stat.S_ISUID | stat.S_ISGID)
         or stat.S_IMODE(metadata.st_mode) & 0o022
         or not os.access(path, os.X_OK)
     ):
         raise GitHubGatewayError(
             "gateway Python executable must be broker-owned, executable, "
-            "and not group or other writable"
+            "free of privilege bits, and not group or other writable"
         )
     _require_protected_ancestors(path)
+    _reject_file_capabilities(path)
     return path
 
 
@@ -685,16 +720,53 @@ def _require_protected_ancestors(path: Path) -> None:
         current = current.parent
 
 
+def _reject_file_capabilities(path: Path) -> None:
+    if sys.platform != "linux":
+        return
+    getxattr = getattr(os, "getxattr", None)
+    if getxattr is None:
+        raise GitHubGatewayError(
+            "cannot verify gateway Python file capabilities on this platform"
+        )
+    try:
+        capabilities = getxattr(
+            path,
+            "security.capability",
+            follow_symlinks=False,
+        )
+    except OSError as exc:
+        absent = {
+            errno.ENODATA,
+            errno.ENOTSUP,
+            getattr(errno, "ENOATTR", errno.ENODATA),
+            getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+        }
+        if exc.errno in absent:
+            return
+        raise GitHubGatewayError(
+            f"cannot verify gateway Python file capabilities: {exc}"
+        ) from exc
+    if capabilities:
+        raise GitHubGatewayError(
+            "gateway Python executable must not carry file capabilities"
+        )
+
+
 def _gateway_command(
     executable: Path,
     package_root: Path,
+    expected_uid: int,
+    expected_gid: int,
     *arguments: str,
 ) -> tuple[str, ...]:
     return (
         os.fspath(executable),
         "-I",
+        "-S",
         "-c",
         _ISOLATED_ENTRYPOINT,
+        str(expected_uid),
+        str(expected_gid),
         os.fspath(package_root),
         *arguments,
     )
@@ -794,6 +866,8 @@ def _parser() -> ArgumentParser:
 
 
 def _worker_command(args: argparse.Namespace) -> dict[str, str]:
+    if resource.getrlimit(resource.RLIMIT_NPROC) != (1, 1):
+        raise GitHubGatewayError("gateway worker process limit is not enforced")
     request = _decode_request_line(sys.stdin.buffer.read(_MAX_WIRE_BYTES + 1))
     return run_worker(request, args.job_root)
 

@@ -290,10 +290,13 @@ Its canonical request has no credential, proxy, CA, state-path, header, or
 caller-controlled limit fields. The privileged broker launches it under a
 configured non-root UID and group, clears supplementary groups, supplies an
 allowlisted environment, closes inherited descriptors, and enforces bounded
-output plus a process-group wall-clock deadline. It then imports the declared
-bytes through Aragorn's cross-owner handoff and independently re-verifies the
-exact manifest, Git blob identities, source binding, and closure in a fresh
-broker-owned quarantine. The returned receipt is explicitly
+output plus a process-group wall-clock deadline. Before importing any Aragorn
+module, the isolated bootstrap fixes the worker's soft and hard `RLIMIT_NPROC`
+at one and fails closed unless a fork probe is denied. This is defense in depth,
+not a replacement for sealed service-level containment. The broker then imports
+the declared bytes through Aragorn's cross-owner handoff and independently
+re-verifies the exact manifest, Git blob identities, source binding, and closure
+in a fresh broker-owned quarantine. The returned receipt is explicitly
 `QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY`, with
 `github_api_membership_asserted_blob_identity_reverified` source assurance:
 commit and tree membership still inherit GitHub's authenticated API assertions,
@@ -302,9 +305,10 @@ so this receipt cannot authorize admission, promotion, or installation.
 This is an internal primitive, not a command developers repeatedly run. It is
 not yet the supported production acquisition boundary: a protected installation
 of the gateway module, a provisioned dedicated UID/private transfer root,
-service-level descendant containment, control-plane promotion, and install/update
-wiring remain required. The direct `acquire-github` command still runs with the
-operator's UID and remains evaluation-only.
+sealed service-level descendant containment with no pre-existing same-UID peers,
+control-plane promotion, and install/update wiring remain required. The direct
+`acquire-github` command still runs with the operator's UID and remains
+evaluation-only.
 
 Recursively retain supported exact same-repository blob references for Phase 0
 comparator evaluation:

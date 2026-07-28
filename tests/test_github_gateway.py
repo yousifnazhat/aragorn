@@ -225,8 +225,11 @@ class GitHubGatewayTests(unittest.TestCase):
             (
                 "/usr/bin/python3",
                 "-I",
+                "-S",
                 "-c",
                 github_gateway._ISOLATED_ENTRYPOINT,
+                "501",
+                "20",
                 "/opt/aragorn-gateway",
                 "worker",
                 "--job-root",
@@ -248,26 +251,108 @@ class GitHubGatewayTests(unittest.TestCase):
 
     def test_isolated_entrypoint_imports_without_cwd_or_pythonpath(self) -> None:
         package_root = Path(github_gateway.__file__).resolve().parents[1]
-        completed = subprocess.run(
+        completed = self._run_isolated(
             github_gateway._gateway_command(
                 Path(sys.executable),
                 package_root,
+                os.getuid(),
+                os.getgid(),
                 "--help",
-            ),
-            cwd=os.path.sep,
-            env={
-                "LANG": "C",
-                "LC_ALL": "C",
-                "PATH": os.defpath,
-                "PYTHONDONTWRITEBYTECODE": "1",
-            },
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            check=False,
-            timeout=5.0,
+            )
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn(b"GitHub acquisition worker", completed.stdout)
+
+        worker = self._run_isolated(
+            github_gateway._gateway_command(
+                Path(sys.executable),
+                package_root,
+                os.getuid(),
+                os.getgid(),
+                "worker",
+                "--job-root",
+                os.fspath(self.root / "unused-job"),
+            )
+        )
+        self.assertEqual(worker.returncode, 4)
+        self.assertIn(b"bounded canonical JSON line", worker.stderr)
+        self.assertNotIn(b"process limit is not enforced", worker.stderr)
+
+        unconfined = self._run_isolated(
+            (
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                (
+                    "import sys;"
+                    "sys.path.insert(0,sys.argv.pop(1));"
+                    "from aragorn.github_gateway import main;"
+                    "raise SystemExit(main())"
+                ),
+                os.fspath(package_root),
+                "worker",
+                "--job-root",
+                os.fspath(self.root / "unused-job"),
+            )
+        )
+        self.assertEqual(unconfined.returncode, 4)
+        self.assertIn(b"process limit is not enforced", unconfined.stderr)
+
+    def test_gateway_rejects_privileged_interpreter_and_identity_mismatch(
+        self,
+    ) -> None:
+        executable = self.root / "python"
+        executable.write_bytes(b"placeholder")
+        executable.chmod(0o4755)
+        with (
+            mock.patch.object(
+                github_gateway,
+                "_broker_euid",
+                return_value=os.geteuid(),
+            ),
+            mock.patch.object(github_gateway, "_require_protected_ancestors"),
+            self.assertRaisesRegex(GitHubGatewayError, "privilege bits"),
+        ):
+            github_gateway._trusted_python_executable(executable)
+
+        executable.chmod(0o755)
+        with (
+            mock.patch.object(
+                github_gateway,
+                "_broker_euid",
+                return_value=os.geteuid(),
+            ),
+            mock.patch.object(github_gateway, "_require_protected_ancestors"),
+            mock.patch.object(github_gateway.sys, "platform", "linux"),
+            mock.patch.object(
+                github_gateway.os,
+                "getxattr",
+                return_value=b"capability",
+                create=True,
+            ),
+            self.assertRaisesRegex(GitHubGatewayError, "file capabilities"),
+        ):
+            github_gateway._trusted_python_executable(executable)
+
+        with (
+            mock.patch.object(github_gateway.sys, "platform", "linux"),
+            mock.patch.object(github_gateway.os, "getxattr", None, create=True),
+            self.assertRaisesRegex(GitHubGatewayError, "cannot verify"),
+        ):
+            github_gateway._reject_file_capabilities(executable)
+
+        package_root = Path(github_gateway.__file__).resolve().parents[1]
+        mismatch = self._run_isolated(
+            github_gateway._gateway_command(
+                Path(sys.executable),
+                package_root,
+                os.getuid() + 1,
+                os.getgid(),
+                "--help",
+            )
+        )
+        self.assertEqual(mismatch.returncode, 70)
 
     def test_supervisor_refuses_same_privilege_and_failed_processes(self) -> None:
         with (
@@ -354,6 +439,25 @@ class GitHubGatewayTests(unittest.TestCase):
             except ProcessLookupError:
                 pass
             self.fail("same-process-group descendant survived command completion")
+
+    @staticmethod
+    def _run_isolated(
+        command: tuple[str, ...],
+    ) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            command,
+            cwd=os.path.sep,
+            env={
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": os.defpath,
+                "PYTHONDONTWRITEBYTECODE": "1",
+            },
+            input=b"",
+            capture_output=True,
+            check=False,
+            timeout=5.0,
+        )
 
     def _fake_acquire(
         self,

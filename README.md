@@ -78,8 +78,9 @@ workspace skill writes externally or evaluate another harness.
 - Same-file-descriptor ingestion into a private SHA-256 content-addressed store.
 - Re-verification before reads and materialization.
 - Descriptor-bound comparison of a staged source-tree snapshot against a fully
-  re-verified retained manifest. This snapshot check neither authorizes nor
-  activates the tree.
+  re-verified retained manifest, plus private POSIX fresh-only publication
+  beneath a broker-owned, sole-writer root. No current receipt authorizes that
+  publisher, and it remains absent from the CLI.
 - A source-screen-only lock for exact OpenClaw and Pi Git identities. A
   separately bound OpenClaw probe retains one install-path `PASS` and one
   direct-write `FAIL`; the static lock remains a source-screen record and does

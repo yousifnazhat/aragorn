@@ -350,6 +350,18 @@ receipt marks only `DET-01/PASS`; fixed analyzer inputs are not re-attested,
 
 The first private bake-off target is OpenClaw because it exposes the clearest operator-owned pre-install policy boundary; Pi is the comparison target because its tool-call hook documents blocking on hook errors; Hermes remains a useful contained workload/detonation candidate but its hook failure behavior is not suitable for fail-closed authority. This ordering is not a runtime selection. A candidate is eliminated as soon as one mandatory scenario fails; a candidate can be chosen only after `DET-01`, `ADM-01`, `ADM-02`, and `ADM-03` all pass against an immutable runtime version. Runtime prevention additionally requires `RUN-01` and `RUN-02` with an external OS-level broker/sensor. The next production decision is to mediate and protect workspace skill writes externally or evaluate another harness.
 
+The first external-mediation primitive now verifies and freezes a retained
+staged tree, rejects occupied activation names, and publishes a fresh sibling
+atomically beneath one protected root descriptor. It assumes a dedicated
+broker UID is the sole writer on a local filesystem and remains private and
+unwired. Current deterministic decisions, conformance receipts, and benchmark
+signatures grant it no authority. The next installer unit must recompute
+`ALLOW` from protected retained evidence, bind the expected runtime and
+destination, and only then call the publisher in the same broker transaction.
+The internal retained-input pre-gate now binds policy evaluation to re-hashed
+source and opaque evidence bytes, but does not yet replay their semantics or
+grant that authority.
+
 The source-screen-only Git identities and commit-pinned evidence anchors are
 frozen in `benchmark/admission-runtime-candidates-v1.lock.json`; that immutable
 screen does not absorb later runtime results. The separate bound OpenClaw
@@ -576,8 +588,9 @@ aragorn/
 │   ├── admission_decision.py     # Runtime-bound deterministic policy authority
 │   ├── admission_evidence.py     # Exact partial-claim semantic verification
 │   ├── admission_gate.py         # Retained-evidence pre-gate
+│   ├── admission_retained.py     # Retained inputs for policy-only decisions
 │   ├── artifact_closure.py       # Evaluation-only literal source-reference graph
-│   ├── materialization.py        # Descriptor-bound staged-tree snapshot check
+│   ├── materialization.py        # Staged-tree verification and private fresh publication
 │   ├── github_acquire.py         # Evaluation-only immutable public GitHub source
 │   ├── github_expand.py          # Bounded exact same-repository comparator expansion
 │   ├── analyze.py                # JSONL analyzer subprocess runner

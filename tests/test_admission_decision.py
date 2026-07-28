@@ -6,10 +6,14 @@ import subprocess
 import sys
 import unittest
 from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from aragorn.admission_decision import AdmissionDecisionError, evaluate_admission
-from aragorn.oci_worker_protocol import canonical_json
+from aragorn.admission_retained import evaluate_retained_admission
+from aragorn.cas import CAS
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 
 _ROOT = Path(__file__).resolve().parents[1]
 _VECTOR_PATH = (
@@ -49,6 +53,10 @@ def _run(raw: bytes, seed: str) -> subprocess.CompletedProcess[bytes]:
         check=False,
         timeout=5,
     )
+
+
+def _put(cas: CAS, raw: bytes) -> str:
+    return cas.put(BytesIO(raw), max_bytes=len(raw))
 
 
 class AdmissionDecisionTests(unittest.TestCase):
@@ -121,6 +129,118 @@ class AdmissionDecisionTests(unittest.TestCase):
             decision["reason_codes"],
             ["ARTIFACT_CLOSURE_INCOMPLETE"],
         )
+
+    def test_retained_admission_binds_source_and_evidence_without_authority(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temporary:
+            cas = CAS(temporary)
+            request = _request("allow")
+            content = b"retained conformance fixture\n"
+            content_digest = _put(cas, content)
+            files = [
+                {
+                    "path": "SKILL.md",
+                    "size": len(content),
+                    "digest": content_digest,
+                    "executable": False,
+                }
+            ]
+            tree_digest = canonical_digest(files)
+            source_path = "/profile/state/skills/aragorn-admitted"
+            request["manifest"] = {
+                "schema": "aragorn/admission-manifest/v1",
+                "source": {
+                    "kind": "contained_conformance_fixture",
+                    "path": source_path,
+                },
+                "tree_digest": tree_digest,
+                "files": files,
+                "closure": {
+                    "scope": "artifact_graph",
+                    "status": "complete",
+                    "unresolved": [],
+                },
+            }
+            for result in request["evidence"]["analyzer_results"]:
+                result["subject_digest"] = tree_digest
+            request["evidence"]["source_evidence_digests"] = sorted(
+                [_put(cas, b"evidence-a"), _put(cas, b"evidence-b")]
+            )
+            request["evidence"]["source_receipt_digest"] = _put(
+                cas,
+                b"opaque-source-receipt",
+            )
+            retained = {
+                "schema": "aragorn/manifest/v1",
+                "source": {"kind": "local", "path": source_path},
+                "tree_digest": tree_digest,
+                "files": files,
+                "closure": {"scope": "source_tree", "status": "complete"},
+            }
+            manifest_digest = _put(cas, canonical_json(retained))
+            retained_cas = CAS(temporary, read_only=True)
+
+            decision = evaluate_retained_admission(
+                request,
+                cas=retained_cas,
+                source_manifest_digest=manifest_digest,
+            )
+            self.assertEqual(decision["verdict"], "ALLOW")
+            self.assertEqual(
+                decision["authority"],
+                "POLICY_DECISION_ONLY_NOT_INSTALLER_AUTHORITY",
+            )
+
+            missing_evidence = deepcopy(request)
+            missing_evidence["evidence"]["source_receipt_digest"] = "sha256:" + "0" * 64
+
+            other_source = deepcopy(retained)
+            other_source["source"]["path"] = "/different/source"
+            other_source_digest = _put(cas, canonical_json(other_source))
+
+            other_content = b"different retained bytes\n"
+            other_files = [
+                {
+                    "path": "SKILL.md",
+                    "size": len(other_content),
+                    "digest": _put(cas, other_content),
+                    "executable": False,
+                }
+            ]
+            other_manifest = {
+                **retained,
+                "tree_digest": canonical_digest(other_files),
+                "files": other_files,
+            }
+            other_manifest_digest = _put(cas, canonical_json(other_manifest))
+            for label, candidate, retained_digest, message in (
+                (
+                    "missing evidence",
+                    missing_evidence,
+                    manifest_digest,
+                    "cannot verify retained admission inputs",
+                ),
+                (
+                    "source identity",
+                    request,
+                    other_source_digest,
+                    "retained source identity",
+                ),
+                (
+                    "source bytes",
+                    request,
+                    other_manifest_digest,
+                    "retained source bytes",
+                ),
+            ):
+                with self.subTest(label):
+                    with self.assertRaisesRegex(AdmissionDecisionError, message):
+                        evaluate_retained_admission(
+                            candidate,
+                            cas=retained_cas,
+                            source_manifest_digest=retained_digest,
+                        )
 
     def test_cli_rejects_noncanonical_and_duplicate_json(self) -> None:
         noncanonical = json.dumps(_request("allow")).encode() + b"\n"

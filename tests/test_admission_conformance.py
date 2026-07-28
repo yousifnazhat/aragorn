@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 
 import aragorn.admission_evidence as admission_evidence
 from aragorn import admission_evidence_plug01 as plug01_evidence
+from aragorn import admission_evidence_workshop as workshop_evidence
 from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
     AdmissionConformanceError,
@@ -1822,6 +1823,205 @@ class AdmissionConformanceTests(unittest.TestCase):
                     route_inventory=inventory,
                     runtime_candidates=candidates,
                 )
+
+    def test_retained_update_reload_coverage_v3_records_only_workshop_policy_bypass(
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt_dir = _ROOT / "benchmark" / "receipts"
+        receipt = json.loads(
+            (
+                receipt_dir
+                / (
+                    "phase1-openclaw-update-reload-route-coverage-"
+                    "v3-2026-07-28.json"
+                )
+            ).read_bytes()
+        )
+        coverage_path = (
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-update-reload-route-"
+                "coverage-v3-2026-07-28.json"
+            )
+        )
+        workshop_path = (
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-workshop-"
+                "bypass-2026-07-28.json"
+            )
+        )
+        prior_coverage_path = (
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-update-reload-route-"
+                "coverage-v2-2026-07-28.json"
+            )
+        )
+        evidence_paths = (
+            coverage_path,
+            workshop_path,
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-workshop-bypass-"
+                "environment-2026-07-28.json"
+            ),
+            receipt_dir
+            / (
+                "phase1-openclaw-update-reload-route-"
+                "coverage-v2-2026-07-28.json"
+            ),
+            prior_coverage_path,
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-plug01-"
+                "activation-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-plug01-"
+                "replacement-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-plug01-"
+                "environment-2026-07-28.json"
+            ),
+            receipt_dir
+            / "phase1-openclaw-update-reload-route-coverage-2026-07-28.json",
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-update-reload-route-"
+                "coverage-2026-07-28.json"
+            ),
+            receipt_dir
+            / (
+                "phase1-openclaw-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            receipt_dir
+            / (
+                "phase1-openclaw-contained-config-activation-"
+                "probe-2026-07-27.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "environment-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-config-activation-"
+                "probe-2026-07-27.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-config-activation-"
+                "environment-2026-07-27.json"
+            ),
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+        )
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        inventory = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "admission"
+                / "openclaw-v2026.7.1"
+                / "update-reload-route-inventory-v1.json"
+            ).read_bytes()
+        )
+        candidates = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "admission-runtime-candidates-v1.lock.json"
+            ).read_bytes()
+        )
+        self.assertIsNone(
+            workshop_evidence.verify_openclaw_update_reload_coverage_v3(
+                receipt,
+                evidence_cas=self.cas,
+                route_inventory=inventory,
+                runtime_candidates=candidates,
+            )
+        )
+
+        coverage = json.loads(coverage_path.read_bytes())
+        prior_coverage = json.loads(prior_coverage_path.read_bytes())
+        changed = [
+            current["id"]
+            for prior, current in zip(
+                prior_coverage["routes"],
+                coverage["routes"],
+                strict=True,
+            )
+            if prior != current
+        ]
+        self.assertEqual(
+            changed,
+            ["ADM-02/update/workshop-proposal-apply"],
+        )
+        counts = {
+            kind: {
+                status: sum(
+                    f"/{kind}/" in route["id"] and route["status"] == status
+                    for route in coverage["routes"]
+                )
+                for status in ("PASS", "FAIL", "NOT_TESTED")
+            }
+            for kind in ("update", "reload")
+        }
+        self.assertEqual(
+            counts,
+            {
+                "update": {"PASS": 3, "FAIL": 1, "NOT_TESTED": 5},
+                "reload": {"PASS": 6, "FAIL": 0, "NOT_TESTED": 6},
+            },
+        )
+        self.assertEqual(
+            next(
+                route["status"]
+                for route in coverage["routes"]
+                if route["id"] == "ADM-02/reload/workshop-invalidation"
+            ),
+            "NOT_TESTED",
+        )
+
+        workshop = json.loads(workshop_path.read_bytes())
+        probe_path = (
+            _ROOT
+            / "benchmark"
+            / "admission"
+            / "openclaw-v2026.7.1"
+            / "workshop-bypass-probe.mjs"
+        )
+        self.assertEqual(
+            _sha256(probe_path.read_bytes()),
+            workshop["adapter"]["implementation_digest"],
+        )
+        policy_drift = deepcopy(workshop)
+        snapshot = policy_drift["scenario"]["evidence"]["policy_after_apply"]
+        snapshot["records"].append(deepcopy(snapshot["records"][-1]))
+        snapshot["count"] = len(snapshot["records"])
+        snapshot["digest"] = _sha256(
+            b"".join(
+                admission_evidence._canonical_bytes(record) + b"\n"
+                for record in snapshot["records"]
+            )
+        )
+        with self.assertRaises(workshop_evidence.AdmissionEvidenceError):
+            workshop_evidence._verify_workshop_bypass(policy_drift)
 
     def test_retained_openclaw_model_activation_binds_exact_tool_bytes(  # noqa: PLR0915
         self,

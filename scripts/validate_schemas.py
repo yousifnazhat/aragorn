@@ -53,6 +53,9 @@ from aragorn.admission_evidence import (
 from aragorn.admission_evidence_plug01 import (
     verify_openclaw_update_reload_coverage_v2,
 )
+from aragorn.admission_evidence_workshop import (
+    verify_openclaw_update_reload_coverage_v3,
+)
 from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.artifact_closure import resolve_source_graph
@@ -940,6 +943,34 @@ def main() -> int:
         admission_evidence
         / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
     )
+    openclaw_update_reload_v2_sources = (
+        admission_evidence
+        / (
+            "openclaw-v2026.7.1-update-reload-route-"
+            "coverage-v2-2026-07-28.json"
+        ),
+        admission_evidence
+        / (
+            "openclaw-v2026.7.1-contained-plug01-"
+            "activation-2026-07-28.json"
+        ),
+        admission_evidence
+        / (
+            "openclaw-v2026.7.1-contained-plug01-"
+            "replacement-2026-07-28.json"
+        ),
+        admission_evidence
+        / (
+            "openclaw-v2026.7.1-contained-plug01-"
+            "environment-2026-07-28.json"
+        ),
+        admission_receipts
+        / (
+            "phase1-openclaw-update-reload-route-"
+            "coverage-2026-07-28.json"
+        ),
+        *openclaw_update_reload_v1_sources,
+    )
     retained_admission_results = (
         (
             "openclaw-elimination",
@@ -1061,40 +1092,45 @@ def main() -> int:
         ),
         (
             "openclaw-update-reload-route-coverage-v2",
-            (
-                admission_evidence
-                / (
-                    "openclaw-v2026.7.1-update-reload-route-"
-                    "coverage-v2-2026-07-28.json"
-                ),
-                admission_evidence
-                / (
-                    "openclaw-v2026.7.1-contained-plug01-"
-                    "activation-2026-07-28.json"
-                ),
-                admission_evidence
-                / (
-                    "openclaw-v2026.7.1-contained-plug01-"
-                    "replacement-2026-07-28.json"
-                ),
-                admission_evidence
-                / (
-                    "openclaw-v2026.7.1-contained-plug01-"
-                    "environment-2026-07-28.json"
-                ),
-                admission_receipts
-                / (
-                    "phase1-openclaw-update-reload-route-"
-                    "coverage-2026-07-28.json"
-                ),
-                *openclaw_update_reload_v1_sources,
-            ),
+            openclaw_update_reload_v2_sources,
             admission_receipts
             / (
                 "phase1-openclaw-update-reload-route-"
                 "coverage-v2-2026-07-28.json"
             ),
             "NOT_TESTED",
+        ),
+        (
+            "openclaw-update-reload-route-coverage-v3",
+            (
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-update-reload-route-"
+                    "coverage-v3-2026-07-28.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-workshop-"
+                    "bypass-2026-07-28.json"
+                ),
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-workshop-bypass-"
+                    "environment-2026-07-28.json"
+                ),
+                admission_receipts
+                / (
+                    "phase1-openclaw-update-reload-route-"
+                    "coverage-v2-2026-07-28.json"
+                ),
+                *openclaw_update_reload_v2_sources,
+            ),
+            admission_receipts
+            / (
+                "phase1-openclaw-update-reload-route-"
+                "coverage-v3-2026-07-28.json"
+            ),
+            "FAIL",
         ),
         (
             "openclaw-model-activation-slice",
@@ -1191,6 +1227,13 @@ def main() -> int:
                 )
             if label == "openclaw-update-reload-route-coverage-v2":
                 verify_openclaw_update_reload_coverage_v2(
+                    result,
+                    evidence_cas=evidence_cas,
+                    route_inventory=openclaw_route_inventory,
+                    runtime_candidates=runtime_candidates,
+                )
+            if label == "openclaw-update-reload-route-coverage-v3":
+                verify_openclaw_update_reload_coverage_v3(
                     result,
                     evidence_cas=evidence_cas,
                     route_inventory=openclaw_route_inventory,

@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, one local-directory forced-update denial slice, one admitted forced replacement, filesystem-watch invalidation, same-session snapshot refresh, two forced isolated cron prompt snapshots spanning that replacement, one config-entry disable/reactivation of previously admitted read-only bytes, and one missing prompt-blob recovery. Formal `ADM-01` now passes for that contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. The remaining update and reload routes remain `NOT_TESTED`. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, general OpenClaw security finding, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
@@ -12,9 +12,9 @@ verifier rejects promotion and aggregate `PASS`; it grants no installer
 authority and does not replace the future general verifier.
 
 The update-slice verifier proves that one user-writable managed target was not
-replaced after an exact `skill-install/update` policy denial. Formal
-`ADM-02/update` remains `NOT_TESTED` because the other inventoried update routes
-have not executed.
+replaced after an exact `skill-install/update` policy denial. That slice did not
+establish aggregate update conformance; cumulative formal `ADM-02/update` is now
+`FAIL` because of the independently retained workshop route.
 
 The live-reload verifiers bind one admitted forced replacement to a new watcher
 snapshot consumed by the same chat session and to two forced isolated cron runs
@@ -22,9 +22,8 @@ that built fresh prompt snapshots on opposite sides of that replacement,
 without a gateway restart. The cron runs used distinct isolated sessions and
 lifecycle revisions but stopped at model resolution before provider execution;
 this proves prompt-snapshot construction, not successful provider completion.
-Formal `ADM-02/update` and `ADM-02/reload` remain `NOT_TESTED` because their
-remaining inventoried routes have not executed, and these route-level
-observations grant no installer authority.
+Formal `ADM-02/update` is now `FAIL`; formal `ADM-02/reload` remains
+`NOT_TESTED`. These route-level observations grant no installer authority.
 
 The config-activation-slice verifier proves `skills.update` disabled and
 re-enabled a previously verified skill digest mounted read-only, while the same
@@ -50,13 +49,15 @@ output across three fresh CPython processes with distinct hash seeds. This
 promotes only `DET-01` in a separate receipt; it does not attest the fixed
 analyzer evidence, compose `ADM-01`, or grant installer authority.
 
-The update/reload coverage verifier derives one canonical 21-route ledger from
-the exact live-reload-cron and config-activation source receipts and their
-transitive evidence. It records 1/9 update and 5/12 reload routes as proven.
-The local-directory CLI replacement remains a partial observation because its
-inventory route also contains unexecuted archive, upload, and gateway variants;
-stored route labels cannot promote formal scenarios or grant installer
-authority.
+The cumulative update/reload coverage verifier derives one canonical 21-route
+ledger from exact source receipts and their transitive evidence. It records
+3/9 update routes as `PASS`, 1/9 as `FAIL`, and 6/12 reload routes as `PASS`.
+`ADM-02/update/workshop-proposal-apply` failed because the configured install
+policy blocked the positive-control installer but was not invoked when workshop
+apply created the workspace skill. This result is limited to the pinned runtime,
+configuration, route, and retained evidence; `reload/workshop-invalidation`
+remains `NOT_TESTED`. The next production decision is to mediate and protect
+workspace skill writes externally or evaluate another harness.
 
 ## What works now
 

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/inspect-result-v2.schema.json",
+  "title": "Aragorn inspect result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "decision_digest", "decision"],
+  "properties": {
+    "schema": {"const": "aragorn/inspect-result/v2"},
+    "decision_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "decision": {"$ref": "decision-v2.schema.json"}
+  }
+}

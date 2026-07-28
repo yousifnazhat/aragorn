@@ -88,6 +88,11 @@ workspace skill writes externally or evaluate another harness.
 - Sanitized execution from an empty control directory, with bounded output, process-group wall-clock supervision, and executable-byte identity.
 - Open-once analyzer ingestion and launch from a private CAS materialization, so later replacement of the original configured file cannot change the staged entrypoint bytes.
 - Byte-exact retention of analyzer stdout and stderr.
+- Evidence-only analyzer-run receipts that bind the exact request, retained
+  executable and configuration bytes, verifier implementation identity, raw
+  streams, execution state, and canonical observations; replay rejects
+  mismatched or missing CAS evidence. These receipts are not installer
+  authority.
 - Strict JSON Lines observations bound to the exact tree digest.
 - Deterministic `ALLOW | REVIEW | DENY | ERROR` policy evaluation.
 - Fail-closed handling of missing analyzers, malformed evidence, timeouts, output limits, and incomplete artifact closure.

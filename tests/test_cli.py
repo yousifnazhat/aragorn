@@ -17,8 +17,10 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
 import aragorn.cli as cli_module
 from aragorn.acquire import inventory_local
+from aragorn.analyzer_receipt import verify_analyzer_run
 from aragorn.cas import CAS
 from aragorn.cli import main
+from aragorn.phase0_candidate import candidate_implementation_digest
 
 
 ROOT = Path(__file__).parents[1]
@@ -112,7 +114,11 @@ class CLITests(unittest.TestCase):
             result = json.loads(stdout.getvalue())
             receipt = result["decision"]
             self.assertEqual(status, 4)
-            self.assertEqual(result["schema"], "aragorn/inspect-result/v1")
+            self.assertEqual(result["schema"], "aragorn/inspect-result/v2")
+            self.assertEqual(
+                receipt["authority"],
+                "EVIDENCE_SUMMARY_ONLY_NOT_INSTALLER_AUTHORITY",
+            )
             self.assertEqual(receipt["verdict"], "ERROR")
             self.assertEqual(receipt["reason_codes"], ["ARTIFACT_CLOSURE_INCOMPLETE"])
             self.assertEqual(
@@ -121,6 +127,17 @@ class CLITests(unittest.TestCase):
             self.assertTrue(
                 all(
                     analyzer["executable_digest"].startswith("sha256:")
+                    for analyzer in receipt["analyzers"]
+                )
+            )
+            self.assertTrue(
+                all(
+                    verify_analyzer_run(
+                        CAS(root / "state"),
+                        analyzer["run_receipt_digest"],
+                        expected_subject_digest=receipt["tree_digest"],
+                        expected_verifier_digest=candidate_implementation_digest(),
+                    ).ok
                     for analyzer in receipt["analyzers"]
                 )
             )

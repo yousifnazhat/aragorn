@@ -362,6 +362,17 @@ The internal retained-input pre-gate now binds policy evaluation to re-hashed
 source and opaque evidence bytes, but does not yet replay their semantics or
 grant that authority.
 
+The analyzer runner now retains a separate
+`aragorn/analyzer-run-receipt/v1` for each execution. Its verifier reloads the
+exact request, executable, stdout, stderr, and canonical observation blobs,
+re-parses successful JSONL output, and rejects configuration, verifier,
+subject, or evidence mismatch. The receipt is explicitly evidence-only:
+authenticity still depends on a future broker-owned CAS and same-process
+execution, so it cannot authorize the publisher.
+`aragorn/decision/v2` requires each run-receipt digest but remains an
+evidence summary; the future broker must replay those receipts, compare every
+summary field, and re-derive policy before publication.
+
 The source-screen-only Git identities and commit-pinned evidence anchors are
 frozen in `benchmark/admission-runtime-candidates-v1.lock.json`; that immutable
 screen does not absorb later runtime results. The separate bound OpenClaw
@@ -497,7 +508,8 @@ URLs describe provenance; digests define identity.
 
 ```json
 {
-  "schema": "aragorn/decision/v1",
+  "schema": "aragorn/decision/v2",
+  "authority": "EVIDENCE_SUMMARY_ONLY_NOT_INSTALLER_AUTHORITY",
   "verdict": "ERROR",
   "manifest_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "tree_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -514,6 +526,7 @@ URLs describe provenance; digests define identity.
       "config_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "executable_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "status": "ok",
+      "run_receipt_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "observation_digests": [],
       "stdout_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "stderr_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
@@ -594,6 +607,7 @@ aragorn/
 │   ├── github_acquire.py         # Evaluation-only immutable public GitHub source
 │   ├── github_expand.py          # Bounded exact same-repository comparator expansion
 │   ├── analyze.py                # JSONL analyzer subprocess runner
+│   ├── analyzer_receipt.py       # Exact retained analyzer-run replay
 │   ├── benchmark.py              # Evidence verifier and metric aggregation
 │   ├── benchmark_handoff_v2.py   # Cross-owner-capable CAS snapshot importer
 │   ├── benchmark_protocol_v2.py  # Portable policy plus request/result v2 contracts
@@ -607,6 +621,7 @@ aragorn/
 │   └── vendor_reports.py         # Fail-closed pinned vendor report normalizers
 ├── schema/
 │   ├── analyzer-request-v1.schema.json
+│   ├── analyzer-run-receipt-v1.schema.json
 │   ├── analyzers-v1.schema.json
 │   ├── baseline-image-verification-v1.schema.json
 │   ├── baseline-lock-v1.schema.json
@@ -620,14 +635,16 @@ aragorn/
 │   ├── benchmark-suite-v1.schema.json
 │   ├── benchmark-system-config-v1.schema.json
 │   ├── benchmark-system-identities-v1.schema.json
+│   ├── decision-v1.schema.json
+│   ├── decision-v2.schema.json
 │   ├── github-manifest-v1.schema.json
+│   ├── inspect-result-v1.schema.json
+│   ├── inspect-result-v2.schema.json
 │   ├── manifest-v1.schema.json
 │   ├── observation-v1.schema.json
-│   ├── source-artifact-graph-v1.schema.json
 │   ├── resolve-artifacts-result-v1.schema.json
-│   ├── decision-v1.schema.json
+│   ├── source-artifact-graph-v1.schema.json
 │   ├── inventory-result-v1.schema.json
-│   ├── inspect-result-v1.schema.json
 │   └── error-v1.schema.json
 ├── tests/
 ├── README.md

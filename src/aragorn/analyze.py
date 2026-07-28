@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
 import re
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -22,6 +24,8 @@ _SEVERITIES = frozenset({"info", "low", "medium", "high", "critical"})
 _MAX_OBSERVATIONS = 10_000
 MAX_ANALYZER_OUTPUT_BYTES = 8 * 1024 * 1024
 _MAX_EVIDENCE_RECORD_BYTES = 8 * 1024 * 1024
+_MAX_CONFIGURATION_BYTES = 1024 * 1024
+_MAX_EXECUTABLE_BYTES = 128 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +51,8 @@ class AnalyzerResult:
     observations: tuple[Observation, ...] = ()
     error_code: str | None = None
     error_message: str | None = None
+    raw_configuration: bytes = b""
+    raw_request: bytes = b""
     raw_stdout: bytes = b""
     raw_stderr: bytes = b""
     stderr: str = ""
@@ -66,6 +72,7 @@ def run_analyzer(
     config_digest: str,
     executable_digest: str,
     subject_digest: str,
+    configuration_bytes: bytes | None = None,
     timeout_seconds: float = 120.0,
     output_limit_bytes: int = 1024 * 1024,
 ) -> AnalyzerResult:
@@ -96,6 +103,53 @@ def run_analyzer(
     )
     if invalid is not None:
         return _error(identity, "INVALID_CONFIGURATION", invalid)
+
+    raw_configuration = b""
+    if configuration_bytes is not None:
+        try:
+            configuration = _decode_analyzer_configuration(configuration_bytes)
+        except ValueError as exc:
+            return _error(identity, "INVALID_CONFIGURATION", str(exc))
+        if (
+            f"sha256:{hashlib.sha256(configuration_bytes).hexdigest()}"
+            != config_digest
+        ):
+            return _error(
+                identity,
+                "INVALID_CONFIGURATION",
+                "configuration bytes do not match config_digest",
+            )
+        if (
+            configuration["name"],
+            configuration["version"],
+            configuration["executable_digest"],
+        ) != (name, version, executable_digest):
+            return _error(
+                identity,
+                "INVALID_CONFIGURATION",
+                "configuration identity does not match analyzer arguments",
+            )
+        if tuple(configuration["argv"][1:]) != tuple(argv[1:]):
+            return _error(
+                identity,
+                "INVALID_CONFIGURATION",
+                "configuration argv tail does not match analyzer arguments",
+            )
+        try:
+            observed_executable_digest = _hash_executable(argv[0])
+        except (OSError, ValueError) as exc:
+            return _error(
+                identity,
+                "INVALID_CONFIGURATION",
+                f"cannot verify analyzer executable bytes: {exc}",
+            )
+        if observed_executable_digest != executable_digest:
+            return _error(
+                identity,
+                "INVALID_CONFIGURATION",
+                "analyzer executable bytes do not match executable_digest",
+            )
+        raw_configuration = configuration_bytes
 
     try:
         workspace_path = Path(workspace).resolve(strict=True)
@@ -130,10 +184,14 @@ def run_analyzer(
     try:
         control_directory = tempfile.TemporaryDirectory(prefix="aragorn-control-")
     except OSError as exc:
-        return _error(
-            identity,
-            "CONTROL_DIRECTORY_FAILED",
-            f"cannot create analyzer control directory: {exc}",
+        return replace(
+            _error(
+                identity,
+                "CONTROL_DIRECTORY_FAILED",
+                f"cannot create analyzer control directory: {exc}",
+            ),
+            raw_configuration=raw_configuration,
+            raw_request=request_bytes,
         )
     control_path = Path(control_directory.name).resolve(strict=True)
 
@@ -155,16 +213,24 @@ def run_analyzer(
         )
     except (OSError, ValueError) as exc:
         control_directory.cleanup()
-        return _error(identity, "LAUNCH_FAILED", f"cannot start analyzer: {exc}")
+        return replace(
+            _error(identity, "LAUNCH_FAILED", f"cannot start analyzer: {exc}"),
+            raw_configuration=raw_configuration,
+            raw_request=request_bytes,
+        )
 
     try:
-        return _collect_analyzer_process(
-            process,
-            request_bytes=request_bytes,
-            identity=identity,
-            subject_digest=subject_digest,
-            timeout=timeout,
-            output_limit_bytes=output_limit_bytes,
+        return replace(
+            _collect_analyzer_process(
+                process,
+                request_bytes=request_bytes,
+                identity=identity,
+                subject_digest=subject_digest,
+                timeout=timeout,
+                output_limit_bytes=output_limit_bytes,
+            ),
+            raw_configuration=raw_configuration,
+            raw_request=request_bytes,
         )
     finally:
         control_directory.cleanup()
@@ -473,6 +539,108 @@ def _sanitized_path() -> str:
     return os.pathsep.join(
         entry for entry in os.defpath.split(os.pathsep) if entry and os.path.isabs(entry)
     )
+
+
+def _decode_analyzer_configuration(raw: bytes) -> dict[str, Any]:
+    if (
+        not isinstance(raw, bytes)
+        or not raw
+        or len(raw) > _MAX_CONFIGURATION_BYTES
+    ):
+        raise ValueError("configuration bytes are missing or oversized")
+    try:
+        document = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_json_keys,
+            parse_constant=_reject_json_constant,
+        )
+        canonical = json.dumps(
+            document,
+            allow_nan=False,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    except (UnicodeDecodeError, TypeError, ValueError, RecursionError) as exc:
+        raise ValueError(f"configuration is not canonical JSON: {exc}") from exc
+    if not isinstance(document, dict) or canonical != raw:
+        raise ValueError("configuration is not a canonical JSON object")
+    if set(document) != {
+        "name",
+        "version",
+        "argv",
+        "operator_argv0",
+        "executable_digest",
+    }:
+        raise ValueError("configuration fields are invalid")
+    for field in ("name", "version", "operator_argv0"):
+        value = document[field]
+        if (
+            not isinstance(value, str)
+            or not value
+            or "\0" in value
+            or len(value) > 4096
+        ):
+            raise ValueError(f"configuration {field} is invalid")
+    argv = document["argv"]
+    if (
+        not isinstance(argv, list)
+        or not argv
+        or any(
+            not isinstance(argument, str) or not argument or "\0" in argument
+            for argument in argv
+        )
+        or not os.path.isabs(argv[0])
+    ):
+        raise ValueError("configuration argv is invalid")
+    if (
+        not isinstance(document["executable_digest"], str)
+        or _SHA256.fullmatch(document["executable_digest"]) is None
+    ):
+        raise ValueError("configuration executable_digest is invalid")
+    return document
+
+
+def _hash_executable(path: str) -> str:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or not stat.S_IMODE(before.st_mode) & 0o111
+            or before.st_size > _MAX_EXECUTABLE_BYTES
+        ):
+            raise ValueError("executable is not a bounded executable regular file")
+        digest = hashlib.sha256()
+        size = 0
+        while chunk := os.read(descriptor, 1024 * 1024):
+            size += len(chunk)
+            if size > _MAX_EXECUTABLE_BYTES:
+                raise ValueError("executable exceeds 128 MiB")
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_mode,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        after_identity = (
+            after.st_dev,
+            after.st_ino,
+            after.st_mode,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        if size != after.st_size or before_identity != after_identity:
+            raise ValueError("executable changed while hashing")
+        return f"sha256:{digest.hexdigest()}"
+    finally:
+        os.close(descriptor)
 
 
 def _parse_observations(

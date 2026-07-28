@@ -18,6 +18,7 @@ from typing import Any, Iterator, Sequence
 
 from .acquire import InventoryError, ingest_open_directory
 from .analyze import MAX_ANALYZER_OUTPUT_BYTES, AnalyzerResult, run_analyzer
+from .analyzer_receipt import retain_analyzer_run
 from .artifact_closure import (
     MAX_GRAPH_BYTES,
     load_retained_manifest,
@@ -295,6 +296,10 @@ def _inspect(args: argparse.Namespace) -> int:
                         config_digest=specification["config_digest"],
                         executable_digest=specification["executable_digest"],
                         subject_digest=manifest["tree_digest"],
+                        configuration_bytes=cas.read(
+                            specification["config_digest"],
+                            max_bytes=_MAX_CONFIG_BYTES,
+                        ),
                         timeout_seconds=args.timeout,
                         output_limit_bytes=args.output_limit,
                     )
@@ -311,6 +316,10 @@ def _inspect(args: argparse.Namespace) -> int:
     decision = evaluate_policy(policy, closure=manifest["closure"], results=results)
 
     analyzer_records = []
+    if results:
+        from .phase0_candidate import candidate_implementation_digest
+
+        verifier_implementation_digest = candidate_implementation_digest()
     for result in results:
         observation_digests = tuple(
             _put_bytes(cas, observation.document_json.encode("ascii"))
@@ -320,13 +329,19 @@ def _inspect(args: argparse.Namespace) -> int:
             _result_record(
                 result,
                 observation_digests,
+                run_receipt_digest=retain_analyzer_run(
+                    cas,
+                    result,
+                    verifier_implementation_digest=verifier_implementation_digest,
+                ),
                 stdout_digest=_put_bytes(cas, result.raw_stdout),
                 stderr_digest=_put_bytes(cas, result.raw_stderr),
             )
         )
 
     receipt = {
-        "schema": "aragorn/decision/v1",
+        "schema": "aragorn/decision/v2",
+        "authority": "EVIDENCE_SUMMARY_ONLY_NOT_INSTALLER_AUTHORITY",
         "verdict": decision.verdict,
         "manifest_digest": manifest_digest,
         "tree_digest": manifest["tree_digest"],
@@ -343,7 +358,7 @@ def _inspect(args: argparse.Namespace) -> int:
     print(
         json.dumps(
             {
-                "schema": "aragorn/inspect-result/v1",
+                "schema": "aragorn/inspect-result/v2",
                 "decision_digest": receipt_digest,
                 "decision": receipt,
             },
@@ -479,7 +494,17 @@ def _validate_analyzer_locations(
             "operator_argv0": specification["argv"][0],
             "executable_digest": executable_digest,
         }
-        validated.append({**bound, "config_digest": _digest_json(bound)})
+        config_digest = (
+            _put_json(
+                cas,
+                bound,
+                max_bytes=_MAX_CONFIG_BYTES,
+                record_name="analyzer effective configuration",
+            )
+            if cas is not None
+            else _digest_json(bound)
+        )
+        validated.append({**bound, "config_digest": config_digest})
     return tuple(sorted(validated, key=lambda item: item["name"]))
 
 
@@ -543,6 +568,7 @@ def _result_record(
     result: AnalyzerResult,
     observation_digests: tuple[str, ...],
     *,
+    run_receipt_digest: str,
     stdout_digest: str,
     stderr_digest: str,
 ) -> dict[str, Any]:
@@ -552,6 +578,7 @@ def _result_record(
         "config_digest": result.config_digest,
         "executable_digest": result.executable_digest,
         "status": result.status,
+        "run_receipt_digest": run_receipt_digest,
         "observation_digests": list(observation_digests),
         "stdout_digest": stdout_digest,
         "stderr_digest": stderr_digest,

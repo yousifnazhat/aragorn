@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/analyzer-run-receipt-v1.schema.json",
+  "title": "Aragorn analyzer run receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "verifier",
+    "request_digest",
+    "stdout_digest",
+    "stderr_digest",
+    "observation_digests",
+    "execution"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/analyzer-run-receipt/v1"},
+    "authority": {"const": "EVIDENCE_ONLY_NOT_INSTALLER_AUTHORITY"},
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "implementation_digest"],
+      "properties": {
+        "name": {"const": "aragorn/analyzer-run-verifier/v1"},
+        "implementation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "request_digest": {"$ref": "#/$defs/digest"},
+    "stdout_digest": {"$ref": "#/$defs/digest"},
+    "stderr_digest": {"$ref": "#/$defs/digest"},
+    "observation_digests": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "error_code", "error_message", "returncode"],
+      "properties": {
+        "status": {"enum": ["ok", "error"]},
+        "error_code": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$"}
+          ]
+        },
+        "error_message": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 4096}
+          ]
+        },
+        "returncode": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "integer"}
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

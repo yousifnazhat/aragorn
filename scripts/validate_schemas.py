@@ -3656,6 +3656,52 @@ def main() -> int:
             "decision": decision,
         }
     )
+    decision_v2 = {
+        **decision,
+        "schema": "aragorn/decision/v2",
+        "authority": "EVIDENCE_SUMMARY_ONLY_NOT_INSTALLER_AUTHORITY",
+        "analyzers": [
+            {
+                "name": "schema-test",
+                "version": "1",
+                "config_digest": digest,
+                "executable_digest": digest,
+                "status": "ok",
+                "run_receipt_digest": digest,
+                "observation_digests": [],
+                "stdout_digest": digest,
+                "stderr_digest": digest,
+                "returncode": 0,
+            }
+        ],
+    }
+    validators["inspect-result-v2.schema.json"].validate(
+        {
+            "schema": "aragorn/inspect-result/v2",
+            "decision_digest": digest,
+            "decision": decision_v2,
+        }
+    )
+    validators["analyzer-run-receipt-v1.schema.json"].validate(
+        {
+            "schema": "aragorn/analyzer-run-receipt/v1",
+            "authority": "EVIDENCE_ONLY_NOT_INSTALLER_AUTHORITY",
+            "verifier": {
+                "name": "aragorn/analyzer-run-verifier/v1",
+                "implementation_digest": digest,
+            },
+            "request_digest": digest,
+            "stdout_digest": digest,
+            "stderr_digest": digest,
+            "observation_digests": [],
+            "execution": {
+                "status": "ok",
+                "error_code": None,
+                "error_message": None,
+                "returncode": 0,
+            },
+        }
+    )
     print(f"validated {len(schemas)} schemas and checked-in contract examples")
     return 0
 

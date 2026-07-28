@@ -297,7 +297,7 @@ Runtime selection is conformance-based, not brand-based:
 
 OpenClaw, Hermes, Pi, or another runtime earns a role only by passing the applicable mandatory properties. A failed mandatory property cannot be averaged away by scanner accuracy.
 
-Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never satisfies a profile. No runtime currently has a passing conformance result. The retained OpenClaw `2026.7.1` probe passed explicit install blocking but failed `ADM-02/direct-write`: OpenClaw discovered a directly written, model-visible skill without invoking `security.installPolicy`. That mandatory failure eliminates this version as a standalone admission reference monitor; its hook remains usable only as defense in depth. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, formal `ADM-01` exact conformance-fixture activation, one local-directory forced-update denial slice, one admitted forced replacement, filesystem-watch invalidation, same-session snapshot refresh, two forced isolated cron prompt snapshots spanning that replacement, one config-entry disable/reactivation of previously admitted read-only bytes, and one missing prompt-blob recovery. It remains `NOT_TESTED` and installer-ineligible because the remaining update and reload routes and deterministic replay are unproven; host, daemon, and root tampering are outside the retained claim. A fake runtime validates only Aragorn's harness, not mediation, privilege separation, hook timing, tamper resistance, or attribution in a real runtime.
+Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never satisfies a profile. No runtime currently has a passing conformance result. The retained OpenClaw `2026.7.1` probe passed explicit install blocking but failed `ADM-02/direct-write`: OpenClaw discovered a directly written, model-visible skill without invoking `security.installPolicy`. That mandatory failure eliminates this version as a standalone admission reference monitor; its hook remains usable only as defense in depth. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, formal `ADM-01` exact conformance-fixture activation, one local-directory forced-update denial slice, one admitted forced replacement, filesystem-watch invalidation, same-session snapshot refresh, two forced isolated cron prompt snapshots spanning that replacement, one config-entry disable/reactivation of previously admitted read-only bytes, and one missing prompt-blob recovery. A DET-only receipt separately passes four fixed decision exits across three clean processes each. It remains `NOT_TESTED` and installer-ineligible because that proof is not composed with the runtime receipt and the remaining update and reload routes are unproven; host, daemon, and root tampering are outside the retained claim. A fake runtime validates only Aragorn's harness, not mediation, privilege separation, hook timing, tamper resistance, or attribution in a real runtime.
 
 The retention pre-gate re-verifies every referenced conformance-evidence blob
 from the protected CAS. This proves blob identity and availability, not the
@@ -339,6 +339,13 @@ process identity remained unchanged. This is sufficient for formal
 `ADM-01/PASS` for the conformance fixture only. The evaluator-controlled local
 provider does not prove production `ALLOW` lineage, external-model efficacy,
 `DET-01`, or installer authority.
+
+The deterministic-authority verifier independently reconstructs canonical
+decisions for fixed `ALLOW`, `REVIEW`, `DENY`, and `ERROR` vectors. Each exact
+manifest, evidence, policy, and target-runtime input produced byte-identical
+output in three fresh CPython processes with distinct hash seeds. Its separate
+receipt marks only `DET-01/PASS`; fixed analyzer inputs are not re-attested,
+`ADM-01` is not composed, and installer authority remains disabled.
 
 The first private bake-off target is OpenClaw because it exposes the clearest operator-owned pre-install policy boundary; Pi is the comparison target because its tool-call hook documents blocking on hook errors; Hermes remains a useful contained workload/detonation candidate but its hook failure behavior is not suitable for fail-closed authority. This ordering is not a runtime selection. A candidate is eliminated as soon as one mandatory scenario fails; a candidate can be chosen only after `DET-01`, `ADM-01`, `ADM-02`, and `ADM-03` all pass against an immutable runtime version. Runtime prevention additionally requires `RUN-01` and `RUN-02` with an external OS-level broker/sensor.
 
@@ -565,6 +572,8 @@ aragorn/
 ├── src/aragorn/
 │   ├── acquire.py                # Bounded local inventory and CAS ingestion
 │   ├── admission_conformance.py  # Phase 1 scenario aggregation
+│   ├── admission_decision.py     # Runtime-bound deterministic policy authority
+│   ├── admission_evidence.py     # Exact partial-claim semantic verification
 │   ├── admission_gate.py         # Retained-evidence pre-gate
 │   ├── artifact_closure.py       # Evaluation-only literal source-reference graph
 │   ├── materialization.py        # Descriptor-bound staged-tree snapshot check

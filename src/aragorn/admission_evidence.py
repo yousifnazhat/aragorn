@@ -13,8 +13,9 @@ from .admission_conformance import (
     AdmissionConformanceError,
     validate_admission_conformance,
 )
+from .admission_decision import evaluate_admission
 from .cas import CAS, CASError
-from .oci_worker_protocol import canonical_digest
+from .oci_worker_protocol import canonical_digest, canonical_json
 
 _MAX_EVIDENCE_BYTES = 8 * 1024 * 1024
 _PROBE_SCHEMA = "aragorn/openclaw-contained-restart-probe-evidence/v1"
@@ -250,6 +251,62 @@ _OPENCLAW_RUNTIME_TREE = (
 )
 _OPENCLAW_PLATFORM_MANIFEST = (
     "sha256:1df790a7d590f617d0d3c2cd84cbe18b5400ff972dd9701670f7e5a4f1634e52"
+)
+_DETERMINISTIC_VECTOR_SCHEMA = "aragorn/admission-authority-vector-set/v1"
+_DETERMINISTIC_REPLAY_SCHEMA = "aragorn/admission-authority-replay-evidence/v1"
+_DETERMINISTIC_VECTOR_DIGEST = (
+    "sha256:1b611972663a9de166bc4de16e15bf4a05841a3dc895cc920e71094b55a16161"
+)
+_DETERMINISTIC_REPLAY_DIGEST = (
+    "sha256:324acb5363d23aef73addc3689416f0bba730ae32b90410c7d1670999ddc9c1f"
+)
+_DETERMINISTIC_EVIDENCE_SET = sorted(
+    (_DETERMINISTIC_REPLAY_DIGEST, _DETERMINISTIC_VECTOR_DIGEST)
+)
+_DETERMINISTIC_SCENARIO = "DET-01/identical-canonical-input-replay"
+_DETERMINISTIC_STATUSES = {
+    key: "PASS" if key == _DETERMINISTIC_SCENARIO else "NOT_TESTED"
+    for key in _STATUSES
+}
+_DETERMINISTIC_REASON = ["SCENARIO_OUTSIDE_DETERMINISTIC_REPLAY_SLICE"]
+_DETERMINISTIC_REASONS = {
+    key: _DETERMINISTIC_REASON
+    for key in _STATUSES
+    if key != _DETERMINISTIC_SCENARIO
+}
+_DETERMINISTIC_CASES = ("allow", "deny", "error", "review")
+_DETERMINISTIC_SEEDS = ("1", "2", "3")
+_DETERMINISTIC_EXPECTED = {
+    "allow": {"reason_codes": [], "verdict": "ALLOW"},
+    "deny": {"reason_codes": ["TEST_HARD_DENY"], "verdict": "DENY"},
+    "error": {
+        "reason_codes": ["REQUIRED_ANALYZER_FAILED:skillspector:TIMEOUT"],
+        "verdict": "ERROR",
+    },
+    "review": {
+        "reason_codes": ["CONFORMANCE_FIXTURE_ONLY"],
+        "verdict": "REVIEW",
+    },
+}
+_DETERMINISTIC_IMPLEMENTATION = {
+    "admission_decision_digest": (
+        "sha256:ca65af1d5e13b62718065fed0a933680f8336ca10217bde62e6c48f16ab1c683"
+    ),
+    "analyze_digest": (
+        "sha256:f1721deaef0649e779950ebc1fff612a92a0f2757a2fb1149d642a6f15836949"
+    ),
+    "oci_worker_protocol_digest": (
+        "sha256:0af6b5fc1fa6b4a3a4b4ec6fd514c2edc475cf339cda01cf9a1b66d3a6e81c2b"
+    ),
+    "policy_digest": (
+        "sha256:246a0f93c1c0e2ca803c8d1bda4e50a0bc4d3ab5855242532308396d6ad82d9b"
+    ),
+    "replay_runner_digest": (
+        "sha256:43be1290771abc4c6664faa262a0c366e8078a3f8aa5143d05b747e01030b966"
+    ),
+}
+_EMPTY_DIGEST = (
+    "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 _RFC3339_EXTRA_PRECISION = re.compile(
     r"(\.[0-9]{6})[0-9]+(?=Z$|[+-][0-9]{2}:[0-9]{2}$)"
@@ -628,6 +685,246 @@ def verify_openclaw_model_activation_evidence(
         raise AdmissionEvidenceError(
             f"invalid retained model-activation evidence: {exc}"
         ) from exc
+
+
+def verify_openclaw_deterministic_replay_evidence(
+    document: Mapping[str, Any], *, evidence_cas: CAS
+) -> None:
+    """Verify DET-01 only; fixed inputs do not transfer installer authority."""
+
+    try:
+        if validate_admission_conformance(document) != "NOT_TESTED" or document[
+            "decision"
+        ] != {"status": "NOT_TESTED", "installer_work_eligible": False}:
+            raise AdmissionEvidenceError(
+                "deterministic replay cannot grant installer authority"
+            )
+        formal = {
+            f"{item['id']}/{scenario['id']}": scenario
+            for item in document["properties"]
+            for scenario in item["scenarios"]
+        }
+        if (
+            {key: item["status"] for key, item in formal.items()}
+            != _DETERMINISTIC_STATUSES
+            or {
+                key: item["reason_codes"]
+                for key, item in formal.items()
+                if item["status"] == "NOT_TESTED"
+            }
+            != _DETERMINISTIC_REASONS
+        ):
+            raise AdmissionEvidenceError("deterministic replay claim set changed")
+        for key, scenario in formal.items():
+            expected = (
+                _DETERMINISTIC_EVIDENCE_SET
+                if key == _DETERMINISTIC_SCENARIO
+                else []
+            )
+            if scenario["evidence_digests"] != expected:
+                raise AdmissionEvidenceError(
+                    f"{key} does not bind the deterministic replay evidence"
+                )
+        vectors = _read_exact(
+            evidence_cas,
+            _DETERMINISTIC_VECTOR_DIGEST,
+            _DETERMINISTIC_VECTOR_SCHEMA,
+        )
+        replay = _read_exact(
+            evidence_cas,
+            _DETERMINISTIC_REPLAY_DIGEST,
+            _DETERMINISTIC_REPLAY_SCHEMA,
+        )
+        _verify_deterministic_replay(document, vectors, replay)
+    except AdmissionEvidenceError:
+        raise
+    except (
+        AdmissionConformanceError,
+        CASError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AdmissionEvidenceError(
+            f"invalid retained deterministic replay evidence: {exc}"
+        ) from exc
+
+
+def _verify_deterministic_replay(
+    receipt: Mapping[str, Any],
+    vector_set: Mapping[str, Any],
+    replay: Mapping[str, Any],
+) -> None:
+    if (
+        set(vector_set) != {"schema", "vectors"}
+        or not isinstance(vector_set["vectors"], list)
+        or len(vector_set["vectors"]) != len(_DETERMINISTIC_CASES)
+        or set(replay)
+        != {
+            "adapter",
+            "assurance",
+            "cases",
+            "environment",
+            "limitations",
+            "recorded_at",
+            "schema",
+            "vector_set_digest",
+        }
+        or replay["vector_set_digest"] != _DETERMINISTIC_VECTOR_DIGEST
+        or receipt["recorded_at"] != replay["recorded_at"]
+        or replay["assurance"]
+        != "SELF_REPORTED_LOCAL_PROCESS_NOT_INDEPENDENTLY_ATTESTED"
+        or replay["limitations"]
+        != [
+            "DECISION_ONLY_NOT_INSTALLER_AUTHORITY",
+            "LOCAL_PROCESS_SELF_REPORTED_NOT_INDEPENDENTLY_ATTESTED",
+            "SOURCE_ANALYZER_RESULTS_ARE_FIXED_RETAINED_VECTORS",
+        ]
+    ):
+        raise AdmissionEvidenceError("deterministic replay envelope changed")
+
+    adapter = replay["adapter"]
+    configuration = {
+        "case_ids": list(_DETERMINISTIC_CASES),
+        "input_limit_bytes": 65_536,
+        "module": "aragorn.admission_decision",
+        "output_limit_bytes": 4_096,
+        "seeds": list(_DETERMINISTIC_SEEDS),
+        "timeout_seconds": 5,
+        "vector_set_digest": _DETERMINISTIC_VECTOR_DIGEST,
+    }
+    if (
+        set(adapter)
+        != {
+            "configuration",
+            "configuration_digest",
+            "implementation",
+            "implementation_digest",
+        }
+        or adapter["configuration"] != configuration
+        or adapter["configuration_digest"] != canonical_digest(configuration)
+        or adapter["implementation"] != _DETERMINISTIC_IMPLEMENTATION
+        or adapter["implementation_digest"]
+        != canonical_digest(_DETERMINISTIC_IMPLEMENTATION)
+    ):
+        raise AdmissionEvidenceError("deterministic replay adapter changed")
+
+    environment = replay["environment"]
+    if (
+        set(environment) != {"profile", "profile_digest"}
+        or environment["profile_digest"] != canonical_digest(environment["profile"])
+    ):
+        raise AdmissionEvidenceError("deterministic replay environment changed")
+
+    vectors = vector_set["vectors"]
+    cases = replay["cases"]
+    if not isinstance(cases, list) or len(cases) != len(vectors):
+        raise AdmissionEvidenceError("deterministic replay case count changed")
+    policies = []
+    target_runtime = None
+    for case_id, vector, retained in zip(
+        _DETERMINISTIC_CASES,
+        vectors,
+        cases,
+        strict=True,
+    ):
+        if (
+            not isinstance(vector, Mapping)
+            or set(vector) != {"expected", "request"}
+            or vector["expected"] != _DETERMINISTIC_EXPECTED[case_id]
+            or not isinstance(retained, Mapping)
+            or set(retained) != {"case_id", "replays"}
+        ):
+            raise AdmissionEvidenceError("deterministic replay vector changed")
+        request = vector["request"]
+        if request["case_id"] != case_id or retained["case_id"] != case_id:
+            raise AdmissionEvidenceError("deterministic replay case order changed")
+        decision = evaluate_admission(request)
+        if {
+            "reason_codes": decision["reason_codes"],
+            "verdict": decision["verdict"],
+        } != vector["expected"]:
+            raise AdmissionEvidenceError("deterministic replay expectation is false")
+        raw_input = canonical_json(request) + b"\n"
+        raw_output = canonical_json(decision) + b"\n"
+        if len(raw_input) > 65_536 or len(raw_output) > 4_096:
+            raise AdmissionEvidenceError("deterministic replay I/O limit changed")
+        replays = retained["replays"]
+        if (
+            not isinstance(replays, list)
+            or len(replays) != len(_DETERMINISTIC_SEEDS)
+            or [item["seed"] for item in replays] != list(_DETERMINISTIC_SEEDS)
+        ):
+            raise AdmissionEvidenceError("deterministic replay seed set changed")
+        for item in replays:
+            if (
+                set(item)
+                != {
+                    "exit_code",
+                    "seed",
+                    "stdin_digest",
+                    "stderr_digest",
+                    "stdout_digest",
+                }
+                or item["exit_code"] != 0
+                or item["stdin_digest"] != _line_digest(request)
+                or item["stdout_digest"] != _line_digest(decision)
+                or item["stderr_digest"] != _EMPTY_DIGEST
+            ):
+                raise AdmissionEvidenceError(
+                    "deterministic replay process record changed"
+                )
+        evidence = request["evidence"]
+        if (
+            evidence["source_evidence_digests"]
+            != _MODEL_ACTIVATION_EVIDENCE_SET
+            or evidence["source_receipt_digest"]
+            != "sha256:ffae477eb5bc9be5568e506808a7e61e02c8e18e830475d7ac3e14da6a64f919"
+        ):
+            raise AdmissionEvidenceError("deterministic replay source binding changed")
+        if target_runtime is None:
+            target_runtime = request["target_runtime"]
+        elif request["target_runtime"] != target_runtime:
+            raise AdmissionEvidenceError("deterministic target runtime differs")
+        policies.append(request["policy"])
+
+    runtime = target_runtime["runtime"]
+    expected_runtime = {
+        key: runtime[key]
+        for key in (
+            "commit",
+            "name",
+            "repository_url",
+            "source_tree_digest",
+            "version",
+        )
+    }
+    aragorn_implementation = {
+        key: _DETERMINISTIC_IMPLEMENTATION[key]
+        for key in (
+            "admission_decision_digest",
+            "analyze_digest",
+            "oci_worker_protocol_digest",
+            "policy_digest",
+        )
+    }
+    if receipt["bindings"] != {
+        "runtime": expected_runtime,
+        "adapter": {
+            "name": "openclaw-contained-deterministic-authority-replay",
+            "implementation_digest": adapter["implementation_digest"],
+            "configuration_digest": adapter["configuration_digest"],
+        },
+        "environment": {
+            "worker_digest": environment["profile"]["executable_digest"],
+            "os_profile_digest": environment["profile_digest"],
+        },
+        "aragorn": {
+            "implementation_digest": canonical_digest(aragorn_implementation),
+            "policy_digest": canonical_digest(policies),
+        },
+    }:
+        raise AdmissionEvidenceError("deterministic replay receipt bindings changed")
 
 
 def _read_exact(cas: CAS, digest: str, schema: str) -> dict[str, Any]:

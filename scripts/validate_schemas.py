@@ -42,6 +42,7 @@ from aragorn.admission_conformance import (
 )
 from aragorn.admission_evidence import (
     verify_openclaw_config_activation_slice_evidence,
+    verify_openclaw_deterministic_replay_evidence,
     verify_openclaw_live_reload_cron_slice_evidence,
     verify_openclaw_live_reload_slice_evidence,
     verify_openclaw_model_activation_evidence,
@@ -1030,6 +1031,27 @@ def main() -> int:
             ),
             "NOT_TESTED",
         ),
+        (
+            "openclaw-deterministic-authority-replay",
+            (
+                ROOT
+                / "benchmark"
+                / "admission"
+                / "openclaw-v2026.7.1"
+                / "deterministic-authority-vectors-v1.json",
+                admission_evidence
+                / (
+                    "openclaw-v2026.7.1-contained-deterministic-authority-"
+                    "replay-2026-07-28.json"
+                ),
+            ),
+            admission_receipts
+            / (
+                "phase1-openclaw-contained-deterministic-authority-"
+                "replay-2026-07-28.json"
+            ),
+            "NOT_TESTED",
+        ),
     )
     for label, evidence_paths, result_path, expected_status in retained_admission_results:
         result = load(result_path)
@@ -1074,6 +1096,11 @@ def main() -> int:
                 )
             if label == "openclaw-model-activation-slice":
                 verify_openclaw_model_activation_evidence(
+                    result,
+                    evidence_cas=evidence_cas,
+                )
+            if label == "openclaw-deterministic-authority-replay":
+                verify_openclaw_deterministic_replay_evidence(
                     result,
                     evidence_cas=evidence_cas,
                 )

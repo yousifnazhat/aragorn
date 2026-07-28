@@ -1606,6 +1606,106 @@ class AdmissionConformanceTests(unittest.TestCase):
                     mutation,
                 )
 
+    def test_retained_deterministic_authority_replay_is_det_only(self) -> None:
+        vector_path = (
+            _ROOT
+            / "benchmark"
+            / "admission"
+            / "openclaw-v2026.7.1"
+            / "deterministic-authority-vectors-v1.json"
+        )
+        replay_path = (
+            _ROOT
+            / "benchmark"
+            / "evidence"
+            / (
+                "openclaw-v2026.7.1-contained-deterministic-authority-"
+                "replay-2026-07-28.json"
+            )
+        )
+        receipt = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "receipts"
+                / (
+                    "phase1-openclaw-contained-deterministic-authority-"
+                    "replay-2026-07-28.json"
+                )
+            ).read_bytes()
+        )
+        for path in (vector_path, replay_path):
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertEqual(
+            validate_retained_admission_conformance(
+                receipt,
+                evidence_cas=self.cas,
+            ),
+            "NOT_TESTED",
+        )
+        self.assertIsNone(
+            admission_evidence.verify_openclaw_deterministic_replay_evidence(
+                receipt,
+                evidence_cas=self.cas,
+            )
+        )
+        self.assertEqual(
+            receipt["decision"],
+            {"installer_work_eligible": False, "status": "NOT_TESTED"},
+        )
+
+        promoted = deepcopy(receipt)
+        promoted["properties"][1]["status"] = "PASS"
+        promoted["properties"][1]["scenarios"][0] = {
+            "evidence_digests": receipt["properties"][0]["scenarios"][0][
+                "evidence_digests"
+            ],
+            "id": "exact-admitted-bytes",
+            "reason_codes": [],
+            "status": "PASS",
+        }
+        binding_drift = deepcopy(receipt)
+        binding_drift["bindings"]["runtime"]["source_tree_digest"] = (
+            "sha256:" + "0" * 64
+        )
+        for mutation in (promoted, binding_drift):
+            with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+                admission_evidence.verify_openclaw_deterministic_replay_evidence(
+                    mutation,
+                    evidence_cas=self.cas,
+                )
+
+        vectors = json.loads(vector_path.read_bytes())
+        replay = json.loads(replay_path.read_bytes())
+        missing_seed = deepcopy(replay)
+        missing_seed["cases"][0]["replays"].pop()
+        changed_output = deepcopy(replay)
+        changed_output["cases"][0]["replays"][0]["stdout_digest"] = (
+            "sha256:" + "1" * 64
+        )
+        changed_source = deepcopy(replay)
+        changed_source["adapter"]["implementation"]["analyze_digest"] = (
+            "sha256:" + "3" * 64
+        )
+        changed_runtime = deepcopy(vectors)
+        changed_runtime["vectors"][0]["request"]["target_runtime"]["runtime"][
+            "runtime_tree_digest"
+        ] = "sha256:" + "2" * 64
+        for changed_vectors, changed_replay in (
+            (vectors, missing_seed),
+            (vectors, changed_output),
+            (vectors, changed_source),
+            (changed_runtime, replay),
+        ):
+            with self.assertRaises(admission_evidence.AdmissionEvidenceError):
+                admission_evidence._verify_deterministic_replay(
+                    receipt,
+                    changed_vectors,
+                    changed_replay,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

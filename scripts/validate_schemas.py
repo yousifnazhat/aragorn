@@ -42,6 +42,7 @@ from aragorn.admission_conformance import (
 )
 from aragorn.admission_evidence import verify_openclaw_restart_evidence
 from aragorn.admission_gate import validate_retained_admission_conformance
+from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.artifact_closure import resolve_source_graph
 from aragorn.benchmark import evaluate_files
 from aragorn.benchmark_handoff_v2 import build_handoff_manifest
@@ -873,6 +874,17 @@ def main() -> int:
         dynamic_reasons = candidate["dynamic_conformance"]["reason_codes"]
         if dynamic_reasons != sorted(set(dynamic_reasons)):
             raise AssertionError("dynamic-conformance reasons are not canonical")
+
+    validate_openclaw_2026_7_1_route_inventory(
+        load(
+            ROOT
+            / "benchmark"
+            / "admission"
+            / "openclaw-v2026.7.1"
+            / "update-reload-route-inventory-v1.json"
+        ),
+        runtime_candidates,
+    )
 
     admission_evidence = ROOT / "benchmark" / "evidence"
     admission_receipts = ROOT / "benchmark" / "receipts"

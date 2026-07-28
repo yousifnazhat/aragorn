@@ -3,7 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import unittest
+from copy import deepcopy
 from pathlib import Path
+
+from aragorn.admission_routes import (
+    AdmissionRouteInventoryError,
+    validate_openclaw_2026_7_1_route_inventory,
+)
 
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
 EXPECTED_CONTRACTS = {
@@ -277,6 +283,59 @@ class SchemaTests(unittest.TestCase):
                     for url in candidate["source_screen"]["evidence_urls"]
                 )
             )
+
+    def test_update_reload_route_inventory_is_static_and_commit_bound(self) -> None:
+        root = SCHEMA_DIRECTORY.parent
+        lock = json.loads(
+            (
+                root / "benchmark" / "admission-runtime-candidates-v1.lock.json"
+            ).read_text()
+        )
+        inventory = json.loads(
+            (
+                root
+                / "benchmark"
+                / "admission"
+                / "openclaw-v2026.7.1"
+                / "update-reload-route-inventory-v1.json"
+            ).read_text()
+        )
+        validate_openclaw_2026_7_1_route_inventory(inventory, lock)
+
+        promoted_route = deepcopy(inventory)
+        promoted_route["routes"][0]["status"] = "PASS"
+        promoted_decision = deepcopy(inventory)
+        promoted_decision["decision"]["installer_work_eligible"] = True
+        off_commit = deepcopy(inventory)
+        source_urls = off_commit["routes"][0]["paths"][0]["source_urls"]
+        source_urls[0] = source_urls[0].replace(
+            inventory["runtime"]["commit_sha1"],
+            "0" * 40,
+        )
+        unknown_path = deepcopy(inventory)
+        unknown_path["routes"][0]["paths"][0]["source_urls"][0] = (
+            "https://github.com/openclaw/openclaw/blob/"
+            f"{inventory['runtime']['commit_sha1']}/src/not-real.ts#L1-L2"
+        )
+        reversed_range = deepcopy(inventory)
+        reversed_range["routes"][1]["paths"][1]["source_urls"][0] = reversed_range[
+            "routes"
+        ][1]["paths"][1]["source_urls"][0].replace(
+            "#L210-L290",
+            "#L290-L210",
+        )
+        for label, changed in (
+            ("promoted route", promoted_route),
+            ("promoted decision", promoted_decision),
+            ("off-commit source", off_commit),
+            ("unknown source path", unknown_path),
+            ("reversed source range", reversed_range),
+        ):
+            with (
+                self.subTest(label=label),
+                self.assertRaises(AdmissionRouteInventoryError),
+            ):
+                validate_openclaw_2026_7_1_route_inventory(changed, lock)
 
 
 if __name__ == "__main__":

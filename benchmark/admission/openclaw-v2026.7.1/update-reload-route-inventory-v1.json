@@ -1,0 +1,236 @@
+{
+  "schema": "aragorn/admission-route-inventory/v1",
+  "assurance": "static_source_inventory_only_not_runtime_conformance",
+  "runtime": {
+    "name": "openclaw",
+    "version": "2026.7.1",
+    "commit_sha1": "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4",
+    "tree_sha1": "5e9f2135f1b2c3c14910efdedb9e60b2593f8135"
+  },
+  "routes": [
+    {
+      "id": "ADM-02/update",
+      "paths": [
+        {
+          "id": "archive-source-force-replacement",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/skills-cli.ts#L443-L547",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/skills.ts#L592-L701",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/infra/install-package-dir.ts#L167-L375",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/install-security-scan.runtime.ts#L1249-L1306",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/lifecycle/archive-install.ts#L131-L202",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/lifecycle/source-install.ts#L195-L263",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/lifecycle/upload-install.ts#L52-L136"
+          ]
+        },
+        {
+          "id": "clawhub-tracked-replacement",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/skills-cli.ts#L549-L638",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/skills.ts#L702-L764",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/infra/install-package-dir.ts#L167-L375",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/install-security-scan.runtime.ts#L1249-L1306",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/lifecycle/clawhub.ts#L1163-L1258",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/lifecycle/clawhub.ts#L1311-L1522",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/lifecycle/clawhub.ts#L1609-L1668"
+          ]
+        },
+        {
+          "id": "config-entry-activation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/skills.ts#L766-L777",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/config/mutations.ts#L56-L70"
+          ]
+        },
+        {
+          "id": "core-updater-plugin-replacement",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/update-cli/update-command.ts#L2150-L2169",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/update-cli/update-command.ts#L2228-L2349",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/update-cli/update-command.ts#L2418-L2451",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/update.ts#L1371-L1406",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/update.ts#L2060-L2120",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/update.ts#L2296-L2402"
+          ]
+        },
+        {
+          "id": "curator-restore-activation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/skills-cli.ts#L736-L755",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/skills.ts#L381-L397",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/workshop/curator.ts#L581-L618"
+          ]
+        },
+        {
+          "id": "plugin-enable-activation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/plugins-cli.ts#L134-L141",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/plugins-cli.runtime.ts#L189-L227",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/enable.ts#L20-L46",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/loading/plugin-skills.ts#L22-L115"
+          ]
+        },
+        {
+          "id": "plugin-force-reinstall",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/plugins-cli.ts#L165-L208",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/plugins-install-command.ts#L92-L94",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/plugins-install-command.ts#L863-L1005",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/infra/install-package-dir.ts#L167-L375",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/install-security-scan.runtime.ts#L1003-L1061"
+          ]
+        },
+        {
+          "id": "plugin-package-skill-replacement",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/plugins-cli.ts#L210-L235",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/plugins-update-command.ts#L264-L377",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/install-security-scan.runtime.ts#L1003-L1061",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/update.ts#L1371-L1406",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/update.ts#L2060-L2120",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/update.ts#L2296-L2402",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/loading/plugin-skills.ts#L22-L115"
+          ]
+        },
+        {
+          "id": "workshop-proposal-apply",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/tools/skill-workshop-tool.ts#L134-L180",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/cli/skills-cli.ts#L976-L998",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/skills.ts#L544-L559",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/lifecycle/workspace-skill-write.ts#L107-L156",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/workshop/service.ts#L538-L622"
+          ]
+        }
+      ],
+      "status": "NOT_TESTED",
+      "reason_codes": [
+        "UPDATE_PATH_NOT_TESTED"
+      ]
+    },
+    {
+      "id": "ADM-02/reload",
+      "paths": [
+        {
+          "id": "chat-session-snapshot-consumer",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/auto-reply/reply/session-updates.ts#L164-L250"
+          ]
+        },
+        {
+          "id": "config-invalidation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/config-reload.ts#L210-L290",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/config-reload.ts#L353-L423",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/config-reload.ts#L432-L451",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/config.ts#L739-L772",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/config.ts#L773-L946",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/config.ts#L947-L997"
+          ]
+        },
+        {
+          "id": "cron-rescan",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/cron-snapshot.ts#L14-L44"
+          ]
+        },
+        {
+          "id": "filesystem-watch-invalidation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/refresh.ts#L98-L199",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/refresh.ts#L383-L409",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/refresh.ts#L511-L589",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/refresh.ts#L644-L723"
+          ]
+        },
+        {
+          "id": "fresh-session-reset",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/auto-reply/reply/session.ts#L960-L989"
+          ]
+        },
+        {
+          "id": "manual-plugin-invalidation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugin-sdk/skills-runtime.ts#L1-L10",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/refresh-state.ts#L29-L65"
+          ]
+        },
+        {
+          "id": "missing-prompt-blob-rebuild",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/config/sessions/skill-prompt-blobs.ts#L262-L299"
+          ]
+        },
+        {
+          "id": "plugin-skill-dir-activation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/config-reload-plan.ts#L121-L141",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/config-reload-plan.ts#L334-L415",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/config-reload.ts#L261-L324",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-reload-handlers.ts#L404-L480",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server.impl.ts#L1330-L1406",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/discovery.ts#L1631-L1660",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/manifest-registry.ts#L500-L545",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/plugins/plugin-metadata-snapshot.ts#L677-L715",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/loading/plugin-skills.ts#L22-L115",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/loading/workspace.ts#L1160-L1192",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/refresh.ts#L672-L721"
+          ]
+        },
+        {
+          "id": "remote-eligibility-invalidation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-startup-early.ts#L128-L172",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/nodes.ts#L521-L545",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/nodes.ts#L959-L1009",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server-methods/nodes.ts#L1060-L1109",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server/ws-connection/message-handler.ts#L2100-L2135",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/gateway/server/ws-connection.ts#L493-L511",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/remote.ts#L183-L239",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/remote.ts#L314-L467"
+          ]
+        },
+        {
+          "id": "sandbox-per-run-rescan",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/cli-runner/prepare.ts#L172-L239",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/embedded-agent-runner/compact.ts#L756-L768",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/embedded-agent-runner/compact.ts#L786-L834",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/embedded-agent-runner/run/attempt.ts#L911-L923",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/embedded-agent-runner/run/attempt.ts#L1108-L1157",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/embedded-agent-runner/sandbox-skills.ts#L126-L163",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/sandbox/context.ts#L28-L112",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/sandbox/context.ts#L185-L213",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/sandbox/context.ts#L311-L352",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/auto-reply/reply/commands-system-prompt.ts#L71-L135",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/loading/workspace.ts#L1649-L1715",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/embedded-run-entries.ts#L8-L31"
+          ]
+        },
+        {
+          "id": "session-snapshot-consumer",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/agents/agent-command.ts#L1334-L1360",
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/runtime/session-snapshot.ts#L58-L108"
+          ]
+        },
+        {
+          "id": "workshop-invalidation",
+          "source_urls": [
+            "https://github.com/openclaw/openclaw/blob/2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4/src/skills/workshop/service.ts#L598-L612"
+          ]
+        }
+      ],
+      "status": "NOT_TESTED",
+      "reason_codes": [
+        "LIVE_RELOAD_NOT_TESTED"
+      ]
+    }
+  ],
+  "decision": {
+    "runtime_executed": false,
+    "status": "NOT_TESTED",
+    "installer_work_eligible": false
+  }
+}

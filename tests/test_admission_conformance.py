@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import aragorn.admission_evidence as admission_evidence
+from aragorn import admission_evidence_plug01 as plug01_evidence
 from aragorn.admission_conformance import (
     MANDATORY_ADMISSION_SCENARIOS,
     AdmissionConformanceError,
@@ -1617,6 +1618,209 @@ class AdmissionConformanceTests(unittest.TestCase):
                     mutation,
                     evidence_cas=self.cas,
                     route_inventory=inventory,
+                )
+
+    def test_retained_update_reload_coverage_v2_adds_only_plug01_routes(
+        self,
+    ) -> None:
+        evidence_dir = _ROOT / "benchmark" / "evidence"
+        receipt_dir = _ROOT / "benchmark" / "receipts"
+        receipt = json.loads(
+            (
+                receipt_dir
+                / (
+                    "phase1-openclaw-update-reload-route-coverage-"
+                    "v2-2026-07-28.json"
+                )
+            ).read_bytes()
+        )
+        inventory = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "admission"
+                / "openclaw-v2026.7.1"
+                / "update-reload-route-inventory-v1.json"
+            ).read_bytes()
+        )
+        candidates = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "admission-runtime-candidates-v1.lock.json"
+            ).read_bytes()
+        )
+        evidence_paths = (
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-plug01-"
+                "activation-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-plug01-"
+                "replacement-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-plug01-"
+                "environment-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-update-reload-route-"
+                "coverage-v2-2026-07-28.json"
+            ),
+            receipt_dir
+            / "phase1-openclaw-update-reload-route-coverage-2026-07-28.json",
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-update-reload-route-"
+                "coverage-2026-07-28.json"
+            ),
+            receipt_dir
+            / (
+                "phase1-openclaw-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            receipt_dir
+            / (
+                "phase1-openclaw-contained-config-activation-"
+                "probe-2026-07-27.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "probe-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-live-reload-cron-"
+                "environment-2026-07-28.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-config-activation-"
+                "probe-2026-07-27.json"
+            ),
+            evidence_dir
+            / (
+                "openclaw-v2026.7.1-contained-config-activation-"
+                "environment-2026-07-27.json"
+            ),
+            evidence_dir
+            / "openclaw-v2026.7.1-contained-profile-probe-2026-07-27.json",
+        )
+        (
+            activation,
+            replacement,
+            environment,
+            coverage,
+            v1_receipt,
+        ) = (json.loads(path.read_bytes()) for path in evidence_paths[:5])
+        for path in evidence_paths:
+            raw = path.read_bytes()
+            self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        self.assertIsNone(
+            plug01_evidence.verify_openclaw_update_reload_coverage_v2(
+                receipt,
+                evidence_cas=self.cas,
+                route_inventory=inventory,
+                runtime_candidates=candidates,
+            )
+        )
+        passed = {
+            route["id"] for route in coverage["routes"] if route["status"] == "PASS"
+        }
+        self.assertEqual(
+            passed,
+            {
+                "ADM-02/update/config-entry-activation",
+                "ADM-02/update/plugin-enable-activation",
+                "ADM-02/update/plugin-force-reinstall",
+                "ADM-02/reload/chat-session-snapshot-consumer",
+                "ADM-02/reload/config-invalidation",
+                "ADM-02/reload/cron-rescan",
+                "ADM-02/reload/filesystem-watch-invalidation",
+                "ADM-02/reload/missing-prompt-blob-rebuild",
+                "ADM-02/reload/plugin-skill-dir-activation",
+            },
+        )
+        self.assertEqual(
+            next(
+                route["status"]
+                for route in coverage["routes"]
+                if route["id"]
+                == "ADM-02/update/plugin-package-skill-replacement"
+            ),
+            "NOT_TESTED",
+        )
+
+        promoted = deepcopy(receipt)
+        promoted["decision"]["installer_work_eligible"] = True
+        reshaped = deepcopy(receipt)
+        reshaped["profile"] = "other-profile"
+        for label, mutation in (
+            ("installer authority", promoted),
+            ("receipt profile", reshaped),
+        ):
+            with (
+                self.subTest(label),
+                self.assertRaises(plug01_evidence.AdmissionEvidenceError),
+            ):
+                plug01_evidence.verify_openclaw_update_reload_coverage_v2(
+                    mutation,
+                    evidence_cas=self.cas,
+                    route_inventory=inventory,
+                    runtime_candidates=candidates,
+                )
+
+        writable = deepcopy(environment)
+        next(
+            mount
+            for mount in writable["containers"][1]["mounts"]
+            if mount["destination"] == "/profile/state/extensions"
+        )["read_only"] = False
+        with self.assertRaises(plug01_evidence.AdmissionEvidenceError):
+            plug01_evidence._verify_plug01_environment(
+                activation,
+                replacement,
+                writable,
+            )
+
+        false_pass = deepcopy(coverage)
+        next(
+            route
+            for route in false_pass["routes"]
+            if route["id"]
+            == "ADM-02/update/plugin-package-skill-replacement"
+        ).update(status="PASS")
+        with self.assertRaises(plug01_evidence.AdmissionEvidenceError):
+            plug01_evidence._verify_update_reload_coverage_v2(
+                receipt,
+                false_pass,
+                activation=activation,
+                replacement=replacement,
+                environment=environment,
+                v1_receipt=v1_receipt,
+                evidence_cas=self.cas,
+                route_inventory=inventory,
+            )
+
+        with TemporaryDirectory() as temporary:
+            incomplete = CAS(temporary)
+            for path in evidence_paths:
+                if "plug01-environment" in path.name:
+                    continue
+                raw = path.read_bytes()
+                incomplete.put(BytesIO(raw), max_bytes=len(raw))
+            with self.assertRaises(plug01_evidence.AdmissionEvidenceError):
+                plug01_evidence.verify_openclaw_update_reload_coverage_v2(
+                    receipt,
+                    evidence_cas=incomplete,
+                    route_inventory=inventory,
+                    runtime_candidates=candidates,
                 )
 
     def test_retained_openclaw_model_activation_binds_exact_tool_bytes(  # noqa: PLR0915

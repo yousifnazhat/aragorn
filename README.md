@@ -108,6 +108,12 @@ workspace skill writes externally or evaluate another harness.
   graph-verifier, and analyzer-verifier identities before evaluating the
   verified artifact closure. It remains evidence-only and is not wired to the
   CLI or publisher.
+- A broker-context-only install contract requires a caller-held context digest
+  and independently expected target, runtime-conformance identity, measured
+  runtime identity, live destination descriptor, expiry, and current revocation
+  state before replaying `decision/v3`. It returns only normalized verified
+  values; it cannot grant installer authority and does not call the publisher
+  while positive runtime evidence semantics remain unverified.
 - Strict JSON Lines observations bound to the exact tree digest.
 - Deterministic `ALLOW | REVIEW | DENY | ERROR` policy evaluation.
 - Fail-closed handling of missing analyzers, malformed evidence, timeouts, output limits, and incomplete artifact closure.

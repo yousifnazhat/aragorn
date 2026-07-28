@@ -115,6 +115,7 @@ EXPECTED_CONTRACTS = {
     "manifest-v1.schema.json": "aragorn/manifest/v1",
     "observation-v1.schema.json": "aragorn/observation/v1",
     "phase0-standards-gate-v1.schema.json": "aragorn/phase0-standards-gate/v1",
+    "protected-install-context-v1.schema.json": "aragorn/protected-install-context/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",
 }

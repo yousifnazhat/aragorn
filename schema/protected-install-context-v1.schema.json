@@ -1,0 +1,66 @@
+{
+  "$id": "https://aragorn.dev/schema/protected-install-context-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn protected install context v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "context_id",
+    "status",
+    "expires_at_unix",
+    "decision_digest",
+    "manifest_digest",
+    "artifact_graph_digest",
+    "policy_digest",
+    "analyzer_run_receipt_digests",
+    "analyzer_verifier_digest",
+    "artifact_graph_verifier_digest",
+    "target_runtime_digest",
+    "runtime_conformance_digest",
+    "destination"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/protected-install-context/v1"},
+    "authority": {
+      "const": "BROKER_CONTEXT_ONLY_NOT_INSTALLER_AUTHORITY"
+    },
+    "context_id": {"$ref": "#/$defs/digest"},
+    "status": {"enum": ["active", "revoked"]},
+    "expires_at_unix": {"type": "integer", "minimum": 0},
+    "decision_digest": {"$ref": "#/$defs/digest"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "artifact_graph_digest": {"$ref": "#/$defs/digest"},
+    "policy_digest": {"$ref": "#/$defs/digest"},
+    "analyzer_run_receipt_digests": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "analyzer_verifier_digest": {"$ref": "#/$defs/digest"},
+    "artifact_graph_verifier_digest": {"$ref": "#/$defs/digest"},
+    "target_runtime_digest": {"$ref": "#/$defs/digest"},
+    "runtime_conformance_digest": {"$ref": "#/$defs/digest"},
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_device", "root_inode", "target_name"],
+      "properties": {
+        "root_device": {"type": "integer", "minimum": 0},
+        "root_inode": {"type": "integer", "minimum": 1},
+        "target_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

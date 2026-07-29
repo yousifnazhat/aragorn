@@ -121,6 +121,8 @@ EXPECTED_CONTRACTS = {
     "manifest-v1.schema.json": "aragorn/manifest/v1",
     "observation-v1.schema.json": "aragorn/observation/v1",
     "phase0-standards-gate-v1.schema.json": "aragorn/phase0-standards-gate/v1",
+    "phase1-acquisition-lock-evidence-v1.schema.json": "aragorn/phase1-acquisition-lock-evidence/v1",
+    "phase1-acquisition-lock-milestone-v1.schema.json": "aragorn/phase1-acquisition-lock-milestone/v1",
     "policy-v2.schema.json": "aragorn/policy/v2",
     "protected-install-broker-request-v1.schema.json": "aragorn/protected-install-broker-request/v1",
     "protected-install-broker-request-v2.schema.json": "aragorn/protected-install-broker-request/v2",

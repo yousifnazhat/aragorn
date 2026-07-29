@@ -1,0 +1,76 @@
+{
+  "$id": "https://aragorn.dev/schema/phase1-acquisition-lock-evidence-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn Phase 1 acquisition-lock evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "scope", "workload", "workload_digest"],
+  "properties": {
+    "schema": {"const": "aragorn/phase1-acquisition-lock-evidence/v1"},
+    "scope": {"const": "supported-acquisition-lock/v1"},
+    "workload_digest": {
+      "const": "sha256:80ddb1d4769ef085ae17e3559367fb2114a2fde312c0141a8aeaf2b9aa9ed78c"
+    },
+    "workload": {
+      "const": {
+        "artifacts": [
+          {
+            "artifact_id": "anthropics-template-install-skill-md",
+            "required": true,
+            "resolution": "STATICALLY_RESOLVABLE"
+          },
+          {
+            "artifact_id": "anthropics-template-update-skill-md",
+            "required": true,
+            "resolution": "STATICALLY_RESOLVABLE"
+          },
+          {
+            "artifact_id": "openai-figma-required-references",
+            "allowed_outcomes": ["ERROR", "REVIEW"],
+            "required": true,
+            "resolution": "UNRESOLVED"
+          }
+        ],
+        "installed_checks": [
+          {
+            "check_id": "protected-install-skill",
+            "expected_digest": "sha256:eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa",
+            "operation": "install"
+          },
+          {
+            "check_id": "protected-update-skill",
+            "expected_digest": "sha256:8c62d28fbc672785c57b8d996bbc2568eabc3adda434ee13f3341cebf33b95d8",
+            "operation": "update"
+          }
+        ],
+        "leaf_digests": {
+          "protected_transition": {
+            "archive": "sha256:738a57537a9c1ad24736f0cb5a3ce9507debb830f632ec4e7606d09ee6302aec",
+            "capture": "sha256:85f043ce3b49711251129d877996f0e6e7d31c09da56b46af50704d98d4867dd",
+            "consumed": "sha256:94faa277bb26b623899c75e927ad488b189b95b5b29cbcaec3fa9b6001d75a3d",
+            "install": "sha256:71bfaa2318576443841ee7b6de097ba0df07c19ad1be22d42bed39c058fb0d04",
+            "stale": "sha256:e7d1a12400fbe2cdb8337018c6db26ad129ea8b876a4dbd432b50ca723e9356a",
+            "update": "sha256:42e0cf87abb76f4a3c65c7f97c2c5d89a9c277ee5a0772da86300da292473a9c"
+          },
+          "runtime_conformance": {
+            "receipt": "sha256:dd681d09043c4582dcc198db91f0784f4e8fc33eea7dd0113abac397ad62987e",
+            "route_inventory": "sha256:406a3d3b6d33bff924bbc658e62d7f3c563f36acc1fd354388969ef9001a2df7",
+            "runtime_candidates": "sha256:1e8ad12c57e0414b83c1a28612f8c67e1c0d9ea03d19403d8f2dc6b6887ab6b8"
+          },
+          "unresolved_required": {
+            "evidence": "sha256:53c63ec7da8252ce51a130af0405896d9b311f3da727fc1174d667d9719cb78f",
+            "retention": "sha256:dfd4967294efec67e616d970cb11554793b0eb048a7a709f0597cfc6c6ee0cbb"
+          }
+        },
+        "schema": "aragorn/phase1-acquisition-lock-workload/v1",
+        "thresholds": {
+          "installed_digest_mismatches": 0,
+          "static_capture_minimum_percent": 95,
+          "unresolved_allowed_outcomes": ["ERROR", "REVIEW"],
+          "unresolved_required_percent": 100
+        },
+        "workload_id": "phase1-retained-evidence-2026-07-29"
+      }
+    }
+  }
+}

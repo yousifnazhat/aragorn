@@ -1,0 +1,161 @@
+{
+  "$id": "https://aragorn.dev/schema/phase1-acquisition-lock-milestone-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn Phase 1 acquisition-lock milestone v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source_evidence_digest",
+    "workload_digest",
+    "claims",
+    "decision"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/phase1-acquisition-lock-milestone/v1"},
+    "source_evidence_digest": {"$ref": "#/$defs/digest"},
+    "workload_digest": {
+      "const": "sha256:80ddb1d4769ef085ae17e3559367fb2114a2fde312c0141a8aeaf2b9aa9ed78c"
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installed_digest_integrity",
+        "static_artifact_capture",
+        "unresolved_required_non_allow",
+        "runtime_conformance",
+        "supported_replay"
+      ],
+      "properties": {
+        "installed_digest_integrity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["checked", "mismatches", "status"],
+          "properties": {
+            "checked": {"type": "integer", "minimum": 0},
+            "mismatches": {"type": "integer", "minimum": 0},
+            "status": {"$ref": "#/$defs/status"}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"status": {"const": "PASS"}}},
+              "then": {
+                "properties": {
+                  "checked": {"minimum": 1},
+                  "mismatches": {"const": 0}
+                }
+              }
+            }
+          ]
+        },
+        "static_artifact_capture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["captured", "total", "minimum_percent", "status"],
+          "properties": {
+            "captured": {"type": "integer", "minimum": 0},
+            "total": {"type": "integer", "minimum": 1},
+            "minimum_percent": {"const": 95},
+            "status": {"$ref": "#/$defs/status"}
+          }
+        },
+        "unresolved_required_non_allow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "qualifying",
+            "total",
+            "required_percent",
+            "allowed_outcomes",
+            "observed_outcomes",
+            "status"
+          ],
+          "properties": {
+            "qualifying": {"type": "integer", "minimum": 0},
+            "total": {"type": "integer", "minimum": 1},
+            "required_percent": {"const": 100},
+            "allowed_outcomes": {"const": ["ERROR", "REVIEW"]},
+            "observed_outcomes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["ERROR", "REVIEW"]}
+            },
+            "status": {"$ref": "#/$defs/status"}
+          }
+        },
+        "runtime_conformance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result_digest", "status"],
+          "properties": {
+            "result_digest": {"$ref": "#/$defs/digest"},
+            "status": {"$ref": "#/$defs/status"}
+          }
+        },
+        "supported_replay": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["install", "update"],
+          "properties": {
+            "install": {"$ref": "#/$defs/replay"},
+            "update": {"$ref": "#/$defs/replay"}
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "phase1_exit_eligible", "reason_codes"],
+      "properties": {
+        "status": {"enum": ["PASS", "FAIL", "NOT_TESTED"]},
+        "phase1_exit_eligible": {"type": "boolean"},
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reason"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "PASS"}}},
+          "then": {
+            "properties": {
+              "phase1_exit_eligible": {"const": true},
+              "reason_codes": {"maxItems": 0}
+            }
+          },
+          "else": {
+            "properties": {
+              "phase1_exit_eligible": {"const": false},
+              "reason_codes": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reason": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+    },
+    "status": {
+      "enum": ["PASS", "FAIL", "NOT_TESTED", "EVIDENCE_ONLY"]
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_digest"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "evidence_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

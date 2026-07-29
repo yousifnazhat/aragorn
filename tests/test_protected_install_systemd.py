@@ -138,6 +138,7 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
         self.assertNotIn("CAP_DAC_OVERRIDE", "\n".join(service))
         self.assertNotIn("CAP_DAC_READ_SEARCH", "\n".join(service))
         self.assertNotIn("CAP_CHOWN", "\n".join(service))
+        self.assertNotIn("RestrictSUIDSGID=yes", service)
 
     def test_sysusers_provisions_dedicated_analyzer_identity(self) -> None:
         lines = set(_SYSUSERS.read_text(encoding="utf-8").splitlines())

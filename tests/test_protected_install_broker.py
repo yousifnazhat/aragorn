@@ -63,6 +63,7 @@ def _github_args(
         "version": producer._GITHUB_ANALYZER_VERSION,
         "argv": [
             str(executable),
+            "-B",
             "-c",
             producer._github_analyzer_script(analyzer_implementation_digest),
         ],

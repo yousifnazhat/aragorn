@@ -657,7 +657,7 @@ def _run_github_live(
     configuration = {
         "name": _GITHUB_SCANNER,
         "version": _GITHUB_ANALYZER_VERSION,
-        "argv": [str(executable), "-c", script],
+        "argv": [str(executable), "-B", "-c", script],
         "operator_argv0": str(executable),
         "executable_digest": executable_digest,
     }
@@ -755,7 +755,7 @@ def _run_github_live(
                 staging_fd,
             )
             analyzer_result = run_analyzer(
-                (str(executable), "-c", script),
+                (str(executable), "-B", "-c", script),
                 workspace=staging,
                 name=_GITHUB_SCANNER,
                 version=_GITHUB_ANALYZER_VERSION,

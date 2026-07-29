@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import PurePosixPath
 import re
 import stat
+from pathlib import PurePosixPath
 from typing import Any
 
 from .acquire import InventoryError, inventory_open_directory
@@ -241,7 +241,11 @@ def _freeze_materialized_source_tree(
     for entry in manifest["files"]:
         parts = PurePosixPath(entry["path"]).parts
         directories.update("/".join(parts[:depth]) for depth in range(1, len(parts)))
-        descriptor = os.open(entry["path"], file_flags, dir_fd=staging_fd)
+        descriptor = _open_staged_path(
+            staging_fd,
+            entry["path"],
+            final_flags=file_flags,
+        )
         try:
             metadata = os.fstat(descriptor)
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
@@ -257,13 +261,51 @@ def _freeze_materialized_source_tree(
         directories,
         key=lambda item: (-len(PurePosixPath(item).parts), item),
     ):
-        descriptor = os.open(directory, directory_flags, dir_fd=staging_fd)
+        descriptor = _open_staged_path(
+            staging_fd,
+            directory,
+            final_flags=directory_flags,
+        )
         try:
             os.fchmod(descriptor, 0o555)
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
     os.fsync(staging_fd)
+
+
+def _open_staged_path(
+    staging_fd: int,
+    path: str,
+    *,
+    final_flags: int,
+) -> int:
+    relative = PurePosixPath(path)
+    parts = relative.parts
+    if (
+        relative.is_absolute()
+        or not parts
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
+        raise MaterializationVerificationError("staged source entry path is invalid")
+
+    directory_flags = (
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    )
+    current_fd = os.dup(staging_fd)
+    os.set_inheritable(current_fd, False)
+    try:
+        for component in parts[:-1]:
+            next_fd = os.open(
+                component,
+                directory_flags,
+                dir_fd=current_fd,
+            )
+            os.close(current_fd)
+            current_fd = next_fd
+        return os.open(parts[-1], final_flags, dir_fd=current_fd)
+    finally:
+        os.close(current_fd)
 
 
 def _inode(metadata: os.stat_result) -> tuple[int, int]:

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path, PurePosixPath
+from unittest.mock import patch
 
 from aragorn.acquire import ingest_local
 from aragorn.artifact_closure import canonical_json
@@ -297,6 +298,91 @@ class MaterializationTests(unittest.TestCase):
                 self.assertEqual((target / "SKILL.md").read_bytes(), b"expected")
             finally:
                 os.close(root_fd)
+
+    def test_freeze_rejects_nested_intermediate_symlink_without_touching_target(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            (source / "nested" / "deeper").mkdir(parents=True)
+            (source / "nested" / "deeper" / "content").write_bytes(b"expected")
+            cas = CAS(root / "state")
+            manifest, manifest_digest = _retain_manifest(cas, source)
+
+            active = root / "active"
+            active.mkdir(mode=0o700)
+            staging_name = ".aragorn-stage-" + "1" * 24
+            staging = _stage_manifest(cas, active, staging_name, manifest)
+
+            outside = root / "outside"
+            outside_content = outside / "deeper" / "content"
+            outside_content.parent.mkdir(parents=True, mode=0o700)
+            outside_content.write_bytes(b"expected")
+            outside_content.chmod(0o600)
+            original_directory_mode = stat.S_IMODE(
+                os.lstat(outside_content.parent).st_mode
+            )
+            original_file_mode = stat.S_IMODE(os.lstat(outside_content).st_mode)
+
+            real_verify = verify_materialized_source_tree
+            retargeted = False
+
+            def verify_then_retarget(
+                selected_cas: CAS,
+                selected_manifest_digest: str,
+                selected_staging_fd: int,
+            ) -> str:
+                nonlocal retargeted
+                tree_digest = real_verify(
+                    selected_cas,
+                    selected_manifest_digest,
+                    selected_staging_fd,
+                )
+                if not retargeted:
+                    (staging / "nested").rename(active / "detached-nested")
+                    (staging / "nested").symlink_to(
+                        outside,
+                        target_is_directory=True,
+                    )
+                    retargeted = True
+                return tree_digest
+
+            root_fd = os.open(
+                active,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            )
+            try:
+                with (
+                    patch(
+                        "aragorn.materialization.verify_materialized_source_tree",
+                        side_effect=verify_then_retarget,
+                    ),
+                    self.assertRaisesRegex(
+                        MaterializationVerificationError,
+                        "cannot publish materialized source tree",
+                    ),
+                ):
+                    _publish_materialized_source_tree(
+                        CAS(root / "state", read_only=True),
+                        manifest_digest,
+                        root_fd,
+                        staging_name=staging_name,
+                        target_name="verified-skill",
+                    )
+            finally:
+                os.close(root_fd)
+
+            self.assertFalse(os.path.lexists(active / "verified-skill"))
+            self.assertEqual(outside_content.read_bytes(), b"expected")
+            self.assertEqual(
+                stat.S_IMODE(os.lstat(outside_content.parent).st_mode),
+                original_directory_mode,
+            )
+            self.assertEqual(
+                stat.S_IMODE(os.lstat(outside_content).st_mode),
+                original_file_mode,
+            )
 
     def test_retained_tree_beyond_supported_depth_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

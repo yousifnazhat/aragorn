@@ -864,6 +864,8 @@ def candidate_system_identity(document: object) -> dict[str, str]:
 def detect_first_party_observations(
     manifest: object,
     cas: CAS,
+    *,
+    subject_digest: str | None = None,
 ) -> tuple[Observation, ...]:
     """Derive bounded, label-free agent-skill threat observations."""
 
@@ -873,6 +875,11 @@ def detect_first_party_observations(
     tree_digest = _digest(
         manifest.get("tree_digest"),
         "candidate manifest tree digest",
+    )
+    observation_subject_digest = (
+        tree_digest
+        if subject_digest is None
+        else _digest(subject_digest, "candidate observation subject digest")
     )
     if not isinstance(files, list) or not files:
         raise CandidateError("candidate manifest files must be a non-empty array")
@@ -1088,7 +1095,7 @@ def detect_first_party_observations(
     for reason_code in sorted(findings):
         document = {
             "schema": OBSERVATION_SCHEMA,
-            "subject_digest": tree_digest,
+            "subject_digest": observation_subject_digest,
             "reason_code": reason_code,
             "severity": (
                 "medium"
@@ -1113,7 +1120,7 @@ def detect_first_party_observations(
         observations.append(
             Observation(
                 schema=OBSERVATION_SCHEMA,
-                subject_digest=tree_digest,
+                subject_digest=observation_subject_digest,
                 reason_code=reason_code,
                 severity=document["severity"],
                 document_json=document_json,

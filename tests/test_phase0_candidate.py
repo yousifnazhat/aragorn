@@ -324,10 +324,30 @@ class Phase0CandidateTests(unittest.TestCase):
             observed = {}
             for case in suite["cases"]:
                 manifest = ingest_local(_ROOT / "benchmark" / case["path"], cas)
+                observations = detect_first_party_observations(manifest, cas)
                 observed[case["id"]] = {
-                    observation.reason_code
-                    for observation in detect_first_party_observations(manifest, cas)
+                    observation.reason_code for observation in observations
                 }
+                if case["id"] == "hidden-comment-role-override":
+                    rebound = detect_first_party_observations(
+                        manifest,
+                        cas,
+                        subject_digest=_DIGEST,
+                    )
+                    self.assertTrue(rebound)
+                    self.assertEqual(
+                        {observation.subject_digest for observation in rebound},
+                        {_DIGEST},
+                    )
+                    self.assertTrue(
+                        all(
+                            json.loads(observation.document_json)[
+                                "subject_digest"
+                            ]
+                            == _DIGEST
+                            for observation in rebound
+                        )
+                    )
 
         self.assertEqual(
             observed,

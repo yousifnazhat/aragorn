@@ -739,15 +739,18 @@ class ArtifactClosureTests(unittest.TestCase):
 
             graph = resolve_source_graph(ingest_local(source, cas), cas)
 
-            self.assertFalse(
-                any(edge["status"] == "resolved" for edge in graph["edges"])
+            resolved = [
+                edge for edge in graph["edges"] if edge["status"] == "resolved"
+            ]
+            self.assertEqual(
+                [(edge["literal"], edge["target"]["path"]) for edge in resolved],
+                [("./setup.sh", "setup.sh")],
             )
             reasons = {
                 edge["reason_code"]
                 for edge in graph["edges"]
                 if edge["status"] == "unresolved"
             }
-            self.assertIn("LOCAL_REFERENCE_NOT_CANONICAL", reasons)
             self.assertIn("LOCAL_ARTIFACT_NOT_RETAINED", reasons)
             self.assertIn("EXTERNAL_REFERENCE_UNSUPPORTED", reasons)
             self.assertIn("REFERENCE_SYNTAX_UNSUPPORTED", reasons)

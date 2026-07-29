@@ -1230,6 +1230,7 @@ def _validate_source(source: dict[str, Any], schema: object) -> None:
 
 
 def _resolve_local_path(source_path: str, value: str) -> str | None:
+    value = value.removeprefix("./")
     if _canonical_relative_path(value) != value:
         return None
     candidate = PurePosixPath(source_path).parent / PurePosixPath(value)

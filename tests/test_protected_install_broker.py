@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import importlib.util
 import json
@@ -17,7 +18,10 @@ from unittest import mock
 import aragorn.admission_artifact_graph as artifact_graph_module
 import aragorn.analyzer_receipt as analyzer_receipt_module
 from aragorn.cas import CAS
-from aragorn.oci_worker_protocol import canonical_json
+from aragorn.github_gateway_live_evidence import (
+    verify_github_gateway_live_evidence,
+)
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.phase0_candidate import candidate_implementation_digest
 from tests.test_admission_artifact_graph import _retain_github_quarantine
 
@@ -28,6 +32,30 @@ _PRODUCER = (
     / "admission"
     / "openclaw-v2026.7.1"
     / "protected-install-broker.py"
+)
+_LIVE_EVIDENCE = (
+    _ROOT
+    / "benchmark"
+    / "evidence"
+    / "openclaw-v2026.7.1-agent-skill-protected-install-live-2026-07-29.json"
+)
+_LIVE_NEGATIVE_EVIDENCE = (
+    _ROOT
+    / "benchmark"
+    / "evidence"
+    / "openclaw-v2026.7.1-incomplete-skill-block-live-2026-07-29.json"
+)
+_LIVE_RETENTION = (
+    _ROOT
+    / "benchmark"
+    / "receipts"
+    / "phase1-agent-skill-protected-install-live-retention-2026-07-29.json"
+)
+_GATEWAY_LIVE_EVIDENCE = (
+    _ROOT
+    / "benchmark"
+    / "evidence"
+    / "github-gateway-anthropics-template-live-2026-07-29.json"
 )
 
 
@@ -519,6 +547,249 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
                 result["transaction"]["version_path"],
             )
             self.assertTrue((protected / "aragorn-admitted").is_symlink())
+
+
+class ProtectedInstallBrokerLiveEvidenceTests(unittest.TestCase):
+    def test_live_evidence_retains_exact_non_authoritative_bindings(self) -> None:
+        evidence_raw = _LIVE_EVIDENCE.read_bytes()
+        negative_raw = _LIVE_NEGATIVE_EVIDENCE.read_bytes()
+        retention_raw = _LIVE_RETENTION.read_bytes()
+        evidence = json.loads(evidence_raw)
+        negative = json.loads(negative_raw)
+        retention = json.loads(retention_raw)
+        self.assertEqual(evidence_raw, canonical_json(evidence) + b"\n")
+        self.assertEqual(negative_raw, canonical_json(negative) + b"\n")
+        self.assertEqual(retention_raw, canonical_json(retention) + b"\n")
+        self.assertEqual(
+            retention["schema"],
+            "aragorn/phase1-agent-skill-protected-install-live-retention/v1",
+        )
+        self.assertEqual(
+            retention["assurance"],
+            "OPERATOR_CAPTURE_ONLY_NOT_INSTALLER_AUTHORITY",
+        )
+        self.assertEqual(
+            retention["status"],
+            "CAPTURE_PASS_PHASE_EXIT_INELIGIBLE",
+        )
+        self.assertFalse(retention["phase1_exit_eligible"])
+        positive_retention = retention["evidence"]["positive"]
+        negative_retention = retention["evidence"]["negative"]
+        self.assertEqual(
+            positive_retention["path"],
+            _LIVE_EVIDENCE.relative_to(_ROOT).as_posix(),
+        )
+        self.assertEqual(
+            positive_retention["file_digest"],
+            "sha256:" + hashlib.sha256(evidence_raw).hexdigest(),
+        )
+        self.assertEqual(
+            negative_retention["path"],
+            _LIVE_NEGATIVE_EVIDENCE.relative_to(_ROOT).as_posix(),
+        )
+        self.assertEqual(
+            negative_retention["file_digest"],
+            "sha256:" + hashlib.sha256(negative_raw).hexdigest(),
+        )
+        self.assertEqual(evidence["slice_status"], "PASS")
+        self.assertFalse(evidence["decision"]["installer_work_eligible"])
+        self.assertEqual(
+            evidence["source"]["manifest_digest"],
+            evidence["transaction"]["manifest_digest"],
+        )
+        self.assertEqual(
+            evidence["source"]["tree_digest"],
+            evidence["transaction"]["tree_digest"],
+        )
+        self.assertEqual(
+            evidence["transaction"]["tree_digest"],
+            evidence["active"]["tree_digest"],
+        )
+        self.assertEqual(
+            evidence["context"]["digest"],
+            evidence["transaction"]["context_digest"],
+        )
+        self.assertEqual(
+            evidence["context"]["context_id"],
+            evidence["transaction"]["context_id"],
+        )
+        self.assertEqual(
+            evidence["context"]["destination"],
+            evidence["transaction"]["destination"],
+        )
+        self.assertEqual(
+            evidence["active"]["link_target"],
+            evidence["transaction"]["version_path"],
+        )
+        implementation = retention["implementation"]
+        self.assertEqual(
+            implementation["commit"],
+            "4415d6d0f05a2d10c02e1875521252bbb1e8c06b",
+        )
+        self.assertIn(implementation["commit"][:7], implementation["package_path"])
+        self.assertEqual(
+            implementation["package_tree_algorithm"],
+            "scripts/verify_build_inputs.py:tree_digest",
+        )
+        self.assertEqual(
+            implementation["package_tree_digest_before"],
+            implementation["package_tree_digest_after"],
+        )
+        self.assertEqual(
+            evidence["producer_implementation_digest"],
+            "sha256:" + hashlib.sha256(_PRODUCER.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            evidence["producer_implementation_digest"],
+            implementation["producer_implementation_digest"],
+        )
+        self.assertEqual(
+            evidence["analyzer"]["executable_digest"],
+            implementation["python_executable_digest"],
+        )
+        self.assertEqual(
+            evidence["source"]["gateway"]["python_executable_digest"],
+            implementation["python_executable_digest"],
+        )
+        self.assertEqual(
+            evidence["analyzer"]["implementation_digest"],
+            candidate_implementation_digest(),
+        )
+        self.assertEqual(
+            evidence["analyzer"]["verifier_implementation_digest"],
+            "sha256:"
+            + hashlib.sha256(
+                Path(analyzer_receipt_module.__file__).resolve().read_bytes()
+            ).hexdigest(),
+        )
+        self.assertEqual(
+            evidence["source"][
+                "artifact_graph_verifier_implementation_digest"
+            ],
+            "sha256:"
+            + hashlib.sha256(
+                Path(artifact_graph_module.__file__).resolve().read_bytes()
+            ).hexdigest(),
+        )
+        conformance = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "evidence"
+                / (
+                    "openclaw-v2026.7.1-update-reload-route-coverage-"
+                    "v3-2026-07-28.json"
+                )
+            ).read_bytes()
+        )
+        self.assertEqual(
+            evidence["context"]["runtime_conformance_digest"],
+            canonical_digest(conformance),
+        )
+        runtime = json.loads(
+            (
+                _ROOT
+                / "benchmark"
+                / "evidence"
+                / (
+                    "openclaw-v2026.7.1-contained-model-activation-"
+                    "probe-2026-07-28.json"
+                )
+            ).read_bytes()
+        )
+        self.assertEqual(
+            evidence["context"]["target_runtime_digest"],
+            runtime["runtime"]["runtime_tree"]["tree_digest"],
+        )
+        gateway = verify_github_gateway_live_evidence(
+            json.loads(_GATEWAY_LIVE_EVIDENCE.read_bytes())
+        )
+        self.assertEqual(evidence["source"]["request"], gateway["positive"]["request"])
+        self.assertEqual(
+            evidence["source"]["manifest_digest"],
+            gateway["positive"]["result"]["manifest_digest"],
+        )
+        self.assertEqual(
+            evidence["source"]["quarantine_receipt_digest"],
+            gateway["positive"]["result"]["quarantine_receipt_digest"],
+        )
+        by_digest = {
+            item["digest"]: base64.b64decode(item["base64"], validate=True)
+            for item in gateway["positive"]["cas_blobs"]
+        }
+        manifest = json.loads(by_digest[evidence["source"]["manifest_digest"]])
+        self.assertEqual(
+            [item["path"] for item in manifest["files"]],
+            ["SKILL.md"],
+        )
+        observed = retention["observed_install"]
+        self.assertTrue(observed["source_has_root_skill_md"])
+        self.assertEqual(observed["request"], evidence["source"]["request"])
+        self.assertEqual(
+            observed["manifest_digest"],
+            evidence["source"]["manifest_digest"],
+        )
+        self.assertEqual(
+            observed["quarantine_receipt_digest"],
+            evidence["source"]["quarantine_receipt_digest"],
+        )
+        self.assertEqual(
+            observed["active_file_digest"],
+            manifest["files"][0]["digest"],
+        )
+        self.assertEqual(observed["active_file_mode"], 0o444)
+        self.assertEqual(
+            observed["active_tree_digest"],
+            evidence["active"]["tree_digest"],
+        )
+        self.assertTrue(observed["exact_quarantine_blob_match"])
+        self.assertEqual(
+            observed["receipt_slice_status"],
+            evidence["slice_status"],
+        )
+        self.assertEqual(negative["slice_status"], "ERROR")
+        self.assertEqual(
+            negative["error"],
+            {
+                "message": (
+                    "GitHub artifact closure is incomplete; "
+                    "protected install is blocked"
+                ),
+                "type": "BrokerConformanceError",
+            },
+        )
+        negative_observation = retention["negative"]
+        self.assertEqual(
+            negative_observation["result"],
+            {
+                "error_type": negative["error"]["type"],
+                "slice_status": negative["slice_status"],
+            },
+        )
+        self.assertEqual(negative_observation["closure_status"], "incomplete")
+        self.assertEqual(negative_observation["unresolved_count"], 27)
+        self.assertEqual(
+            negative_observation["analyzer_run_receipt_count_after"],
+            0,
+        )
+        self.assertEqual(negative_observation["decision_receipt_count_after"], 0)
+        self.assertTrue(negative_observation["protected_root_empty_after"])
+        self.assertEqual(len(retention["discarded_attempts"]), 2)
+        self.assertTrue(
+            all(
+                not attempt["retained_as_exit_evidence"]
+                for attempt in retention["discarded_attempts"]
+            )
+        )
+        self.assertIn("NO_INSTALLER_AUTHORITY", evidence["limitations"])
+        self.assertIn(
+            "DIGEST_REFERENCES_ONLY_CAS_CLOSURE_NOT_RETAINED",
+            retention["limitations"],
+        )
+        self.assertIn(
+            "CURRENT_RUNTIME_CONFORMANCE_LEDGER_IS_FAIL",
+            retention["limitations"],
+        )
 
 
 if __name__ == "__main__":

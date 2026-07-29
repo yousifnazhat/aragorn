@@ -67,9 +67,14 @@ def _retain_github_quarantine(
     content: bytes,
     *,
     containment_profile: str = LINUX_CONTAINMENT_PROFILE,
+    file_name: str = "SKILL.md",
 ) -> tuple[str, str, str, str]:
     blob_oid = _git_oid("blob", content)
-    skill_tree_payload = _tree_entry(b"100644", b"SKILL.md", blob_oid)
+    skill_tree_payload = _tree_entry(
+        b"100644",
+        file_name.encode("utf-8"),
+        blob_oid,
+    )
     skill_tree_oid = _git_oid("tree", skill_tree_payload)
     root_tree_payload = _tree_entry(b"40000", b"demo", skill_tree_oid)
     root_tree_oid = _git_oid("tree", root_tree_payload)
@@ -82,7 +87,7 @@ def _retain_github_quarantine(
     blob_digest = cas.put(BytesIO(content), max_bytes=len(content))
     tree_files = [
         {
-            "path": "SKILL.md",
+            "path": file_name,
             "size": len(content),
             "digest": blob_digest,
             "executable": False,

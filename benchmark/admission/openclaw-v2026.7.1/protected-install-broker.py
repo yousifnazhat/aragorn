@@ -727,6 +727,10 @@ def _run_github_live(
         )
 
     manifest = load_verified_retained_manifest(cas, manifest_digest)
+    if not any(item["path"] == "SKILL.md" for item in manifest["files"]):
+        raise BrokerConformanceError(
+            "GitHub source is not an Agent Skill root; SKILL.md is missing"
+        )
     with executable.open("rb") as stream:
         retained_executable_digest = cas.put(
             stream,

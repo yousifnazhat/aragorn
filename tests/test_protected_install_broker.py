@@ -483,6 +483,65 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
             publication.assert_not_called()
             self.assertEqual(list(protected.iterdir()), [])
 
+    def test_complete_markdown_without_root_skill_fails_before_analysis(
+        self,
+    ) -> None:
+        producer = _load_producer()
+        with (
+            TemporaryDirectory() as temporary,
+            mock.patch(
+                "aragorn.github_quarantine_receipt.sys.platform",
+                "linux",
+            ),
+            mock.patch(
+                "aragorn.admission_artifact_graph._REQUIRED_BROKER_UID",
+                os.geteuid(),
+            ),
+        ):
+            root = Path(temporary)
+            cas_root = root / "cas"
+            cas = CAS(cas_root)
+            (
+                manifest_digest,
+                _proof_digest,
+                receipt_digest,
+                gateway_profile_digest,
+            ) = _retain_github_quarantine(
+                cas,
+                b"# mapping checklist\n",
+                file_name="mapping-checklist.md",
+            )
+            request = json.loads(cas.read(receipt_digest))["request"]
+            protected = root / "protected"
+            protected.mkdir(mode=0o700)
+
+            with (
+                mock.patch.object(producer, "run_analyzer") as analyzer,
+                mock.patch.object(
+                    producer,
+                    "_publish_protected_install_transaction",
+                ) as publication,
+                self.assertRaisesRegex(
+                    ValueError,
+                    "source is not an Agent Skill root",
+                ),
+            ):
+                producer._run(
+                    _github_args(
+                        producer=producer,
+                        cas_root=cas_root,
+                        protected_root=protected,
+                        manifest_digest=manifest_digest,
+                        receipt_digest=receipt_digest,
+                        gateway_profile_digest=gateway_profile_digest,
+                        request=request,
+                    )
+                )
+
+            analyzer.assert_not_called()
+            publication.assert_not_called()
+            self.assertEqual(list(protected.iterdir()), [])
+
     def test_claimed_transaction_failure_retains_recovery_identity(self) -> None:
         producer = _load_producer()
         with (
@@ -637,7 +696,7 @@ class ProtectedInstallBrokerLiveEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(
             evidence["producer_implementation_digest"],
-            "sha256:" + hashlib.sha256(_PRODUCER.read_bytes()).hexdigest(),
+            "sha256:870c16942360ad1f1117b3e6d1c8ad2e8363ce95c073bc165fca5464d9c07435",
         )
         self.assertEqual(
             evidence["producer_implementation_digest"],
@@ -790,6 +849,15 @@ class ProtectedInstallBrokerLiveEvidenceTests(unittest.TestCase):
             "CURRENT_RUNTIME_CONFORMANCE_LEDGER_IS_FAIL",
             retention["limitations"],
         )
+        self.assertIn(
+            "PRE_IMPORT_TRUSTED_LAUNCHER_NOT_IMPLEMENTED",
+            retention["limitations"],
+        )
+        self.assertIn(
+            "ROOT_ANALYZER_NOT_SANDBOXED",
+            retention["limitations"],
+        )
+        self.assertIn("NO_INSTALLER_AUTHORITY", retention["limitations"])
 
 
 if __name__ == "__main__":

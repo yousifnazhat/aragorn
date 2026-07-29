@@ -145,17 +145,18 @@ The acquisition service accepts a GitHub URL, full commit, and skill path. It pe
 
 The implemented Phase 0 slice is narrower: `acquire-github` accepts only an
 unauthenticated public `https://github.com/OWNER/REPOSITORY`, an exact
-lowercase 40-hex commit, and a canonical relative skill path. It pins GitHub
-REST API `2026-03-10`, first requires the repository hash-algorithm endpoint to
-report `sha1`, records API-reported commit and tree identities, walks
-non-recursive Git trees, verifies every returned blob's Git SHA-1, and stores
-the bytes by SHA-256 only after all bounded blobs validate. GitHub's API
-response authenticates the commit/tree assertions; Phase 0 does not receive
-and independently hash their raw Git object bytes. It rejects redirects,
-credentials, proxies, links, submodules, special modes, Git LFS pointers,
-path-normalization collisions, truncation, deadline exhaustion, and other
-resource-limit exhaustion. It is not the dedicated egress boundary described
-below and cannot produce `artifact_graph` closure.
+lowercase 40-hex commit, and a canonical relative skill path. It uses GitHub
+Smart HTTP protocol v2 for commit/tree objects and REST API `2026-03-10` for
+blobs. It requires SHA-1 object format, filtered shallow support, and exactly
+one checksum-valid PACK v2 base object of the requested type; it independently
+reproduces the raw commit/tree Git SHA-1 before walking the tree. Every blob's
+Git SHA-1 is also reproduced before its bytes are stored by SHA-256, and
+publication occurs only after all bounded blobs validate. It rejects
+redirects, credentials, proxies, deltas, extra objects, links, submodules,
+special modes, Git LFS pointers, path-normalization collisions, truncation,
+deadline exhaustion, and other resource-limit exhaustion. The current handoff
+does not retain the raw proof, so this slice still cannot produce
+`artifact_graph` closure.
 
 `resolve-artifacts` is a second evaluation-only Phase 0 surface. It reads only
 re-verified CAS bytes, NFKC-normalizes bounded text for discovery while retaining
@@ -168,9 +169,9 @@ source content. `source_reference_graph.status = "complete"` is scoped only to
 absent and can never satisfy the policy-required `artifact_graph` scope.
 For a GitHub root the graph records
 `github_api_membership_asserted_blob_identity_reverified`: retained blob Git
-SHA-1 identities are rederived, but commit/path membership still inherits the
-authenticated API assertion rather than an independently verified raw tree
-proof.
+SHA-1 identities are rederived. That historical evidence label is intentionally
+unchanged; current acquisition verifies raw trees online, but the graph cannot
+claim or replay that stronger proof until the handoff retains it.
 
 `expand-github` is the bounded Phase 0 differentiation candidate. It caches one
 immutable session and tree cache per exact commit while sharing one credential,

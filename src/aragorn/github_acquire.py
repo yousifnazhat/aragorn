@@ -7,7 +7,6 @@ import binascii
 import hashlib
 import http.client
 import ipaddress
-from io import BytesIO
 import json
 import math
 import os
@@ -15,15 +14,26 @@ import re
 import socket
 import ssl
 import time
-from typing import Any
 import unicodedata
+from io import BytesIO
+from typing import Any
 from urllib.parse import urlsplit
 
 from .cas import CAS
-
+from .github_git_protocol import (
+    GitCapabilities,
+    GitProtocolError,
+    build_fetch_request,
+    decode_fetch_response,
+    parse_capabilities,
+    parse_commit_tree,
+    parse_tree,
+)
 
 API_HOST = "api.github.com"
+GIT_HOST = "github.com"
 API_VERSION = "2026-03-10"
+_FIXED_HOSTS = {API_HOST, GIT_HOST}
 _COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 _OWNER = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\Z")
 _REPOSITORY = re.compile(r"[A-Za-z0-9_.-]{1,100}\Z")
@@ -33,6 +43,9 @@ _MAX_API_BYTES = 384 * 1024 * 1024
 _MAX_ACQUISITION_SECONDS = 600.0
 _MAX_BEARER_TOKEN_BYTES = 1024
 _MAX_PINNED_ENDPOINTS = 16
+_MAX_GIT_ADVERTISEMENT_BYTES = 256 * 1024
+_MAX_GIT_OBJECT_BYTES = _MAX_METADATA_BYTES
+_MAX_GIT_RESPONSE_BYTES = _MAX_GIT_OBJECT_BYTES + 1024 * 1024
 _HTTPS_PORT = 443
 
 _Endpoint = tuple[int, int, int, tuple[Any, ...]]
@@ -67,20 +80,105 @@ class _BearerToken:
 
 
 class _PinnedEndpoints:
-    """Resolve the fixed API host once and retain only public addresses."""
+    """Resolve one fixed GitHub host once and retain only public addresses."""
 
     def __init__(
         self,
         addresses: list[str] | tuple[str, ...] | None = None,
+        *,
+        host: str = API_HOST,
     ) -> None:
+        if host not in _FIXED_HOSTS:
+            raise GitHubAcquisitionError("pinned endpoint host is unsupported")
+        self._host = host
         self._value = (
             None if addresses is None else _validate_pinned_addresses(addresses)
         )
 
     def get(self) -> tuple[_Endpoint, ...]:
         if self._value is None:
-            self._value = _resolve_public_api_endpoints()
+            self._value = _resolve_public_host_endpoints(self._host)
         return self._value
+
+    @property
+    def host(self) -> str:
+        return self._host
+
+
+class _GitSmartClient:
+    """Fetch independently verifiable commit and tree objects over Git v2."""
+
+    def __init__(
+        self,
+        owner: str,
+        repository: str,
+        *,
+        budget: _RequestBudget,
+        deadline: float,
+        endpoints: _PinnedEndpoints,
+    ) -> None:
+        self._path = f"/{owner}/{repository}.git"
+        self._budget = budget
+        self._deadline = deadline
+        self._endpoints = endpoints
+        self._capabilities: GitCapabilities | None = None
+
+    def fetch_object(self, oid: str, expected_type: str) -> bytes:
+        try:
+            capabilities = self._discover()
+            request = build_fetch_request(oid, expected_type, capabilities)
+            response = _request_bytes(
+                GIT_HOST,
+                f"{self._path}/git-upload-pack",
+                method="POST",
+                headers={
+                    "Accept": "application/x-git-upload-pack-result",
+                    "Content-Type": "application/x-git-upload-pack-request",
+                    "Git-Protocol": "version=2",
+                },
+                media_types={"application/x-git-upload-pack-result"},
+                max_bytes=_MAX_GIT_RESPONSE_BYTES,
+                timeout_seconds=_remaining_seconds(self._deadline),
+                budget=self._budget,
+                body=request,
+                endpoints=self._endpoints,
+            )
+            payload = decode_fetch_response(
+                response,
+                oid,
+                expected_type,
+                _MAX_GIT_OBJECT_BYTES,
+            )
+            _remaining_seconds(self._deadline)
+            return payload
+        except GitProtocolError as exc:
+            raise GitHubAcquisitionError(
+                f"Git protocol verification failed: {exc}"
+            ) from exc
+
+    def _discover(self) -> GitCapabilities:
+        if self._capabilities is None:
+            advertisement = _request_bytes(
+                GIT_HOST,
+                f"{self._path}/info/refs?service=git-upload-pack",
+                method="GET",
+                headers={
+                    "Accept": "application/x-git-upload-pack-advertisement",
+                    "Git-Protocol": "version=2",
+                },
+                media_types={"application/x-git-upload-pack-advertisement"},
+                max_bytes=_MAX_GIT_ADVERTISEMENT_BYTES,
+                timeout_seconds=_remaining_seconds(self._deadline),
+                budget=self._budget,
+                endpoints=self._endpoints,
+            )
+            try:
+                self._capabilities = parse_capabilities(advertisement)
+            except GitProtocolError as exc:
+                raise GitHubAcquisitionError(
+                    f"Git protocol verification failed: {exc}"
+                ) from exc
+        return self._capabilities
 
 
 class GitHubAcquisitionSession:
@@ -96,6 +194,7 @@ class GitHubAcquisitionSession:
         timeout_seconds: float = 120.0,
         bearer_token: str | None = None,
         _pinned_addresses: list[str] | tuple[str, ...] | None = None,
+        _pinned_git_addresses: list[str] | tuple[str, ...] | None = None,
     ) -> None:
         owner, repository = _parse_repository_url(repository_url)
         if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
@@ -121,18 +220,19 @@ class GitHubAcquisitionSession:
         self._authorization = authorization
         self._budget = _RequestBudget(max_api_requests, max_api_bytes)
         self._deadline = time.monotonic() + float(timeout_seconds)
-        self._endpoints = _PinnedEndpoints(_pinned_addresses)
-        self._tree_cache: dict[str, tuple[dict[str, Any], ...]] = {}
-
-        algorithm = self._request(
-            f"{self.prefix}/hash-algorithm",
-            max_bytes=_MAX_METADATA_BYTES,
+        self._api_endpoints = _PinnedEndpoints(_pinned_addresses, host=API_HOST)
+        self._git_endpoints = _PinnedEndpoints(
+            _pinned_git_addresses,
+            host=GIT_HOST,
         )
-        if (
-            set(algorithm) != {"hash_algorithm"}
-            or algorithm["hash_algorithm"] != "sha1"
-        ):
-            raise GitHubAcquisitionError("repository object format is not exactly sha1")
+        self._git = _GitSmartClient(
+            owner,
+            repository,
+            budget=self._budget,
+            deadline=self._deadline,
+            endpoints=self._git_endpoints,
+        )
+        self._tree_cache: dict[str, tuple[dict[str, Any], ...]] = {}
 
         self._load_commit(commit)
 
@@ -152,23 +252,23 @@ class GitHubAcquisitionSession:
         session._authorization = self._authorization
         session._budget = self._budget
         session._deadline = self._deadline
-        session._endpoints = self._endpoints
-        session._tree_cache = {}
+        session._api_endpoints = self._api_endpoints
+        session._git_endpoints = self._git_endpoints
+        session._git = self._git
+        session._tree_cache = self._tree_cache
         session._load_commit(commit)
         return session
 
     def _load_commit(self, commit: str) -> None:
         self.commit = commit
-        commit_document = self._request(
-            f"{self.prefix}/git/commits/{commit}",
-            max_bytes=_MAX_METADATA_BYTES,
-        )
-        if commit_document.get("sha") != commit:
-            raise GitHubAcquisitionError("GitHub returned a different commit identity")
-        commit_tree = commit_document.get("tree")
-        if not isinstance(commit_tree, dict):
-            raise GitHubAcquisitionError("commit response has no tree")
-        self.root_tree_sha = _object_sha(commit_tree.get("sha"), "commit tree")
+        try:
+            self.root_tree_sha = parse_commit_tree(
+                self._git.fetch_object(commit, "commit")
+            )
+        except GitProtocolError as exc:
+            raise GitHubAcquisitionError(
+                f"Git commit verification failed: {exc}"
+            ) from exc
 
     def read_tree(self, tree_sha: str) -> tuple[dict[str, Any], ...]:
         """Read and validate one non-recursive Git tree, with session caching."""
@@ -177,33 +277,12 @@ class GitHubAcquisitionSession:
         cached = self._tree_cache.get(tree_sha)
         if cached is not None:
             return cached
-        document = self._request(
-            f"{self.prefix}/git/trees/{tree_sha}",
-            max_bytes=_MAX_METADATA_BYTES,
-        )
-        if document.get("sha") != tree_sha:
-            raise GitHubAcquisitionError("GitHub returned a different tree identity")
-        if document.get("truncated") is not False:
+        try:
+            result = parse_tree(self._git.fetch_object(tree_sha, "tree"))
+        except GitProtocolError as exc:
             raise GitHubAcquisitionError(
-                "GitHub tree response is truncated or ambiguous"
-            )
-        raw_entries = document.get("tree")
-        if not isinstance(raw_entries, list):
-            raise GitHubAcquisitionError("GitHub tree response has no entry array")
-        entries: list[dict[str, Any]] = []
-        names: set[str] = set()
-        for raw_entry in raw_entries:
-            entry = _validate_tree_entry(raw_entry)
-            name = entry["path"]
-            collision_key = name.casefold()
-            if collision_key in names:
-                raise GitHubAcquisitionError(
-                    f"duplicate or colliding Git tree entry after case folding: {name}"
-                )
-            names.add(collision_key)
-            entries.append(entry)
-        entries.sort(key=lambda item: item["path"])
-        result = tuple(entries)
+                f"Git tree verification failed: {exc}"
+            ) from exc
         self._tree_cache[tree_sha] = result
         return result
 
@@ -247,22 +326,20 @@ class GitHubAcquisitionSession:
                 raise GitHubAcquisitionError(
                     f"repository path is not a supported blob: {path}"
                 )
-            if selected["size"] > max_file_size:
-                raise GitHubAcquisitionError(f"maximum file size exceeded: {path}")
             content = _read_blob(
                 self.prefix,
                 selected["sha"],
-                selected["size"],
+                max_file_size,
                 budget=self._budget,
                 deadline=self._deadline,
                 authorization=self._authorization,
-                endpoints=self._endpoints,
+                endpoints=self._api_endpoints,
             )
             if _is_lfs_pointer(content):
                 raise GitHubAcquisitionError(f"Git LFS pointer rejected: {path}")
             return {
                 "path": path,
-                "size": selected["size"],
+                "size": len(content),
                 "git_blob_sha1": selected["sha"],
                 "executable": selected["mode"] == "100755",
                 "content": content,
@@ -300,16 +377,6 @@ class GitHubAcquisitionSession:
             )
         return matches[0]
 
-    def _request(self, path: str, *, max_bytes: int) -> dict[str, Any]:
-        return _request_before_deadline(
-            path,
-            max_bytes=max_bytes,
-            budget=self._budget,
-            deadline=self._deadline,
-            authorization=self._authorization,
-            endpoints=self._endpoints,
-        )
-
 
 def acquire_github_commit(
     repository_url: str,
@@ -326,6 +393,7 @@ def acquire_github_commit(
     timeout_seconds: float = 120.0,
     bearer_token: str | None = None,
     _pinned_addresses: list[str] | tuple[str, ...] | None = None,
+    _pinned_git_addresses: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """Acquire exact file bytes from one public GitHub SHA-1 commit.
 
@@ -363,16 +431,16 @@ def acquire_github_commit(
         timeout_seconds=timeout_seconds,
         bearer_token=bearer_token,
         _pinned_addresses=_pinned_addresses,
+        _pinned_git_addresses=_pinned_git_addresses,
     )
     root_tree_sha = session.root_tree_sha
     skill_tree_sha, _ = session.resolve_tree(skill_path)
 
     pending_files: list[dict[str, Any]] = []
     entries_seen = 0
-    total_bytes = 0
 
     def walk(tree_sha: str, parts: tuple[str, ...]) -> None:
-        nonlocal entries_seen, total_bytes
+        nonlocal entries_seen
         for entry in session.read_tree(tree_sha):
             entries_seen += 1
             if entries_seen > max_files:
@@ -386,18 +454,9 @@ def acquire_github_commit(
                     )
                 walk(entry["sha"], relative_parts)
                 continue
-            size = entry["size"]
-            if size > max_file_size:
-                raise GitHubAcquisitionError(
-                    f"maximum file size exceeded: {relative_path}"
-                )
-            total_bytes += size
-            if total_bytes > max_total_bytes:
-                raise GitHubAcquisitionError("maximum total byte count exceeded")
             pending_files.append(
                 {
                     "path": relative_path,
-                    "size": size,
                     "git_blob_sha1": entry["sha"],
                     "executable": entry["mode"] == "100755",
                 }
@@ -406,6 +465,7 @@ def acquire_github_commit(
     walk(skill_tree_sha, ())
 
     staged_files: list[dict[str, Any]] = []
+    total_bytes = 0
     for pending in pending_files:
         repository_path = (
             pending["path"]
@@ -417,14 +477,22 @@ def acquire_github_commit(
             max_file_size=max_file_size,
         )
         if (
-            staged["size"] != pending["size"]
-            or staged["git_blob_sha1"] != pending["git_blob_sha1"]
+            staged["git_blob_sha1"] != pending["git_blob_sha1"]
             or staged["executable"] != pending["executable"]
         ):
             raise GitHubAcquisitionError(
                 f"Git tree membership changed during acquisition: {pending['path']}"
             )
-        staged_files.append({**pending, "content": staged["content"]})
+        total_bytes += staged["size"]
+        if total_bytes > max_total_bytes:
+            raise GitHubAcquisitionError("maximum total byte count exceeded")
+        staged_files.append(
+            {
+                **pending,
+                "size": staged["size"],
+                "content": staged["content"],
+            }
+        )
 
     session.check_deadline()
     files: list[dict[str, Any]] = []
@@ -486,9 +554,8 @@ def _validate_bearer_token(value: object) -> _BearerToken | None:
         encoded = value.encode("ascii")
     except UnicodeEncodeError:
         encoded = b""
-    if (
-        not 1 <= len(encoded) <= _MAX_BEARER_TOKEN_BYTES
-        or any(byte < 0x21 or byte > 0x7E for byte in encoded)
+    if not 1 <= len(encoded) <= _MAX_BEARER_TOKEN_BYTES or any(
+        byte < 0x21 or byte > 0x7E for byte in encoded
     ):
         raise GitHubAcquisitionError(
             "bearer_token must be a string of 1 to 1024 visible ASCII characters"
@@ -603,39 +670,10 @@ def _safe_component(value: object) -> bool:
     )
 
 
-def _validate_tree_entry(value: object) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise GitHubAcquisitionError("GitHub tree entry is not an object")
-    path = value.get("path")
-    mode = value.get("mode")
-    kind = value.get("type")
-    sha = _object_sha(value.get("sha"), "tree entry")
-    if not _safe_component(path):
-        raise GitHubAcquisitionError("GitHub tree contains an unsafe path component")
-    if mode == "120000":
-        raise GitHubAcquisitionError(f"symlink rejected: {path}")
-    if mode == "160000" or kind == "commit":
-        raise GitHubAcquisitionError(f"submodule rejected: {path}")
-    if kind == "tree" and mode == "040000":
-        return {"path": path, "mode": mode, "type": kind, "sha": sha}
-    if kind == "blob" and mode in {"100644", "100755"}:
-        size = value.get("size")
-        if isinstance(size, bool) or not isinstance(size, int) or size < 0:
-            raise GitHubAcquisitionError(f"blob size is invalid: {path}")
-        return {
-            "path": path,
-            "mode": mode,
-            "type": kind,
-            "sha": sha,
-            "size": size,
-        }
-    raise GitHubAcquisitionError(f"unsupported Git object type or mode: {path}")
-
-
 def _read_blob(
     prefix: str,
     sha: str,
-    expected_size: int,
+    maximum_size: int,
     *,
     budget: _RequestBudget,
     deadline: float,
@@ -644,7 +682,7 @@ def _read_blob(
 ) -> bytes:
     document = _request_before_deadline(
         f"{prefix}/git/blobs/{sha}",
-        max_bytes=max(65_536, expected_size * 2 + 65_536),
+        max_bytes=max(65_536, maximum_size * 2 + 65_536),
         budget=budget,
         deadline=deadline,
         authorization=authorization,
@@ -656,10 +694,10 @@ def _read_blob(
     if (
         isinstance(reported_size, bool)
         or not isinstance(reported_size, int)
-        or reported_size != expected_size
+        or not 0 <= reported_size <= maximum_size
         or document.get("encoding") != "base64"
     ):
-        raise GitHubAcquisitionError("GitHub blob metadata does not match the tree")
+        raise GitHubAcquisitionError("GitHub blob metadata exceeds its limit")
     encoded = document.get("content")
     if not isinstance(encoded, str) or "\r" in encoded:
         raise GitHubAcquisitionError("GitHub blob content is not canonical base64")
@@ -667,8 +705,8 @@ def _read_blob(
         content = base64.b64decode(encoded.replace("\n", ""), validate=True)
     except (ValueError, binascii.Error) as exc:
         raise GitHubAcquisitionError("GitHub blob content is not valid base64") from exc
-    if len(content) != expected_size:
-        raise GitHubAcquisitionError("GitHub blob byte size does not match the tree")
+    if len(content) != reported_size:
+        raise GitHubAcquisitionError("GitHub blob byte size does not match metadata")
     git_object = b"blob " + str(len(content)).encode("ascii") + b"\0" + content
     if hashlib.sha1(git_object).hexdigest() != sha:
         raise GitHubAcquisitionError("GitHub blob bytes fail Git SHA-1 verification")
@@ -727,22 +765,26 @@ def _server_tls_context() -> ssl.SSLContext:
     return context
 
 
-def _validate_pinned_addresses(value: object) -> tuple[_Endpoint, ...]:
+def _validate_pinned_addresses(
+    value: object,
+    *,
+    max_entries: int = _MAX_PINNED_ENDPOINTS,
+) -> tuple[_Endpoint, ...]:
     if (
-        not isinstance(value, (list, tuple))
-        or not value
-        or len(value) > _MAX_PINNED_ENDPOINTS
+        isinstance(max_entries, bool)
+        or not isinstance(max_entries, int)
+        or not 1 <= max_entries <= _MAX_PINNED_ENDPOINTS * 2
     ):
+        raise GitHubAcquisitionError("pinned address entry limit is invalid")
+    if not isinstance(value, (list, tuple)) or not value or len(value) > max_entries:
         raise GitHubAcquisitionError(
-            "pinned addresses must contain between 1 and 16 entries"
+            f"pinned addresses must contain between 1 and {max_entries} entries"
         )
 
     addresses: dict[tuple[int, int], str] = {}
     for item in value:
         if type(item) is not str:
-            raise GitHubAcquisitionError(
-                "pinned address is not canonical IPv4 or IPv6"
-            )
+            raise GitHubAcquisitionError("pinned address is not canonical IPv4 or IPv6")
         try:
             address = ipaddress.ip_address(item)
         except ValueError as exc:
@@ -750,9 +792,7 @@ def _validate_pinned_addresses(value: object) -> tuple[_Endpoint, ...]:
                 "pinned address is not canonical IPv4 or IPv6"
             ) from exc
         if item != address.compressed:
-            raise GitHubAcquisitionError(
-                "pinned address is not canonical IPv4 or IPv6"
-            )
+            raise GitHubAcquisitionError("pinned address is not canonical IPv4 or IPv6")
         if (
             not address.is_global
             or address.is_multicast
@@ -777,17 +817,19 @@ def _validate_pinned_addresses(value: object) -> tuple[_Endpoint, ...]:
     )
 
 
-def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
+def _resolve_public_host_endpoints(host: str) -> tuple[_Endpoint, ...]:
+    if host not in _FIXED_HOSTS:
+        raise GitHubAcquisitionError("GitHub resolver host is unsupported")
     try:
         records = socket.getaddrinfo(
-            API_HOST,
+            host,
             _HTTPS_PORT,
             type=socket.SOCK_STREAM,
             proto=socket.IPPROTO_TCP,
         )
     except socket.gaierror as exc:
         raise GitHubAcquisitionError(
-            f"cannot resolve the fixed GitHub API host: {exc}"
+            f"cannot resolve the fixed GitHub host: {exc}"
         ) from exc
 
     endpoints: list[_Endpoint] = []
@@ -801,7 +843,7 @@ def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
             address = ipaddress.ip_address(socket_address[0].partition("%")[0])
         except ValueError as exc:
             raise GitHubAcquisitionError(
-                "fixed GitHub API host resolved to an invalid address"
+                "fixed GitHub host resolved to an invalid address"
             ) from exc
         if (
             not address.is_global
@@ -810,10 +852,11 @@ def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
             or address.is_unspecified
             or address.is_loopback
             or address.is_link_local
+            or getattr(address, "ipv4_mapped", None) is not None
             or getattr(address, "is_site_local", False)
         ):
             raise GitHubAcquisitionError(
-                "fixed GitHub API host resolved to a non-global or non-unicast address"
+                "fixed GitHub host resolved to a non-global or non-unicast address"
             )
         port = socket_address[1]
         flow = socket_address[2] if family == socket.AF_INET6 else 0
@@ -823,24 +866,30 @@ def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
             continue
         if len(endpoints) >= _MAX_PINNED_ENDPOINTS:
             raise GitHubAcquisitionError(
-                "fixed GitHub API host returned too many addresses"
+                "fixed GitHub host returned too many addresses"
             )
         seen.add(identity)
         endpoints.append((family, socket_type, protocol, socket_address))
     if not endpoints:
-        raise GitHubAcquisitionError(
-            "fixed GitHub API host has no usable public address"
-        )
+        raise GitHubAcquisitionError("fixed GitHub host has no usable public address")
     return tuple(endpoints)
 
 
-def _resolve_public_api_addresses() -> tuple[str, ...]:
+def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
+    return _resolve_public_host_endpoints(API_HOST)
+
+
+def _resolve_public_host_addresses(host: str) -> tuple[str, ...]:
     return tuple(
         endpoint[3][0]
         for endpoint in _validate_pinned_addresses(
-            [endpoint[3][0] for endpoint in _resolve_public_api_endpoints()]
+            [endpoint[3][0] for endpoint in _resolve_public_host_endpoints(host)]
         )
     )
+
+
+def _resolve_public_api_addresses() -> tuple[str, ...]:
+    return _resolve_public_host_addresses(API_HOST)
 
 
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
@@ -848,11 +897,15 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         self,
         endpoints: tuple[_Endpoint, ...],
         *,
+        host: str = API_HOST,
         timeout: float,
         context: ssl.SSLContext,
     ) -> None:
-        super().__init__(API_HOST, timeout=timeout, context=context)
+        if host not in _FIXED_HOSTS:
+            raise GitHubAcquisitionError("pinned HTTPS host is unsupported")
+        super().__init__(host, timeout=timeout, context=context)
         self._endpoints = endpoints
+        self._server_hostname = host
 
     def connect(self) -> None:
         if self._tunnel_host is not None:
@@ -868,7 +921,7 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
                 raw_socket.settimeout(_remaining_connect_seconds(deadline))
                 self.sock = self._context.wrap_socket(
                     raw_socket,
-                    server_hostname=API_HOST,
+                    server_hostname=self._server_hostname,
                 )
                 return
             except OSError as exc:
@@ -885,59 +938,75 @@ def _remaining_connect_seconds(deadline: float) -> float:
     return remaining
 
 
-def _request_json(
+def _request_bytes(
+    host: str,
     path: str,
     *,
+    method: str,
+    headers: dict[str, str],
+    media_types: set[str],
     max_bytes: int,
     timeout_seconds: float,
     budget: _RequestBudget,
+    body: bytes | None = None,
     authorization: _BearerToken | None = None,
     endpoints: _PinnedEndpoints | None = None,
-) -> dict[str, Any]:
-    """GET one bounded GitHub API object without ambient auth or proxies."""
-
-    if not path.startswith("/repos/") or any(character in path for character in "\r\n"):
-        raise GitHubAcquisitionError("invalid GitHub API path")
-    if authorization is not None and not isinstance(authorization, _BearerToken):
+    media_type_error: str = "GitHub response has an unexpected media type",
+) -> bytes:
+    if (
+        host not in _FIXED_HOSTS
+        or method not in {"GET", "POST"}
+        or not path.startswith("/")
+        or any(character in path for character in "\r\n")
+        or not media_types
+        or (endpoints is not None and endpoints.host != host)
+    ):
+        raise GitHubAcquisitionError("invalid fixed GitHub transport request")
+    if authorization is not None and (
+        not isinstance(authorization, _BearerToken) or host != API_HOST
+    ):
         raise GitHubAcquisitionError("invalid internal GitHub authorization")
     budget.start_request()
     context = _server_tls_context()
     connection = (
         http.client.HTTPSConnection(
-            API_HOST,
+            host,
             timeout=timeout_seconds,
             context=context,
         )
         if endpoints is None
         else _PinnedHTTPSConnection(
             endpoints.get(),
+            host=host,
             timeout=timeout_seconds,
             context=context,
         )
     )
     connection.set_debuglevel(0)
     try:
-        headers = {
-            "Accept": "application/vnd.github+json",
+        request_headers = {
             "Accept-Encoding": "identity",
             "Connection": "close",
-            "User-Agent": "aragorn-evaluation-resolver/0",
-            "X-GitHub-Api-Version": API_VERSION,
+            "User-Agent": "aragorn-acquisition-gateway/0",
+            **headers,
         }
         if authorization is not None:
-            headers["Authorization"] = authorization.authorization_header()
-        connection.request("GET", path, headers=headers)
+            request_headers["Authorization"] = authorization.authorization_header()
+        if body is None:
+            connection.request(method, path, headers=request_headers)
+        else:
+            connection.request(method, path, body=body, headers=request_headers)
         response = connection.getresponse()
         if response.status != 200:
             raise GitHubAcquisitionError(
-                f"GitHub API request failed with status {response.status}"
+                f"GitHub transport request failed with status {response.status}"
             )
         if response.getheader("Content-Encoding", "identity").lower() != "identity":
             raise GitHubAcquisitionError("compressed GitHub responses are unsupported")
         content_type = response.getheader("Content-Type", "")
         media_type = content_type.partition(";")[0].strip().lower()
-        if media_type not in {"application/json", "application/vnd.github+json"}:
-            raise GitHubAcquisitionError("GitHub response is not JSON")
+        if media_type not in media_types:
+            raise GitHubAcquisitionError(media_type_error)
         content_length = response.getheader("Content-Length")
         declared_length: int | None = None
         if content_length is not None:
@@ -964,18 +1033,50 @@ def _request_json(
                 "GitHub response length does not match Content-Length"
             )
         budget.add_bytes(len(raw))
+        return raw
     except GitHubAcquisitionError:
         raise
     except (OSError, http.client.HTTPException, ssl.SSLError) as exc:
         if authorization is None:
             raise GitHubAcquisitionError(
-                f"GitHub API request failed: {exc}"
+                f"GitHub transport request failed: {exc}"
             ) from exc
         raise GitHubAcquisitionError(
-            f"GitHub API request failed: {authorization.redact(exc)}"
+            f"GitHub transport request failed: {authorization.redact(exc)}"
         ) from None
     finally:
         connection.close()
+
+
+def _request_json(
+    path: str,
+    *,
+    max_bytes: int,
+    timeout_seconds: float,
+    budget: _RequestBudget,
+    authorization: _BearerToken | None = None,
+    endpoints: _PinnedEndpoints | None = None,
+) -> dict[str, Any]:
+    """GET one bounded GitHub API object without ambient auth or proxies."""
+
+    if not path.startswith("/repos/") or any(character in path for character in "\r\n"):
+        raise GitHubAcquisitionError("invalid GitHub API path")
+    raw = _request_bytes(
+        API_HOST,
+        path,
+        method="GET",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": API_VERSION,
+        },
+        media_types={"application/json", "application/vnd.github+json"},
+        max_bytes=max_bytes,
+        timeout_seconds=timeout_seconds,
+        budget=budget,
+        authorization=authorization,
+        endpoints=endpoints,
+        media_type_error="GitHub response is not JSON",
+    )
     try:
         document = json.loads(
             raw.decode("utf-8"),

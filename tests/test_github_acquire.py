@@ -1,25 +1,24 @@
 from __future__ import annotations
 
 import base64
-from contextlib import redirect_stdout
 import hashlib
-from io import StringIO
 import json
 import os
-from pathlib import Path
+import sys
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
-
-
-import sys
+from contextlib import redirect_stdout
+from dataclasses import dataclass
+from io import StringIO
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
+from aragorn import github_acquire
 from aragorn.cas import CAS
 from aragorn.cli import main
-import aragorn.github_acquire as github_acquire
 from aragorn.github_acquire import (
     API_HOST,
     API_VERSION,
@@ -28,16 +27,19 @@ from aragorn.github_acquire import (
 )
 
 
-COMMIT = "a" * 40
-ROOT_TREE = "b" * 40
-SKILLS_TREE = "c" * 40
-SKILL_TREE = "d" * 40
-SCRIPTS_TREE = "e" * 40
+def git_object_sha(kind: str, content: bytes) -> str:
+    git_object = (
+        kind.encode("ascii")
+        + b" "
+        + str(len(content)).encode("ascii")
+        + b"\0"
+        + content
+    )
+    return hashlib.sha1(git_object, usedforsecurity=False).hexdigest()
 
 
 def git_blob_sha(content: bytes) -> str:
-    git_object = b"blob " + str(len(content)).encode("ascii") + b"\0" + content
-    return hashlib.sha1(git_object).hexdigest()
+    return git_object_sha("blob", content)
 
 
 def blob_document(content: bytes) -> dict[str, object]:
@@ -49,104 +51,129 @@ def blob_document(content: bytes) -> dict[str, object]:
     }
 
 
-def valid_responses(
+def raw_tree_entry(mode: bytes, name: bytes, oid: str) -> bytes:
+    return mode + b" " + name + b"\0" + bytes.fromhex(oid)
+
+
+@dataclass
+class AcquisitionFixture:
+    commit: str
+    root_tree: str
+    skills_tree: str
+    skill_tree: str
+    scripts_tree: str
+    git_objects: dict[tuple[str, str], bytes]
+    api_responses: dict[str, dict[str, object]]
+
+
+def valid_fixture(
     *,
     skill_content: bytes = b"# safe\n",
     script_content: bytes = b"#!/bin/sh\n",
-) -> dict[str, dict[str, object]]:
+    skill_tree_payload: bytes | None = None,
+) -> AcquisitionFixture:
     skill_blob = git_blob_sha(skill_content)
     script_blob = git_blob_sha(script_content)
+    scripts_payload = raw_tree_entry(b"100755", b"run.sh", script_blob)
+    scripts_tree = git_object_sha("tree", scripts_payload)
+    if skill_tree_payload is None:
+        skill_tree_payload = raw_tree_entry(
+            b"100644", b"SKILL.md", skill_blob
+        ) + raw_tree_entry(b"40000", b"scripts", scripts_tree)
+    skill_tree = git_object_sha("tree", skill_tree_payload)
+    skills_payload = raw_tree_entry(b"40000", b"demo", skill_tree)
+    skills_tree = git_object_sha("tree", skills_payload)
+    root_payload = raw_tree_entry(b"40000", b"skills", skills_tree)
+    root_tree = git_object_sha("tree", root_payload)
+    commit_payload = (
+        f"tree {root_tree}\n".encode("ascii")
+        + b"author Fixture <fixture@example.test> 1 +0000\n"
+        + b"committer Fixture <fixture@example.test> 1 +0000\n"
+        + b"\nfixture\n"
+    )
+    commit = git_object_sha("commit", commit_payload)
     prefix = "/repos/example/project"
-    return {
-        f"{prefix}/hash-algorithm": {"hash_algorithm": "sha1"},
-        f"{prefix}/git/commits/{COMMIT}": {
-            "sha": COMMIT,
-            "tree": {"sha": ROOT_TREE},
+    return AcquisitionFixture(
+        commit=commit,
+        root_tree=root_tree,
+        skills_tree=skills_tree,
+        skill_tree=skill_tree,
+        scripts_tree=scripts_tree,
+        git_objects={
+            ("commit", commit): commit_payload,
+            ("tree", root_tree): root_payload,
+            ("tree", skills_tree): skills_payload,
+            ("tree", skill_tree): skill_tree_payload,
+            ("tree", scripts_tree): scripts_payload,
         },
-        f"{prefix}/git/trees/{ROOT_TREE}": {
-            "sha": ROOT_TREE,
-            "truncated": False,
-            "tree": [
-                {
-                    "path": "skills",
-                    "mode": "040000",
-                    "type": "tree",
-                    "sha": SKILLS_TREE,
-                }
-            ],
+        api_responses={
+            f"{prefix}/git/blobs/{skill_blob}": blob_document(skill_content),
+            f"{prefix}/git/blobs/{script_blob}": blob_document(script_content),
         },
-        f"{prefix}/git/trees/{SKILLS_TREE}": {
-            "sha": SKILLS_TREE,
-            "truncated": False,
-            "tree": [
-                {
-                    "path": "demo",
-                    "mode": "040000",
-                    "type": "tree",
-                    "sha": SKILL_TREE,
-                }
-            ],
-        },
-        f"{prefix}/git/trees/{SKILL_TREE}": {
-            "sha": SKILL_TREE,
-            "truncated": False,
-            "tree": [
-                {
-                    "path": "scripts",
-                    "mode": "040000",
-                    "type": "tree",
-                    "sha": SCRIPTS_TREE,
-                },
-                {
-                    "path": "SKILL.md",
-                    "mode": "100644",
-                    "type": "blob",
-                    "sha": skill_blob,
-                    "size": len(skill_content),
-                },
-            ],
-        },
-        f"{prefix}/git/trees/{SCRIPTS_TREE}": {
-            "sha": SCRIPTS_TREE,
-            "truncated": False,
-            "tree": [
-                {
-                    "path": "run.sh",
-                    "mode": "100755",
-                    "type": "blob",
-                    "sha": script_blob,
-                    "size": len(script_content),
-                }
-            ],
-        },
-        f"{prefix}/git/blobs/{skill_blob}": blob_document(skill_content),
-        f"{prefix}/git/blobs/{script_blob}": blob_document(script_content),
-    }
+    )
+
+
+def fixture_fetcher(
+    fixture: AcquisitionFixture,
+    calls: list[tuple[str, str]],
+):
+    def fetch(oid: str, expected_type: str) -> bytes:
+        calls.append((oid, expected_type))
+        payload = fixture.git_objects.get((expected_type, oid))
+        if payload is None:
+            raise github_acquire.GitProtocolError(
+                "requested Git proof object is absent"
+            )
+        if git_object_sha(expected_type, payload) != oid:
+            raise github_acquire.GitProtocolError(
+                "Git proof object identity does not match its bytes"
+            )
+        return payload
+
+    return fetch
+
+
+_DEFAULT_FIXTURE = valid_fixture()
+COMMIT = _DEFAULT_FIXTURE.commit
 
 
 class GitHubAcquisitionTests(unittest.TestCase):
     def acquire(
         self,
-        responses: dict[str, dict[str, object]],
+        fixture: AcquisitionFixture,
         *,
         skill_path: str = "skills/demo",
         **limits: object,
-    ) -> tuple[dict[str, object], CAS, list[str], tempfile.TemporaryDirectory[str]]:
+    ) -> tuple[
+        dict[str, object],
+        CAS,
+        list[str],
+        list[tuple[str, str]],
+        tempfile.TemporaryDirectory[str],
+    ]:
         temporary = tempfile.TemporaryDirectory()
         cas = CAS(Path(temporary.name) / "state")
-        calls: list[str] = []
+        api_calls: list[str] = []
+        git_calls: list[tuple[str, str]] = []
 
         def request(path: str, **_kwargs: object) -> dict[str, object]:
-            calls.append(path)
-            if path not in responses:
+            api_calls.append(path)
+            if path not in fixture.api_responses:
                 raise AssertionError(f"unexpected request: {path}")
-            return responses[path]
+            return fixture.api_responses[path]
 
         try:
-            with patch.object(github_acquire, "_request_json", side_effect=request):
+            with (
+                patch.object(
+                    github_acquire._GitSmartClient,
+                    "fetch_object",
+                    side_effect=fixture_fetcher(fixture, git_calls),
+                ),
+                patch.object(github_acquire, "_request_json", side_effect=request),
+            ):
                 manifest = acquire_github_commit(
                     "https://github.com/Example/Project",
-                    COMMIT,
+                    fixture.commit,
                     skill_path,
                     cas,
                     **limits,
@@ -154,16 +181,20 @@ class GitHubAcquisitionTests(unittest.TestCase):
         except BaseException:
             temporary.cleanup()
             raise
-        return manifest, cas, calls, temporary
+        return manifest, cas, api_calls, git_calls, temporary
 
     def test_exact_bytes_are_sha256_bound_and_manifest_is_deterministic(self) -> None:
         expected = {
             "SKILL.md": b"# safe\n",
             "scripts/run.sh": b"#!/bin/sh\n",
         }
-        first, cas, calls, temporary = self.acquire(valid_responses())
+        first_fixture = valid_fixture()
+        first, cas, api_calls, git_calls, temporary = self.acquire(first_fixture)
         self.addCleanup(temporary.cleanup)
-        second, _cas, second_calls, temporary2 = self.acquire(valid_responses())
+        second_fixture = valid_fixture()
+        second, _cas, second_api_calls, second_git_calls, temporary2 = self.acquire(
+            second_fixture
+        )
         self.addCleanup(temporary2.cleanup)
 
         self.assertEqual(first, second)
@@ -175,11 +206,11 @@ class GitHubAcquisitionTests(unittest.TestCase):
                 "host": "github.com",
                 "owner": "example",
                 "repository": "project",
-                "commit": COMMIT,
+                "commit": first_fixture.commit,
                 "repository_hash_algorithm": "sha1",
-                "commit_tree": ROOT_TREE,
+                "commit_tree": first_fixture.root_tree,
                 "skill_path": "skills/demo",
-                "skill_tree": SKILL_TREE,
+                "skill_tree": first_fixture.skill_tree,
                 "api_version": API_VERSION,
             },
         )
@@ -188,36 +219,57 @@ class GitHubAcquisitionTests(unittest.TestCase):
         )
         self.assertEqual(
             expected,
-            {
-                entry["path"]: cas.read(entry["digest"])
-                for entry in first["files"]
-            },
+            {entry["path"]: cas.read(entry["digest"]) for entry in first["files"]},
         )
         self.assertEqual(
             [entry["executable"] for entry in first["files"]], [False, True]
         )
-        self.assertFalse(any("?recursive" in path for path in calls + second_calls))
+        self.assertEqual(
+            api_calls,
+            [path for path in first_fixture.api_responses],
+        )
+        self.assertEqual(api_calls, second_api_calls)
+        self.assertEqual(git_calls, second_git_calls)
+        self.assertEqual(
+            git_calls,
+            [
+                (first_fixture.commit, "commit"),
+                (first_fixture.root_tree, "tree"),
+                (first_fixture.skills_tree, "tree"),
+                (first_fixture.skill_tree, "tree"),
+                (first_fixture.scripts_tree, "tree"),
+            ],
+        )
+        self.assertFalse(any("?recursive" in path for path in api_calls))
 
     def test_bearer_token_is_redacted_and_never_retained(self) -> None:
         token = "github_pat_private-evaluation-token"
-        responses = valid_responses()
+        fixture = valid_fixture()
         observed_authorization_reprs: list[str] = []
+        git_calls: list[tuple[str, str]] = []
 
         def request(path: str, **kwargs: object) -> dict[str, object]:
             observed_authorization_reprs.append(repr(kwargs["authorization"]))
-            return responses[path]
+            return fixture.api_responses[path]
 
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary) / "state"
             cas = CAS(state)
-            with patch.object(
-                github_acquire,
-                "_request_json",
-                side_effect=request,
+            with (
+                patch.object(
+                    github_acquire._GitSmartClient,
+                    "fetch_object",
+                    side_effect=fixture_fetcher(fixture, git_calls),
+                ),
+                patch.object(
+                    github_acquire,
+                    "_request_json",
+                    side_effect=request,
+                ),
             ):
                 manifest = acquire_github_commit(
                     "https://github.com/example/project",
-                    COMMIT,
+                    fixture.commit,
                     "skills/demo",
                     cas,
                     bearer_token=token,
@@ -251,42 +303,97 @@ class GitHubAcquisitionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             cas = CAS(Path(temporary) / "state")
             for value in invalid:
-                with self.subTest(value=repr(value)):
-                    with patch.object(github_acquire, "_request_json") as request:
-                        with self.assertRaises(GitHubAcquisitionError) as raised:
-                            acquire_github_commit(
-                                "https://github.com/example/project",
-                                COMMIT,
-                                "skills/demo",
-                                cas,
-                                bearer_token=value,
-                            )
-                    request.assert_not_called()
-                    rendered = repr(raised.exception)
-                    if isinstance(value, str) and len(value) > 8:
-                        self.assertNotIn(value, rendered)
-                    if isinstance(value, bytes):
-                        self.assertNotIn(value.decode("ascii"), rendered)
+                with (
+                    self.subTest(value=repr(value)),
+                    patch.object(
+                        github_acquire._GitSmartClient,
+                        "fetch_object",
+                    ) as fetch,
+                    patch.object(github_acquire, "_request_json") as request,
+                    self.assertRaises(GitHubAcquisitionError) as raised,
+                ):
+                    acquire_github_commit(
+                        "https://github.com/example/project",
+                        COMMIT,
+                        "skills/demo",
+                        cas,
+                        bearer_token=value,
+                    )
+                fetch.assert_not_called()
+                request.assert_not_called()
+                rendered = repr(raised.exception)
+                if isinstance(value, str) and len(value) > 8:
+                    self.assertNotIn(value, rendered)
+                if isinstance(value, bytes):
+                    self.assertNotIn(value.decode("ascii"), rendered)
 
-    def test_repository_hash_algorithm_and_commit_are_exact(self) -> None:
-        cases = (
-            (
-                "/repos/example/project/hash-algorithm",
-                {"hash_algorithm": "sha256"},
-                "object format",
+    def test_session_uses_smart_git_for_commit_and_caches_raw_trees(self) -> None:
+        fixture = valid_fixture()
+        git_calls: list[tuple[str, str]] = []
+        with (
+            patch.object(
+                github_acquire._GitSmartClient,
+                "fetch_object",
+                side_effect=fixture_fetcher(fixture, git_calls),
             ),
+            patch.object(github_acquire, "_request_json") as api_request,
+        ):
+            session = github_acquire.GitHubAcquisitionSession(
+                "https://github.com/example/project",
+                fixture.commit,
+            )
+            first = session.read_tree(fixture.root_tree)
+            second = session.read_tree(fixture.root_tree)
+            skill_entries = session.read_tree(fixture.skill_tree)
+            self.assertIs(
+                skill_entries,
+                session.read_tree(fixture.skill_tree),
+            )
+
+        self.assertEqual(session.root_tree_sha, fixture.root_tree)
+        self.assertIs(first, second)
+        self.assertEqual(
+            first,
             (
-                f"/repos/example/project/git/commits/{COMMIT}",
-                {"sha": "f" * 40, "tree": {"sha": ROOT_TREE}},
-                "different commit",
+                {
+                    "path": "skills",
+                    "mode": "040000",
+                    "type": "tree",
+                    "sha": fixture.skills_tree,
+                },
             ),
         )
-        for path, replacement, message in cases:
-            with self.subTest(path=path):
-                responses = valid_responses()
-                responses[path] = replacement
-                with self.assertRaisesRegex(GitHubAcquisitionError, message):
-                    self.acquire(responses)
+        self.assertNotIn("size", skill_entries[0])
+        self.assertEqual(
+            git_calls,
+            [
+                (fixture.commit, "commit"),
+                (fixture.root_tree, "tree"),
+                (fixture.skill_tree, "tree"),
+            ],
+        )
+        api_request.assert_not_called()
+
+    def test_malformed_and_mismatched_raw_git_proofs_fail_closed(self) -> None:
+        malformed_commit = valid_fixture()
+        malformed_commit_payload = b"parent " + b"1" * 40 + b"\n"
+        malformed_commit.commit = git_object_sha("commit", malformed_commit_payload)
+        malformed_commit.git_objects = {
+            ("commit", malformed_commit.commit): malformed_commit_payload
+        }
+        with self.assertRaisesRegex(GitHubAcquisitionError, "root-tree"):
+            self.acquire(malformed_commit)
+
+        malformed_tree = valid_fixture(
+            skill_tree_payload=b"100644 truncated\0" + b"\x11" * 19
+        )
+        with self.assertRaisesRegex(GitHubAcquisitionError, "truncated"):
+            self.acquire(malformed_tree)
+
+        mismatched = valid_fixture()
+        mismatched.git_objects[("tree", mismatched.skill_tree)] = b""
+        with self.assertRaisesRegex(GitHubAcquisitionError, "identity"):
+            self.acquire(mismatched)
 
     def test_unsafe_source_inputs_are_rejected_before_network_or_state(self) -> None:
         invalid_repositories = (
@@ -312,133 +419,106 @@ class GitHubAcquisitionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary) / "state"
             for repository in invalid_repositories:
-                with self.subTest(repository=repository):
-                    with self.assertRaises(GitHubAcquisitionError):
-                        acquire_github_commit(repository, COMMIT, "skills/demo", CAS(state))
+                with (
+                    self.subTest(repository=repository),
+                    self.assertRaises(GitHubAcquisitionError),
+                ):
+                    acquire_github_commit(repository, COMMIT, "skills/demo", CAS(state))
             for commit in invalid_commits:
-                with self.subTest(commit=commit):
-                    with self.assertRaises(GitHubAcquisitionError):
-                        acquire_github_commit(
-                            "https://github.com/example/project",
-                            commit,
-                            "skills/demo",
-                            CAS(state),
-                        )
+                with (
+                    self.subTest(commit=commit),
+                    self.assertRaises(GitHubAcquisitionError),
+                ):
+                    acquire_github_commit(
+                        "https://github.com/example/project",
+                        commit,
+                        "skills/demo",
+                        CAS(state),
+                    )
             for skill_path in invalid_paths:
-                with self.subTest(skill_path=skill_path):
-                    with self.assertRaises(GitHubAcquisitionError):
-                        acquire_github_commit(
-                            "https://github.com/example/project",
-                            COMMIT,
-                            skill_path,
-                            CAS(state),
-                        )
+                with (
+                    self.subTest(skill_path=skill_path),
+                    self.assertRaises(GitHubAcquisitionError),
+                ):
+                    acquire_github_commit(
+                        "https://github.com/example/project",
+                        COMMIT,
+                        skill_path,
+                        CAS(state),
+                    )
 
     def test_links_submodules_special_modes_and_unsafe_names_are_rejected(self) -> None:
+        blob_sha = git_blob_sha(b"x")
         cases = (
             (
-                {
-                    "path": "link",
-                    "mode": "120000",
-                    "type": "blob",
-                    "sha": "f" * 40,
-                    "size": 6,
-                },
+                raw_tree_entry(b"120000", b"link", blob_sha),
                 "symlink",
             ),
             (
-                {
-                    "path": "vendor",
-                    "mode": "160000",
-                    "type": "commit",
-                    "sha": "f" * 40,
-                },
+                raw_tree_entry(b"160000", b"vendor", blob_sha),
                 "submodule",
             ),
             (
-                {
-                    "path": "device",
-                    "mode": "100600",
-                    "type": "blob",
-                    "sha": "f" * 40,
-                    "size": 0,
-                },
+                raw_tree_entry(b"100600", b"device", blob_sha),
                 "unsupported",
             ),
             (
-                {
-                    "path": "../escape",
-                    "mode": "100644",
-                    "type": "blob",
-                    "sha": "f" * 40,
-                    "size": 0,
-                },
+                raw_tree_entry(b"100644", b"../escape", blob_sha),
                 "unsafe path",
             ),
         )
-        tree_path = f"/repos/example/project/git/trees/{SKILL_TREE}"
-        for entry, message in cases:
-            with self.subTest(entry=entry):
-                responses = valid_responses()
-                responses[tree_path] = {
-                    "sha": SKILL_TREE,
-                    "truncated": False,
-                    "tree": [entry],
-                }
+        for payload, message in cases:
+            with self.subTest(payload=payload):
+                fixture = valid_fixture(skill_tree_payload=payload)
                 with self.assertRaisesRegex(GitHubAcquisitionError, message):
-                    self.acquire(responses)
+                    self.acquire(fixture)
 
-    def test_truncated_and_duplicate_trees_are_rejected(self) -> None:
-        tree_path = f"/repos/example/project/git/trees/{SKILL_TREE}"
-        responses = valid_responses()
-        responses[tree_path]["truncated"] = True
+    def test_truncated_and_duplicate_raw_trees_are_rejected(self) -> None:
+        truncated = valid_fixture(
+            skill_tree_payload=b"100644 truncated\0" + b"\x11" * 19
+        )
         with self.assertRaisesRegex(GitHubAcquisitionError, "truncated"):
-            self.acquire(responses)
+            self.acquire(truncated)
 
-        responses = valid_responses()
-        entry = responses[tree_path]["tree"][1]
-        responses[tree_path]["tree"] = [entry, dict(entry)]
+        duplicate = valid_fixture(
+            skill_tree_payload=(
+                raw_tree_entry(b"100644", b"same", "11" * 20)
+                + raw_tree_entry(b"100644", b"same", "22" * 20)
+            )
+        )
         with self.assertRaisesRegex(GitHubAcquisitionError, "duplicate"):
-            self.acquire(responses)
+            self.acquire(duplicate)
 
     def test_portability_collisions_and_unsafe_unicode_names_are_rejected(self) -> None:
-        tree_path = f"/repos/example/project/git/trees/{SKILL_TREE}"
         blob_sha = git_blob_sha(b"x")
-        entry = {
-            "mode": "100644",
-            "type": "blob",
-            "sha": blob_sha,
-            "size": 1,
-        }
-        responses = valid_responses()
-        responses[tree_path] = {
-            "sha": SKILL_TREE,
-            "truncated": False,
-            "tree": [
-                {"path": "README", **entry},
-                {"path": "readme", **entry},
-            ],
-        }
-        with self.assertRaisesRegex(GitHubAcquisitionError, "case folding"):
-            self.acquire(responses)
+        collision = valid_fixture(
+            skill_tree_payload=(
+                raw_tree_entry(b"100644", b"README", blob_sha)
+                + raw_tree_entry(b"100644", b"readme", blob_sha)
+            )
+        )
+        with self.assertRaisesRegex(GitHubAcquisitionError, "case-folding"):
+            self.acquire(collision)
 
-        responses = valid_responses()
-        responses[tree_path] = {
-            "sha": SKILL_TREE,
-            "truncated": False,
-            "tree": [{"path": "e\u0301.txt", **entry}],
-        }
+        decomposed = valid_fixture(
+            skill_tree_payload=raw_tree_entry(
+                b"100644",
+                "e\u0301.txt".encode(),
+                blob_sha,
+            )
+        )
         with self.assertRaisesRegex(GitHubAcquisitionError, "unsafe path"):
-            self.acquire(responses)
+            self.acquire(decomposed)
 
-        responses = valid_responses()
-        responses[tree_path] = {
-            "sha": SKILL_TREE,
-            "truncated": False,
-            "tree": [{"path": "safe\u202etxt", **entry}],
-        }
+        bidi_control = valid_fixture(
+            skill_tree_payload=raw_tree_entry(
+                b"100644",
+                "safe\u202etxt".encode(),
+                blob_sha,
+            )
+        )
         with self.assertRaisesRegex(GitHubAcquisitionError, "unsafe path"):
-            self.acquire(responses)
+            self.acquire(bidi_control)
 
     def test_lfs_pointer_and_blob_identity_mismatches_are_rejected(self) -> None:
         lfs = (
@@ -446,21 +526,34 @@ class GitHubAcquisitionTests(unittest.TestCase):
             b"oid sha256:" + b"0" * 64 + b"\nsize 1\n"
         )
         with self.assertRaisesRegex(GitHubAcquisitionError, "LFS pointer"):
-            self.acquire(valid_responses(skill_content=lfs))
+            self.acquire(valid_fixture(skill_content=lfs))
 
-        responses = valid_responses()
-        blob_path = next(path for path in responses if "/git/blobs/" in path)
-        responses[blob_path]["content"] = base64.b64encode(b"tampered").decode("ascii")
+        fixture = valid_fixture()
+        blob_path = next(
+            path for path in fixture.api_responses if "/git/blobs/" in path
+        )
+        fixture.api_responses[blob_path]["content"] = base64.b64encode(
+            b"tampered"
+        ).decode("ascii")
         with self.assertRaisesRegex(GitHubAcquisitionError, "byte size|SHA-1"):
-            self.acquire(responses)
+            self.acquire(fixture)
+
+        oversized_metadata = valid_fixture()
+        blob_path = next(
+            path for path in oversized_metadata.api_responses if "/git/blobs/" in path
+        )
+        oversized_metadata.api_responses[blob_path]["size"] = 8
+        with self.assertRaisesRegex(GitHubAcquisitionError, "metadata"):
+            self.acquire(oversized_metadata, max_file_size=7)
 
     def test_late_blob_failure_publishes_no_source_blob_to_cas(self) -> None:
         lfs = (
             b"version https://git-lfs.github.com/spec/v1\n"
             b"oid sha256:" + b"0" * 64 + b"\nsize 1\n"
         )
-        responses = valid_responses(script_content=lfs)
+        fixture = valid_fixture(script_content=lfs)
         published: list[bytes] = []
+        git_calls: list[tuple[str, str]] = []
 
         class RecordingCAS:
             def put(self, source: object, *, max_bytes: int) -> str:
@@ -468,18 +561,25 @@ class GitHubAcquisitionTests(unittest.TestCase):
                 published.append(content)
                 return "sha256:" + hashlib.sha256(content).hexdigest()
 
-        with patch.object(
-            github_acquire,
-            "_request_json",
-            side_effect=lambda path, **_kwargs: responses[path],
+        with (
+            patch.object(
+                github_acquire._GitSmartClient,
+                "fetch_object",
+                side_effect=fixture_fetcher(fixture, git_calls),
+            ),
+            patch.object(
+                github_acquire,
+                "_request_json",
+                side_effect=lambda path, **_kwargs: fixture.api_responses[path],
+            ),
+            self.assertRaisesRegex(GitHubAcquisitionError, "LFS pointer"),
         ):
-            with self.assertRaisesRegex(GitHubAcquisitionError, "LFS pointer"):
-                acquire_github_commit(
-                    "https://github.com/example/project",
-                    COMMIT,
-                    "skills/demo",
-                    RecordingCAS(),
-                )
+            acquire_github_commit(
+                "https://github.com/example/project",
+                fixture.commit,
+                "skills/demo",
+                RecordingCAS(),
+            )
 
         self.assertEqual(published, [])
 
@@ -487,62 +587,71 @@ class GitHubAcquisitionTests(unittest.TestCase):
         cases = (
             ({"max_files": 2}, "file count"),
             ({"max_depth": 0}, "depth"),
-            ({"max_file_size": 5}, "file size"),
+            ({"max_file_size": 5}, "metadata"),
             ({"max_total_bytes": 10}, "total byte"),
         )
         for limits, message in cases:
-            with self.subTest(limits=limits):
-                with self.assertRaisesRegex(GitHubAcquisitionError, message):
-                    self.acquire(valid_responses(), **limits)
+            with (
+                self.subTest(limits=limits),
+                self.assertRaisesRegex(GitHubAcquisitionError, message),
+            ):
+                self.acquire(valid_fixture(), **limits)
 
     def test_one_monotonic_deadline_is_shared_by_all_requests(self) -> None:
-        responses = valid_responses()
+        fixture = valid_fixture()
         request_timeouts: list[float] = []
+        git_calls: list[tuple[str, str]] = []
 
         def request(path: str, **kwargs: object) -> dict[str, object]:
             request_timeouts.append(float(kwargs["timeout_seconds"]))
-            return responses[path]
+            return fixture.api_responses[path]
 
         with tempfile.TemporaryDirectory() as temporary:
             cas = CAS(Path(temporary) / "state")
-            with patch.object(
-                github_acquire.time,
-                "monotonic",
-                side_effect=(0.0, 0.0, 0.6, 0.6, 1.1),
+            with (
+                patch.object(
+                    github_acquire.time,
+                    "monotonic",
+                    side_effect=(0.0, 0.6, 1.1),
+                ),
+                patch.object(
+                    github_acquire._GitSmartClient,
+                    "fetch_object",
+                    side_effect=fixture_fetcher(fixture, git_calls),
+                ),
+                patch.object(
+                    github_acquire,
+                    "_request_json",
+                    side_effect=request,
+                ),
+                self.assertRaisesRegex(GitHubAcquisitionError, "deadline exceeded"),
             ):
-                with patch.object(
-                    github_acquire, "_request_json", side_effect=request
-                ):
-                    with self.assertRaisesRegex(
-                        GitHubAcquisitionError, "deadline exceeded"
-                    ):
-                        acquire_github_commit(
-                            "https://github.com/example/project",
-                            COMMIT,
-                            "skills/demo",
-                            cas,
-                            timeout_seconds=1.0,
-                        )
+                acquire_github_commit(
+                    "https://github.com/example/project",
+                    fixture.commit,
+                    "skills/demo",
+                    cas,
+                    timeout_seconds=1.0,
+                )
 
-        self.assertEqual(len(request_timeouts), 2)
-        self.assertAlmostEqual(request_timeouts[0], 1.0)
-        self.assertAlmostEqual(request_timeouts[1], 0.4)
+        self.assertEqual(len(request_timeouts), 1)
+        self.assertAlmostEqual(request_timeouts[0], 0.4)
 
     def test_acquisition_deadline_configuration_is_bounded(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             cas = CAS(Path(temporary) / "state")
             for value in (0, 600.1, float("inf"), float("nan"), True):
-                with self.subTest(value=value):
-                    with self.assertRaisesRegex(
-                        GitHubAcquisitionError, "timeout_seconds"
-                    ):
-                        acquire_github_commit(
-                            "https://github.com/example/project",
-                            COMMIT,
-                            "skills/demo",
-                            cas,
-                            timeout_seconds=value,
-                        )
+                with (
+                    self.subTest(value=value),
+                    self.assertRaisesRegex(GitHubAcquisitionError, "timeout_seconds"),
+                ):
+                    acquire_github_commit(
+                        "https://github.com/example/project",
+                        COMMIT,
+                        "skills/demo",
+                        cas,
+                        timeout_seconds=value,
+                    )
 
     def test_cli_retains_the_github_manifest_in_cas(self) -> None:
         manifest = {
@@ -555,18 +664,20 @@ class GitHubAcquisitionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary) / "state"
             stdout = StringIO()
-            with patch("aragorn.cli.acquire_github_commit", return_value=manifest):
-                with redirect_stdout(stdout):
-                    status = main(
-                        (
-                            "acquire-github",
-                            "https://github.com/example/project",
-                            COMMIT,
-                            "skills/demo",
-                            "--state",
-                            str(state),
-                        )
+            with (
+                patch("aragorn.cli.acquire_github_commit", return_value=manifest),
+                redirect_stdout(stdout),
+            ):
+                status = main(
+                    (
+                        "acquire-github",
+                        "https://github.com/example/project",
+                        COMMIT,
+                        "skills/demo",
+                        "--state",
+                        str(state),
                     )
+                )
             result = json.loads(stdout.getvalue())
             retained = json.loads(CAS(state).read(result["manifest_digest"]))
 
@@ -591,8 +702,8 @@ class GitHubTransportTests(unittest.TestCase):
             "Content-Length": str(len(raw)),
             **(headers or {}),
         }
-        response.getheader.side_effect = (
-            lambda name, default=None: actual_headers.get(name, default)
+        response.getheader.side_effect = lambda name, default=None: actual_headers.get(
+            name, default
         )
         response.read.side_effect = lambda limit: raw[:limit]
         return response
@@ -610,18 +721,20 @@ class GitHubTransportTests(unittest.TestCase):
             "NETRC": "/tmp/credentials",
             "SSLKEYLOGFILE": "/tmp/tls.keys",
         }
-        with patch.dict(os.environ, environment, clear=True):
-            with patch.object(
+        with (
+            patch.dict(os.environ, environment, clear=True),
+            patch.object(
                 github_acquire.http.client,
                 "HTTPSConnection",
                 return_value=connection,
-            ) as constructor:
-                result = github_acquire._request_json(
-                    "/repos/example/project/hash-algorithm",
-                    max_bytes=1024,
-                    timeout_seconds=1.0,
-                    budget=github_acquire._RequestBudget(1, 1024),
-                )
+            ) as constructor,
+        ):
+            result = github_acquire._request_json(
+                "/repos/example/project/hash-algorithm",
+                max_bytes=1024,
+                timeout_seconds=1.0,
+                budget=github_acquire._RequestBudget(1, 1024),
+            )
 
         self.assertEqual(result, {"hash_algorithm": "sha1"})
         self.assertEqual(constructor.call_args.args, (API_HOST,))
@@ -662,16 +775,19 @@ class GitHubTransportTests(unittest.TestCase):
             ("224.0.0.1", 443),
         )
         for unsafe in (private, multicast):
-            with self.subTest(address=unsafe[4][0]), patch.object(
-                github_acquire.socket,
-                "getaddrinfo",
-                return_value=[public, unsafe],
-            ):
-                with self.assertRaisesRegex(
+            with (
+                self.subTest(address=unsafe[4][0]),
+                patch.object(
+                    github_acquire.socket,
+                    "getaddrinfo",
+                    return_value=[public, unsafe],
+                ),
+                self.assertRaisesRegex(
                     GitHubAcquisitionError,
                     "non-global or non-unicast",
-                ):
-                    github_acquire._resolve_public_api_endpoints()
+                ),
+            ):
+                github_acquire._resolve_public_api_endpoints()
 
         endpoints = github_acquire._PinnedEndpoints()
         with patch.object(
@@ -697,38 +813,50 @@ class GitHubTransportTests(unittest.TestCase):
             (*public[:4], (f"8.8.8.{index}", 443))
             for index in range(1, github_acquire._MAX_PINNED_ENDPOINTS + 2)
         ]
-        with patch.object(
-            github_acquire.socket,
-            "getaddrinfo",
-            return_value=too_many,
-        ):
-            with self.assertRaisesRegex(
+        with (
+            patch.object(
+                github_acquire.socket,
+                "getaddrinfo",
+                return_value=too_many,
+            ),
+            self.assertRaisesRegex(
                 GitHubAcquisitionError,
                 "too many addresses",
-            ):
-                github_acquire._resolve_public_api_endpoints()
+            ),
+        ):
+            github_acquire._resolve_public_api_endpoints()
 
     def test_exact_pinned_addresses_are_normalized_without_dns(self) -> None:
-        responses = valid_responses()
+        fixture = valid_fixture()
         observed: list[tuple[github_acquire._Endpoint, ...]] = []
+        git_calls: list[tuple[str, str]] = []
 
         def request(path: str, **kwargs: object) -> dict[str, object]:
             endpoints = kwargs["endpoints"]
             assert isinstance(endpoints, github_acquire._PinnedEndpoints)
             observed.append(endpoints.get())
-            return responses[path]
+            return fixture.api_responses[path]
 
-        with tempfile.TemporaryDirectory() as temporary, patch.object(
-            github_acquire.socket,
-            "getaddrinfo",
-        ) as resolve, patch.object(
-            github_acquire,
-            "_request_json",
-            side_effect=request,
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(
+                github_acquire.socket,
+                "getaddrinfo",
+            ) as resolve,
+            patch.object(
+                github_acquire._GitSmartClient,
+                "fetch_object",
+                side_effect=fixture_fetcher(fixture, git_calls),
+            ),
+            patch.object(
+                github_acquire,
+                "_request_json",
+                side_effect=request,
+            ),
         ):
             acquire_github_commit(
                 "https://github.com/example/project",
-                COMMIT,
+                fixture.commit,
                 "skills/demo",
                 CAS(Path(temporary) / "state"),
                 _pinned_addresses=[
@@ -775,10 +903,13 @@ class GitHubTransportTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             for index, (addresses, message) in enumerate(cases):
-                with self.subTest(addresses=addresses), patch.object(
-                    github_acquire,
-                    "_request_json",
-                ) as request:
+                with (
+                    self.subTest(addresses=addresses),
+                    patch.object(
+                        github_acquire,
+                        "_request_json",
+                    ) as request,
+                ):
                     with self.assertRaisesRegex(GitHubAcquisitionError, message):
                         acquire_github_commit(
                             "https://github.com/example/project",
@@ -803,14 +934,17 @@ class GitHubTransportTests(unittest.TestCase):
         tls_socket = MagicMock()
         context = MagicMock()
         context.wrap_socket.return_value = tls_socket
-        with patch.object(
-            github_acquire.socket,
-            "socket",
-            side_effect=(first_socket, second_socket),
-        ) as constructor, patch.object(
-            github_acquire.time,
-            "monotonic",
-            side_effect=(10.0, 10.0, 10.4, 10.5),
+        with (
+            patch.object(
+                github_acquire.socket,
+                "socket",
+                side_effect=(first_socket, second_socket),
+            ) as constructor,
+            patch.object(
+                github_acquire.time,
+                "monotonic",
+                side_effect=(10.0, 10.0, 10.4, 10.5),
+            ),
         ):
             connection = github_acquire._PinnedHTTPSConnection(
                 (first_endpoint, second_endpoint),
@@ -879,19 +1013,21 @@ class GitHubTransportTests(unittest.TestCase):
         authorization = github_acquire._validate_bearer_token(token)
         connection = MagicMock()
         connection.request.side_effect = OSError(f"transport echoed {token}")
-        with patch.object(
-            github_acquire.http.client,
-            "HTTPSConnection",
-            return_value=connection,
+        with (
+            patch.object(
+                github_acquire.http.client,
+                "HTTPSConnection",
+                return_value=connection,
+            ),
+            self.assertRaises(GitHubAcquisitionError) as raised,
         ):
-            with self.assertRaises(GitHubAcquisitionError) as raised:
-                github_acquire._request_json(
-                    "/repos/example/project/hash-algorithm",
-                    max_bytes=1024,
-                    timeout_seconds=1.0,
-                    budget=github_acquire._RequestBudget(1, 1024),
-                    authorization=authorization,
-                )
+            github_acquire._request_json(
+                "/repos/example/project/hash-algorithm",
+                max_bytes=1024,
+                timeout_seconds=1.0,
+                budget=github_acquire._RequestBudget(1, 1024),
+                authorization=authorization,
+            )
 
         self.assertNotIn(token, str(raised.exception))
         self.assertNotIn(token, repr(raised.exception))
@@ -904,60 +1040,66 @@ class GitHubTransportTests(unittest.TestCase):
         connection.getresponse.return_value = self.response(
             headers={"Content-Length": token}
         )
-        with patch.object(
-            github_acquire.http.client,
-            "HTTPSConnection",
-            return_value=connection,
+        with (
+            patch.object(
+                github_acquire.http.client,
+                "HTTPSConnection",
+                return_value=connection,
+            ),
+            self.assertRaises(GitHubAcquisitionError) as raised,
         ):
-            with self.assertRaises(GitHubAcquisitionError) as raised:
-                github_acquire._request_json(
-                    "/repos/example/project/hash-algorithm",
-                    max_bytes=1024,
-                    timeout_seconds=1.0,
-                    budget=github_acquire._RequestBudget(1, 1024),
-                    authorization=authorization,
-                )
+            github_acquire._request_json(
+                "/repos/example/project/hash-algorithm",
+                max_bytes=1024,
+                timeout_seconds=1.0,
+                budget=github_acquire._RequestBudget(1, 1024),
+                authorization=authorization,
+            )
 
         self.assertNotIn(token, repr(raised.exception))
         self.assertIsNone(raised.exception.__cause__)
 
     def test_transport_rejects_unvalidated_authorization_before_network(self) -> None:
         token = "github_pat_unvalidated-token"
-        with patch.object(
-            github_acquire.http.client,
-            "HTTPSConnection",
-        ) as constructor:
-            with self.assertRaises(GitHubAcquisitionError) as raised:
-                github_acquire._request_json(
-                    "/repos/example/project/hash-algorithm",
-                    max_bytes=1024,
-                    timeout_seconds=1.0,
-                    budget=github_acquire._RequestBudget(1, 1024),
-                    authorization=token,
-                )
+        with (
+            patch.object(
+                github_acquire.http.client,
+                "HTTPSConnection",
+            ) as constructor,
+            self.assertRaises(GitHubAcquisitionError) as raised,
+        ):
+            github_acquire._request_json(
+                "/repos/example/project/hash-algorithm",
+                max_bytes=1024,
+                timeout_seconds=1.0,
+                budget=github_acquire._RequestBudget(1, 1024),
+                authorization=token,
+            )
 
         constructor.assert_not_called()
         self.assertNotIn(token, repr(raised.exception))
 
     def test_transport_rejects_ambient_ca_overrides_before_network(self) -> None:
         for variable in ("SSL_CERT_FILE", "SSL_CERT_DIR"):
-            with self.subTest(variable=variable):
-                with patch.dict(os.environ, {variable: ""}, clear=True):
-                    with patch.object(
-                        github_acquire.http.client,
-                        "HTTPSConnection",
-                    ) as constructor:
-                        with self.assertRaisesRegex(
-                            GitHubAcquisitionError,
-                            f"ambient TLS trust overrides.*{variable}",
-                        ):
-                            github_acquire._request_json(
-                                "/repos/example/project/hash-algorithm",
-                                max_bytes=1024,
-                                timeout_seconds=1.0,
-                                budget=github_acquire._RequestBudget(1, 1024),
-                            )
-                constructor.assert_not_called()
+            with (
+                self.subTest(variable=variable),
+                patch.dict(os.environ, {variable: ""}, clear=True),
+                patch.object(
+                    github_acquire.http.client,
+                    "HTTPSConnection",
+                ) as constructor,
+                self.assertRaisesRegex(
+                    GitHubAcquisitionError,
+                    f"ambient TLS trust overrides.*{variable}",
+                ),
+            ):
+                github_acquire._request_json(
+                    "/repos/example/project/hash-algorithm",
+                    max_bytes=1024,
+                    timeout_seconds=1.0,
+                    budget=github_acquire._RequestBudget(1, 1024),
+                )
+            constructor.assert_not_called()
 
     def test_tls_context_uses_only_compiled_ca_paths(self) -> None:
         paths = SimpleNamespace(
@@ -1026,18 +1168,20 @@ class GitHubTransportTests(unittest.TestCase):
             with self.subTest(message=message):
                 connection = MagicMock()
                 connection.getresponse.return_value = response
-                with patch.object(
-                    github_acquire.http.client,
-                    "HTTPSConnection",
-                    return_value=connection,
+                with (
+                    patch.object(
+                        github_acquire.http.client,
+                        "HTTPSConnection",
+                        return_value=connection,
+                    ),
+                    self.assertRaisesRegex(GitHubAcquisitionError, message),
                 ):
-                    with self.assertRaisesRegex(GitHubAcquisitionError, message):
-                        github_acquire._request_json(
-                            "/repos/example/project/hash-algorithm",
-                            max_bytes=16,
-                            timeout_seconds=1.0,
-                            budget=github_acquire._RequestBudget(1, 16),
-                        )
+                    github_acquire._request_json(
+                        "/repos/example/project/hash-algorithm",
+                        max_bytes=16,
+                        timeout_seconds=1.0,
+                        budget=github_acquire._RequestBudget(1, 16),
+                    )
 
     def test_transport_enforces_shared_request_and_raw_byte_budgets(self) -> None:
         connection = MagicMock()

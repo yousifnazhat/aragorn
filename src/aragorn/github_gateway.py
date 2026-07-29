@@ -32,8 +32,10 @@ from .github_acquire import (
     _COMMIT,
     _OWNER,
     _REPOSITORY,
+    API_HOST,
+    GIT_HOST,
     _parse_skill_path,
-    _resolve_public_api_addresses,
+    _resolve_public_host_addresses,
     _validate_pinned_addresses,
     acquire_github_commit,
 )
@@ -46,9 +48,11 @@ from .oci_runtime import (
 
 REQUEST_SCHEMA = "aragorn/github-gateway-request/v1"
 RESULT_SCHEMA = "aragorn/github-gateway-result/v1"
-ADDRESS_RESULT_SCHEMA = "aragorn/github-gateway-address-result/v1"
+ADDRESS_RESULT_SCHEMA = "aragorn/github-gateway-address-result/v2"
 QUARANTINE_AUTHORITY = "QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY"
-SOURCE_ASSURANCE = "github_api_membership_asserted_blob_identity_reverified"
+SOURCE_ASSURANCE = (
+    "git_smart_http_v2_commit_tree_and_api_blob_identity_reverified"
+)
 _REQUEST_KEYS = {"schema", "owner", "repository", "commit", "skill_path"}
 _RESULT_KEYS = {
     "schema",
@@ -56,7 +60,9 @@ _RESULT_KEYS = {
     "manifest_digest",
     "handoff_manifest_digest",
 }
-_ADDRESS_RESULT_KEYS = {"schema", "addresses"}
+_ADDRESS_RESULT_KEYS = {"schema", "hosts"}
+_GATEWAY_HOSTS = (API_HOST, GIT_HOST)
+_MAX_GATEWAY_ENDPOINTS = 32
 _MAX_WIRE_BYTES = 64 * 1024
 _MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 _MAX_GATEWAY_SECONDS = 180.0
@@ -277,7 +283,8 @@ def run_worker(
     request: object,
     job_root: str | os.PathLike[str],
     *,
-    pinned_addresses: list[str] | tuple[str, ...],
+    pinned_api_addresses: list[str] | tuple[str, ...],
+    pinned_git_addresses: list[str] | tuple[str, ...],
 ) -> dict[str, str]:
     """Acquire one exact public source and export its declared byte closure."""
 
@@ -288,7 +295,8 @@ def run_worker(
     acquisition_options: dict[str, object] = {
         **_FIXED_LIMITS,
         "bearer_token": None,
-        "_pinned_addresses": pinned_addresses,
+        "_pinned_addresses": pinned_api_addresses,
+        "_pinned_git_addresses": pinned_git_addresses,
     }
     manifest = acquire_github_commit(
         _repository_url(frozen),
@@ -402,6 +410,15 @@ def quarantine_through_gateway(
                     stage="after resolver shutdown",
                 )
                 pinned_addresses = _require_address_result(resolver)
+                api_addresses = pinned_addresses[API_HOST]
+                git_addresses = pinned_addresses[GIT_HOST]
+                allowed_addresses = tuple(
+                    endpoint[3][0]
+                    for endpoint in _validate_pinned_addresses(
+                        [*api_addresses, *git_addresses],
+                        max_entries=_MAX_GATEWAY_ENDPOINTS,
+                    )
+                )
                 command = _gateway_command(
                     executable,
                     protected_package,
@@ -412,8 +429,13 @@ def quarantine_through_gateway(
                     os.fspath(job_root),
                     *(
                         item
-                        for address in pinned_addresses
-                        for item in ("--endpoint", address)
+                        for address in api_addresses
+                        for item in ("--api-endpoint", address)
+                    ),
+                    *(
+                        item
+                        for address in git_addresses
+                        for item in ("--git-endpoint", address)
                     ),
                 )
                 process = _run_gateway_process(
@@ -422,7 +444,7 @@ def quarantine_through_gateway(
                     environment=environment,
                     worker_uid=worker_uid,
                     worker_gid=worker_gid,
-                    allowed_addresses=pinned_addresses,
+                    allowed_addresses=allowed_addresses,
                     writable_root=gateway,
                     postflight_stage="after worker shutdown",
                     stdin_bytes=raw_request + b"\n",
@@ -614,24 +636,32 @@ def _decode_result_line(raw: bytes) -> dict[str, str]:
     return document
 
 
-def _decode_address_result_line(raw: bytes) -> tuple[str, ...]:
+def _decode_address_result_line(raw: bytes) -> dict[str, tuple[str, ...]]:
     document = _decode_canonical_line(raw, "gateway address result")
     if (
         set(document) != _ADDRESS_RESULT_KEYS
         or document.get("schema") != ADDRESS_RESULT_SCHEMA
-        or not isinstance(document.get("addresses"), list)
+        or not isinstance(document.get("hosts"), dict)
+        or set(document["hosts"]) != set(_GATEWAY_HOSTS)
     ):
         raise GitHubGatewayError("gateway address result is invalid")
-    addresses = document["addresses"]
-    try:
-        canonical = tuple(
-            endpoint[3][0] for endpoint in _validate_pinned_addresses(addresses)
-        )
-    except ValueError as exc:
-        raise GitHubGatewayError(f"gateway address result is invalid: {exc}") from exc
-    if tuple(addresses) != canonical:
-        raise GitHubGatewayError("gateway address result is not canonical")
-    return canonical
+    result: dict[str, tuple[str, ...]] = {}
+    for host in _GATEWAY_HOSTS:
+        addresses = document["hosts"].get(host)
+        if not isinstance(addresses, list):
+            raise GitHubGatewayError("gateway address result is invalid")
+        try:
+            canonical = tuple(
+                endpoint[3][0] for endpoint in _validate_pinned_addresses(addresses)
+            )
+        except ValueError as exc:
+            raise GitHubGatewayError(
+                f"gateway address result is invalid: {exc}"
+            ) from exc
+        if tuple(addresses) != canonical:
+            raise GitHubGatewayError("gateway address result is not canonical")
+        result[host] = canonical
+    return result
 
 
 def _decode_canonical_line(raw: bytes, label: str) -> dict[str, Any]:
@@ -694,7 +724,9 @@ def _require_success_result(process: _ProcessResult) -> dict[str, str]:
     return _decode_result_line(_require_success_output(process))
 
 
-def _require_address_result(process: _ProcessResult) -> tuple[str, ...]:
+def _require_address_result(
+    process: _ProcessResult,
+) -> dict[str, tuple[str, ...]]:
     return _decode_address_result_line(_require_success_output(process))
 
 
@@ -1018,7 +1050,11 @@ def _systemd_allowed_addresses(value: Sequence[str]) -> tuple[str, ...]:
         return addresses
     try:
         canonical = tuple(
-            endpoint[3][0] for endpoint in _validate_pinned_addresses(addresses)
+            endpoint[3][0]
+            for endpoint in _validate_pinned_addresses(
+                addresses,
+                max_entries=_MAX_GATEWAY_ENDPOINTS,
+            )
         )
     except ValueError as exc:
         raise GitHubGatewayError(f"invalid systemd network boundary: {exc}") from exc
@@ -1708,7 +1744,8 @@ def _parser() -> ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     worker = commands.add_parser("worker")
     worker.add_argument("--job-root", type=Path, required=True)
-    worker.add_argument("--endpoint", action="append", required=True)
+    worker.add_argument("--api-endpoint", action="append", required=True)
+    worker.add_argument("--git-endpoint", action="append", required=True)
     worker.set_defaults(action=_worker_command)
     resolver = commands.add_parser("resolve")
     resolver.set_defaults(action=_resolver_command)
@@ -1718,14 +1755,21 @@ def _parser() -> ArgumentParser:
 def _worker_command(args: argparse.Namespace) -> dict[str, str]:
     _require_worker_process_limit()
     request = _decode_request_line(sys.stdin.buffer.read(_MAX_WIRE_BYTES + 1))
-    return run_worker(request, args.job_root, pinned_addresses=args.endpoint)
+    return run_worker(
+        request,
+        args.job_root,
+        pinned_api_addresses=args.api_endpoint,
+        pinned_git_addresses=args.git_endpoint,
+    )
 
 
 def _resolver_command(_args: argparse.Namespace) -> dict[str, object]:
     _require_worker_process_limit()
     return {
         "schema": ADDRESS_RESULT_SCHEMA,
-        "addresses": list(_resolve_public_api_addresses()),
+        "hosts": {
+            host: list(_resolve_public_host_addresses(host)) for host in _GATEWAY_HOSTS
+        },
     }
 
 

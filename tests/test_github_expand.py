@@ -1,31 +1,30 @@
 from __future__ import annotations
 
 import base64
-from contextlib import redirect_stdout
 import hashlib
-from io import BytesIO, StringIO
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import BytesIO, StringIO
+from itertools import pairwise
+from pathlib import Path
 from unittest.mock import patch
 
-from aragorn.cas import CAS, CASError
+from aragorn import github_acquire, github_expand
 from aragorn.benchmark import _load_phase0_expansion
+from aragorn.cas import CAS, CASError
 from aragorn.cli import main
-import aragorn.github_acquire as github_acquire
-import aragorn.github_expand as github_expand
 from aragorn.github_expand import (
     ASSURANCE,
     PROFILE,
-    GitHubExpansionError,
     TERMINAL_DEPTH_1_ASSURANCE,
     TERMINAL_DEPTH_1_MODE,
     TERMINAL_DEPTH_1_PROFILE,
+    GitHubExpansionError,
     acquire_github_expansion,
     resolve_terminal_source_graph,
 )
-
 
 COMMIT = "a" * 40
 PRIOR_COMMIT = "f" * 40
@@ -33,7 +32,7 @@ ROOT_TREE = "b" * 40
 SKILLS_TREE = "c" * 40
 SKILL_TREE = "d" * 40
 PAYLOADS_TREE = "e" * 40
-PRIOR_ROOT_TREE = "0" * 40
+PRIOR_ROOT_TREE = "2" * 40
 PRIOR_PAYLOADS_TREE = "1" * 40
 
 
@@ -49,6 +48,72 @@ def _blob_document(content: bytes) -> dict[str, object]:
         "encoding": "base64",
         "content": base64.encodebytes(content).decode("ascii"),
     }
+
+
+def _raw_tree(entries: list[dict[str, object]]) -> bytes:
+    def sort_key(entry: dict[str, object]) -> bytes:
+        name = str(entry["path"]).encode("utf-8")
+        return name + (b"/" if entry["mode"] == "040000" else b"\0")
+
+    raw = bytearray()
+    for entry in sorted(entries, key=sort_key):
+        mode = "40000" if entry["mode"] == "040000" else str(entry["mode"])
+        raw.extend(mode.encode("ascii"))
+        raw.extend(b" ")
+        raw.extend(str(entry["path"]).encode("utf-8"))
+        raw.extend(b"\0")
+        raw.extend(bytes.fromhex(str(entry["sha"])))
+    return bytes(raw)
+
+
+def _fake_git_smart_client(
+    responses: dict[str, dict[str, object]],
+    calls: list[str] | None = None,
+) -> type:
+    observed_calls = [] if calls is None else calls
+
+    class FakeGitSmartClient:
+        def __init__(
+            self,
+            owner: str,
+            repository: str,
+            *,
+            budget: object,
+            **_kwargs: object,
+        ) -> None:
+            self._prefix = f"/repos/{owner}/{repository}"
+            self._budget = budget
+            self._discovered = False
+
+        def fetch_object(self, oid: str, expected_type: str) -> bytes:
+            if not self._discovered:
+                self._budget.start_request()
+                self._budget.add_bytes(64)
+                self._discovered = True
+            path = f"{self._prefix}/git/{expected_type}s/{oid}"
+            observed_calls.append(f"git:{expected_type}:{oid}")
+            document = responses.get(path)
+            if document is None:
+                raise AssertionError(f"unexpected raw Git object: {path}")
+            if document["sha"] != oid:
+                raise AssertionError(f"inconsistent raw Git fixture: {path}")
+            if expected_type == "commit":
+                tree = document["tree"]
+                if not isinstance(tree, dict):
+                    raise AssertionError(f"invalid raw Git commit fixture: {path}")
+                raw = f"tree {tree['sha']}\n".encode("ascii")
+            elif expected_type == "tree":
+                entries = document["tree"]
+                if not isinstance(entries, list):
+                    raise AssertionError(f"invalid raw Git tree fixture: {path}")
+                raw = _raw_tree(entries)
+            else:
+                raise AssertionError(f"unexpected raw Git object type: {expected_type}")
+            self._budget.start_request()
+            self._budget.add_bytes(len(raw))
+            return raw
+
+    return FakeGitSmartClient
 
 
 def _retain_reingested_manifest(
@@ -258,7 +323,14 @@ class GitHubExpansionTests(unittest.TestCase):
             return document
 
         try:
-            with patch.object(github_acquire, "_request_json", side_effect=request):
+            with (
+                patch.object(github_acquire, "_request_json", side_effect=request),
+                patch.object(
+                    github_acquire,
+                    "_GitSmartClient",
+                    _fake_git_smart_client(responses, calls),
+                ),
+            ):
                 result = acquire_github_expansion(
                     "https://github.com/Example/Project",
                     COMMIT,
@@ -293,10 +365,17 @@ class GitHubExpansionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary) / "state"
             cas = CAS(state)
-            with patch.object(
-                github_acquire,
-                "_request_json",
-                side_effect=request,
+            with (
+                patch.object(
+                    github_acquire,
+                    "_request_json",
+                    side_effect=request,
+                ),
+                patch.object(
+                    github_acquire,
+                    "_GitSmartClient",
+                    _fake_git_smart_client(responses),
+                ),
             ):
                 result = acquire_github_expansion(
                     "https://github.com/example/project",
@@ -325,12 +404,14 @@ class GitHubExpansionTests(unittest.TestCase):
     ) -> None:
         token = "github_pat_cross-commit-token"
         urls = [
-            "https://raw.githubusercontent.com/example/project/"
-            f"{COMMIT}/payloads/one.txt",
+            (
+                "https://raw.githubusercontent.com/example/project/"
+                f"{COMMIT}/payloads/one.txt"
+            ),
             *[
-            "https://raw.githubusercontent.com/example/project/"
-            f"{PRIOR_COMMIT}/payloads/{name}.txt"
-            for name in ("one", "two")
+                "https://raw.githubusercontent.com/example/project/"
+                f"{PRIOR_COMMIT}/payloads/{name}.txt"
+                for name in ("one", "two")
             ],
         ]
         responses = _cross_commit_responses(
@@ -361,6 +442,11 @@ class GitHubExpansionTests(unittest.TestCase):
             cas = CAS(state)
             with (
                 patch.object(github_acquire, "_request_json", side_effect=request),
+                patch.object(
+                    github_acquire,
+                    "_GitSmartClient",
+                    _fake_git_smart_client(responses, calls),
+                ),
                 patch.object(
                     github_acquire.time,
                     "monotonic",
@@ -408,12 +494,12 @@ class GitHubExpansionTests(unittest.TestCase):
         )
         self.assertEqual(len(verified["objects"]), 3)
         self.assertEqual(
-            calls.count(f"/repos/example/project/git/commits/{PRIOR_COMMIT}"),
+            calls.count(f"git:commit:{PRIOR_COMMIT}"),
             1,
         )
         self.assertEqual(len(budget_ids), 1)
         self.assertTrue(
-            all(previous > current for previous, current in zip(timeouts, timeouts[1:]))
+            all(previous > current for previous, current in pairwise(timeouts))
         )
         self.assertTrue(
             authorization_reprs
@@ -464,7 +550,7 @@ class GitHubExpansionTests(unittest.TestCase):
             [(PRIOR_COMMIT, "payloads/one.txt", "expanded")],
         )
         self.assertIn(
-            f"/repos/example/project/git/commits/{PRIOR_COMMIT}",
+            f"git:commit:{PRIOR_COMMIT}",
             calls,
         )
 
@@ -489,7 +575,7 @@ class GitHubExpansionTests(unittest.TestCase):
                     },
                 )
                 self.assertNotIn(
-                    f"/repos/example/project/git/commits/{PRIOR_COMMIT}",
+                    f"git:commit:{PRIOR_COMMIT}",
                     calls,
                 )
 
@@ -549,7 +635,7 @@ class GitHubExpansionTests(unittest.TestCase):
             0,
         )
         self.assertEqual(
-            calls.count(f"/repos/example/project/git/trees/{PAYLOADS_TREE}"),
+            calls.count(f"git:tree:{PAYLOADS_TREE}"),
             1,
         )
 
@@ -600,9 +686,7 @@ class GitHubExpansionTests(unittest.TestCase):
         self.assertEqual(cas.read(retained_target["digest"]), target_content)
         self.assertNotIn(second_blob_path, terminal_calls)
 
-        default_result, default, _cas, default_calls, temporary = self.expand(
-            responses
-        )
+        default_result, default, _cas, default_calls, temporary = self.expand(responses)
         self.addCleanup(temporary.cleanup)
         self.assertEqual(default_result["closure"]["status"], "complete")
         self.assertEqual(default["profile"], PROFILE)
@@ -628,9 +712,7 @@ class GitHubExpansionTests(unittest.TestCase):
             max_expansion_depth=1,
         )
         self.addCleanup(temporary.cleanup)
-        subject = json.loads(
-            cas.read(result["comparator_subject_manifest_digest"])
-        )
+        subject = json.loads(cas.read(result["comparator_subject_manifest_digest"]))
         manifest, manifest_digest = _retain_reingested_manifest(cas, subject)
 
         graph = resolve_terminal_source_graph(
@@ -674,21 +756,20 @@ class GitHubExpansionTests(unittest.TestCase):
             max_expansion_depth=1,
         )
         self.addCleanup(temporary.cleanup)
-        subject = json.loads(
-            cas.read(result["comparator_subject_manifest_digest"])
-        )
+        subject = json.loads(cas.read(result["comparator_subject_manifest_digest"]))
         tampered = json.loads(json.dumps(subject))
-        tampered["files"][1]["path"] = (
-            "__aragorn_expanded__/payloads/renamed.txt"
+        tampered["files"][1]["path"] = "__aragorn_expanded__/payloads/renamed.txt"
+        tampered["tree_digest"] = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    tampered["files"],
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode("ascii")
+            ).hexdigest()
         )
-        tampered["tree_digest"] = "sha256:" + hashlib.sha256(
-            json.dumps(
-                tampered["files"],
-                ensure_ascii=True,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode("ascii")
-        ).hexdigest()
         manifest, manifest_digest = _retain_reingested_manifest(cas, tampered)
 
         with self.assertRaisesRegex(
@@ -1033,6 +1114,11 @@ class GitHubExpansionTests(unittest.TestCase):
                     "_request_json",
                     side_effect=request,
                 ),
+                patch.object(
+                    github_acquire,
+                    "_GitSmartClient",
+                    _fake_git_smart_client(responses),
+                ),
                 patch.object(github_expand, "MAX_RECORD_BYTES", 128),
                 self.assertRaisesRegex(
                     GitHubExpansionError,
@@ -1366,60 +1452,69 @@ class GitHubExpansionTests(unittest.TestCase):
             ),
         )
         for responses, expected_status, expected_closure in cases:
-            with self.subTest(closure=expected_closure):
-                with tempfile.TemporaryDirectory() as temporary:
-                    state = Path(temporary) / "state"
+            with (
+                self.subTest(closure=expected_closure),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                state = Path(temporary) / "state"
 
-                    def request(path: str, **kwargs: object) -> dict[str, object]:
-                        document = responses.get(path)
-                        if document is None:
-                            raise AssertionError(f"unexpected request: {path}")
-                        budget = kwargs["budget"]
-                        budget.start_request()
-                        raw = json.dumps(
-                            document, sort_keys=True, separators=(",", ":")
-                        ).encode("utf-8")
-                        budget.add_bytes(len(raw))
-                        return document
+                def request(
+                    path: str,
+                    _responses: dict[str, dict[str, object]] = responses,
+                    **kwargs: object,
+                ) -> dict[str, object]:
+                    document = _responses.get(path)
+                    if document is None:
+                        raise AssertionError(f"unexpected request: {path}")
+                    budget = kwargs["budget"]
+                    budget.start_request()
+                    raw = json.dumps(
+                        document, sort_keys=True, separators=(",", ":")
+                    ).encode("utf-8")
+                    budget.add_bytes(len(raw))
+                    return document
 
-                    output = StringIO()
-                    with (
-                        patch.object(
-                            github_acquire,
-                            "_request_json",
-                            side_effect=request,
-                        ),
-                        redirect_stdout(output),
-                    ):
-                        status = main(
-                            (
-                                "expand-github",
-                                "https://github.com/Example/Project",
-                                COMMIT,
-                                "skills/demo",
-                                "--state",
-                                str(state),
-                            )
+                output = StringIO()
+                with (
+                    patch.object(
+                        github_acquire,
+                        "_request_json",
+                        side_effect=request,
+                    ),
+                    patch.object(
+                        github_acquire,
+                        "_GitSmartClient",
+                        _fake_git_smart_client(responses),
+                    ),
+                    redirect_stdout(output),
+                ):
+                    status = main(
+                        (
+                            "expand-github",
+                            "https://github.com/Example/Project",
+                            COMMIT,
+                            "skills/demo",
+                            "--state",
+                            str(state),
                         )
+                    )
 
-                    result = json.loads(output.getvalue())
-                    self.assertEqual(status, expected_status)
-                    self.assertEqual(
-                        result["schema"],
-                        "aragorn/github-expansion-result/v1",
-                    )
-                    self.assertEqual(
-                        result["closure"]["status"],
-                        expected_closure,
-                    )
-                    expansion = json.loads(CAS(state).read(result["expansion_digest"]))
-                    self.assertEqual(expansion["closure"], result["closure"])
-                    if expected_closure == "complete":
-                        self.assertIsNotNone(
-                            result["comparator_subject_manifest_digest"]
-                        )
-                    else:
-                        self.assertIsNone(result["comparator_subject_manifest_digest"])
+                result = json.loads(output.getvalue())
+                self.assertEqual(status, expected_status)
+                self.assertEqual(
+                    result["schema"],
+                    "aragorn/github-expansion-result/v1",
+                )
+                self.assertEqual(
+                    result["closure"]["status"],
+                    expected_closure,
+                )
+                expansion = json.loads(CAS(state).read(result["expansion_digest"]))
+                self.assertEqual(expansion["closure"], result["closure"])
+                if expected_closure == "complete":
+                    self.assertIsNotNone(result["comparator_subject_manifest_digest"])
+                else:
+                    self.assertIsNone(result["comparator_subject_manifest_digest"])
 
 
 if __name__ == "__main__":

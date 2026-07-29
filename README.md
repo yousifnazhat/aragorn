@@ -274,16 +274,17 @@ Acquire and retain a public GitHub skill without running repository code:
 This private evaluation command is deliberately unauthenticated and direct: it
 supports no private repositories, tokens, cookies, proxies, redirects, Git
 configuration, submodules, symlinks, special modes, or Git LFS objects. It pins
-GitHub REST API `2026-03-10`, requires the repository to report SHA-1 object
-format, walks non-recursive trees, verifies each Git blob SHA-1, and retains the
-same bytes by SHA-256 only after the complete bounded tree has been fetched and
-validated. The client rejects ambient `SSL_CERT_FILE` and `SSL_CERT_DIR`
-overrides and loads only the Python/OpenSSL runtime's compiled CA paths. Commit
-and tree identities are assertions from the authenticated GitHub API response;
-Aragorn does not receive or independently hash their raw Git object bytes. One
-monotonic deadline covers the acquisition. The client resolves the fixed API
-host once per session, rejects any non-global result, and connects only to that
-frozen address set while retaining GitHub hostname verification.
+GitHub REST API `2026-03-10` for blobs and uses Smart HTTP protocol v2 for
+commit and tree objects. It requires `object-format=sha1`, filtered shallow
+fetch support, a one-object PACK v2 response of the expected type, a valid pack
+checksum, and an independently reproduced Git object SHA-1. It then walks the
+verified raw trees, re-verifies each REST-returned blob SHA-1, and retains the
+same bytes by SHA-256 only after the complete bounded tree has validated. The
+client rejects ambient `SSL_CERT_FILE` and `SSL_CERT_DIR` overrides and loads
+only the Python/OpenSSL runtime's compiled CA paths. One monotonic deadline
+covers the acquisition. It separately freezes canonical public addresses for
+`github.com` and `api.github.com`, connects only to the matching host's set,
+and retains TLS hostname verification.
 
 Phase 1 now includes an internal one-shot gateway worker and broker supervisor.
 Its canonical request has no credential, proxy, CA, state-path, header, or
@@ -291,9 +292,11 @@ caller-controlled limit fields. The privileged broker launches it under a
 configured non-root UID and group, clears supplementary groups, supplies an
 allowlisted environment, closes inherited descriptors, and enforces bounded
 output plus process-group wall-clock deadlines. A bounded isolated resolver
-under that UID resolves the fixed GitHub API host once; the broker rejects
-non-global or noncanonical results and passes only the exact numeric set to the
-acquisition worker, which performs no DNS resolution. A fixed, root-protected
+under that UID resolves both fixed GitHub hosts once; the broker rejects
+missing, non-global, duplicate, or noncanonical host-specific results
+and passes only those exact numeric sets to the acquisition worker, which
+performs no DNS resolution. The kernel boundary allows their canonical union
+while the application preserves each host-to-address binding. A fixed, root-protected
 per-UID lock serializes cooperating brokers that share the host control root
 and namespaces; bounded pre- and post-run process censuses reject a pre-existing
 or surviving real-UID peer.
@@ -323,16 +326,17 @@ independently re-verifies the exact manifest, Git blob identities, source
 binding, and closure in a fresh broker-owned quarantine. The returned receipt is
 explicitly
 `QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY`, with
-`github_api_membership_asserted_blob_identity_reverified` source assurance:
-commit and tree membership still inherit GitHub's authenticated API assertions,
-so this receipt cannot authorize admission, promotion, or installation.
+`git_smart_http_v2_commit_tree_and_api_blob_identity_reverified` source
+assurance. The raw commit and tree proof is enforced online but is not yet
+retained in the cross-owner handoff, so this receipt cannot authorize admission,
+promotion, or installation.
 
 This is an internal primitive, not a command developers repeatedly run. The
 Linux service boundary covers process and IP-address containment but does not
 seal a dedicated root filesystem or attest the host platform. It is not yet the
 supported production acquisition boundary: protected installation and
-provisioning automation, independently hashed raw Git commit/tree membership,
-control-plane promotion, and install/update wiring remain required. The direct
+provisioning automation, durable raw-Git proof retention, recursive artifact
+closure, control-plane promotion, and install/update wiring remain required. The direct
 `acquire-github` command still runs with the operator's UID and remains
 evaluation-only.
 

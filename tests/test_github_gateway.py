@@ -53,7 +53,8 @@ class GitHubGatewayTests(unittest.TestCase):
             result = run_worker(
                 self.request,
                 job,
-                pinned_addresses=("1.1.1.1",),
+                pinned_api_addresses=("1.1.1.1",),
+                pinned_git_addresses=("8.8.8.8",),
             )
 
         acquire.assert_called_once()
@@ -69,6 +70,7 @@ class GitHubGatewayTests(unittest.TestCase):
                 **github_gateway._FIXED_LIMITS,
                 "bearer_token": None,
                 "_pinned_addresses": ("1.1.1.1",),
+                "_pinned_git_addresses": ("8.8.8.8",),
             },
         )
         self.assertEqual(
@@ -146,7 +148,8 @@ class GitHubGatewayTests(unittest.TestCase):
             result = run_worker(
                 other,
                 job,
-                pinned_addresses=("1.1.1.1",),
+                pinned_api_addresses=("1.1.1.1",),
+                pinned_git_addresses=("8.8.8.8",),
             )
         forged = {
             **result,
@@ -175,7 +178,8 @@ class GitHubGatewayTests(unittest.TestCase):
             result = run_worker(
                 self.request,
                 job,
-                pinned_addresses=("1.1.1.1",),
+                pinned_api_addresses=("1.1.1.1",),
+                pinned_git_addresses=("8.8.8.8",),
             )
 
         quarantine = self.root / "cleanup-quarantine"
@@ -213,7 +217,13 @@ class GitHubGatewayTests(unittest.TestCase):
             canonical_json(
                 {
                     "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
-                    "addresses": ["1.1.1.1", "2606:4700:4700::1111"],
+                    "hosts": {
+                        github_gateway.API_HOST: [
+                            "1.1.1.1",
+                            "2606:4700:4700::1111",
+                        ],
+                        github_gateway.GIT_HOST: ["8.8.8.8"],
+                    },
                 }
             )
             + b"\n",
@@ -270,6 +280,11 @@ class GitHubGatewayTests(unittest.TestCase):
                     _ProcessResult(b"", b"", -9, timed_out=True),
                 ),
             ) as launch,
+            mock.patch.object(
+                github_gateway,
+                "_run_gateway_process",
+                wraps=github_gateway._run_gateway_process,
+            ) as gateway_launch,
             mock.patch.object(
                 github_gateway,
                 "_accept_gateway_output",
@@ -330,11 +345,17 @@ class GitHubGatewayTests(unittest.TestCase):
                 "worker",
                 "--job-root",
                 "/gateway/job-" + "f" * 32,
-                "--endpoint",
+                "--api-endpoint",
                 "1.1.1.1",
-                "--endpoint",
+                "--api-endpoint",
                 "2606:4700:4700::1111",
+                "--git-endpoint",
+                "8.8.8.8",
             ),
+        )
+        self.assertEqual(
+            gateway_launch.call_args_list[1].kwargs["allowed_addresses"],
+            ("1.1.1.1", "8.8.8.8", "2606:4700:4700::1111"),
         )
         self.assertEqual(options["user"], 501)
         self.assertEqual(options["group"], 20)
@@ -369,25 +390,75 @@ class GitHubGatewayTests(unittest.TestCase):
         accept.assert_called_once()
 
     def test_broker_rejects_untrusted_resolver_output(self) -> None:
-        for addresses in (
-            ["127.0.0.1"],
-            ["1.1.1.1", "1.1.1.1"],
-            ["2606:4700:4700::1111", "1.1.1.1"],
-        ):
+        valid_hosts = {
+            github_gateway.API_HOST: ["1.1.1.1"],
+            github_gateway.GIT_HOST: ["8.8.8.8"],
+        }
+        cases = (
+            {
+                github_gateway.API_HOST: ["1.1.1.1"],
+            },
+            {
+                github_gateway.API_HOST: ["1.1.1.1", "1.1.1.1"],
+                github_gateway.GIT_HOST: ["8.8.8.8"],
+            },
+            {
+                github_gateway.API_HOST: [
+                    "2606:4700:4700::1111",
+                    "1.1.1.1",
+                ],
+                github_gateway.GIT_HOST: ["8.8.8.8"],
+            },
+            {
+                github_gateway.API_HOST: ["1.1.1.1"],
+                github_gateway.GIT_HOST: ["2001:0db8::1"],
+            },
+        )
+        for hosts in cases:
             raw = (
                 canonical_json(
                     {
                         "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
-                        "addresses": addresses,
+                        "hosts": hosts,
                     }
                 )
                 + b"\n"
             )
             with (
-                self.subTest(addresses=addresses),
+                self.subTest(hosts=hosts),
                 self.assertRaises(GitHubGatewayError),
             ):
                 github_gateway._decode_address_result_line(raw)
+
+        noncanonical_key_order = (
+            b'{"hosts":{"github.com":["8.8.8.8"],'
+            b'"api.github.com":["1.1.1.1"]},'
+            b'"schema":"aragorn/github-gateway-address-result/v2"}\n'
+        )
+        duplicate = (
+            b'{"hosts":{"api.github.com":["1.1.1.1"],'
+            b'"api.github.com":["8.8.8.8"],"github.com":["8.8.8.8"]},'
+            b'"schema":"aragorn/github-gateway-address-result/v2"}\n'
+        )
+        for raw in (noncanonical_key_order, duplicate):
+            with self.assertRaises(GitHubGatewayError):
+                github_gateway._decode_address_result_line(raw)
+
+        self.assertEqual(
+            github_gateway._decode_address_result_line(
+                canonical_json(
+                    {
+                        "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
+                        "hosts": valid_hosts,
+                    }
+                )
+                + b"\n"
+            ),
+            {
+                github_gateway.API_HOST: ("1.1.1.1",),
+                github_gateway.GIT_HOST: ("8.8.8.8",),
+            },
+        )
 
     def test_isolated_entrypoint_imports_without_cwd_or_pythonpath(self) -> None:
         package_root = Path(github_gateway.__file__).resolve().parents[1]
@@ -412,8 +483,10 @@ class GitHubGatewayTests(unittest.TestCase):
                 "worker",
                 "--job-root",
                 os.fspath(self.root / "unused-job"),
-                "--endpoint",
+                "--api-endpoint",
                 "1.1.1.1",
+                "--git-endpoint",
+                "8.8.8.8",
             )
         )
         self.assertEqual(worker.returncode, 4)
@@ -436,8 +509,10 @@ class GitHubGatewayTests(unittest.TestCase):
                 "worker",
                 "--job-root",
                 os.fspath(self.root / "unused-job"),
-                "--endpoint",
+                "--api-endpoint",
                 "1.1.1.1",
+                "--git-endpoint",
+                "8.8.8.8",
             )
         )
         self.assertEqual(unconfined.returncode, 4)

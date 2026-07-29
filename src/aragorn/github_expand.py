@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-from collections import deque
 import hashlib
-from io import BytesIO
 import json
+from collections import deque
+from io import BytesIO
 from pathlib import PurePosixPath
 from typing import Any
 
 from .artifact_closure import (
     MAX_SCANNED_TEXT_BYTES,
-    ReferenceBudgetExceeded,
     TEXT_CARRIER_SUFFIXES,
-    canonical_local_reference_target,
+    ReferenceBudgetExceeded,
+    _validate_manifest,
     canonical_json,
+    canonical_local_reference_target,
     exact_raw_github_fetch_target,
     load_retained_manifest,
     parse_immutable_github_reference,
     scan_retained_text_references,
-    _validate_manifest,
 )
 from .cas import CAS, CASError
 from .github_acquire import (
@@ -35,13 +35,10 @@ from .oci_worker_protocol import (
     validate_subject_manifest,
 )
 
-
 PROFILE = "phase0-exact-github-blob-expansion/v1"
 ASSURANCE = "evaluation_only_github_api_membership_asserted_blob_identity_reverified"
 TERMINAL_DEPTH_1_MODE = "terminal_depth_1"
-TERMINAL_DEPTH_1_PROFILE = (
-    "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
-)
+TERMINAL_DEPTH_1_PROFILE = "phase0-exact-github-blob-expansion-terminal-depth-1/v1"
 TERMINAL_DEPTH_1_ASSURANCE = (
     "evaluation_only_github_api_membership_asserted_blob_identity_reverified_"
     "depth_1_targets_terminal_not_reference_scanned"
@@ -158,10 +155,7 @@ def acquire_github_expansion(
     )
     if expansion_mode not in (None, TERMINAL_DEPTH_1_MODE):
         raise GitHubExpansionError("unsupported GitHub expansion mode")
-    if (
-        expansion_mode == TERMINAL_DEPTH_1_MODE
-        and max_expansion_depth != 1
-    ):
+    if expansion_mode == TERMINAL_DEPTH_1_MODE and max_expansion_depth != 1:
         raise GitHubExpansionError(
             "terminal-depth-1 expansion requires max_expansion_depth=1"
         )
@@ -280,8 +274,7 @@ def acquire_github_expansion(
             fetch_target = exact_raw_github_fetch_target(edge["literal"])
             if (
                 fetch_target is not None
-                and (fetch_target["commit"], fetch_target["path"])
-                in immutable_targets
+                and (fetch_target["commit"], fetch_target["path"]) in immutable_targets
                 and _same_repository(fetch_target, root_source)
             ):
                 suppressed_dynamic.add(
@@ -1034,12 +1027,8 @@ def resolve_terminal_source_graph(
 
     comparator_digest = expansion.get("comparator_subject_manifest_digest")
     comparator_tree = expansion.get("comparator_subject_tree_digest")
-    if not isinstance(comparator_digest, str) or not isinstance(
-        comparator_tree, str
-    ):
-        raise GitHubExpansionError(
-            "terminal expansion omits its comparator subject"
-        )
+    if not isinstance(comparator_digest, str) or not isinstance(comparator_tree, str):
+        raise GitHubExpansionError("terminal expansion omits its comparator subject")
     try:
         comparator_raw = cas.read(comparator_digest, max_bytes=MAX_RECORD_BYTES)
         comparator = json.loads(comparator_raw)
@@ -1075,17 +1064,13 @@ def resolve_terminal_source_graph(
         root_manifest = load_retained_manifest(cas, root_digest)
         normalized_root, root_files = _validate_manifest(root_manifest, cas)
     except (ValueError, CASError) as exc:
-        raise GitHubExpansionError(
-            f"terminal root manifest is invalid: {exc}"
-        ) from exc
+        raise GitHubExpansionError(f"terminal root manifest is invalid: {exc}") from exc
     if (
         normalized_root["schema"] != "aragorn/github-manifest/v1"
         or _digest_document(normalized_root) != root_digest
         or normalized_root["tree_digest"] != expansion.get("root_tree_digest")
     ):
-        raise GitHubExpansionError(
-            "terminal expansion root manifest binding changed"
-        )
+        raise GitHubExpansionError("terminal expansion root manifest binding changed")
     source = normalized_root["source"]
     expansion_source = expansion.get("source")
     source_fields = (
@@ -1098,8 +1083,7 @@ def resolve_terminal_source_graph(
         "api_version",
     )
     if not isinstance(expansion_source, dict) or any(
-        source.get(field) != expansion_source.get(field)
-        for field in source_fields
+        source.get(field) != expansion_source.get(field) for field in source_fields
     ):
         raise GitHubExpansionError(
             "terminal expansion source does not match its root manifest"
@@ -1193,17 +1177,13 @@ def resolve_terminal_source_graph(
             "retained comparator subject does not match root and terminal objects"
         )
 
-    references_by_key: dict[
-        tuple[str, str, str, int, int, str], dict[str, Any]
-    ] = {}
+    references_by_key: dict[tuple[str, str, str, int, int, str], dict[str, Any]] = {}
     expected_object_references: dict[
         tuple[str, str], set[tuple[str, str, str, int, int, str]]
     ] = {identity: set() for identity in object_reference_keys}
     for reference in references:
         if not isinstance(reference, dict):
-            raise GitHubExpansionError(
-                "terminal expansion reference must be an object"
-            )
+            raise GitHubExpansionError("terminal expansion reference must be an object")
         key = _terminal_reference_key(reference)
         if (
             key in references_by_key
@@ -1366,9 +1346,7 @@ def resolve_terminal_source_graph(
         "schema": "aragorn/source-artifact-graph/v1",
         "profile": TERMINAL_DEPTH_1_PROFILE,
         "assurance": TERMINAL_DEPTH_1_ASSURANCE,
-        "source_assurance": (
-            "github_api_membership_asserted_blob_identity_reverified"
-        ),
+        "source_assurance": ("github_api_membership_asserted_blob_identity_reverified"),
         "root_manifest_digest": root_manifest_digest,
         "tree_digest": normalized_manifest["tree_digest"],
         "nodes": sorted(nodes, key=lambda item: item["path"]),
@@ -1419,9 +1397,7 @@ def _terminal_edge_target(
             source_path=edge["source_path"],
         )
         if target_path is None:
-            raise GitHubExpansionError(
-                "terminal local edge has no canonical target"
-            )
+            raise GitHubExpansionError("terminal local edge has no canonical target")
         return (
             source["commit"],
             _repository_path(source["skill_path"], target_path),
@@ -1446,7 +1422,7 @@ def _stage_root(
     retained_bytes = 0
 
     def walk(tree_sha: str, parts: tuple[str, ...]) -> None:
-        nonlocal entries_seen, retained_bytes
+        nonlocal entries_seen
         for entry in session.read_tree(tree_sha):
             entries_seen += 1
             if entries_seen > max_source_entries:
@@ -1460,17 +1436,9 @@ def _stage_root(
                     )
                 walk(entry["sha"], relative_parts)
                 continue
-            if entry["size"] > max_file_size:
-                raise GitHubAcquisitionError(
-                    f"maximum file size exceeded: {relative_path}"
-                )
-            retained_bytes += entry["size"]
-            if retained_bytes > max_retained_bytes:
-                raise GitHubAcquisitionError("maximum retained byte count exceeded")
             pending_files.append(
                 {
                     "path": relative_path,
-                    "size": entry["size"],
                     "git_blob_sha1": entry["sha"],
                     "executable": entry["mode"] == "100755",
                 }
@@ -1494,16 +1462,18 @@ def _stage_root(
         )
         content = staged.pop("content")
         if (
-            staged["size"] != pending["size"]
-            or staged["git_blob_sha1"] != pending["git_blob_sha1"]
+            staged["git_blob_sha1"] != pending["git_blob_sha1"]
             or staged["executable"] != pending["executable"]
         ):
             raise GitHubAcquisitionError(
                 f"Git tree membership changed during acquisition: {pending['path']}"
             )
+        retained_bytes += staged["size"]
+        if retained_bytes > max_retained_bytes:
+            raise GitHubAcquisitionError("maximum retained byte count exceeded")
         digest = _digest_bytes(content)
         content_by_digest.setdefault(digest, content)
-        files.append({**pending, "digest": digest})
+        files.append({**pending, "size": staged["size"], "digest": digest})
 
     files.sort(key=lambda item: item["path"])
     reserved_prefix = MATERIALIZED_PREFIX.casefold()
@@ -1619,10 +1589,9 @@ def _standalone_raw_github_reference(
     line_end = content.find(b"\n", end)
     if line_end < 0:
         line_end = len(content)
-    return (
-        not content[line_start:start].strip(b" \t")
-        and not content[end:line_end].strip(b" \t\r")
-    )
+    return not content[line_start:start].strip(b" \t") and not content[
+        end:line_end
+    ].strip(b" \t\r")
 
 
 def _comparator_subject(
@@ -1717,21 +1686,39 @@ def _expected_blob_failure(
         return "IMMUTABLE_GITHUB_OBJECT_NOT_A_BLOB"
     if "repository path is not a supported blob" in message:
         return "IMMUTABLE_GITHUB_OBJECT_NOT_A_BLOB"
-    if "symlink rejected" in message:
+    if (
+        "symlink rejected" in message
+        or "Git tree symlink entry is unsupported" in message
+    ):
         return "GIT_SYMLINK_UNSUPPORTED"
-    if "submodule rejected" in message:
+    if (
+        "submodule rejected" in message
+        or "Git tree submodule entry is unsupported" in message
+    ):
         return "GIT_SUBMODULE_UNSUPPORTED"
-    if "unsupported Git object type or mode" in message:
+    if (
+        "unsupported Git object type or mode" in message
+        or "Git tree entry mode is unsupported" in message
+    ):
         return "GIT_OBJECT_MODE_UNSUPPORTED"
-    if "GitHub tree contains an unsafe path component" in message:
+    if (
+        "GitHub tree contains an unsafe path component" in message
+        or "Git tree contains an unsafe path component" in message
+    ):
         return "GIT_TREE_PATH_UNSUPPORTED"
-    if "duplicate or colliding Git tree entry" in message:
+    if (
+        "duplicate or colliding Git tree entry" in message
+        or "Git tree contains duplicate or case-folding-colliding names" in message
+    ):
         return "GIT_TREE_AMBIGUOUS"
     if "GitHub tree response is truncated or ambiguous" in message:
         return "GIT_TREE_TRUNCATED_OR_AMBIGUOUS"
     if "blob size is invalid" in message:
         return "GIT_TREE_BLOB_SIZE_INVALID"
-    if "maximum file size exceeded" in message:
+    if (
+        "maximum file size exceeded" in message
+        or "GitHub blob metadata exceeds its limit" in message
+    ):
         return (
             "RETAINED_BYTE_BUDGET_EXCEEDED"
             if remaining_bytes < max_file_size

@@ -9,13 +9,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import scripts.run_phase0_acquisition as execution
-import aragorn.github_acquire as github_acquire
+from aragorn import github_acquire
 from aragorn.acquire import ingest_local
 from aragorn.benchmark import (
     BenchmarkError,
-    _verify_authenticated_worker_batch_bindings,
     _load_authenticated_worker_dispatch,
     _load_candidate_dispatch,
+    _verify_authenticated_worker_batch_bindings,
     _verify_candidate_evidence,
 )
 from aragorn.cas import CAS
@@ -38,13 +38,13 @@ from scripts.run_phase0_acquisition import (
     _runner_source,
     run,
 )
+from tests.test_github_expand import COMMIT, _fake_git_smart_client, _responses
 from tests.test_label_blind_prepare import (
     LOCK,
     _candidate_policy,
     _portable_policies,
     _v2_suite,
 )
-from tests.test_github_expand import COMMIT, _responses
 
 
 def _acceptances(cas: CAS, dispatch: dict) -> dict[str, dict]:
@@ -337,7 +337,11 @@ class Phase0AcquisitionCompositionTests(unittest.TestCase):
                     first_content=target_content,
                 )
 
-                def request(path: str, **kwargs: object) -> dict[str, object]:
+                def request(
+                    path: str,
+                    responses: dict[str, dict[str, object]] = responses,
+                    **kwargs: object,
+                ) -> dict[str, object]:
                     response = responses[path]
                     budget = kwargs["budget"]
                     budget.start_request()
@@ -348,6 +352,10 @@ class Phase0AcquisitionCompositionTests(unittest.TestCase):
                     github_acquire,
                     "_request_json",
                     side_effect=request,
+                ), patch.object(
+                    github_acquire,
+                    "_GitSmartClient",
+                    _fake_git_smart_client(responses),
                 ):
                     expansion = acquire_github_expansion(
                         "https://github.com/example/project",

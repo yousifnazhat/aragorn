@@ -344,22 +344,20 @@ lookup and at most one redirect to the separately pinned release-asset host.
 The worker retains at most 16 assets and 64 MiB total; the broker rescans the
 retained source and accepts the exact URL/result/blob set only against
 caller-held release pins. Release bytes remain outside the installable source
-manifest. The v5 graph inventories downloaded ZIP, WHL, and PYZ assets under
-bounded entry and expanded-byte limits, then binds a separate analyzer input
-containing the retained source plus extracted members; exact
-GitHub-digest-bound non-archive assets enter that input as raw bytes. Public
-release URL edges
-remain unresolved with
-`GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN`, because analysis does not
-prove that an installer or runtime will consume those exact bytes. The current
-broker therefore fails closed before invoking that input or publishing bytes.
+manifest. V5 inventories downloaded ZIP, WHL, and PYZ assets under bounded entry
+and expanded-byte limits. V6 additionally retains an exact
+GitHub-digest-backed v2 inventory archive as a raw CAS blob at a deterministic
+reserved runtime-candidate path and binds a separate analyzer input containing
+the retained source plus verified extracted members. Source-controlled files
+cannot occupy the reserved release namespace. The public release edge remains
+unresolved with `GITHUB_RELEASE_ASSET_RUNTIME_CONSUMER_UNPROVEN`: retaining
+candidate bytes does not prove that an installer or runtime consumes them.
 The receipt still cannot authorize admission, promotion, or installation.
 The root coordinator now carries the recursive root manifest, expansion proof,
 and exact release-result digests through
 `aragorn/protected-install-broker-request/v3`. A versioned broker independently
-replays graph v3, v4, or v5 and the decision receipt. Complete release-free
-closure may reach the existing protected context; release-bearing v5 closure
-remains incomplete and records an `ERROR` decision without analyzer invocation,
+replays graph v3, v4, or v6 and the decision receipt. Release-bearing v6
+closure remains incomplete and records `ERROR` without analyzer invocation,
 context creation, or protected publication.
 
 This is an internal primitive, not a command developers repeatedly run. The
@@ -378,11 +376,11 @@ sequence reach their exact protected trees. A pinned release-bearing source
 returns `ERROR` with nine unresolved reasons, including an unanalyzed release
 asset, zero analyzer receipts, no publication, and operator-recorded empty
 protected state; the asset is not isolated as the sole cause.
-Automatic independent release-pin acquisition, downloaded-archive runtime
-binding, general archive closure beyond the bounded ZIP/WHL/PYZ analysis input,
-live public out-of-root recursive coverage, systemd provisioning-unit
-retention, control-plane promotion, runtime conformance, and installer
-authority remain incomplete.
+Automatic independent release-pin acquisition, a pinned release-asset runtime
+consumer, general archive closure beyond the bounded ZIP/WHL/PYZ profile, live
+public release-bearing and out-of-root recursive coverage, systemd
+provisioning-unit retention, control-plane promotion, runtime conformance, and
+installer authority remain incomplete.
 The direct `acquire-github` command still runs with the operator's UID and
 remains evaluation-only.
 
@@ -811,8 +809,10 @@ profile admission-conformant or installer-eligible, authorize the publisher, or
 establish general recursive acquisition. The bounded release gateway and v4
 fail-closed graph are implemented; automatic independent release-pin
 acquisition remains incomplete. V5 additionally provides bounded ZIP/WHL/PYZ
-inventory and a separate analyzer input without resolving the public release
-URL. Runtime binding of analyzed release assets, general archive closure, and
-live public out-of-root recursive evidence remain incomplete. Production
+inventory and a separate analyzer input. V6 retains exact
+GitHub-digest-backed inventory archives in a deterministic runtime-candidate
+manifest but leaves each public release edge unresolved until a pinned consumer
+is implemented. General archive closure and live public
+release-bearing/out-of-root recursive evidence remain incomplete. Production
 installation and public release remain blocked by the runtime, coverage, and
 later-phase gates.

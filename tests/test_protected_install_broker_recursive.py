@@ -240,8 +240,8 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
                     return_value=_digest("4"),
                 ) as retain_graph,
                 mock.patch.object(
-                    producer.recursive_graph_v5_module,
-                    "release_assets_require_v5",
+                    producer.recursive_graph_v6_module,
+                    "release_assets_require_v6",
                     return_value=False,
                 ),
                 mock.patch.object(
@@ -452,7 +452,7 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
             (),
         )
 
-    def test_recursive_v5_runtime_binding_gap_fails_before_analyzer(
+    def test_recursive_v6_runtime_consumer_gap_fails_before_analyzer(
         self,
     ) -> None:
         producer = _load_producer()
@@ -473,7 +473,7 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
                 "profile": "recursive-github-markdown/v3",
                 "status": "incomplete",
                 "unresolved": [
-                    "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN"
+                    "GITHUB_RELEASE_ASSET_RUNTIME_CONSUMER_UNPROVEN"
                 ],
             },
         }
@@ -507,13 +507,13 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
                     ),
                 ),
                 mock.patch.object(
-                    producer.recursive_graph_v5_module,
+                    producer.recursive_graph_v6_module,
                     "retain_recursive_github_artifact_graph",
                     return_value=_digest("6"),
-                ) as retain_v5,
+                ) as retain_v6,
                 mock.patch.object(
-                    producer.recursive_graph_v5_module,
-                    "release_assets_require_v5",
+                    producer.recursive_graph_v6_module,
+                    "release_assets_require_v6",
                     return_value=True,
                 ),
                 mock.patch.object(
@@ -557,7 +557,7 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
             "WITH_SEPARATE_ANALYSIS_INPUT",
             result["limitations"],
         )
-        retain_v5.assert_called_once()
+        retain_v6.assert_called_once()
         materialize.assert_not_called()
         analyzer.assert_not_called()
         publish.assert_not_called()

@@ -485,15 +485,17 @@ decisions. Phase 1 now has evidence-only `artifact_graph` contracts for
 self-contained local Markdown, proof-bound recursive GitHub expansion, and v4
 retained release assets. V4 replay requires caller-held release-result digests
 and rederives candidates from retained source bytes. V5 adds bounded
-ZIP/WHL/PYZ inventory and a separate analysis manifest containing extracted
-members, or raw bytes for exact GitHub-digest-bound non-archive assets. Release
-assets remain outside the installable source manifest, and public release URL
-edges remain unresolved with
-`GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN`. The current broker fails closed
-before analyzer invocation or publication while that reason is present; neither
-an analysis manifest nor an analyzer receipt grants installer/runtime
-authority. Replay also requires a protected expected verifier implementation
-identity. Decision authority and publication wiring remain separate.
+ZIP/WHL/PYZ inventory and a separate analysis manifest. V6 additionally retains
+an exact GitHub-digest-backed v2 inventory archive as its raw CAS blob at a
+deterministic reserved runtime-candidate path. Verified extracted members enter
+only the analysis manifest. The v6 edge remains unresolved with
+`GITHUB_RELEASE_ASSET_RUNTIME_CONSUMER_UNPROVEN` because no pinned resolver or
+rewriter proves that the target runtime consumes that candidate path. The
+broker rederives both manifests and fails closed before analyzer invocation or
+publication while closure is incomplete. Neither retained bytes, an analysis
+manifest, nor an analyzer receipt grants installer/runtime authority. Replay
+also requires a protected expected verifier implementation identity. Decision
+authority and publication wiring remain separate.
 
 ### Acquisition manifest
 
@@ -765,12 +767,13 @@ bounded release resolver, recursive gateway/broker replay, and v4 fail-closed
 graph are implemented. The protected request-v3 path now binds recursive
 acquisition identities through graph and decision replay; release-bearing v4
 stops before analysis or publication. Automatic independent release-pin
-acquisition remains blocked. V5 now inventories bounded ZIP/WHL/PYZ assets and
-builds a separate analysis input, but leaves each analyzed public release URL
-unresolved with `GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN`. Runtime binding
-of those exact bytes, general archive closure, live public out-of-root
-recursive evidence, runtime conformance, installer eligibility, and public
-release remain blocked.
+acquisition remains blocked. V6 now vendors only exact
+GitHub-digest-backed inventory archives into a deterministic runtime-candidate
+manifest and builds a separate extracted-member analysis input. V6 still leaves
+the public release edge unresolved until a pinned runtime consumer is
+implemented. Automatic pin acquisition, general archive closure, live public
+release-bearing and out-of-root recursive evidence, runtime conformance,
+installer eligibility, and public release remain blocked.
 
 The
 `benchmark/receipts/phase1-protected-recursive-v3-live-qualification-2026-07-29.json`

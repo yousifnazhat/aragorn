@@ -12,9 +12,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import mock
 
-import aragorn.github_recursive_artifact_graph as recursive_artifact_graph_v3
-import aragorn.github_recursive_artifact_graph_v4 as recursive_artifact_graph_v4
-import aragorn.github_recursive_artifact_graph_v5 as recursive_artifact_graph_v5
+import aragorn.github_recursive_artifact_graph_v6 as recursive_artifact_graph_v6
 from aragorn.cas import CAS
 from aragorn.github_gateway import QUARANTINE_AUTHORITY
 from aragorn.oci_worker_protocol import canonical_json
@@ -424,28 +422,30 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         ):
             _load_release_asset_pins(path, self.uid)
 
-    def test_recursive_verifier_pin_matches_graph_version(self) -> None:
+    def test_recursive_verifier_pin_covers_the_python_source_closure(self) -> None:
         cas = CAS(self.root / "verifier-cas")
-        for release_digests, requires_v5, module in (
-            ([], False, recursive_artifact_graph_v3),
-            ([_digest("1")], False, recursive_artifact_graph_v4),
-            ([_digest("1")], True, recursive_artifact_graph_v5),
+        for release_digests, requires_v6 in (
+            ([], False),
+            ([_digest("1")], False),
+            ([_digest("1")], True),
         ):
             with self.subTest(release_assets=bool(release_digests)):
-                path = Path(module.__file__).resolve(strict=True)
                 with mock.patch.object(
-                    recursive_artifact_graph_v5,
-                    "release_assets_require_v5",
-                    return_value=requires_v5,
-                ):
+                    recursive_artifact_graph_v6,
+                    "release_assets_require_v6",
+                    return_value=requires_v6,
+                ) as select_v6:
                     self.assertEqual(
                         _recursive_artifact_graph_verifier_digest(
                             cas,
                             release_digests,
                         ),
-                        "sha256:"
-                        + hashlib.sha256(path.read_bytes()).hexdigest(),
+                        candidate_implementation_digest(),
                     )
+                if release_digests:
+                    select_v6.assert_called_once_with(cas, release_digests)
+                else:
+                    select_v6.assert_not_called()
 
     def test_release_identity_derives_broker_and_analyzer_pins(self) -> None:
         broker = (

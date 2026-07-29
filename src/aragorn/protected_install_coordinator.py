@@ -19,9 +19,7 @@ from types import ModuleType
 from typing import Any
 
 import aragorn.analyzer_receipt as analyzer_receipt_module
-import aragorn.github_recursive_artifact_graph as recursive_artifact_graph_v3
-import aragorn.github_recursive_artifact_graph_v4 as recursive_artifact_graph_v4
-import aragorn.github_recursive_artifact_graph_v5 as recursive_artifact_graph_v5
+import aragorn.github_recursive_artifact_graph_v6 as recursive_artifact_graph_v6
 
 from .artifact_closure import load_verified_retained_manifest
 from .cas import CAS
@@ -435,8 +433,8 @@ def _derive_release_pins(
             "expected_analyzer_verifier_digest": _module_digest(
                 analyzer_receipt_module
             ),
-            "expected_artifact_graph_verifier_digest": _module_digest(
-                recursive_artifact_graph_v3
+            "expected_artifact_graph_verifier_digest": (
+                analyzer_implementation_digest
             ),
         },
         {
@@ -506,16 +504,12 @@ def _recursive_artifact_graph_verifier_digest(
     cas: CAS,
     release_asset_result_digests: list[str],
 ) -> str:
-    return _module_digest(
-        recursive_artifact_graph_v5
-        if recursive_artifact_graph_v5.release_assets_require_v5(
+    if release_asset_result_digests:
+        recursive_artifact_graph_v6.release_assets_require_v6(
             cas,
             release_asset_result_digests,
         )
-        else recursive_artifact_graph_v4
-        if release_asset_result_digests
-        else recursive_artifact_graph_v3
-    )
+    return candidate_implementation_digest()
 
 
 def _verify_recursive_identity(

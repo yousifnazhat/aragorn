@@ -17,6 +17,7 @@ EXPECTED_CONTRACTS = {
     "admission-artifact-graph-v2.schema.json": "aragorn/admission-artifact-graph/v2",
     "admission-artifact-graph-v4.schema.json": "aragorn/admission-artifact-graph/v4",
     "admission-artifact-graph-v5.schema.json": "aragorn/admission-artifact-graph/v5",
+    "admission-artifact-graph-v6.schema.json": "aragorn/admission-artifact-graph/v6",
     "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
     "admission-runtime-candidate-lock-v1.schema.json": "aragorn/admission-runtime-candidate-lock/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",
@@ -184,6 +185,48 @@ class SchemaTests(unittest.TestCase):
         self.assertIn(
             "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN",
             edge["properties"]["reason_code"]["enum"],
+        )
+
+    def test_v6_vendors_archives_but_requires_a_runtime_consumer(self) -> None:
+        document = json.loads(
+            (
+                SCHEMA_DIRECTORY / "admission-artifact-graph-v6.schema.json"
+            ).read_text()
+        )
+        edge = document["$defs"]["release_asset_edge"]
+
+        self.assertEqual(edge["properties"]["status"], {"const": "unresolved"})
+        self.assertEqual(
+            document["properties"]["closure"]["properties"]["status"],
+            {"const": "incomplete"},
+        )
+        self.assertEqual(
+            document["properties"]["coverage"]["properties"][
+                "unresolved_required"
+            ]["minimum"],
+            1,
+        )
+        self.assertIn(
+            "GITHUB_RELEASE_ASSET_RUNTIME_CONSUMER_UNPROVEN",
+            edge["properties"]["reason_code"]["enum"],
+        )
+        self.assertIn(
+            "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN",
+            edge["properties"]["reason_code"]["enum"],
+        )
+        self.assertTrue(
+            {
+                "runtime_candidate_manifest_digest",
+                "runtime_candidate_tree_digest",
+                "runtime_candidate_artifacts",
+            }.issubset(document["required"])
+        )
+        self.assertEqual(
+            document["$defs"]["release_asset_target"]["properties"][
+                "runtime_path"
+            ]["oneOf"][0]["pattern"],
+            "^__aragorn_release_assets__/[1-9][0-9]*/[1-9][0-9]*/raw/"
+            "[A-Za-z0-9][A-Za-z0-9._-]{0,254}$",
         )
 
     def test_protected_install_broker_request_separates_authority_from_mechanics(

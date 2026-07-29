@@ -92,6 +92,7 @@ def verify_admission_artifact_graph(
             "aragorn/admission-artifact-graph/v3",
             "aragorn/admission-artifact-graph/v4",
             "aragorn/admission-artifact-graph/v5",
+            "aragorn/admission-artifact-graph/v6",
         }:
             if (
                 expected_quarantine_receipt_digest is None
@@ -109,6 +110,22 @@ def verify_admission_artifact_graph(
                 expected_gateway_profile_digest,
                 "expected gateway profile digest",
             )
+            if graph["schema"] == "aragorn/admission-artifact-graph/v6":
+                from .github_recursive_artifact_graph_v6 import (
+                    verify_recursive_github_artifact_graph,
+                )
+
+                return verify_recursive_github_artifact_graph(
+                    cas,
+                    graph_digest,
+                    expected_manifest_digest=manifest_digest,
+                    expected_quarantine_receipt_digest=receipt_digest,
+                    expected_gateway_profile_digest=gateway_profile_digest,
+                    expected_verifier_digest=verifier_digest,
+                    expected_release_asset_result_digests=(
+                        expected_release_asset_result_digests
+                    ),
+                )
             if graph["schema"] == "aragorn/admission-artifact-graph/v5":
                 from .github_recursive_artifact_graph_v5 import (
                     verify_recursive_github_artifact_graph,

@@ -10,6 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
+from aragorn.acquire import ingest_local
 from aragorn.admission_artifact_graph import verify_admission_artifact_graph
 from aragorn.artifact_closure import canonical_json, load_verified_retained_manifest
 from aragorn.benchmark_handoff_v2 import build_handoff_manifest
@@ -31,11 +32,12 @@ from aragorn.github_recursive_artifact_graph_v4 import (
 from aragorn.github_recursive_artifact_graph_v4 import (
     retain_recursive_github_artifact_graph as retain_recursive_github_artifact_graph_v4,
 )
-from aragorn.github_recursive_artifact_graph_v5 import (
+from aragorn.github_recursive_artifact_graph_v6 import (
     _validate_combined_analysis_files,
+    retain_vendored_release_manifest,
 )
-from aragorn.github_recursive_artifact_graph_v5 import (
-    retain_recursive_github_artifact_graph as retain_recursive_github_artifact_graph_v5,
+from aragorn.github_recursive_artifact_graph_v6 import (
+    retain_recursive_github_artifact_graph as retain_recursive_github_artifact_graph_v6,
 )
 from aragorn.github_source_proof import retain_github_source_proof
 from aragorn.policy import Policy, evaluate_policy
@@ -130,6 +132,152 @@ def _zip_bytes(files: dict[str, bytes]) -> bytes:
 
 
 class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
+    def test_runtime_vendoring_requires_digest_backed_inventory_archive(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cas = CAS(root / "state")
+            source = root / "source"
+            source.mkdir()
+            (source / "SKILL.md").write_text("# retained source\n")
+            source_manifest = ingest_local(source, cas)
+            source_raw = canonical_json(source_manifest)
+            source_digest = cas.put(
+                BytesIO(source_raw),
+                max_bytes=len(source_raw),
+            )
+
+            archive = _zip_bytes({"agent/main.py": b"print('exact')\n"})
+            archive_digest = cas.put(
+                BytesIO(archive),
+                max_bytes=len(archive),
+            )
+            inventory_digest = retain_zip_inventory(
+                cas,
+                archive_digest,
+                archive_name="bundle.pyz",
+            )
+            digest_backed_result, _ = _release_result(
+                cas,
+                url=(
+                    "https://github.com/example/skills/releases/"
+                    "download/0.12.0/bundle.pyz"
+                ),
+                name="bundle.pyz",
+                content=archive,
+                asset_id=10,
+                github_digest=True,
+                inventory_digest=inventory_digest,
+            )
+            vendored_digest = retain_vendored_release_manifest(
+                cas,
+                source_digest,
+                (digest_backed_result,),
+            )
+            vendored = load_verified_retained_manifest(cas, vendored_digest)
+            vendored_path = (
+                "__aragorn_release_assets__/361308705/10/raw/bundle.pyz"
+            )
+            self.assertEqual(
+                {entry["path"]: entry for entry in vendored["files"]}[
+                    vendored_path
+                ]["digest"],
+                archive_digest,
+            )
+            self.assertEqual(cas.read(archive_digest), archive)
+
+            reserved_source = root / "reserved-source"
+            reserved_source.mkdir()
+            (reserved_source / "SKILL.md").write_text("# reserved source\n")
+            reserved_path = (
+                reserved_source
+                / "__aragorn_release_assets__"
+                / "untrusted.txt"
+            )
+            reserved_path.parent.mkdir()
+            reserved_path.write_text("untrusted\n")
+            reserved_manifest = ingest_local(reserved_source, cas)
+            reserved_raw = canonical_json(reserved_manifest)
+            reserved_digest = cas.put(
+                BytesIO(reserved_raw),
+                max_bytes=len(reserved_raw),
+            )
+            with self.assertRaisesRegex(
+                GitHubRecursiveArtifactGraphError,
+                "reserved release namespace",
+            ):
+                retain_vendored_release_manifest(
+                    cas,
+                    reserved_digest,
+                    (digest_backed_result,),
+                )
+
+            duplicate_inventory = retain_zip_inventory(
+                cas,
+                archive_digest,
+                archive_name="duplicate.pyz",
+            )
+            duplicate_identity_result, _ = _release_result(
+                cas,
+                url=(
+                    "https://github.com/example/skills/releases/"
+                    "download/0.12.0/duplicate.pyz"
+                ),
+                name="duplicate.pyz",
+                content=archive,
+                asset_id=10,
+                github_digest=True,
+                inventory_digest=duplicate_inventory,
+            )
+            with self.assertRaisesRegex(
+                GitHubRecursiveArtifactGraphError,
+                "repeat a GitHub identity",
+            ):
+                retain_vendored_release_manifest(
+                    cas,
+                    source_digest,
+                    (digest_backed_result, duplicate_identity_result),
+                )
+
+            unsigned_result, _ = _release_result(
+                cas,
+                url=(
+                    "https://github.com/example/skills/releases/"
+                    "download/0.12.0/unsigned.pyz"
+                ),
+                name="unsigned.pyz",
+                content=archive,
+                asset_id=11,
+                github_digest=False,
+                inventory_digest=retain_zip_inventory(
+                    cas,
+                    archive_digest,
+                    archive_name="unsigned.pyz",
+                ),
+            )
+            nonarchive_result, _ = _release_result(
+                cas,
+                url=(
+                    "https://github.com/example/skills/releases/"
+                    "download/0.12.0/checksums.txt"
+                ),
+                name="checksums.txt",
+                content=b"retained checksum\n",
+                asset_id=12,
+                github_digest=True,
+            )
+            for result_digest in (unsigned_result, nonarchive_result):
+                with self.subTest(result_digest=result_digest):
+                    self.assertEqual(
+                        retain_vendored_release_manifest(
+                            cas,
+                            source_digest,
+                            (result_digest,),
+                        ),
+                        source_digest,
+                    )
+
     def test_analysis_manifest_bounds_and_collisions_fail_closed(self) -> None:
         def entry(path: str, size: int = 0) -> dict[str, object]:
             return {
@@ -144,6 +292,7 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
             [entry("__aragorn_release_assets__"), entry(
                 "__aragorn_release_assets__/1/2/raw/asset.bin"
             )],
+            [entry("/".join(["nested"] * 10))],
             [entry(f"file-{index}") for index in range(10_001)],
             [entry(f"file-{index}", 16 * 1024 * 1024) for index in range(9)],
         ):
@@ -557,7 +706,7 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                     expected_release_asset_result_digests=release_result_digests,
                 )
                 self.assertEqual(
-                    retain_recursive_github_artifact_graph_v5(
+                    retain_recursive_github_artifact_graph_v6(
                         cas,
                         release_manifest_digest,
                         root_manifest_digest=root_manifest_digest,
@@ -701,6 +850,11 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 unsigned_result_digest,
                 carrier_v2_result_digest,
             )
+            runtime_manifest_digest = retain_vendored_release_manifest(
+                cas,
+                release_manifest_digest,
+                analysis_result_digests,
+            )
             with (
                 mock.patch(
                     "aragorn.github_quarantine_receipt.sys.platform",
@@ -711,7 +865,7 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                     os.geteuid(),
                 ),
             ):
-                analysis_graph_digest = retain_recursive_github_artifact_graph_v5(
+                analysis_graph_digest = retain_recursive_github_artifact_graph_v6(
                     cas,
                     release_manifest_digest,
                     root_manifest_digest=root_manifest_digest,
@@ -734,11 +888,23 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
 
             self.assertEqual(
                 analysis_graph["schema"],
-                "aragorn/admission-artifact-graph/v5",
+                "aragorn/admission-artifact-graph/v6",
             )
             self.assertEqual(
                 analysis_graph["profile"],
                 "recursive-github-markdown/v3",
+            )
+            self.assertEqual(
+                analysis_graph["closure"]["status"],
+                "incomplete",
+            )
+            self.assertTrue(
+                any(
+                    reason.startswith(
+                        "GITHUB_RELEASE_ASSET_RUNTIME_CONSUMER_UNPROVEN:"
+                    )
+                    for reason in analysis_graph["closure"]["unresolved"]
+                )
             )
             self.assertEqual(
                 analysis_graph["root_manifest_digest"],
@@ -752,6 +918,33 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 analysis_graph["artifacts"],
                 release_graph["artifacts"],
             )
+            self.assertEqual(
+                analysis_graph["runtime_candidate_manifest_digest"],
+                runtime_manifest_digest,
+            )
+            runtime_manifest = load_verified_retained_manifest(
+                cas,
+                runtime_manifest_digest,
+            )
+            self.assertEqual(
+                analysis_graph["runtime_candidate_tree_digest"],
+                runtime_manifest["tree_digest"],
+            )
+            runtime_paths = {
+                artifact["path"]: artifact
+                for artifact in analysis_graph["runtime_candidate_artifacts"]
+            }
+            runtime_path = (
+                "__aragorn_release_assets__/361308705/"
+                "493071346/raw/agent-bundle.bin"
+            )
+            self.assertEqual(
+                runtime_paths[runtime_path]["digest"],
+                zip_digest,
+            )
+            self.assertFalse(
+                any("/members/" in path for path in runtime_paths)
+            )
             analysis_manifest = load_verified_retained_manifest(
                 cas,
                 analysis_graph["analysis_manifest_digest"],
@@ -762,7 +955,7 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
             )
             self.assertNotEqual(
                 analysis_graph["analysis_tree_digest"],
-                analysis_graph["tree_digest"],
+                analysis_graph["runtime_candidate_tree_digest"],
             )
             analysis_paths = {
                 artifact["path"]: artifact for artifact in analysis_manifest["files"]
@@ -807,11 +1000,15 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
             )
             self.assertEqual(
                 analysis_edges[zip_carrier_url]["reason_code"],
-                "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN",
+                "GITHUB_RELEASE_ASSET_RUNTIME_CONSUMER_UNPROVEN",
             )
             self.assertEqual(
                 analysis_edges[zip_carrier_url]["target"]["inventory_digest"],
                 inventory_digest,
+            )
+            self.assertEqual(
+                analysis_edges[zip_carrier_url]["target"]["runtime_path"],
+                runtime_path,
             )
             self.assertEqual(
                 analysis_edges[checksums_url]["status"],
@@ -823,6 +1020,9 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
             )
             self.assertIsNone(
                 analysis_edges[checksums_url]["target"]["inventory_digest"],
+            )
+            self.assertIsNone(
+                analysis_edges[checksums_url]["target"]["runtime_path"],
             )
             self.assertEqual(analysis_edges[archive_url]["status"], "unresolved")
             self.assertEqual(
@@ -866,7 +1066,7 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 ),
             ):
                 unsigned_graph_digest = (
-                    retain_recursive_github_artifact_graph_v5(
+                    retain_recursive_github_artifact_graph_v6(
                         cas,
                         release_manifest_digest,
                         root_manifest_digest=root_manifest_digest,
@@ -917,13 +1117,93 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 "GITHUB_RELEASE_ASSET_DIGEST_UNAVAILABLE",
             )
 
-            tampered_graph = deepcopy(analysis_graph)
-            tampered_graph["analysis_tree_digest"] = "sha256:" + "f" * 64
-            tampered_raw = canonical_json(tampered_graph)
-            tampered_digest = cas.put(
-                BytesIO(tampered_raw),
-                max_bytes=len(tampered_raw),
-            )
+            def vendored_edge(document: dict) -> dict:
+                return next(
+                    edge
+                    for edge in document["edges"]
+                    if edge["literal"] == zip_carrier_url
+                )
+
+            def vendored_artifact(document: dict) -> dict:
+                return next(
+                    artifact
+                    for artifact in document["runtime_candidate_artifacts"]
+                    if artifact["path"] == runtime_path
+                )
+
+            mutations = {
+                "analysis tree": lambda document: document.update(
+                    analysis_tree_digest="sha256:" + "f" * 64
+                ),
+                "runtime path": lambda document: vendored_edge(document)[
+                    "target"
+                ].update(runtime_path="untrusted/path"),
+                "edge status": lambda document: vendored_edge(document).update(
+                    status="resolved"
+                ),
+                "target URL": lambda document: vendored_edge(document)[
+                    "target"
+                ].update(url=checksums_url),
+                "asset digest": lambda document: vendored_edge(document)[
+                    "target"
+                ].update(digest="sha256:" + "a" * 64),
+                "GitHub digest": lambda document: vendored_edge(document)[
+                    "target"
+                ].update(github_digest="sha256:" + "b" * 64),
+                "result digest": lambda document: vendored_edge(document)[
+                    "target"
+                ].update(result_digest="sha256:" + "c" * 64),
+                "inventory digest": lambda document: vendored_edge(document)[
+                    "target"
+                ].update(inventory_digest="sha256:" + "d" * 64),
+                "runtime artifact path": lambda document: vendored_artifact(
+                    document
+                ).update(path="untrusted/path"),
+                "runtime artifact digest": lambda document: vendored_artifact(
+                    document
+                ).update(digest="sha256:" + "e" * 64),
+            }
+            for label, mutate in mutations.items():
+                tampered_graph = deepcopy(analysis_graph)
+                mutate(tampered_graph)
+                tampered_raw = canonical_json(tampered_graph)
+                tampered_digest = cas.put(
+                    BytesIO(tampered_raw),
+                    max_bytes=len(tampered_raw),
+                )
+                with (
+                    self.subTest(label=label),
+                    mock.patch(
+                        "aragorn.github_quarantine_receipt.sys.platform",
+                        "linux",
+                    ),
+                    mock.patch(
+                        "aragorn.github_recursive_artifact_graph_v4."
+                        "_REQUIRED_BROKER_UID",
+                        os.geteuid(),
+                    ),
+                    self.assertRaises(GitHubRecursiveArtifactGraphError),
+                ):
+                    verify_admission_artifact_graph(
+                        cas,
+                        tampered_digest,
+                        expected_manifest_digest=release_manifest_digest,
+                        expected_quarantine_receipt_digest=receipt_digest,
+                        expected_gateway_profile_digest=gateway_profile,
+                        expected_verifier_digest=_VERIFIER_DIGEST,
+                        expected_release_asset_result_digests=(
+                            analysis_result_digests
+                        ),
+                    )
+
+            archive_hex = zip_digest.removeprefix("sha256:")
+            (
+                cas.root
+                / "blobs"
+                / "sha256"
+                / archive_hex[:2]
+                / archive_hex[2:]
+            ).unlink()
             with (
                 mock.patch(
                     "aragorn.github_quarantine_receipt.sys.platform",
@@ -937,7 +1217,7 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
             ):
                 verify_admission_artifact_graph(
                     cas,
-                    tampered_digest,
+                    analysis_graph_digest,
                     expected_manifest_digest=release_manifest_digest,
                     expected_quarantine_receipt_digest=receipt_digest,
                     expected_gateway_profile_digest=gateway_profile,

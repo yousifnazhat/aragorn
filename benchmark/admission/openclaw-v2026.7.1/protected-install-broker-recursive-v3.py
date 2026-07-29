@@ -22,7 +22,7 @@ import aragorn.admission_artifact_graph as artifact_graph_module
 import aragorn.analyzer_receipt as analyzer_receipt_module
 import aragorn.github_recursive_artifact_graph as recursive_graph_v3_module
 import aragorn.github_recursive_artifact_graph_v4 as recursive_graph_v4_module
-import aragorn.github_recursive_artifact_graph_v5 as recursive_graph_v5_module
+import aragorn.github_recursive_artifact_graph_v6 as recursive_graph_v6_module
 from aragorn.acquire import ingest_local
 from aragorn.admission_artifact_graph import (
     retain_admission_artifact_graph,
@@ -1451,8 +1451,8 @@ def _run_github_live(
         )
     else:
         recursive_graph_module = (
-            recursive_graph_v5_module
-            if recursive_graph_v5_module.release_assets_require_v5(
+            recursive_graph_v6_module
+            if recursive_graph_v6_module.release_assets_require_v6(
                 cas,
                 release_asset_result_digests,
             )
@@ -2068,20 +2068,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         )
     cas = CAS(cas_root)
     analyzer_verifier_digest = _module_digest(analyzer_receipt_module)
-    graph_verifier_digest = _module_digest(
-        artifact_graph_module
-        if recursive is None
-        else (
-            recursive_graph_v5_module
-            if recursive_graph_v5_module.release_assets_require_v5(
-                cas,
-                recursive["release_asset_result_digests"],
-            )
-            else recursive_graph_v4_module
-            if recursive["release_asset_result_digests"]
-            else recursive_graph_v3_module
-        )
-    )
+    graph_verifier_digest = candidate_implementation_digest()
     if args.github_live:
         return _run_github_live(
             args,

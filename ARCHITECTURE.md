@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started
+Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 acquisition-lock exit metrics pass on the frozen workload; runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -741,6 +741,18 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 | 3. Runtime Detect and Respond | 10–12 weeks | One real runtime, out-of-process sensor, digest attribution, process/file/network/tool events, block/kill/quarantine/revoke | Known skill digest can be contained before protected impact | At least 99% event attribution; benchmark exfiltration and destructive actions blocked before protected sink; p95 synchronous decision under 500 ms; task overhead under 10% |
 | 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× the frozen reference workload without dropped evidence |
 | 5. OSS 1.0 | Ongoing | Signed releases, SBOM, reproducible builds, parser fuzzing, disclosure process, compatibility policy | The security tool's own supply chain is defensible | Independent review; no unresolved critical/high findings; 72-hour parser fuzz run; clean supported install and upgrade tests |
+
+The checked-in
+`benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json`
+records `PASS` and `acquisition_lock_exit_eligible: true` for its bound
+workload: zero mismatches across two installed trees and four file instances,
+13/13 statically resolvable artifacts captured, and all 18 unresolved required
+artifacts covered by a fail-closed `ERROR` outcome. This is evidence-set
+eligibility under the Phase 1 exit column, not production completion of the
+full deliverable column. The current runtime profile remains `FAIL` and
+installer-ineligible; no live public out-of-root recursive case is retained;
+redirect/release-asset resolution remains under implementation; and public
+release remains blocked.
 
 The qualified Phase 0 validation milestone is complete under the checked-in
 aggregate phase-evidence rule in

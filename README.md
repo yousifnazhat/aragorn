@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; Phase 1 admission-runtime conformance engineering started**. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, general OpenClaw security finding, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; the Phase 1 acquisition-lock exit receipt passes for its frozen workload, while Phase 1 product hardening remains incomplete**. That receipt records `acquisition_lock_exit_eligible: true`; it does not make a runtime admission-conformant, grant installer authority, or authorize release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, general OpenClaw security finding, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
@@ -334,12 +334,13 @@ The receipt still cannot authorize admission, promotion, or installation.
 
 This is an internal primitive, not a command developers repeatedly run. The
 Linux service boundary covers process and IP-address containment but does not
-seal a dedicated root filesystem or attest the host platform. It is not yet the
-supported production acquisition boundary: protected installation and
-provisioning automation, recursive artifact closure, control-plane promotion,
-and install/update wiring remain required. The direct
-`acquire-github` command still runs with the operator's UID and remains
-evaluation-only.
+seal a dedicated root filesystem or attest the host platform. The retained
+Phase 1 v2 receipt proves its frozen acquisition-lock metrics; it does not make
+this a supported production acquisition boundary. Redirect/release-asset
+resolution remains under implementation, and live public out-of-root recursive
+coverage, provisioning, control-plane promotion, and admission-authorized
+install/update wiring remain incomplete. The direct `acquire-github` command
+still runs with the operator's UID and remains evaluation-only.
 
 Recursively retain supported exact same-repository blob references for Phase 0
 comparator evaluation:
@@ -715,7 +716,7 @@ PYTHONPATH=src uv run --python 3.12 \
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete roadmap and [SECURITY.md](./SECURITY.md) for the trusted boundary and vulnerability policy.
 
-## Phase 0 result and next production gate
+## Phase 0 and Phase 1 acquisition-lock results
 
 The qualified Phase 0 validation milestone is complete under the checked-in
 [aggregate decision rule](./benchmark/receipts/phase0-validation-milestone-2026-07-27.json).
@@ -752,6 +753,18 @@ same-UID, VM, hardware, nor platform attestation. The acquisition lock's
 pre-outcome ordering remains operator-asserted without trusted timestamping.
 Independent review remains a Phase 5 release requirement.
 
-The next production gate is Phase 1: supported quarantine, recursive artifact
-closure, a dedicated credential-free fetch gateway, decision receipts, and
-exact-digest installation.
+The checked-in
+[Phase 1 acquisition-lock receipt](./benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json)
+records `PASS` and `acquisition_lock_exit_eligible: true` for its frozen
+workload: zero installed digest mismatches across two install/update trees and
+four file instances; 13/13 statically resolvable artifacts captured (100%,
+above the 95% threshold); and 18/18 unresolved required artifacts covered by
+the fail-closed `ERROR` outcome.
+
+This closes the roadmap's Phase 1 exit metrics only for the bound evidence set.
+It does not make the current runtime profile admission-conformant or
+installer-eligible, authorize the publisher, or establish general recursive
+acquisition. No live public out-of-root recursive case has been retained, and
+redirect/release-asset resolution remains under implementation. Phase 2 may
+begin against this acquisition-lock milestone, but production installation and
+public release remain blocked by the runtime, coverage, and later-phase gates.

@@ -16,6 +16,12 @@ replaced after an exact `skill-install/update` policy denial. That slice did not
 establish aggregate update conformance; cumulative formal `ADM-02/update` is now
 `FAIL` because of the independently retained workshop route.
 
+A separate shared-filesystem slice proves that the root-owned broker atomically
+changed exact skill bytes beneath a read-only OpenClaw bind mount and that the
+same running PID resolved the new immutable path without restart. It is
+composition evidence only, not `ADM-02` route conformance or installer
+authority.
+
 The live-reload verifiers bind one admitted forced replacement to a new watcher
 snapshot consumed by the same chat session and to two forced isolated cron runs
 that built fresh prompt snapshots on opposite sides of that replacement,

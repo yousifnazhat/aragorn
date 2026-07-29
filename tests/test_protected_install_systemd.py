@@ -142,6 +142,7 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
 
     def test_sysusers_provisions_dedicated_analyzer_identity(self) -> None:
         lines = set(_SYSUSERS.read_text(encoding="utf-8").splitlines())
+        self.assertIn("g aragorn-runtime -", lines)
         self.assertIn(
             (
                 'u aragorn-analyze - "Aragorn protected analyzer" '
@@ -165,8 +166,11 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
             "d /etc/aragorn 0700 root root -",
             "d /run/aragorn-protected-install 0700 root root -",
             "d /var/lib/aragorn-quarantine 0700 root root -",
-            "d /var/lib/aragorn-protected 0700 root root -",
-            "d /var/lib/aragorn-protected/skills 0700 root root -",
+            "d /var/lib/aragorn-protected 0750 root aragorn-runtime -",
+            (
+                "d /var/lib/aragorn-protected/skills "
+                "0750 root aragorn-runtime -"
+            ),
             revocations,
         ):
             self.assertIn(required, lines)

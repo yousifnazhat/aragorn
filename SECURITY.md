@@ -188,6 +188,10 @@ loopback listener, which makes missing cgroup IP enforcement fail closed.
 the only host-writable path is a runtime-verified bounded 512 MiB, 25,000-inode
 `nosuid,nodev,noexec` transfer tmpfs. Unexpected transfer-root entries or
 worker-job cleanup failure prevent quarantine publication.
+Protected skill roots are `root:aragorn-runtime` mode `0750`: the broker remains
+the only writer, while a runtime receives only the supplementary group needed
+to traverse an explicitly read-only bind mount. Group membership alone is not
+an admission decision and must never be paired with a writable mount.
 This earns a Linux process/IP containment primitive with durable broker-replayed
 raw Git commit/tree proof, not supported acquisition: the root filesystem is
 not sealed, and the host kernel/systemd/Python trust boundary is not attested.

@@ -316,6 +316,11 @@ The separate update-slice verifier binds the exact policy payload, exit code,
 user-writable managed-root identity, before/after byte equality, and contained
 execution profile. That route-level `PASS` does not promote formal
 `ADM-02/update` or override its later cumulative `FAIL`.
+The shared-filesystem update verifier separately binds one root-owned broker
+transition to the same live read-only OpenClaw mount, unchanged PID/start time,
+changed exact skill digest, and new immutable path. It proves the missing
+broker-to-runtime composition slice only; it does not satisfy an inventoried
+update/reload route or grant installer authority.
 The live-reload verifiers additionally bind one admitted forced replacement to
 a new watcher snapshot consumed by the same chat session and to two forced
 isolated cron runs that built fresh prompt snapshots on opposite sides of that

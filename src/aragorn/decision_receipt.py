@@ -346,12 +346,31 @@ def _derive_decision_v3(
         expected_release_asset_result_digests=(expected_release_asset_result_digests),
     )
     validated_policy, policy = _load_policy(cas, policy_digest)
+    analysis_input: dict[str, str] = {}
+    analysis_fields = {"analysis_manifest_digest", "analysis_tree_digest"}
+    present_analysis_fields = analysis_fields.intersection(graph)
+    if present_analysis_fields:
+        if present_analysis_fields != analysis_fields:
+            raise DecisionReceiptError(
+                "artifact graph analysis input digests must be supplied together"
+            )
+        analysis_input = {
+            "expected_input_manifest_digest": _digest(
+                graph["analysis_manifest_digest"],
+                "artifact graph analysis manifest digest",
+            ),
+            "expected_input_tree_digest": _digest(
+                graph["analysis_tree_digest"],
+                "artifact graph analysis tree digest",
+            ),
+        }
     results, expected_records = _replay_analyzers(
         cas,
         analyzer_records,
         tree_digest=graph["tree_digest"],
         verifier_digest=analyzer_verifier_digest,
         expected_run_receipt_digests=expected_run_receipt_digests,
+        **analysis_input,
     )
     evaluated = evaluate_policy(
         policy,
@@ -399,7 +418,28 @@ def _replay_analyzers(
     tree_digest: str,
     verifier_digest: str,
     expected_run_receipt_digests: list[str] | None = None,
+    expected_input_manifest_digest: str | None = None,
+    expected_input_tree_digest: str | None = None,
 ) -> tuple[list[Any], list[dict[str, Any]]]:
+    if (expected_input_manifest_digest is None) != (
+        expected_input_tree_digest is None
+    ):
+        raise DecisionReceiptError(
+            "analyzer input manifest and tree digests must be supplied together"
+        )
+    input_expectations: dict[str, str] = {}
+    if expected_input_manifest_digest is not None:
+        assert expected_input_tree_digest is not None
+        input_expectations = {
+            "expected_input_manifest_digest": _digest(
+                expected_input_manifest_digest,
+                "expected analyzer input manifest digest",
+            ),
+            "expected_input_tree_digest": _digest(
+                expected_input_tree_digest,
+                "expected analyzer input tree digest",
+            ),
+        }
     if not isinstance(analyzer_records, list) or len(analyzer_records) > _MAX_ANALYZERS:
         raise DecisionReceiptError("decision analyzer list is invalid")
     receipt_digests = []
@@ -426,6 +466,7 @@ def _replay_analyzers(
             run_receipt_digest,
             expected_subject_digest=tree_digest,
             expected_verifier_digest=verifier_digest,
+            **input_expectations,
         )
         results.append(result)
         expected_records.append(

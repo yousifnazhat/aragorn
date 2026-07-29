@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+import aragorn.decision_receipt as decision_receipt_module
 from aragorn.acquire import ingest_local
 from aragorn.admission_artifact_graph import retain_admission_artifact_graph
 from aragorn.admission_decision import (
@@ -41,6 +42,105 @@ def _put(cas: CAS, document: object) -> str:
 
 
 class DecisionV3Tests(unittest.TestCase):
+    def test_analysis_input_pair_reaches_analyzer_replay(self) -> None:
+        digest = "sha256:" + "2" * 64
+        run_digest = "sha256:" + "3" * 64
+        input_manifest_digest = "sha256:" + "4" * 64
+        input_tree_digest = "sha256:" + "5" * 64
+        graph = {
+            "profile": "test-profile/v1",
+            "tree_digest": digest,
+            "artifacts": [],
+            "closure": {"status": "complete"},
+            "analysis_manifest_digest": input_manifest_digest,
+            "analysis_tree_digest": input_tree_digest,
+        }
+        analyzer_result = mock.Mock()
+        analyzer_result.name = "test-scanner"
+        evaluated = mock.Mock(verdict="ALLOW", reason_codes=())
+
+        with (
+            TemporaryDirectory() as temporary,
+            mock.patch.object(
+                decision_receipt_module,
+                "verify_admission_artifact_graph",
+                return_value=graph,
+            ) as verify_graph,
+            mock.patch.object(
+                decision_receipt_module,
+                "_load_policy",
+                return_value=({"id": "test", "version": 1}, object()),
+            ),
+            mock.patch.object(
+                decision_receipt_module,
+                "verify_analyzer_run",
+                return_value=analyzer_result,
+            ) as verify_run,
+            mock.patch.object(
+                decision_receipt_module,
+                "summarize_analyzer_run",
+                return_value={"run_receipt_digest": run_digest},
+            ),
+            mock.patch.object(
+                decision_receipt_module,
+                "evaluate_policy",
+                return_value=evaluated,
+            ),
+            mock.patch.object(
+                decision_receipt_module,
+                "policy_artifact_graph_profiles",
+                return_value={"test-profile/v1"},
+            ),
+        ):
+            cas = CAS(Path(temporary) / "state")
+            arguments = {
+                "manifest_digest": digest,
+                "artifact_graph_digest": digest,
+                "policy_digest": digest,
+                "analyzer_records": [{"run_receipt_digest": run_digest}],
+                "expected_run_receipt_digests": [run_digest],
+                "analyzer_verifier_digest": digest,
+                "artifact_graph_verifier_digest": digest,
+                "expected_quarantine_receipt_digest": None,
+                "expected_gateway_profile_digest": None,
+            }
+            decision_receipt_module._derive_decision_v3(cas, **arguments)
+            verify_run.assert_called_once_with(
+                cas,
+                run_digest,
+                expected_subject_digest=digest,
+                expected_verifier_digest=digest,
+                expected_input_manifest_digest=input_manifest_digest,
+                expected_input_tree_digest=input_tree_digest,
+            )
+
+            verify_graph.return_value = {
+                key: value
+                for key, value in graph.items()
+                if key not in {"analysis_manifest_digest", "analysis_tree_digest"}
+            }
+            verify_run.reset_mock()
+            decision_receipt_module._derive_decision_v3(cas, **arguments)
+            verify_run.assert_called_once_with(
+                cas,
+                run_digest,
+                expected_subject_digest=digest,
+                expected_verifier_digest=digest,
+            )
+
+            for missing in ("analysis_manifest_digest", "analysis_tree_digest"):
+                with self.subTest(missing=missing):
+                    verify_graph.return_value = {
+                        key: value for key, value in graph.items() if key != missing
+                    }
+                    verify_run.reset_mock()
+                    with self.assertRaisesRegex(
+                        DecisionReceiptError,
+                        "analysis input digests must be supplied together",
+                    ):
+                        decision_receipt_module._derive_decision_v3(cas, **arguments)
+                    verify_run.assert_not_called()
+
     def test_release_asset_pins_reach_decision_replay(self) -> None:
         digest = "sha256:" + "2" * 64
         release_digest = "sha256:" + "3" * 64

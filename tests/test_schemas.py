@@ -122,6 +122,7 @@ EXPECTED_CONTRACTS = {
     "observation-v1.schema.json": "aragorn/observation/v1",
     "phase0-standards-gate-v1.schema.json": "aragorn/phase0-standards-gate/v1",
     "policy-v2.schema.json": "aragorn/policy/v2",
+    "protected-install-broker-request-v1.schema.json": "aragorn/protected-install-broker-request/v1",
     "protected-install-context-v1.schema.json": "aragorn/protected-install-context/v1",
     "protected-install-context-v2.schema.json": "aragorn/protected-install-context/v2",
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
@@ -144,6 +145,36 @@ class SchemaTests(unittest.TestCase):
                     "https://json-schema.org/draft/2020-12/schema",
                 )
                 self.assertEqual(document["properties"]["schema"]["const"], identifier)
+
+    def test_protected_install_broker_request_separates_authority_from_mechanics(
+        self,
+    ) -> None:
+        document = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "protected-install-broker-request-v1.schema.json"
+            ).read_text()
+        )
+        properties = document["properties"]
+        self.assertFalse(document["additionalProperties"])
+        self.assertEqual(set(document["required"]), set(properties))
+        self.assertEqual(
+            properties["source_request"]["$ref"],
+            "github-gateway-request-v1.schema.json",
+        )
+        self.assertTrue(
+            {
+                "path",
+                "uid",
+                "now_unix",
+                "command",
+                "environment",
+                "cas_root",
+                "protected_root",
+                "revocation_file",
+                "expected_broker_uid",
+            }.isdisjoint(properties)
+        )
 
     def test_v6_corpus_and_freeze_schema_pin_external_reference(self) -> None:
         root = SCHEMA_DIRECTORY.parent

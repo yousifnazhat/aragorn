@@ -1,0 +1,49 @@
+{
+  "$id": "https://aragorn.dev/schema/protected-install-broker-request-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn protected install broker request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "expires_at_unix",
+    "target_runtime_digest",
+    "runtime_conformance_digest",
+    "manifest_digest",
+    "quarantine_receipt_digest",
+    "gateway_profile_digest",
+    "context_id",
+    "source_request",
+    "expected_producer_implementation_digest",
+    "expected_analyzer_implementation_digest",
+    "expected_analyzer_executable_digest",
+    "expected_analyzer_configuration_digest",
+    "expected_policy_digest",
+    "expected_analyzer_verifier_digest",
+    "expected_artifact_graph_verifier_digest"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/protected-install-broker-request/v1"},
+    "expires_at_unix": {"type": "integer", "minimum": 0},
+    "target_runtime_digest": {"$ref": "#/$defs/digest"},
+    "runtime_conformance_digest": {"$ref": "#/$defs/digest"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "quarantine_receipt_digest": {"$ref": "#/$defs/digest"},
+    "gateway_profile_digest": {"$ref": "#/$defs/digest"},
+    "context_id": {"$ref": "#/$defs/digest"},
+    "source_request": {"$ref": "github-gateway-request-v1.schema.json"},
+    "expected_producer_implementation_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_implementation_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_executable_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_configuration_digest": {"$ref": "#/$defs/digest"},
+    "expected_policy_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_verifier_digest": {"$ref": "#/$defs/digest"},
+    "expected_artifact_graph_verifier_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

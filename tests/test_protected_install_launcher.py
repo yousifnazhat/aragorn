@@ -91,8 +91,21 @@ def _load_launcher():
     return module
 
 
+def _raw_digest(raw: bytes) -> str:
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
 def _digest(path: Path) -> str:
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    return _raw_digest(path.read_bytes())
+
+
+def _commit_bytes(commit: str, path: str) -> bytes:
+    return subprocess.run(
+        ["git", "show", f"{commit}:{path}"],
+        check=True,
+        cwd=_ROOT,
+        stdout=subprocess.PIPE,
+    ).stdout
 
 
 def _commit_package_digest(
@@ -120,12 +133,7 @@ def _commit_package_digest(
     for path in paths:
         raw = replacements.get(path)
         if raw is None:
-            raw = subprocess.run(
-                ["git", "show", f"{commit}:{path}"],
-                check=True,
-                cwd=_ROOT,
-                stdout=subprocess.PIPE,
-            ).stdout
+            raw = _commit_bytes(commit, path)
         path_bytes = path.encode()
         mode = 0o444 if path == _PACKAGE_INCLUDES[0] else 0o644
         result.update(len(path_bytes).to_bytes(8, "big"))
@@ -454,20 +462,35 @@ class ProtectedInstallLauncherTests(unittest.TestCase):
         )
         self.assertFalse(retention["phase1_exit_eligible"])
         implementation = retention["implementation"]
+        commit = implementation["commit"]
         self.assertEqual(
-            implementation["commit"],
+            commit,
             "8ce3582b46df9343ce7bc7904cdf50c20e877a38",
         )
         package_digest, package_paths = _commit_package_digest(
-            implementation["commit"]
+            commit
+        )
+        launcher_raw = _commit_bytes(
+            commit,
+            _SOURCE.relative_to(_ROOT).as_posix(),
+        )
+        broker_raw = _commit_bytes(
+            commit,
+            _BROKER.relative_to(_ROOT).as_posix(),
         )
         self.assertEqual(len(package_paths), 54)
         self.assertEqual(
             package_digest,
             implementation["package_tree_digest_after"],
         )
-        self.assertEqual(implementation["launcher_digest"], _digest(_SOURCE))
-        self.assertEqual(implementation["broker_digest"], _digest(_BROKER))
+        self.assertEqual(
+            implementation["launcher_digest"],
+            _raw_digest(launcher_raw),
+        )
+        self.assertEqual(
+            implementation["broker_digest"],
+            _raw_digest(broker_raw),
+        )
         self.assertEqual(
             implementation["package_tree_digest_before"],
             implementation["package_tree_digest_after"],
@@ -485,8 +508,11 @@ class ProtectedInstallLauncherTests(unittest.TestCase):
             identity_digest,
             implementation["identity_digest_before"],
         )
-        self.assertEqual(identity["launcher"]["digest"], _digest(_SOURCE))
-        self.assertEqual(identity["broker"]["digest"], _digest(_BROKER))
+        self.assertEqual(
+            identity["launcher"]["digest"],
+            _raw_digest(launcher_raw),
+        )
+        self.assertEqual(identity["broker"]["digest"], _raw_digest(broker_raw))
         self.assertEqual(
             identity["launcher"]["path"],
             implementation["launcher_path"],
@@ -699,7 +725,6 @@ class ProtectedInstallLauncherTests(unittest.TestCase):
             implementation["identity_digest_after"],
         )
         mutation = negative["byte_tamper"]["mutation"]
-        broker_raw = _BROKER.read_bytes()
         anchor = mutation["anchor_utf8"].encode()
         insertion = mutation["insertion_utf8"].encode()
         self.assertEqual(broker_raw.count(anchor), 1)
@@ -724,7 +749,7 @@ class ProtectedInstallLauncherTests(unittest.TestCase):
         )
         self.assertEqual(
             tamper["expected_broker_digest"],
-            _digest(_BROKER),
+            _raw_digest(broker_raw),
         )
         self.assertEqual(
             "sha256:"

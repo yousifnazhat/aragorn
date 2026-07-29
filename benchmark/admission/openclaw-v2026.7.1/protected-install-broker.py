@@ -18,37 +18,38 @@ from typing import Any
 _REPOSITORY = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPOSITORY / "src"))
 
-import aragorn.admission_artifact_graph as artifact_graph_module  # noqa: E402
-import aragorn.analyzer_receipt as analyzer_receipt_module  # noqa: E402
-from aragorn.acquire import ingest_local  # noqa: E402
-from aragorn.admission_artifact_graph import (  # noqa: E402
+import aragorn.admission_artifact_graph as artifact_graph_module
+import aragorn.analyzer_receipt as analyzer_receipt_module
+from aragorn.acquire import ingest_local
+from aragorn.admission_artifact_graph import (
     retain_admission_artifact_graph,
 )
-from aragorn.analyze import run_analyzer  # noqa: E402
-from aragorn.analyzer_receipt import retain_analyzer_run  # noqa: E402
-from aragorn.artifact_closure import (  # noqa: E402
+from aragorn.analyze import run_analyzer
+from aragorn.analyzer_receipt import retain_analyzer_run
+from aragorn.artifact_closure import (
     load_verified_retained_manifest,
 )
-from aragorn.cas import CAS  # noqa: E402
-from aragorn.decision_receipt import (  # noqa: E402
+from aragorn.cas import CAS
+from aragorn.decision_receipt import (
     retain_decision_v3,
     verify_decision_v3,
 )
-from aragorn.github_quarantine_receipt import (  # noqa: E402
+from aragorn.github_gateway import build_gateway_request
+from aragorn.github_quarantine_receipt import (
     verify_github_quarantine_receipt,
 )
-from aragorn.materialization import (  # noqa: E402
+from aragorn.materialization import (
     _freeze_materialized_source_tree,
     verify_materialized_source_tree,
 )
-from aragorn.oci_worker_protocol import (  # noqa: E402
+from aragorn.oci_worker_protocol import (
     canonical_digest,
     canonical_json,
 )
-from aragorn.phase0_candidate import (  # noqa: E402
+from aragorn.phase0_candidate import (
     candidate_implementation_digest,
 )
-from aragorn.protected_install import (  # noqa: E402
+from aragorn.protected_install import (
     ProtectedInstallTransactionError,
     _materialize_verified_manifest,
     _publish_protected_install_transaction,
@@ -64,6 +65,50 @@ _TARGET = "aragorn-admitted"
 _SCANNER = "aragorn-inert-fixture-scanner"
 _GITHUB_SCANNER = "aragorn-agent-skill-threats"
 _GITHUB_ANALYZER_VERSION = "0.1.0-phase0-v7"
+_SERVICE_REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v1"
+_MAX_SERVICE_REQUEST_BYTES = 64 * 1024
+_SERVICE_REQUEST_DIGEST_FIELDS = (
+    "target_runtime_digest",
+    "runtime_conformance_digest",
+    "manifest_digest",
+    "quarantine_receipt_digest",
+    "gateway_profile_digest",
+    "context_id",
+    "expected_producer_implementation_digest",
+    "expected_analyzer_implementation_digest",
+    "expected_analyzer_executable_digest",
+    "expected_analyzer_configuration_digest",
+    "expected_policy_digest",
+    "expected_analyzer_verifier_digest",
+    "expected_artifact_graph_verifier_digest",
+)
+_SERVICE_REQUEST_FIELDS = {
+    "schema",
+    "expires_at_unix",
+    "source_request",
+    *_SERVICE_REQUEST_DIGEST_FIELDS,
+}
+_SERVICE_DYNAMIC_ARGUMENTS = (
+    "now_unix",
+    "expires_at_unix",
+    "target_runtime_digest",
+    "runtime_conformance_digest",
+    "manifest_digest",
+    "quarantine_receipt_digest",
+    "gateway_profile_digest",
+    "context_id",
+    "expected_owner",
+    "expected_repository",
+    "expected_commit",
+    "expected_skill_path",
+    "expected_producer_implementation_digest",
+    "expected_analyzer_implementation_digest",
+    "expected_analyzer_executable_digest",
+    "expected_analyzer_configuration_digest",
+    "expected_policy_digest",
+    "expected_analyzer_verifier_digest",
+    "expected_artifact_graph_verifier_digest",
+)
 _LIMITATIONS = [
     "LOCAL_INERT_FIXTURE_NOT_LIVE_GITHUB_ACQUISITION_CUSTODY",
     "BROKER_DERIVED_CANONICAL_DIGEST_NOT_INDEPENDENT_SIGNATURE",
@@ -398,6 +443,10 @@ def _metadata(state: os.stat_result) -> dict[str, int]:
     }
 
 
+def _service_request_metadata(state: os.stat_result) -> dict[str, int]:
+    return {**_metadata(state), "ctime_ns": state.st_ctime_ns}
+
+
 def _load_revocation_snapshot(
     path_value: str,
     expected_uid: int,
@@ -469,6 +518,165 @@ def _load_revocation_snapshot(
         "mode": stat.S_IMODE(after.st_mode),
         "context_ids": list(context_ids),
     }
+
+
+def _load_service_request(
+    path_value: str,
+    expected_uid: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    path = Path(path_value)
+    if not path.is_absolute():
+        raise BrokerConformanceError("service request path must be absolute")
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise BrokerConformanceError(
+            f"cannot resolve service request: {exc}"
+        ) from exc
+    if resolved != path:
+        raise BrokerConformanceError(
+            "service request path must be canonical and contain no symlinks"
+        )
+    for ancestor in resolved.parents:
+        try:
+            ancestor_state = ancestor.lstat()
+        except OSError as exc:
+            raise BrokerConformanceError(
+                f"cannot inspect service request ancestry: {exc}"
+            ) from exc
+        if (
+            not stat.S_ISDIR(ancestor_state.st_mode)
+            or stat.S_ISLNK(ancestor_state.st_mode)
+            or ancestor_state.st_uid not in {0, expected_uid}
+            or stat.S_IMODE(ancestor_state.st_mode) & 0o022
+        ):
+            raise BrokerConformanceError(
+                "service request ancestry must be owner-protected"
+            )
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    try:
+        descriptor = os.open(resolved, flags)
+    except OSError as exc:
+        raise BrokerConformanceError(
+            f"cannot open service request: {exc}"
+        ) from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != expected_uid
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o400
+            or before.st_size > _MAX_SERVICE_REQUEST_BYTES
+        ):
+            raise BrokerConformanceError(
+                "service request must be a bounded broker-owned 0400 regular file"
+            )
+        raw = bytearray()
+        while chunk := os.read(
+            descriptor,
+            min(8192, _MAX_SERVICE_REQUEST_BYTES + 1 - len(raw)),
+        ):
+            raw.extend(chunk)
+            if len(raw) > _MAX_SERVICE_REQUEST_BYTES:
+                raise BrokerConformanceError(
+                    "service request exceeds 64 KiB"
+                )
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    if (
+        _service_request_metadata(before)
+        != _service_request_metadata(after)
+        or len(raw) != after.st_size
+    ):
+        raise BrokerConformanceError("service request changed while read")
+    try:
+        document = json.loads(bytes(raw).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+        raise BrokerConformanceError(
+            f"service request is invalid: {exc}"
+        ) from exc
+    if (
+        not isinstance(document, dict)
+        or set(document) != _SERVICE_REQUEST_FIELDS
+        or document.get("schema") != _SERVICE_REQUEST_SCHEMA
+        or canonical_json(document) != bytes(raw)
+    ):
+        raise BrokerConformanceError(
+            "service request must be one exact canonical request object"
+        )
+    expiry = document["expires_at_unix"]
+    if isinstance(expiry, bool) or not isinstance(expiry, int) or expiry < 0:
+        raise BrokerConformanceError("service request expiry is invalid")
+    for field in _SERVICE_REQUEST_DIGEST_FIELDS:
+        _require_digest(document[field], field.replace("_", " "))
+    source_request = document["source_request"]
+    if not isinstance(source_request, dict):
+        raise BrokerConformanceError("service source request is invalid")
+    try:
+        verified_source = build_gateway_request(
+            source_request.get("owner"),
+            source_request.get("repository"),
+            source_request.get("commit"),
+            source_request.get("skill_path"),
+        )
+    except (TypeError, ValueError) as exc:
+        raise BrokerConformanceError(
+            f"service source request is invalid: {exc}"
+        ) from exc
+    if source_request != verified_source:
+        raise BrokerConformanceError("service source request is not canonical")
+    request_digest = _digest_bytes(bytes(raw))
+    return document, {
+        "authority": "PROTECTED_CANONICAL_REQUEST_CREDENTIAL",
+        "request_digest": request_digest,
+        "request_schema": _SERVICE_REQUEST_SCHEMA,
+        "credential": {
+            "path": str(resolved),
+            **_service_request_metadata(after),
+        },
+    }
+
+
+def _resolve_service_request(
+    args: argparse.Namespace,
+) -> tuple[argparse.Namespace, dict[str, Any] | None]:
+    if args.service_request is None:
+        return args, None
+    if not args.github_live:
+        raise BrokerConformanceError(
+            "service request requires --github-live"
+        )
+    if args.expected_broker_uid != 0 or os.geteuid() != 0:
+        raise BrokerConformanceError(
+            "service request requires the fixed root broker"
+        )
+    if any(getattr(args, field) is not None for field in _SERVICE_DYNAMIC_ARGUMENTS):
+        raise BrokerConformanceError(
+            "service request cannot be combined with dynamic CLI trust inputs"
+        )
+    request, authority = _load_service_request(
+        args.service_request,
+        args.expected_broker_uid,
+    )
+    resolved = argparse.Namespace(**vars(args))
+    resolved.now_unix = int(time.time())
+    for field in (
+        "expires_at_unix",
+        *_SERVICE_REQUEST_DIGEST_FIELDS,
+    ):
+        setattr(resolved, field, request[field])
+    source = request["source_request"]
+    resolved.expected_owner = source["owner"]
+    resolved.expected_repository = source["repository"]
+    resolved.expected_commit = source["commit"]
+    resolved.expected_skill_path = source["skill_path"]
+    return resolved, authority
 
 
 def _bounded_tree_snapshot_digest(root: Path) -> str:
@@ -1023,7 +1231,12 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         raise BrokerConformanceError("protected install conformance requires POSIX")
     if args.expected_broker_uid != os.geteuid():
         raise BrokerConformanceError("effective UID is not the expected broker UID")
-    if args.now_unix < 0 or args.expires_at_unix <= args.now_unix:
+    if (
+        args.now_unix is None
+        or args.expires_at_unix is None
+        or args.now_unix < 0
+        or args.expires_at_unix <= args.now_unix
+    ):
         raise BrokerConformanceError("trusted time window is invalid")
     _require_digest(args.target_runtime_digest, "target runtime digest")
     _require_digest(
@@ -1275,13 +1488,14 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--github-live", action="store_true")
+    parser.add_argument("--service-request")
     parser.add_argument("--cas-root", required=True)
     parser.add_argument("--protected-root", required=True)
     parser.add_argument("--expected-broker-uid", required=True, type=int)
-    parser.add_argument("--now-unix", required=True, type=int)
-    parser.add_argument("--expires-at-unix", required=True, type=int)
-    parser.add_argument("--target-runtime-digest", required=True)
-    parser.add_argument("--runtime-conformance-digest", required=True)
+    parser.add_argument("--now-unix", type=int)
+    parser.add_argument("--expires-at-unix", type=int)
+    parser.add_argument("--target-runtime-digest")
+    parser.add_argument("--runtime-conformance-digest")
     parser.add_argument("--manifest-digest")
     parser.add_argument("--quarantine-receipt-digest")
     parser.add_argument("--gateway-profile-digest")
@@ -1306,7 +1520,9 @@ def main() -> int:
     schema = _GITHUB_SCHEMA if args.github_live else _SCHEMA
     assurance = _GITHUB_ASSURANCE if args.github_live else _ASSURANCE
     limitations = _GITHUB_LIMITATIONS if args.github_live else _LIMITATIONS
+    request_authority = None
     try:
+        args, request_authority = _resolve_service_request(args)
         receipt = _run(args)
     except Exception as exc:  # noqa: BLE001 - emit one canonical fail-closed receipt
         receipt = {
@@ -1316,8 +1532,8 @@ def main() -> int:
             "error": {"type": type(exc).__name__, "message": str(exc)},
             "limitations": limitations,
         }
-        sys.stdout.buffer.write(canonical_json(receipt) + b"\n")
-        return 1
+    if request_authority is not None:
+        receipt["request_authority"] = request_authority
     sys.stdout.buffer.write(canonical_json(receipt) + b"\n")
     return 0 if receipt["slice_status"] == "PASS" else 1
 

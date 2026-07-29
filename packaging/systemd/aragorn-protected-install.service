@@ -1,0 +1,61 @@
+[Unit]
+Description=Aragorn protected Agent Skill install
+After=local-fs.target
+RequiresMountsFor=/var/lib/aragorn-quarantine /var/lib/aragorn-protected
+ConditionPathExists=/etc/aragorn/protected-broker-release.json
+ConditionPathExists=/etc/aragorn/protected-install-revocations.json
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+LoadCredential=install-request:/run/aragorn-protected-install/request.json
+ExecStart=/usr/bin/python3.14 -I -S -B /usr/libexec/aragorn/aragorn-protected-install-launcher.py -- --github-live --service-request %d/install-request --cas-root /var/lib/aragorn-quarantine --protected-root /var/lib/aragorn-protected --expected-broker-uid 0 --revocation-file /etc/aragorn/protected-install-revocations.json
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+Restart=no
+TimeoutStartSec=5min
+KillMode=control-group
+TasksMax=8
+MemoryMax=1G
+MemorySwapMax=0
+LimitNOFILE=128
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-protected-install
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/run/aragorn-protected-install/request.json
+ReadWritePaths=/var/lib/aragorn-quarantine /var/lib/aragorn-protected
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SocketBindDeny=any
+SystemCallArchitectures=native
+SystemCallFilter=~@network-io @mount @reboot @swap @raw-io @clock

@@ -11,8 +11,10 @@ import stat
 import subprocess
 import sys
 import unittest
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest import mock
 
 import aragorn.admission_artifact_graph as artifact_graph_module
@@ -161,8 +163,348 @@ def _github_args(
     )
 
 
+def _service_request(args: argparse.Namespace) -> dict[str, object]:
+    return {
+        "schema": "aragorn/protected-install-broker-request/v1",
+        "expires_at_unix": args.expires_at_unix,
+        "target_runtime_digest": args.target_runtime_digest,
+        "runtime_conformance_digest": args.runtime_conformance_digest,
+        "manifest_digest": args.manifest_digest,
+        "quarantine_receipt_digest": args.quarantine_receipt_digest,
+        "gateway_profile_digest": args.gateway_profile_digest,
+        "context_id": args.context_id,
+        "source_request": {
+            "schema": "aragorn/github-gateway-request/v1",
+            "owner": args.expected_owner,
+            "repository": args.expected_repository,
+            "commit": args.expected_commit,
+            "skill_path": args.expected_skill_path,
+        },
+        "expected_producer_implementation_digest": (
+            args.expected_producer_implementation_digest
+        ),
+        "expected_analyzer_implementation_digest": (
+            args.expected_analyzer_implementation_digest
+        ),
+        "expected_analyzer_executable_digest": (
+            args.expected_analyzer_executable_digest
+        ),
+        "expected_analyzer_configuration_digest": (
+            args.expected_analyzer_configuration_digest
+        ),
+        "expected_policy_digest": args.expected_policy_digest,
+        "expected_analyzer_verifier_digest": (
+            args.expected_analyzer_verifier_digest
+        ),
+        "expected_artifact_graph_verifier_digest": (
+            args.expected_artifact_graph_verifier_digest
+        ),
+    }
+
+
+def _service_args(
+    producer,
+    direct: argparse.Namespace,
+    request_path: Path,
+) -> argparse.Namespace:
+    values = vars(direct).copy()
+    values["service_request"] = str(request_path)
+    for field in producer._SERVICE_DYNAMIC_ARGUMENTS:
+        values[field] = None
+    return argparse.Namespace(**values)
+
+
 @unittest.skipUnless(os.name == "posix", "protected install requires POSIX")
 class ProtectedInstallBrokerProducerTests(unittest.TestCase):
+    def test_service_request_maps_only_root_owned_authority_inputs(
+        self,
+    ) -> None:
+        producer = _load_producer()
+        with TemporaryDirectory(dir=_ROOT) as temporary:
+            root = Path(temporary).resolve()
+            credential_root = root / "credentials"
+            credential_root.mkdir(mode=0o700)
+            protected = root / "protected"
+            protected.mkdir(mode=0o700)
+            source = {
+                "schema": "aragorn/github-gateway-request/v1",
+                "owner": "anthropics",
+                "repository": "skills",
+                "commit": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+                "skill_path": "template",
+            }
+            direct = _github_args(
+                producer=producer,
+                cas_root=root / "cas",
+                protected_root=protected,
+                manifest_digest="sha256:" + "4" * 64,
+                receipt_digest="sha256:" + "5" * 64,
+                gateway_profile_digest="sha256:" + "6" * 64,
+                request=source,
+            )
+            request = _service_request(direct)
+            request_path = credential_root / "install-request"
+            request_path.write_bytes(canonical_json(request))
+            request_path.chmod(0o400)
+            service = _service_args(producer, direct, request_path)
+
+            loaded, authority = producer._load_service_request(
+                str(request_path),
+                os.geteuid(),
+            )
+            self.assertEqual(loaded, request)
+            self.assertEqual(authority["credential"]["uid"], os.geteuid())
+            authority["credential"]["uid"] = 0
+            service.expected_broker_uid = 0
+            with (
+                mock.patch.object(producer.os, "geteuid", return_value=0),
+                mock.patch.object(
+                    producer,
+                    "_load_service_request",
+                    return_value=(loaded, authority),
+                ),
+                mock.patch.object(producer.time, "time", return_value=150),
+            ):
+                resolved, authority = producer._resolve_service_request(
+                    service
+                )
+
+            self.assertIsNotNone(authority)
+            assert authority is not None
+            self.assertEqual(
+                authority["authority"],
+                "PROTECTED_CANONICAL_REQUEST_CREDENTIAL",
+            )
+            self.assertEqual(
+                authority["request_digest"],
+                canonical_digest(request),
+            )
+            self.assertEqual(authority["credential"]["mode"], 0o400)
+            self.assertEqual(authority["credential"]["uid"], 0)
+            self.assertIsInstance(authority["credential"]["ctime_ns"], int)
+            self.assertEqual(resolved.now_unix, 150)
+            for field in producer._SERVICE_DYNAMIC_ARGUMENTS:
+                if field == "now_unix":
+                    continue
+                self.assertEqual(
+                    getattr(resolved, field),
+                    getattr(direct, field),
+                    field,
+                )
+            for field in (
+                "cas_root",
+                "protected_root",
+                "revocation_file",
+            ):
+                self.assertEqual(
+                    getattr(resolved, field),
+                    getattr(direct, field),
+                )
+            self.assertEqual(resolved.expected_broker_uid, 0)
+
+            duplicate = _service_args(producer, direct, request_path)
+            duplicate.expected_broker_uid = 0
+            duplicate.manifest_digest = direct.manifest_digest
+            with (
+                mock.patch.object(producer.os, "geteuid", return_value=0),
+                self.assertRaisesRegex(
+                    producer.BrokerConformanceError,
+                    "cannot be combined",
+                ),
+            ):
+                producer._resolve_service_request(duplicate)
+
+            nonroot = _service_args(producer, direct, request_path)
+            with (
+                mock.patch.object(producer.os, "geteuid", return_value=501),
+                self.assertRaisesRegex(
+                    producer.BrokerConformanceError,
+                    "fixed root broker",
+                ),
+            ):
+                producer._resolve_service_request(nonroot)
+
+            output = SimpleNamespace(buffer=BytesIO())
+            with (
+                mock.patch.object(
+                    producer,
+                    "_parser",
+                    return_value=SimpleNamespace(
+                        parse_args=lambda: service
+                    ),
+                ),
+                mock.patch.object(producer.os, "geteuid", return_value=0),
+                mock.patch.object(
+                    producer,
+                    "_load_service_request",
+                    return_value=(loaded, authority),
+                ),
+                mock.patch.object(
+                    producer,
+                    "_run",
+                    return_value={
+                        "schema": producer._GITHUB_SCHEMA,
+                        "assurance": producer._GITHUB_ASSURANCE,
+                        "slice_status": "PASS",
+                        "limitations": producer._GITHUB_LIMITATIONS,
+                    },
+                ) as run,
+                mock.patch.object(producer.time, "time", return_value=150),
+                mock.patch.object(producer.sys, "stdout", output),
+            ):
+                self.assertEqual(producer.main(), 0)
+            self.assertEqual(run.call_args.args[0].now_unix, 150)
+            receipt = json.loads(output.buffer.getvalue())
+            self.assertEqual(
+                receipt["request_authority"]["request_digest"],
+                canonical_digest(request),
+            )
+
+    def test_service_request_file_boundary_fails_closed(self) -> None:
+        producer = _load_producer()
+        with TemporaryDirectory(dir=_ROOT) as temporary:
+            root = Path(temporary).resolve()
+            credential_root = root / "credentials"
+            credential_root.mkdir(mode=0o700)
+            protected = root / "protected"
+            protected.mkdir(mode=0o700)
+            source = {
+                "schema": "aragorn/github-gateway-request/v1",
+                "owner": "anthropics",
+                "repository": "skills",
+                "commit": "b29e7cf65e5cb78a5ac33d582270551bc74a14eb",
+                "skill_path": "template",
+            }
+            direct = _github_args(
+                producer=producer,
+                cas_root=root / "cas",
+                protected_root=protected,
+                manifest_digest="sha256:" + "4" * 64,
+                receipt_digest="sha256:" + "5" * 64,
+                gateway_profile_digest="sha256:" + "6" * 64,
+                request=source,
+            )
+            request = _service_request(direct)
+            invalid_raw = {
+                "missing": canonical_json(
+                    {
+                        key: value
+                        for key, value in request.items()
+                        if key != "context_id"
+                    }
+                ),
+                "extra": canonical_json(request | {"protected_root": "/tmp"}),
+                "noncanonical": json.dumps(request).encode(),
+                "oversize": b"x" * (64 * 1024 + 1),
+            }
+            for name, raw in invalid_raw.items():
+                with self.subTest(name=name):
+                    path = credential_root / name
+                    path.write_bytes(raw)
+                    path.chmod(0o400)
+                    with self.assertRaises(
+                        producer.BrokerConformanceError
+                    ):
+                        producer._load_service_request(
+                            str(path),
+                            os.geteuid(),
+                        )
+
+            writable = credential_root / "writable"
+            writable.write_bytes(canonical_json(request))
+            writable.chmod(0o600)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "0400 regular file",
+            ):
+                producer._load_service_request(
+                    str(writable),
+                    os.geteuid(),
+                )
+
+            hardlink_source = credential_root / "hardlink-source"
+            hardlink_source.write_bytes(canonical_json(request))
+            hardlink_source.chmod(0o400)
+            hardlink = credential_root / "hardlink"
+            os.link(hardlink_source, hardlink)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "0400 regular file",
+            ):
+                producer._load_service_request(
+                    str(hardlink),
+                    os.geteuid(),
+                )
+
+            symlink_target = credential_root / "symlink-target"
+            symlink_target.write_bytes(canonical_json(request))
+            symlink_target.chmod(0o400)
+            symlink = credential_root / "symlink"
+            symlink.symlink_to(symlink_target)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "canonical and contain no symlinks",
+            ):
+                producer._load_service_request(
+                    str(symlink),
+                    os.geteuid(),
+                )
+
+            valid = credential_root / "unsafe-parent"
+            valid.write_bytes(canonical_json(request))
+            valid.chmod(0o400)
+            credential_root.chmod(0o722)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "ancestry must be owner-protected",
+            ):
+                producer._load_service_request(
+                    str(valid),
+                    os.geteuid(),
+                )
+            credential_root.chmod(0o700)
+
+            unsafe_grandparent = root / "unsafe-grandparent"
+            unsafe_grandparent.mkdir(mode=0o700)
+            nested = unsafe_grandparent / "credentials"
+            nested.mkdir(mode=0o700)
+            nested_request = nested / "install-request"
+            nested_request.write_bytes(canonical_json(request))
+            nested_request.chmod(0o400)
+            unsafe_grandparent.chmod(0o722)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "ancestry must be owner-protected",
+            ):
+                producer._load_service_request(
+                    str(nested_request),
+                    os.geteuid(),
+                )
+            unsafe_grandparent.chmod(0o700)
+
+            service = _service_args(producer, direct, writable)
+            service.expected_broker_uid = 0
+            output = SimpleNamespace(buffer=BytesIO())
+            with (
+                mock.patch.object(
+                    producer,
+                    "_parser",
+                    return_value=SimpleNamespace(
+                        parse_args=lambda: service
+                    ),
+                ),
+                mock.patch.object(producer.os, "geteuid", return_value=0),
+                mock.patch.object(producer, "_run") as run,
+                mock.patch.object(producer.sys, "stdout", output),
+            ):
+                self.assertEqual(producer.main(), 1)
+            run.assert_not_called()
+            self.assertEqual(list(protected.iterdir()), [])
+            self.assertEqual(
+                json.loads(output.buffer.getvalue())["slice_status"],
+                "ERROR",
+            )
+
     def test_real_chain_and_negative_attempts_are_local_and_fail_closed(
         self,
     ) -> None:

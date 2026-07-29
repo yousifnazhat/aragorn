@@ -197,6 +197,11 @@ out-of-root recursive evidence, admission-authorized protected installation,
 and install/update enforcement remain unsupported. The internal request-v3
 broker path is evidence-only and fails closed before protected publication when
 recursive closure is incomplete.
+One operator-retained qualification archive replays exact request credentials,
+systemd controls, recursive install, byte-identical update sequencing, and a
+release-bearing `ERROR` path. The protected-state comparison remains an
+operator record, the asset is only one of nine unresolved reasons, and this is
+neither independent attestation nor supported acquisition.
 
 ## Attack Surface, Mitigations, and Attacker Stories
 

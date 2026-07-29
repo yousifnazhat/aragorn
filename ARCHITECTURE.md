@@ -380,9 +380,10 @@ verdict drift. Current inspection still has only `source_tree` closure, so
 faithful replay returns `ERROR`. The parallel evidence-only
 `aragorn/decision/v3` retains and replays an admission artifact graph bound to
 caller-held expected identities, including the exact analyzer-run receipts,
-and evaluates only its verified closure; it is not wired to the CLI or
-publisher. A future broker must additionally bind runtime, destination, expiry,
-and revocation before publication.
+and evaluates only its verified closure. The internal protected request-v3
+broker now composes that replay with recursive source identities, runtime,
+destination, expiry, revocation, and protected publication. It remains absent
+from the CLI and evidence-only rather than installer authority.
 
 The source-screen-only Git identities and commit-pinned evidence anchors are
 frozen in `benchmark/admission-runtime-candidates-v1.lock.json`; that immutable
@@ -757,6 +758,18 @@ stops before analysis or publication. Automatic independent release-pin
 acquisition, archive inventory/extraction, live public out-of-root recursive
 evidence, runtime conformance, installer eligibility, and public release remain
 blocked.
+
+The
+`benchmark/receipts/phase1-protected-recursive-v3-live-qualification-2026-07-29.json`
+receipt additionally replays one retained Linux path: exact canonical request
+credentials and reconstructed contexts/transactions, three static/effective
+systemd units, the private broker network, and the observed gateway tmpfs.
+Recursive install and a byte-identical update sequence publish their
+digest-matching trees. The release-bearing fixture retains its asset bytes but
+returns `ERROR` for nine unresolved reasons (one is the unanalyzed asset),
+creates no analyzer receipt, and has operator-recorded empty protected state.
+The capture does not isolate the asset as the sole cause, retain provisioning
+units, grant installer authority, or make full Phase 1 complete.
 
 The qualified Phase 0 validation milestone is complete under the checked-in
 aggregate phase-evidence rule in

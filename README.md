@@ -106,8 +106,9 @@ workspace skill writes externally or evaluate another harness.
 - Graph-bound `decision/v3` retention and replay: the verifier requires
   caller-held expected manifest, graph, policy, exact analyzer-run receipts,
   graph-verifier, and analyzer-verifier identities before evaluating the
-  verified artifact closure. It remains evidence-only and is not wired to the
-  CLI or publisher.
+  verified artifact closure. The internal request-v3 broker consumes it before
+  protected publication, but it remains evidence-only, absent from the CLI,
+  and grants no installer authority.
 - A broker-context-only install contract requires a caller-held context digest
   and independently expected target, runtime-conformance identity, measured
   runtime identity, live destination descriptor, expiry, and current revocation
@@ -354,10 +355,19 @@ Phase 1 v2 receipt proves its frozen acquisition-lock metrics; it does not make
 this a supported production acquisition boundary. The bounded release resolver,
 recursive gateway/broker replay, protected request-v3 composition, and v4
 fail-closed decision path are implemented.
-Automatic independent release-pin acquisition, archive inventory/extraction,
-live public out-of-root recursive coverage, provisioning, control-plane
-promotion, live protected-path qualification, and installer authority remain
-incomplete.
+The
+[recursive-v3 live qualification](./benchmark/receipts/phase1-protected-recursive-v3-live-qualification-2026-07-29.json)
+now binds one retained Linux service path: exact request credentials, three
+static/effective systemd units, the private broker network, and the observed
+gateway tmpfs replay together. Recursive install and a byte-identical update
+sequence reach their exact protected trees. A pinned release-bearing source
+returns `ERROR` with nine unresolved reasons, including an unanalyzed release
+asset, zero analyzer receipts, no publication, and operator-recorded empty
+protected state; the asset is not isolated as the sole cause.
+Automatic independent release-pin acquisition, downloaded-archive
+inventory/extraction and analysis, live public out-of-root recursive coverage,
+systemd provisioning-unit retention, control-plane promotion, runtime
+conformance, and installer authority remain incomplete.
 The direct `acquire-github` command still runs with the operator's UID and
 remains evaluation-only.
 

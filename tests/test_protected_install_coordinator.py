@@ -463,8 +463,18 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         self.assertNotIn("ProtectSystem=", unit)
         self.assertIn("IPAddressDeny=any", unit)
         self.assertIn("IPAddressAllow=localhost", unit)
-        self.assertIn("CapabilityBoundingSet=CAP_DAC_OVERRIDE", unit)
-        self.assertIn("AmbientCapabilities=CAP_DAC_OVERRIDE", unit)
+        self.assertIn(
+            "CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_SYS_PTRACE",
+            unit,
+        )
+        self.assertIn(
+            "AmbientCapabilities=CAP_DAC_OVERRIDE CAP_SYS_PTRACE",
+            unit,
+        )
+        self.assertIn(
+            "ARAGORN_DROP_HOST_INSPECTION_CAPABILITY=1",
+            unit,
+        )
         self.assertNotIn("CAP_CHOWN", unit)
         self.assertNotIn("CAP_FOWNER", unit)
         self.assertNotIn("ExecStart=/bin/sh", unit)

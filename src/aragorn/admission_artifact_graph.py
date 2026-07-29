@@ -87,6 +87,33 @@ def verify_admission_artifact_graph(
             max_bytes=MAX_GRAPH_BYTES,
         )
         graph = _canonical_document(raw)
+        if graph.get("schema") == "aragorn/admission-artifact-graph/v3":
+            if (
+                expected_quarantine_receipt_digest is None
+                or expected_gateway_profile_digest is None
+            ):
+                raise AdmissionArtifactGraphError(
+                    "recursive GitHub admission replay requires caller-held "
+                    "quarantine receipt and gateway profile digests"
+                )
+            from .github_recursive_artifact_graph import (
+                verify_recursive_github_artifact_graph,
+            )
+
+            return verify_recursive_github_artifact_graph(
+                cas,
+                graph_digest,
+                expected_manifest_digest=manifest_digest,
+                expected_quarantine_receipt_digest=_digest(
+                    expected_quarantine_receipt_digest,
+                    "expected quarantine receipt digest",
+                ),
+                expected_gateway_profile_digest=_digest(
+                    expected_gateway_profile_digest,
+                    "expected gateway profile digest",
+                ),
+                expected_verifier_digest=verifier_digest,
+            )
         if graph.get("schema") == "aragorn/admission-artifact-graph/v2":
             if (
                 expected_quarantine_receipt_digest is None

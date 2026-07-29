@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import errno
 import hashlib
 import json
@@ -93,6 +94,29 @@ _SYSTEMD_RUN_PATH = Path("/usr/bin/systemd-run")
 _SYSTEMCTL_PATH = Path("/usr/bin/systemctl")
 _SYSTEMD_CGROUP_ROOT = Path("/sys/fs/cgroup/system.slice")
 _UID_LEASE_ROOT = Path("/var/run/aragorn-gateway")
+_DROP_HOST_INSPECTION_CAP_ENV = (
+    "ARAGORN_DROP_HOST_INSPECTION_CAPABILITY"
+)
+_CAP_SYS_PTRACE = 19
+_LINUX_CAPABILITY_VERSION_3 = 0x20080522
+_PR_CAP_AMBIENT = 47
+_PR_CAP_AMBIENT_LOWER = 3
+_HOST_NAMESPACE_IDENTITY: tuple[tuple[int, int], ...] | None = None
+
+
+class _LinuxCapabilityHeader(ctypes.Structure):
+    _fields_ = [
+        ("version", ctypes.c_uint32),
+        ("pid", ctypes.c_int),
+    ]
+
+
+class _LinuxCapabilityData(ctypes.Structure):
+    _fields_ = [
+        ("effective", ctypes.c_uint32),
+        ("permitted", ctypes.c_uint32),
+        ("inheritable", ctypes.c_uint32),
+    ]
 _ISOLATED_ENTRYPOINT = """\
 import errno
 import os
@@ -372,6 +396,31 @@ def quarantine_through_gateway(
 ) -> GatewayQuarantineReceipt:
     """Quarantine one source assertion; this function cannot authorize it."""
 
+    return _quarantine_through_gateway(
+        request,
+        gateway_root=gateway_root,
+        quarantine_state=quarantine_state,
+        worker_uid=worker_uid,
+        worker_gid=worker_gid,
+        process_timeout_seconds=process_timeout_seconds,
+        python_executable=python_executable,
+        package_root=package_root,
+        recursive=False,
+    )
+
+
+def _quarantine_through_gateway(
+    request: object,
+    *,
+    gateway_root: str | os.PathLike[str],
+    quarantine_state: str | os.PathLike[str],
+    worker_uid: int,
+    worker_gid: int,
+    process_timeout_seconds: float,
+    python_executable: str | os.PathLike[str],
+    package_root: str | os.PathLike[str],
+    recursive: bool,
+) -> Any:
     frozen = _freeze_request(request)
     raw_request = canonical_json(frozen)
     if (
@@ -454,7 +503,7 @@ def quarantine_through_gateway(
                     protected_package,
                     worker_uid,
                     worker_gid,
-                    "worker",
+                    "recursive-worker" if recursive else "worker",
                     "--job-root",
                     os.fspath(job_root),
                     *(
@@ -491,13 +540,27 @@ def quarantine_through_gateway(
                 raise GitHubGatewayError(
                     f"cannot launch acquisition gateway: {exc}"
                 ) from exc
-            result = _require_success_result(process)
+            if recursive:
+                from .github_recursive_gateway import (
+                    require_recursive_success_result,
+                )
+
+                result = require_recursive_success_result(process)
+            else:
+                result = _require_success_result(process)
             _require_gateway_runtime_unchanged(
                 executable,
                 protected_package,
                 runtime_measurements,
             )
-            return _accept_gateway_output(
+            acceptance = _accept_gateway_output
+            if recursive:
+                from .github_recursive_gateway import (
+                    accept_recursive_gateway_output,
+                )
+
+                acceptance = accept_recursive_gateway_output
+            return acceptance(
                 frozen,
                 result,
                 job_root=job_root,
@@ -1231,20 +1294,43 @@ def _require_bounded_transfer_mount(path: Path) -> None:
 
 
 def _require_systemd_host() -> None:
+    global _HOST_NAMESPACE_IDENTITY
+
     if _read_virtual_file(Path("/proc/1/comm"), 32, "PID 1 command") != b"systemd\n":
         raise GitHubGatewayError("gateway requires systemd as host PID 1")
+    current: list[tuple[int, int]] = []
     for namespace in ("pid", "mnt", "user", "cgroup"):
         try:
             broker = os.stat(f"/proc/self/ns/{namespace}")
-            host = os.stat(f"/proc/1/ns/{namespace}")
         except OSError as exc:
             raise GitHubGatewayError(
-                f"cannot verify host {namespace} namespace: {exc}"
+                f"cannot inspect broker {namespace} namespace: {exc}"
             ) from exc
-        if (broker.st_dev, broker.st_ino) != (host.st_dev, host.st_ino):
+        current.append((broker.st_dev, broker.st_ino))
+    identity = tuple(current)
+    drop_capability = os.environ.get(_DROP_HOST_INSPECTION_CAP_ENV) == "1"
+    if drop_capability and _HOST_NAMESPACE_IDENTITY is not None:
+        if identity != _HOST_NAMESPACE_IDENTITY:
             raise GitHubGatewayError(
-                f"gateway broker is outside the host {namespace} namespace"
+                "gateway broker changed its attested host namespaces"
             )
+        _require_capability_absent(_CAP_SYS_PTRACE)
+    else:
+        for namespace, broker_identity in zip(
+            ("pid", "mnt", "user", "cgroup"),
+            identity,
+            strict=True,
+        ):
+            try:
+                host = os.stat(f"/proc/1/ns/{namespace}")
+            except OSError as exc:
+                raise GitHubGatewayError(
+                    f"cannot verify host {namespace} namespace: {exc}"
+                ) from exc
+            if broker_identity != (host.st_dev, host.st_ino):
+                raise GitHubGatewayError(
+                    f"gateway broker is outside the host {namespace} namespace"
+                )
     if not Path("/sys/fs/cgroup/cgroup.controllers").is_file():
         raise GitHubGatewayError("gateway requires a mounted cgroup v2 hierarchy")
     cgroup = _read_virtual_file(
@@ -1254,6 +1340,79 @@ def _require_systemd_host() -> None:
     )
     if not cgroup.startswith(b"0::/") or cgroup.count(b"\n") != 1:
         raise GitHubGatewayError("gateway broker cgroup membership is invalid")
+    if drop_capability and _HOST_NAMESPACE_IDENTITY is None:
+        _drop_capability(_CAP_SYS_PTRACE)
+        _HOST_NAMESPACE_IDENTITY = identity
+
+
+def _drop_capability(capability: int) -> None:
+    """Permanently remove one inherited Linux capability from this process."""
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    header = _LinuxCapabilityHeader(
+        version=_LINUX_CAPABILITY_VERSION_3,
+        pid=0,
+    )
+    data = (_LinuxCapabilityData * 2)()
+    if libc.capget(ctypes.byref(header), data) != 0:
+        error = ctypes.get_errno()
+        raise GitHubGatewayError(
+            f"cannot inspect broker capabilities: {os.strerror(error)}"
+        )
+    index, offset = divmod(capability, 32)
+    mask = 1 << offset
+    if not data[index].effective & mask or not data[index].permitted & mask:
+        raise GitHubGatewayError(
+            "gateway host-inspection capability is not effective"
+        )
+    if (
+        libc.prctl(
+            _PR_CAP_AMBIENT,
+            _PR_CAP_AMBIENT_LOWER,
+            capability,
+            0,
+            0,
+        )
+        != 0
+    ):
+        error = ctypes.get_errno()
+        raise GitHubGatewayError(
+            f"cannot lower broker ambient capability: {os.strerror(error)}"
+        )
+    data[index].effective &= ~mask
+    data[index].permitted &= ~mask
+    data[index].inheritable &= ~mask
+    if libc.capset(ctypes.byref(header), data) != 0:
+        error = ctypes.get_errno()
+        raise GitHubGatewayError(
+            f"cannot drop broker capability: {os.strerror(error)}"
+        )
+    _require_capability_absent(capability)
+
+
+def _require_capability_absent(capability: int) -> None:
+    raw = _read_virtual_file(
+        Path("/proc/self/status"),
+        64 * 1024,
+        "broker process status",
+    )
+    fields: dict[str, int] = {}
+    try:
+        for line in raw.decode("ascii").splitlines():
+            name, separator, value = line.partition(":")
+            if separator and name in {"CapInh", "CapPrm", "CapEff", "CapAmb"}:
+                fields[name] = int(value.strip(), 16)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise GitHubGatewayError(
+            "broker capability status is invalid"
+        ) from exc
+    mask = 1 << capability
+    if set(fields) != {"CapInh", "CapPrm", "CapEff", "CapAmb"} or any(
+        value & mask for value in fields.values()
+    ):
+        raise GitHubGatewayError(
+            "gateway host-inspection capability remained available"
+        )
 
 
 def _stop_systemd_unit(systemctl: Path, unit: str) -> None:
@@ -1990,6 +2149,11 @@ def _parser() -> ArgumentParser:
     worker.add_argument("--api-endpoint", action="append", required=True)
     worker.add_argument("--git-endpoint", action="append", required=True)
     worker.set_defaults(action=_worker_command)
+    recursive_worker = commands.add_parser("recursive-worker")
+    recursive_worker.add_argument("--job-root", type=Path, required=True)
+    recursive_worker.add_argument("--api-endpoint", action="append", required=True)
+    recursive_worker.add_argument("--git-endpoint", action="append", required=True)
+    recursive_worker.set_defaults(action=_recursive_worker_command)
     resolver = commands.add_parser("resolve")
     resolver.set_defaults(action=_resolver_command)
     return parser
@@ -1999,6 +2163,19 @@ def _worker_command(args: argparse.Namespace) -> dict[str, str]:
     _require_worker_process_limit()
     request = _decode_request_line(sys.stdin.buffer.read(_MAX_WIRE_BYTES + 1))
     return run_worker(
+        request,
+        args.job_root,
+        pinned_api_addresses=args.api_endpoint,
+        pinned_git_addresses=args.git_endpoint,
+    )
+
+
+def _recursive_worker_command(args: argparse.Namespace) -> dict[str, Any]:
+    _require_worker_process_limit()
+    request = _decode_request_line(sys.stdin.buffer.read(_MAX_WIRE_BYTES + 1))
+    from .github_recursive_gateway import run_recursive_worker
+
+    return run_recursive_worker(
         request,
         args.job_root,
         pinned_api_addresses=args.api_endpoint,

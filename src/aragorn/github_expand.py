@@ -12,6 +12,7 @@ from typing import Any
 from .artifact_closure import (
     MAX_SCANNED_TEXT_BYTES,
     TEXT_CARRIER_SUFFIXES,
+    ArtifactClosureError,
     ReferenceBudgetExceeded,
     _validate_manifest,
     canonical_json,
@@ -28,6 +29,11 @@ from .github_acquire import (
     GitHubAcquisitionSession,
     GitHubBudgetExceeded,
 )
+from .github_expansion_proof import (
+    GitHubExpansionProofError,
+    retain_github_expansion_proof,
+)
+from .github_source_proof import retain_github_source_proof
 from .oci_worker_protocol import (
     WorkerProtocolError,
     canonical_digest,
@@ -95,6 +101,11 @@ def acquire_github_expansion(
     timeout_seconds: float = 120.0,
     bearer_token: str | None = None,
     expansion_mode: str | None = None,
+    _pinned_addresses: list[str] | tuple[str, ...] | None = None,
+    _pinned_git_addresses: list[str] | tuple[str, ...] | None = None,
+    _retain_source_proof: bool = False,
+    _retain_expansion_proof: bool = False,
+    _retain_partial_objects: bool = False,
 ) -> dict[str, Any]:
     """Acquire a skill and retain supported exact-commit blob references.
 
@@ -176,6 +187,8 @@ def acquire_github_expansion(
             max_api_bytes=max_api_bytes,
             timeout_seconds=timeout_seconds,
             bearer_token=bearer_token,
+            _pinned_addresses=_pinned_addresses,
+            _pinned_git_addresses=_pinned_git_addresses,
             _max_tree_entries=max_source_entries,
         )
         root_manifest, root_content, retained_bytes = _stage_root(
@@ -189,6 +202,7 @@ def acquire_github_expansion(
     except GitHubAcquisitionError as exc:
         raise GitHubExpansionError(str(exc)) from exc
 
+    root_raw_objects = dict(session._raw_objects)
     root_manifest_digest = _digest_document(root_manifest)
     root_source = root_manifest["source"]
     root_repository_entries = {
@@ -601,7 +615,7 @@ def acquire_github_expansion(
         if stop_scanning:
             break
 
-    if not incomplete_reasons:
+    if not incomplete_reasons or _retain_partial_objects:
         while pending:
             depth = queued_depth[pending[0]]
             layer: list[tuple[str, str]] = []
@@ -764,6 +778,19 @@ def acquire_github_expansion(
             )
         )
 
+    if _retain_partial_objects:
+        for occurrence in reference_occurrences:
+            identity = (
+                occurrence["target_commit"],
+                occurrence["target_repository_path"],
+            )
+            if (
+                occurrence["status"] == "expanded"
+                and identity not in expanded
+            ):
+                occurrence["status"] = "unresolved"
+                occurrence["reason_code"] = "ARTIFACT_NOT_CAPTURED"
+
     complete = not incomplete_reasons
     comparator_manifest: dict[str, Any] | None = None
     comparator_manifest_digest: str | None = None
@@ -779,6 +806,7 @@ def acquire_github_expansion(
             ) from exc
         comparator_manifest_digest = canonical_digest(comparator_manifest)
         comparator_tree_digest = comparator_manifest["tree_digest"]
+    if complete or _retain_partial_objects:
         for target_identity in sorted(expanded):
             target_commit, repository_path = target_identity
             item = expanded[target_identity]
@@ -805,7 +833,7 @@ def acquire_github_expansion(
                     ),
                 }
             )
-    else:
+    if not complete and not _retain_partial_objects:
         failure_code = incomplete_reasons[0]["reason_code"]
         for occurrence in reference_occurrences:
             if occurrence["status"] == "expanded":
@@ -956,7 +984,7 @@ def acquire_github_expansion(
 
     # No CAS object is published before recursive scanning reaches a complete or
     # explicitly incomplete, bounded versioned outcome.
-    published_content = all_content if complete else root_content
+    published_content = all_content if complete or objects else root_content
     for digest in sorted(published_content):
         actual = cas.put(
             BytesIO(published_content[digest]),
@@ -975,7 +1003,7 @@ def acquire_github_expansion(
             )
     expansion_digest = _put_record(cas, expansion_record)
 
-    return {
+    result = {
         "schema": "aragorn/github-expansion-result/v1",
         "expansion_digest": expansion_digest,
         "root_manifest_digest": root_manifest_digest,
@@ -986,6 +1014,23 @@ def acquire_github_expansion(
         "accounting": accounting,
         "closure": closure,
     }
+    try:
+        if _retain_source_proof:
+            result["source_proof_digest"] = retain_github_source_proof(
+                cas,
+                root_manifest,
+                root_raw_objects,
+            )
+        if _retain_expansion_proof and (complete or objects):
+            result["expansion_proof_digest"] = retain_github_expansion_proof(
+                cas,
+                expansion_digest,
+                root_manifest_digest,
+                session._raw_objects,
+            )
+    except (ArtifactClosureError, GitHubExpansionProofError) as exc:
+        raise GitHubExpansionError(str(exc)) from exc
+    return result
 
 
 def resolve_terminal_source_graph(

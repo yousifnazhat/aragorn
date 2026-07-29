@@ -527,6 +527,40 @@ class GitHubExpansionTests(unittest.TestCase):
         self.assertEqual(expansion["objects"], [])
         self.assertFalse(any(path.startswith("/repos/other/") for path in calls))
 
+    def test_phase1_partial_mode_retains_95_percent_static_capture(self) -> None:
+        valid = (
+            "https://raw.githubusercontent.com/example/project/"
+            f"{COMMIT}/payloads/one.txt"
+        )
+        missing = (
+            "https://raw.githubusercontent.com/example/project/"
+            f"{COMMIT}/payloads/zz-missing.md"
+        )
+        content = (
+            "\n".join([f"[target-{index}]({valid})" for index in range(19)])
+            + f"\n[missing]({missing})"
+            + "\ncurl https://github.com/example/project/"
+            "releases/download/v1/payload.tar.gz\n"
+        ).encode()
+        result, expansion, _cas, _calls, temporary = self.expand(
+            _responses(content),
+            _retain_partial_objects=True,
+        )
+        self.addCleanup(temporary.cleanup)
+
+        references = expansion["accounting"]["references"]
+        self.assertEqual(result["closure"]["status"], "incomplete")
+        self.assertEqual(references["expanded"], 19)
+        self.assertEqual(references["unresolved"], 3)
+        self.assertEqual(
+            [item["repository_path"] for item in expansion["objects"]],
+            ["payloads/one.txt"],
+        )
+        self.assertEqual(
+            references["expanded"] * 100,
+            (references["expanded"] + 1) * 95,
+        )
+
     def test_standalone_raw_url_line_expands_prior_commit(self) -> None:
         url = (
             "https://raw.githubusercontent.com/example/project/"

@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from aragorn import github_gateway
@@ -25,6 +26,71 @@ class GitHubGatewaySystemdTests(unittest.TestCase):
             "PYTHONDONTWRITEBYTECODE": "1",
             "TZ": "UTC",
         }
+
+    def test_host_namespace_attestation_drops_ptrace_once(self) -> None:
+        identity = {
+            namespace: index
+            for index, namespace in enumerate(
+                ("pid", "mnt", "user", "cgroup"),
+                start=100,
+            )
+        }
+
+        def namespace_stat(path: str):
+            namespace = path.rsplit("/", 1)[-1]
+            return SimpleNamespace(st_dev=5, st_ino=identity[namespace])
+
+        def virtual_file(path: Path, *_args: object) -> bytes:
+            if path == Path("/proc/1/comm"):
+                return b"systemd\n"
+            if path == Path("/proc/self/cgroup"):
+                return b"0::/system.slice/aragorn-test.service\n"
+            raise AssertionError(path)
+
+        self.addCleanup(
+            setattr,
+            github_gateway,
+            "_HOST_NAMESPACE_IDENTITY",
+            github_gateway._HOST_NAMESPACE_IDENTITY,
+        )
+        github_gateway._HOST_NAMESPACE_IDENTITY = None
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    github_gateway._DROP_HOST_INSPECTION_CAP_ENV: "1",
+                },
+                clear=False,
+            ),
+            mock.patch.object(
+                github_gateway.os,
+                "stat",
+                side_effect=namespace_stat,
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_read_virtual_file",
+                side_effect=virtual_file,
+            ),
+            mock.patch.object(
+                github_gateway.Path,
+                "is_file",
+                return_value=True,
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_drop_capability",
+            ) as drop,
+            mock.patch.object(
+                github_gateway,
+                "_require_capability_absent",
+            ) as absent,
+        ):
+            github_gateway._require_systemd_host()
+            github_gateway._require_systemd_host()
+
+        drop.assert_called_once_with(github_gateway._CAP_SYS_PTRACE)
+        absent.assert_called_once_with(github_gateway._CAP_SYS_PTRACE)
 
     def test_linux_launch_uses_fixed_systemd_policy_and_cleans_up(self) -> None:
         completed = _ProcessResult(b"ok\n", b"", 0)

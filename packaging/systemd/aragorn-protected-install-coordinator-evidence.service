@@ -13,7 +13,7 @@ User=root
 Group=root
 ExecStart=/usr/bin/python3.14 -I -S -B /usr/libexec/aragorn/aragorn-protected-install-coordinator.py
 WorkingDirectory=/
-Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC ARAGORN_DROP_HOST_INSPECTION_CAPABILITY=1
 UMask=0077
 Restart=no
 TimeoutStartSec=10min
@@ -29,8 +29,8 @@ StandardError=journal
 SyslogIdentifier=aragorn-protected-install-coordinator
 
 NoNewPrivileges=yes
-CapabilityBoundingSet=CAP_DAC_OVERRIDE
-AmbientCapabilities=CAP_DAC_OVERRIDE
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_SYS_PTRACE
+AmbientCapabilities=CAP_DAC_OVERRIDE CAP_SYS_PTRACE
 PrivateIPC=yes
 ProtectHostname=yes
 ProtectKernelLogs=yes

@@ -45,9 +45,7 @@ class BrokerSymlinkProbeTests(unittest.TestCase):
         self.assertEqual(
             result["implementation_digest"], evidence._IMPLEMENTATION_DIGEST
         )
-        self.assertEqual(
-            result["configuration_digest"], evidence._CONFIGURATION["digest"]
-        )
+        self.assertEqual(result["configuration"], evidence._CONFIGURATION)
         self.assertTrue(all(result["checks"].values()))
         self.assertEqual(
             result["mount_contract"],
@@ -69,6 +67,10 @@ class BrokerSymlinkProbeTests(unittest.TestCase):
         self.assertEqual(
             result["pinned_source_review"]["status"],
             "SOURCE_REVIEWED_RUNTIME_LIVE_PROOF_PENDING",
+        )
+        self.assertEqual(
+            result["pinned_source_review"]["sandbox_runtime_files"],
+            evidence._SOURCE_REVIEW["sandbox_runtime_files"],
         )
         self.assertLess(len(completed.stdout.encode()), 16 * 1024)
         canonical = json.dumps(
@@ -114,7 +116,9 @@ def _rpc(method: str, params: dict, start: int, timeout: int = 5_000) -> dict:
             "--timeout",
             str(timeout),
             "--params",
-            json.dumps(params, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+            json.dumps(
+                params, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+            ),
         ],
         start,
     )
@@ -137,8 +141,7 @@ def _boundary(role: str) -> dict:
             "mount_options": ["relatime", mode],
             "mount_point": evidence._ACTIVE_ROOT,
             "root": (
-                "/docker/volumes/"
-                "aragorn-openclaw-2026-7-1-broker-skills-v99/_data"
+                "/docker/volumes/aragorn-openclaw-2026-7-1-broker-skills-v99/_data"
             ),
             "source": "/dev/vdb1",
             "super_options": ["rw"],
@@ -149,10 +152,7 @@ def _boundary(role: str) -> dict:
 
 def _link(version: str, inode: int) -> dict:
     tree = evidence._FIXTURES[version]["tree_digest"]
-    target = (
-        f".aragorn-versions/{evidence._NAME}/"
-        f"{tree.removeprefix('sha256:')}"
-    )
+    target = f".aragorn-versions/{evidence._NAME}/{tree.removeprefix('sha256:')}"
     return {
         "device": 5,
         "inode": inode,
@@ -343,6 +343,68 @@ def _readiness(start: int) -> dict:
     )
 
 
+def _sandbox_command(argv: list[str], start: int, output: object) -> dict:
+    stdout = json.dumps(output, indent=2) + "\n"
+    command = _command(argv, start, stdout_bytes=len(stdout.encode()))
+    command["stdout_digest"] = _digest(stdout)
+    return {"command": command, "output": output, "stdout": stdout}
+
+
+def _sandbox() -> dict:
+    configured = _sandbox_command(
+        [
+            evidence._NODE,
+            evidence._OPENCLAW,
+            "config",
+            "get",
+            "agents.defaults.sandbox.mode",
+            "--json",
+        ],
+        22,
+        "off",
+    )
+    effective = _sandbox_command(
+        [
+            evidence._NODE,
+            evidence._OPENCLAW,
+            "sandbox",
+            "explain",
+            "--agent",
+            "main",
+            "--session",
+            evidence._SESSION_KEY,
+            "--json",
+        ],
+        24,
+        {
+            "agentId": "main",
+            "docsUrl": "https://docs.openclaw.ai/sandbox",
+            "mainSessionKey": "agent:main:main",
+            "sandbox": {
+                "backend": "docker",
+                "effectiveHostWorkspaceRoot": "/profile/workspace",
+                "mode": "off",
+                "runtimeWorkdir": "/profile/workspace",
+                "scope": "agent",
+                "sessionIsSandboxed": False,
+                "workspaceAccess": "none",
+                "workspaceMounts": [],
+                "workspaceRoot": "/profile/state/sandboxes",
+                "workspaceSource": "direct",
+            },
+            "sessionKey": evidence._SESSION_KEY,
+        },
+    )
+    return {
+        "configured": configured,
+        "effective": effective,
+        "runtime_files": {
+            path: record["digest"]
+            for path, record in evidence._SOURCE_REVIEW["sandbox_runtime_files"].items()
+        },
+    }
+
+
 def _guards(active: dict) -> dict:
     roots = [
         ("active-workspace-skills", evidence._ACTIVE_ROOT),
@@ -437,7 +499,7 @@ def _document() -> dict:
     observation = {
         "attempt": 1,
         "session": _session("v2", 101),
-        "turn": _turn("v2", 1, 3, 22),
+        "turn": _turn("v2", 1, 3, 26),
     }
     gateway = {
         "log_after": _log(200, "after"),
@@ -469,6 +531,7 @@ def _document() -> dict:
             },
             "runtime_boundary_after": _boundary("runtime"),
             "runtime_boundary_before": _boundary("runtime"),
+            "sandbox": _sandbox(),
             "same_session_advanced": True,
             "selected_attempt": 1,
             "version_proofs": {
@@ -476,7 +539,7 @@ def _document() -> dict:
                 "v2": _proof("v2", "installed"),
             },
         },
-        30,
+        40,
     )
 
 
@@ -484,6 +547,13 @@ class BrokerSymlinkEvidenceTests(unittest.TestCase):
     def test_strict_replay_binds_switch_mounts_guards_and_non_authority(self) -> None:
         document = _document()
         evidence.verify_openclaw_broker_symlink_evidence(document)
+
+        def enable_sandbox(item: dict) -> None:
+            block = item["payload"]["sandbox"]["effective"]
+            block["output"]["sandbox"]["mode"] = "all"
+            block["stdout"] = json.dumps(block["output"], indent=2) + "\n"
+            block["command"]["stdout_bytes"] = len(block["stdout"].encode())
+            block["command"]["stdout_digest"] = _digest(block["stdout"])
 
         mutations = [
             lambda item: item["decision"].update(status="PASS"),
@@ -503,6 +573,17 @@ class BrokerSymlinkEvidenceTests(unittest.TestCase):
             lambda item: item["payload"]["activations"]["v1"]["payload"][
                 "materialized"
             ].update(staged_device=6),
+            enable_sandbox,
+            lambda item: item["payload"]["sandbox"]["runtime_files"].update(
+                {
+                    "/runtime/lib/node_modules/openclaw/openclaw.mjs": (
+                        "sha256:" + "0" * 64
+                    )
+                }
+            ),
+            lambda item: item["payload"]["sandbox"]["effective"]["command"].update(
+                completed_at="2026-07-29T03:00:27.000Z"
+            ),
         ]
         for mutate in mutations:
             with self.subTest(mutate=mutate):

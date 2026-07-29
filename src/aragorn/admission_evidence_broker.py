@@ -22,11 +22,16 @@ _LIMITATIONS = [
     "NO_ADM_02_ROUTE_STATUS_IS_GRANTED",
 ]
 _IMPLEMENTATION_DIGEST = (
-    "sha256:25130a18c6edf547e7d1cf9cd81d1459207154dc606bac9cafd98e7827295adc"
+    "sha256:09f96b9963507e8d37713753a6f219d23656ed29528fa62c4b45e98fa33d96b4"
 )
 _CONFIGURATION = {
-    "bytes": 1441,
-    "digest": "sha256:7670d0460e8f99b9bcbb0ce08822b3dc25b463605b7ba9d2277adf9dba85fac8",
+    "canonical_document_digest": (
+        "sha256:6ac6a76b495a59561e9fd92d70135f033d90d83601ced57f97f9e8dfd42a2f2a"
+    ),
+    "file_bytes": 1466,
+    "file_digest": (
+        "sha256:a00da537d7538e818b4c075b661e536e84582a79cbee1faa233c484491a5b3ea"
+    ),
 }
 _EMPTY_DIGEST = (
     "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -60,6 +65,47 @@ _SOURCE_REVIEW = {
         "src/skills/runtime/refresh.ts": (
             "sha256:24afdf4b95d910b7cedca8415b3b93430b9417d4be2737e4eb76b2eaba8df531"
         ),
+    },
+    "sandbox_runtime_files": {
+        "/runtime/lib/node_modules/openclaw/openclaw.mjs": {
+            "digest": (
+                "sha256:f643b005d6db233a0b45204e8d8e943256874ccc6897b8a6e0cf42a9b376a188"
+            ),
+            "source": "openclaw.mjs",
+        },
+        "/runtime/lib/node_modules/openclaw/dist/entry.js": {
+            "digest": (
+                "sha256:c21dee0628985527f8a22d2fa54cfeba986479c5206339f379139464389cbf9f"
+            ),
+            "source": "src/entry.ts",
+        },
+        "/runtime/lib/node_modules/openclaw/dist/sandbox-cli-B0Is4BeU.js": {
+            "digest": (
+                "sha256:ba6a27d0c9ed49878a0046b7528438b1e683b21bc6dc38f2624520cd3f502fb5"
+            ),
+            "source": "src/commands/sandbox-explain.ts",
+        },
+        "/runtime/lib/node_modules/openclaw/dist/runtime-status-BRnZ3ffr.js": {
+            "digest": (
+                "sha256:9f5b9492c43b2c8ead57d46fb41205ac1b0e759542672ff47b9f56da3333d5d8"
+            ),
+            "source": "src/agents/sandbox/runtime-status.ts",
+        },
+        "/runtime/lib/node_modules/openclaw/dist/config-Dy4vED5-.js": {
+            "digest": (
+                "sha256:ce66d1255b1b66f4a0c09966fa2a8da59d42d15d8e8f578e4aae9387ac7ffb84"
+            ),
+            "source": "src/agents/sandbox/config.ts",
+        },
+        (
+            "/runtime/lib/node_modules/openclaw/dist/"
+            "zod-schema.agent-runtime-C02vY4RT.js"
+        ): {
+            "digest": (
+                "sha256:84e2127660eed8573e3d486708e67884de408ed6403995f3100e42c0d4e0b0eb"
+            ),
+            "source": "src/config/zod-schema.agent-runtime.ts",
+        },
     },
     "status": "SOURCE_REVIEWED_RUNTIME_LIVE_PROOF_PENDING",
 }
@@ -124,6 +170,7 @@ def verify_openclaw_broker_symlink_evidence(document: Mapping[str, Any]) -> None
                 "runtime",
                 "runtime_boundary_after",
                 "runtime_boundary_before",
+                "sandbox",
                 "same_session_advanced",
                 "selected_attempt",
                 "version_proofs",
@@ -195,6 +242,7 @@ def verify_openclaw_broker_symlink_evidence(document: Mapping[str, Any]) -> None
         _verify_shared_mount(broker_v1, runtime_before, runtime_after)
 
         gateway = _verify_gateway(payload["gateway"], baseline["gateway"])
+        sandbox = _verify_sandbox(payload["sandbox"])
         observations = payload["observations"]
         if (
             not isinstance(observations, list)
@@ -241,6 +289,12 @@ def verify_openclaw_broker_symlink_evidence(document: Mapping[str, Any]) -> None
             > _time(activation_v2["_recorded_at"])
             or _time(activation_v2["_recorded_at"])
             > _time(gateway["readiness_command"]["started_at"])
+            or _time(activation_v2["_recorded_at"])
+            > _time(sandbox["configured"]["command"]["started_at"])
+            or _time(sandbox["effective"]["command"]["completed_at"])
+            > _time(selected["turn"]["send"]["command"]["started_at"])
+            or _time(sandbox["effective"]["command"]["completed_at"])
+            > _time(document["recorded_at"])
             or _time(selected["turn"]["history_command"]["completed_at"])
             > _time(document["recorded_at"])
         ):
@@ -408,6 +462,97 @@ def _verify_baseline(document: Mapping[str, Any]) -> dict[str, Any]:
         "session": session,
         "turn": turn,
         "_recorded_at": value["recorded_at"],
+    }
+
+
+def _verify_sandbox(document: Mapping[str, Any]) -> dict[str, Any]:
+    value = _object(
+        document,
+        {"configured", "effective", "runtime_files"},
+        "sandbox proof",
+    )
+    configured = _object(
+        value["configured"], {"command", "output", "stdout"}, "configured sandbox"
+    )
+    configured_command = _verify_command(
+        configured["command"],
+        [
+            _NODE,
+            _OPENCLAW,
+            "config",
+            "get",
+            "agents.defaults.sandbox.mode",
+            "--json",
+        ],
+    )
+    effective = _object(
+        value["effective"], {"command", "output", "stdout"}, "effective sandbox"
+    )
+    effective_command = _verify_command(
+        effective["command"],
+        [
+            _NODE,
+            _OPENCLAW,
+            "sandbox",
+            "explain",
+            "--agent",
+            "main",
+            "--session",
+            _SESSION_KEY,
+            "--json",
+        ],
+    )
+    for item, command in (
+        (configured, configured_command),
+        (effective, effective_command),
+    ):
+        stdout = item["stdout"]
+        if not isinstance(stdout, str):
+            raise AdmissionEvidenceError("sandbox command stdout is not text")
+        raw = stdout.encode()
+        if (
+            command["stdout_bytes"] != len(raw)
+            or command["stdout_digest"] != "sha256:" + hashlib.sha256(raw).hexdigest()
+            or json.loads(stdout) != item["output"]
+        ):
+            raise AdmissionEvidenceError("sandbox command output binding changed")
+
+    output = _mapping(effective["output"], "effective sandbox output")
+    sandbox = _mapping(output.get("sandbox"), "effective sandbox state")
+    if (
+        configured["output"] != "off"
+        or configured["stdout"] != '"off"\n'
+        or output.get("docsUrl") != "https://docs.openclaw.ai/sandbox"
+        or output.get("agentId") != "main"
+        or output.get("sessionKey") != _SESSION_KEY
+        or output.get("mainSessionKey") != "agent:main:main"
+        or sandbox.get("mode") != "off"
+        or sandbox.get("scope") != "agent"
+        or sandbox.get("backend") != "docker"
+        or sandbox.get("workspaceAccess") != "none"
+        or sandbox.get("workspaceRoot") != "/profile/state/sandboxes"
+        or sandbox.get("effectiveHostWorkspaceRoot") != "/profile/workspace"
+        or sandbox.get("runtimeWorkdir") != "/profile/workspace"
+        or sandbox.get("workspaceMounts") != []
+        or sandbox.get("workspaceSource") != "direct"
+        or sandbox.get("sessionIsSandboxed") is not False
+        or _time(configured_command["completed_at"])
+        > _time(effective_command["started_at"])
+    ):
+        raise AdmissionEvidenceError(
+            "OpenClaw sandbox is not explicitly and effectively off"
+        )
+    runtime_files = _mapping(value["runtime_files"], "sandbox runtime files")
+    expected_runtime_files = {
+        path: record["digest"]
+        for path, record in _SOURCE_REVIEW["sandbox_runtime_files"].items()
+    }
+    if runtime_files != expected_runtime_files:
+        raise AdmissionEvidenceError("OpenClaw sandbox runtime files changed")
+    return {
+        "configured": {**configured, "command": configured_command},
+        "effective": {**effective, "command": effective_command},
+        "runtime_files": runtime_files,
     }
 
 

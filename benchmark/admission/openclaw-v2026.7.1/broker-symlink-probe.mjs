@@ -73,6 +73,39 @@ const PINNED_SOURCE_REVIEW = {
     "src/skills/runtime/refresh.ts":
       "sha256:24afdf4b95d910b7cedca8415b3b93430b9417d4be2737e4eb76b2eaba8df531",
   },
+  sandbox_runtime_files: {
+    "/runtime/lib/node_modules/openclaw/openclaw.mjs": {
+      digest:
+        "sha256:f643b005d6db233a0b45204e8d8e943256874ccc6897b8a6e0cf42a9b376a188",
+      source: "openclaw.mjs",
+    },
+    "/runtime/lib/node_modules/openclaw/dist/entry.js": {
+      digest:
+        "sha256:c21dee0628985527f8a22d2fa54cfeba986479c5206339f379139464389cbf9f",
+      source: "src/entry.ts",
+    },
+    "/runtime/lib/node_modules/openclaw/dist/sandbox-cli-B0Is4BeU.js": {
+      digest:
+        "sha256:ba6a27d0c9ed49878a0046b7528438b1e683b21bc6dc38f2624520cd3f502fb5",
+      source: "src/commands/sandbox-explain.ts",
+    },
+    "/runtime/lib/node_modules/openclaw/dist/runtime-status-BRnZ3ffr.js": {
+      digest:
+        "sha256:9f5b9492c43b2c8ead57d46fb41205ac1b0e759542672ff47b9f56da3333d5d8",
+      source: "src/agents/sandbox/runtime-status.ts",
+    },
+    "/runtime/lib/node_modules/openclaw/dist/config-Dy4vED5-.js": {
+      digest:
+        "sha256:ce66d1255b1b66f4a0c09966fa2a8da59d42d15d8e8f578e4aae9387ac7ffb84",
+      source: "src/agents/sandbox/config.ts",
+    },
+    "/runtime/lib/node_modules/openclaw/dist/zod-schema.agent-runtime-C02vY4RT.js":
+      {
+        digest:
+          "sha256:84e2127660eed8573e3d486708e67884de408ed6403995f3100e42c0d4e0b0eb",
+        source: "src/config/zod-schema.agent-runtime.ts",
+      },
+  },
   status: "SOURCE_REVIEWED_RUNTIME_LIVE_PROOF_PENDING",
 };
 
@@ -170,6 +203,7 @@ function configuration() {
     agents: {
       defaults: {
         model: { primary: `${PROVIDER}/${MODEL}` },
+        sandbox: { mode: "off" },
         skills: [NAME],
         workspace: WORKSPACE,
       },
@@ -241,6 +275,16 @@ function configuration() {
         watchDebounceMs: 250,
       },
     },
+  };
+}
+
+function configurationIdentity() {
+  const canonical = Buffer.from(canonicalJson(configuration()), "ascii");
+  const file = Buffer.concat([canonical, Buffer.from("\n", "ascii")]);
+  return {
+    canonical_document_digest: sha256(canonical),
+    file_bytes: file.length,
+    file_digest: sha256(file),
   };
 }
 
@@ -396,9 +440,7 @@ function prepare() {
     "aragorn/openclaw-broker-symlink-preparation-evidence/v1",
     {
       broker_identity: { uid: BROKER_UID },
-      configuration_digest: sha256(
-        Buffer.from(canonicalJson(config), "ascii"),
-      ),
+      configuration: configurationIdentity(),
       fixtures: FIXTURES,
       implementation_digest: sha256(readFileSync(SELF)),
       runtime_identity: { uid: RUNTIME_UID },
@@ -1320,10 +1362,11 @@ function exactConfiguration() {
   if (!raw.equals(expected)) {
     throw new Error("broker-switch configuration changed");
   }
-  return {
-    bytes: raw.length,
-    digest: sha256(Buffer.from(canonicalJson(configuration()), "ascii")),
-  };
+  const identity = configurationIdentity();
+  if (raw.length !== identity.file_bytes || sha256(raw) !== identity.file_digest) {
+    throw new Error("broker-switch configuration identity changed");
+  }
+  return identity;
 }
 
 function runtimeVersion() {
@@ -1579,6 +1622,53 @@ async function after() {
     throw new Error("broker-switch baseline schema changed");
   }
   const configurationProof = exactConfiguration();
+  const sandboxRuntimeFiles = Object.fromEntries(
+    Object.entries(PINNED_SOURCE_REVIEW.sandbox_runtime_files).map(
+      ([path, expected]) => [path, sha256(readFileSync(path))],
+    ),
+  );
+  for (const [path, expected] of Object.entries(
+    PINNED_SOURCE_REVIEW.sandbox_runtime_files,
+  )) {
+    if (sandboxRuntimeFiles[path] !== expected.digest) {
+      throw new Error(`pinned sandbox source bundle changed: ${path}`);
+    }
+  }
+  const configuredSandbox = command([
+    "config",
+    "get",
+    "agents.defaults.sandbox.mode",
+    "--json",
+  ]);
+  const configuredSandboxOutput = parseCommand(
+    configuredSandbox,
+    "configured sandbox mode",
+  );
+  const effectiveSandbox = command([
+    "sandbox",
+    "explain",
+    "--agent",
+    "main",
+    "--session",
+    SESSION_KEY,
+    "--json",
+  ]);
+  const effectiveSandboxOutput = parseCommand(
+    effectiveSandbox,
+    "effective sandbox mode",
+  );
+  if (
+    configuredSandboxOutput !== "off" ||
+    effectiveSandboxOutput?.agentId !== "main" ||
+    effectiveSandboxOutput?.sessionKey !== SESSION_KEY ||
+    effectiveSandboxOutput?.mainSessionKey !== "agent:main:main" ||
+    effectiveSandboxOutput?.sandbox?.mode !== "off" ||
+    effectiveSandboxOutput?.sandbox?.sessionIsSandboxed !== false ||
+    effectiveSandboxOutput?.sandbox?.workspaceSource !== "direct" ||
+    canonicalJson(effectiveSandboxOutput?.sandbox?.workspaceMounts) !== "[]"
+  ) {
+    throw new Error("OpenClaw sandbox is not explicitly and effectively off");
+  }
   const link = activeLinkSnapshot();
   if (link.version !== "v2") {
     throw new Error("after slice did not start on v2");
@@ -1676,6 +1766,19 @@ async function after() {
         source_review: PINNED_SOURCE_REVIEW,
         version: "2026.7.1",
       },
+      sandbox: {
+        configured: {
+          command: summarized(configuredSandbox),
+          output: configuredSandboxOutput,
+          stdout: configuredSandbox.stdout,
+        },
+        effective: {
+          command: summarized(effectiveSandbox),
+          output: effectiveSandboxOutput,
+          stdout: effectiveSandbox.stdout,
+        },
+        runtime_files: sandboxRuntimeFiles,
+      },
       same_session_advanced: true,
       selected_attempt: selected.attempt,
       version_proofs: versionProofs,
@@ -1737,6 +1840,15 @@ function selfCheck() {
       Object.values(PINNED_SOURCE_REVIEW.files).every((digest) =>
         /^sha256:[a-f0-9]{64}$/.test(digest),
       ) &&
+      Object.entries(PINNED_SOURCE_REVIEW.sandbox_runtime_files).every(
+        ([path, bundle]) =>
+          path.startsWith(
+            "/runtime/lib/node_modules/openclaw/",
+          ) &&
+          /^sha256:[a-f0-9]{64}$/.test(bundle.digest) &&
+          (bundle.source === "openclaw.mjs" ||
+            bundle.source.startsWith("src/")),
+      ) &&
       Object.values(PINNED_SOURCE_REVIEW.findings).every(Boolean),
     provider_scopes_tool_results_to_latest_user:
       latestToolContent({
@@ -1763,6 +1875,10 @@ function selfCheck() {
       isPathInside(ACTIVE_ROOT, VERSION_ROOT) &&
       basename(VERSION_ROOT).startsWith(".") &&
       resolve(ACTIVE_ROOT) !== resolve(VERSION_ROOT),
+    sandbox_is_explicitly_disabled_for_main:
+      config.agents.defaults.sandbox.mode === "off" &&
+      config.agents.list[0].id === "main" &&
+      config.agents.list[0].sandbox === undefined,
     tree_digests_are_sha256: Object.values(FIXTURES).every((fixture) =>
       /^sha256:[a-f0-9]{64}$/.test(fixture.tree_digest),
     ),
@@ -1773,9 +1889,7 @@ function selfCheck() {
   return {
     assurance: ASSURANCE,
     checks,
-    configuration_digest: sha256(
-      Buffer.from(canonicalJson(config), "ascii"),
-    ),
+    configuration: configurationIdentity(),
     fixtures: FIXTURES,
     implementation_digest: sha256(readFileSync(SELF)),
     mount_contract: {

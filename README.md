@@ -65,6 +65,12 @@ configuration, route, and retained evidence; `reload/workshop-invalidation`
 remains `NOT_TESTED`. The next production decision is to mediate and protect
 workspace skill writes externally or evaluate another harness.
 
+A separate
+[protected-route raw-action receipt](./benchmark/receipts/phase1-openclaw-protected-route-actions-v3-2026-07-29.json)
+binds one hardened read-only-root profile to three `OBSERVED` actions and nine
+`NOT_TESTED` routes. It records no `PASS` or `FAIL`, grants no installer
+authority, and does not alter the cumulative conformance ledger.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

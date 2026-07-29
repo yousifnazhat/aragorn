@@ -1,0 +1,490 @@
+{
+  "archive": {
+    "bytes": 3061027,
+    "format": "ustar+gzip",
+    "name": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace-2026-07-29.tar.gz",
+    "raw_sha256": "sha256:5c1465dde68a3e40c6d97790809ae24bed9c0320efb3b934fe853a46b0abc292"
+  },
+  "members": [
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/capture.json",
+      "sha256": "sha256:967bf3774114ccedf619347feee5733b9cdb46e752f082413d864c042acf3b91",
+      "size": 7295
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas",
+      "size": 0
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs",
+      "size": 0
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256",
+      "size": 0
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/08",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/08/a28b12ffa9fcb16f257ea685c70a920f4f835978b9ffbbac055137c6f6aca0",
+      "sha256": "sha256:08a28b12ffa9fcb16f257ea685c70a920f4f835978b9ffbbac055137c6f6aca0",
+      "size": 3677
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/09",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/09/ba57eb066a6318732f833d02bada48085f55a8553ea746f88042a4cb78ea10",
+      "sha256": "sha256:09ba57eb066a6318732f833d02bada48085f55a8553ea746f88042a4cb78ea10",
+      "size": 1531
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/0d",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/0d/614599e711c087b381a4ac7ee3c40758af1022669fc998649d199b9dfe15ed",
+      "sha256": "sha256:0d614599e711c087b381a4ac7ee3c40758af1022669fc998649d199b9dfe15ed",
+      "size": 1690
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/13",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/13/8fea476dd0e57a0baf5dae82afd47ceb60931f3727e5f8ab46356dc6c3a6f7",
+      "sha256": "sha256:138fea476dd0e57a0baf5dae82afd47ceb60931f3727e5f8ab46356dc6c3a6f7",
+      "size": 2861
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/27",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/27/43e1c420b6bdc59965380bde226a183ac2ec5fd1aa455a6b532ca5fc5c93f9",
+      "sha256": "sha256:2743e1c420b6bdc59965380bde226a183ac2ec5fd1aa455a6b532ca5fc5c93f9",
+      "size": 14067
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/34",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/34/8c58f4cf38a2e7080ea5272935a7658c7122d83dd6c52d0a1f2ef599c176ab",
+      "sha256": "sha256:348c58f4cf38a2e7080ea5272935a7658c7122d83dd6c52d0a1f2ef599c176ab",
+      "size": 1304
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/47",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/47/7f54b7f468132d8ba847a1f52ee57b5606c5bfe0b4677a64b9dcb5bf3629e0",
+      "sha256": "sha256:477f54b7f468132d8ba847a1f52ee57b5606c5bfe0b4677a64b9dcb5bf3629e0",
+      "size": 1981
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/5b",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/5b/139ceeb6a3ef16555a6eef421e2642e6ca286b5527ee2b4e02c11ae5b75dd5",
+      "sha256": "sha256:5b139ceeb6a3ef16555a6eef421e2642e6ca286b5527ee2b4e02c11ae5b75dd5",
+      "size": 10148
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/6d",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/6d/df9c045f8defe2d5a130209164d6b98d7e7b55a300a75f5f354426befaa8c3",
+      "sha256": "sha256:6ddf9c045f8defe2d5a130209164d6b98d7e7b55a300a75f5f354426befaa8c3",
+      "size": 304
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/71",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/71/fed21d4d1e09acae4415436f5fb1d9c25db2f04748c57dfea70c7d18b40490",
+      "sha256": "sha256:71fed21d4d1e09acae4415436f5fb1d9c25db2f04748c57dfea70c7d18b40490",
+      "size": 118
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/7d",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/7d/72a7c16637a2382fc25c15b0b12cedad85ff2f28b6e3fd732b44844057291f",
+      "sha256": "sha256:7d72a7c16637a2382fc25c15b0b12cedad85ff2f28b6e3fd732b44844057291f",
+      "size": 1553
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/7f",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/7f/8e7a795829837f46a0c058c26c8f5c4aa8be5c9fb5316b828229d1802ded77",
+      "sha256": "sha256:7f8e7a795829837f46a0c058c26c8f5c4aa8be5c9fb5316b828229d1802ded77",
+      "size": 8299
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/85",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/85/a7d55488f8f38f9b98350b5cb597fb306432d5e61eaa3444e7226ca9309e0b",
+      "sha256": "sha256:85a7d55488f8f38f9b98350b5cb597fb306432d5e61eaa3444e7226ca9309e0b",
+      "size": 4200
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/85/decd87d8a2c85b74d10b4005608e0eba891439a2f9acd68c7b12599ec35a5d",
+      "sha256": "sha256:85decd87d8a2c85b74d10b4005608e0eba891439a2f9acd68c7b12599ec35a5d",
+      "size": 142
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/89",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/89/a8ef9bb7508e4819080e65834d6783afa5a5a614d458a3821b80a329eb32e5",
+      "sha256": "sha256:89a8ef9bb7508e4819080e65834d6783afa5a5a614d458a3821b80a329eb32e5",
+      "size": 1222
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/a2",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/a2/2658e9311874a996f7fc0870f2a189c759544eb2cd7ceb53c767efe3efee46",
+      "sha256": "sha256:a22658e9311874a996f7fc0870f2a189c759544eb2cd7ceb53c767efe3efee46",
+      "size": 12922
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/a6",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/a6/4e4de844900a2090b6dbeaa0052168ef8e650f03112fe15821c17541fe6408",
+      "sha256": "sha256:a64e4de844900a2090b6dbeaa0052168ef8e650f03112fe15821c17541fe6408",
+      "size": 627
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/b0",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/b0/79b84f1a7dc91959ba334164ccc0c2927ef7bdcebb5b07dc038e38163e095d",
+      "sha256": "sha256:b079b84f1a7dc91959ba334164ccc0c2927ef7bdcebb5b07dc038e38163e095d",
+      "size": 1976
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/be",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/be/2076bcf7d49127b998befef25b1b26e2a76ef72c5f0ff0d3e30631a5ee6704",
+      "sha256": "sha256:be2076bcf7d49127b998befef25b1b26e2a76ef72c5f0ff0d3e30631a5ee6704",
+      "size": 2023
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/c4",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/c4/634d15129cf4aa06a4245ddbc08401f3ee5912e1cd1d639579bf8342145cf9",
+      "sha256": "sha256:c4634d15129cf4aa06a4245ddbc08401f3ee5912e1cd1d639579bf8342145cf9",
+      "size": 1212
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/cb",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/cb/607fca192bfa892fd198141b86dac9d0ca2c573a280b054b7beaa56fc9a8bf",
+      "sha256": "sha256:cb607fca192bfa892fd198141b86dac9d0ca2c573a280b054b7beaa56fc9a8bf",
+      "size": 7144
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/cb/79b91a243d4867f48b47b3983fe1da5f5f4e64c79b29c93a10af294dcc008e",
+      "sha256": "sha256:cb79b91a243d4867f48b47b3983fe1da5f5f4e64c79b29c93a10af294dcc008e",
+      "size": 2315
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/cd",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/cd/c65d0eb735b387b32d4ae76c7a527be1b20a911126424079abda0488d95f71",
+      "sha256": "sha256:cdc65d0eb735b387b32d4ae76c7a527be1b20a911126424079abda0488d95f71",
+      "size": 279
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/d2",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/d2/10e881b794fbe0350aebc998abf257b20e7cbe5a6928a3d4294fecb32bd3b2",
+      "sha256": "sha256:d210e881b794fbe0350aebc998abf257b20e7cbe5a6928a3d4294fecb32bd3b2",
+      "size": 519
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/d7",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/d7/dc1ef6da10929a8bb44e1e3f1d666b83fa746f92db9c50f889e4c747c6dc26",
+      "sha256": "sha256:d7dc1ef6da10929a8bb44e1e3f1d666b83fa746f92db9c50f889e4c747c6dc26",
+      "size": 7503168
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/db",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/db/093bd9e441d93ce3e34a002d60c88e25cc164ca5ad9f254ea6493f8d1ff235",
+      "sha256": "sha256:db093bd9e441d93ce3e34a002d60c88e25cc164ca5ad9f254ea6493f8d1ff235",
+      "size": 1934
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/db/5ab07be6431ce716943d93f6eaa903abd890514fa3204b9c70def8089f3a37",
+      "sha256": "sha256:db5ab07be6431ce716943d93f6eaa903abd890514fa3204b9c70def8089f3a37",
+      "size": 214
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/dc",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/dc/a4531a79471d90a1e119cc52753e124a9f88c45b61dd5cdd912a590477a748",
+      "sha256": "sha256:dca4531a79471d90a1e119cc52753e124a9f88c45b61dd5cdd912a590477a748",
+      "size": 132
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/de",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/de/d642e811b4731f6a2c90c73b02e00c937511d9ee65236bb8cf9964f0069393",
+      "sha256": "sha256:ded642e811b4731f6a2c90c73b02e00c937511d9ee65236bb8cf9964f0069393",
+      "size": 5336
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/e3",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/e3/2575a82f9b193e88940116778d9c182c1ae22ab866819b179a598eb9b998d1",
+      "sha256": "sha256:e32575a82f9b193e88940116778d9c182c1ae22ab866819b179a598eb9b998d1",
+      "size": 2607
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/e3/b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/e7",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/e7/785d6c61d368f5ea5270c979753aea02f776f5b6aa220137ec4585abd720c2",
+      "sha256": "sha256:e7785d6c61d368f5ea5270c979753aea02f776f5b6aa220137ec4585abd720c2",
+      "size": 5081
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/eb",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/eb/7f434e84efa0922ebd3edea1b7a2352f38d2d820c7a881669aa556db4eeb3f",
+      "sha256": "sha256:eb7f434e84efa0922ebd3edea1b7a2352f38d2d820c7a881669aa556db4eeb3f",
+      "size": 170
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/f4",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/f4/7e2d42f6360294216a859ae0c30b93caafdd2b2e5ffc007489ba4ca447fa5c",
+      "sha256": "sha256:f47e2d42f6360294216a859ae0c30b93caafdd2b2e5ffc007489ba4ca447fa5c",
+      "size": 16246
+    },
+    {
+      "kind": "directory",
+      "mode": 365,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/ff",
+      "size": 0
+    },
+    {
+      "kind": "file",
+      "mode": 292,
+      "path": "phase1-github-recursive-anthropics-claude-plugins-hook-development-6b708ace/cas/blobs/sha256/ff/536d2d3093b21c1f8cbb401ad5afeaf086c0d4654af39d06005a4431da9979",
+      "sha256": "sha256:ff536d2d3093b21c1f8cbb401ad5afeaf086c0d4654af39d06005a4431da9979",
+      "size": 262
+    }
+  ],
+  "normalization": {
+    "gid": 0,
+    "gname": "",
+    "gzip_filename": "",
+    "gzip_mtime": 0,
+    "member_mtime": 0,
+    "uid": 0,
+    "uname": ""
+  },
+  "schema": "aragorn/deterministic-evidence-archive-inventory/v1",
+  "summary": {
+    "cas_blob_count": 35,
+    "cas_payload_bytes": 7617264,
+    "directory_count": 35,
+    "member_count": 71,
+    "regular_file_count": 36,
+    "regular_payload_bytes": 7624559
+  }
+}

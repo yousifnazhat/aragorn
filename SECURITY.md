@@ -193,8 +193,10 @@ raw Git commit/tree proof, not supported acquisition: the root filesystem is
 not sealed, and the host kernel/systemd/Python trust boundary is not attested.
 Private repositories, scoped credential injection, retry policy, automatic
 independent release-pin acquisition, archive inventory/extraction, live public
-out-of-root recursive evidence, protected installation, and install/update
-enforcement remain unsupported.
+out-of-root recursive evidence, admission-authorized protected installation,
+and install/update enforcement remain unsupported. The internal request-v3
+broker path is evidence-only and fails closed before protected publication when
+recursive closure is incomplete.
 
 ## Attack Surface, Mitigations, and Attacker Stories
 

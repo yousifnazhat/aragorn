@@ -751,9 +751,12 @@ artifacts covered by a fail-closed `ERROR` outcome. This is evidence-set
 eligibility under the Phase 1 exit column and makes Phase 2 engineering
 eligible; it is not production completion of the full deliverable column. The
 bounded release resolver, recursive gateway/broker replay, and v4 fail-closed
-graph are implemented. Automatic independent release-pin acquisition, archive
-inventory/extraction, live public out-of-root recursive evidence, runtime
-conformance, installer eligibility, and public release remain blocked.
+graph are implemented. The protected request-v3 path now binds recursive
+acquisition identities through graph and decision replay; release-bearing v4
+stops before analysis or publication. Automatic independent release-pin
+acquisition, archive inventory/extraction, live public out-of-root recursive
+evidence, runtime conformance, installer eligibility, and public release remain
+blocked.
 
 The qualified Phase 0 validation milestone is complete under the checked-in
 aggregate phase-evidence rule in

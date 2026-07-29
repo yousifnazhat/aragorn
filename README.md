@@ -340,16 +340,24 @@ caller-held release pins. Release bytes remain outside the installable source
 manifest and the v4 graph leaves them unresolved until a supported analyzer
 actually assesses them.
 The receipt still cannot authorize admission, promotion, or installation.
+The root coordinator now carries the recursive root manifest, expansion proof,
+and exact release-result digests through
+`aragorn/protected-install-broker-request/v3`. A versioned broker independently
+replays graph v3 or v4 and the decision receipt. Complete release-free closure
+may reach the existing protected context; incomplete release closure records an
+`ERROR` decision before analysis, context creation, or protected publication.
 
 This is an internal primitive, not a command developers repeatedly run. The
 Linux service boundary covers process and IP-address containment but does not
 seal a dedicated root filesystem or attest the host platform. The retained
 Phase 1 v2 receipt proves its frozen acquisition-lock metrics; it does not make
 this a supported production acquisition boundary. The bounded release resolver,
-recursive gateway/broker replay, and v4 fail-closed graph are implemented.
+recursive gateway/broker replay, protected request-v3 composition, and v4
+fail-closed decision path are implemented.
 Automatic independent release-pin acquisition, archive inventory/extraction,
 live public out-of-root recursive coverage, provisioning, control-plane
-promotion, and admission-authorized install/update wiring remain incomplete.
+promotion, live protected-path qualification, and installer authority remain
+incomplete.
 The direct `acquire-github` command still runs with the operator's UID and
 remains evaluation-only.
 

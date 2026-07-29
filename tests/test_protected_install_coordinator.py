@@ -12,8 +12,10 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import mock
 
+import aragorn.github_recursive_artifact_graph as recursive_artifact_graph_v3
+import aragorn.github_recursive_artifact_graph_v4 as recursive_artifact_graph_v4
 from aragorn.cas import CAS
-from aragorn.github_gateway import QUARANTINE_AUTHORITY, SOURCE_ASSURANCE
+from aragorn.github_gateway import QUARANTINE_AUTHORITY
 from aragorn.oci_worker_protocol import canonical_json
 from aragorn.phase0_candidate import candidate_implementation_digest
 from aragorn.protected_install_coordinator import (
@@ -21,6 +23,8 @@ from aragorn.protected_install_coordinator import (
     INTENT_SCHEMA,
     ProtectedInstallCoordinatorError,
     _derive_release_pins,
+    _load_release_asset_pins,
+    _recursive_artifact_graph_verifier_digest,
     _release_analyzer_script,
     _start_fixed_service,
     coordinate_intent,
@@ -114,28 +118,36 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         }
 
     def _gateway_result(self, source_request, **kwargs):
+        self.assertEqual(kwargs["release_asset_pins"], {})
         quarantine = Path(kwargs["quarantine_state"])
         CAS(quarantine)
         suffix = source_request["commit"][0]
         receipt_digest = _digest("a" if suffix == "1" else "b")
         manifest_digest = _digest("c" if suffix == "1" else "d")
+        root_manifest_digest = _digest("0" if suffix == "1" else "1")
         tree_digest = _digest("e" if suffix == "1" else "f")
         profile_digest = _digest("8" if suffix == "1" else "9")
         self.receipts[receipt_digest] = {
             "schema": "aragorn/github-quarantine-receipt/v1",
             "authority": QUARANTINE_AUTHORITY,
             "request": source_request,
-            "manifest_digest": manifest_digest,
+            "manifest_digest": root_manifest_digest,
             "tree_digest": tree_digest,
+            "source_proof_digest": _digest("6"),
+            "expanded_tree_digest": tree_digest,
         }
         return SimpleNamespace(
-            authority=QUARANTINE_AUTHORITY,
-            source_assurance=SOURCE_ASSURANCE,
+            request_digest="sha256:"
+            + hashlib.sha256(canonical_json(source_request)).hexdigest(),
             quarantine_state=quarantine,
             quarantine_receipt_digest=receipt_digest,
             gateway_profile_digest=profile_digest,
             manifest_digest=manifest_digest,
-            tree_digest=tree_digest,
+            root_manifest_digest=root_manifest_digest,
+            source_proof_digest=_digest("6"),
+            expansion_digest=_digest("2" if suffix == "1" else "3"),
+            expansion_proof_digest=_digest("4" if suffix == "1" else "5"),
+            release_asset_result_digests=(),
         )
 
     def _verify_receipt(
@@ -193,7 +205,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             "manifest_digest": request["manifest_digest"],
             "tree_digest": self.receipts[
                 request["quarantine_receipt_digest"]
-            ]["tree_digest"],
+            ]["expanded_tree_digest"],
             "destination": {
                 "root_device": self.protected.stat().st_dev,
                 "root_inode": self.protected.stat().st_ino,
@@ -221,13 +233,23 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                 return_value=(123, 123),
             ),
             mock.patch(
-                "aragorn.protected_install_coordinator.quarantine_through_gateway",
+                "aragorn.protected_install_coordinator."
+                "quarantine_recursive_through_gateway",
                 side_effect=self._gateway_result,
             ),
             mock.patch(
                 "aragorn.protected_install_coordinator."
                 "verify_github_quarantine_receipt",
                 side_effect=self._verify_receipt,
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "load_verified_retained_manifest",
+                side_effect=lambda _cas, digest: {
+                    "tree_digest": (
+                        _digest("e") if digest == _digest("c") else _digest("f")
+                    )
+                },
             ),
             mock.patch(
                 "aragorn.protected_install_coordinator."
@@ -255,7 +277,15 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                 side_effect=self._run_service,
             ),
         )
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+        ):
             installed = coordinate_intent(
                 self._intent("install", "1" * 40),
                 release_identity_path=self.root / "unused-identity.json",
@@ -264,6 +294,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                 protected_root=self.protected,
                 request_path=self.request,
                 state_path=self.state,
+                release_asset_pins_path=self.control / "absent-pins.json",
                 expected_uid=self.uid,
                 now_unix=100,
             )
@@ -275,6 +306,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                 protected_root=self.protected,
                 request_path=self.request,
                 state_path=self.state,
+                release_asset_pins_path=self.control / "absent-pins.json",
                 expected_uid=self.uid,
                 now_unix=200,
             )
@@ -286,11 +318,32 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         self.assertEqual(len(self.service_requests), 2)
         first, second = self.service_requests
         self.assertEqual(first["operation"], "install")
+        self.assertEqual(
+            first["schema"],
+            "aragorn/protected-install-broker-request/v3",
+        )
         self.assertIsNone(first["expected_active"])
         self.assertIsNone(first["expected_manifest_diff_digest"])
         self.assertEqual(
-            {field: first[field] for field in pins},
-            pins,
+            {
+                field: first[field]
+                for field in pins
+                if field != "expected_artifact_graph_verifier_digest"
+            },
+            {
+                field: value
+                for field, value in pins.items()
+                if field != "expected_artifact_graph_verifier_digest"
+            },
+        )
+        self.assertEqual(
+            first["recursive"],
+            {
+                "root_manifest_digest": _digest("0"),
+                "expansion_digest": _digest("2"),
+                "expansion_proof_digest": _digest("4"),
+                "release_asset_result_digests": [],
+            },
         )
         self.assertEqual(second["operation"], "update")
         self.assertEqual(
@@ -304,6 +357,10 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         self.assertEqual(
             second["expected_active"]["quarantine_receipt_digest"],
             first["quarantine_receipt_digest"],
+        )
+        self.assertEqual(
+            second["expected_active"]["recursive"],
+            first["recursive"],
         )
         self.assertNotEqual(
             second["expected_manifest_diff_digest"],
@@ -321,7 +378,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                     "repository": "skills",
                     "commit": "1" * 40,
                     "skill_path": "sample",
-                    "expected_policy_digest": _digest("1"),
+                    "release_asset_pins": {},
                 }
             )
         )
@@ -329,7 +386,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         with (
             mock.patch(
                 "aragorn.protected_install_coordinator."
-                "quarantine_through_gateway"
+                "quarantine_recursive_through_gateway"
             ) as gateway,
             self.assertRaisesRegex(
                 ProtectedInstallCoordinatorError,
@@ -344,9 +401,41 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                 protected_root=self.protected,
                 request_path=self.request,
                 state_path=self.state,
+                release_asset_pins_path=None,
                 expected_uid=self.uid,
             )
         gateway.assert_not_called()
+
+    def test_release_asset_pins_require_a_protected_operator_file(self) -> None:
+        path = self.control / "release-pins.json"
+        path.write_bytes(canonical_json({}))
+        path.chmod(0o400)
+
+        self.assertEqual(_load_release_asset_pins(path, self.uid), {})
+        self.assertEqual(
+            _load_release_asset_pins(self.control / "absent.json", self.uid),
+            {},
+        )
+        path.chmod(0o600)
+        with self.assertRaisesRegex(
+            ProtectedInstallCoordinatorError,
+            "metadata is unsafe",
+        ):
+            _load_release_asset_pins(path, self.uid)
+
+    def test_recursive_verifier_pin_matches_graph_version(self) -> None:
+        for release_digests, module in (
+            ([], recursive_artifact_graph_v3),
+            ([_digest("1")], recursive_artifact_graph_v4),
+        ):
+            with self.subTest(release_assets=bool(release_digests)):
+                path = Path(module.__file__).resolve(strict=True)
+                self.assertEqual(
+                    _recursive_artifact_graph_verifier_digest(
+                        release_digests
+                    ),
+                    "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+                )
 
     def test_release_identity_derives_broker_and_analyzer_pins(self) -> None:
         broker = (
@@ -354,7 +443,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             / "benchmark"
             / "admission"
             / "openclaw-v2026.7.1"
-            / "protected-install-broker.py"
+            / "protected-install-broker-recursive-v3.py"
         )
         python = Path(sys.executable).resolve(strict=True)
         raw_broker = broker.read_bytes()

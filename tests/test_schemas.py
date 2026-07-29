@@ -130,6 +130,7 @@ EXPECTED_CONTRACTS = {
     "policy-v2.schema.json": "aragorn/policy/v2",
     "protected-install-broker-request-v1.schema.json": "aragorn/protected-install-broker-request/v1",
     "protected-install-broker-request-v2.schema.json": "aragorn/protected-install-broker-request/v2",
+    "protected-install-broker-request-v3.schema.json": "aragorn/protected-install-broker-request/v3",
     "protected-install-context-v1.schema.json": "aragorn/protected-install-context/v1",
     "protected-install-context-v2.schema.json": "aragorn/protected-install-context/v2",
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
@@ -195,6 +196,30 @@ class SchemaTests(unittest.TestCase):
                 "revocation_file",
                 "expected_broker_uid",
             }.isdisjoint(properties)
+        )
+
+    def test_recursive_protected_request_keeps_pins_out_of_source_intent(
+        self,
+    ) -> None:
+        document = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "protected-install-broker-request-v3.schema.json"
+            ).read_text()
+        )
+        recursive = document["$defs"]["recursive"]
+
+        self.assertEqual(
+            set(recursive["required"]),
+            set(recursive["properties"]),
+        )
+        self.assertFalse(recursive["additionalProperties"])
+        self.assertNotIn("release_asset_pins", document["properties"])
+        self.assertEqual(
+            recursive["properties"]["release_asset_result_digests"][
+                "maxItems"
+            ],
+            16,
         )
 
     def test_v6_corpus_and_freeze_schema_pin_external_reference(self) -> None:

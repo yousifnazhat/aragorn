@@ -18,24 +18,26 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import aragorn.admission_artifact_graph as artifact_graph_module
 import aragorn.analyzer_receipt as analyzer_receipt_module
+import aragorn.github_recursive_artifact_graph as recursive_artifact_graph_v3
+import aragorn.github_recursive_artifact_graph_v4 as recursive_artifact_graph_v4
 
+from .artifact_closure import load_verified_retained_manifest
 from .cas import CAS
 from .github_gateway import (
     QUARANTINE_AUTHORITY,
-    SOURCE_ASSURANCE,
     build_gateway_request,
-    quarantine_through_gateway,
 )
 from .github_quarantine_receipt import verify_github_quarantine_receipt
+from .github_recursive_gateway import quarantine_recursive_through_gateway
 from .manifest_diff import diff_verified_manifests_between
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .phase0_candidate import candidate_implementation_digest
 
 INTENT_SCHEMA = "aragorn/protected-install-intent/v1"
-REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v2"
-STATE_SCHEMA = "aragorn/protected-install-coordinator-state/v1"
+REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v3"
+STATE_SCHEMA_V1 = "aragorn/protected-install-coordinator-state/v1"
+STATE_SCHEMA = "aragorn/protected-install-coordinator-state/v2"
 RESULT_SCHEMA = "aragorn/protected-install-coordinator-result/v1"
 ASSURANCE = "TRUSTED_COORDINATOR_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
 
@@ -47,12 +49,19 @@ _INTENT_FIELDS = {
     "commit",
     "skill_path",
 }
-_EXPECTED_ACTIVE_FIELDS = {
+_EXPECTED_ACTIVE_V1_FIELDS = {
     "context_id",
     "manifest_digest",
     "source_request",
     "quarantine_receipt_digest",
     "gateway_profile_digest",
+}
+_EXPECTED_ACTIVE_FIELDS = _EXPECTED_ACTIVE_V1_FIELDS | {"recursive"}
+_RECURSIVE_FIELDS = {
+    "root_manifest_digest",
+    "expansion_digest",
+    "expansion_proof_digest",
+    "release_asset_result_digests",
 }
 _STATE_FIELDS = {
     "schema",
@@ -103,6 +112,9 @@ def coordinate_intent(
     state_path: Path = Path(
         "/var/lib/aragorn-protected/coordinator-active.json"
     ),
+    release_asset_pins_path: Path | None = Path(
+        "/etc/aragorn/github-release-asset-pins.json"
+    ),
     expected_uid: int = 0,
     now_unix: int | None = None,
 ) -> dict[str, Any]:
@@ -150,7 +162,7 @@ def coordinate_intent(
         )
 
     worker_uid, worker_gid = _service_identity(_FETCH_USER, _FETCH_GROUP)
-    receipt = quarantine_through_gateway(
+    receipt = quarantine_recursive_through_gateway(
         source_request,
         gateway_root=gateway_root,
         quarantine_state=quarantine,
@@ -158,11 +170,21 @@ def coordinate_intent(
         worker_gid=worker_gid,
         python_executable=release["python_path"],
         package_root=release["package_root"] / "src",
+        release_asset_pins=_load_release_asset_pins(
+            release_asset_pins_path,
+            expected_uid,
+        ),
     )
-    replay = _verify_gateway_receipt(
+    replay = _verify_recursive_gateway_receipt(
         receipt,
         source_request,
         quarantine,
+    )
+    recursive = replay["recursive"]
+    pins["expected_artifact_graph_verifier_digest"] = (
+        _recursive_artifact_graph_verifier_digest(
+            recursive["release_asset_result_digests"]
+        )
     )
     transition = _transition_fields(
         operation,
@@ -193,6 +215,7 @@ def coordinate_intent(
         "gateway_profile_digest": receipt.gateway_profile_digest,
         "context_id": context_id,
         "source_request": source_request,
+        "recursive": recursive,
         **pins,
     }
     raw_request = canonical_json(request)
@@ -204,12 +227,12 @@ def coordinate_intent(
             protected,
             context_id=context_id,
             manifest_digest=receipt.manifest_digest,
-            tree_digest=receipt.tree_digest,
+            tree_digest=replay["tree_digest"],
             operation=operation,
             expected_active=transition["context_expected_active"],
             expected_uid=expected_uid,
         )
-        _verify_gateway_receipt(
+        _verify_recursive_gateway_receipt(
             receipt,
             source_request,
             quarantine,
@@ -220,12 +243,13 @@ def coordinate_intent(
             "source_request": source_request,
             "quarantine_receipt_digest": receipt.quarantine_receipt_digest,
             "gateway_profile_digest": receipt.gateway_profile_digest,
+            "recursive": recursive,
         }
         state = {
             "schema": STATE_SCHEMA,
             "assurance": ASSURANCE,
             "expected_active": active,
-            "tree_digest": receipt.tree_digest,
+            "tree_digest": replay["tree_digest"],
             "version_path": transaction["version_path"],
             "service_request_digest": request_digest,
         }
@@ -245,7 +269,7 @@ def coordinate_intent(
         "service_request_digest": request_digest,
         "installer_work_eligible": False,
         "runtime_conformance_qualified": False,
-        "quarantine_authority": replay["authority"],
+        "quarantine_authority": replay["receipt"]["authority"],
     }
 
 
@@ -390,7 +414,8 @@ def _derive_release_pins(
         "hard_deny_reason_codes": [],
         "review_severities": ["critical", "high", "medium"],
         "allowed_artifact_graph_profiles": [
-            "self-contained-github-markdown/v1"
+            "recursive-github-markdown/v1",
+            "recursive-github-markdown/v2",
         ],
     }
     return (
@@ -408,7 +433,7 @@ def _derive_release_pins(
                 analyzer_receipt_module
             ),
             "expected_artifact_graph_verifier_digest": _module_digest(
-                artifact_graph_module
+                recursive_artifact_graph_v3
             ),
         },
         {
@@ -416,6 +441,109 @@ def _derive_release_pins(
             "python_path": python_path,
         },
     )
+
+
+def _load_release_asset_pins(
+    path: Path | None,
+    expected_uid: int,
+) -> dict[str, Any]:
+    if path is None:
+        return {}
+    if not path.is_absolute():
+        raise ProtectedInstallCoordinatorError(
+            "release asset pins path must be absolute"
+        )
+    parent = _protected_directory(
+        path.parent,
+        expected_uid,
+        "release asset pins directory",
+    )
+    if parent / path.name != path:
+        raise ProtectedInstallCoordinatorError(
+            "release asset pins path is not canonical"
+        )
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return {}
+    return _read_canonical_document(
+        path,
+        max_bytes=_MAX_DOCUMENT_BYTES,
+        expected_uid=expected_uid,
+        exact_mode=0o400,
+        label="release asset pins",
+    )
+
+
+def _recursive_identity(receipt: Any) -> dict[str, Any]:
+    try:
+        release_digests = sorted(
+            _require_digest(
+                item,
+                "recursive acquisition release asset result digest",
+            )
+            for item in receipt.release_asset_result_digests
+        )
+    except (TypeError, ProtectedInstallCoordinatorError) as exc:
+        raise ProtectedInstallCoordinatorError(
+            "recursive release asset result digests are invalid"
+        ) from exc
+    return _verify_recursive_identity(
+        {
+            "root_manifest_digest": receipt.root_manifest_digest,
+            "expansion_digest": receipt.expansion_digest,
+            "expansion_proof_digest": receipt.expansion_proof_digest,
+            "release_asset_result_digests": release_digests,
+        },
+        "recursive acquisition",
+    )
+
+
+def _recursive_artifact_graph_verifier_digest(
+    release_asset_result_digests: list[str],
+) -> str:
+    return _module_digest(
+        recursive_artifact_graph_v4
+        if release_asset_result_digests
+        else recursive_artifact_graph_v3
+    )
+
+
+def _verify_recursive_identity(
+    value: object,
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != _RECURSIVE_FIELDS:
+        raise ProtectedInstallCoordinatorError(f"{label} is invalid")
+    proof = value["expansion_proof_digest"]
+    if proof is not None:
+        proof = _require_digest(proof, f"{label} expansion proof digest")
+    release_digests = value["release_asset_result_digests"]
+    if (
+        not isinstance(release_digests, list)
+        or len(release_digests) > 16
+        or any(not isinstance(item, str) for item in release_digests)
+        or len(set(release_digests)) != len(release_digests)
+    ):
+        raise ProtectedInstallCoordinatorError(f"{label} is invalid")
+    ordered_release_digests = sorted(
+        _require_digest(item, f"{label} release asset result digest")
+        for item in release_digests
+    )
+    if release_digests != ordered_release_digests:
+        raise ProtectedInstallCoordinatorError(f"{label} is not canonical")
+    return {
+        "root_manifest_digest": _require_digest(
+            value["root_manifest_digest"],
+            f"{label} root manifest digest",
+        ),
+        "expansion_digest": _require_digest(
+            value["expansion_digest"],
+            f"{label} expansion digest",
+        ),
+        "expansion_proof_digest": proof,
+        "release_asset_result_digests": ordered_release_digests,
+    }
 
 
 def _prepare_predecessor(
@@ -444,9 +572,10 @@ def _prepare_predecessor(
         exact_mode=0o400,
         label="coordinator active state",
     )
+    schema = state.get("schema")
     if (
         set(state) != _STATE_FIELDS
-        or state.get("schema") != STATE_SCHEMA
+        or schema not in {STATE_SCHEMA_V1, STATE_SCHEMA}
         or state.get("assurance") != ASSURANCE
     ):
         raise ProtectedInstallCoordinatorError(
@@ -454,7 +583,11 @@ def _prepare_predecessor(
         )
     active = _exact_mapping(
         state["expected_active"],
-        _EXPECTED_ACTIVE_FIELDS,
+        (
+            _EXPECTED_ACTIVE_V1_FIELDS
+            if schema == STATE_SCHEMA_V1
+            else _EXPECTED_ACTIVE_FIELDS
+        ),
         "coordinator expected active",
     )
     active_source = build_gateway_request(
@@ -474,6 +607,12 @@ def _prepare_predecessor(
         "gateway_profile_digest",
     ):
         _require_digest(active[field], f"coordinator predecessor {field}")
+    recursive = None
+    if schema == STATE_SCHEMA:
+        recursive = _verify_recursive_identity(
+            active["recursive"],
+            "coordinator predecessor recursive identity",
+        )
     _require_digest(state["tree_digest"], "coordinator predecessor tree digest")
     _require_digest(
         state["service_request_digest"],
@@ -497,7 +636,11 @@ def _prepare_predecessor(
     receipt = verify_github_quarantine_receipt(
         CAS(previous_cas, read_only=True),
         active["quarantine_receipt_digest"],
-        expected_manifest_digest=active["manifest_digest"],
+        expected_manifest_digest=(
+            active["manifest_digest"]
+            if recursive is None
+            else recursive["root_manifest_digest"]
+        ),
         expected_gateway_profile_digest=active["gateway_profile_digest"],
     )
     if receipt["request"] != active_source:
@@ -544,14 +687,14 @@ def _transition_fields(
     }
 
 
-def _verify_gateway_receipt(
+def _verify_recursive_gateway_receipt(
     receipt: Any,
     source_request: dict[str, str],
     quarantine_path: Path,
 ) -> dict[str, Any]:
+    recursive = _recursive_identity(receipt)
     if (
-        receipt.authority != QUARANTINE_AUTHORITY
-        or receipt.source_assurance != SOURCE_ASSURANCE
+        receipt.request_digest != canonical_digest(source_request)
         or receipt.quarantine_state != quarantine_path
         or receipt.quarantine_receipt_digest is None
         or receipt.gateway_profile_digest is None
@@ -562,19 +705,27 @@ def _verify_gateway_receipt(
     replay = verify_github_quarantine_receipt(
         CAS(quarantine_path, read_only=True),
         receipt.quarantine_receipt_digest,
-        expected_manifest_digest=receipt.manifest_digest,
+        expected_manifest_digest=receipt.root_manifest_digest,
         expected_gateway_profile_digest=receipt.gateway_profile_digest,
+    )
+    manifest = load_verified_retained_manifest(
+        CAS(quarantine_path, read_only=True),
+        receipt.manifest_digest,
     )
     if (
         replay["request"] != source_request
-        or replay["manifest_digest"] != receipt.manifest_digest
-        or replay["tree_digest"] != receipt.tree_digest
+        or replay["manifest_digest"] != receipt.root_manifest_digest
+        or replay["source_proof_digest"] != receipt.source_proof_digest
         or replay["authority"] != QUARANTINE_AUTHORITY
     ):
         raise ProtectedInstallCoordinatorError(
             "gateway quarantine replay does not match its intent"
         )
-    return replay
+    return {
+        "receipt": replay,
+        "recursive": recursive,
+        "tree_digest": manifest["tree_digest"],
+    }
 
 
 def _verify_state_transaction(

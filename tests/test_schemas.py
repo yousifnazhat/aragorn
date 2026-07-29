@@ -123,6 +123,7 @@ EXPECTED_CONTRACTS = {
     "phase0-standards-gate-v1.schema.json": "aragorn/phase0-standards-gate/v1",
     "policy-v2.schema.json": "aragorn/policy/v2",
     "protected-install-broker-request-v1.schema.json": "aragorn/protected-install-broker-request/v1",
+    "protected-install-broker-request-v2.schema.json": "aragorn/protected-install-broker-request/v2",
     "protected-install-context-v1.schema.json": "aragorn/protected-install-context/v1",
     "protected-install-context-v2.schema.json": "aragorn/protected-install-context/v2",
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",

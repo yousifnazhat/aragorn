@@ -38,6 +38,7 @@ from aragorn.github_gateway import build_gateway_request
 from aragorn.github_quarantine_receipt import (
     verify_github_quarantine_receipt,
 )
+from aragorn.manifest_diff import diff_verified_manifests_between
 from aragorn.materialization import (
     _freeze_materialized_source_tree,
     verify_materialized_source_tree,
@@ -66,6 +67,7 @@ _SCANNER = "aragorn-inert-fixture-scanner"
 _GITHUB_SCANNER = "aragorn-agent-skill-threats"
 _GITHUB_ANALYZER_VERSION = "0.1.0-phase0-v7"
 _SERVICE_REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v1"
+_SERVICE_REQUEST_SCHEMA_V2 = "aragorn/protected-install-broker-request/v2"
 _MAX_SERVICE_REQUEST_BYTES = 64 * 1024
 _SERVICE_REQUEST_DIGEST_FIELDS = (
     "target_runtime_digest",
@@ -87,6 +89,11 @@ _SERVICE_REQUEST_FIELDS = {
     "expires_at_unix",
     "source_request",
     *_SERVICE_REQUEST_DIGEST_FIELDS,
+}
+_SERVICE_REQUEST_V2_FIELDS = _SERVICE_REQUEST_FIELDS | {
+    "operation",
+    "expected_active",
+    "expected_manifest_diff_digest",
 }
 _SERVICE_DYNAMIC_ARGUMENTS = (
     "now_unix",
@@ -274,6 +281,37 @@ def _require_initial_protected_root(
             )
 
 
+def _require_update_protected_root(path: Path, expected_uid: int) -> None:
+    if sorted(child.name for child in path.iterdir()) != [
+        ".aragorn-install-claims",
+        ".aragorn-versions",
+        _TARGET,
+    ]:
+        raise BrokerConformanceError(
+            "protected update root namespace is not exact"
+        )
+    controls = (
+        (path / ".aragorn-install-claims", 0o700),
+        (path / ".aragorn-versions", 0o755),
+        (path / ".aragorn-versions" / _TARGET, 0o755),
+    )
+    for control, expected_mode in controls:
+        state = _require_root(control, expected_uid)
+        if stat.S_IMODE(state.st_mode) != expected_mode:
+            raise BrokerConformanceError(
+                "protected update control layout is not exact"
+            )
+    active = (path / _TARGET).lstat()
+    if (
+        not stat.S_ISLNK(active.st_mode)
+        or active.st_uid != expected_uid
+        or active.st_nlink != 1
+    ):
+        raise BrokerConformanceError(
+            "protected update target must be one broker-owned symlink"
+        )
+
+
 def _build_fixture_evidence(
     cas: CAS,
     sources: Path,
@@ -413,6 +451,7 @@ def _publish(
     runtime_conformance_digest: str,
     target_runtime_digest: str,
     revoked_context_ids: tuple[str, ...] = (),
+    expected_active_cas: CAS | None = None,
     claim_state_provider: Callable[[], tuple[int, tuple[str, ...]]] | None = None,
 ) -> dict[str, Any]:
     return _publish_protected_install_transaction(
@@ -426,6 +465,7 @@ def _publish(
         expected_runtime_conformance_digest=runtime_conformance_digest,
         measured_target_runtime_digest=target_runtime_digest,
         revoked_context_ids=revoked_context_ids,
+        expected_active_cas=expected_active_cas,
         claim_state_provider=claim_state_provider,
     )
 
@@ -473,6 +513,28 @@ def _require_owner_protected_ancestry(
         if current == Path(current.anchor):
             return
         current = current.parent
+
+
+def _canonical_service_directory(
+    path_value: str,
+    expected_uid: int,
+    label: str,
+) -> Path:
+    supplied = Path(path_value)
+    try:
+        resolved = supplied.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise BrokerConformanceError(f"cannot resolve {label}: {exc}") from exc
+    if not supplied.is_absolute() or supplied != resolved:
+        raise BrokerConformanceError(
+            f"{label} must be an absolute canonical path"
+        )
+    _require_owner_protected_ancestry(
+        resolved,
+        expected_uid,
+        include_path=True,
+    )
+    return resolved
 
 
 def _load_revocation_snapshot(
@@ -548,6 +610,78 @@ def _load_revocation_snapshot(
     }
 
 
+def _canonical_source_request(value: object, label: str) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise BrokerConformanceError(f"{label} is invalid")
+    try:
+        verified = build_gateway_request(
+            value.get("owner"),
+            value.get("repository"),
+            value.get("commit"),
+            value.get("skill_path"),
+        )
+    except (TypeError, ValueError) as exc:
+        raise BrokerConformanceError(f"{label} is invalid: {exc}") from exc
+    if value != verified:
+        raise BrokerConformanceError(f"{label} is not canonical")
+    return verified
+
+
+def _service_transition(document: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
+    if document["schema"] == _SERVICE_REQUEST_SCHEMA:
+        return "install", None
+    operation = document["operation"]
+    expected_active = document["expected_active"]
+    expected_diff_digest = document["expected_manifest_diff_digest"]
+    if operation == "install":
+        if expected_active is not None or expected_diff_digest is not None:
+            raise BrokerConformanceError(
+                "service install request must not bind an active predecessor"
+            )
+        return operation, None
+    if operation != "update" or not isinstance(expected_active, dict):
+        raise BrokerConformanceError("service request operation is invalid")
+    if set(expected_active) != {
+        "context_id",
+        "manifest_digest",
+        "source_request",
+        "quarantine_receipt_digest",
+        "gateway_profile_digest",
+    }:
+        raise BrokerConformanceError(
+            "service update predecessor must be one exact object"
+        )
+    for field in (
+        "context_id",
+        "manifest_digest",
+        "quarantine_receipt_digest",
+        "gateway_profile_digest",
+    ):
+        _require_digest(expected_active[field], f"expected active {field}")
+    _canonical_source_request(
+        expected_active["source_request"],
+        "expected active source request",
+    )
+    _require_digest(expected_diff_digest, "expected manifest diff digest")
+    if expected_active["manifest_digest"] == document["manifest_digest"]:
+        raise BrokerConformanceError(
+            "service update manifest must differ from its predecessor"
+        )
+    if expected_active["source_request"] == document["source_request"]:
+        raise BrokerConformanceError(
+            "service update source request must differ from its predecessor"
+        )
+    for field in ("owner", "repository", "skill_path"):
+        if (
+            expected_active["source_request"][field]
+            != document["source_request"][field]
+        ):
+            raise BrokerConformanceError(
+                "service update source lineage must not change"
+            )
+    return operation, expected_active
+
+
 def _load_service_request(
     path_value: str,
     expected_uid: int,
@@ -618,10 +752,15 @@ def _load_service_request(
         raise BrokerConformanceError(
             f"service request is invalid: {exc}"
         ) from exc
+    schema = document.get("schema") if isinstance(document, dict) else None
+    fields = {
+        _SERVICE_REQUEST_SCHEMA: _SERVICE_REQUEST_FIELDS,
+        _SERVICE_REQUEST_SCHEMA_V2: _SERVICE_REQUEST_V2_FIELDS,
+    }.get(schema)
     if (
         not isinstance(document, dict)
-        or set(document) != _SERVICE_REQUEST_FIELDS
-        or document.get("schema") != _SERVICE_REQUEST_SCHEMA
+        or fields is None
+        or set(document) != fields
         or canonical_json(document) != bytes(raw)
     ):
         raise BrokerConformanceError(
@@ -632,27 +771,16 @@ def _load_service_request(
         raise BrokerConformanceError("service request expiry is invalid")
     for field in _SERVICE_REQUEST_DIGEST_FIELDS:
         _require_digest(document[field], field.replace("_", " "))
-    source_request = document["source_request"]
-    if not isinstance(source_request, dict):
-        raise BrokerConformanceError("service source request is invalid")
-    try:
-        verified_source = build_gateway_request(
-            source_request.get("owner"),
-            source_request.get("repository"),
-            source_request.get("commit"),
-            source_request.get("skill_path"),
-        )
-    except (TypeError, ValueError) as exc:
-        raise BrokerConformanceError(
-            f"service source request is invalid: {exc}"
-        ) from exc
-    if source_request != verified_source:
-        raise BrokerConformanceError("service source request is not canonical")
+    _canonical_source_request(
+        document["source_request"],
+        "service source request",
+    )
+    _service_transition(document)
     request_digest = _digest_bytes(bytes(raw))
     return document, {
         "authority": "PROTECTED_CANONICAL_REQUEST_CREDENTIAL",
         "request_digest": request_digest,
-        "request_schema": _SERVICE_REQUEST_SCHEMA,
+        "request_schema": document["schema"],
         "credential": {
             "path": str(resolved),
             **_service_request_metadata(after),
@@ -688,13 +816,29 @@ def _resolve_service_request(
         *_SERVICE_REQUEST_DIGEST_FIELDS,
     ):
         setattr(resolved, field, request[field])
+    operation, expected_active = _service_transition(request)
+    resolved.operation = operation
+    resolved.expected_active = expected_active
+    resolved.expected_manifest_diff_digest = request.get(
+        "expected_manifest_diff_digest"
+    )
     source = request["source_request"]
     resolved.expected_owner = source["owner"]
     resolved.expected_repository = source["repository"]
     resolved.expected_commit = source["commit"]
     resolved.expected_skill_path = source["skill_path"]
+    cas_parent = Path(resolved.cas_root)
+    resolved.cas_base_root = str(cas_parent)
     resolved.cas_root = str(
-        Path(resolved.cas_root) / canonical_digest(source)[7:]
+        cas_parent / canonical_digest(source)[7:]
+    )
+    resolved.expected_active_cas_root = (
+        None
+        if expected_active is None
+        else str(
+            cas_parent
+            / canonical_digest(expected_active["source_request"])[7:]
+        )
     )
     return resolved, authority
 
@@ -817,10 +961,141 @@ def _require_active(
     }
 
 
+def _prepare_github_transition(
+    args: argparse.Namespace,
+    cas: CAS,
+    previous_cas: CAS | None,
+) -> tuple[dict[str, str] | None, dict[str, Any]]:
+    operation = getattr(args, "operation", "install")
+    expected_active = getattr(args, "expected_active", None)
+    expected_diff_digest = getattr(
+        args,
+        "expected_manifest_diff_digest",
+        None,
+    )
+    if operation == "install":
+        if expected_active is not None or expected_diff_digest is not None:
+            raise BrokerConformanceError(
+                "GitHub install must not bind an active predecessor"
+            )
+        return None, {
+            "operation": "install",
+            "expected_active": None,
+            "manifest_diff": None,
+        }
+    if operation != "update" or not isinstance(expected_active, dict):
+        raise BrokerConformanceError("GitHub transition is invalid")
+    if previous_cas is None:
+        raise BrokerConformanceError("GitHub update predecessor CAS is absent")
+    previous_receipt = verify_github_quarantine_receipt(
+        previous_cas,
+        expected_active["quarantine_receipt_digest"],
+        expected_manifest_digest=expected_active["manifest_digest"],
+        expected_gateway_profile_digest=expected_active[
+            "gateway_profile_digest"
+        ],
+    )
+    if previous_receipt["request"] != expected_active["source_request"]:
+        raise BrokerConformanceError(
+            "active predecessor quarantine source is not request-authorized"
+        )
+    manifest_diff = diff_verified_manifests_between(
+        previous_cas,
+        expected_active["manifest_digest"],
+        cas,
+        args.manifest_digest,
+    )
+    retained_diff_digest = _retain_document(cas, manifest_diff)
+    if retained_diff_digest != expected_diff_digest:
+        raise BrokerConformanceError(
+            "manifest update diff does not match the service request"
+        )
+    context_expected_active = {
+        "context_id": expected_active["context_id"],
+        "manifest_digest": expected_active["manifest_digest"],
+    }
+    return context_expected_active, {
+        "operation": "update",
+        "expected_active": context_expected_active,
+        "previous_source": {
+            "request": expected_active["source_request"],
+            "manifest_digest": expected_active["manifest_digest"],
+            "quarantine_receipt_digest": expected_active[
+                "quarantine_receipt_digest"
+            ],
+            "gateway_profile_digest": expected_active[
+                "gateway_profile_digest"
+            ],
+            "source_closure_digest": previous_receipt[
+                "source_closure_digest"
+            ],
+        },
+        "manifest_diff": {
+            "digest": retained_diff_digest,
+            "document": manifest_diff,
+        },
+    }
+
+
+def _reverify_github_transition(
+    args: argparse.Namespace,
+    cas: CAS,
+    previous_cas: CAS | None,
+    current_receipt: dict[str, Any],
+    expected_request: dict[str, str],
+    transition: dict[str, Any],
+) -> None:
+    replayed_current = verify_github_quarantine_receipt(
+        cas,
+        args.quarantine_receipt_digest,
+        expected_manifest_digest=args.manifest_digest,
+        expected_gateway_profile_digest=args.gateway_profile_digest,
+    )
+    if replayed_current != current_receipt or replayed_current[
+        "request"
+    ] != expected_request:
+        raise BrokerConformanceError(
+            "current quarantine custody changed before publication"
+        )
+    if transition["operation"] == "install":
+        return
+    if previous_cas is None:
+        raise BrokerConformanceError("update predecessor CAS is absent")
+    expected_active = args.expected_active
+    replayed_previous = verify_github_quarantine_receipt(
+        previous_cas,
+        expected_active["quarantine_receipt_digest"],
+        expected_manifest_digest=expected_active["manifest_digest"],
+        expected_gateway_profile_digest=expected_active[
+            "gateway_profile_digest"
+        ],
+    )
+    if replayed_previous["request"] != expected_active["source_request"]:
+        raise BrokerConformanceError(
+            "active predecessor custody changed before publication"
+        )
+    manifest_diff = diff_verified_manifests_between(
+        previous_cas,
+        expected_active["manifest_digest"],
+        cas,
+        args.manifest_digest,
+    )
+    retained_diff_digest = _retain_document(cas, manifest_diff)
+    if (
+        manifest_diff != transition["manifest_diff"]["document"]
+        or retained_diff_digest
+        != transition["manifest_diff"]["digest"]
+    ):
+        raise BrokerConformanceError(
+            "manifest update diff changed before publication"
+        )
+
+
 def _run_github_live(
     args: argparse.Namespace,
     *,
     cas: CAS,
+    previous_cas: CAS | None,
     protected_root: Path,
     root_state: os.stat_result,
     analyzer_verifier_digest: str,
@@ -934,6 +1209,11 @@ def _run_github_live(
         raise BrokerConformanceError(
             "quarantine receipt source request is not caller-authorized"
         )
+    context_expected_active, transition_record = _prepare_github_transition(
+        args,
+        cas,
+        previous_cas,
+    )
     graph_digest = artifact_graph_module.retain_github_admission_artifact_graph_v2(
         cas,
         manifest_digest,
@@ -1051,8 +1331,8 @@ def _run_github_live(
         "context_id": context_id,
         "status": "active",
         "expires_at_unix": args.expires_at_unix,
-        "operation": "install",
-        "expected_active": None,
+        "operation": transition_record["operation"],
+        "expected_active": context_expected_active,
         "decision_digest": decision_digest,
         "manifest_digest": manifest_digest,
         "artifact_graph_digest": graph_digest,
@@ -1105,6 +1385,8 @@ def _run_github_live(
     context_record = {
         "context_id": context_id,
         "digest": canonical_digest(context),
+        "operation": transition_record["operation"],
+        "expected_active": context_expected_active,
         "target_runtime_digest": args.target_runtime_digest,
         "runtime_conformance_digest": args.runtime_conformance_digest,
         "destination": context["destination"],
@@ -1139,6 +1421,7 @@ def _run_github_live(
             "analyzer": analyzer_record,
             "decision": decision_record,
             "context": context_record,
+            "transition": transition_record,
             "transaction": transaction_record,
             "claim": {
                 "initial_revocation_snapshot": initial_revocation_snapshot,
@@ -1156,6 +1439,14 @@ def _run_github_live(
             "limitations": _GITHUB_LIMITATIONS,
         }
 
+    _reverify_github_transition(
+        args,
+        cas,
+        previous_cas,
+        quarantine_receipt,
+        expected_request,
+        transition_record,
+    )
     root_fd = os.open(protected_root, _DIRECTORY_FLAGS)
     try:
         try:
@@ -1168,6 +1459,7 @@ def _run_github_live(
                 runtime_conformance_digest=args.runtime_conformance_digest,
                 target_runtime_digest=args.target_runtime_digest,
                 revoked_context_ids=initial_revoked_context_ids,
+                expected_active_cas=previous_cas,
                 claim_state_provider=fresh_claim_state,
             )
         except ProtectedInstallTransactionError as exc:
@@ -1223,6 +1515,7 @@ def _run_github_live(
         "analyzer": analyzer_record,
         "decision": decision_record,
         "context": context_record,
+        "transition": transition_record,
         "claim": {
             "initial_revocation_snapshot": initial_revocation_snapshot,
             "fresh": claim_state,
@@ -1239,6 +1532,11 @@ def _run_github_live(
             "digest-bound-first-party-analyzer-run",
             "decision-v3-replay",
             "protected-install-context-v2",
+            *(
+                ["manifest-update-diff-v1"]
+                if transition_record["operation"] == "update"
+                else []
+            ),
             "protected-install-transaction",
             "active-tree-reverification",
         ],
@@ -1292,27 +1590,88 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     protected_root = Path(args.protected_root).resolve(strict=True)
-    supplied_cas_root = Path(args.cas_root)
-    cas_root = supplied_cas_root.resolve(strict=args.github_live)
-    if getattr(args, "service_request", None) is not None:
-        if not supplied_cas_root.is_absolute() or supplied_cas_root != cas_root:
+    operation = getattr(args, "operation", "install")
+    service_request = getattr(args, "service_request", None)
+    previous_cas: CAS | None = None
+    if service_request is None:
+        if operation != "install":
             raise BrokerConformanceError(
-                "service CAS namespace must be an absolute canonical path"
+                "GitHub updates require a protected service request"
             )
-        _require_owner_protected_ancestry(
-            cas_root,
+        cas_root = Path(args.cas_root).resolve(strict=args.github_live)
+        cas_roots = (cas_root,)
+    else:
+        cas_root = _canonical_service_directory(
+            args.cas_root,
             args.expected_broker_uid,
-            include_path=True,
+            "service CAS namespace",
         )
-    common = Path(os.path.commonpath((protected_root, cas_root)))
-    if common in {protected_root, cas_root}:
-        raise BrokerConformanceError("CAS and protected roots must be disjoint")
+        cas_base_root = _canonical_service_directory(
+            args.cas_base_root,
+            args.expected_broker_uid,
+            "service quarantine base",
+        )
+        current_request = build_gateway_request(
+            args.expected_owner,
+            args.expected_repository,
+            args.expected_commit,
+            args.expected_skill_path,
+        )
+        if cas_root != cas_base_root / canonical_digest(current_request)[7:]:
+            raise BrokerConformanceError(
+                "service CAS namespace is not derived from its source request"
+            )
+        previous_root_value = getattr(args, "expected_active_cas_root", None)
+        if operation == "update":
+            if previous_root_value is None:
+                raise BrokerConformanceError(
+                    "service update predecessor CAS namespace is absent"
+                )
+            previous_root = _canonical_service_directory(
+                previous_root_value,
+                args.expected_broker_uid,
+                "service predecessor CAS namespace",
+            )
+            expected_active = args.expected_active
+            if previous_root != cas_base_root / canonical_digest(
+                expected_active["source_request"]
+            )[7:]:
+                raise BrokerConformanceError(
+                    "service predecessor CAS namespace is not derived "
+                    "from its source request"
+                )
+            if previous_root == cas_root:
+                raise BrokerConformanceError(
+                    "service update CAS namespaces must be distinct"
+                )
+            previous_cas = CAS(previous_root, read_only=True)
+            cas_roots = (cas_base_root, cas_root, previous_root)
+        elif operation == "install":
+            if previous_root_value is not None:
+                raise BrokerConformanceError(
+                    "service install must not select a predecessor CAS"
+                )
+            cas_roots = (cas_base_root, cas_root)
+        else:
+            raise BrokerConformanceError("service operation is invalid")
+    for checked_root in cas_roots:
+        common = Path(os.path.commonpath((protected_root, checked_root)))
+        if common in {protected_root, checked_root}:
+            raise BrokerConformanceError(
+                "CAS and protected roots must be disjoint"
+            )
     root_state = _require_root(protected_root, args.expected_broker_uid)
-    _require_initial_protected_root(
-        protected_root,
-        args.expected_broker_uid,
-        allow_empty_control_layout=args.github_live,
-    )
+    if operation == "update":
+        _require_update_protected_root(
+            protected_root,
+            args.expected_broker_uid,
+        )
+    else:
+        _require_initial_protected_root(
+            protected_root,
+            args.expected_broker_uid,
+            allow_empty_control_layout=args.github_live,
+        )
     cas = CAS(cas_root)
     analyzer_verifier_digest = _module_digest(analyzer_receipt_module)
     graph_verifier_digest = _module_digest(artifact_graph_module)
@@ -1320,6 +1679,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         return _run_github_live(
             args,
             cas=cas,
+            previous_cas=previous_cas,
             protected_root=protected_root,
             root_state=root_state,
             analyzer_verifier_digest=analyzer_verifier_digest,
@@ -1440,6 +1800,9 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
                 now_unix=args.now_unix,
                 runtime_conformance_digest=args.runtime_conformance_digest,
                 target_runtime_digest=args.target_runtime_digest,
+                expected_active_cas=(
+                    cas if context["expected_active"] is not None else None
+                ),
             )
             for context in (install, update, rollback)
         ]
@@ -1466,6 +1829,9 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
                     runtime_conformance_digest=args.runtime_conformance_digest,
                     target_runtime_digest=args.target_runtime_digest,
                     revoked_context_ids=revoked_ids,
+                    expected_active_cas=(
+                        cas if context["expected_active"] is not None else None
+                    ),
                 )
             except ProtectedInstallTransactionError as exc:
                 message = str(exc)

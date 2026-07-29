@@ -249,6 +249,11 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
                 ),
                 measured_target_runtime_digest=context.target_runtime_digest,
                 revoked_context_ids=(),
+                expected_active_cas=(
+                    self.cas
+                    if context.expected_active_context_id is not None
+                    else None
+                ),
             )
 
     @staticmethod

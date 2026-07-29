@@ -58,6 +58,7 @@ def _publish_protected_install_transaction(
     expected_runtime_conformance_digest: str,
     measured_target_runtime_digest: str,
     revoked_context_ids: Collection[str],
+    expected_active_cas: CAS | None = None,
     claim_state_provider: Callable[[], tuple[int, Collection[str]]] | None = None,
 ) -> dict[str, Any]:
     """Apply one context-bound link switch without granting installer authority.
@@ -76,6 +77,9 @@ def _publish_protected_install_transaction(
     ``claim_now_unix`` plus ``revoked_context_ids`` for the final pre-claim
     verification. Otherwise ``claim_now_unix`` is an injected trusted clock
     reading taken after staging and must not precede ``now_unix``.
+
+    Updates and rollbacks must supply the separately verified CAS that retains
+    the exact active predecessor. Fresh installs must not supply one.
     """
 
     broker_root_fd = -1
@@ -171,6 +175,18 @@ def _publish_protected_install_transaction(
             measured_target_runtime_digest=measured_target_runtime_digest,
             revoked_context_ids=revoked_context_ids,
         )
+        if verified.expected_active_context_id is None:
+            if expected_active_cas is not None:
+                raise ProtectedInstallTransactionError(
+                    "fresh protected install must not supply a predecessor CAS"
+                )
+            predecessor_cas = cas
+        else:
+            if expected_active_cas is None:
+                raise ProtectedInstallTransactionError(
+                    "protected update requires its predecessor CAS"
+                )
+            predecessor_cas = expected_active_cas
         target_versions_fd = _open_or_create_broker_directory(
             versions_fd,
             verified.target_name,
@@ -181,7 +197,7 @@ def _publish_protected_install_transaction(
         claim_name = _claim_name(verified.context_id)
         _require_absent(claims_fd, claim_name, "protected install context is consumed")
         expected_active_inode = _verify_expected_active(
-            cas,
+            predecessor_cas,
             verified,
             broker_root_fd,
             target_versions_fd,
@@ -224,7 +240,7 @@ def _publish_protected_install_transaction(
         if claim_state_provider is not None:
             try:
                 claim_now_unix, claim_revoked_context_ids = claim_state_provider()
-            except Exception as exc:  # noqa: BLE001 - fail closed before claim
+            except Exception as exc:
                 raise ProtectedInstallTransactionError(
                     f"cannot obtain fresh protected install claim state: {exc}"
                 ) from exc
@@ -262,7 +278,7 @@ def _publish_protected_install_transaction(
             "protected install version appeared before claim",
         )
         _verify_expected_active(
-            cas,
+            predecessor_cas,
             claim_context,
             broker_root_fd,
             target_versions_fd,
@@ -354,7 +370,7 @@ def _publish_protected_install_transaction(
             )
 
         _verify_expected_active(
-            cas,
+            predecessor_cas,
             verified,
             broker_root_fd,
             target_versions_fd,

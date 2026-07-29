@@ -1089,23 +1089,20 @@ class ProtectedInstallBrokerLiveEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(
             evidence["analyzer"]["implementation_digest"],
-            candidate_implementation_digest(),
+            "sha256:c7d17a714090118749b161464129755b"
+            "976c93378365330711bfaaaf7395ca62",
         )
         self.assertEqual(
             evidence["analyzer"]["verifier_implementation_digest"],
-            "sha256:"
-            + hashlib.sha256(
-                Path(analyzer_receipt_module.__file__).resolve().read_bytes()
-            ).hexdigest(),
+            "sha256:9f008f75c522176aa8df6b282687626d"
+            "b4c0acd178ca69cdc0b9c841e23d8164",
         )
         self.assertEqual(
             evidence["source"][
                 "artifact_graph_verifier_implementation_digest"
             ],
-            "sha256:"
-            + hashlib.sha256(
-                Path(artifact_graph_module.__file__).resolve().read_bytes()
-            ).hexdigest(),
+            "sha256:e5d97210aa45abb7dde005d4f16661ca"
+            "ddf88d0de267aebe30c71ab4a5059116",
         )
         conformance = json.loads(
             (

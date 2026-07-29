@@ -21,9 +21,31 @@ def diff_verified_manifests(
 ) -> dict[str, Any]:
     """Diff regular-file content and executable bits without granting authority."""
 
+    return diff_verified_manifests_between(
+        cas,
+        old_manifest_digest,
+        cas,
+        new_manifest_digest,
+    )
+
+
+def diff_verified_manifests_between(
+    old_cas: CAS,
+    old_manifest_digest: str,
+    new_cas: CAS,
+    new_manifest_digest: str,
+) -> dict[str, Any]:
+    """Diff manifests retained under distinct, verified custody roots."""
+
     try:
-        old_manifest = load_verified_retained_manifest(cas, old_manifest_digest)
-        new_manifest = load_verified_retained_manifest(cas, new_manifest_digest)
+        old_manifest = load_verified_retained_manifest(
+            old_cas,
+            old_manifest_digest,
+        )
+        new_manifest = load_verified_retained_manifest(
+            new_cas,
+            new_manifest_digest,
+        )
     except (ArtifactClosureError, CASError, TypeError, ValueError) as exc:
         raise ManifestDiffError(f"cannot verify update manifests: {exc}") from exc
 

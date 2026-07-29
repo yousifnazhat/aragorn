@@ -8,7 +8,11 @@ from tempfile import TemporaryDirectory
 from aragorn.acquire import ingest_local
 from aragorn.artifact_closure import canonical_json
 from aragorn.cas import CAS
-from aragorn.manifest_diff import ManifestDiffError, diff_verified_manifests
+from aragorn.manifest_diff import (
+    ManifestDiffError,
+    diff_verified_manifests,
+    diff_verified_manifests_between,
+)
 
 
 class ManifestDiffTests(unittest.TestCase):
@@ -63,6 +67,30 @@ class ManifestDiffTests(unittest.TestCase):
             observed = diff_verified_manifests(cas, old_digest, new_digest)
             self.assertEqual(observed, expected)
             self.assertEqual(canonical_json(observed), canonical_json(expected))
+
+            old_cas = CAS(root / "old-state")
+            new_cas = CAS(root / "new-state")
+            old_cross = ingest_local(old, old_cas)
+            new_cross = ingest_local(new, new_cas)
+            old_raw = canonical_json(old_cross)
+            new_raw = canonical_json(new_cross)
+            old_cross_digest = old_cas.put(
+                BytesIO(old_raw),
+                max_bytes=len(old_raw),
+            )
+            new_cross_digest = new_cas.put(
+                BytesIO(new_raw),
+                max_bytes=len(new_raw),
+            )
+            self.assertEqual(
+                diff_verified_manifests_between(
+                    old_cas,
+                    old_cross_digest,
+                    new_cas,
+                    new_cross_digest,
+                ),
+                expected,
+            )
 
             malformed = cas.put(BytesIO(b"{}"), max_bytes=2)
             with self.assertRaisesRegex(

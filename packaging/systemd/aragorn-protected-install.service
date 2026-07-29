@@ -1,7 +1,7 @@
 [Unit]
 Description=Aragorn protected Agent Skill install
 After=local-fs.target
-RequiresMountsFor=/var/lib/aragorn-quarantine /var/lib/aragorn-protected
+RequiresMountsFor=/var/lib/aragorn-quarantine /var/lib/aragorn-protected/skills
 ConditionPathExists=/etc/aragorn/protected-broker-release.json
 ConditionPathExists=/etc/aragorn/protected-install-revocations.json
 
@@ -10,7 +10,7 @@ Type=oneshot
 User=root
 Group=root
 LoadCredential=install-request:/run/aragorn-protected-install/request.json
-ExecStart=/usr/bin/python3.14 -I -S -B /usr/libexec/aragorn/aragorn-protected-install-launcher.py -- --github-live --service-request %d/install-request --cas-root /var/lib/aragorn-quarantine --protected-root /var/lib/aragorn-protected --expected-broker-uid 0 --revocation-file /etc/aragorn/protected-install-revocations.json
+ExecStart=/usr/bin/python3.14 -I -S -B /usr/libexec/aragorn/aragorn-protected-install-launcher.py -- --github-live --service-request %d/install-request --cas-root /var/lib/aragorn-quarantine --protected-root /var/lib/aragorn-protected/skills --expected-broker-uid 0 --revocation-file /etc/aragorn/protected-install-revocations.json
 WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
@@ -46,7 +46,7 @@ ProtectProc=invisible
 ProtectSystem=strict
 ProcSubset=pid
 InaccessiblePaths=/run/aragorn-protected-install/request.json
-ReadWritePaths=/var/lib/aragorn-quarantine /var/lib/aragorn-protected
+ReadWritePaths=/var/lib/aragorn-quarantine /var/lib/aragorn-protected/skills
 RemoveIPC=yes
 RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=yes

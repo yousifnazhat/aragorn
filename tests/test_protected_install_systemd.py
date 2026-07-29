@@ -65,7 +65,7 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
                     "--github-live "
                     "--service-request %d/install-request "
                     "--cas-root /var/lib/aragorn-quarantine "
-                    "--protected-root /var/lib/aragorn-protected "
+                    "--protected-root /var/lib/aragorn-protected/skills "
                     "--expected-broker-uid 0 "
                     "--revocation-file "
                     "/etc/aragorn/protected-install-revocations.json"
@@ -111,7 +111,8 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
             "MemorySwapMax=0",
             (
                 "ReadWritePaths="
-                "/var/lib/aragorn-quarantine /var/lib/aragorn-protected"
+                "/var/lib/aragorn-quarantine "
+                "/var/lib/aragorn-protected/skills"
             ),
         ):
             self.assertIn(directive, service)
@@ -126,7 +127,8 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
             [
                 (
                     "ReadWritePaths="
-                    "/var/lib/aragorn-quarantine /var/lib/aragorn-protected"
+                    "/var/lib/aragorn-quarantine "
+                    "/var/lib/aragorn-protected/skills"
                 )
             ],
         )
@@ -143,6 +145,7 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
             "d /run/aragorn-protected-install 0700 root root -",
             "d /var/lib/aragorn-quarantine 0700 root root -",
             "d /var/lib/aragorn-protected 0700 root root -",
+            "d /var/lib/aragorn-protected/skills 0700 root root -",
             revocations,
         ):
             self.assertIn(required, lines)

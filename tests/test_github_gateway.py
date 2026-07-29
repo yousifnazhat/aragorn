@@ -46,6 +46,16 @@ _COMMIT_PAYLOAD = (
     + b"committer Fixture <fixture@example.test> 1 +0000\n\nfixture\n"
 )
 COMMIT = _git_oid("commit", _COMMIT_PAYLOAD)
+_PYTHON_DIGEST = "sha256:" + "a" * 64
+_PACKAGE_DIGEST = "sha256:" + "b" * 64
+_ACCEPTANCE_MEASUREMENTS = {
+    "containment_profile": github_gateway.LINUX_CONTAINMENT_PROFILE,
+    "python_executable_digest": _PYTHON_DIGEST,
+    "gateway_package_tree_digest": _PACKAGE_DIGEST,
+}
+_GATEWAY_PROFILE_DIGEST = github_gateway.github_gateway_profile_digest(
+    **_ACCEPTANCE_MEASUREMENTS,
+)
 
 
 class GitHubGatewayTests(unittest.TestCase):
@@ -73,6 +83,8 @@ class GitHubGatewayTests(unittest.TestCase):
             Path("/quarantine"),
         )
         self.assertIsNone(receipt.source_proof_digest)
+        self.assertIsNone(receipt.quarantine_receipt_digest)
+        self.assertIsNone(receipt.gateway_profile_digest)
 
     def test_worker_is_credential_free_and_broker_reverifies_exact_closure(
         self,
@@ -117,13 +129,18 @@ class GitHubGatewayTests(unittest.TestCase):
         broker = self.root / "broker"
         broker.mkdir(mode=0o700)
         quarantine = broker / "quarantine"
-        accepted = github_gateway._accept_gateway_output(
-            self.request,
-            result,
-            job_root=job,
-            quarantine_state=quarantine,
-            worker_uid=os.geteuid(),
-        )
+        with mock.patch(
+            "aragorn.github_quarantine_receipt.sys.platform",
+            "linux",
+        ):
+            accepted = github_gateway._accept_gateway_output(
+                self.request,
+                result,
+                job_root=job,
+                quarantine_state=quarantine,
+                worker_uid=os.geteuid(),
+                **_ACCEPTANCE_MEASUREMENTS,
+            )
         self.assertIsInstance(accepted, GatewayQuarantineReceipt)
         self.assertEqual(
             accepted.authority,
@@ -138,6 +155,58 @@ class GitHubGatewayTests(unittest.TestCase):
         self.assertEqual(
             accepted.source_proof_digest,
             result["source_proof_digest"],
+        )
+        self.assertIsNotNone(accepted.quarantine_receipt_digest)
+        self.assertEqual(
+            accepted.gateway_profile_digest,
+            _GATEWAY_PROFILE_DIGEST,
+        )
+        with mock.patch(
+            "aragorn.github_quarantine_receipt.sys.platform",
+            "linux",
+        ):
+            retained_receipt = github_gateway.verify_github_quarantine_receipt(
+                CAS(quarantine, read_only=True),
+                accepted.quarantine_receipt_digest,
+                expected_manifest_digest=accepted.manifest_digest,
+                expected_gateway_profile_digest=_GATEWAY_PROFILE_DIGEST,
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "gateway profile identity is untrusted",
+            ):
+                github_gateway.verify_github_quarantine_receipt(
+                    CAS(quarantine, read_only=True),
+                    accepted.quarantine_receipt_digest,
+                    expected_manifest_digest=accepted.manifest_digest,
+                    expected_gateway_profile_digest="sha256:" + "0" * 64,
+                )
+        quarantine_state = os.lstat(quarantine)
+        self.assertEqual(
+            retained_receipt["containment_profile"],
+            github_gateway.LINUX_CONTAINMENT_PROFILE,
+        )
+        self.assertEqual(
+            retained_receipt["gateway"],
+            {
+                "package_tree_digest": _PACKAGE_DIGEST,
+                "python_executable_digest": _PYTHON_DIGEST,
+            },
+        )
+        self.assertEqual(
+            retained_receipt["gateway_profile_digest"],
+            _GATEWAY_PROFILE_DIGEST,
+        )
+        CAS(quarantine, read_only=True).verify(
+            retained_receipt["handoff_manifest_digest"],
+        )
+        self.assertEqual(
+            retained_receipt["protected_cas"]["root_device"],
+            quarantine_state.st_dev,
+        )
+        self.assertEqual(
+            retained_receipt["protected_cas"]["root_inode"],
+            quarantine_state.st_ino,
         )
         manifest = load_verified_retained_manifest(
             CAS(quarantine, read_only=True),
@@ -204,6 +273,7 @@ class GitHubGatewayTests(unittest.TestCase):
                 job_root=job,
                 quarantine_state=quarantine,
                 worker_uid=os.geteuid(),
+                **_ACCEPTANCE_MEASUREMENTS,
             )
         self.assertFalse(quarantine.exists())
         self.assertEqual(list(self.root.glob(".replay-quarantine.import-*")), [])
@@ -240,6 +310,7 @@ class GitHubGatewayTests(unittest.TestCase):
                 job_root=job,
                 quarantine_state=quarantine,
                 worker_uid=os.geteuid(),
+                **_ACCEPTANCE_MEASUREMENTS,
             )
         self.assertFalse(quarantine.exists())
 
@@ -272,6 +343,7 @@ class GitHubGatewayTests(unittest.TestCase):
                 job_root=job,
                 quarantine_state=quarantine,
                 worker_uid=os.geteuid(),
+                **_ACCEPTANCE_MEASUREMENTS,
             )
         self.assertFalse(quarantine.exists())
         self.assertEqual(list(self.root.glob(".cleanup-quarantine.import-*")), [])
@@ -334,6 +406,15 @@ class GitHubGatewayTests(unittest.TestCase):
                 github_gateway,
                 "_trusted_package_root",
                 return_value=Path("/opt/aragorn-gateway"),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_gateway_runtime_measurements",
+                return_value=(_PYTHON_DIGEST, _PACKAGE_DIGEST),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_require_gateway_runtime_unchanged",
             ),
             mock.patch.object(
                 github_gateway,

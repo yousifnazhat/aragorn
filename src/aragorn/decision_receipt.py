@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from io import BytesIO
 import json
 import re
+from io import BytesIO
 from typing import Any
 
 from .admission_artifact_graph import (
     AdmissionArtifactGraphError,
     verify_admission_artifact_graph,
 )
-from .admission_decision import AdmissionDecisionError, parse_policy
+from .admission_decision import (
+    AdmissionDecisionError,
+    parse_policy,
+    policy_artifact_graph_profiles,
+)
 from .analyzer_receipt import (
     AnalyzerReceiptError,
     summarize_analyzer_run,
@@ -25,12 +29,12 @@ from .cas import CAS, CASError
 from .oci_worker_protocol import WorkerProtocolError, canonical_json
 from .policy import evaluate_policy
 
-
 _AUTHORITY = "EVIDENCE_SUMMARY_ONLY_NOT_INSTALLER_AUTHORITY"
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _MAX_DECISION_BYTES = 8 * 1024 * 1024
 _MAX_POLICY_BYTES = 1024 * 1024
 _MAX_ANALYZERS = 16
+_PROFILE_NOT_ALLOWED = "ARTIFACT_GRAPH_PROFILE_NOT_ALLOWED"
 
 
 class DecisionReceiptError(ValueError):
@@ -46,10 +50,16 @@ def retain_decision_v3(
     analyzer_run_receipt_digests: list[str] | tuple[str, ...],
     analyzer_verifier_digest: str,
     artifact_graph_verifier_digest: str,
+    expected_quarantine_receipt_digest: str | None = None,
+    expected_gateway_profile_digest: str | None = None,
 ) -> str:
     """Retain a decision derived from replayed graph and analyzer evidence."""
 
     run_receipt_digests = _run_receipt_digests(analyzer_run_receipt_digests)
+    receipt_digest, gateway_profile_digest = _optional_github_trust_digests(
+        expected_quarantine_receipt_digest,
+        expected_gateway_profile_digest,
+    )
     records = [{"run_receipt_digest": digest} for digest in run_receipt_digests]
     try:
         decision = _derive_decision_v3(
@@ -70,6 +80,8 @@ def retain_decision_v3(
                 artifact_graph_verifier_digest,
                 "artifact graph verifier digest",
             ),
+            expected_quarantine_receipt_digest=receipt_digest,
+            expected_gateway_profile_digest=gateway_profile_digest,
         )
         raw = canonical_json(decision)
         return cas.put(BytesIO(raw), max_bytes=_MAX_DECISION_BYTES)
@@ -96,6 +108,8 @@ def verify_decision_v3(
     expected_analyzer_run_receipt_digests: list[str] | tuple[str, ...],
     expected_analyzer_verifier_digest: str,
     expected_artifact_graph_verifier_digest: str,
+    expected_quarantine_receipt_digest: str | None = None,
+    expected_gateway_profile_digest: str | None = None,
 ) -> dict[str, Any]:
     """Re-derive one graph-bound evidence summary without installer authority."""
 
@@ -119,6 +133,10 @@ def verify_decision_v3(
         graph_verifier_digest = _digest(
             expected_artifact_graph_verifier_digest,
             "expected artifact graph verifier digest",
+        )
+        receipt_digest, gateway_profile_digest = _optional_github_trust_digests(
+            expected_quarantine_receipt_digest,
+            expected_gateway_profile_digest,
         )
         decision, raw_decision = _canonical_document(
             cas.read(
@@ -169,6 +187,8 @@ def verify_decision_v3(
             expected_run_receipt_digests=run_receipt_digests,
             analyzer_verifier_digest=analyzer_verifier_digest,
             artifact_graph_verifier_digest=graph_verifier_digest,
+            expected_quarantine_receipt_digest=receipt_digest,
+            expected_gateway_profile_digest=gateway_profile_digest,
         )
         if raw_decision != canonical_json(expected):
             raise DecisionReceiptError(
@@ -301,12 +321,16 @@ def _derive_decision_v3(
     expected_run_receipt_digests: list[str] | None = None,
     analyzer_verifier_digest: str,
     artifact_graph_verifier_digest: str,
+    expected_quarantine_receipt_digest: str | None,
+    expected_gateway_profile_digest: str | None,
 ) -> dict[str, Any]:
     graph = verify_admission_artifact_graph(
         cas,
         artifact_graph_digest,
         expected_manifest_digest=manifest_digest,
         expected_verifier_digest=artifact_graph_verifier_digest,
+        expected_quarantine_receipt_digest=expected_quarantine_receipt_digest,
+        expected_gateway_profile_digest=expected_gateway_profile_digest,
     )
     validated_policy, policy = _load_policy(cas, policy_digest)
     results, expected_records = _replay_analyzers(
@@ -321,10 +345,16 @@ def _derive_decision_v3(
         closure=graph["closure"],
         results=results,
     )
+    if graph["profile"] not in policy_artifact_graph_profiles(validated_policy):
+        verdict = "ERROR"
+        reason_codes = [_PROFILE_NOT_ALLOWED]
+    else:
+        verdict = evaluated.verdict
+        reason_codes = list(evaluated.reason_codes)
     return {
         "schema": "aragorn/decision/v3",
         "authority": _AUTHORITY,
-        "verdict": evaluated.verdict,
+        "verdict": verdict,
         "manifest_digest": manifest_digest,
         "artifact_graph_digest": artifact_graph_digest,
         "tree_digest": graph["tree_digest"],
@@ -337,7 +367,7 @@ def _derive_decision_v3(
             "digest": policy_digest,
         },
         "analyzers": expected_records,
-        "reason_codes": list(evaluated.reason_codes),
+        "reason_codes": reason_codes,
     }
 
 
@@ -408,6 +438,22 @@ def _run_receipt_digests(value: object) -> list[str]:
             "expected analyzer run receipt digests must be unique"
         )
     return digests
+
+
+def _optional_github_trust_digests(
+    receipt_digest: object,
+    gateway_profile_digest: object,
+) -> tuple[str | None, str | None]:
+    if receipt_digest is None and gateway_profile_digest is None:
+        return None, None
+    if receipt_digest is None or gateway_profile_digest is None:
+        raise DecisionReceiptError(
+            "quarantine receipt and gateway profile digests must be supplied together"
+        )
+    return (
+        _digest(receipt_digest, "expected quarantine receipt digest"),
+        _digest(gateway_profile_digest, "expected gateway profile digest"),
+    )
 
 
 def _canonical_document(raw: bytes, label: str) -> tuple[dict[str, Any], bytes]:

@@ -24,7 +24,10 @@ _MAX_INPUT_BYTES = 8 * 1024 * 1024
 _MAX_ANALYZERS = 16
 _MAX_OBSERVATIONS = 10_000
 _MAX_SOURCE_EVIDENCE_DIGESTS = 64
+_MAX_ARTIFACT_GRAPH_PROFILES = 64
 _SEVERITIES = frozenset({"info", "low", "medium", "high", "critical"})
+_ARTIFACT_GRAPH_PROFILE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}/v[1-9][0-9]{0,8}\Z")
+_V1_ARTIFACT_GRAPH_PROFILES = ("self-contained-local-markdown/v1",)
 
 
 class AdmissionDecisionError(ValueError):
@@ -55,6 +58,8 @@ def evaluate_admission(document: object) -> dict[str, Any]:
     manifest = _manifest(request["manifest"])
     evidence, results = _evidence(request["evidence"], manifest["tree_digest"])
     policy_document, policy = parse_policy(request["policy"])
+    if policy_document["schema"] != "aragorn/policy/v1":
+        raise AdmissionDecisionError("policy/v2 requires a graph-bound decision input")
     target_runtime = _target_runtime(request["target_runtime"])
     decision = evaluate_policy(
         policy,
@@ -248,19 +253,25 @@ def _observation(value: object, tree_digest: str) -> Observation:
 
 
 def parse_policy(value: object) -> tuple[dict[str, Any], Policy]:
+    base_fields = {
+        "schema",
+        "id",
+        "version",
+        "required_analyzers",
+        "hard_deny_reason_codes",
+        "review_severities",
+    }
+    fields = (
+        {*base_fields, "allowed_artifact_graph_profiles"}
+        if isinstance(value, dict) and value.get("schema") == "aragorn/policy/v2"
+        else base_fields
+    )
     document = _exact_object(
         value,
-        {
-            "schema",
-            "id",
-            "version",
-            "required_analyzers",
-            "hard_deny_reason_codes",
-            "review_severities",
-        },
+        fields,
         "admission policy",
     )
-    if document["schema"] != "aragorn/policy/v1":
+    if document["schema"] not in {"aragorn/policy/v1", "aragorn/policy/v2"}:
         raise AdmissionDecisionError("admission policy schema is unsupported")
     _identifier(document["id"], "admission policy id")
     version = document["version"]
@@ -288,11 +299,32 @@ def parse_policy(value: object) -> tuple[dict[str, Any], Policy]:
     )
     if not set(severities) <= _SEVERITIES:
         raise AdmissionDecisionError("review severity is invalid")
+    if document["schema"] == "aragorn/policy/v2":
+        profiles = _sorted_strings(
+            document["allowed_artifact_graph_profiles"],
+            "allowed artifact graph profile",
+        )
+        if len(profiles) > _MAX_ARTIFACT_GRAPH_PROFILES or any(
+            _ARTIFACT_GRAPH_PROFILE.fullmatch(item) is None for item in profiles
+        ):
+            raise AdmissionDecisionError(
+                "allowed artifact graph profile set is invalid"
+            )
     return document, Policy(
         required_analyzers=tuple(required),
         hard_deny_reason_codes=frozenset(hard_denies),
         review_severities=frozenset(severities),
     )
+
+
+def policy_artifact_graph_profiles(
+    document: dict[str, Any],
+) -> tuple[str, ...]:
+    """Return the graph profiles explicitly authorized by a parsed policy."""
+
+    if document["schema"] == "aragorn/policy/v1":
+        return _V1_ARTIFACT_GRAPH_PROFILES
+    return tuple(document["allowed_artifact_graph_profiles"])
 
 
 def _target_runtime(value: object) -> dict[str, Any]:

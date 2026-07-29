@@ -1,7 +1,7 @@
 {
-  "$id": "https://aragorn.dev/schema/protected-install-context-v1.schema.json",
+  "$id": "https://aragorn.dev/schema/protected-install-context-v2.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Aragorn protected install context v1",
+  "title": "Aragorn protected install context v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,6 +10,8 @@
     "context_id",
     "status",
     "expires_at_unix",
+    "operation",
+    "expected_active",
     "decision_digest",
     "manifest_digest",
     "artifact_graph_digest",
@@ -22,13 +24,20 @@
     "destination"
   ],
   "properties": {
-    "schema": {"const": "aragorn/protected-install-context/v1"},
+    "schema": {"const": "aragorn/protected-install-context/v2"},
     "authority": {
       "const": "BROKER_CONTEXT_ONLY_NOT_INSTALLER_AUTHORITY"
     },
     "context_id": {"$ref": "#/$defs/digest"},
     "status": {"enum": ["active", "revoked"]},
     "expires_at_unix": {"type": "integer", "minimum": 0},
+    "operation": {"enum": ["install", "update", "rollback"]},
+    "expected_active": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/expectedActive"}
+      ]
+    },
     "decision_digest": {"$ref": "#/$defs/digest"},
     "manifest_digest": {"$ref": "#/$defs/digest"},
     "artifact_graph_digest": {"$ref": "#/$defs/digest"},
@@ -73,10 +82,35 @@
     "quarantine_receipt_digest": ["gateway_profile_digest"],
     "gateway_profile_digest": ["quarantine_receipt_digest"]
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"const": "install"}},
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {"expected_active": {"type": "null"}}
+      },
+      "else": {
+        "properties": {
+          "expected_active": {"$ref": "#/$defs/expectedActive"}
+        }
+      }
+    }
+  ],
   "$defs": {
     "digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "expectedActive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_id", "manifest_digest"],
+      "properties": {
+        "context_id": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"}
+      }
     }
   }
 }

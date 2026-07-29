@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/github-quarantine-receipt-v1.schema.json",
+  "title": "Aragorn broker-authored GitHub quarantine receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "receipt_id",
+    "authority",
+    "source_assurance",
+    "request",
+    "request_digest",
+    "manifest_digest",
+    "source_proof_digest",
+    "handoff_manifest_digest",
+    "source_closure_digest",
+    "tree_digest",
+    "file_count",
+    "containment_profile",
+    "gateway_profile_digest",
+    "protected_cas",
+    "gateway"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/github-quarantine-receipt/v1"},
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authority": {"const": "QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY"},
+    "source_assurance": {
+      "const": "git_smart_http_v2_commit_tree_proof_and_api_blob_identity_reverified"
+    },
+    "request": {
+      "$ref": "github-gateway-request-v1.schema.json"
+    },
+    "request_digest": {"$ref": "#/$defs/digest"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "source_proof_digest": {"$ref": "#/$defs/digest"},
+    "handoff_manifest_digest": {"$ref": "#/$defs/digest"},
+    "source_closure_digest": {"$ref": "#/$defs/digest"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "file_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "containment_profile": {
+      "enum": [
+        "linux-systemd-restricted-egress/v1",
+        "darwin-distinct-principal/v1"
+      ]
+    },
+    "gateway_profile_digest": {"$ref": "#/$defs/digest"},
+    "protected_cas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root_device",
+        "root_inode",
+        "owner_uid",
+        "mode"
+      ],
+      "properties": {
+        "root_device": {"type": "integer", "minimum": 0},
+        "root_inode": {"type": "integer", "minimum": 1},
+        "owner_uid": {"type": "integer", "minimum": 0},
+        "mode": {"type": "integer", "minimum": 0, "maximum": 511}
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_tree_digest",
+        "python_executable_digest"
+      ],
+      "properties": {
+        "package_tree_digest": {"$ref": "#/$defs/digest"},
+        "python_executable_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

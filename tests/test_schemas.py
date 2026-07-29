@@ -14,6 +14,7 @@ from aragorn.admission_routes import (
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
 EXPECTED_CONTRACTS = {
     "admission-artifact-graph-v1.schema.json": "aragorn/admission-artifact-graph/v1",
+    "admission-artifact-graph-v2.schema.json": "aragorn/admission-artifact-graph/v2",
     "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
     "admission-runtime-candidate-lock-v1.schema.json": "aragorn/admission-runtime-candidate-lock/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",
@@ -112,6 +113,7 @@ EXPECTED_CONTRACTS = {
     "github-gateway-result-v1.schema.json": "aragorn/github-gateway-result/v1",
     "github-gateway-result-v2.schema.json": "aragorn/github-gateway-result/v2",
     "github-manifest-v1.schema.json": "aragorn/github-manifest/v1",
+    "github-quarantine-receipt-v1.schema.json": "aragorn/github-quarantine-receipt/v1",
     "github-source-proof-v1.schema.json": "aragorn/github-source-proof/v1",
     "inspect-result-v1.schema.json": "aragorn/inspect-result/v1",
     "inspect-result-v2.schema.json": "aragorn/inspect-result/v2",
@@ -119,7 +121,10 @@ EXPECTED_CONTRACTS = {
     "manifest-v1.schema.json": "aragorn/manifest/v1",
     "observation-v1.schema.json": "aragorn/observation/v1",
     "phase0-standards-gate-v1.schema.json": "aragorn/phase0-standards-gate/v1",
+    "policy-v2.schema.json": "aragorn/policy/v2",
     "protected-install-context-v1.schema.json": "aragorn/protected-install-context/v1",
+    "protected-install-context-v2.schema.json": "aragorn/protected-install-context/v2",
+    "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",
 }

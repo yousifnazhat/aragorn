@@ -39,6 +39,16 @@ from .github_acquire import (
     _validate_pinned_addresses,
     acquire_github_commit,
 )
+from .github_quarantine_receipt import (
+    AUTHORITY,
+    DARWIN_CONTAINMENT_PROFILE,
+    LINUX_CONTAINMENT_PROFILE,
+    SOURCE_ASSURANCE,
+    GitHubQuarantineReceiptError,
+    github_gateway_profile_digest,
+    retain_github_quarantine_receipt,
+    verify_github_quarantine_receipt,
+)
 from .github_source_proof import verify_github_source_proof
 from .oci_runtime import (
     VerificationError,
@@ -50,10 +60,7 @@ from .oci_runtime import (
 REQUEST_SCHEMA = "aragorn/github-gateway-request/v1"
 RESULT_SCHEMA = "aragorn/github-gateway-result/v2"
 ADDRESS_RESULT_SCHEMA = "aragorn/github-gateway-address-result/v2"
-QUARANTINE_AUTHORITY = "QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY"
-SOURCE_ASSURANCE = (
-    "git_smart_http_v2_commit_tree_proof_and_api_blob_identity_reverified"
-)
+QUARANTINE_AUTHORITY = AUTHORITY
 _REQUEST_KEYS = {"schema", "owner", "repository", "commit", "skill_path"}
 _RESULT_KEYS = {
     "schema",
@@ -73,6 +80,9 @@ _MAX_PACKAGE_ENTRIES = 1_000
 _MAX_PROCESS_CENSUS_BYTES = 1024 * 1024
 _MAX_PROCESS_CENSUS_EXECUTABLE_BYTES = 4 * 1024 * 1024
 _MAX_SYSTEMD_EXECUTABLE_BYTES = 4 * 1024 * 1024
+_MAX_PYTHON_EXECUTABLE_BYTES = 256 * 1024 * 1024
+_MAX_PACKAGE_FILE_BYTES = 16 * 1024 * 1024
+_MAX_PACKAGE_TOTAL_BYTES = 128 * 1024 * 1024
 _MAX_MOUNTINFO_BYTES = 1024 * 1024
 _SYSTEMD_CLEANUP_SECONDS = 10.0
 _GATEWAY_TRANSFER_BYTES = 512 * 1024 * 1024
@@ -261,6 +271,8 @@ class GatewayQuarantineReceipt:
     handoff_manifest_digest: str
     quarantine_state: Path
     source_proof_digest: str | None = None
+    quarantine_receipt_digest: str | None = None
+    gateway_profile_digest: str | None = None
 
 
 def build_gateway_request(
@@ -378,6 +390,11 @@ def quarantine_through_gateway(
     )
     executable = _trusted_python_executable(python_executable)
     protected_package = _trusted_package_root(package_root)
+    runtime_measurements = _gateway_runtime_measurements(
+        executable,
+        protected_package,
+    )
+    containment_profile = _gateway_containment_profile()
     job_root = gateway / f"job-{secrets.token_hex(16)}"
     environment = {
         "HOME": os.fspath(gateway),
@@ -475,12 +492,20 @@ def quarantine_through_gateway(
                     f"cannot launch acquisition gateway: {exc}"
                 ) from exc
             result = _require_success_result(process)
+            _require_gateway_runtime_unchanged(
+                executable,
+                protected_package,
+                runtime_measurements,
+            )
             return _accept_gateway_output(
                 frozen,
                 result,
                 job_root=job_root,
                 quarantine_state=quarantine,
                 worker_uid=worker_uid,
+                containment_profile=containment_profile,
+                python_executable_digest=runtime_measurements[0],
+                gateway_package_tree_digest=runtime_measurements[1],
             )
         finally:
             _remove_worker_job(job_root, expected_uid=worker_uid)
@@ -493,6 +518,9 @@ def _accept_gateway_output(
     job_root: Path,
     quarantine_state: Path,
     worker_uid: int,
+    containment_profile: str,
+    python_executable_digest: str,
+    gateway_package_tree_digest: str,
 ) -> GatewayQuarantineReceipt:
     """Import and semantically verify a completed distinct-principal handoff."""
 
@@ -540,6 +568,44 @@ def _accept_gateway_output(
             raise GitHubGatewayError(
                 "gateway handoff contains bytes outside the verified source closure"
             )
+        raw_handoff = canonical_json(handoff)
+        try:
+            destination.put_expected(
+                BytesIO(raw_handoff),
+                expected_digest=result["handoff_manifest_digest"],
+                max_bytes=len(raw_handoff),
+            )
+        except CASError as exc:
+            raise GitHubGatewayError(
+                f"cannot retain verified gateway handoff manifest: {exc}"
+            ) from exc
+        _remove_worker_job(job_root, expected_uid=worker_uid)
+        _require_gateway_entries(
+            job_root.parent,
+            (),
+            worker_uid=worker_uid,
+            stage="before quarantine publication",
+        )
+        try:
+            gateway_profile_digest = github_gateway_profile_digest(
+                containment_profile=containment_profile,
+                gateway_package_tree_digest=gateway_package_tree_digest,
+                python_executable_digest=python_executable_digest,
+            )
+            receipt_digest = retain_github_quarantine_receipt(
+                destination,
+                request=request,
+                manifest_digest=result["manifest_digest"],
+                source_proof_digest=result["source_proof_digest"],
+                handoff_manifest_digest=result["handoff_manifest_digest"],
+                containment_profile=containment_profile,
+                python_executable_digest=python_executable_digest,
+                gateway_package_tree_digest=gateway_package_tree_digest,
+            )
+        except GitHubQuarantineReceiptError as exc:
+            raise GitHubGatewayError(
+                f"cannot retain broker quarantine receipt: {exc}"
+            ) from exc
         receipt = GatewayQuarantineReceipt(
             authority=QUARANTINE_AUTHORITY,
             source_assurance=SOURCE_ASSURANCE,
@@ -550,19 +616,25 @@ def _accept_gateway_output(
             file_count=len(manifest["files"]),
             handoff_manifest_digest=result["handoff_manifest_digest"],
             quarantine_state=quarantine_state,
-        )
-        _remove_worker_job(job_root, expected_uid=worker_uid)
-        _require_gateway_entries(
-            job_root.parent,
-            (),
-            worker_uid=worker_uid,
-            stage="before quarantine publication",
+            quarantine_receipt_digest=receipt_digest,
+            gateway_profile_digest=gateway_profile_digest,
         )
         if os.path.lexists(quarantine_state):
             raise GitHubGatewayError("broker quarantine is no longer a fresh path")
         os.rename(staging, quarantine_state)
         try:
             _fsync_directory(quarantine_state.parent)
+            verify_github_quarantine_receipt(
+                CAS(quarantine_state, read_only=True),
+                receipt_digest,
+                expected_manifest_digest=result["manifest_digest"],
+                expected_gateway_profile_digest=gateway_profile_digest,
+            )
+        except (CASError, GitHubQuarantineReceiptError) as exc:
+            _remove_broker_staging(quarantine_state)
+            raise GitHubGatewayError(
+                f"published broker quarantine receipt failed replay: {exc}"
+            ) from exc
         except OSError:
             _remove_broker_staging(quarantine_state)
             raise
@@ -1610,6 +1682,142 @@ def _trusted_package_root(value: str | os.PathLike[str]) -> Path:
                     "gateway package contains a special filesystem entry"
                 )
     return root
+
+
+def _gateway_containment_profile() -> str:
+    if sys.platform == "linux":
+        return LINUX_CONTAINMENT_PROFILE
+    if sys.platform == "darwin":
+        return DARWIN_CONTAINMENT_PROFILE
+    raise GitHubGatewayError(
+        "gateway containment profile is unsupported on this platform"
+    )
+
+
+def _gateway_runtime_measurements(
+    executable: Path,
+    package_root: Path,
+) -> tuple[str, str]:
+    """Measure the exact protected interpreter and package tree."""
+
+    try:
+        python_digest, _identity, _mode = _hash_regular_file(
+            executable,
+            _MAX_PYTHON_EXECUTABLE_BYTES,
+            "gateway Python executable",
+        )
+        package_digest = _gateway_package_tree_digest(package_root)
+        return python_digest, package_digest
+    except (OSError, VerificationError) as exc:
+        raise GitHubGatewayError(
+            f"cannot measure protected gateway runtime: {exc}"
+        ) from exc
+
+
+def _require_gateway_runtime_unchanged(
+    executable: Path,
+    package_root: Path,
+    expected: tuple[str, str],
+) -> None:
+    """Revalidate and remeasure gateway code after worker shutdown."""
+
+    observed_executable = _trusted_python_executable(executable)
+    observed_package = _trusted_package_root(package_root)
+    if observed_executable != executable or observed_package != package_root:
+        raise GitHubGatewayError("protected gateway runtime path changed during use")
+    if _gateway_runtime_measurements(executable, package_root) != expected:
+        raise GitHubGatewayError("protected gateway runtime changed during use")
+
+
+def _gateway_package_tree_digest(root: Path) -> str:
+    """Hash a deterministic description of the protected package tree."""
+
+    pending = [root]
+    entries_seen = 0
+    total_bytes = 0
+    records: list[dict[str, object]] = []
+    while pending:
+        directory = pending.pop()
+        try:
+            metadata = os.lstat(directory)
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError as exc:
+            raise GitHubGatewayError(
+                f"cannot measure gateway package tree: {exc}"
+            ) from exc
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != _broker_euid()
+            or stat.S_IMODE(metadata.st_mode) & 0o022
+        ):
+            raise GitHubGatewayError(
+                "gateway package tree changed protection during measurement"
+            )
+        relative_directory = directory.relative_to(root).as_posix()
+        records.append(
+            {
+                "path": "." if relative_directory == "." else relative_directory,
+                "kind": "directory",
+                "mode": stat.S_IMODE(metadata.st_mode),
+            }
+        )
+        child_directories: list[Path] = []
+        for entry in entries:
+            entries_seen += 1
+            if entries_seen > _MAX_PACKAGE_ENTRIES:
+                raise GitHubGatewayError("gateway package tree is too large")
+            path = Path(entry.path)
+            try:
+                child = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise GitHubGatewayError(
+                    f"cannot measure gateway package entry: {exc}"
+                ) from exc
+            if (
+                stat.S_ISLNK(child.st_mode)
+                or child.st_uid != _broker_euid()
+                or stat.S_IMODE(child.st_mode) & 0o022
+            ):
+                raise GitHubGatewayError(
+                    "gateway package entry changed protection during measurement"
+                )
+            if stat.S_ISDIR(child.st_mode):
+                child_directories.append(path)
+                continue
+            if not stat.S_ISREG(child.st_mode):
+                raise GitHubGatewayError(
+                    "gateway package contains a special filesystem entry"
+                )
+            total_bytes += child.st_size
+            if total_bytes > _MAX_PACKAGE_TOTAL_BYTES:
+                raise GitHubGatewayError("gateway package tree exceeds its byte limit")
+            try:
+                digest, identity, _mode = _hash_regular_file(
+                    path,
+                    _MAX_PACKAGE_FILE_BYTES,
+                    "gateway package file",
+                )
+            except VerificationError as exc:
+                raise GitHubGatewayError(
+                    f"cannot measure gateway package file: {exc}"
+                ) from exc
+            if identity[:3] != (child.st_dev, child.st_ino, child.st_size):
+                raise GitHubGatewayError(
+                    "gateway package entry changed during measurement"
+                )
+            records.append(
+                {
+                    "path": path.relative_to(root).as_posix(),
+                    "kind": "file",
+                    "mode": stat.S_IMODE(child.st_mode),
+                    "size": child.st_size,
+                    "digest": digest,
+                }
+            )
+        pending.extend(reversed(child_directories))
+    records.sort(key=lambda record: (str(record["path"]), str(record["kind"])))
+    return _digest(canonical_json(records))
 
 
 def _require_protected_ancestors(path: Path) -> None:

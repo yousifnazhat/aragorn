@@ -1,0 +1,84 @@
+{
+  "$id": "https://aragorn.dev/schema/protected-install-transaction-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn protected install transaction binding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "context_digest",
+    "context_id",
+    "operation",
+    "expected_active",
+    "manifest_digest",
+    "tree_digest",
+    "destination",
+    "version_path"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/protected-install-transaction/v1"},
+    "authority": {
+      "const": "BROKER_TRANSACTION_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
+    },
+    "context_digest": {"$ref": "#/$defs/digest"},
+    "context_id": {"$ref": "#/$defs/digest"},
+    "operation": {"enum": ["install", "update", "rollback"]},
+    "expected_active": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/expectedActive"}
+      ]
+    },
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "tree_digest": {"$ref": "#/$defs/digest"},
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_device", "root_inode", "target_name"],
+      "properties": {
+        "root_device": {"type": "integer", "minimum": 0},
+        "root_inode": {"type": "integer", "minimum": 1},
+        "target_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        }
+      }
+    },
+    "version_path": {
+      "type": "string",
+      "pattern": "^\\.aragorn-versions/[a-z0-9][a-z0-9._-]{0,127}/[0-9a-f]{64}-[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"const": "install"}},
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {"expected_active": {"type": "null"}}
+      },
+      "else": {
+        "properties": {
+          "expected_active": {"$ref": "#/$defs/expectedActive"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "expectedActive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_id", "manifest_digest"],
+      "properties": {
+        "context_id": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

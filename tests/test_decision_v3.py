@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import json
+import os
+import sys
+import unittest
 from copy import deepcopy
 from io import BytesIO
-import os
 from pathlib import Path
-import sys
 from tempfile import TemporaryDirectory
-import unittest
 
 from aragorn.acquire import ingest_local
 from aragorn.admission_artifact_graph import retain_admission_artifact_graph
+from aragorn.admission_decision import (
+    AdmissionDecisionError,
+    evaluate_admission,
+    parse_policy,
+)
 from aragorn.analyze import run_analyzer
 from aragorn.analyzer_receipt import retain_analyzer_run
 from aragorn.artifact_closure import canonical_json
@@ -25,7 +31,6 @@ from aragorn.protected_install_context import (
     verify_protected_install_context,
 )
 
-
 VERIFIER_DIGEST = "sha256:" + "1" * 64
 
 
@@ -35,6 +40,55 @@ def _put(cas: CAS, document: object) -> str:
 
 
 class DecisionV3Tests(unittest.TestCase):
+    def test_policy_v2_requires_a_canonical_graph_profile_allowlist(self) -> None:
+        policy = {
+            "schema": "aragorn/policy/v2",
+            "id": "test",
+            "version": 1,
+            "required_analyzers": ["test-scanner"],
+            "hard_deny_reason_codes": [],
+            "review_severities": ["critical", "high", "medium"],
+            "allowed_artifact_graph_profiles": ["self-contained-local-markdown/v1"],
+        }
+        validated, _parsed = parse_policy(policy)
+        self.assertEqual(validated, policy)
+
+        vectors = json.loads(
+            (
+                Path(__file__).parents[1]
+                / "benchmark"
+                / "admission"
+                / "openclaw-v2026.7.1"
+                / "deterministic-authority-vectors-v1.json"
+            ).read_bytes()
+        )
+        direct_request = deepcopy(vectors["vectors"][0]["request"])
+        direct_request["policy"] = policy
+        with self.assertRaisesRegex(
+            AdmissionDecisionError,
+            "graph-bound decision input",
+        ):
+            evaluate_admission(direct_request)
+
+        for profiles in (
+            ["z-profile/v1", "a-profile/v1"],
+            ["a-profile/v1", "a-profile/v1"],
+            ["not-a-versioned-profile"],
+        ):
+            with (
+                self.subTest(profiles=profiles),
+                self.assertRaisesRegex(
+                    AdmissionDecisionError,
+                    "artifact graph profile",
+                ),
+            ):
+                parse_policy(
+                    {
+                        **policy,
+                        "allowed_artifact_graph_profiles": profiles,
+                    }
+                )
+
     def test_graph_bound_decision_replays_and_rejects_drift(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -121,6 +175,70 @@ class DecisionV3Tests(unittest.TestCase):
             self.assertEqual(decision["artifact_graph_digest"], graph_digest)
             self.assertEqual(decision["reason_codes"], [])
 
+            policy_v2 = {
+                "schema": "aragorn/policy/v2",
+                "id": "test",
+                "version": 2,
+                "required_analyzers": ["test-scanner"],
+                "hard_deny_reason_codes": [],
+                "review_severities": ["critical", "high", "medium"],
+                "allowed_artifact_graph_profiles": ["self-contained-local-markdown/v1"],
+            }
+            policy_v2_digest = _put(cas, policy_v2)
+            decision_v2_digest = retain_decision_v3(
+                cas,
+                manifest_digest=manifest_digest,
+                artifact_graph_digest=graph_digest,
+                policy_digest=policy_v2_digest,
+                analyzer_run_receipt_digests=[run_receipt_digest],
+                analyzer_verifier_digest=VERIFIER_DIGEST,
+                artifact_graph_verifier_digest=VERIFIER_DIGEST,
+            )
+            decision_v2 = verify_decision_v3(
+                CAS(root / "state", read_only=True),
+                decision_v2_digest,
+                expected_manifest_digest=manifest_digest,
+                expected_artifact_graph_digest=graph_digest,
+                expected_policy_digest=policy_v2_digest,
+                expected_analyzer_run_receipt_digests=[run_receipt_digest],
+                expected_analyzer_verifier_digest=VERIFIER_DIGEST,
+                expected_artifact_graph_verifier_digest=VERIFIER_DIGEST,
+            )
+            self.assertEqual(decision_v2["verdict"], "ALLOW")
+            self.assertEqual(decision_v2["reason_codes"], [])
+
+            disallowed_policy_digest = _put(
+                cas,
+                {
+                    **policy_v2,
+                    "allowed_artifact_graph_profiles": ["other-profile/v1"],
+                },
+            )
+            disallowed_decision_digest = retain_decision_v3(
+                cas,
+                manifest_digest=manifest_digest,
+                artifact_graph_digest=graph_digest,
+                policy_digest=disallowed_policy_digest,
+                analyzer_run_receipt_digests=[run_receipt_digest],
+                analyzer_verifier_digest=VERIFIER_DIGEST,
+                artifact_graph_verifier_digest=VERIFIER_DIGEST,
+            )
+            disallowed_decision = verify_decision_v3(
+                CAS(root / "state", read_only=True),
+                disallowed_decision_digest,
+                expected_manifest_digest=manifest_digest,
+                expected_artifact_graph_digest=graph_digest,
+                expected_policy_digest=disallowed_policy_digest,
+                expected_analyzer_run_receipt_digests=[run_receipt_digest],
+                expected_analyzer_verifier_digest=VERIFIER_DIGEST,
+                expected_artifact_graph_verifier_digest=VERIFIER_DIGEST,
+            )
+            self.assertEqual(disallowed_decision["verdict"], "ERROR")
+            self.assertEqual(
+                disallowed_decision["reason_codes"],
+                ["ARTIFACT_GRAPH_PROFILE_NOT_ALLOWED"],
+            )
+
             protected_root = root / "protected"
             protected_root.mkdir(mode=0o700)
             root_fd = os.open(protected_root, os.O_RDONLY | os.O_DIRECTORY)
@@ -200,9 +318,12 @@ class DecisionV3Tests(unittest.TestCase):
             ):
                 changed_context = deepcopy(context)
                 changed_context.update(mutation)
-                with self.subTest(message=message), self.assertRaisesRegex(
-                    ProtectedInstallContextError,
-                    message,
+                with (
+                    self.subTest(message=message),
+                    self.assertRaisesRegex(
+                        ProtectedInstallContextError,
+                        message,
+                    ),
                 ):
                     verify_context(changed_context)
 

@@ -298,10 +298,25 @@ per-UID lock serializes cooperating brokers that share the host control root
 and namespaces; bounded pre- and post-run process censuses reject a pre-existing
 or surviving real-UID peer.
 Before importing any Aragorn module, each isolated process fixes its soft and
-hard `RLIMIT_NPROC` at one and fails closed unless a fork probe is denied. These
-are defense in depth under the provisioned exclusive non-login UID, shared host
-PID/mount namespaces, trusted-root, and protected Darwin/procps-compatible
-`/bin/ps` assumptions, not a replacement for sealed service-level containment.
+hard `RLIMIT_NPROC` at one and fails closed unless a fork probe is denied. On
+Linux, the broker also requires host systemd and cgroup v2 and runs each
+resolver and worker in a unique transient service. The fixed service policy
+uses the dedicated UID/GID, `TasksMax=1`, control-group cleanup, no
+capabilities, no-new-privileges, a read-only host filesystem, address-family
+and socket-bind restrictions, and default-deny cgroup IP filtering. The
+broker holds a reachable loopback listener and the isolated bootstrap must
+prove that the service cannot connect to it before any Aragorn import, so a
+host that silently skips the cgroup IP filter fails closed. The bootstrap also
+verifies its identity, environment, capabilities,
+no-new-privileges state, exact one-task cgroup, and denied fork before importing
+Aragorn. Broker cleanup requires the unit to be inactive and jobless, its
+cgroup to be absent or empty, and the worker UID to have no remaining process.
+The transfer root must be a dedicated 512 MiB, 20,000-inode
+`nosuid,nodev,noexec` tmpfs; quarantine is not published until the worker job
+is removed and that root is empty. The checked-in sysusers, tmpfiles, and mount
+definitions provision the stable non-login principal and private state roots.
+Darwin retains the narrower UID-drop, process-group, census, and
+`RLIMIT_NPROC` defense-in-depth path.
 The broker then imports the declared bytes through Aragorn's cross-owner handoff
 and
 independently re-verifies the exact manifest, Git blob identities, source
@@ -312,10 +327,11 @@ explicitly
 commit and tree membership still inherit GitHub's authenticated API assertions,
 so this receipt cannot authorize admission, promotion, or installation.
 
-This is an internal primitive, not a command developers repeatedly run. It is
-not yet the supported production acquisition boundary: a protected installation
-of the gateway module, a provisioned dedicated UID/private transfer root,
-sealed service-level descendant containment with no pre-existing same-UID peers,
+This is an internal primitive, not a command developers repeatedly run. The
+Linux service boundary covers process and IP-address containment but does not
+seal a dedicated root filesystem or attest the host platform. It is not yet the
+supported production acquisition boundary: protected installation and
+provisioning automation, independently hashed raw Git commit/tree membership,
 control-plane promotion, and install/update wiring remain required. The direct
 `acquire-github` command still runs with the operator's UID and remains
 evaluation-only.

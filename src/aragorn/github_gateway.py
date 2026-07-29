@@ -10,6 +10,7 @@ import os
 import resource
 import secrets
 import shutil
+import socket
 import stat
 import sys
 from collections.abc import Iterator, Sequence
@@ -63,13 +64,22 @@ _MAX_RESOLUTION_SECONDS = 10.0
 _MAX_PACKAGE_ENTRIES = 1_000
 _MAX_PROCESS_CENSUS_BYTES = 1024 * 1024
 _MAX_PROCESS_CENSUS_EXECUTABLE_BYTES = 4 * 1024 * 1024
+_MAX_SYSTEMD_EXECUTABLE_BYTES = 4 * 1024 * 1024
+_MAX_MOUNTINFO_BYTES = 1024 * 1024
+_SYSTEMD_CLEANUP_SECONDS = 10.0
+_GATEWAY_TRANSFER_BYTES = 512 * 1024 * 1024
+_GATEWAY_TRANSFER_INODES = 20_000
 _DEFAULT_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _PROCESS_CENSUS_PATH = Path("/bin/ps")
+_SYSTEMD_RUN_PATH = Path("/usr/bin/systemd-run")
+_SYSTEMCTL_PATH = Path("/usr/bin/systemctl")
+_SYSTEMD_CGROUP_ROOT = Path("/sys/fs/cgroup/system.slice")
 _UID_LEASE_ROOT = Path("/var/run/aragorn-gateway")
 _ISOLATED_ENTRYPOINT = """\
 import errno
 import os
 import resource
+import socket
 import sys
 
 expected_uid = int(sys.argv.pop(1))
@@ -80,12 +90,126 @@ identity = (
     os.getgid(),
     os.getegid(),
 )
+groups = os.getgroups()
+base_environment = {
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "PATH",
+    "PYTHONDONTWRITEBYTECODE",
+    "TZ",
+}
+systemd_environment = base_environment | {
+    "ARAGORN_DENIED_PROBE",
+    "INVOCATION_ID",
+    "SYSTEMD_EXEC_PID",
+}
+darwin_environment = base_environment | {"__CF_USER_TEXT_ENCODING"}
+environment_keys = set(os.environ)
 if (
     not sys.flags.isolated
     or not sys.flags.no_site
     or identity != (expected_uid, expected_uid, expected_gid, expected_gid)
+    or (sys.platform == "linux" and environment_keys != systemd_environment)
+    or (
+        sys.platform == "darwin"
+        and environment_keys not in (base_environment, darwin_environment)
+    )
+    or sys.platform not in {"darwin", "linux"}
 ):
     raise SystemExit(70)
+if environment_keys == darwin_environment:
+    encoding = os.environ["__CF_USER_TEXT_ENCODING"].split(":")
+    if (
+        sys.platform != "darwin"
+        or len(encoding) != 3
+        or any(
+            len(item) <= 2
+            or not item.startswith("0x")
+            or any(character not in "0123456789abcdefABCDEF" for character in item[2:])
+            for item in encoding
+        )
+    ):
+        raise SystemExit(70)
+if environment_keys == systemd_environment:
+    invocation_id = os.environ["INVOCATION_ID"]
+    systemd_pid = os.environ["SYSTEMD_EXEC_PID"]
+    probe_port = os.environ["ARAGORN_DENIED_PROBE"]
+    if (
+        sys.platform != "linux"
+        or len(invocation_id) != 32
+        or any(character not in "0123456789abcdef" for character in invocation_id)
+        or not systemd_pid.isdigit()
+        or int(systemd_pid) != os.getpid()
+        or not probe_port.isdigit()
+        or not 0 < int(probe_port) <= 65535
+        or len(groups) > 1
+        or any(group != expected_gid for group in groups)
+    ):
+        raise SystemExit(70)
+    process_status = {}
+    with open("/proc/self/status", encoding="ascii") as source:
+        for line in source:
+            key, separator, value = line.partition(":")
+            if separator and key in {
+                "NoNewPrivs",
+                "CapInh",
+                "CapPrm",
+                "CapEff",
+                "CapBnd",
+                "CapAmb",
+            }:
+                process_status[key] = value.strip()
+    if process_status != {
+        "NoNewPrivs": "1",
+        "CapInh": "0000000000000000",
+        "CapPrm": "0000000000000000",
+        "CapEff": "0000000000000000",
+        "CapBnd": "0000000000000000",
+        "CapAmb": "0000000000000000",
+    }:
+        raise SystemExit(70)
+    with open("/proc/self/cgroup", encoding="ascii") as source:
+        cgroup_entry = source.read(4097)
+    if (
+        len(cgroup_entry) > 4096
+        or not cgroup_entry.endswith("\\n")
+        or not cgroup_entry.startswith("0::/system.slice/aragorn-gateway-")
+        or not cgroup_entry.endswith(".service\\n")
+    ):
+        raise SystemExit(70)
+    cgroup_root = "/sys/fs/cgroup" + cgroup_entry[3:-1]
+    with open(cgroup_root + "/pids.max", encoding="ascii") as source:
+        pids_max = source.read(17).strip()
+    with open(cgroup_root + "/pids.current", encoding="ascii") as source:
+        pids_current = source.read(17).strip()
+    with open(cgroup_root + "/cgroup.procs", encoding="ascii") as source:
+        cgroup_procs = source.read(65).split()
+    with open(cgroup_root + "/cgroup.threads", encoding="ascii") as source:
+        cgroup_threads = source.read(65).split()
+    with open(cgroup_root + "/cgroup.subtree_control", encoding="ascii") as source:
+        subtree_control = source.read(65).split()
+    if (
+        pids_max != "1"
+        or pids_current != "1"
+        or cgroup_procs != [str(os.getpid())]
+        or cgroup_threads != [str(os.getpid())]
+        or subtree_control
+        or any(entry.is_dir(follow_symlinks=False) for entry in os.scandir(cgroup_root))
+    ):
+        raise SystemExit(70)
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.settimeout(0.5)
+    try:
+        probe.connect(("127.0.0.1", int(probe_port)))
+    except TimeoutError:
+        pass
+    except OSError:
+        raise SystemExit(70)
+    else:
+        raise SystemExit(70)
+    finally:
+        probe.close()
 resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
 try:
     child = os.fork()
@@ -245,6 +369,12 @@ def quarantine_through_gateway(
     with _exclusive_uid_lease(_UID_LEASE_ROOT, worker_uid):
         try:
             _require_idle_uid(worker_uid, "before launch")
+            _require_gateway_entries(
+                gateway,
+                (),
+                worker_uid=worker_uid,
+                stage="before launch",
+            )
             try:
                 resolver = _run_gateway_process(
                     _gateway_command(
@@ -261,7 +391,15 @@ def quarantine_through_gateway(
                     environment=environment,
                     worker_uid=worker_uid,
                     worker_gid=worker_gid,
+                    allowed_addresses=("127.0.0.53",),
+                    writable_root=gateway,
                     postflight_stage="after resolver shutdown",
+                )
+                _require_gateway_entries(
+                    gateway,
+                    (),
+                    worker_uid=worker_uid,
+                    stage="after resolver shutdown",
                 )
                 pinned_addresses = _require_address_result(resolver)
                 command = _gateway_command(
@@ -284,8 +422,16 @@ def quarantine_through_gateway(
                     environment=environment,
                     worker_uid=worker_uid,
                     worker_gid=worker_gid,
+                    allowed_addresses=pinned_addresses,
+                    writable_root=gateway,
                     postflight_stage="after worker shutdown",
                     stdin_bytes=raw_request + b"\n",
+                )
+                _require_gateway_entries(
+                    gateway,
+                    (job_root.name,),
+                    worker_uid=worker_uid,
+                    stage="after worker shutdown",
                 )
             except GitHubGatewayError:
                 raise
@@ -367,6 +513,13 @@ def _accept_gateway_output(
             file_count=len(manifest["files"]),
             handoff_manifest_digest=result["handoff_manifest_digest"],
             quarantine_state=quarantine_state,
+        )
+        _remove_worker_job(job_root, expected_uid=worker_uid)
+        _require_gateway_entries(
+            job_root.parent,
+            (),
+            worker_uid=worker_uid,
+            stage="before quarantine publication",
         )
         if os.path.lexists(quarantine_state):
             raise GitHubGatewayError("broker quarantine is no longer a fresh path")
@@ -677,10 +830,27 @@ def _run_gateway_process(
     environment: dict[str, str],
     worker_uid: int,
     worker_gid: int,
+    allowed_addresses: Sequence[str],
+    writable_root: Path,
     postflight_stage: str,
     stdin_bytes: bytes | None = None,
 ) -> _ProcessResult:
     try:
+        if sys.platform == "linux":
+            return _run_systemd_gateway_process(
+                command,
+                timeout=timeout,
+                environment=environment,
+                worker_uid=worker_uid,
+                worker_gid=worker_gid,
+                allowed_addresses=allowed_addresses,
+                writable_root=writable_root,
+                stdin_bytes=stdin_bytes,
+            )
+        if sys.platform != "darwin":
+            raise GitHubGatewayError(
+                "gateway process containment is unsupported on this platform"
+            )
         return _run_bounded(
             command,
             timeout=timeout,
@@ -697,6 +867,417 @@ def _run_gateway_process(
         )
     finally:
         _require_idle_uid(worker_uid, postflight_stage)
+
+
+def _run_systemd_gateway_process(
+    command: Sequence[str],
+    *,
+    timeout: float,
+    environment: dict[str, str],
+    worker_uid: int,
+    worker_gid: int,
+    allowed_addresses: Sequence[str],
+    writable_root: Path,
+    stdin_bytes: bytes | None,
+) -> _ProcessResult:
+    _require_systemd_host()
+    systemd_run, run_identity = _trusted_root_executable(
+        _SYSTEMD_RUN_PATH,
+        _MAX_SYSTEMD_EXECUTABLE_BYTES,
+        "systemd-run",
+    )
+    systemctl, control_identity = _trusted_root_executable(
+        _SYSTEMCTL_PATH,
+        _MAX_SYSTEMD_EXECUTABLE_BYTES,
+        "systemctl",
+    )
+    addresses = _systemd_allowed_addresses(allowed_addresses)
+    writable = _systemd_writable_root(writable_root)
+    unit = f"aragorn-gateway-{secrets.token_hex(12)}.service"
+    runtime = f"{timeout:.6f}s"
+    properties = (
+        "AmbientCapabilities=",
+        "CapabilityBoundingSet=",
+        "Delegate=no",
+        "IPAddressDeny=any",
+        "KeyringMode=private",
+        "KillMode=control-group",
+        "LimitNOFILE=64",
+        "LockPersonality=yes",
+        "MemoryDenyWriteExecute=yes",
+        "MemoryMax=512M",
+        "MemorySwapMax=0",
+        "NoNewPrivileges=yes",
+        "PrivateDevices=yes",
+        "PrivateTmp=yes",
+        "InaccessiblePaths=/tmp /var/tmp",
+        "ProcSubset=pid",
+        "ProtectClock=yes",
+        "ProtectControlGroups=yes",
+        "ProtectHome=yes",
+        "ProtectHostname=yes",
+        "ProtectKernelLogs=yes",
+        "ProtectKernelModules=yes",
+        "ProtectKernelTunables=yes",
+        "ProtectProc=invisible",
+        "ProtectSystem=strict",
+        "RemoveIPC=yes",
+        "Restart=no",
+        "RestrictAddressFamilies=AF_INET AF_INET6",
+        "RestrictNamespaces=yes",
+        "RestrictRealtime=yes",
+        "RestrictSUIDSGID=yes",
+        f"RuntimeMaxSec={runtime}",
+        "SendSIGKILL=yes",
+        "SocketBindDeny=any",
+        "SystemCallArchitectures=native",
+        "SystemCallErrorNumber=EPERM",
+        "SystemCallFilter=@system-service",
+        "TasksMax=1",
+        "TimeoutStopSec=5s",
+        "UMask=0077",
+        "UnsetEnvironment=LOGNAME USER SHELL MEMORY_PRESSURE_WATCH MEMORY_PRESSURE_WRITE",
+        f"ReadWritePaths={writable}",
+        *(f"IPAddressAllow={address}" for address in addresses),
+    )
+    with _denied_network_listener() as probe_port:
+        service_environment = {
+            **environment,
+            "ARAGORN_DENIED_PROBE": str(probe_port),
+        }
+        argv = (
+            os.fspath(systemd_run),
+            "--system",
+            "--no-ask-password",
+            "--quiet",
+            "--wait",
+            "--pipe",
+            "--collect",
+            "--service-type=exec",
+            f"--unit={unit}",
+            f"--uid={worker_uid}",
+            f"--gid={worker_gid}",
+            "--working-directory=/",
+            "--expand-environment=no",
+            *(
+                f"--setenv={key}={value}"
+                for key, value in sorted(service_environment.items())
+            ),
+            *(f"--property={value}" for value in properties),
+            "--",
+            *command,
+        )
+        try:
+            return _run_bounded(
+                argv,
+                timeout=timeout + _SYSTEMD_CLEANUP_SECONDS,
+                stdout_limit=_MAX_WIRE_BYTES,
+                stderr_limit=_MAX_WIRE_BYTES,
+                shared_limit=2 * _MAX_WIRE_BYTES,
+                env={"LANG": "C", "LC_ALL": "C", "PATH": os.defpath},
+                stdin_bytes=stdin_bytes,
+                cwd=os.path.sep,
+            )
+        finally:
+            _stop_systemd_unit(systemctl, unit)
+            _reverify_root_executable(systemd_run, run_identity, "systemd-run")
+            _reverify_root_executable(systemctl, control_identity, "systemctl")
+
+
+@contextmanager
+def _denied_network_listener() -> Iterator[int]:
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        yield listener.getsockname()[1]
+        listener.setblocking(False)
+        try:
+            connection, _address = listener.accept()
+        except BlockingIOError:
+            pass
+        else:
+            connection.close()
+            raise GitHubGatewayError(
+                "systemd gateway network-denial probe was reachable"
+            )
+    except GitHubGatewayError:
+        raise
+    except OSError as exc:
+        raise GitHubGatewayError(
+            f"cannot verify systemd gateway network denial: {exc}"
+        ) from exc
+    finally:
+        listener.close()
+
+
+def _systemd_allowed_addresses(value: Sequence[str]) -> tuple[str, ...]:
+    addresses = tuple(value)
+    if addresses == ("127.0.0.53",):
+        return addresses
+    try:
+        canonical = tuple(
+            endpoint[3][0] for endpoint in _validate_pinned_addresses(addresses)
+        )
+    except ValueError as exc:
+        raise GitHubGatewayError(f"invalid systemd network boundary: {exc}") from exc
+    if canonical != addresses:
+        raise GitHubGatewayError("systemd network boundary is not canonical")
+    return canonical
+
+
+def _systemd_writable_root(value: Path) -> str:
+    text = os.fspath(value)
+    try:
+        resolved = value.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise GitHubGatewayError(f"invalid systemd writable root: {exc}") from exc
+    if (
+        not value.is_absolute()
+        or resolved != value
+        or any(character.isspace() or character in "\0:\\" for character in text)
+    ):
+        raise GitHubGatewayError("systemd writable root is not canonical")
+    _require_bounded_transfer_mount(value)
+    return text
+
+
+def _require_bounded_transfer_mount(path: Path) -> None:
+    raw = _read_virtual_file(
+        Path("/proc/self/mountinfo"),
+        _MAX_MOUNTINFO_BYTES,
+        "gateway mount table",
+    )
+    try:
+        lines = raw.decode("ascii").splitlines()
+    except UnicodeDecodeError as exc:
+        raise GitHubGatewayError("gateway mount table is not ASCII") from exc
+    matches: list[tuple[set[str], str]] = []
+    for line in lines:
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+        except ValueError:
+            continue
+        if (
+            separator >= 6
+            and len(fields) >= separator + 4
+            and fields[4] == os.fspath(path)
+        ):
+            matches.append((set(fields[5].split(",")), fields[separator + 1]))
+    required_options = {"rw", "nosuid", "nodev", "noexec"}
+    if (
+        len(matches) != 1
+        or matches[0][1] != "tmpfs"
+        or not required_options.issubset(matches[0][0])
+    ):
+        raise GitHubGatewayError(
+            "gateway root must be one rw,nosuid,nodev,noexec tmpfs mount"
+        )
+    try:
+        filesystem = os.statvfs(path)
+    except OSError as exc:
+        raise GitHubGatewayError(f"cannot inspect gateway tmpfs limits: {exc}") from exc
+    total_bytes = filesystem.f_frsize * filesystem.f_blocks
+    if (
+        not 0 < total_bytes <= _GATEWAY_TRANSFER_BYTES
+        or not 0 < filesystem.f_files <= _GATEWAY_TRANSFER_INODES
+    ):
+        raise GitHubGatewayError("gateway tmpfs limits exceed the fixed boundary")
+
+
+def _require_systemd_host() -> None:
+    if _read_virtual_file(Path("/proc/1/comm"), 32, "PID 1 command") != b"systemd\n":
+        raise GitHubGatewayError("gateway requires systemd as host PID 1")
+    for namespace in ("pid", "mnt", "user", "cgroup"):
+        try:
+            broker = os.stat(f"/proc/self/ns/{namespace}")
+            host = os.stat(f"/proc/1/ns/{namespace}")
+        except OSError as exc:
+            raise GitHubGatewayError(
+                f"cannot verify host {namespace} namespace: {exc}"
+            ) from exc
+        if (broker.st_dev, broker.st_ino) != (host.st_dev, host.st_ino):
+            raise GitHubGatewayError(
+                f"gateway broker is outside the host {namespace} namespace"
+            )
+    if not Path("/sys/fs/cgroup/cgroup.controllers").is_file():
+        raise GitHubGatewayError("gateway requires a mounted cgroup v2 hierarchy")
+    cgroup = _read_virtual_file(
+        Path("/proc/self/cgroup"),
+        4096,
+        "broker cgroup membership",
+    )
+    if not cgroup.startswith(b"0::/") or cgroup.count(b"\n") != 1:
+        raise GitHubGatewayError("gateway broker cgroup membership is invalid")
+
+
+def _stop_systemd_unit(systemctl: Path, unit: str) -> None:
+    environment = {"LANG": "C", "LC_ALL": "C", "PATH": os.defpath}
+    stop = _run_bounded(
+        (
+            os.fspath(systemctl),
+            "--system",
+            "--no-ask-password",
+            "--no-pager",
+            "stop",
+            unit,
+        ),
+        timeout=_SYSTEMD_CLEANUP_SECONDS,
+        stdout_limit=4 * 1024,
+        stderr_limit=4 * 1024,
+        shared_limit=8 * 1024,
+        env=environment,
+        cwd=os.path.sep,
+    )
+    if (
+        stop.timed_out
+        or stop.output_exceeded
+        or stop.termination_failed
+        or stop.io_error is not None
+        or stop.returncode not in {0, 5}
+    ):
+        raise GitHubGatewayError("cannot stop the systemd gateway unit")
+    show = _run_bounded(
+        (
+            os.fspath(systemctl),
+            "--system",
+            "--no-ask-password",
+            "--no-pager",
+            "show",
+            unit,
+            "--property=LoadState",
+            "--property=ActiveState",
+            "--property=SubState",
+            "--property=Job",
+        ),
+        timeout=_SYSTEMD_CLEANUP_SECONDS,
+        stdout_limit=4 * 1024,
+        stderr_limit=4 * 1024,
+        shared_limit=8 * 1024,
+        env=environment,
+        cwd=os.path.sep,
+    )
+    if (
+        show.timed_out
+        or show.output_exceeded
+        or show.termination_failed
+        or show.io_error is not None
+        or show.returncode != 0
+        or show.stderr
+    ):
+        raise GitHubGatewayError("cannot verify the stopped systemd gateway unit")
+    state: dict[str, str] = {}
+    try:
+        lines = show.stdout.decode("ascii").splitlines()
+    except UnicodeDecodeError as exc:
+        raise GitHubGatewayError("systemd gateway unit state is not ASCII") from exc
+    for line in lines:
+        key, separator, value = line.partition("=")
+        if (
+            not separator
+            or key not in {"LoadState", "ActiveState", "SubState", "Job"}
+            or key in state
+        ):
+            raise GitHubGatewayError("systemd gateway unit state is invalid")
+        state[key] = value
+    if (
+        set(state) != {"LoadState", "ActiveState", "SubState", "Job"}
+        or state["LoadState"] not in {"loaded", "not-found"}
+        or state["ActiveState"] != "inactive"
+        or state["SubState"] != "dead"
+        or state["Job"]
+    ):
+        raise GitHubGatewayError("systemd gateway unit did not stop completely")
+    cgroup = _SYSTEMD_CGROUP_ROOT / unit
+    try:
+        metadata = os.lstat(cgroup)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise GitHubGatewayError(
+            f"cannot inspect stopped systemd gateway cgroup: {exc}"
+        ) from exc
+    if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise GitHubGatewayError("systemd gateway cgroup is not a directory")
+    procs = _read_virtual_file(
+        cgroup / "cgroup.procs",
+        4096,
+        "stopped gateway cgroup processes",
+    )
+    events = _read_virtual_file(
+        cgroup / "cgroup.events",
+        4096,
+        "stopped gateway cgroup events",
+    )
+    if procs.strip() or b"populated 0\n" not in events:
+        raise GitHubGatewayError("systemd gateway cgroup remains populated")
+    try:
+        if any(entry.is_dir(follow_symlinks=False) for entry in os.scandir(cgroup)):
+            raise GitHubGatewayError("systemd gateway cgroup retains a child cgroup")
+    except OSError as exc:
+        raise GitHubGatewayError(
+            f"cannot inspect stopped systemd gateway cgroup: {exc}"
+        ) from exc
+
+
+def _trusted_root_executable(
+    configured: Path,
+    maximum: int,
+    label: str,
+) -> tuple[Path, tuple[str, tuple[int, int, int, int]]]:
+    try:
+        path = configured.resolve(strict=True)
+        metadata = os.lstat(path)
+        digest, identity, _mode = _hash_regular_file(path, maximum, label)
+    except (OSError, RuntimeError, VerificationError) as exc:
+        raise GitHubGatewayError(f"invalid {label} executable: {exc}") from exc
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != _broker_euid()
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+        or not os.access(path, os.X_OK)
+    ):
+        raise GitHubGatewayError(f"{label} executable is not protected")
+    _require_protected_ancestors(path)
+    return path, (digest, identity)
+
+
+def _reverify_root_executable(
+    path: Path,
+    expected: tuple[str, tuple[int, int, int, int]],
+    label: str,
+) -> None:
+    try:
+        observed = _hash_regular_file(path, _MAX_SYSTEMD_EXECUTABLE_BYTES, label)
+    except (OSError, VerificationError) as exc:
+        raise GitHubGatewayError(f"cannot reverify {label}: {exc}") from exc
+    if observed[:2] != expected:
+        raise GitHubGatewayError(f"{label} executable changed during use")
+
+
+def _read_virtual_file(path: Path, maximum: int, label: str) -> bytes:
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+        )
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise GitHubGatewayError(f"{label} is not a regular file")
+        raw = os.read(descriptor, maximum + 1)
+    except GitHubGatewayError:
+        raise
+    except OSError as exc:
+        raise GitHubGatewayError(f"cannot read {label}: {exc}") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if len(raw) > maximum:
+        raise GitHubGatewayError(f"{label} exceeds its byte limit")
+    return raw
 
 
 def _uid_processes(worker_uid: int) -> tuple[int, ...]:
@@ -737,25 +1318,11 @@ def _uid_processes(worker_uid: int) -> tuple[int, ...]:
 def _trusted_process_census_executable() -> tuple[
     Path, tuple[str, tuple[int, int, int, int]]
 ]:
-    try:
-        path = _PROCESS_CENSUS_PATH.resolve(strict=True)
-        metadata = os.lstat(path)
-        digest, identity, _mode = _hash_regular_file(
-            path,
-            _MAX_PROCESS_CENSUS_EXECUTABLE_BYTES,
-            "process census executable",
-        )
-    except (OSError, RuntimeError, VerificationError) as exc:
-        raise GitHubGatewayError(f"invalid process census executable: {exc}") from exc
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != _broker_euid()
-        or stat.S_IMODE(metadata.st_mode) & 0o022
-        or not os.access(path, os.X_OK)
-    ):
-        raise GitHubGatewayError("process census executable is not protected")
-    _require_protected_ancestors(path)
-    return path, (digest, identity)
+    return _trusted_root_executable(
+        _PROCESS_CENSUS_PATH,
+        _MAX_PROCESS_CENSUS_EXECUTABLE_BYTES,
+        "process census",
+    )
 
 
 def _parse_uid_census(raw: bytes, worker_uid: int) -> tuple[int, ...]:
@@ -811,6 +1378,26 @@ def _require_private_directory(
             f"{label} must be a private real directory owned by UID {expected_uid}"
         )
     return path
+
+
+def _require_gateway_entries(
+    root: Path,
+    expected: Sequence[str],
+    *,
+    worker_uid: int,
+    stage: str,
+) -> None:
+    protected = _require_private_directory(
+        root,
+        expected_uid=worker_uid,
+        label="gateway root",
+    )
+    try:
+        names = tuple(sorted(entry.name for entry in os.scandir(protected)))
+    except OSError as exc:
+        raise GitHubGatewayError(f"cannot inspect gateway root {stage}: {exc}") from exc
+    if names != tuple(sorted(expected)):
+        raise GitHubGatewayError(f"gateway root contains unexpected entries {stage}")
 
 
 def _fresh_private_path(
@@ -1033,19 +1620,21 @@ def _gateway_command(
 def _remove_worker_job(path: Path, *, expected_uid: int) -> None:
     try:
         metadata = os.lstat(path)
-    except OSError:
+    except FileNotFoundError:
         return
+    except OSError as exc:
+        raise GitHubGatewayError(f"cannot inspect gateway worker job: {exc}") from exc
     if (
         not stat.S_ISDIR(metadata.st_mode)
         or stat.S_ISLNK(metadata.st_mode)
         or metadata.st_uid != expected_uid
         or not shutil.rmtree.avoids_symlink_attacks
     ):
-        return
+        raise GitHubGatewayError("gateway worker job is not safe to remove")
     try:
         shutil.rmtree(path)
-    except OSError:
-        pass
+    except OSError as exc:
+        raise GitHubGatewayError(f"cannot remove gateway worker job: {exc}") from exc
 
 
 def _remove_broker_staging(path: Path) -> None:

@@ -42,7 +42,9 @@ class GitHubGatewayTests(unittest.TestCase):
     def test_worker_is_credential_free_and_broker_reverifies_exact_closure(
         self,
     ) -> None:
-        job = self.root / "job"
+        gateway = self.root / "gateway"
+        gateway.mkdir(mode=0o700)
+        job = gateway / "job"
         with mock.patch.object(
             github_gateway,
             "acquire_github_commit",
@@ -74,7 +76,9 @@ class GitHubGatewayTests(unittest.TestCase):
             github_gateway._digest(canonical_json(self.request)),
         )
 
-        quarantine = self.root / "broker-quarantine"
+        broker = self.root / "broker"
+        broker.mkdir(mode=0o700)
+        quarantine = broker / "quarantine"
         accepted = github_gateway._accept_gateway_output(
             self.request,
             result,
@@ -161,6 +165,38 @@ class GitHubGatewayTests(unittest.TestCase):
         self.assertFalse(quarantine.exists())
         self.assertEqual(list(self.root.glob(".replay-quarantine.import-*")), [])
 
+    def test_worker_cleanup_failure_prevents_quarantine_publication(self) -> None:
+        job = self.root / "cleanup-job"
+        with mock.patch.object(
+            github_gateway,
+            "acquire_github_commit",
+            side_effect=self._fake_acquire,
+        ):
+            result = run_worker(
+                self.request,
+                job,
+                pinned_addresses=("1.1.1.1",),
+            )
+
+        quarantine = self.root / "cleanup-quarantine"
+        with (
+            mock.patch.object(
+                github_gateway,
+                "_remove_worker_job",
+                side_effect=GitHubGatewayError("cleanup failed"),
+            ),
+            self.assertRaisesRegex(GitHubGatewayError, "cleanup failed"),
+        ):
+            github_gateway._accept_gateway_output(
+                self.request,
+                result,
+                job_root=job,
+                quarantine_state=quarantine,
+                worker_uid=os.geteuid(),
+            )
+        self.assertFalse(quarantine.exists())
+        self.assertEqual(list(self.root.glob(".cleanup-quarantine.import-*")), [])
+
     def test_supervisor_requests_kernel_uid_drop_and_sanitized_launch(self) -> None:
         result = {
             "schema": github_gateway.RESULT_SCHEMA,
@@ -217,6 +253,7 @@ class GitHubGatewayTests(unittest.TestCase):
                 "_exclusive_uid_lease",
                 return_value=nullcontext(),
             ) as lease,
+            mock.patch.object(github_gateway, "_require_gateway_entries"),
             mock.patch.object(github_gateway, "_require_idle_uid") as idle_uid,
             mock.patch.object(
                 github_gateway.secrets,
@@ -504,6 +541,19 @@ class GitHubGatewayTests(unittest.TestCase):
         ):
             github_gateway._require_idle_uid(501, "before launch")
 
+    def test_gateway_root_rejects_unexpected_worker_entries(self) -> None:
+        (self.root / "sibling").write_bytes(b"persistence")
+        with self.assertRaisesRegex(
+            GitHubGatewayError,
+            "unexpected entries after worker shutdown",
+        ):
+            github_gateway._require_gateway_entries(
+                self.root,
+                ("expected-job",),
+                worker_uid=os.geteuid(),
+                stage="after worker shutdown",
+            )
+
     def test_process_census_rejects_executable_identity_change(self) -> None:
         process = _ProcessResult(b"1 0\n", b"", 0)
         with (
@@ -620,10 +670,12 @@ class GitHubGatewayTests(unittest.TestCase):
             command,
             cwd=os.path.sep,
             env={
+                "HOME": os.path.sep,
                 "LANG": "C",
                 "LC_ALL": "C",
                 "PATH": os.defpath,
                 "PYTHONDONTWRITEBYTECODE": "1",
+                "TZ": "UTC",
             },
             input=b"",
             capture_output=True,

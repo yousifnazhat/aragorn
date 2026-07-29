@@ -158,9 +158,24 @@ compiled CA file and directory, so repository-controlled or shell-inherited CA
 paths cannot replace the trust set. It still trusts the host DNS resolver,
 those compiled CA paths and their contents, the Python/OpenSSL runtime, and the
 GitHub API, and public API rate limits make it unsuitable for mass acquisition.
-Private repositories, scoped credential injection, DNS/IP policy, network
-isolation, retry policy, and cross-host fetch attestation require the dedicated
-fetch gateway planned for Phase 1.
+Phase 1's internal Linux gateway now runs its credential-free resolver and
+worker under a stable non-login UID in transient systemd services with cgroup
+v2 process limits, default-deny IP filtering, no capabilities, and verified
+post-run cleanup. The resolver is confined to the local DNS-stub address; the
+worker is confined to the resolver's canonical public IP set, while the HTTPS
+client continues to enforce port 443 and GitHub TLS hostname verification.
+Before importing Aragorn, each service must fail to reach a broker-held
+loopback listener, which makes missing cgroup IP enforcement fail closed.
+`AF_UNIX` and socket binding are denied, temporary paths are inaccessible, and
+the only host-writable path is a runtime-verified 512 MiB, 20,000-inode
+`nosuid,nodev,noexec` transfer tmpfs. Unexpected transfer-root entries or
+worker-job cleanup failure prevent quarantine publication.
+This earns a Linux process/IP containment primitive, not supported acquisition:
+the raw Git commit/tree membership is still API-asserted, the root filesystem
+is not sealed, and the host kernel/systemd/Python trust boundary is not
+attested. Private repositories, scoped credential injection, retry policy,
+cross-host fetch attestation, protected installation, and install/update
+enforcement remain unsupported.
 
 ## Attack Surface, Mitigations, and Attacker Stories
 

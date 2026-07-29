@@ -1,0 +1,3 @@
+d /run/aragorn-gateway 0700 root root -
+d /var/lib/aragorn-gateway 0700 aragorn-fetch aragorn-fetch -
+d /var/lib/aragorn-quarantine 0700 root root -

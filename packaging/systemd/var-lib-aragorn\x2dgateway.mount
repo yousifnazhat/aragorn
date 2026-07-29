@@ -1,0 +1,11 @@
+[Unit]
+Description=Aragorn acquisition gateway bounded transfer store
+
+[Mount]
+What=tmpfs
+Where=/var/lib/aragorn-gateway
+Type=tmpfs
+Options=rw,nosuid,nodev,noexec,mode=0700,uid=aragorn-fetch,gid=aragorn-fetch,size=512M,nr_inodes=20000
+
+[Install]
+WantedBy=local-fs.target

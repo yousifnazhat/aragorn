@@ -8,6 +8,7 @@ from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from aragorn.acquire import ingest_local
 from aragorn.admission_artifact_graph import retain_admission_artifact_graph
@@ -40,6 +41,83 @@ def _put(cas: CAS, document: object) -> str:
 
 
 class DecisionV3Tests(unittest.TestCase):
+    def test_release_asset_pins_reach_decision_replay(self) -> None:
+        digest = "sha256:" + "2" * 64
+        release_digest = "sha256:" + "3" * 64
+        decision = {
+            "schema": "aragorn/decision/v3",
+            "authority": "EVIDENCE_SUMMARY_ONLY_NOT_INSTALLER_AUTHORITY",
+            "verdict": "ERROR",
+            "manifest_digest": digest,
+            "artifact_graph_digest": digest,
+            "tree_digest": digest,
+            "artifact_digests": [],
+            "policy": {"id": "test", "version": 1, "digest": digest},
+            "analyzers": [],
+            "reason_codes": ["ARTIFACT_CLOSURE_INCOMPLETE"],
+        }
+        with TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "state")
+            with mock.patch(
+                "aragorn.decision_receipt._derive_decision_v3",
+                return_value=decision,
+            ) as derive:
+                decision_digest = retain_decision_v3(
+                    cas,
+                    manifest_digest=digest,
+                    artifact_graph_digest=digest,
+                    policy_digest=digest,
+                    analyzer_run_receipt_digests=[],
+                    analyzer_verifier_digest=digest,
+                    artifact_graph_verifier_digest=digest,
+                    expected_release_asset_result_digests=[release_digest],
+                )
+                self.assertEqual(
+                    derive.call_args.kwargs["expected_release_asset_result_digests"],
+                    (release_digest,),
+                )
+
+            with mock.patch(
+                "aragorn.decision_receipt._derive_decision_v3",
+                return_value=decision,
+            ) as derive:
+                self.assertEqual(
+                    verify_decision_v3(
+                        CAS(Path(temporary) / "state", read_only=True),
+                        decision_digest,
+                        expected_manifest_digest=digest,
+                        expected_artifact_graph_digest=digest,
+                        expected_policy_digest=digest,
+                        expected_analyzer_run_receipt_digests=[],
+                        expected_analyzer_verifier_digest=digest,
+                        expected_artifact_graph_verifier_digest=digest,
+                        expected_release_asset_result_digests=[release_digest],
+                    ),
+                    decision,
+                )
+                self.assertEqual(
+                    derive.call_args.kwargs["expected_release_asset_result_digests"],
+                    (release_digest,),
+                )
+
+            with self.assertRaisesRegex(
+                DecisionReceiptError,
+                "release asset result digests must be unique",
+            ):
+                retain_decision_v3(
+                    cas,
+                    manifest_digest=digest,
+                    artifact_graph_digest=digest,
+                    policy_digest=digest,
+                    analyzer_run_receipt_digests=[],
+                    analyzer_verifier_digest=digest,
+                    artifact_graph_verifier_digest=digest,
+                    expected_release_asset_result_digests=[
+                        release_digest,
+                        release_digest,
+                    ],
+                )
+
     def test_policy_v2_requires_a_canonical_graph_profile_allowlist(self) -> None:
         policy = {
             "schema": "aragorn/policy/v2",

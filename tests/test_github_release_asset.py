@@ -246,6 +246,33 @@ class GitHubReleaseAssetTests(unittest.TestCase):
         with self.assertRaises(CASError):
             self._acquire((_response(),), metadata=wrong)
 
+    def test_remaining_aggregate_cap_rejects_before_download_or_store(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "cas")
+            with (
+                patch(
+                    "aragorn.github_release_asset._request_before_deadline",
+                    return_value=_metadata(),
+                ) as release_request,
+                patch("aragorn.github_release_asset._download") as download,
+                self.assertRaisesRegex(
+                    GitHubReleaseAssetError,
+                    "remaining byte limit",
+                ),
+            ):
+                acquire_github_release_asset(
+                    _URL,
+                    cas,
+                    max_asset_bytes=len(_CONTENT) - 1,
+                    _pinned_api_addresses=_API_ADDRESS,
+                    _pinned_asset_addresses=_ASSET_ADDRESS,
+                )
+
+            release_request.assert_called_once()
+            download.assert_not_called()
+            with self.assertRaises(CASError):
+                cas.verify(_DIGEST)
+
     def test_redirect_and_response_ambiguity_are_rejected(self) -> None:
         locations = (
             "http://release-assets.githubusercontent.com/path?token=x",

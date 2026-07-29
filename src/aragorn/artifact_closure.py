@@ -24,6 +24,7 @@ _GIT_SHA1 = re.compile(r"[0-9a-f]{40}\Z")
 _GITHUB_OWNER = re.compile(r"[a-z0-9][a-z0-9-]{0,38}\Z")
 _GITHUB_REPOSITORY = re.compile(r"[a-z0-9_.-]{1,100}\Z")
 _GITHUB_PATH = re.compile(r"[A-Za-z0-9._/-]{1,4096}\Z")
+_GITHUB_RELEASE_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,254}\Z")
 _CHARACTER_REFERENCE = re.compile(
     r"&(?:#[0-9]{1,7}|#x[0-9a-f]{1,6}|[a-z][a-z0-9]{1,31});",
     re.IGNORECASE,
@@ -399,6 +400,7 @@ def scan_retained_text_references(
     source_by_path: dict[str, dict[str, Any]],
     redact_dynamic_literals: bool = True,
     include_literal_size: bool = False,
+    release_asset_contract: bool = False,
 ) -> tuple[dict[str, Any], ...]:
     """Return deterministic reference edges using the v1 retained-text parser."""
 
@@ -436,6 +438,7 @@ def scan_retained_text_references(
             source=source,
             source_by_path=source_by_path,
             add_edge=add_edge,
+            release_asset_contract=release_asset_contract,
         )
     except ReferenceBudgetExceeded:
         raise
@@ -558,6 +561,7 @@ def _scan_retained_text_into(
     source: dict[str, Any],
     source_by_path: dict[str, dict[str, Any]],
     add_edge: Any,
+    release_asset_contract: bool = False,
 ) -> None:
     _scan_text(
         text,
@@ -565,6 +569,7 @@ def _scan_retained_text_into(
         source=source,
         source_by_path=source_by_path,
         add_edge=add_edge,
+        release_asset_contract=release_asset_contract,
     )
     if source_entry["path"] == ".gitmodules":
         add_edge(
@@ -638,6 +643,7 @@ def _scan_text(
     source: dict[str, Any],
     source_by_path: dict[str, dict[str, Any]],
     add_edge: Any,
+    release_asset_contract: bool,
 ) -> None:
     _scan_obfuscated_fetches(
         text,
@@ -740,6 +746,7 @@ def _scan_text(
                     source_path=source_entry["path"],
                     source=source,
                     source_by_path=source_by_path,
+                    release_asset_contract=release_asset_contract,
                 )
             immutable = parse_immutable_github_reference(literal)
             exact_fetch_target = exact_raw_github_fetch_target(stripped)
@@ -917,6 +924,7 @@ def _classify_reference(
     source_path: str,
     source: dict[str, Any],
     source_by_path: dict[str, dict[str, Any]],
+    release_asset_contract: bool,
 ) -> dict[str, Any] | None:
     if len(literal.encode("utf-8")) > 4096 or any(
         unicodedata.category(character).startswith("C") for character in literal
@@ -961,6 +969,11 @@ def _classify_reference(
             return _unresolved(
                 "github_immutable", "IMMUTABLE_GITHUB_OBJECT_NOT_RETAINED"
             )
+        if release_asset_contract and _same_repository_release_asset(parsed, source):
+            return _unresolved(
+                "github_release_asset",
+                "GITHUB_RELEASE_ASSET_NOT_RETAINED",
+            )
         path = parsed.path.casefold()
         path_parts = [part for part in parsed.path.split("/") if part]
         if (
@@ -1000,6 +1013,34 @@ def _classify_reference(
             "digest": target_entry["digest"],
         },
     }
+
+
+def _same_repository_release_asset(
+    parsed: Any,
+    source: dict[str, Any],
+) -> bool:
+    parts = parsed.path.split("/")
+    if (
+        parsed.netloc != "github.com"
+        or parsed.hostname != "github.com"
+        or len(parts) != 7
+        or parts[0]
+        or parts[3:5] != ["releases", "download"]
+    ):
+        return False
+    owner, repository, tag, name = parts[1], parts[2], parts[5], parts[6]
+    return (
+        source.get("host") == "github.com"
+        and owner == source.get("owner")
+        and repository == source.get("repository")
+        and _GITHUB_OWNER.fullmatch(owner) is not None
+        and not owner.endswith("-")
+        and _GITHUB_REPOSITORY.fullmatch(repository) is not None
+        and repository not in {".", ".."}
+        and not repository.endswith(".git")
+        and _GITHUB_RELEASE_COMPONENT.fullmatch(tag) is not None
+        and _GITHUB_RELEASE_COMPONENT.fullmatch(name) is not None
+    )
 
 
 def _immutable_github_target(parsed: Any) -> dict[str, str] | None:

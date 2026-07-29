@@ -35,6 +35,7 @@ from .github_acquire import (
     _REPOSITORY,
     API_HOST,
     GIT_HOST,
+    RELEASE_ASSET_HOST,
     _parse_skill_path,
     _resolve_public_host_addresses,
     _validate_pinned_addresses,
@@ -72,6 +73,7 @@ _RESULT_KEYS = {
 }
 _ADDRESS_RESULT_KEYS = {"schema", "hosts"}
 _GATEWAY_HOSTS = (API_HOST, GIT_HOST)
+_RECURSIVE_GATEWAY_HOSTS = (*_GATEWAY_HOSTS, RELEASE_ASSET_HOST)
 _MAX_GATEWAY_ENDPOINTS = 32
 _MAX_WIRE_BYTES = 64 * 1024
 _MAX_MANIFEST_BYTES = 64 * 1024 * 1024
@@ -420,8 +422,21 @@ def _quarantine_through_gateway(
     python_executable: str | os.PathLike[str],
     package_root: str | os.PathLike[str],
     recursive: bool,
+    broker_release_asset_pins: object | None = None,
 ) -> Any:
     frozen = _freeze_request(request)
+    if recursive:
+        from .github_recursive_gateway import _freeze_release_asset_pins
+
+        frozen_release_asset_pins = _freeze_release_asset_pins(
+            broker_release_asset_pins
+        )
+    else:
+        if broker_release_asset_pins is not None:
+            raise GitHubGatewayError(
+                "ordinary gateway acquisition does not accept release asset pins"
+            )
+        frozen_release_asset_pins = {}
     raw_request = canonical_json(frozen)
     if (
         isinstance(process_timeout_seconds, bool)
@@ -470,6 +485,7 @@ def _quarantine_through_gateway(
                         worker_uid,
                         worker_gid,
                         "resolve",
+                        *(("--include-release-asset",) if recursive else ()),
                     ),
                     timeout=min(
                         float(process_timeout_seconds),
@@ -488,13 +504,23 @@ def _quarantine_through_gateway(
                     worker_uid=worker_uid,
                     stage="after resolver shutdown",
                 )
-                pinned_addresses = _require_address_result(resolver)
+                pinned_addresses = _require_address_result(
+                    resolver,
+                    recursive=recursive,
+                )
                 api_addresses = pinned_addresses[API_HOST]
                 git_addresses = pinned_addresses[GIT_HOST]
+                release_asset_addresses = (
+                    pinned_addresses[RELEASE_ASSET_HOST] if recursive else ()
+                )
                 allowed_addresses = tuple(
                     endpoint[3][0]
                     for endpoint in _validate_pinned_addresses(
-                        [*api_addresses, *git_addresses],
+                        [
+                            *api_addresses,
+                            *git_addresses,
+                            *release_asset_addresses,
+                        ],
                         max_entries=_MAX_GATEWAY_ENDPOINTS,
                     )
                 )
@@ -515,6 +541,11 @@ def _quarantine_through_gateway(
                         item
                         for address in git_addresses
                         for item in ("--git-endpoint", address)
+                    ),
+                    *(
+                        item
+                        for address in release_asset_addresses
+                        for item in ("--release-asset-endpoint", address)
                     ),
                 )
                 process = _run_gateway_process(
@@ -560,6 +591,11 @@ def _quarantine_through_gateway(
                 )
 
                 acceptance = accept_recursive_gateway_output
+            acceptance_options: dict[str, object] = {}
+            if recursive:
+                acceptance_options["release_asset_pins"] = (
+                    frozen_release_asset_pins
+                )
             return acceptance(
                 frozen,
                 result,
@@ -569,6 +605,7 @@ def _quarantine_through_gateway(
                 containment_profile=containment_profile,
                 python_executable_digest=runtime_measurements[0],
                 gateway_package_tree_digest=runtime_measurements[1],
+                **acceptance_options,
             )
         finally:
             _remove_worker_job(job_root, expected_uid=worker_uid)
@@ -787,17 +824,22 @@ def _decode_result_line(raw: bytes) -> dict[str, str]:
     return document
 
 
-def _decode_address_result_line(raw: bytes) -> dict[str, tuple[str, ...]]:
+def _decode_address_result_line(
+    raw: bytes,
+    *,
+    recursive: bool = False,
+) -> dict[str, tuple[str, ...]]:
     document = _decode_canonical_line(raw, "gateway address result")
+    expected_hosts = _RECURSIVE_GATEWAY_HOSTS if recursive else _GATEWAY_HOSTS
     if (
         set(document) != _ADDRESS_RESULT_KEYS
         or document.get("schema") != ADDRESS_RESULT_SCHEMA
         or not isinstance(document.get("hosts"), dict)
-        or set(document["hosts"]) != set(_GATEWAY_HOSTS)
+        or set(document["hosts"]) != set(expected_hosts)
     ):
         raise GitHubGatewayError("gateway address result is invalid")
     result: dict[str, tuple[str, ...]] = {}
-    for host in _GATEWAY_HOSTS:
+    for host in expected_hosts:
         addresses = document["hosts"].get(host)
         if not isinstance(addresses, list):
             raise GitHubGatewayError("gateway address result is invalid")
@@ -896,8 +938,13 @@ def _require_success_result(process: _ProcessResult) -> dict[str, str]:
 
 def _require_address_result(
     process: _ProcessResult,
+    *,
+    recursive: bool,
 ) -> dict[str, tuple[str, ...]]:
-    return _decode_address_result_line(_require_success_output(process))
+    return _decode_address_result_line(
+        _require_success_output(process),
+        recursive=recursive,
+    )
 
 
 def _require_success_output(process: _ProcessResult) -> bytes:
@@ -2190,8 +2237,14 @@ def _parser() -> ArgumentParser:
     recursive_worker.add_argument("--job-root", type=Path, required=True)
     recursive_worker.add_argument("--api-endpoint", action="append", required=True)
     recursive_worker.add_argument("--git-endpoint", action="append", required=True)
+    recursive_worker.add_argument(
+        "--release-asset-endpoint",
+        action="append",
+        required=True,
+    )
     recursive_worker.set_defaults(action=_recursive_worker_command)
     resolver = commands.add_parser("resolve")
+    resolver.add_argument("--include-release-asset", action="store_true")
     resolver.set_defaults(action=_resolver_command)
     return parser
 
@@ -2217,16 +2270,16 @@ def _recursive_worker_command(args: argparse.Namespace) -> dict[str, Any]:
         args.job_root,
         pinned_api_addresses=args.api_endpoint,
         pinned_git_addresses=args.git_endpoint,
+        pinned_release_asset_addresses=args.release_asset_endpoint,
     )
 
 
-def _resolver_command(_args: argparse.Namespace) -> dict[str, object]:
+def _resolver_command(args: argparse.Namespace) -> dict[str, object]:
     _require_worker_process_limit()
+    hosts = _RECURSIVE_GATEWAY_HOSTS if args.include_release_asset else _GATEWAY_HOSTS
     return {
         "schema": ADDRESS_RESULT_SCHEMA,
-        "hosts": {
-            host: list(_resolve_public_host_addresses(host)) for host in _GATEWAY_HOSTS
-        },
+        "hosts": {host: list(_resolve_public_host_addresses(host)) for host in hosts},
     }
 
 

@@ -15,6 +15,7 @@ from aragorn.artifact_closure import (
     load_retained_manifest,
     load_verified_retained_manifest,
     resolve_source_graph,
+    scan_retained_text_references,
 )
 from aragorn.cas import CAS
 from aragorn.cli import main
@@ -194,6 +195,89 @@ class ArtifactClosureTests(unittest.TestCase):
                 if edge["reason_code"] == "GITHUB_METADATA_REFERENCE"
             )
             self.assertEqual(issue["status"], "non_artifact")
+
+    def test_release_asset_classification_is_explicitly_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "skill"
+            source.mkdir()
+            (source / "SKILL.md").write_text(
+                "\n".join(
+                    (
+                        (
+                            "[same](https://github.com/example/skill/releases/"
+                            "download/v1/checksums.txt)"
+                        ),
+                        (
+                            "[cross](https://github.com/example/other/releases/"
+                            "download/v1/checksums.txt)"
+                        ),
+                        (
+                            "[archive](https://github.com/example/skill/archive/"
+                            "refs/tags/v1.zip)"
+                        ),
+                        (
+                            "[mutable](https://github.com/example/skill/releases/"
+                            "latest/download/checksums.txt)"
+                        ),
+                        (
+                            "[malformed](https://github.com/Example/skill/releases/"
+                            "download/v1/checksums.txt)"
+                        ),
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            cas = CAS(root / "state")
+            manifest = _github_manifest(ingest_local(source, cas), cas)
+
+            graph = resolve_source_graph(manifest, cas)
+
+            self.assertFalse(
+                any(
+                    edge["reference_kind"] == "github_release_asset"
+                    for edge in graph["edges"]
+                )
+            )
+            default_generic = [
+                edge
+                for edge in graph["edges"]
+                if edge["reference_kind"] == "external_artifact"
+            ]
+            self.assertEqual(len(default_generic), 5)
+            self.assertEqual(
+                {edge["reason_code"] for edge in default_generic},
+                {"RELEASE_OR_ARCHIVE_UNRESOLVED"},
+            )
+
+            entry = manifest["files"][0]
+            opt_in = scan_retained_text_references(
+                cas.read(entry["digest"], max_bytes=entry["size"]).decode("utf-8"),
+                source_entry=entry,
+                source=manifest["source"],
+                source_by_path={entry["path"]: entry},
+                release_asset_contract=True,
+            )
+            same = next(
+                edge
+                for edge in opt_in
+                if edge["reference_kind"] == "github_release_asset"
+            )
+            self.assertEqual(same["status"], "unresolved")
+            self.assertEqual(
+                same["reason_code"],
+                "GITHUB_RELEASE_ASSET_NOT_RETAINED",
+            )
+            generic = [
+                edge for edge in opt_in if edge["reference_kind"] == "external_artifact"
+            ]
+            self.assertEqual(len(generic), 4)
+            self.assertEqual(
+                {edge["reason_code"] for edge in generic},
+                {"RELEASE_OR_ARCHIVE_UNRESOLVED"},
+            )
+            self.assertEqual(graph["closure"]["status"], "incomplete")
 
     def test_github_repository_urls_are_inert_only_as_links(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

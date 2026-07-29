@@ -20,7 +20,8 @@ Aragorn does not certify that an artifact is safe. Until a runtime enforcement i
 Attacker-controlled inputs include every entry, filename, and file byte below
 the selected local source root; every literal URL, path, Markdown reference, and
 fetch-command line parsed from those bytes; analyzer output; normalized
-benchmark outcomes; and future repository or archive responses.
+benchmark outcomes; repository and retained release-asset responses; and any
+future extracted archive members.
 Operator-controlled inputs include the selected source path and its ancestor
 namespace, benchmark labels and split assignments, analyzer commands, policy,
 state location, and installation destination. Developer-controlled inputs
@@ -40,8 +41,12 @@ Aragorn must preserve these invariants:
   GitHub Smart HTTP and REST hosts, require protocol v2 with SHA-1 object format
   plus filtering and shallow support, and accept only a checksum-valid
   one-object PACK v2 of the requested commit or tree type whose Git SHA-1 is
-  independently reproduced. Reject redirects, deltas, extra objects,
-  unsupported Git modes, unsafe path normalization, and deadline exhaustion.
+  independently reproduced. Source commit/tree acquisition rejects redirects,
+  deltas, extra objects, unsupported Git modes, unsafe path normalization, and
+  deadline exhaustion. The separate release path accepts at most one HTTPS
+  redirect from `api.github.com` to the separately pinned
+  `release-assets.githubusercontent.com` host, retains no redirect query, and
+  binds its evidence and bytes to caller-held digests.
   Reproduce every REST-returned blob's Git SHA-1 and publish its exact bytes to
   the SHA-256 CAS only after the complete source tree validates. The gateway
   retains the exact raw commit/tree proof in the handoff and the broker replays
@@ -173,9 +178,10 @@ worker under a stable non-login UID in transient systemd services with cgroup
 v2 process limits, default-deny IP filtering, no capabilities, and verified
 post-run cleanup. The resolver is confined to the local DNS-stub address; the
 worker is confined to the canonical union of separately resolved
-`github.com` and `api.github.com` public IP sets, while the HTTPS client pins
-each request to its matching host set and continues to enforce port 443 and
-GitHub TLS hostname verification.
+`github.com` and `api.github.com` public IP sets; recursive release jobs alone
+also receive the separately resolved `release-assets.githubusercontent.com`
+set. The HTTPS client pins each request to its matching host set and continues
+to enforce port 443 and GitHub TLS hostname verification.
 Before importing Aragorn, each service must fail to reach a broker-held
 loopback listener, which makes missing cgroup IP enforcement fail closed.
 `AF_UNIX` and socket binding are denied, temporary paths are inaccessible, and
@@ -185,9 +191,10 @@ worker-job cleanup failure prevent quarantine publication.
 This earns a Linux process/IP containment primitive with durable broker-replayed
 raw Git commit/tree proof, not supported acquisition: the root filesystem is
 not sealed, and the host kernel/systemd/Python trust boundary is not attested.
-Private repositories,
-scoped credential injection, retry policy, recursive closure, protected
-installation, and install/update enforcement remain unsupported.
+Private repositories, scoped credential injection, retry policy, automatic
+independent release-pin acquisition, archive inventory/extraction, live public
+out-of-root recursive evidence, protected installation, and install/update
+enforcement remain unsupported.
 
 ## Attack Surface, Mitigations, and Attacker Stories
 
@@ -201,7 +208,9 @@ fail-closed verdicts.
 
 A realistic attacker can control an inspected skill and attempt to escape its root, exhaust resources, exploit a parser, confuse an analyzer, or cause analyzed bytes to differ from installed bytes. A compromised host kernel, administrator, Python runtime, or Aragorn release key is outside the containment guarantee and must be addressed by host and release security.
 
-Supported production GitHub acquisition, general external-artifact and archive
+The bounded canonical same-repository release slice is implemented as
+quarantine evidence; its bytes remain unresolved until analyzed. Supported
+production GitHub acquisition, general external-artifact and archive
 resolution, general analyzer sandboxing, detonation, network mediation, MCP,
 and runtime response remain future phases. The Phase 0 literal graph performs
 no acquisition, and the exact GitHub expansion candidate covers only supported

@@ -547,6 +547,221 @@ class GitHubGatewayTests(unittest.TestCase):
         )
         accept.assert_called_once()
 
+    def test_recursive_worker_alone_receives_release_asset_network_pins(
+        self,
+    ) -> None:
+        resolver_process = _ProcessResult(
+            canonical_json(
+                {
+                    "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
+                    "hosts": {
+                        github_gateway.API_HOST: ["1.1.1.1"],
+                        github_gateway.GIT_HOST: ["8.8.8.8"],
+                        github_gateway.RELEASE_ASSET_HOST: ["9.9.9.9"],
+                    },
+                }
+            )
+            + b"\n",
+            b"",
+            0,
+        )
+        worker_process = _ProcessResult(b"{}\n", b"", 0)
+        accepted = object()
+        broker_pins = {
+            (
+                "https://github.com/example/skills/releases/"
+                "download/v1/checksums.txt"
+            ): {
+                "release_id": 1,
+                "asset_id": 2,
+                "digest": "sha256:" + "4" * 64,
+                "github_digest": "sha256:" + "4" * 64,
+                "content_type": "application/octet-stream",
+                "redirected": True,
+            }
+        }
+        with (
+            mock.patch.object(github_gateway, "_broker_euid", return_value=0),
+            mock.patch.object(
+                github_gateway,
+                "_prepare_paths",
+                return_value=(Path("/gateway"), Path("/broker/quarantine")),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_trusted_python_executable",
+                return_value=Path("/usr/bin/python3"),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_trusted_package_root",
+                return_value=Path("/opt/aragorn-gateway"),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_gateway_runtime_measurements",
+                return_value=(_PYTHON_DIGEST, _PACKAGE_DIGEST),
+            ),
+            mock.patch.object(github_gateway, "_require_gateway_runtime_unchanged"),
+            mock.patch.object(
+                github_gateway,
+                "_exclusive_uid_lease",
+                return_value=nullcontext(),
+            ),
+            mock.patch.object(github_gateway, "_require_gateway_entries"),
+            mock.patch.object(github_gateway, "_require_idle_uid"),
+            mock.patch.object(
+                github_gateway.secrets,
+                "token_hex",
+                return_value="e" * 32,
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_run_gateway_process",
+                side_effect=(resolver_process, worker_process),
+            ) as launch,
+            mock.patch.object(github_gateway, "_remove_worker_job"),
+            mock.patch(
+                "aragorn.github_recursive_gateway.require_recursive_success_result",
+                return_value={"schema": "recursive-result"},
+            ),
+            mock.patch(
+                "aragorn.github_recursive_gateway.accept_recursive_gateway_output",
+                return_value=accepted,
+            ) as accept,
+        ):
+            observed = github_gateway._quarantine_through_gateway(
+                self.request,
+                gateway_root="/gateway",
+                quarantine_state="/broker/quarantine",
+                worker_uid=501,
+                worker_gid=20,
+                process_timeout_seconds=130.0,
+                python_executable="/usr/bin/python3",
+                package_root="/opt/aragorn-gateway",
+                recursive=True,
+                broker_release_asset_pins=broker_pins,
+            )
+
+        self.assertIs(observed, accepted)
+        resolver_command = launch.call_args_list[0].args[0]
+        self.assertEqual(
+            resolver_command[-2:],
+            ("resolve", "--include-release-asset"),
+        )
+        worker_command = launch.call_args_list[1].args[0]
+        self.assertEqual(
+            worker_command[-9:],
+            (
+                "recursive-worker",
+                "--job-root",
+                "/gateway/job-" + "e" * 32,
+                "--api-endpoint",
+                "1.1.1.1",
+                "--git-endpoint",
+                "8.8.8.8",
+                "--release-asset-endpoint",
+                "9.9.9.9",
+            ),
+        )
+        self.assertEqual(
+            launch.call_args_list[1].kwargs["allowed_addresses"],
+            ("1.1.1.1", "8.8.8.8", "9.9.9.9"),
+        )
+        self.assertEqual(
+            accept.call_args.kwargs["release_asset_pins"],
+            broker_pins,
+        )
+        self.assertNotIn(
+            broker_pins[
+                (
+                    "https://github.com/example/skills/releases/"
+                    "download/v1/checksums.txt"
+                )
+            ]["digest"],
+            worker_command,
+        )
+        self.assertNotIn(
+            "--release-asset-endpoint",
+            github_gateway._gateway_command(
+                Path("/usr/bin/python3"),
+                Path("/opt/aragorn-gateway"),
+                501,
+                20,
+                "worker",
+                "--job-root",
+                "/gateway/job",
+                "--api-endpoint",
+                "1.1.1.1",
+                "--git-endpoint",
+                "8.8.8.8",
+            ),
+        )
+
+    def test_release_asset_resolution_and_flag_are_recursive_only(self) -> None:
+        addresses = {
+            github_gateway.API_HOST: ("1.1.1.1",),
+            github_gateway.GIT_HOST: ("8.8.8.8",),
+            github_gateway.RELEASE_ASSET_HOST: ("9.9.9.9",),
+        }
+        with (
+            mock.patch.object(github_gateway, "_require_worker_process_limit"),
+            mock.patch.object(
+                github_gateway,
+                "_resolve_public_host_addresses",
+                side_effect=lambda host: addresses[host],
+            ) as resolve,
+        ):
+            ordinary = github_gateway._resolver_command(
+                mock.Mock(include_release_asset=False)
+            )
+            recursive = github_gateway._resolver_command(
+                mock.Mock(include_release_asset=True)
+            )
+
+        self.assertEqual(
+            set(ordinary["hosts"]),
+            {github_gateway.API_HOST, github_gateway.GIT_HOST},
+        )
+        self.assertEqual(
+            set(recursive["hosts"]),
+            {
+                github_gateway.API_HOST,
+                github_gateway.GIT_HOST,
+                github_gateway.RELEASE_ASSET_HOST,
+            },
+        )
+        self.assertEqual(resolve.call_count, 5)
+
+        recursive_args = github_gateway._parser().parse_args(
+            (
+                "recursive-worker",
+                "--job-root",
+                "/gateway/job",
+                "--api-endpoint",
+                "1.1.1.1",
+                "--git-endpoint",
+                "8.8.8.8",
+                "--release-asset-endpoint",
+                "9.9.9.9",
+            )
+        )
+        self.assertEqual(recursive_args.release_asset_endpoint, ["9.9.9.9"])
+        with self.assertRaises(GitHubGatewayError):
+            github_gateway._parser().parse_args(
+                (
+                    "worker",
+                    "--job-root",
+                    "/gateway/job",
+                    "--api-endpoint",
+                    "1.1.1.1",
+                    "--git-endpoint",
+                    "8.8.8.8",
+                    "--release-asset-endpoint",
+                    "9.9.9.9",
+                )
+            )
+
     def test_broker_rejects_untrusted_resolver_output(self) -> None:
         valid_hosts = {
             github_gateway.API_HOST: ["1.1.1.1"],
@@ -615,6 +830,32 @@ class GitHubGatewayTests(unittest.TestCase):
             {
                 github_gateway.API_HOST: ("1.1.1.1",),
                 github_gateway.GIT_HOST: ("8.8.8.8",),
+            },
+        )
+        recursive_hosts = {
+            **valid_hosts,
+            github_gateway.RELEASE_ASSET_HOST: ["9.9.9.9"],
+        }
+        recursive_raw = (
+            canonical_json(
+                {
+                    "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
+                    "hosts": recursive_hosts,
+                }
+            )
+            + b"\n"
+        )
+        with self.assertRaises(GitHubGatewayError):
+            github_gateway._decode_address_result_line(recursive_raw)
+        self.assertEqual(
+            github_gateway._decode_address_result_line(
+                recursive_raw,
+                recursive=True,
+            ),
+            {
+                github_gateway.API_HOST: ("1.1.1.1",),
+                github_gateway.GIT_HOST: ("8.8.8.8",),
+                github_gateway.RELEASE_ASSET_HOST: ("9.9.9.9",),
             },
         )
 

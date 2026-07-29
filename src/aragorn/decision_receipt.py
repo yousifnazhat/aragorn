@@ -34,6 +34,7 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _MAX_DECISION_BYTES = 8 * 1024 * 1024
 _MAX_POLICY_BYTES = 1024 * 1024
 _MAX_ANALYZERS = 16
+_MAX_RELEASE_ASSETS = 16
 _PROFILE_NOT_ALLOWED = "ARTIFACT_GRAPH_PROFILE_NOT_ALLOWED"
 
 
@@ -52,10 +53,14 @@ def retain_decision_v3(
     artifact_graph_verifier_digest: str,
     expected_quarantine_receipt_digest: str | None = None,
     expected_gateway_profile_digest: str | None = None,
+    expected_release_asset_result_digests: list[str] | tuple[str, ...] = (),
 ) -> str:
     """Retain a decision derived from replayed graph and analyzer evidence."""
 
     run_receipt_digests = _run_receipt_digests(analyzer_run_receipt_digests)
+    release_asset_result_digests = _release_asset_result_digests(
+        expected_release_asset_result_digests
+    )
     receipt_digest, gateway_profile_digest = _optional_github_trust_digests(
         expected_quarantine_receipt_digest,
         expected_gateway_profile_digest,
@@ -82,6 +87,7 @@ def retain_decision_v3(
             ),
             expected_quarantine_receipt_digest=receipt_digest,
             expected_gateway_profile_digest=gateway_profile_digest,
+            expected_release_asset_result_digests=release_asset_result_digests,
         )
         raw = canonical_json(decision)
         return cas.put(BytesIO(raw), max_bytes=_MAX_DECISION_BYTES)
@@ -110,6 +116,7 @@ def verify_decision_v3(
     expected_artifact_graph_verifier_digest: str,
     expected_quarantine_receipt_digest: str | None = None,
     expected_gateway_profile_digest: str | None = None,
+    expected_release_asset_result_digests: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Re-derive one graph-bound evidence summary without installer authority."""
 
@@ -125,6 +132,9 @@ def verify_decision_v3(
         policy_digest = _digest(expected_policy_digest, "expected policy digest")
         run_receipt_digests = _run_receipt_digests(
             expected_analyzer_run_receipt_digests,
+        )
+        release_asset_result_digests = _release_asset_result_digests(
+            expected_release_asset_result_digests
         )
         analyzer_verifier_digest = _digest(
             expected_analyzer_verifier_digest,
@@ -189,6 +199,7 @@ def verify_decision_v3(
             artifact_graph_verifier_digest=graph_verifier_digest,
             expected_quarantine_receipt_digest=receipt_digest,
             expected_gateway_profile_digest=gateway_profile_digest,
+            expected_release_asset_result_digests=release_asset_result_digests,
         )
         if raw_decision != canonical_json(expected):
             raise DecisionReceiptError(
@@ -323,6 +334,7 @@ def _derive_decision_v3(
     artifact_graph_verifier_digest: str,
     expected_quarantine_receipt_digest: str | None,
     expected_gateway_profile_digest: str | None,
+    expected_release_asset_result_digests: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     graph = verify_admission_artifact_graph(
         cas,
@@ -331,6 +343,7 @@ def _derive_decision_v3(
         expected_verifier_digest=artifact_graph_verifier_digest,
         expected_quarantine_receipt_digest=expected_quarantine_receipt_digest,
         expected_gateway_profile_digest=expected_gateway_profile_digest,
+        expected_release_asset_result_digests=(expected_release_asset_result_digests),
     )
     validated_policy, policy = _load_policy(cas, policy_digest)
     results, expected_records = _replay_analyzers(
@@ -436,6 +449,21 @@ def _run_receipt_digests(value: object) -> list[str]:
     if len(digests) != len(set(digests)):
         raise DecisionReceiptError(
             "expected analyzer run receipt digests must be unique"
+        )
+    return digests
+
+
+def _release_asset_result_digests(value: object) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)) or len(value) > _MAX_RELEASE_ASSETS:
+        raise DecisionReceiptError(
+            "expected release asset result digest list is invalid"
+        )
+    digests = tuple(
+        sorted(_digest(item, "expected release asset result digest") for item in value)
+    )
+    if len(digests) != len(set(digests)):
+        raise DecisionReceiptError(
+            "expected release asset result digests must be unique"
         )
     return digests
 

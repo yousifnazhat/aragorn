@@ -292,11 +292,13 @@ caller-controlled limit fields. The privileged broker launches it under a
 configured non-root UID and group, clears supplementary groups, supplies an
 allowlisted environment, closes inherited descriptors, and enforces bounded
 output plus process-group wall-clock deadlines. A bounded isolated resolver
-under that UID resolves both fixed GitHub hosts once; the broker rejects
-missing, non-global, duplicate, or noncanonical host-specific results
-and passes only those exact numeric sets to the acquisition worker, which
-performs no DNS resolution. The kernel boundary allows their canonical union
-while the application preserves each host-to-address binding. A fixed, root-protected
+under that UID resolves the two fixed source hosts once and, for recursive
+release jobs only, separately resolves `release-assets.githubusercontent.com`;
+the broker rejects missing, non-global, duplicate, or noncanonical
+host-specific results and passes only those exact numeric sets to the matching
+worker, which performs no DNS resolution. The kernel boundary allows their
+canonical union while the application preserves each host-to-address binding.
+A fixed, root-protected
 per-UID lock serializes cooperating brokers that share the host control root
 and namespaces; bounded pre- and post-run process censuses reject a pre-existing
 or surviving real-UID peer.
@@ -330,17 +332,26 @@ explicitly
 assurance. The worker retains the exact raw commit and traversed tree payloads
 as `aragorn/github-source-proof/v1`; the handoff carries that complete CAS
 closure and the broker rehashes and rewalks it before publishing quarantine.
+Canonical same-repository release-download references use one bounded API
+lookup and at most one redirect to the separately pinned release-asset host.
+The worker retains at most 16 assets and 64 MiB total; the broker rescans the
+retained source and accepts the exact URL/result/blob set only against
+caller-held release pins. Release bytes remain outside the installable source
+manifest and the v4 graph leaves them unresolved until a supported analyzer
+actually assesses them.
 The receipt still cannot authorize admission, promotion, or installation.
 
 This is an internal primitive, not a command developers repeatedly run. The
 Linux service boundary covers process and IP-address containment but does not
 seal a dedicated root filesystem or attest the host platform. The retained
 Phase 1 v2 receipt proves its frozen acquisition-lock metrics; it does not make
-this a supported production acquisition boundary. Redirect/release-asset
-resolution remains under implementation, and live public out-of-root recursive
-coverage, provisioning, control-plane promotion, and admission-authorized
-install/update wiring remain incomplete. The direct `acquire-github` command
-still runs with the operator's UID and remains evaluation-only.
+this a supported production acquisition boundary. The bounded release resolver,
+recursive gateway/broker replay, and v4 fail-closed graph are implemented.
+Automatic independent release-pin acquisition, archive inventory/extraction,
+live public out-of-root recursive coverage, provisioning, control-plane
+promotion, and admission-authorized install/update wiring remain incomplete.
+The direct `acquire-github` command still runs with the operator's UID and
+remains evaluation-only.
 
 Recursively retain supported exact same-repository blob references for Phase 0
 comparator evaluation:
@@ -761,10 +772,11 @@ four file instances; 13/13 statically resolvable artifacts captured (100%,
 above the 95% threshold); and 18/18 unresolved required artifacts covered by
 the fail-closed `ERROR` outcome.
 
-This closes the roadmap's Phase 1 exit metrics only for the bound evidence set.
-It does not make the current runtime profile admission-conformant or
-installer-eligible, authorize the publisher, or establish general recursive
-acquisition. No live public out-of-root recursive case has been retained, and
-redirect/release-asset resolution remains under implementation. Phase 2 may
-begin against this acquisition-lock milestone, but production installation and
-public release remain blocked by the runtime, coverage, and later-phase gates.
+This closes the roadmap's Phase 1 exit metrics only for the bound evidence set
+and makes Phase 2 engineering eligible. It does not make the current runtime
+profile admission-conformant or installer-eligible, authorize the publisher, or
+establish general recursive acquisition. The bounded release gateway and v4
+fail-closed graph are implemented; automatic independent release-pin
+acquisition, archive inventory/extraction, and live public out-of-root
+recursive evidence remain incomplete. Production installation and public
+release remain blocked by the runtime, coverage, and later-phase gates.

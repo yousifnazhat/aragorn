@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 acquisition-lock exit metrics pass on the frozen workload; runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 acquisition-lock exit metrics pass on the frozen workload and Phase 2 engineering is eligible; archive closure, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -475,14 +475,14 @@ Canonical acceptance additionally requires the reference validator's bounded
 decoding, Unicode normalization, ordering, collision, digest, and cross-record
 rules; another implementation must pass the same negative test vectors before
 it is trusted. Start contracts at version 1 and keep evidence separate from
-decisions. Phase 1 now has a distinct evidence-only admission `artifact_graph`
-contract for self-contained local Markdown. It independently reuses the
-bounded retained-text scanner instead of reinterpreting
-`aragorn/source-artifact-graph/v1`; unsupported carriers, executables, external
-or dynamic acquisition, unsupported Markdown references, and unresolved
-references remain incomplete. Replay also requires a protected expected
-verifier implementation identity. Decision authority and publication wiring
-remain separate.
+decisions. Phase 1 now has evidence-only `artifact_graph` contracts for
+self-contained local Markdown, proof-bound recursive GitHub expansion, and v4
+retained release assets. V4 replay requires caller-held release-result digests
+and rederives candidates from retained source bytes. Release assets remain
+separate from the installable source manifest and unresolved until analyzed;
+archive inventory/extraction is unsupported. Replay also requires a protected
+expected verifier implementation identity. Decision authority and publication
+wiring remain separate.
 
 ### Acquisition manifest
 
@@ -748,11 +748,12 @@ records `PASS` and `acquisition_lock_exit_eligible: true` for its bound
 workload: zero mismatches across two installed trees and four file instances,
 13/13 statically resolvable artifacts captured, and all 18 unresolved required
 artifacts covered by a fail-closed `ERROR` outcome. This is evidence-set
-eligibility under the Phase 1 exit column, not production completion of the
-full deliverable column. The current runtime profile remains `FAIL` and
-installer-ineligible; no live public out-of-root recursive case is retained;
-redirect/release-asset resolution remains under implementation; and public
-release remains blocked.
+eligibility under the Phase 1 exit column and makes Phase 2 engineering
+eligible; it is not production completion of the full deliverable column. The
+bounded release resolver, recursive gateway/broker replay, and v4 fail-closed
+graph are implemented. Automatic independent release-pin acquisition, archive
+inventory/extraction, live public out-of-root recursive evidence, runtime
+conformance, installer eligibility, and public release remain blocked.
 
 The qualified Phase 0 validation milestone is complete under the checked-in
 aggregate phase-evidence rule in

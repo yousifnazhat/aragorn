@@ -70,6 +70,7 @@ def verify_admission_artifact_graph(
     expected_verifier_digest: str,
     expected_quarantine_receipt_digest: str | None = None,
     expected_gateway_profile_digest: str | None = None,
+    expected_release_asset_result_digests: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Re-derive closure evidence without granting installer authority."""
 
@@ -87,7 +88,10 @@ def verify_admission_artifact_graph(
             max_bytes=MAX_GRAPH_BYTES,
         )
         graph = _canonical_document(raw)
-        if graph.get("schema") == "aragorn/admission-artifact-graph/v3":
+        if graph.get("schema") in {
+            "aragorn/admission-artifact-graph/v3",
+            "aragorn/admission-artifact-graph/v4",
+        }:
             if (
                 expected_quarantine_receipt_digest is None
                 or expected_gateway_profile_digest is None
@@ -95,6 +99,34 @@ def verify_admission_artifact_graph(
                 raise AdmissionArtifactGraphError(
                     "recursive GitHub admission replay requires caller-held "
                     "quarantine receipt and gateway profile digests"
+                )
+            receipt_digest = _digest(
+                expected_quarantine_receipt_digest,
+                "expected quarantine receipt digest",
+            )
+            gateway_profile_digest = _digest(
+                expected_gateway_profile_digest,
+                "expected gateway profile digest",
+            )
+            if graph["schema"] == "aragorn/admission-artifact-graph/v4":
+                from .github_recursive_artifact_graph_v4 import (
+                    verify_recursive_github_artifact_graph,
+                )
+
+                return verify_recursive_github_artifact_graph(
+                    cas,
+                    graph_digest,
+                    expected_manifest_digest=manifest_digest,
+                    expected_quarantine_receipt_digest=receipt_digest,
+                    expected_gateway_profile_digest=gateway_profile_digest,
+                    expected_verifier_digest=verifier_digest,
+                    expected_release_asset_result_digests=(
+                        expected_release_asset_result_digests
+                    ),
+                )
+            if expected_release_asset_result_digests:
+                raise AdmissionArtifactGraphError(
+                    "v3 recursive admission replay does not accept release assets"
                 )
             from .github_recursive_artifact_graph import (
                 verify_recursive_github_artifact_graph,
@@ -104,15 +136,13 @@ def verify_admission_artifact_graph(
                 cas,
                 graph_digest,
                 expected_manifest_digest=manifest_digest,
-                expected_quarantine_receipt_digest=_digest(
-                    expected_quarantine_receipt_digest,
-                    "expected quarantine receipt digest",
-                ),
-                expected_gateway_profile_digest=_digest(
-                    expected_gateway_profile_digest,
-                    "expected gateway profile digest",
-                ),
+                expected_quarantine_receipt_digest=receipt_digest,
+                expected_gateway_profile_digest=gateway_profile_digest,
                 expected_verifier_digest=verifier_digest,
+            )
+        if expected_release_asset_result_digests:
+            raise AdmissionArtifactGraphError(
+                "non-recursive admission replay does not accept release assets"
             )
         if graph.get("schema") == "aragorn/admission-artifact-graph/v2":
             if (

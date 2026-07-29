@@ -4,6 +4,7 @@ import hashlib
 import os
 import tempfile
 import unittest
+from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
 from unittest import mock
@@ -18,6 +19,8 @@ from aragorn.github_quarantine_receipt import (
     github_gateway_profile_digest,
 )
 from aragorn.github_recursive_gateway import (
+    GitHubRecursiveGatewayError,
+    _verify_release_assets,
     accept_recursive_gateway_output,
     quarantine_recursive_through_gateway,
     run_recursive_worker,
@@ -31,6 +34,135 @@ def _oid(kind: str, payload: bytes) -> str:
 
 
 class GitHubRecursiveGatewayTests(unittest.TestCase):
+    def test_release_asset_replay_requires_broker_pins_and_rejects_forgery(
+        self,
+    ) -> None:
+        url = (
+            "https://github.com/example/skills/releases/"
+            "download/v1/checksums.txt"
+        )
+        content = b"fixture checksum\n"
+        digest = "sha256:" + hashlib.sha256(content).hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "cas")
+            cas.put_expected(
+                BytesIO(content),
+                expected_digest=digest,
+                max_bytes=len(content),
+            )
+            result = {
+                "schema": "aragorn/github-release-asset/v1",
+                "source": {
+                    "kind": "github_release_asset",
+                    "host": "github.com",
+                    "owner": "example",
+                    "repository": "skills",
+                    "tag": "v1",
+                    "url": url,
+                },
+                "asset": {
+                    "release_id": 1,
+                    "asset_id": 2,
+                    "name": "checksums.txt",
+                    "size": len(content),
+                    "digest": digest,
+                    "github_digest": digest,
+                    "content_type": "application/octet-stream",
+                },
+                "transport": {
+                    "api_version": "2026-03-10",
+                    "redirected": False,
+                    "final_host": "api.github.com",
+                },
+                "closure": {"scope": "release_asset", "status": "complete"},
+            }
+            raw = canonical_json(result)
+            result_digest = cas.put(BytesIO(raw), max_bytes=len(raw))
+            entry = {"url": url, "result_digest": result_digest}
+            pins = {
+                url: {
+                    "release_id": 1,
+                    "asset_id": 2,
+                    "digest": digest,
+                    "github_digest": digest,
+                    "content_type": "application/octet-stream",
+                    "redirected": False,
+                }
+            }
+
+            closure = _verify_release_assets(
+                cas,
+                (entry,),
+                (url,),
+                release_asset_pins=pins,
+            )
+
+            self.assertEqual(
+                closure,
+                {
+                    result_digest: len(raw),
+                    digest: len(content),
+                },
+            )
+            for entries, discovered in (
+                ((), (url,)),
+                ((entry,), ()),
+            ):
+                with (
+                    self.subTest(entries=entries, discovered=discovered),
+                    self.assertRaises(GitHubRecursiveGatewayError),
+                ):
+                    _verify_release_assets(
+                        cas,
+                        entries,
+                        discovered,
+                        release_asset_pins=pins,
+                    )
+
+            forged_content = b"self-consistent bytes not selected by the broker\n"
+            forged_asset_digest = (
+                "sha256:" + hashlib.sha256(forged_content).hexdigest()
+            )
+            cas.put_expected(
+                BytesIO(forged_content),
+                expected_digest=forged_asset_digest,
+                max_bytes=len(forged_content),
+            )
+            forged = deepcopy(result)
+            forged["asset"]["size"] = len(forged_content)
+            forged["asset"]["digest"] = forged_asset_digest
+            forged["asset"]["github_digest"] = forged_asset_digest
+            forged_raw = canonical_json(forged)
+            forged_digest = cas.put(
+                BytesIO(forged_raw),
+                max_bytes=len(forged_raw),
+            )
+            with self.assertRaises(GitHubRecursiveGatewayError):
+                _verify_release_assets(
+                    cas,
+                    ({"url": url, "result_digest": forged_digest},),
+                    (url,),
+                    release_asset_pins=pins,
+                )
+
+    def test_automatic_release_pin_orchestration_remains_fail_closed(self) -> None:
+        url = (
+            "https://github.com/example/skills/releases/"
+            "download/v1/checksums.txt"
+        )
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            self.assertRaisesRegex(
+                GitHubRecursiveGatewayError,
+                "lack exact broker-held pins",
+            ),
+        ):
+            _verify_release_assets(
+                CAS(Path(temporary) / "cas"),
+                ({"url": url, "result_digest": "sha256:" + "1" * 64},),
+                (url,),
+            )
+
     def test_recursive_wrapper_selects_the_hardened_supervisor_path(self) -> None:
         request = {"schema": "irrelevant to delegated supervisor"}
         with mock.patch(
@@ -232,9 +364,16 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
             quarantine = broker / "quarantine"
             python_digest = "sha256:" + "1" * 64
             package_digest = "sha256:" + "2" * 64
-            with mock.patch(
-                "aragorn.github_quarantine_receipt.sys.platform",
-                "linux",
+            with (
+                mock.patch(
+                    "aragorn.github_quarantine_receipt.sys.platform",
+                    "linux",
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_gateway."
+                    "discover_recursive_github_release_asset_urls",
+                    side_effect=AssertionError("v1 must retain its scanner contract"),
+                ),
             ):
                 accepted = accept_recursive_gateway_output(
                     request,
@@ -281,6 +420,112 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
             self.assertIn(
                 partial["expansion_proof_digest"],
                 {entry["digest"] for entry in partial_handoff["blobs"]},
+            )
+
+            release_url = (
+                "https://github.com/example/skills/releases/"
+                "download/v1/checksums.txt"
+            )
+            release_bytes = b"fixture checksum\n"
+            release_digest = "sha256:" + hashlib.sha256(release_bytes).hexdigest()
+
+            def fake_release(
+                url: str,
+                cas: CAS,
+                **_kwargs: object,
+            ) -> dict:
+                cas.put_expected(
+                    BytesIO(release_bytes),
+                    expected_digest=release_digest,
+                    max_bytes=len(release_bytes),
+                )
+                return {
+                    "schema": "aragorn/github-release-asset/v1",
+                    "source": {
+                        "kind": "github_release_asset",
+                        "host": "github.com",
+                        "owner": "example",
+                        "repository": "skills",
+                        "tag": "v1",
+                        "url": url,
+                    },
+                    "asset": {
+                        "release_id": 1,
+                        "asset_id": 2,
+                        "name": "checksums.txt",
+                        "size": len(release_bytes),
+                        "digest": release_digest,
+                        "github_digest": release_digest,
+                        "content_type": "application/octet-stream",
+                    },
+                    "transport": {
+                        "api_version": "2026-03-10",
+                        "redirected": True,
+                        "final_host": "release-assets.githubusercontent.com",
+                    },
+                    "closure": {
+                        "scope": "release_asset",
+                        "status": "complete",
+                    },
+                }
+
+            release_job = gateway / "release-job"
+            with (
+                mock.patch(
+                    "aragorn.github_recursive_gateway.acquire_github_expansion",
+                    side_effect=fake_expansion,
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_gateway."
+                    "discover_recursive_github_release_asset_urls",
+                    return_value=(release_url,),
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_gateway.acquire_github_release_asset",
+                    side_effect=fake_release,
+                ) as release_acquire,
+            ):
+                release_result = run_recursive_worker(
+                    request,
+                    release_job,
+                    pinned_api_addresses=("1.1.1.1",),
+                    pinned_git_addresses=("8.8.8.8",),
+                    pinned_release_asset_addresses=("9.9.9.9",),
+                )
+
+            self.assertEqual(
+                release_result["schema"],
+                "aragorn/github-recursive-gateway-result/v2",
+            )
+            self.assertEqual(
+                [entry["url"] for entry in release_result["release_assets"]],
+                [release_url],
+            )
+            self.assertEqual(
+                release_acquire.call_args.kwargs["_pinned_asset_addresses"],
+                ("9.9.9.9",),
+            )
+            self.assertEqual(
+                release_acquire.call_args.kwargs["max_asset_bytes"],
+                16 * 1024 * 1024,
+            )
+            release_imported = CAS(root / "release-imported")
+            release_handoff = import_declared_byte_transport(
+                release_job / "bundle",
+                release_imported,
+                expected_manifest_digest=release_result[
+                    "handoff_manifest_digest"
+                ],
+                expected_kind="github_source",
+                expected_root_digest=release_result["manifest_digest"],
+            )
+            release_closure = {
+                entry["digest"] for entry in release_handoff["blobs"]
+            }
+            self.assertIn(release_digest, release_closure)
+            self.assertIn(
+                release_result["release_assets"][0]["result_digest"],
+                release_closure,
             )
 
 

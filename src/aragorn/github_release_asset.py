@@ -55,7 +55,7 @@ def verify_github_release_asset_result(
 ) -> dict[str, Any]:
     """Re-hash one retained release asset against caller-held source pins."""
 
-    owner, repository, tag, name = _parse_url(expected_url)
+    owner, repository, tag, name = parse_github_release_asset_url(expected_url)
     if (
         not evidence_cas.read_only
         or isinstance(expected_release_id, bool)
@@ -163,12 +163,17 @@ def acquire_github_release_asset(
     cas: CAS,
     *,
     timeout_seconds: float = 60.0,
+    max_asset_bytes: int = _MAX_ASSET_BYTES,
     _pinned_api_addresses: list[str] | tuple[str, ...] | None = None,
     _pinned_asset_addresses: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    """Retain one exact public release asset without executing or extracting it."""
+    """Retain one exact public release asset without executing or extracting it.
 
-    owner, repository, tag, name = _parse_url(url)
+    ``max_asset_bytes`` is checked against API metadata before the asset body is
+    requested or written to CAS.
+    """
+
+    owner, repository, tag, name = parse_github_release_asset_url(url)
     if (
         isinstance(timeout_seconds, bool)
         or not isinstance(timeout_seconds, (int, float))
@@ -177,8 +182,16 @@ def acquire_github_release_asset(
         raise GitHubReleaseAssetError(
             f"timeout_seconds must be between 0 and {_MAX_ACQUISITION_SECONDS:g}"
         )
+    if (
+        isinstance(max_asset_bytes, bool)
+        or not isinstance(max_asset_bytes, int)
+        or not 0 <= max_asset_bytes <= _MAX_ASSET_BYTES
+    ):
+        raise GitHubReleaseAssetError(
+            f"max_asset_bytes must be between 0 and {_MAX_ASSET_BYTES}"
+        )
 
-    budget = _RequestBudget(3, _MAX_METADATA_BYTES + _MAX_ASSET_BYTES)
+    budget = _RequestBudget(3, _MAX_METADATA_BYTES + max_asset_bytes)
     deadline = time.monotonic() + float(timeout_seconds)
     api_endpoints = _PinnedEndpoints(_pinned_api_addresses, host=API_HOST)
     asset_endpoints = _PinnedEndpoints(
@@ -193,7 +206,15 @@ def acquire_github_release_asset(
         authorization=None,
         endpoints=api_endpoints,
     )
-    asset = _select_asset(release, url, owner, repository, tag, name)
+    asset = _select_asset(
+        release,
+        url,
+        owner,
+        repository,
+        tag,
+        name,
+        max_asset_bytes=max_asset_bytes,
+    )
     content, redirected, final_host = _download(
         f"/repos/{owner}/{repository}/releases/assets/{asset['id']}",
         expected_size=asset["size"],
@@ -240,7 +261,9 @@ def acquire_github_release_asset(
     }
 
 
-def _parse_url(value: object) -> tuple[str, str, str, str]:
+def parse_github_release_asset_url(
+    value: object,
+) -> tuple[str, str, str, str]:
     if not isinstance(value, str) or not value or value != value.strip():
         raise GitHubReleaseAssetError(
             "release asset must be a canonical public GitHub URL"
@@ -291,6 +314,8 @@ def _select_asset(
     repository: str,
     tag: str,
     name: str,
+    *,
+    max_asset_bytes: int,
 ) -> dict[str, Any]:
     release_id = release.get("id")
     assets = release.get("assets")
@@ -341,6 +366,10 @@ def _select_asset(
         )
     ):
         raise GitHubReleaseAssetError("GitHub release asset metadata is invalid")
+    if size > max_asset_bytes:
+        raise GitHubReleaseAssetError(
+            "GitHub release asset exceeds its remaining byte limit"
+        )
     return asset
 
 

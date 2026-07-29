@@ -161,6 +161,14 @@ class GitHubGatewaySystemdTests(unittest.TestCase):
             f"--property=ReadWritePaths={self.root}",
         ):
             self.assertIn(required, argv)
+        self.assertEqual(
+            {
+                argument
+                for argument in argv
+                if argument.startswith("--property=IPAddressAllow=")
+            },
+            {"--property=IPAddressAllow=1.1.1.1"},
+        )
         self.assertIn("--setenv=ARAGORN_DENIED_PROBE=18443", argv)
         self.assertNotIn(
             "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6", argv

@@ -8,6 +8,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 _SYSTEMD = _ROOT / "packaging" / "systemd"
 _SERVICE = _SYSTEMD / "aragorn-protected-install.service"
 _TMPFILES = _SYSTEMD / "aragorn-gateway.tmpfiles"
+_SYSUSERS = _SYSTEMD / "aragorn-gateway.sysusers"
 
 
 def _section(raw: str, name: str) -> list[str]:
@@ -64,6 +65,8 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
                     "aragorn-protected-install-launcher.py -- "
                     "--github-live "
                     "--service-request %d/install-request "
+                    "--analyzer-user aragorn-analyze "
+                    "--analyzer-group aragorn-analyze "
                     "--cas-root /var/lib/aragorn-quarantine "
                     "--protected-root /var/lib/aragorn-protected/skills "
                     "--expected-broker-uid 0 "
@@ -97,7 +100,7 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
         )
         for directive in (
             "NoNewPrivileges=yes",
-            "CapabilityBoundingSet=",
+            "CapabilityBoundingSet=CAP_SETGID CAP_SETUID",
             "AmbientCapabilities=",
             "PrivateNetwork=yes",
             "IPAddressDeny=any",
@@ -131,6 +134,23 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
                     "/var/lib/aragorn-protected/skills"
                 )
             ],
+        )
+        self.assertNotIn("CAP_DAC_OVERRIDE", "\n".join(service))
+        self.assertNotIn("CAP_DAC_READ_SEARCH", "\n".join(service))
+        self.assertNotIn("CAP_CHOWN", "\n".join(service))
+
+    def test_sysusers_provisions_dedicated_analyzer_identity(self) -> None:
+        lines = set(_SYSUSERS.read_text(encoding="utf-8").splitlines())
+        self.assertIn(
+            (
+                'u aragorn-analyze - "Aragorn protected analyzer" '
+                "/nonexistent /usr/sbin/nologin"
+            ),
+            lines,
+        )
+        self.assertEqual(
+            sum(line.startswith("u aragorn-analyze ") for line in lines),
+            1,
         )
 
     def test_tmpfiles_provisions_only_fixed_root_owned_inputs(self) -> None:

@@ -10,7 +10,7 @@ Type=oneshot
 User=root
 Group=root
 LoadCredential=install-request:/run/aragorn-protected-install/request.json
-ExecStart=/usr/bin/python3.14 -I -S -B /usr/libexec/aragorn/aragorn-protected-install-launcher.py -- --github-live --service-request %d/install-request --cas-root /var/lib/aragorn-quarantine --protected-root /var/lib/aragorn-protected/skills --expected-broker-uid 0 --revocation-file /etc/aragorn/protected-install-revocations.json
+ExecStart=/usr/bin/python3.14 -I -S -B /usr/libexec/aragorn/aragorn-protected-install-launcher.py -- --github-live --service-request %d/install-request --analyzer-user aragorn-analyze --analyzer-group aragorn-analyze --cas-root /var/lib/aragorn-quarantine --protected-root /var/lib/aragorn-protected/skills --expected-broker-uid 0 --revocation-file /etc/aragorn/protected-install-revocations.json
 WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
@@ -28,7 +28,7 @@ StandardError=journal
 SyslogIdentifier=aragorn-protected-install
 
 NoNewPrivileges=yes
-CapabilityBoundingSet=
+CapabilityBoundingSet=CAP_SETGID CAP_SETUID
 AmbientCapabilities=
 PrivateDevices=yes
 PrivateIPC=yes

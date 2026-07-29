@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import grp
 import hashlib
 import json
 import os
+import pwd
 import stat
 import sys
 import time
@@ -66,6 +68,8 @@ _TARGET = "aragorn-admitted"
 _SCANNER = "aragorn-inert-fixture-scanner"
 _GITHUB_SCANNER = "aragorn-agent-skill-threats"
 _GITHUB_ANALYZER_VERSION = "0.1.0-phase0-v7"
+_SERVICE_ANALYZER_USER = "aragorn-analyze"
+_SERVICE_ANALYZER_GROUP = "aragorn-analyze"
 _SERVICE_REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v1"
 _SERVICE_REQUEST_SCHEMA_V2 = "aragorn/protected-install-broker-request/v2"
 _MAX_SERVICE_REQUEST_BYTES = 64 * 1024
@@ -141,6 +145,11 @@ _GITHUB_LIMITATIONS = [
     "PROTECTED_TRANSACTION_EXECUTION_NOT_INSTALLER_AUTHORITY",
     "NO_INSTALLER_AUTHORITY",
 ]
+_UNPRIVILEGED_ANALYZER_LIMITATIONS = [
+    limitation
+    for limitation in _GITHUB_LIMITATIONS
+    if limitation != "ANALYZER_EXECUTES_AS_ROOT_WITHOUT_OS_SANDBOX_OR_UID_DROP"
+]
 _FIXTURE_BYTES = {
     "v1": (
         b"---\n"
@@ -186,10 +195,79 @@ def _require_digest(value: object, label: str) -> str:
     return value
 
 
-def _github_analyzer_script(expected_implementation_digest: str) -> str:
+def _resolve_analyzer_execution_identity(
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    user = getattr(args, "analyzer_user", None)
+    group = getattr(args, "analyzer_group", None)
+    if user is None and group is None:
+        return None
+    if (user, group) != (
+        _SERVICE_ANALYZER_USER,
+        _SERVICE_ANALYZER_GROUP,
+    ):
+        raise BrokerConformanceError(
+            "analyzer identity must be the fixed service worker"
+        )
+    try:
+        user_record = pwd.getpwnam(user)
+        group_record = grp.getgrnam(group)
+    except KeyError as exc:
+        raise BrokerConformanceError(
+            "fixed analyzer service identity is not provisioned"
+        ) from exc
+    if (
+        user_record.pw_name != user
+        or group_record.gr_name != group
+        or user_record.pw_uid <= 0
+        or group_record.gr_gid <= 0
+        or user_record.pw_gid != group_record.gr_gid
+        or user_record.pw_dir != "/nonexistent"
+        or user_record.pw_shell != "/usr/sbin/nologin"
+    ):
+        raise BrokerConformanceError(
+            "fixed analyzer service identity is not exact"
+        )
+    return {
+        "user": user,
+        "group": group,
+        "uid": user_record.pw_uid,
+        "gid": group_record.gr_gid,
+        "supplementary_groups": [],
+    }
+
+
+def _github_analyzer_script(
+    expected_implementation_digest: str,
+    *,
+    expected_user: str | None = None,
+    expected_group: str | None = None,
+) -> str:
+    if (expected_user is None) != (expected_group is None):
+        raise BrokerConformanceError(
+            "analyzer user and group must be bound together"
+        )
     source_root = str(_REPOSITORY / "src")
+    identity_check = ""
+    if expected_user is not None:
+        identity_check = (
+            "import grp,os,pwd\n"
+            f"if pwd.getpwuid(os.geteuid()).pw_name!={expected_user!r}:\n"
+            " raise RuntimeError('analyzer effective user changed')\n"
+            f"if grp.getgrgid(os.getegid()).gr_name!={expected_group!r}:\n"
+            " raise RuntimeError('analyzer effective group changed')\n"
+            "if os.getgroups():\n"
+            " raise RuntimeError('analyzer supplementary groups are not empty')\n"
+            "with open('/proc/self/status',encoding='ascii') as status_stream:\n"
+            " status=dict(line.rstrip().split(':',1) "
+            "for line in status_stream if ':' in line)\n"
+            "for capability_field in ('CapEff','CapPrm','CapAmb'):\n"
+            " if int(status.get(capability_field,'-1').strip(),16)!=0:\n"
+            "  raise RuntimeError('analyzer process retained capabilities')\n"
+        )
     return (
-        "import json,sys\n"
+        "import json,sys,tempfile\n"
+        f"{identity_check}"
         "from pathlib import Path\n"
         f"sys.path.insert(0,{source_root!r})\n"
         "from aragorn.acquire import ingest_local\n"
@@ -200,12 +278,14 @@ def _github_analyzer_script(expected_implementation_digest: str) -> str:
         "if candidate_implementation_digest()!=expected:\n"
         " raise RuntimeError('analyzer implementation identity changed')\n"
         "request=json.load(sys.stdin)\n"
-        "cas=CAS(Path.cwd()/'.aragorn-analyzer-state')\n"
-        "manifest=ingest_local(Path(request['workspace']),cas)\n"
-        "if manifest['tree_digest']!=request['subject_digest']:\n"
-        " raise RuntimeError('analyzer workspace identity changed')\n"
-        "for observation in detect_first_party_observations(manifest,cas):\n"
-        " sys.stdout.write(observation.document_json+'\\n')\n"
+        "with tempfile.TemporaryDirectory("
+        "prefix='aragorn-analyzer-state-',dir='/tmp') as state:\n"
+        " cas=CAS(Path(state))\n"
+        " manifest=ingest_local(Path(request['workspace']),cas)\n"
+        " if manifest['tree_digest']!=request['subject_digest']:\n"
+        "  raise RuntimeError('analyzer workspace identity changed')\n"
+        " for observation in detect_first_party_observations(manifest,cas):\n"
+        "  sys.stdout.write(observation.document_json+'\\n')\n"
     )
 
 
@@ -1101,6 +1181,12 @@ def _run_github_live(
     analyzer_verifier_digest: str,
     graph_verifier_digest: str,
 ) -> dict[str, Any]:
+    analyzer_execution_identity = _resolve_analyzer_execution_identity(args)
+    github_limitations = (
+        _UNPRIVILEGED_ANALYZER_LIMITATIONS
+        if analyzer_execution_identity is not None
+        else _GITHUB_LIMITATIONS
+    )
     manifest_digest = _require_digest(args.manifest_digest, "manifest digest")
     quarantine_receipt_digest = _require_digest(
         args.quarantine_receipt_digest,
@@ -1156,7 +1242,19 @@ def _run_github_live(
     executable_digest = _digest_bytes(executable.read_bytes())
     if executable_digest != expected_executable_digest:
         raise BrokerConformanceError("analyzer executable identity changed")
-    script = _github_analyzer_script(analyzer_implementation_digest)
+    script = _github_analyzer_script(
+        analyzer_implementation_digest,
+        expected_user=(
+            None
+            if analyzer_execution_identity is None
+            else analyzer_execution_identity["user"]
+        ),
+        expected_group=(
+            None
+            if analyzer_execution_identity is None
+            else analyzer_execution_identity["group"]
+        ),
+    )
     configuration = {
         "name": _GITHUB_SCANNER,
         "version": _GITHUB_ANALYZER_VERSION,
@@ -1261,6 +1359,9 @@ def _run_github_live(
         try:
             _materialize_verified_manifest(cas, manifest, staging_fd)
             _freeze_materialized_source_tree(staging_fd, manifest)
+            if analyzer_execution_identity is not None:
+                os.fchmod(staging_fd, 0o555)
+                os.fsync(staging_fd)
             staged_tree_digest = verify_materialized_source_tree(
                 cas,
                 manifest_digest,
@@ -1277,6 +1378,16 @@ def _run_github_live(
                 configuration_bytes=configuration_raw,
                 timeout_seconds=2,
                 output_limit_bytes=4096,
+                run_as_uid=(
+                    None
+                    if analyzer_execution_identity is None
+                    else analyzer_execution_identity["uid"]
+                ),
+                run_as_gid=(
+                    None
+                    if analyzer_execution_identity is None
+                    else analyzer_execution_identity["gid"]
+                ),
             )
             if not analyzer_result.ok:
                 raise BrokerConformanceError(
@@ -1376,6 +1487,8 @@ def _run_github_live(
         "run_receipt_digest": analyzer_run_receipt_digest,
         "verifier_implementation_digest": analyzer_verifier_digest,
     }
+    if analyzer_execution_identity is not None:
+        analyzer_record["execution_identity"] = analyzer_execution_identity
     decision_record = {
         "digest": decision_digest,
         "verdict": decision["verdict"],
@@ -1436,7 +1549,7 @@ def _run_github_live(
                 "claim_consumed": True,
                 "version_path": transaction_record["version_path"],
             },
-            "limitations": _GITHUB_LIMITATIONS,
+            "limitations": github_limitations,
         }
 
     _reverify_github_transition(
@@ -1540,7 +1653,7 @@ def _run_github_live(
             "protected-install-transaction",
             "active-tree-reverification",
         ],
-        "limitations": _GITHUB_LIMITATIONS,
+        "limitations": github_limitations,
     }
 
 
@@ -1886,6 +1999,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--github-live", action="store_true")
     parser.add_argument("--service-request")
+    parser.add_argument("--analyzer-user")
+    parser.add_argument("--analyzer-group")
     parser.add_argument("--cas-root", required=True)
     parser.add_argument("--protected-root", required=True)
     parser.add_argument("--expected-broker-uid", required=True, type=int)

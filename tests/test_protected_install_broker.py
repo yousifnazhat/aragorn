@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import base64
+import grp
 import hashlib
 import importlib.util
 import json
 import os
+import pwd
 import shutil
 import stat
 import subprocess
@@ -18,7 +20,10 @@ from types import SimpleNamespace
 from unittest import mock
 
 import aragorn.admission_artifact_graph as artifact_graph_module
+import aragorn.analyze as analyze_module
 import aragorn.analyzer_receipt as analyzer_receipt_module
+from aragorn.acquire import ingest_local
+from aragorn.analyze import run_analyzer
 from aragorn.cas import CAS
 from aragorn.github_gateway_live_evidence import (
     verify_github_gateway_live_evidence,
@@ -216,6 +221,154 @@ def _service_args(
 
 @unittest.skipUnless(os.name == "posix", "protected install requires POSIX")
 class ProtectedInstallBrokerProducerTests(unittest.TestCase):
+    def test_service_analyzer_identity_is_fixed_and_digest_bound(self) -> None:
+        producer = _load_producer()
+        user = SimpleNamespace(
+            pw_name="aragorn-analyze",
+            pw_uid=64001,
+            pw_gid=64002,
+            pw_dir="/nonexistent",
+            pw_shell="/usr/sbin/nologin",
+        )
+        group = SimpleNamespace(
+            gr_name="aragorn-analyze",
+            gr_gid=64002,
+        )
+        args = SimpleNamespace(
+            analyzer_user="aragorn-analyze",
+            analyzer_group="aragorn-analyze",
+        )
+        with (
+            mock.patch.object(
+                producer.pwd,
+                "getpwnam",
+                return_value=user,
+            ),
+            mock.patch.object(
+                producer.grp,
+                "getgrnam",
+                return_value=group,
+            ),
+        ):
+            identity = producer._resolve_analyzer_execution_identity(args)
+
+        self.assertEqual(
+            identity,
+            {
+                "user": "aragorn-analyze",
+                "group": "aragorn-analyze",
+                "uid": 64001,
+                "gid": 64002,
+                "supplementary_groups": [],
+            },
+        )
+        script = producer._github_analyzer_script(
+            "sha256:" + "a" * 64,
+            expected_user=identity["user"],
+            expected_group=identity["group"],
+        )
+        self.assertIn("pwd.getpwuid(os.geteuid())", script)
+        self.assertIn("grp.getgrgid(os.getegid())", script)
+        self.assertIn("if os.getgroups():", script)
+        self.assertIn("('CapEff','CapPrm','CapAmb')", script)
+        self.assertIn("dir='/tmp'", script)
+        compile(script, "<github-analyzer>", "exec")
+        self.assertNotIn(
+            "ANALYZER_EXECUTES_AS_ROOT_WITHOUT_OS_SANDBOX_OR_UID_DROP",
+            producer._UNPRIVILEGED_ANALYZER_LIMITATIONS,
+        )
+
+    @unittest.skipUnless(
+        sys.platform.startswith("linux") and os.geteuid() == 0,
+        "real analyzer UID drop requires Linux root",
+    )
+    def test_generated_analyzer_runs_without_root_or_control_residue(
+        self,
+    ) -> None:
+        producer = _load_producer()
+        worker = pwd.getpwnam("nobody")
+        worker_group = grp.getgrgid(worker.pw_gid)
+        implementation_digest = candidate_implementation_digest()
+        script = producer._github_analyzer_script(
+            implementation_digest,
+            expected_user=worker.pw_name,
+            expected_group=worker_group.gr_name,
+        )
+        executable = Path(sys.executable).resolve(strict=True)
+        executable_digest = (
+            "sha256:" + hashlib.sha256(executable.read_bytes()).hexdigest()
+        )
+        configuration = {
+            "name": producer._GITHUB_SCANNER,
+            "version": producer._GITHUB_ANALYZER_VERSION,
+            "argv": [str(executable), "-B", "-c", script],
+            "operator_argv0": str(executable),
+            "executable_digest": executable_digest,
+        }
+        configuration_raw = canonical_json(configuration)
+        configuration_digest = (
+            "sha256:" + hashlib.sha256(configuration_raw).hexdigest()
+        )
+
+        with (
+            TemporaryDirectory(
+                prefix="aragorn-analyzer-workspace-",
+                dir="/tmp",
+            ) as workspace_raw,
+            TemporaryDirectory(
+                prefix="aragorn-analyzer-parent-cas-",
+                dir="/tmp",
+            ) as parent_cas_raw,
+        ):
+            workspace = Path(workspace_raw)
+            skill = workspace / "SKILL.md"
+            skill.write_bytes(producer._FIXTURE_BYTES["v1"])
+            manifest = ingest_local(workspace, CAS(Path(parent_cas_raw)))
+            skill.chmod(0o444)
+            workspace.chmod(0o555)
+            tracked_control_paths: list[Path] = []
+            real_temporary_directory = TemporaryDirectory
+
+            def tracked_temporary_directory(
+                *args: object,
+                **kwargs: object,
+            ) -> TemporaryDirectory[str]:
+                directory = real_temporary_directory(*args, **kwargs)
+                tracked_control_paths.append(Path(directory.name))
+                return directory
+
+            try:
+                with mock.patch.object(
+                    analyze_module.tempfile,
+                    "TemporaryDirectory",
+                    side_effect=tracked_temporary_directory,
+                ):
+                    result = run_analyzer(
+                        (str(executable), "-B", "-c", script),
+                        workspace=workspace,
+                        name=producer._GITHUB_SCANNER,
+                        version=producer._GITHUB_ANALYZER_VERSION,
+                        config_digest=configuration_digest,
+                        executable_digest=executable_digest,
+                        subject_digest=manifest["tree_digest"],
+                        configuration_bytes=configuration_raw,
+                        timeout_seconds=5,
+                        output_limit_bytes=4096,
+                        run_as_uid=worker.pw_uid,
+                        run_as_gid=worker.pw_gid,
+                    )
+            finally:
+                workspace.chmod(0o700)
+                skill.chmod(0o600)
+
+            self.assertTrue(result.ok, result.error_message)
+            self.assertEqual(len(tracked_control_paths), 1)
+            self.assertFalse(tracked_control_paths[0].exists())
+            self.assertEqual(
+                sorted(path.name for path in workspace.iterdir()),
+                ["SKILL.md"],
+            )
+
     def test_service_request_maps_only_root_owned_authority_inputs(
         self,
     ) -> None:

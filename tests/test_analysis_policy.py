@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -22,7 +23,6 @@ from aragorn.analyze import (
     run_analyzer,
 )
 from aragorn.policy import Policy, evaluate_policy
-
 
 SUBJECT_DIGEST = "sha256:" + "a" * 64
 CONFIG_DIGEST = "sha256:" + "b" * 64
@@ -339,6 +339,88 @@ class AnalyzerProcessTests(unittest.TestCase):
 
         self.assertEqual(result.error_code, "INVALID_CONFIGURATION")
         self.assertIn("absolute path", result.error_message or "")
+
+    def test_analyzer_child_uses_dedicated_identity_without_writable_scratch(
+        self,
+    ) -> None:
+        analyzer_uid = 64001
+        analyzer_gid = 64002
+        observed_control: dict[str, object] = {}
+
+        def reject_launch(*args: object, **kwargs: object) -> None:
+            control_path = Path(str(kwargs["cwd"]))
+            state = control_path.stat()
+            observed_control["path"] = control_path
+            observed_control["mode"] = stat.S_IMODE(state.st_mode)
+            observed_control["uid"] = state.st_uid
+            observed_control["gid"] = state.st_gid
+            raise OSError("bounded launch probe")
+
+        with (
+            tempfile.TemporaryDirectory() as workspace,
+            patch.object(
+                analyze_module.subprocess,
+                "Popen",
+                side_effect=reject_launch,
+            ) as popen,
+        ):
+            result = run_analyzer(
+                (sys.executable, "-c", "pass"),
+                workspace=workspace,
+                name="test-scanner",
+                version="1.0",
+                config_digest=CONFIG_DIGEST,
+                executable_digest=EXECUTABLE_DIGEST,
+                subject_digest=SUBJECT_DIGEST,
+                run_as_uid=analyzer_uid,
+                run_as_gid=analyzer_gid,
+            )
+
+        self.assertEqual(result.error_code, "LAUNCH_FAILED")
+        control_path = Path(popen.call_args.kwargs["cwd"])
+        self.assertEqual(observed_control["path"], control_path)
+        self.assertEqual(observed_control["mode"], 0o555)
+        self.assertEqual(observed_control["uid"], os.geteuid())
+        self.assertEqual(observed_control["gid"], os.getegid())
+        self.assertFalse(control_path.exists())
+        self.assertEqual(popen.call_args.kwargs["env"]["HOME"], "/nonexistent")
+        self.assertEqual(popen.call_args.kwargs["user"], analyzer_uid)
+        self.assertEqual(popen.call_args.kwargs["group"], analyzer_gid)
+        self.assertEqual(popen.call_args.kwargs["extra_groups"], ())
+        self.assertEqual(popen.call_args.kwargs["umask"], 0o077)
+
+    def test_launch_interrupt_removes_uid_drop_control_directory(self) -> None:
+        observed_control_path: Path | None = None
+
+        def interrupt_launch(*args: object, **kwargs: object) -> None:
+            nonlocal observed_control_path
+            observed_control_path = Path(str(kwargs["cwd"]))
+            raise KeyboardInterrupt
+
+        with (
+            tempfile.TemporaryDirectory() as workspace,
+            patch.object(
+                analyze_module.subprocess,
+                "Popen",
+                side_effect=interrupt_launch,
+            ),
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                run_analyzer(
+                    (sys.executable, "-c", "pass"),
+                    workspace=workspace,
+                    name="test-scanner",
+                    version="1.0",
+                    config_digest=CONFIG_DIGEST,
+                    executable_digest=EXECUTABLE_DIGEST,
+                    subject_digest=SUBJECT_DIGEST,
+                    run_as_uid=64001,
+                    run_as_gid=64002,
+                )
+
+        self.assertIsNotNone(observed_control_path)
+        assert observed_control_path is not None
+        self.assertFalse(observed_control_path.exists())
 
     def test_workspace_module_is_not_imported_as_analyzer_code(self) -> None:
         with tempfile.TemporaryDirectory() as workspace:

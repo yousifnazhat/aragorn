@@ -12,10 +12,10 @@ import stat
 import subprocess
 import tempfile
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Sequence
-
+from typing import Any
 
 REQUEST_SCHEMA = "aragorn/analyzer-request/v1"
 OBSERVATION_SCHEMA = "aragorn/observation/v1"
@@ -75,13 +75,18 @@ def run_analyzer(
     configuration_bytes: bytes | None = None,
     timeout_seconds: float = 120.0,
     output_limit_bytes: int = 1024 * 1024,
+    run_as_uid: int | None = None,
+    run_as_gid: int | None = None,
 ) -> AnalyzerResult:
     """Run one analyzer without a shell and parse its JSONL observations.
 
     The caller is responsible for any read-only mount or OS sandbox required
-    by its threat model. The runner canonicalizes the existing directory and
-    exposes no write API itself. Stdout and stderr share one hard byte budget.
-    Timeout cleanup covers the analyzer's process group, not descendants that
+    by its threat model. When ``run_as_uid`` and ``run_as_gid`` are supplied,
+    the runner clears supplementary groups, drops credentials only in the
+    child, and gives it a root-owned non-writable control directory. The runner
+    canonicalizes the existing directory and exposes no write API itself.
+    Stdout and stderr share one hard byte budget. Timeout cleanup covers the
+    analyzer's process group, not descendants that
     deliberately detach into another session.
     """
 
@@ -103,6 +108,26 @@ def run_analyzer(
     )
     if invalid is not None:
         return _error(identity, "INVALID_CONFIGURATION", invalid)
+    if (run_as_uid is None) != (run_as_gid is None):
+        return _error(
+            identity,
+            "INVALID_CONFIGURATION",
+            "analyzer UID and GID must be supplied together",
+        )
+    if run_as_uid is not None and (
+        os.name != "posix"
+        or isinstance(run_as_uid, bool)
+        or not isinstance(run_as_uid, int)
+        or run_as_uid <= 0
+        or isinstance(run_as_gid, bool)
+        or not isinstance(run_as_gid, int)
+        or run_as_gid <= 0
+    ):
+        return _error(
+            identity,
+            "INVALID_CONFIGURATION",
+            "analyzer UID and GID must be positive POSIX identities",
+        )
 
     raw_configuration = b""
     if configuration_bytes is not None:
@@ -194,32 +219,74 @@ def run_analyzer(
             raw_request=request_bytes,
         )
     control_path = Path(control_directory.name).resolve(strict=True)
+    privilege_drop: dict[str, object] = {}
+    control_fd: int | None = None
+    analyzer_home = os.fspath(control_path)
+    if run_as_uid is not None:
+        assert run_as_gid is not None
+        try:
+            control_fd = os.open(
+                control_path,
+                os.O_RDONLY
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+            )
+            control_state = os.fstat(control_fd)
+            if (
+                not stat.S_ISDIR(control_state.st_mode)
+                or control_state.st_uid != os.geteuid()
+                or control_state.st_gid != os.getegid()
+            ):
+                raise OSError(
+                    "control directory is not owned by the analyzer broker"
+                )
+            os.fchmod(control_fd, 0o555)
+        except OSError as exc:
+            if control_fd is not None:
+                os.close(control_fd)
+            control_directory.cleanup()
+            return replace(
+                _error(
+                    identity,
+                    "CONTROL_DIRECTORY_FAILED",
+                    f"cannot seal analyzer control directory: {exc}",
+                ),
+                raw_configuration=raw_configuration,
+                raw_request=request_bytes,
+            )
+        analyzer_home = "/nonexistent"
+        privilege_drop = {
+            "user": run_as_uid,
+            "group": run_as_gid,
+            "extra_groups": (),
+            "umask": 0o077,
+        }
 
     try:
-        process = subprocess.Popen(
-            tuple(argv),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=control_path,
-            env={
-                "HOME": os.fspath(control_path),
-                "LANG": "C",
-                "LC_ALL": "C",
-                "PATH": _sanitized_path(),
-            },
-            shell=False,
-            start_new_session=(os.name == "posix"),
-        )
-    except (OSError, ValueError) as exc:
-        control_directory.cleanup()
-        return replace(
-            _error(identity, "LAUNCH_FAILED", f"cannot start analyzer: {exc}"),
-            raw_configuration=raw_configuration,
-            raw_request=request_bytes,
-        )
-
-    try:
+        try:
+            process = subprocess.Popen(
+                tuple(argv),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=control_path,
+                env={
+                    "HOME": analyzer_home,
+                    "LANG": "C",
+                    "LC_ALL": "C",
+                    "PATH": _sanitized_path(),
+                },
+                shell=False,
+                start_new_session=(os.name == "posix"),
+                **privilege_drop,
+            )
+        except (OSError, ValueError) as exc:
+            return replace(
+                _error(identity, "LAUNCH_FAILED", f"cannot start analyzer: {exc}"),
+                raw_configuration=raw_configuration,
+                raw_request=request_bytes,
+            )
         return replace(
             _collect_analyzer_process(
                 process,
@@ -233,7 +300,19 @@ def run_analyzer(
             raw_request=request_bytes,
         )
     finally:
-        control_directory.cleanup()
+        _cleanup_control_directory(control_directory, control_fd)
+
+
+def _cleanup_control_directory(
+    control_directory: tempfile.TemporaryDirectory[str],
+    control_fd: int | None,
+) -> None:
+    if control_fd is not None:
+        try:
+            os.fchmod(control_fd, 0o700)
+        finally:
+            os.close(control_fd)
+    control_directory.cleanup()
 
 
 def _collect_analyzer_process(

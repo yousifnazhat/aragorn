@@ -153,6 +153,28 @@ class ProtectedInstallLauncherTests(unittest.TestCase):
             self.launcher.LaunchVerificationError,
             "package entry is unsafe",
         ), self._running_python(self.python, isolated=True):
+                self.launcher._validated_launch(
+                    self.identity_path,
+                    (),
+                    expected_uid=self.uid,
+                    launcher_path=self.installed_launcher,
+                )
+
+    def test_empty_package_directory_is_rejected(self) -> None:
+        expected = tree_digest(self.package)
+        self.package.chmod(0o755)
+        empty = self.package / "empty-namespace"
+        empty.mkdir(mode=0o555)
+        self.package.chmod(0o555)
+        self.assertEqual(tree_digest(self.package), expected)
+
+        with (
+            self.assertRaisesRegex(
+                self.launcher.LaunchVerificationError,
+                "unpinned empty directory",
+            ),
+            self._running_python(self.python, isolated=True),
+        ):
             self.launcher._validated_launch(
                 self.identity_path,
                 (),

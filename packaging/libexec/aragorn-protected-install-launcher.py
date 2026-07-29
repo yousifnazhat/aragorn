@@ -245,6 +245,10 @@ def _measure_package(root: Path, expected_uid: int) -> str:
             or stat.S_IMODE(before.st_mode) & 0o022
         ):
             raise LaunchVerificationError("protected package directory is unsafe")
+        if not children:
+            raise LaunchVerificationError(
+                "protected package contains an unpinned empty directory"
+            )
         directories.append((directory, _identity(before)))
         child_directories: list[Path] = []
         for child in children:

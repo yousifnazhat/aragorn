@@ -1,0 +1,26 @@
+{
+  "$id": "https://aragorn.dev/schema/phase1-acquisition-lock-evidence-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn Phase 1 acquisition-lock evidence v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "scope", "leaf_digests", "workload_digest"],
+  "properties": {
+    "schema": {"const": "aragorn/phase1-acquisition-lock-evidence/v2"},
+    "scope": {"const": "supported-acquisition-lock/v2"},
+    "leaf_digests": {
+      "const": {
+        "recursive": {
+          "archive": "sha256:5c1465dde68a3e40c6d97790809ae24bed9c0320efb3b934fe853a46b0abc292",
+          "inventory": "sha256:5ba46a3f1278e7573158022b385b1a233cdd5e451e41c8f6d3e4932eb7effb2c"
+        },
+        "protected_transition": {
+          "archive": "sha256:3754f7ae4787ced43351ec0d2c696062f563e60543c381f769b86339823a5ac7"
+        }
+      }
+    },
+    "workload_digest": {
+      "const": "sha256:32a03e4b6fa8327055fd8b0d404091dc12b067897160e7b6a5abfa4ae22f64f2"
+    }
+  }
+}

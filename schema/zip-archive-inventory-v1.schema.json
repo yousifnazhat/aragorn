@@ -1,0 +1,119 @@
+{
+  "$id": "https://aragorn.dev/schema/zip-archive-inventory-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn bounded ZIP archive inventory v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "profile",
+    "archive",
+    "limits",
+    "totals",
+    "directories",
+    "files",
+    "closure"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/zip-archive-inventory/v1"},
+    "authority": {"const": "ARCHIVE_INVENTORY_ONLY_NOT_INSTALLER_AUTHORITY"},
+    "profile": {"const": "bounded-zip-members/v1"},
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "digest", "size", "payload_offset", "prefix"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 255},
+        "kind": {"enum": ["zip", "wheel", "zipapp"]},
+        "digest": {"$ref": "#/$defs/digest"},
+        "size": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "payload_offset": {"type": "integer", "minimum": 0, "maximum": 256},
+        "prefix": {"enum": ["none", "python_shebang"]}
+      }
+    },
+    "limits": {
+      "const": {
+        "max_archive_bytes": 16777216,
+        "max_entries": 10000,
+        "max_member_bytes": 16777216,
+        "max_expanded_bytes": 134217728,
+        "max_path_bytes": 4096,
+        "max_component_bytes": 255,
+        "max_path_depth": 32,
+        "max_compression_ratio": 100,
+        "max_nested_archives": 0,
+        "allowed_compression_methods": [0, 8]
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entries",
+        "directories",
+        "files",
+        "compressed_bytes",
+        "expanded_bytes"
+      ],
+      "properties": {
+        "entries": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "directories": {"type": "integer", "minimum": 0, "maximum": 9999},
+        "files": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "compressed_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "expanded_bytes": {"type": "integer", "minimum": 0, "maximum": 134217728}
+      }
+    },
+    "directories": {
+      "type": "array",
+      "maxItems": 9999,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/path"}
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "size",
+          "compressed_size",
+          "digest",
+          "crc32",
+          "compression_method"
+        ],
+        "properties": {
+          "path": {"$ref": "#/$defs/path"},
+          "size": {"type": "integer", "minimum": 0, "maximum": 16777216},
+          "compressed_size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16777216
+          },
+          "digest": {"$ref": "#/$defs/digest"},
+          "crc32": {"type": "string", "pattern": "^[0-9a-f]{8}$"},
+          "compression_method": {"enum": ["stored", "deflate"]}
+        }
+      }
+    },
+    "closure": {
+      "const": {"scope": "zip_archive_members", "status": "complete"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    }
+  }
+}

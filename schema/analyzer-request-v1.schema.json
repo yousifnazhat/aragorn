@@ -1,4 +1,5 @@
 {
+  "$id": "https://aragorn.dev/schema/analyzer-request-v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Aragorn analyzer request v1",
   "type": "object",

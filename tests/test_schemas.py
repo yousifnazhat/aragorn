@@ -19,6 +19,7 @@ EXPECTED_CONTRACTS = {
     "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
     "admission-runtime-candidate-lock-v1.schema.json": "aragorn/admission-runtime-candidate-lock/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",
+    "analyzer-request-v2.schema.json": "aragorn/analyzer-request/v2",
     "analyzer-run-receipt-v1.schema.json": "aragorn/analyzer-run-receipt/v1",
     "analyzers-v1.schema.json": "aragorn/analyzers/v1",
     "baseline-image-verification-v1.schema.json": "aragorn/baseline-image-verification/v1",
@@ -136,6 +137,7 @@ EXPECTED_CONTRACTS = {
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",
+    "zip-archive-inventory-v1.schema.json": "aragorn/zip-archive-inventory/v1",
 }
 
 

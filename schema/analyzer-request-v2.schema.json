@@ -1,0 +1,41 @@
+{
+  "$id": "https://aragorn.dev/schema/analyzer-request-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn analyzer request with distinct retained input v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "workspace",
+    "subject_digest",
+    "input",
+    "analyzer",
+    "limits"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/analyzer-request/v2"},
+    "workspace": {"type": "string", "minLength": 1},
+    "subject_digest": {"$ref": "#/$defs/digest"},
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_digest", "tree_digest"],
+      "properties": {
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "tree_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "analyzer": {
+      "$ref": "https://aragorn.dev/schema/analyzer-request-v1.schema.json#/properties/analyzer"
+    },
+    "limits": {
+      "$ref": "https://aragorn.dev/schema/analyzer-request-v1.schema.json#/properties/limits"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

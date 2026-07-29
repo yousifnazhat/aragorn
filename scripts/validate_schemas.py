@@ -50,6 +50,9 @@ from aragorn.admission_evidence import (
     verify_openclaw_update_reload_coverage,
     verify_openclaw_update_slice_evidence,
 )
+from aragorn.admission_evidence_broker import (
+    verify_openclaw_broker_symlink_evidence,
+)
 from aragorn.admission_evidence_plug01 import (
     verify_openclaw_update_reload_coverage_v2,
 )
@@ -76,6 +79,9 @@ from aragorn.benchmark_worker_measurement import (
 )
 from aragorn.cas import CAS
 from aragorn.corpus_audit import audit_suite
+from aragorn.github_gateway_live_evidence import (
+    verify_github_gateway_live_evidence,
+)
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.standards_gate import validate_standards_gate
@@ -1249,6 +1255,18 @@ def main() -> int:
                     result,
                     evidence_cas=evidence_cas,
                 )
+    verify_github_gateway_live_evidence(
+        load(
+            admission_evidence
+            / "github-gateway-anthropics-template-live-2026-07-29.json"
+        )
+    )
+    verify_openclaw_broker_symlink_evidence(
+        load(
+            admission_evidence
+            / "openclaw-v2026.7.1-broker-symlink-live-switch-2026-07-29.json"
+        )
+    )
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

@@ -83,6 +83,7 @@ class GitHubGatewaySystemdTests(unittest.TestCase):
             "--property=IPAddressDeny=any",
             "--property=IPAddressAllow=1.1.1.1",
             "--property=TasksMax=1",
+            "--property=MemoryMax=768M",
             "--property=KillMode=control-group",
             "--property=NoNewPrivileges=yes",
             "--property=CapabilityBoundingSet=",
@@ -217,10 +218,10 @@ class GitHubGatewaySystemdTests(unittest.TestCase):
         mount = (
             f"36 25 0:32 / {self.root} "
             "rw,nosuid,nodev,noexec,relatime - "
-            "tmpfs tmpfs rw,size=524288k,nr_inodes=20000\n"
+            "tmpfs tmpfs rw,size=524288k,nr_inodes=25000\n"
         ).encode("ascii")
         filesystem = os.statvfs_result(
-            (4096, 4096, 131072, 65536, 65536, 20000, 10000, 10000, 0, 255)
+            (4096, 4096, 131072, 65536, 65536, 25000, 12500, 12500, 0, 255)
         )
         with (
             mock.patch.object(

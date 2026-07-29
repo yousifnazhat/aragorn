@@ -1,24 +1,24 @@
 from __future__ import annotations
 
-from contextlib import redirect_stdout
-from io import BytesIO, StringIO
 import hashlib
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import BytesIO, StringIO
+from pathlib import Path
 
 from aragorn.acquire import ingest_local
 from aragorn.artifact_closure import (
     ArtifactClosureError,
     canonical_json,
     load_retained_manifest,
+    load_verified_retained_manifest,
     resolve_source_graph,
 )
 from aragorn.cas import CAS
 from aragorn.cli import main
 from aragorn.policy import Policy, evaluate_policy
-
 
 COMMIT = "a" * 40
 
@@ -93,6 +93,24 @@ def _replace_manifest_file(
 
 
 class ArtifactClosureTests(unittest.TestCase):
+    def test_verified_github_manifest_rejects_git_lfs_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "skill"
+            source.mkdir()
+            (source / "SKILL.md").write_bytes(
+                b"version https://git-lfs.github.com/spec/v1\n"
+                b"oid sha256:" + b"0" * 64 + b"\nsize 1\n"
+            )
+            cas = CAS(root / "state")
+            manifest = _github_manifest(ingest_local(source, cas), cas)
+
+            with self.assertRaisesRegex(ArtifactClosureError, "LFS pointer"):
+                load_verified_retained_manifest(
+                    cas,
+                    _retain_manifest(cas, manifest),
+                )
+
     def test_local_reference_resolves_but_cannot_unlock_admission(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

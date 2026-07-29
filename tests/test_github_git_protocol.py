@@ -580,6 +580,19 @@ class TreeParserTests(unittest.TestCase):
         with self.assertRaises(GitProtocolError):
             parse_tree(payload)
 
+    def test_caller_can_reduce_the_tree_entry_budget(self) -> None:
+        payload = tree_entry(b"100644", b"a", 0x11) + tree_entry(
+            b"100644", b"b", 0x22
+        )
+        with self.assertRaisesRegex(GitProtocolError, "too many entries"):
+            parse_tree(payload, max_entries=1)
+        for invalid in (0, True, 100_001):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                GitProtocolError,
+                "entry limit",
+            ):
+                parse_tree(b"", max_entries=invalid)
+
 
 if __name__ == "__main__":
     unittest.main()

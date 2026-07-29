@@ -281,20 +281,30 @@ def parse_commit_tree(payload: bytes) -> str:
     return _validate_oid(oid, "Git commit root tree")
 
 
-def parse_tree(payload: bytes) -> tuple[dict[str, str], ...]:
+def parse_tree(
+    payload: bytes,
+    *,
+    max_entries: int = _MAX_TREE_ENTRIES,
+) -> tuple[dict[str, str], ...]:
     """Parse a canonical raw Git tree into safe acquisition entries."""
 
     if type(payload) is not bytes:
         raise GitProtocolError("Git tree payload must be bytes")
     if len(payload) > _MAX_TREE_BYTES:
         raise GitProtocolError("Git tree payload exceeds its byte limit")
+    if (
+        isinstance(max_entries, bool)
+        or not isinstance(max_entries, int)
+        or not 1 <= max_entries <= _MAX_TREE_ENTRIES
+    ):
+        raise GitProtocolError("Git tree entry limit is invalid")
 
     entries: list[dict[str, str]] = []
     folded_names: set[str] = set()
     previous_sort_key: bytes | None = None
     cursor = 0
     while cursor < len(payload):
-        if len(entries) >= _MAX_TREE_ENTRIES:
+        if len(entries) >= max_entries:
             raise GitProtocolError("Git tree contains too many entries")
         mode_end = payload.find(b" ", cursor, min(len(payload), cursor + 8))
         if mode_end < 0:

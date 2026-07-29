@@ -43,9 +43,10 @@ Aragorn must preserve these invariants:
   independently reproduced. Reject redirects, deltas, extra objects,
   unsupported Git modes, unsafe path normalization, and deadline exhaustion.
   Reproduce every REST-returned blob's Git SHA-1 and publish its exact bytes to
-  the SHA-256 CAS only after the complete source tree validates. The current
-  manifest still earns only `source_tree` closure because the raw commit/tree
-  proof is not retained for control-plane replay.
+  the SHA-256 CAS only after the complete source tree validates. The gateway
+  retains the exact raw commit/tree proof in the handoff and the broker replays
+  it offline. The source manifest still earns only `source_tree` closure until
+  recursive artifact resolution completes.
 - Treat the literal-reference resolver as an evaluation parser, not an
   acquisition or authorization boundary. It reads only re-verified, bounded CAS
   carriers; executes no content; performs no network request; marks opaque,
@@ -55,8 +56,8 @@ Aragorn must preserve these invariants:
   satisfies the admission-required `artifact_graph` scope, changes `inspect`
   from `ERROR`, or proves that undiscoverable generated references are absent.
   Historical GitHub graph assurances remain API-asserted evidence identities.
-  Current acquisition verifies raw trees online, but those graphs do not retain
-  the proof and therefore cannot elevate their authority.
+  Those evaluation-only graphs do not consume the gateway proof and therefore
+  cannot elevate their authority.
 - Treat exact GitHub expansion as bounded evaluation evidence, not supported
   acquisition or admission closure. Share one immutable repository session,
   tree cache, monotonic deadline, and API request/byte budget; independently
@@ -178,13 +179,13 @@ GitHub TLS hostname verification.
 Before importing Aragorn, each service must fail to reach a broker-held
 loopback listener, which makes missing cgroup IP enforcement fail closed.
 `AF_UNIX` and socket binding are denied, temporary paths are inaccessible, and
-the only host-writable path is a runtime-verified 512 MiB, 20,000-inode
+the only host-writable path is a runtime-verified bounded 512 MiB, 25,000-inode
 `nosuid,nodev,noexec` transfer tmpfs. Unexpected transfer-root entries or
 worker-job cleanup failure prevent quarantine publication.
-This earns a Linux process/IP containment primitive with online raw Git
-commit/tree verification, not supported acquisition: the proof is not yet
-retained for broker replay, the root filesystem is not sealed, and the host
-kernel/systemd/Python trust boundary is not attested. Private repositories,
+This earns a Linux process/IP containment primitive with durable broker-replayed
+raw Git commit/tree proof, not supported acquisition: the root filesystem is
+not sealed, and the host kernel/systemd/Python trust boundary is not attested.
+Private repositories,
 scoped credential injection, retry policy, recursive closure, protected
 installation, and install/update enforcement remain unsupported.
 

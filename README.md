@@ -314,7 +314,7 @@ verifies its identity, environment, capabilities,
 no-new-privileges state, exact one-task cgroup, and denied fork before importing
 Aragorn. Broker cleanup requires the unit to be inactive and jobless, its
 cgroup to be absent or empty, and the worker UID to have no remaining process.
-The transfer root must be a dedicated 512 MiB, 20,000-inode
+The transfer root must be a dedicated bounded 512 MiB, 25,000-inode
 `nosuid,nodev,noexec` tmpfs; quarantine is not published until the worker job
 is removed and that root is empty. The checked-in sysusers, tmpfiles, and mount
 definitions provision the stable non-login principal and private state roots.
@@ -326,17 +326,18 @@ independently re-verifies the exact manifest, Git blob identities, source
 binding, and closure in a fresh broker-owned quarantine. The returned receipt is
 explicitly
 `QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY`, with
-`git_smart_http_v2_commit_tree_and_api_blob_identity_reverified` source
-assurance. The raw commit and tree proof is enforced online but is not yet
-retained in the cross-owner handoff, so this receipt cannot authorize admission,
-promotion, or installation.
+`git_smart_http_v2_commit_tree_proof_and_api_blob_identity_reverified` source
+assurance. The worker retains the exact raw commit and traversed tree payloads
+as `aragorn/github-source-proof/v1`; the handoff carries that complete CAS
+closure and the broker rehashes and rewalks it before publishing quarantine.
+The receipt still cannot authorize admission, promotion, or installation.
 
 This is an internal primitive, not a command developers repeatedly run. The
 Linux service boundary covers process and IP-address containment but does not
 seal a dedicated root filesystem or attest the host platform. It is not yet the
 supported production acquisition boundary: protected installation and
-provisioning automation, durable raw-Git proof retention, recursive artifact
-closure, control-plane promotion, and install/update wiring remain required. The direct
+provisioning automation, recursive artifact closure, control-plane promotion,
+and install/update wiring remain required. The direct
 `acquire-github` command still runs with the operator's UID and remains
 evaluation-only.
 
@@ -380,7 +381,9 @@ external-artifact closure, prove that generated references are absent, satisfy
 the policy-required `artifact_graph` scope, or change `inspect` from `ERROR`.
 For GitHub roots, `source_assurance` explicitly records that path membership is
 an authenticated GitHub API assertion while each retained blob identity is
-independently rederived; Aragorn does not yet verify a raw commit/tree proof.
+independently rederived. That evaluation-only graph does not consume the
+gateway's separately retained raw commit/tree proof and cannot inherit its
+stronger assurance.
 
 Run protocol-compatible analyzer adapters:
 

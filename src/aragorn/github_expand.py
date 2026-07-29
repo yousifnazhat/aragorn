@@ -176,6 +176,7 @@ def acquire_github_expansion(
             max_api_bytes=max_api_bytes,
             timeout_seconds=timeout_seconds,
             bearer_token=bearer_token,
+            _max_tree_entries=max_source_entries,
         )
         root_manifest, root_content, retained_bytes = _stage_root(
             session,

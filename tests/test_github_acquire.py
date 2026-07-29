@@ -25,6 +25,7 @@ from aragorn.github_acquire import (
     GitHubAcquisitionError,
     acquire_github_commit,
 )
+from aragorn.github_source_proof import verify_github_source_proof
 
 
 def git_object_sha(kind: str, content: bytes) -> str:
@@ -145,7 +146,7 @@ class GitHubAcquisitionTests(unittest.TestCase):
         skill_path: str = "skills/demo",
         **limits: object,
     ) -> tuple[
-        dict[str, object],
+        dict[str, object] | tuple[dict[str, object], str],
         CAS,
         list[str],
         list[tuple[str, str]],
@@ -241,6 +242,37 @@ class GitHubAcquisitionTests(unittest.TestCase):
             ],
         )
         self.assertFalse(any("?recursive" in path for path in api_calls))
+
+    def test_private_gateway_path_retains_exact_raw_source_proof(self) -> None:
+        fixture = valid_fixture()
+        acquired, cas, _api_calls, _git_calls, temporary = self.acquire(
+            fixture,
+            _retain_source_proof=True,
+        )
+        self.addCleanup(temporary.cleanup)
+        self.assertIsInstance(acquired, tuple)
+        manifest, proof_digest = acquired
+        proof = verify_github_source_proof(
+            cas,
+            proof_digest,
+            json.loads(cas.read(proof_digest))["manifest_digest"],
+        )
+
+        self.assertEqual(proof["source"], manifest["source"])
+        self.assertEqual(
+            {(entry["type"], entry["oid"]) for entry in proof["objects"]},
+            set(fixture.git_objects),
+        )
+
+    def test_one_git_identity_cannot_change_bytes_within_a_session(self) -> None:
+        session = github_acquire.GitHubAcquisitionSession.__new__(
+            github_acquire.GitHubAcquisitionSession
+        )
+        session._raw_objects = {}
+        session._remember_raw_object("tree", "a" * 40, b"first")
+        session._remember_raw_object("tree", "a" * 40, b"first")
+        with self.assertRaisesRegex(GitHubAcquisitionError, "conflicting raw bytes"):
+            session._remember_raw_object("tree", "a" * 40, b"second")
 
     def test_bearer_token_is_redacted_and_never_retained(self) -> None:
         token = "github_pat_private-evaluation-token"
@@ -586,6 +618,7 @@ class GitHubAcquisitionTests(unittest.TestCase):
     def test_file_count_depth_file_size_and_total_size_are_bounded(self) -> None:
         cases = (
             ({"max_files": 2}, "file count"),
+            ({"max_files": 10_001}, "max_files"),
             ({"max_depth": 0}, "depth"),
             ({"max_file_size": 5}, "metadata"),
             ({"max_total_bytes": 10}, "total byte"),

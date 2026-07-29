@@ -21,9 +21,31 @@ from aragorn.github_gateway import (
     quarantine_through_gateway,
     run_worker,
 )
+from aragorn.github_source_proof import retain_github_source_proof
 from aragorn.oci_runtime import _ProcessResult, _run_bounded
 
-COMMIT = "a" * 40
+
+def _git_oid(object_type: str, payload: bytes) -> str:
+    header = f"{object_type} {len(payload)}\0".encode("ascii")
+    return hashlib.sha1(header + payload, usedforsecurity=False).hexdigest()
+
+
+def _tree_entry(mode: bytes, name: bytes, oid: str) -> bytes:
+    return mode + b" " + name + b"\0" + bytes.fromhex(oid)
+
+
+_CONTENT = b"# inert skill\n"
+_BLOB_OID = _git_oid("blob", _CONTENT)
+_SKILL_TREE_PAYLOAD = _tree_entry(b"100644", b"SKILL.md", _BLOB_OID)
+_SKILL_TREE_OID = _git_oid("tree", _SKILL_TREE_PAYLOAD)
+_ROOT_TREE_PAYLOAD = _tree_entry(b"40000", b"demo", _SKILL_TREE_OID)
+_ROOT_TREE_OID = _git_oid("tree", _ROOT_TREE_PAYLOAD)
+_COMMIT_PAYLOAD = (
+    f"tree {_ROOT_TREE_OID}\n".encode("ascii")
+    + b"author Fixture <fixture@example.test> 1 +0000\n"
+    + b"committer Fixture <fixture@example.test> 1 +0000\n\nfixture\n"
+)
+COMMIT = _git_oid("commit", _COMMIT_PAYLOAD)
 
 
 class GitHubGatewayTests(unittest.TestCase):
@@ -38,6 +60,19 @@ class GitHubGatewayTests(unittest.TestCase):
             COMMIT,
             "demo",
         )
+
+    def test_quarantine_receipt_keeps_legacy_constructor_shape(self) -> None:
+        receipt = GatewayQuarantineReceipt(
+            "authority",
+            "assurance",
+            "sha256:" + "1" * 64,
+            "sha256:" + "2" * 64,
+            "sha256:" + "3" * 64,
+            1,
+            "sha256:" + "4" * 64,
+            Path("/quarantine"),
+        )
+        self.assertIsNone(receipt.source_proof_digest)
 
     def test_worker_is_credential_free_and_broker_reverifies_exact_closure(
         self,
@@ -71,6 +106,7 @@ class GitHubGatewayTests(unittest.TestCase):
                 "bearer_token": None,
                 "_pinned_addresses": ("1.1.1.1",),
                 "_pinned_git_addresses": ("8.8.8.8",),
+                "_retain_source_proof": True,
             },
         )
         self.assertEqual(
@@ -99,6 +135,10 @@ class GitHubGatewayTests(unittest.TestCase):
         )
         self.assertEqual(accepted.file_count, 1)
         self.assertEqual(accepted.manifest_digest, result["manifest_digest"])
+        self.assertEqual(
+            accepted.source_proof_digest,
+            result["source_proof_digest"],
+        )
         manifest = load_verified_retained_manifest(
             CAS(quarantine, read_only=True),
             accepted.manifest_digest,
@@ -168,6 +208,41 @@ class GitHubGatewayTests(unittest.TestCase):
         self.assertFalse(quarantine.exists())
         self.assertEqual(list(self.root.glob(".replay-quarantine.import-*")), [])
 
+    def test_broker_rejects_handoff_missing_raw_source_proof(self) -> None:
+        job = self.root / "missing-proof-job"
+        with mock.patch.object(
+            github_gateway,
+            "acquire_github_commit",
+            side_effect=self._fake_acquire,
+        ):
+            result = run_worker(
+                self.request,
+                job,
+                pinned_api_addresses=("1.1.1.1",),
+                pinned_git_addresses=("8.8.8.8",),
+            )
+        proof_path = (
+            job
+            / "bundle"
+            / "blobs"
+            / result["source_proof_digest"].removeprefix("sha256:")
+        )
+        proof_path.unlink()
+
+        quarantine = self.root / "missing-proof-quarantine"
+        with self.assertRaisesRegex(
+            GitHubGatewayError,
+            "gateway quarantine verification failed",
+        ):
+            github_gateway._accept_gateway_output(
+                self.request,
+                result,
+                job_root=job,
+                quarantine_state=quarantine,
+                worker_uid=os.geteuid(),
+            )
+        self.assertFalse(quarantine.exists())
+
     def test_worker_cleanup_failure_prevents_quarantine_publication(self) -> None:
         job = self.root / "cleanup-job"
         with mock.patch.object(
@@ -206,7 +281,8 @@ class GitHubGatewayTests(unittest.TestCase):
             "schema": github_gateway.RESULT_SCHEMA,
             "request_digest": "sha256:" + "1" * 64,
             "manifest_digest": "sha256:" + "2" * 64,
-            "handoff_manifest_digest": "sha256:" + "3" * 64,
+            "source_proof_digest": "sha256:" + "3" * 64,
+            "handoff_manifest_digest": "sha256:" + "4" * 64,
         }
         process = _ProcessResult(
             canonical_json(result) + b"\n",
@@ -235,7 +311,8 @@ class GitHubGatewayTests(unittest.TestCase):
             source_assurance=github_gateway.SOURCE_ASSURANCE,
             request_digest=result["request_digest"],
             manifest_digest=result["manifest_digest"],
-            tree_digest="sha256:" + "4" * 64,
+            source_proof_digest=result["source_proof_digest"],
+            tree_digest="sha256:" + "5" * 64,
             file_count=1,
             handoff_manifest_digest=result["handoff_manifest_digest"],
             quarantine_state=Path("/broker/quarantine"),
@@ -767,13 +844,11 @@ class GitHubGatewayTests(unittest.TestCase):
         *,
         source_request: dict[str, str] | None = None,
         **kwargs: object,
-    ) -> dict:
+    ) -> dict | tuple[dict, str]:
         request = self.request if source_request is None else source_request
-        content = b"# inert skill\n"
+        content = _CONTENT
         digest = cas.put(BytesIO(content), max_bytes=len(content))
-        git_blob = hashlib.sha1(
-            f"blob {len(content)}\0".encode("ascii") + content
-        ).hexdigest()
+        git_blob = _BLOB_OID
         files = [
             {
                 "path": "SKILL.md",
@@ -792,7 +867,7 @@ class GitHubGatewayTests(unittest.TestCase):
             }
             for entry in files
         ]
-        return {
+        manifest = {
             "schema": "aragorn/github-manifest/v1",
             "source": {
                 "kind": "github_commit",
@@ -801,15 +876,27 @@ class GitHubGatewayTests(unittest.TestCase):
                 "repository": request["repository"],
                 "commit": request["commit"],
                 "repository_hash_algorithm": "sha1",
-                "commit_tree": "b" * 40,
+                "commit_tree": _ROOT_TREE_OID,
                 "skill_path": request["skill_path"],
-                "skill_tree": "c" * 40,
+                "skill_tree": _SKILL_TREE_OID,
                 "api_version": "2026-03-10",
             },
             "tree_digest": github_gateway._digest(canonical_json(tree_files)),
             "files": files,
             "closure": {"scope": "source_tree", "status": "complete"},
         }
+        if kwargs.get("_retain_source_proof") is not True:
+            return manifest
+        proof_digest = retain_github_source_proof(
+            cas,
+            manifest,
+            {
+                ("commit", COMMIT): _COMMIT_PAYLOAD,
+                ("tree", _ROOT_TREE_OID): _ROOT_TREE_PAYLOAD,
+                ("tree", _SKILL_TREE_OID): _SKILL_TREE_PAYLOAD,
+            },
+        )
+        return manifest, proof_digest
 
 
 if __name__ == "__main__":

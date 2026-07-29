@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from array import array
 import hashlib
 import json
-from pathlib import PurePosixPath
 import re
-from typing import Any
 import unicodedata
+from array import array
+from pathlib import PurePosixPath
+from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from .cas import CAS, CASError
-
 
 PROFILE = "phase0-literal-source-refs/v1"
 ASSURANCE = "evaluation_only_literal_reference_profile"
@@ -238,6 +237,17 @@ def load_verified_retained_manifest(cas: CAS, digest: str) -> dict[str, Any]:
 
     manifest, _ = _validate_manifest(load_retained_manifest(cas, digest), cas)
     return manifest
+
+
+def is_git_lfs_pointer(content: bytes) -> bool:
+    """Return whether bytes are a canonical Git LFS v1 pointer."""
+
+    return content.startswith(
+        (
+            b"version https://git-lfs.github.com/spec/v1\n",
+            b"version https://git-lfs.github.com/spec/v1\r\n",
+        )
+    )
 
 
 def resolve_source_graph(
@@ -1140,6 +1150,10 @@ def _validate_manifest(
             if hashlib.sha1(git_object).hexdigest() != value["git_blob_sha1"]:
                 raise ArtifactClosureError(
                     f"retained source Git blob identity changed: {path}"
+                )
+            if is_git_lfs_pointer(content):
+                raise ArtifactClosureError(
+                    f"retained source Git LFS pointer rejected: {path}"
                 )
         normalized = {
             "path": path,

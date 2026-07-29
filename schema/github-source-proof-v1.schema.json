@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/github-source-proof-v1.schema.json",
+  "title": "Aragorn retained GitHub source proof v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "manifest_digest", "source", "objects"],
+  "properties": {
+    "schema": {"const": "aragorn/github-source-proof/v1"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "source": {"$ref": "github-manifest-v1.schema.json#/properties/source"},
+    "objects": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 10034,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "oid", "size", "digest"],
+        "properties": {
+          "type": {"enum": ["commit", "tree"]},
+          "oid": {"$ref": "#/$defs/sha1"},
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8388608
+          },
+          "digest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "not": {"const": "0000000000000000000000000000000000000000"}
+    }
+  }
+}

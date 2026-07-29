@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/github-gateway-result-v2.schema.json",
+  "title": "Aragorn credential-free GitHub gateway result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "request_digest",
+    "manifest_digest",
+    "source_proof_digest",
+    "handoff_manifest_digest"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/github-gateway-result/v2"},
+    "request_digest": {"$ref": "#/$defs/digest"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "source_proof_digest": {"$ref": "#/$defs/digest"},
+    "handoff_manifest_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

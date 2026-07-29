@@ -155,7 +155,10 @@ publication occurs only after all bounded blobs validate. It rejects
 redirects, credentials, proxies, deltas, extra objects, links, submodules,
 special modes, Git LFS pointers, path-normalization collisions, truncation,
 deadline exhaustion, and other resource-limit exhaustion. The current handoff
-does not retain the raw proof, so this slice still cannot produce
+retains a canonical proof sidecar plus every raw commit/tree payload. The broker
+rehashes their Git and CAS identities, resolves the manifest skill path from
+the proved root, rewalks the complete skill subtree, and rejects missing or
+extra proof objects. This source proof alone still does not produce recursive
 `artifact_graph` closure.
 
 `resolve-artifacts` is a second evaluation-only Phase 0 surface. It reads only
@@ -170,8 +173,8 @@ absent and can never satisfy the policy-required `artifact_graph` scope.
 For a GitHub root the graph records
 `github_api_membership_asserted_blob_identity_reverified`: retained blob Git
 SHA-1 identities are rederived. That historical evidence label is intentionally
-unchanged; current acquisition verifies raw trees online, but the graph cannot
-claim or replay that stronger proof until the handoff retains it.
+unchanged; the evaluation-only graph does not consume the gateway proof and
+therefore cannot claim its stronger assurance.
 
 `expand-github` is the bounded Phase 0 differentiation candidate. It caches one
 immutable session and tree cache per exact commit while sharing one credential,

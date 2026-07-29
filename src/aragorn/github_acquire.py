@@ -19,6 +19,7 @@ from io import BytesIO
 from typing import Any
 from urllib.parse import urlsplit
 
+from .artifact_closure import is_git_lfs_pointer
 from .cas import CAS
 from .github_git_protocol import (
     GitCapabilities,
@@ -29,6 +30,7 @@ from .github_git_protocol import (
     parse_commit_tree,
     parse_tree,
 )
+from .github_source_proof import retain_github_source_proof
 
 API_HOST = "api.github.com"
 GIT_HOST = "github.com"
@@ -46,6 +48,7 @@ _MAX_PINNED_ENDPOINTS = 16
 _MAX_GIT_ADVERTISEMENT_BYTES = 256 * 1024
 _MAX_GIT_OBJECT_BYTES = _MAX_METADATA_BYTES
 _MAX_GIT_RESPONSE_BYTES = _MAX_GIT_OBJECT_BYTES + 1024 * 1024
+_MAX_PARSED_TREE_ENTRIES = 10_000
 _HTTPS_PORT = 443
 
 _Endpoint = tuple[int, int, int, tuple[Any, ...]]
@@ -195,6 +198,7 @@ class GitHubAcquisitionSession:
         bearer_token: str | None = None,
         _pinned_addresses: list[str] | tuple[str, ...] | None = None,
         _pinned_git_addresses: list[str] | tuple[str, ...] | None = None,
+        _max_tree_entries: int = _MAX_PARSED_TREE_ENTRIES,
     ) -> None:
         owner, repository = _parse_repository_url(repository_url)
         if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
@@ -204,6 +208,14 @@ class GitHubAcquisitionSession:
         authorization = _validate_bearer_token(bearer_token)
         _check_limit("max_api_requests", max_api_requests, 1)
         _check_limit("max_api_bytes", max_api_bytes, 1)
+        if (
+            isinstance(_max_tree_entries, bool)
+            or not isinstance(_max_tree_entries, int)
+            or not 1 <= _max_tree_entries <= _MAX_PARSED_TREE_ENTRIES
+        ):
+            raise GitHubAcquisitionError(
+                "internal Git tree entry limit is invalid"
+            )
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
@@ -233,6 +245,8 @@ class GitHubAcquisitionSession:
             endpoints=self._git_endpoints,
         )
         self._tree_cache: dict[str, tuple[dict[str, Any], ...]] = {}
+        self._raw_objects: dict[tuple[str, str], bytes] = {}
+        self._tree_entry_budget = [_max_tree_entries, 0]
 
         self._load_commit(commit)
 
@@ -256,19 +270,21 @@ class GitHubAcquisitionSession:
         session._git_endpoints = self._git_endpoints
         session._git = self._git
         session._tree_cache = self._tree_cache
+        session._raw_objects = self._raw_objects
+        session._tree_entry_budget = self._tree_entry_budget
         session._load_commit(commit)
         return session
 
     def _load_commit(self, commit: str) -> None:
         self.commit = commit
         try:
-            self.root_tree_sha = parse_commit_tree(
-                self._git.fetch_object(commit, "commit")
-            )
+            payload = self._git.fetch_object(commit, "commit")
+            self.root_tree_sha = parse_commit_tree(payload)
         except GitProtocolError as exc:
             raise GitHubAcquisitionError(
                 f"Git commit verification failed: {exc}"
             ) from exc
+        self._remember_raw_object("commit", commit, payload)
 
     def read_tree(self, tree_sha: str) -> tuple[dict[str, Any], ...]:
         """Read and validate one non-recursive Git tree, with session caching."""
@@ -278,13 +294,42 @@ class GitHubAcquisitionSession:
         if cached is not None:
             return cached
         try:
-            result = parse_tree(self._git.fetch_object(tree_sha, "tree"))
+            payload = self._git.fetch_object(tree_sha, "tree")
+            remaining = (
+                self._tree_entry_budget[0] - self._tree_entry_budget[1]
+            )
+            if remaining <= 0:
+                raise GitProtocolError(
+                    "shared Git tree entry budget is exhausted"
+                )
+            result = parse_tree(payload, max_entries=remaining)
         except GitProtocolError as exc:
+            if str(exc) in {
+                "Git tree contains too many entries",
+                "shared Git tree entry budget is exhausted",
+            }:
+                raise GitHubAcquisitionError(
+                    "maximum file count or Git tree entry count exceeded"
+                ) from exc
             raise GitHubAcquisitionError(
                 f"Git tree verification failed: {exc}"
             ) from exc
+        self._tree_entry_budget[1] += len(result)
+        self._remember_raw_object("tree", tree_sha, payload)
         self._tree_cache[tree_sha] = result
         return result
+
+    def _remember_raw_object(
+        self,
+        object_type: str,
+        oid: str,
+        payload: bytes,
+    ) -> None:
+        previous = self._raw_objects.setdefault((object_type, oid), payload)
+        if previous != payload:
+            raise GitHubAcquisitionError(
+                "Git object identity returned conflicting raw bytes"
+            )
 
     def resolve_tree(self, path: str) -> tuple[str, tuple[str, ...]]:
         """Resolve one canonical repository-relative directory to its tree."""
@@ -335,7 +380,7 @@ class GitHubAcquisitionSession:
                 authorization=self._authorization,
                 endpoints=self._api_endpoints,
             )
-            if _is_lfs_pointer(content):
+            if is_git_lfs_pointer(content):
                 raise GitHubAcquisitionError(f"Git LFS pointer rejected: {path}")
             return {
                 "path": path,
@@ -394,7 +439,8 @@ def acquire_github_commit(
     bearer_token: str | None = None,
     _pinned_addresses: list[str] | tuple[str, ...] | None = None,
     _pinned_git_addresses: list[str] | tuple[str, ...] | None = None,
-) -> dict[str, Any]:
+    _retain_source_proof: bool = False,
+) -> dict[str, Any] | tuple[dict[str, Any], str]:
     """Acquire exact file bytes from one public GitHub SHA-1 commit.
 
     This narrow Phase 0 resolver never runs Git, checks out a repository, follows
@@ -410,6 +456,10 @@ def acquire_github_commit(
     skill_parts = _parse_skill_path(skill_path)
     _check_limit("max_depth", max_depth, 0)
     _check_limit("max_files", max_files, 1)
+    if max_files > _MAX_PARSED_TREE_ENTRIES:
+        raise GitHubAcquisitionError(
+            f"max_files must be <= {_MAX_PARSED_TREE_ENTRIES}"
+        )
     _check_limit("max_file_size", max_file_size, 0)
     _check_limit("max_total_bytes", max_total_bytes, 0)
     _check_limit("max_api_requests", max_api_requests, 1)
@@ -432,6 +482,7 @@ def acquire_github_commit(
         bearer_token=bearer_token,
         _pinned_addresses=_pinned_addresses,
         _pinned_git_addresses=_pinned_git_addresses,
+        _max_tree_entries=max_files,
     )
     root_tree_sha = session.root_tree_sha
     skill_tree_sha, _ = session.resolve_tree(skill_path)
@@ -523,7 +574,7 @@ def acquire_github_commit(
     canonical_tree = json.dumps(
         tree_files, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("ascii")
-    return {
+    manifest = {
         "schema": "aragorn/github-manifest/v1",
         "source": {
             "kind": "github_commit",
@@ -541,6 +592,12 @@ def acquire_github_commit(
         "files": files,
         "closure": {"scope": "source_tree", "status": "complete"},
     }
+    if not _retain_source_proof:
+        return manifest
+    return (
+        manifest,
+        retain_github_source_proof(cas, manifest, session._raw_objects),
+    )
 
 
 def _validate_bearer_token(value: object) -> _BearerToken | None:
@@ -711,15 +768,6 @@ def _read_blob(
     if hashlib.sha1(git_object).hexdigest() != sha:
         raise GitHubAcquisitionError("GitHub blob bytes fail Git SHA-1 verification")
     return content
-
-
-def _is_lfs_pointer(content: bytes) -> bool:
-    return content.startswith(
-        (
-            b"version https://git-lfs.github.com/spec/v1\n",
-            b"version https://git-lfs.github.com/spec/v1\r\n",
-        )
-    )
 
 
 def _object_sha(value: object, subject: str) -> str:

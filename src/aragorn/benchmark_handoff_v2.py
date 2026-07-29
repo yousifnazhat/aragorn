@@ -40,9 +40,9 @@ _LIMITS = {
         "total_bytes": 512 * 1024 * 1024,
     },
     "github_source": {
-        "blobs": 10_001,
+        "blobs": 10_036,
         "blob_bytes": 64 * 1024 * 1024,
-        "total_bytes": 192 * 1024 * 1024,
+        "total_bytes": 216 * 1024 * 1024,
     },
 }
 _MAX_MANIFEST_BYTES = 8 * 1024 * 1024

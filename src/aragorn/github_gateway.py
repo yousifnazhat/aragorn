@@ -39,6 +39,7 @@ from .github_acquire import (
     _validate_pinned_addresses,
     acquire_github_commit,
 )
+from .github_source_proof import verify_github_source_proof
 from .oci_runtime import (
     VerificationError,
     _hash_regular_file,
@@ -47,17 +48,18 @@ from .oci_runtime import (
 )
 
 REQUEST_SCHEMA = "aragorn/github-gateway-request/v1"
-RESULT_SCHEMA = "aragorn/github-gateway-result/v1"
+RESULT_SCHEMA = "aragorn/github-gateway-result/v2"
 ADDRESS_RESULT_SCHEMA = "aragorn/github-gateway-address-result/v2"
 QUARANTINE_AUTHORITY = "QUARANTINE_ONLY_NOT_ADMISSION_AUTHORITY"
 SOURCE_ASSURANCE = (
-    "git_smart_http_v2_commit_tree_and_api_blob_identity_reverified"
+    "git_smart_http_v2_commit_tree_proof_and_api_blob_identity_reverified"
 )
 _REQUEST_KEYS = {"schema", "owner", "repository", "commit", "skill_path"}
 _RESULT_KEYS = {
     "schema",
     "request_digest",
     "manifest_digest",
+    "source_proof_digest",
     "handoff_manifest_digest",
 }
 _ADDRESS_RESULT_KEYS = {"schema", "hosts"}
@@ -74,7 +76,7 @@ _MAX_SYSTEMD_EXECUTABLE_BYTES = 4 * 1024 * 1024
 _MAX_MOUNTINFO_BYTES = 1024 * 1024
 _SYSTEMD_CLEANUP_SECONDS = 10.0
 _GATEWAY_TRANSFER_BYTES = 512 * 1024 * 1024
-_GATEWAY_TRANSFER_INODES = 20_000
+_GATEWAY_TRANSFER_INODES = 25_000
 _DEFAULT_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _PROCESS_CENSUS_PATH = Path("/bin/ps")
 _SYSTEMD_RUN_PATH = Path("/usr/bin/systemd-run")
@@ -258,6 +260,7 @@ class GatewayQuarantineReceipt:
     file_count: int
     handoff_manifest_digest: str
     quarantine_state: Path
+    source_proof_digest: str | None = None
 
 
 def build_gateway_request(
@@ -298,13 +301,17 @@ def run_worker(
         "_pinned_addresses": pinned_api_addresses,
         "_pinned_git_addresses": pinned_git_addresses,
     }
-    manifest = acquire_github_commit(
+    acquired = acquire_github_commit(
         _repository_url(frozen),
         frozen["commit"],
         frozen["skill_path"],
         source_cas,
+        _retain_source_proof=True,
         **acquisition_options,
     )
+    if not isinstance(acquired, tuple) or len(acquired) != 2:
+        raise GitHubGatewayError("GitHub acquisition omitted durable source proof")
+    manifest, source_proof_digest = acquired
     raw_manifest = canonical_json(manifest)
     if len(raw_manifest) > _MAX_MANIFEST_BYTES:
         raise GitHubGatewayError("GitHub source manifest exceeds its byte limit")
@@ -317,7 +324,12 @@ def run_worker(
     transport = build_handoff_manifest(
         kind="github_source",
         root_digest=manifest_digest,
-        blobs=_source_closure(source_cas, manifest_digest, verified),
+        blobs=_source_closure(
+            source_cas,
+            manifest_digest,
+            verified,
+            source_proof_digest,
+        ),
     )
     transport_digest = export_declared_byte_transport(
         source_cas,
@@ -328,6 +340,7 @@ def run_worker(
         "schema": RESULT_SCHEMA,
         "request_digest": request_digest,
         "manifest_digest": manifest_digest,
+        "source_proof_digest": source_proof_digest,
         "handoff_manifest_digest": transport_digest,
     }
     _validate_result(result)
@@ -511,16 +524,17 @@ def _accept_gateway_output(
                 destination,
                 result["manifest_digest"],
             )
+            expected_closure = _source_closure(
+                destination,
+                result["manifest_digest"],
+                manifest,
+                result["source_proof_digest"],
+            )
         except (CASError, HandoffError, ValueError) as exc:
             raise GitHubGatewayError(
                 f"gateway quarantine verification failed: {exc}"
             ) from exc
         _require_requested_source(manifest, request)
-        expected_closure = _source_closure(
-            destination,
-            result["manifest_digest"],
-            manifest,
-        )
         actual_closure = {entry["digest"]: entry["size"] for entry in handoff["blobs"]}
         if actual_closure != expected_closure:
             raise GitHubGatewayError(
@@ -531,6 +545,7 @@ def _accept_gateway_output(
             source_assurance=SOURCE_ASSURANCE,
             request_digest=expected_request_digest,
             manifest_digest=result["manifest_digest"],
+            source_proof_digest=result["source_proof_digest"],
             tree_digest=manifest["tree_digest"],
             file_count=len(manifest["files"]),
             handoff_manifest_digest=result["handoff_manifest_digest"],
@@ -612,6 +627,7 @@ def _validate_result(result: object) -> None:
     for field in (
         "request_digest",
         "manifest_digest",
+        "source_proof_digest",
         "handoff_manifest_digest",
     ):
         value = result.get(field)
@@ -689,6 +705,7 @@ def _source_closure(
     cas: CAS,
     manifest_digest: str,
     manifest: dict[str, Any],
+    source_proof_digest: str,
 ) -> dict[str, int]:
     raw_manifest = cas.read(manifest_digest, max_bytes=_MAX_MANIFEST_BYTES)
     if canonical_json(manifest) != raw_manifest:
@@ -699,6 +716,24 @@ def _source_closure(
         if previous != entry["size"]:
             raise GitHubGatewayError(
                 "source closure repeats a digest with another size"
+            )
+    proof = verify_github_source_proof(
+        cas,
+        source_proof_digest,
+        manifest_digest,
+    )
+    raw_proof = cas.read(source_proof_digest, max_bytes=_MAX_MANIFEST_BYTES)
+    if canonical_json(proof) != raw_proof:
+        raise GitHubGatewayError("verified GitHub source proof is not canonical")
+    proof_entries = [
+        (source_proof_digest, len(raw_proof)),
+        *((entry["digest"], entry["size"]) for entry in proof["objects"]),
+    ]
+    for digest, size in proof_entries:
+        previous = closure.setdefault(digest, size)
+        if previous != size:
+            raise GitHubGatewayError(
+                "source proof closure repeats a digest with another size"
             )
     return closure
 
@@ -937,7 +972,7 @@ def _run_systemd_gateway_process(
         "LimitNOFILE=64",
         "LockPersonality=yes",
         "MemoryDenyWriteExecute=yes",
-        "MemoryMax=512M",
+        "MemoryMax=768M",
         "MemorySwapMax=0",
         "NoNewPrivileges=yes",
         "PrivateDevices=yes",

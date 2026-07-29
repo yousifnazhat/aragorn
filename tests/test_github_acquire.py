@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from dataclasses import dataclass
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -739,6 +739,7 @@ class GitHubTransportTests(unittest.TestCase):
             name, default
         )
         response.read.side_effect = lambda limit: raw[:limit]
+        response.read1.side_effect = BytesIO(raw).read
         return response
 
     def test_transport_uses_fixed_host_headers_and_no_ambient_credentials_or_proxy(
@@ -1218,7 +1219,7 @@ class GitHubTransportTests(unittest.TestCase):
 
     def test_transport_enforces_shared_request_and_raw_byte_budgets(self) -> None:
         connection = MagicMock()
-        connection.getresponse.return_value = self.response(b'{"ok":true}')
+        connection.getresponse.side_effect = lambda: self.response(b'{"ok":true}')
         with patch.object(
             github_acquire.http.client,
             "HTTPSConnection",

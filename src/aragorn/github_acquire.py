@@ -13,6 +13,7 @@ import os
 import re
 import socket
 import ssl
+import threading
 import time
 import unicodedata
 from io import BytesIO
@@ -34,8 +35,9 @@ from .github_source_proof import retain_github_source_proof
 
 API_HOST = "api.github.com"
 GIT_HOST = "github.com"
+RELEASE_ASSET_HOST = "release-assets.githubusercontent.com"
 API_VERSION = "2026-03-10"
-_FIXED_HOSTS = {API_HOST, GIT_HOST}
+_FIXED_HOSTS = {API_HOST, GIT_HOST, RELEASE_ASSET_HOST}
 _COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 _OWNER = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\Z")
 _REPOSITORY = re.compile(r"[A-Za-z0-9_.-]{1,100}\Z")
@@ -50,6 +52,8 @@ _MAX_GIT_OBJECT_BYTES = _MAX_METADATA_BYTES
 _MAX_GIT_RESPONSE_BYTES = _MAX_GIT_OBJECT_BYTES + 1024 * 1024
 _MAX_PARSED_TREE_ENTRIES = 10_000
 _HTTPS_PORT = 443
+# ponytail: one slot caps stuck threads; gateway-supplied pins bypass DNS at scale.
+_RESOLUTION_SLOT = threading.BoundedSemaphore(1)
 
 _Endpoint = tuple[int, int, int, tuple[Any, ...]]
 
@@ -98,9 +102,16 @@ class _PinnedEndpoints:
             None if addresses is None else _validate_pinned_addresses(addresses)
         )
 
-    def get(self) -> tuple[_Endpoint, ...]:
+    def get(self, *, deadline: float | None = None) -> tuple[_Endpoint, ...]:
         if self._value is None:
-            self._value = _resolve_public_host_endpoints(self._host)
+            self._value = (
+                _resolve_public_host_endpoints(self._host)
+                if deadline is None
+                else _resolve_public_host_endpoints_before_deadline(
+                    self._host,
+                    deadline,
+                )
+            )
         return self._value
 
     @property
@@ -923,6 +934,42 @@ def _resolve_public_host_endpoints(host: str) -> tuple[_Endpoint, ...]:
     return tuple(endpoints)
 
 
+def _resolve_public_host_endpoints_before_deadline(
+    host: str,
+    deadline: float,
+) -> tuple[_Endpoint, ...]:
+    if not _RESOLUTION_SLOT.acquire(blocking=False):
+        raise GitHubAcquisitionError(
+            "fixed GitHub host resolution is already in progress"
+        )
+    outcome: list[tuple[_Endpoint, ...] | Exception] = []
+
+    def resolve() -> None:
+        try:
+            outcome.append(_resolve_public_host_endpoints(host))
+        except (GitHubAcquisitionError, OSError) as exc:
+            outcome.append(exc)
+        finally:
+            _RESOLUTION_SLOT.release()
+
+    worker = threading.Thread(target=resolve, daemon=True)
+    try:
+        worker.start()
+    except RuntimeError:
+        _RESOLUTION_SLOT.release()
+        raise
+    worker.join(max(0.0, deadline - time.monotonic()))
+    if worker.is_alive():
+        raise GitHubAcquisitionError(
+            "fixed GitHub host resolution deadline exceeded"
+        )
+    if not outcome or isinstance(outcome[0], Exception):
+        raise GitHubAcquisitionError("cannot resolve the fixed GitHub host") from (
+            outcome[0] if outcome else None
+        )
+    return outcome[0]
+
+
 def _resolve_public_api_endpoints() -> tuple[_Endpoint, ...]:
     return _resolve_public_host_endpoints(API_HOST)
 
@@ -986,6 +1033,38 @@ def _remaining_connect_seconds(deadline: float) -> float:
     return remaining
 
 
+def _read_response_before_deadline(
+    response: http.client.HTTPResponse,
+    connection: http.client.HTTPSConnection,
+    *,
+    max_bytes: int,
+    deadline: float,
+) -> bytes:
+    target = max_bytes + 1
+    chunks: list[bytes] = []
+    total = 0
+    while total < target:
+        transport = connection.sock
+        if transport is None:
+            transport = getattr(response.fp, "_sock", None)
+        if transport is None:
+            transport = getattr(getattr(response.fp, "raw", None), "_sock", None)
+        if transport is None:
+            if response.isclosed():
+                break
+            raise OSError("GitHub transport socket is unavailable")
+        transport.settimeout(_remaining_connect_seconds(deadline))
+        chunk = response.read1(min(64 * 1024, target - total))
+        if not isinstance(chunk, bytes):
+            raise OSError("GitHub transport returned invalid response bytes")
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    _remaining_connect_seconds(deadline)
+    return b"".join(chunks)
+
+
 def _request_bytes(
     host: str,
     path: str,
@@ -1008,6 +1087,7 @@ def _request_bytes(
         or any(character in path for character in "\r\n")
         or not media_types
         or (endpoints is not None and endpoints.host != host)
+        or (host == RELEASE_ASSET_HOST and endpoints is None)
     ):
         raise GitHubAcquisitionError("invalid fixed GitHub transport request")
     if authorization is not None and (
@@ -1015,6 +1095,7 @@ def _request_bytes(
     ):
         raise GitHubAcquisitionError("invalid internal GitHub authorization")
     budget.start_request()
+    deadline = time.monotonic() + float(timeout_seconds)
     context = _server_tls_context()
     connection = (
         http.client.HTTPSConnection(
@@ -1024,9 +1105,9 @@ def _request_bytes(
         )
         if endpoints is None
         else _PinnedHTTPSConnection(
-            endpoints.get(),
+            endpoints.get(deadline=deadline),
             host=host,
-            timeout=timeout_seconds,
+            timeout=_remaining_connect_seconds(deadline),
             context=context,
         )
     )
@@ -1073,7 +1154,12 @@ def _request_bytes(
             if declared_length > budget.remaining_bytes:
                 raise GitHubBudgetExceeded("maximum GitHub API byte limit exceeded")
         read_limit = min(max_bytes, budget.remaining_bytes)
-        raw = response.read(read_limit + 1)
+        raw = _read_response_before_deadline(
+            response,
+            connection,
+            max_bytes=read_limit,
+            deadline=deadline,
+        )
         if len(raw) > max_bytes:
             raise GitHubAcquisitionError("GitHub response exceeds its byte limit")
         if declared_length is not None and len(raw) != declared_length:

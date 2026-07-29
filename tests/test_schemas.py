@@ -114,6 +114,7 @@ EXPECTED_CONTRACTS = {
     "github-gateway-result-v2.schema.json": "aragorn/github-gateway-result/v2",
     "github-manifest-v1.schema.json": "aragorn/github-manifest/v1",
     "github-quarantine-receipt-v1.schema.json": "aragorn/github-quarantine-receipt/v1",
+    "github-release-asset-v1.schema.json": "aragorn/github-release-asset/v1",
     "github-source-proof-v1.schema.json": "aragorn/github-source-proof/v1",
     "inspect-result-v1.schema.json": "aragorn/inspect-result/v1",
     "inspect-result-v2.schema.json": "aragorn/inspect-result/v2",

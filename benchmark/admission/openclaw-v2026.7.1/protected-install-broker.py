@@ -447,6 +447,34 @@ def _service_request_metadata(state: os.stat_result) -> dict[str, int]:
     return {**_metadata(state), "ctime_ns": state.st_ctime_ns}
 
 
+def _require_owner_protected_ancestry(
+    path: Path,
+    expected_uid: int,
+    *,
+    include_path: bool,
+) -> None:
+    current = path if include_path else path.parent
+    while True:
+        try:
+            state = current.lstat()
+        except OSError as exc:
+            raise BrokerConformanceError(
+                f"cannot inspect protected ancestry: {exc}"
+            ) from exc
+        if (
+            not stat.S_ISDIR(state.st_mode)
+            or stat.S_ISLNK(state.st_mode)
+            or state.st_uid not in {0, expected_uid}
+            or stat.S_IMODE(state.st_mode) & 0o022
+        ):
+            raise BrokerConformanceError(
+                "protected ancestry must be owner-protected"
+            )
+        if current == Path(current.anchor):
+            return
+        current = current.parent
+
+
 def _load_revocation_snapshot(
     path_value: str,
     expected_uid: int,
@@ -537,22 +565,11 @@ def _load_service_request(
         raise BrokerConformanceError(
             "service request path must be canonical and contain no symlinks"
         )
-    for ancestor in resolved.parents:
-        try:
-            ancestor_state = ancestor.lstat()
-        except OSError as exc:
-            raise BrokerConformanceError(
-                f"cannot inspect service request ancestry: {exc}"
-            ) from exc
-        if (
-            not stat.S_ISDIR(ancestor_state.st_mode)
-            or stat.S_ISLNK(ancestor_state.st_mode)
-            or ancestor_state.st_uid not in {0, expected_uid}
-            or stat.S_IMODE(ancestor_state.st_mode) & 0o022
-        ):
-            raise BrokerConformanceError(
-                "service request ancestry must be owner-protected"
-            )
+    _require_owner_protected_ancestry(
+        resolved,
+        expected_uid,
+        include_path=False,
+    )
     flags = (
         os.O_RDONLY
         | getattr(os, "O_NOFOLLOW", 0)
@@ -676,6 +693,9 @@ def _resolve_service_request(
     resolved.expected_repository = source["repository"]
     resolved.expected_commit = source["commit"]
     resolved.expected_skill_path = source["skill_path"]
+    resolved.cas_root = str(
+        Path(resolved.cas_root) / canonical_digest(source)[7:]
+    )
     return resolved, authority
 
 
@@ -1272,7 +1292,18 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     protected_root = Path(args.protected_root).resolve(strict=True)
-    cas_root = Path(args.cas_root).resolve(strict=args.github_live)
+    supplied_cas_root = Path(args.cas_root)
+    cas_root = supplied_cas_root.resolve(strict=args.github_live)
+    if getattr(args, "service_request", None) is not None:
+        if not supplied_cas_root.is_absolute() or supplied_cas_root != cas_root:
+            raise BrokerConformanceError(
+                "service CAS namespace must be an absolute canonical path"
+            )
+        _require_owner_protected_ancestry(
+            cas_root,
+            args.expected_broker_uid,
+            include_path=True,
+        )
     common = Path(os.path.commonpath((protected_root, cas_root)))
     if common in {protected_root, cas_root}:
         raise BrokerConformanceError("CAS and protected roots must be disjoint")

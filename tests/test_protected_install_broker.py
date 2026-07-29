@@ -292,7 +292,6 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
                     field,
                 )
             for field in (
-                "cas_root",
                 "protected_root",
                 "revocation_file",
             ):
@@ -300,7 +299,43 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
                     getattr(resolved, field),
                     getattr(direct, field),
                 )
+            self.assertEqual(
+                resolved.cas_root,
+                str(
+                    Path(direct.cas_root)
+                    / canonical_digest(source)[7:]
+                ),
+            )
             self.assertEqual(resolved.expected_broker_uid, 0)
+
+            namespace = Path(resolved.cas_root)
+            namespace.parent.mkdir()
+            real_namespace = root / "real-cas"
+            real_namespace.mkdir()
+            namespace.symlink_to(real_namespace, target_is_directory=True)
+            with (
+                mock.patch.object(producer.os, "geteuid", return_value=0),
+                self.assertRaisesRegex(
+                    producer.BrokerConformanceError,
+                    "absolute canonical path",
+                ),
+            ):
+                producer._run(resolved)
+            namespace.unlink()
+
+            real_parent = root / "real-cas-parent"
+            real_parent.mkdir()
+            (real_parent / namespace.name).mkdir()
+            namespace.parent.rmdir()
+            namespace.parent.symlink_to(real_parent, target_is_directory=True)
+            with (
+                mock.patch.object(producer.os, "geteuid", return_value=0),
+                self.assertRaisesRegex(
+                    producer.BrokerConformanceError,
+                    "absolute canonical path",
+                ),
+            ):
+                producer._run(resolved)
 
             duplicate = _service_args(producer, direct, request_path)
             duplicate.expected_broker_uid = 0
@@ -456,7 +491,7 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
             credential_root.chmod(0o722)
             with self.assertRaisesRegex(
                 producer.BrokerConformanceError,
-                "ancestry must be owner-protected",
+                "protected ancestry must be owner-protected",
             ):
                 producer._load_service_request(
                     str(valid),
@@ -474,7 +509,7 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
             unsafe_grandparent.chmod(0o722)
             with self.assertRaisesRegex(
                 producer.BrokerConformanceError,
-                "ancestry must be owner-protected",
+                "protected ancestry must be owner-protected",
             ):
                 producer._load_service_request(
                     str(nested_request),

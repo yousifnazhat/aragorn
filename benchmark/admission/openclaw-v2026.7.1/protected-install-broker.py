@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import grp
 import hashlib
 import json
 import os
-import pwd
 import stat
 import sys
 import time
@@ -70,6 +68,8 @@ _GITHUB_SCANNER = "aragorn-agent-skill-threats"
 _GITHUB_ANALYZER_VERSION = "0.1.0-phase0-v7"
 _SERVICE_ANALYZER_USER = "aragorn-analyze"
 _SERVICE_ANALYZER_GROUP = "aragorn-analyze"
+_PASSWD_PATH = Path("/etc/passwd")
+_GROUP_PATH = Path("/etc/group")
 _SERVICE_REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v1"
 _SERVICE_REQUEST_SCHEMA_V2 = "aragorn/protected-install-broker-request/v2"
 _MAX_SERVICE_REQUEST_BYTES = 64 * 1024
@@ -210,20 +210,40 @@ def _resolve_analyzer_execution_identity(
             "analyzer identity must be the fixed service worker"
         )
     try:
-        user_record = pwd.getpwnam(user)
-        group_record = grp.getgrnam(group)
-    except KeyError as exc:
+        passwd_records = [
+            line.split(":")
+            for line in _PASSWD_PATH.read_text(encoding="utf-8").splitlines()
+            if line.split(":", 1)[0] == user
+        ]
+        group_records = [
+            line.split(":")
+            for line in _GROUP_PATH.read_text(encoding="utf-8").splitlines()
+            if line.split(":", 1)[0] == group
+        ]
+        if (
+            len(passwd_records) != 1
+            or len(passwd_records[0]) != 7
+            or len(group_records) != 1
+            or len(group_records[0]) != 4
+        ):
+            raise ValueError
+        user_record = passwd_records[0]
+        group_record = group_records[0]
+        user_uid = int(user_record[2])
+        user_gid = int(user_record[3])
+        group_gid = int(group_record[2])
+    except (OSError, UnicodeError, ValueError) as exc:
         raise BrokerConformanceError(
             "fixed analyzer service identity is not provisioned"
         ) from exc
     if (
-        user_record.pw_name != user
-        or group_record.gr_name != group
-        or user_record.pw_uid <= 0
-        or group_record.gr_gid <= 0
-        or user_record.pw_gid != group_record.gr_gid
-        or user_record.pw_dir != "/nonexistent"
-        or user_record.pw_shell != "/usr/sbin/nologin"
+        user_record[0] != user
+        or group_record[0] != group
+        or user_uid <= 0
+        or group_gid <= 0
+        or user_gid != group_gid
+        or user_record[5] != "/nonexistent"
+        or user_record[6] != "/usr/sbin/nologin"
     ):
         raise BrokerConformanceError(
             "fixed analyzer service identity is not exact"
@@ -231,8 +251,8 @@ def _resolve_analyzer_execution_identity(
     return {
         "user": user,
         "group": group,
-        "uid": user_record.pw_uid,
-        "gid": group_record.gr_gid,
+        "uid": user_uid,
+        "gid": group_gid,
         "supplementary_groups": [],
     }
 
@@ -240,22 +260,22 @@ def _resolve_analyzer_execution_identity(
 def _github_analyzer_script(
     expected_implementation_digest: str,
     *,
-    expected_user: str | None = None,
-    expected_group: str | None = None,
+    expected_uid: int | None = None,
+    expected_gid: int | None = None,
 ) -> str:
-    if (expected_user is None) != (expected_group is None):
+    if (expected_uid is None) != (expected_gid is None):
         raise BrokerConformanceError(
-            "analyzer user and group must be bound together"
+            "analyzer UID and GID must be bound together"
         )
     source_root = str(_REPOSITORY / "src")
     identity_check = ""
-    if expected_user is not None:
+    if expected_uid is not None:
         identity_check = (
-            "import grp,os,pwd\n"
-            f"if pwd.getpwuid(os.geteuid()).pw_name!={expected_user!r}:\n"
-            " raise RuntimeError('analyzer effective user changed')\n"
-            f"if grp.getgrgid(os.getegid()).gr_name!={expected_group!r}:\n"
-            " raise RuntimeError('analyzer effective group changed')\n"
+            "import os\n"
+            f"if os.geteuid()!={expected_uid!r}:\n"
+            " raise RuntimeError('analyzer effective UID changed')\n"
+            f"if os.getegid()!={expected_gid!r}:\n"
+            " raise RuntimeError('analyzer effective GID changed')\n"
             "if os.getgroups():\n"
             " raise RuntimeError('analyzer supplementary groups are not empty')\n"
             "with open('/proc/self/status',encoding='ascii') as status_stream:\n"
@@ -1244,15 +1264,15 @@ def _run_github_live(
         raise BrokerConformanceError("analyzer executable identity changed")
     script = _github_analyzer_script(
         analyzer_implementation_digest,
-        expected_user=(
+        expected_uid=(
             None
             if analyzer_execution_identity is None
-            else analyzer_execution_identity["user"]
+            else analyzer_execution_identity["uid"]
         ),
-        expected_group=(
+        expected_gid=(
             None
             if analyzer_execution_identity is None
-            else analyzer_execution_identity["group"]
+            else analyzer_execution_identity["gid"]
         ),
     )
     configuration = {

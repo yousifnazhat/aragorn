@@ -223,34 +223,28 @@ def _service_args(
 class ProtectedInstallBrokerProducerTests(unittest.TestCase):
     def test_service_analyzer_identity_is_fixed_and_digest_bound(self) -> None:
         producer = _load_producer()
-        user = SimpleNamespace(
-            pw_name="aragorn-analyze",
-            pw_uid=64001,
-            pw_gid=64002,
-            pw_dir="/nonexistent",
-            pw_shell="/usr/sbin/nologin",
-        )
-        group = SimpleNamespace(
-            gr_name="aragorn-analyze",
-            gr_gid=64002,
-        )
         args = SimpleNamespace(
             analyzer_user="aragorn-analyze",
             analyzer_group="aragorn-analyze",
         )
-        with (
-            mock.patch.object(
-                producer.pwd,
-                "getpwnam",
-                return_value=user,
-            ),
-            mock.patch.object(
-                producer.grp,
-                "getgrnam",
-                return_value=group,
-            ),
-        ):
-            identity = producer._resolve_analyzer_execution_identity(args)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            passwd = root / "passwd"
+            group = root / "group"
+            passwd.write_text(
+                "aragorn-analyze:x:64001:64002:Aragorn analyzer:"
+                "/nonexistent:/usr/sbin/nologin\n",
+                encoding="utf-8",
+            )
+            group.write_text(
+                "aragorn-analyze:x:64002:\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(producer, "_PASSWD_PATH", passwd),
+                mock.patch.object(producer, "_GROUP_PATH", group),
+            ):
+                identity = producer._resolve_analyzer_execution_identity(args)
 
         self.assertEqual(
             identity,
@@ -264,11 +258,11 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
         )
         script = producer._github_analyzer_script(
             "sha256:" + "a" * 64,
-            expected_user=identity["user"],
-            expected_group=identity["group"],
+            expected_uid=identity["uid"],
+            expected_gid=identity["gid"],
         )
-        self.assertIn("pwd.getpwuid(os.geteuid())", script)
-        self.assertIn("grp.getgrgid(os.getegid())", script)
+        self.assertIn("if os.geteuid()!=64001", script)
+        self.assertIn("if os.getegid()!=64002", script)
         self.assertIn("if os.getgroups():", script)
         self.assertIn("('CapEff','CapPrm','CapAmb')", script)
         self.assertIn("dir='/tmp'", script)
@@ -291,8 +285,8 @@ class ProtectedInstallBrokerProducerTests(unittest.TestCase):
         implementation_digest = candidate_implementation_digest()
         script = producer._github_analyzer_script(
             implementation_digest,
-            expected_user=worker.pw_name,
-            expected_group=worker_group.gr_name,
+            expected_uid=worker.pw_uid,
+            expected_gid=worker_group.gr_gid,
         )
         executable = Path(sys.executable).resolve(strict=True)
         executable_digest = (

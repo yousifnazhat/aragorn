@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 from io import BytesIO
 import json
 from pathlib import Path
@@ -230,6 +231,115 @@ class AnalyzerReceiptTests(unittest.TestCase):
                     7,
                 ),
             )
+
+    def test_v2_request_binds_a_distinct_analysis_input_manifest(self) -> None:
+        script = (
+            "import json,sys;"
+            "r=json.load(sys.stdin);"
+            "assert r['schema']=='aragorn/analyzer-request/v2';"
+            "assert set(r['input'])=={'manifest_digest','tree_digest'};"
+            "print(json.dumps({'schema':'aragorn/observation/v1',"
+            "'subject_digest':r['subject_digest'],'reason_code':'INPUT_SCANNED',"
+            "'severity':'info'},sort_keys=True,separators=(',',':')))"
+        )
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            cas = CAS(root / "state")
+            content = b"analysis-only bytes\n"
+            content_digest = _put(cas, content)
+            files = [
+                {
+                    "path": "release/asset.txt",
+                    "size": len(content),
+                    "digest": content_digest,
+                    "executable": False,
+                }
+            ]
+            tree_digest = (
+                "sha256:" + hashlib.sha256(canonical_json(files)).hexdigest()
+            )
+            manifest_digest = _put(
+                cas,
+                canonical_json(
+                    {
+                        "schema": "aragorn/manifest/v1",
+                        "source": {"kind": "local", "path": str(workspace)},
+                        "tree_digest": tree_digest,
+                        "files": files,
+                        "closure": {"scope": "source_tree", "status": "complete"},
+                    }
+                ),
+            )
+            executable = Path(sys.executable).resolve(strict=True)
+            with executable.open("rb") as stream:
+                executable_digest = cas.put(
+                    stream,
+                    max_bytes=128 * 1024 * 1024,
+                )
+            configuration = {
+                "name": "test-scanner",
+                "version": "1.0",
+                "argv": [str(executable), "-c", script],
+                "operator_argv0": str(executable),
+                "executable_digest": executable_digest,
+            }
+            config_raw = canonical_json(configuration)
+            result = run_analyzer(
+                (str(executable), "-c", script),
+                workspace=workspace,
+                name="test-scanner",
+                version="1.0",
+                config_digest=_put(cas, config_raw),
+                executable_digest=executable_digest,
+                subject_digest=_SUBJECT,
+                input_manifest_digest=manifest_digest,
+                input_tree_digest=tree_digest,
+                configuration_bytes=config_raw,
+                timeout_seconds=2,
+                output_limit_bytes=4096,
+            )
+            verifier_digest = candidate_implementation_digest()
+            receipt_digest = retain_analyzer_run(
+                cas,
+                result,
+                verifier_implementation_digest=verifier_digest,
+            )
+            verified = verify_analyzer_run(
+                cas,
+                receipt_digest,
+                expected_subject_digest=_SUBJECT,
+                expected_input_manifest_digest=manifest_digest,
+                expected_input_tree_digest=tree_digest,
+                expected_verifier_digest=verifier_digest,
+            )
+            self.assertTrue(verified.ok)
+
+            with self.assertRaisesRegex(AnalyzerReceiptError, "another input"):
+                verify_analyzer_run(
+                    cas,
+                    receipt_digest,
+                    expected_subject_digest=_SUBJECT,
+                    expected_input_manifest_digest="sha256:" + "0" * 64,
+                    expected_input_tree_digest=tree_digest,
+                    expected_verifier_digest=verifier_digest,
+                )
+
+            receipt = json.loads(cas.read(receipt_digest))
+            request = json.loads(result.raw_request)
+            request["input"]["tree_digest"] = "sha256:" + "2" * 64
+            receipt["request_digest"] = _put(
+                cas,
+                canonical_json(request) + b"\n",
+            )
+            with self.assertRaisesRegex(AnalyzerReceiptError, "tree digest"):
+                verify_analyzer_run(
+                    cas,
+                    _put(cas, canonical_json(receipt)),
+                    expected_subject_digest=_SUBJECT,
+                    expected_verifier_digest=verifier_digest,
+                )
 
 
 if __name__ == "__main__":

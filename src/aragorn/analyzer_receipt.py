@@ -19,6 +19,7 @@ from .analyze import (
     _reject_duplicate_json_keys,
     _reject_json_constant,
 )
+from .artifact_closure import ArtifactClosureError, load_verified_retained_manifest
 from .cas import CAS, CASError
 from .oci_worker_protocol import WorkerProtocolError, canonical_json
 
@@ -48,6 +49,7 @@ def retain_analyzer_run(
     request = _request(result.raw_request)
     _result_matches_request(result, request)
     _validated_configuration(result.raw_configuration, request)
+    _verified_input(cas, request)
     verifier_digest = _digest(
         verifier_implementation_digest,
         "verifier implementation digest",
@@ -102,6 +104,8 @@ def verify_analyzer_run(
     receipt_digest: str,
     *,
     expected_subject_digest: str | None = None,
+    expected_input_manifest_digest: str | None = None,
+    expected_input_tree_digest: str | None = None,
     expected_verifier_digest: str,
 ) -> AnalyzerResult:
     """Replay internally consistent evidence without authenticating its producer.
@@ -162,6 +166,12 @@ def verify_analyzer_run(
             expected_subject_digest, "expected subject digest"
         ):
             raise AnalyzerReceiptError("analyzer request is bound to another subject")
+        _verified_input(
+            cas,
+            request,
+            expected_manifest_digest=expected_input_manifest_digest,
+            expected_tree_digest=expected_input_tree_digest,
+        )
         cas.verify(
             request["analyzer"]["executable_digest"],
             max_bytes=_MAX_EXECUTABLE_BYTES,
@@ -292,13 +302,24 @@ def _request(raw: bytes) -> dict[str, Any]:
     if not raw.endswith(b"\n"):
         raise AnalyzerReceiptError("analyzer request is not canonical JSON Lines")
     request = _canonical_document(raw[:-1], "analyzer request")
-    _exact_keys(
-        request,
-        {"schema", "workspace", "subject_digest", "analyzer", "limits"},
-        "analyzer request",
+    schema = request.get("schema")
+    expected_keys = (
+        {"schema", "workspace", "subject_digest", "analyzer", "limits"}
+        if schema == "aragorn/analyzer-request/v1"
+        else {
+            "schema",
+            "workspace",
+            "subject_digest",
+            "input",
+            "analyzer",
+            "limits",
+        }
+        if schema == "aragorn/analyzer-request/v2"
+        else None
     )
-    if request["schema"] != "aragorn/analyzer-request/v1":
+    if expected_keys is None:
         raise AnalyzerReceiptError("analyzer request schema is unsupported")
+    _exact_keys(request, expected_keys, "analyzer request")
     workspace = request["workspace"]
     if (
         not isinstance(workspace, str)
@@ -308,6 +329,18 @@ def _request(raw: bytes) -> dict[str, Any]:
     ):
         raise AnalyzerReceiptError("analyzer request workspace is invalid")
     _digest(request["subject_digest"], "analyzer request subject digest")
+    if schema == "aragorn/analyzer-request/v2":
+        input_record = request["input"]
+        _exact_keys(
+            input_record,
+            {"manifest_digest", "tree_digest"},
+            "analyzer request input",
+        )
+        _digest(
+            input_record["manifest_digest"],
+            "analyzer request input manifest digest",
+        )
+        _digest(input_record["tree_digest"], "analyzer request input tree digest")
 
     analyzer = request["analyzer"]
     _exact_keys(
@@ -340,6 +373,48 @@ def _request(raw: bytes) -> dict[str, Any]:
     ):
         raise AnalyzerReceiptError("analyzer request output limit is invalid")
     return request
+
+
+def _verified_input(
+    cas: CAS,
+    request: dict[str, Any],
+    *,
+    expected_manifest_digest: str | None = None,
+    expected_tree_digest: str | None = None,
+) -> dict[str, Any] | None:
+    if (expected_manifest_digest is None) != (expected_tree_digest is None):
+        raise AnalyzerReceiptError(
+            "expected analyzer input manifest and tree digests must be supplied together"
+        )
+    input_record = request.get("input")
+    if input_record is None:
+        if expected_manifest_digest is not None:
+            raise AnalyzerReceiptError("analyzer request omitted its expected input")
+        return None
+    manifest_digest = _digest(
+        input_record["manifest_digest"],
+        "analyzer request input manifest digest",
+    )
+    tree_digest = _digest(
+        input_record["tree_digest"],
+        "analyzer request input tree digest",
+    )
+    if expected_manifest_digest is not None and (
+        manifest_digest
+        != _digest(expected_manifest_digest, "expected analyzer input manifest digest")
+        or tree_digest
+        != _digest(expected_tree_digest, "expected analyzer input tree digest")
+    ):
+        raise AnalyzerReceiptError("analyzer request is bound to another input")
+    try:
+        manifest = load_verified_retained_manifest(cas, manifest_digest)
+    except (ArtifactClosureError, CASError) as exc:
+        raise AnalyzerReceiptError(f"analyzer input manifest is invalid: {exc}") from exc
+    if manifest["tree_digest"] != tree_digest:
+        raise AnalyzerReceiptError(
+            "analyzer input tree digest does not match its retained manifest"
+        )
+    return manifest
 
 
 def _result_matches_request(result: AnalyzerResult, request: dict[str, Any]) -> None:

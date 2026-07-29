@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 REQUEST_SCHEMA = "aragorn/analyzer-request/v1"
+REQUEST_SCHEMA_V2 = "aragorn/analyzer-request/v2"
 OBSERVATION_SCHEMA = "aragorn/observation/v1"
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _SEVERITIES = frozenset({"info", "low", "medium", "high", "critical"})
@@ -72,6 +73,8 @@ def run_analyzer(
     config_digest: str,
     executable_digest: str,
     subject_digest: str,
+    input_manifest_digest: str | None = None,
+    input_tree_digest: str | None = None,
     configuration_bytes: bytes | None = None,
     timeout_seconds: float = 120.0,
     output_limit_bytes: int = 1024 * 1024,
@@ -103,6 +106,8 @@ def run_analyzer(
         config_digest=config_digest,
         executable_digest=executable_digest,
         subject_digest=subject_digest,
+        input_manifest_digest=input_manifest_digest,
+        input_tree_digest=input_tree_digest,
         timeout_seconds=timeout_seconds,
         output_limit_bytes=output_limit_bytes,
     )
@@ -184,8 +189,12 @@ def run_analyzer(
         return _error(identity, "WORKSPACE_INVALID", "workspace must be a directory")
 
     timeout = float(timeout_seconds)
-    request = {
-        "schema": REQUEST_SCHEMA,
+    request: dict[str, Any] = {
+        "schema": (
+            REQUEST_SCHEMA_V2
+            if input_manifest_digest is not None
+            else REQUEST_SCHEMA
+        ),
         "workspace": os.fspath(workspace_path),
         "subject_digest": subject_digest,
         "analyzer": {
@@ -199,6 +208,11 @@ def run_analyzer(
             "output_bytes": output_limit_bytes,
         },
     }
+    if input_manifest_digest is not None:
+        request["input"] = {
+            "manifest_digest": input_manifest_digest,
+            "tree_digest": input_tree_digest,
+        }
     request_bytes = (
         json.dumps(request, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode(
             "ascii"
@@ -568,6 +582,8 @@ def _validate_configuration(
     config_digest: str,
     executable_digest: str,
     subject_digest: str,
+    input_manifest_digest: str | None,
+    input_tree_digest: str | None,
     timeout_seconds: float,
     output_limit_bytes: int,
 ) -> str | None:
@@ -594,6 +610,15 @@ def _validate_configuration(
         return "executable_digest must be a lowercase sha256 digest"
     if not isinstance(subject_digest, str) or _SHA256.fullmatch(subject_digest) is None:
         return "subject_digest must be a lowercase sha256 digest"
+    if (input_manifest_digest is None) != (input_tree_digest is None):
+        return "input manifest and tree digests must be supplied together"
+    if input_manifest_digest is not None and (
+        not isinstance(input_manifest_digest, str)
+        or _SHA256.fullmatch(input_manifest_digest) is None
+        or not isinstance(input_tree_digest, str)
+        or _SHA256.fullmatch(input_tree_digest) is None
+    ):
+        return "input manifest and tree digests must be lowercase sha256 digests"
     if isinstance(timeout_seconds, bool):
         return "timeout_seconds must be finite and greater than zero"
     try:

@@ -21,6 +21,7 @@ from typing import Any
 import aragorn.analyzer_receipt as analyzer_receipt_module
 import aragorn.github_recursive_artifact_graph as recursive_artifact_graph_v3
 import aragorn.github_recursive_artifact_graph_v4 as recursive_artifact_graph_v4
+import aragorn.github_recursive_artifact_graph_v5 as recursive_artifact_graph_v5
 
 from .artifact_closure import load_verified_retained_manifest
 from .cas import CAS
@@ -183,7 +184,8 @@ def coordinate_intent(
     recursive = replay["recursive"]
     pins["expected_artifact_graph_verifier_digest"] = (
         _recursive_artifact_graph_verifier_digest(
-            recursive["release_asset_result_digests"]
+            CAS(quarantine, read_only=True),
+            recursive["release_asset_result_digests"],
         )
     )
     transition = _transition_fields(
@@ -416,6 +418,7 @@ def _derive_release_pins(
         "allowed_artifact_graph_profiles": [
             "recursive-github-markdown/v1",
             "recursive-github-markdown/v2",
+            "recursive-github-markdown/v3",
         ],
     }
     return (
@@ -500,10 +503,16 @@ def _recursive_identity(receipt: Any) -> dict[str, Any]:
 
 
 def _recursive_artifact_graph_verifier_digest(
+    cas: CAS,
     release_asset_result_digests: list[str],
 ) -> str:
     return _module_digest(
-        recursive_artifact_graph_v4
+        recursive_artifact_graph_v5
+        if recursive_artifact_graph_v5.release_assets_require_v5(
+            cas,
+            release_asset_result_digests,
+        )
+        else recursive_artifact_graph_v4
         if release_asset_result_digests
         else recursive_artifact_graph_v3
     )

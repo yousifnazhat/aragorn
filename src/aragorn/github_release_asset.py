@@ -6,6 +6,7 @@ import http.client
 import re
 import ssl
 import time
+import zipfile
 from collections.abc import Mapping
 from io import BytesIO
 from typing import Any
@@ -29,12 +30,19 @@ from .github_acquire import (
     _RequestBudget,
     _server_tls_context,
 )
+from .zip_inventory import (
+    ZipInventoryError,
+    retain_zip_inventory,
+    verify_zip_inventory,
+)
 
 SCHEMA = "aragorn/github-release-asset/v1"
+ZIP_SCHEMA = "aragorn/github-release-asset/v2"
 _MAX_ASSET_BYTES = 16 * 1024 * 1024
 _MAX_REDIRECT_BYTES = 16 * 1024
 _COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,254}\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_ZIP_SUFFIXES = (".zip", ".whl", ".pyz")
 
 
 class GitHubReleaseAssetError(GitHubAcquisitionError):
@@ -52,6 +60,7 @@ def verify_github_release_asset_result(
     expected_github_digest: str | None,
     expected_content_type: str,
     expected_redirected: bool,
+    require_zip_inventory: bool = False,
 ) -> dict[str, Any]:
     """Re-hash one retained release asset against caller-held source pins."""
 
@@ -82,10 +91,28 @@ def verify_github_release_asset_result(
             for character in expected_content_type
         )
         or type(expected_redirected) is not bool
+        or type(require_zip_inventory) is not bool
         or not isinstance(result, Mapping)
-        or set(result) != {"schema", "source", "asset", "transport", "closure"}
-        or result.get("schema") != SCHEMA
     ):
+        raise GitHubReleaseAssetError(
+            "retained GitHub release asset verification inputs are invalid"
+        )
+    schema = result.get("schema")
+    expected_keys = (
+        {"schema", "source", "asset", "transport", "closure"}
+        if schema == SCHEMA
+        else {
+            "schema",
+            "source",
+            "asset",
+            "transport",
+            "inventory_digest",
+            "closure",
+        }
+        if schema == ZIP_SCHEMA
+        else None
+    )
+    if expected_keys is None or set(result) != expected_keys:
         raise GitHubReleaseAssetError(
             "retained GitHub release asset verification inputs are invalid"
         )
@@ -155,6 +182,33 @@ def verify_github_release_asset_result(
         raise GitHubReleaseAssetError(
             "retained GitHub release asset size does not match"
         )
+    zip_intended = _zip_intended(name, content)
+    if schema == SCHEMA:
+        if require_zip_inventory and zip_intended:
+            raise GitHubReleaseAssetError(
+                "ZIP-capable GitHub release assets require a v2 inventory"
+            )
+    else:
+        inventory_digest = result.get("inventory_digest")
+        if (
+            not zip_intended
+            or not isinstance(inventory_digest, str)
+            or _DIGEST.fullmatch(inventory_digest) is None
+        ):
+            raise GitHubReleaseAssetError(
+                "retained GitHub release asset inventory binding is invalid"
+            )
+        try:
+            verify_zip_inventory(
+                evidence_cas,
+                inventory_digest,
+                expected_archive_digest=expected_digest,
+                expected_archive_name=name,
+            )
+        except ZipInventoryError as exc:
+            raise GitHubReleaseAssetError(
+                f"cannot verify retained GitHub release asset inventory: {exc}"
+            ) from exc
     return dict(result)
 
 
@@ -166,11 +220,14 @@ def acquire_github_release_asset(
     max_asset_bytes: int = _MAX_ASSET_BYTES,
     _pinned_api_addresses: list[str] | tuple[str, ...] | None = None,
     _pinned_asset_addresses: list[str] | tuple[str, ...] | None = None,
+    _max_zip_expanded_bytes: int | None = None,
+    _max_zip_entries: int | None = None,
 ) -> dict[str, Any]:
-    """Retain one exact public release asset without executing or extracting it.
+    """Retain one exact public release asset without executing it.
 
     ``max_asset_bytes`` is checked against API metadata before the asset body is
-    requested or written to CAS.
+    requested or written to CAS. ZIP-capable bytes are inventoried and their
+    regular members are retained under the bounded ZIP profile.
     """
 
     owner, repository, tag, name = parse_github_release_asset_url(url)
@@ -232,9 +289,23 @@ def acquire_github_release_asset(
             expected_digest=expected_digest,
             max_bytes=len(content),
         )
+    inventory_digest = None
+    if _zip_intended(name, content):
+        try:
+            inventory_digest = retain_zip_inventory(
+                cas,
+                digest,
+                archive_name=name,
+                max_expanded_bytes=_max_zip_expanded_bytes,
+                max_entries=_max_zip_entries,
+            )
+        except ZipInventoryError as exc:
+            raise GitHubReleaseAssetError(
+                f"cannot inventory GitHub release ZIP asset: {exc}"
+            ) from exc
     _remaining_seconds(deadline)
-    return {
-        "schema": SCHEMA,
+    result = {
+        "schema": ZIP_SCHEMA if inventory_digest is not None else SCHEMA,
         "source": {
             "kind": "github_release_asset",
             "host": "github.com",
@@ -259,6 +330,15 @@ def acquire_github_release_asset(
         },
         "closure": {"scope": "release_asset", "status": "complete"},
     }
+    if inventory_digest is not None:
+        result["inventory_digest"] = inventory_digest
+    return result
+
+
+def _zip_intended(name: str, content: bytes) -> bool:
+    return name.casefold().endswith(_ZIP_SUFFIXES) or zipfile.is_zipfile(
+        BytesIO(content)
+    )
 
 
 def parse_github_release_asset_url(

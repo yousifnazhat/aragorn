@@ -30,9 +30,9 @@ from .oci_worker_protocol import canonical_digest
 from .protected_install import _transaction_record, _version_path
 from .protected_install_context import VerifiedInstallContextV2
 from .protected_install_transition_replay import (
-    _File,
     _canonical_document,
     _evidence_decision,
+    _File,
     _pinned_bytes,
     _safe_name,
     _sha256,
@@ -360,7 +360,7 @@ def _load(raw: bytes, temporary: Path) -> _Archive:
             "archive omits required evidence"
         )
     names = (set(files) | set(directories) | set(symlinks)) - {"."}
-    if set(part.split("/", 1)[0] for part in names) != {
+    if {part.split("/", 1)[0] for part in names} != {
         "capture.json",
         "cas",
         "evidence",
@@ -607,6 +607,9 @@ def _runtime(archive: _Archive, capture: dict[str, Any]) -> dict[str, Any]:
                 "captured Python executable changed"
             )
     repo = Path(__file__).resolve().parents[2]
+    # The captured analyzer implementation is measured above and its receipts
+    # are replayed semantically below. Keep byte identity here for graph
+    # verifiers because they directly derive the historical graph document.
     for field, path in (
         (
             "recursive_v3_verifier_digest",
@@ -616,7 +619,6 @@ def _runtime(archive: _Archive, capture: dict[str, Any]) -> dict[str, Any]:
             "recursive_v4_verifier_digest",
             "src/aragorn/github_recursive_artifact_graph_v4.py",
         ),
-        ("analyzer_verifier_digest", "src/aragorn/analyzer_receipt.py"),
     ):
         if _sha256((repo / path).read_bytes()) != runtime[field]:
             raise ProtectedRecursiveV3LiveArchiveError(

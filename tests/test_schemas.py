@@ -16,6 +16,7 @@ EXPECTED_CONTRACTS = {
     "admission-artifact-graph-v1.schema.json": "aragorn/admission-artifact-graph/v1",
     "admission-artifact-graph-v2.schema.json": "aragorn/admission-artifact-graph/v2",
     "admission-artifact-graph-v4.schema.json": "aragorn/admission-artifact-graph/v4",
+    "admission-artifact-graph-v5.schema.json": "aragorn/admission-artifact-graph/v5",
     "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
     "admission-runtime-candidate-lock-v1.schema.json": "aragorn/admission-runtime-candidate-lock/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",
@@ -117,6 +118,7 @@ EXPECTED_CONTRACTS = {
     "github-manifest-v1.schema.json": "aragorn/github-manifest/v1",
     "github-quarantine-receipt-v1.schema.json": "aragorn/github-quarantine-receipt/v1",
     "github-release-asset-v1.schema.json": "aragorn/github-release-asset/v1",
+    "github-release-asset-v2.schema.json": "aragorn/github-release-asset/v2",
     "github-source-proof-v1.schema.json": "aragorn/github-source-proof/v1",
     "inspect-result-v1.schema.json": "aragorn/inspect-result/v1",
     "inspect-result-v2.schema.json": "aragorn/inspect-result/v2",
@@ -167,6 +169,20 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(edge["properties"]["status"], {"const": "unresolved"})
         self.assertIn(
             "GITHUB_RELEASE_ASSET_NOT_ANALYZED",
+            edge["properties"]["reason_code"]["enum"],
+        )
+
+    def test_v5_release_assets_remain_unresolved_until_runtime_bound(self) -> None:
+        document = json.loads(
+            (
+                SCHEMA_DIRECTORY / "admission-artifact-graph-v5.schema.json"
+            ).read_text()
+        )
+        edge = document["$defs"]["release_asset_edge"]
+
+        self.assertEqual(edge["properties"]["status"], {"const": "unresolved"})
+        self.assertIn(
+            "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN",
             edge["properties"]["reason_code"]["enum"],
         )
 

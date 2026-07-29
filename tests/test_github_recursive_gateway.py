@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import tempfile
 import unittest
+import zipfile
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
@@ -20,17 +22,37 @@ from aragorn.github_quarantine_receipt import (
 )
 from aragorn.github_recursive_gateway import (
     GitHubRecursiveGatewayError,
+    _extend_release_asset_inventory_closure,
     _verify_release_assets,
     accept_recursive_gateway_output,
     quarantine_recursive_through_gateway,
     run_recursive_worker,
 )
 from aragorn.github_source_proof import retain_github_source_proof
+from aragorn.zip_inventory import (
+    MAX_ENTRIES,
+    MAX_EXPANDED_BYTES,
+    retain_zip_inventory,
+    verify_zip_inventory,
+)
 
 
 def _oid(kind: str, payload: bytes) -> str:
     header = f"{kind} {len(payload)}\0".encode("ascii")
     return hashlib.sha1(header + payload, usedforsecurity=False).hexdigest()
+
+
+def _zip_bytes(*, shebang: bool = False) -> bytes:
+    output = BytesIO()
+    with zipfile.ZipFile(
+        output,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        archive.writestr("package/main.py", b"print('retained')\n")
+        archive.writestr("README.md", b"bounded release archive\n")
+    raw = output.getvalue()
+    return b"#!/usr/bin/env python3\n" + raw if shebang else raw
 
 
 class GitHubRecursiveGatewayTests(unittest.TestCase):
@@ -144,6 +166,164 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                     (url,),
                     release_asset_pins=pins,
                 )
+
+    def test_release_asset_v2_replay_closes_inventory_and_member_blobs(self) -> None:
+        url = (
+            "https://github.com/example/skills/releases/"
+            "download/v1/bundle.pyz"
+        )
+        content = _zip_bytes(shebang=True)
+        digest = "sha256:" + hashlib.sha256(content).hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "cas")
+            cas.put_expected(
+                BytesIO(content),
+                expected_digest=digest,
+                max_bytes=len(content),
+            )
+            inventory_digest = retain_zip_inventory(
+                cas,
+                digest,
+                archive_name="bundle.pyz",
+            )
+            inventory = verify_zip_inventory(
+                CAS(cas.root, read_only=True),
+                inventory_digest,
+                expected_archive_digest=digest,
+                expected_archive_name="bundle.pyz",
+            )
+            result = {
+                "schema": "aragorn/github-release-asset/v2",
+                "source": {
+                    "kind": "github_release_asset",
+                    "host": "github.com",
+                    "owner": "example",
+                    "repository": "skills",
+                    "tag": "v1",
+                    "url": url,
+                },
+                "asset": {
+                    "release_id": 1,
+                    "asset_id": 2,
+                    "name": "bundle.pyz",
+                    "size": len(content),
+                    "digest": digest,
+                    "github_digest": digest,
+                    "content_type": "application/octet-stream",
+                },
+                "transport": {
+                    "api_version": "2026-03-10",
+                    "redirected": False,
+                    "final_host": "api.github.com",
+                },
+                "inventory_digest": inventory_digest,
+                "closure": {"scope": "release_asset", "status": "complete"},
+            }
+            raw = canonical_json(result)
+            result_digest = cas.put(BytesIO(raw), max_bytes=len(raw))
+            pins = {
+                url: {
+                    "release_id": 1,
+                    "asset_id": 2,
+                    "digest": digest,
+                    "github_digest": digest,
+                    "content_type": "application/octet-stream",
+                    "redirected": False,
+                }
+            }
+
+            closure = _verify_release_assets(
+                cas,
+                ({"url": url, "result_digest": result_digest},),
+                (url,),
+                release_asset_pins=pins,
+            )
+
+            self.assertEqual(closure[result_digest], len(raw))
+            self.assertEqual(closure[digest], len(content))
+            self.assertEqual(
+                closure[inventory_digest],
+                len(cas.read(inventory_digest)),
+            )
+            for member in inventory["files"]:
+                self.assertEqual(closure[member["digest"]], member["size"])
+
+            incomplete = CAS(Path(temporary) / "incomplete")
+            for retained_digest, retained_raw in (
+                (digest, content),
+                (inventory_digest, cas.read(inventory_digest)),
+                (result_digest, raw),
+            ):
+                incomplete.put_expected(
+                    BytesIO(retained_raw),
+                    expected_digest=retained_digest,
+                    max_bytes=len(retained_raw),
+                )
+            with self.assertRaisesRegex(
+                GitHubRecursiveGatewayError,
+                "verification failed",
+            ):
+                _verify_release_assets(
+                    incomplete,
+                    ({"url": url, "result_digest": result_digest},),
+                    (url,),
+                    release_asset_pins=pins,
+                )
+
+    def test_release_asset_v2_replay_bounds_cumulative_expanded_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "cas")
+            inventory_digest = cas.put(
+                BytesIO(b"retained inventory"),
+                max_bytes=len(b"retained inventory"),
+            )
+            member_digest = "sha256:" + "1" * 64
+            inventory = {
+                "totals": {"expanded_bytes": 3, "entries": 1},
+                "files": [{"digest": member_digest, "size": 3}],
+            }
+            result = {
+                "schema": "aragorn/github-release-asset/v2",
+                "asset": {
+                    "name": "bundle.pyz",
+                    "digest": "sha256:" + "2" * 64,
+                },
+                "inventory_digest": inventory_digest,
+            }
+            closure: dict[str, int] = {}
+            member_digests: set[str] = set()
+            with (
+                mock.patch(
+                    "aragorn.github_recursive_gateway.verify_zip_inventory",
+                    return_value=inventory,
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_gateway.MAX_EXPANDED_BYTES",
+                    3,
+                ),
+            ):
+                expanded_bytes, entry_count = (
+                    _extend_release_asset_inventory_closure(
+                        closure,
+                        cas,
+                        result,
+                        expanded_bytes=0,
+                        entry_count=0,
+                        member_digests=member_digests,
+                    )
+                )
+                with self.assertRaisesRegex(
+                    GitHubRecursiveGatewayError,
+                    "expanded bytes exceed their aggregate bound",
+                ):
+                    _extend_release_asset_inventory_closure(
+                        closure,
+                        cas,
+                        result,
+                        expanded_bytes=expanded_bytes,
+                        entry_count=entry_count,
+                        member_digests=member_digests,
+                    )
 
     def test_automatic_release_pin_orchestration_remains_fail_closed(self) -> None:
         url = (
@@ -424,9 +604,9 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
 
             release_url = (
                 "https://github.com/example/skills/releases/"
-                "download/v1/checksums.txt"
+                "download/v1/bundle.pyz"
             )
-            release_bytes = b"fixture checksum\n"
+            release_bytes = _zip_bytes(shebang=True)
             release_digest = "sha256:" + hashlib.sha256(release_bytes).hexdigest()
 
             def fake_release(
@@ -439,8 +619,13 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                     expected_digest=release_digest,
                     max_bytes=len(release_bytes),
                 )
+                inventory_digest = retain_zip_inventory(
+                    cas,
+                    release_digest,
+                    archive_name="bundle.pyz",
+                )
                 return {
-                    "schema": "aragorn/github-release-asset/v1",
+                    "schema": "aragorn/github-release-asset/v2",
                     "source": {
                         "kind": "github_release_asset",
                         "host": "github.com",
@@ -452,7 +637,7 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                     "asset": {
                         "release_id": 1,
                         "asset_id": 2,
-                        "name": "checksums.txt",
+                        "name": "bundle.pyz",
                         "size": len(release_bytes),
                         "digest": release_digest,
                         "github_digest": release_digest,
@@ -463,6 +648,7 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                         "redirected": True,
                         "final_host": "release-assets.githubusercontent.com",
                     },
+                    "inventory_digest": inventory_digest,
                     "closure": {
                         "scope": "release_asset",
                         "status": "complete",
@@ -509,6 +695,14 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                 release_acquire.call_args.kwargs["max_asset_bytes"],
                 16 * 1024 * 1024,
             )
+            self.assertEqual(
+                release_acquire.call_args.kwargs["_max_zip_expanded_bytes"],
+                MAX_EXPANDED_BYTES,
+            )
+            self.assertEqual(
+                release_acquire.call_args.kwargs["_max_zip_entries"],
+                MAX_ENTRIES,
+            )
             release_imported = CAS(root / "release-imported")
             release_handoff = import_declared_byte_transport(
                 release_job / "bundle",
@@ -527,6 +721,20 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                 release_result["release_assets"][0]["result_digest"],
                 release_closure,
             )
+            retained_result = json.loads(
+                release_imported.read(
+                    release_result["release_assets"][0]["result_digest"]
+                )
+            )
+            retained_inventory = verify_zip_inventory(
+                CAS(release_imported.root, read_only=True),
+                retained_result["inventory_digest"],
+                expected_archive_digest=release_digest,
+                expected_archive_name="bundle.pyz",
+            )
+            self.assertIn(retained_result["inventory_digest"], release_closure)
+            for member in retained_inventory["files"]:
+                self.assertIn(member["digest"], release_closure)
 
 
 if __name__ == "__main__":

@@ -48,10 +48,19 @@ from .github_recursive_artifact_graph import (
 from .github_recursive_artifact_graph_v4 import (
     discover_recursive_github_release_asset_urls,
 )
+from .github_release_asset import SCHEMA as RELEASE_ASSET_SCHEMA
+from .github_release_asset import ZIP_SCHEMA as RELEASE_ASSET_ZIP_SCHEMA
 from .github_release_asset import (
     acquire_github_release_asset,
     parse_github_release_asset_url,
     verify_github_release_asset_result,
+)
+from .zip_inventory import (
+    MAX_ENTRIES,
+    MAX_EXPANDED_BYTES,
+    MAX_INVENTORY_BYTES,
+    ZipInventoryError,
+    verify_zip_inventory,
 )
 
 RESULT_SCHEMA_V1 = "aragorn/github-recursive-gateway-result/v1"
@@ -236,6 +245,9 @@ def run_recursive_worker(
         )
     release_asset_entries: list[dict[str, str]] = []
     release_asset_bytes = 0
+    release_archive_expanded_bytes = 0
+    release_archive_entries = 0
+    release_archive_member_digests: set[str] = set()
     release_asset_urls = discover_recursive_github_release_asset_urls(
         source_cas,
         expansion_digest,
@@ -253,6 +265,10 @@ def run_recursive_worker(
             max_asset_bytes=min(_MAX_RECORD_BYTES, remaining_asset_bytes),
             _pinned_api_addresses=pinned_api_addresses,
             _pinned_asset_addresses=pinned_release_asset_addresses,
+            _max_zip_expanded_bytes=(
+                MAX_EXPANDED_BYTES - release_archive_expanded_bytes
+            ),
+            _max_zip_entries=MAX_ENTRIES - release_archive_entries,
         )
         asset_size = acquired_asset["asset"]["size"]
         release_asset_bytes += asset_size
@@ -275,6 +291,16 @@ def run_recursive_worker(
                 raise GitHubRecursiveGatewayError(
                     "recursive release closure repeats a digest with another size"
                 )
+        release_archive_expanded_bytes, release_archive_entries = (
+            _extend_release_asset_inventory_closure(
+                closure,
+                source_cas,
+                acquired_asset,
+                expanded_bytes=release_archive_expanded_bytes,
+                entry_count=release_archive_entries,
+                member_digests=release_archive_member_digests,
+            )
+        )
     transport = build_handoff_manifest(
         kind="github_source",
         root_digest=manifest_digest,
@@ -629,6 +655,9 @@ def _verify_release_assets(
         )
     closure: dict[str, int] = {}
     retained_bytes = 0
+    release_archive_expanded_bytes = 0
+    release_archive_entries = 0
+    release_archive_member_digests: set[str] = set()
     evidence_cas = CAS(cas.root, read_only=True)
     for entry in entries:
         try:
@@ -652,6 +681,7 @@ def _verify_release_assets(
                 expected_github_digest=pin["github_digest"],
                 expected_content_type=pin["content_type"],
                 expected_redirected=pin["redirected"],
+                require_zip_inventory=True,
             )
         except (
             CASError,
@@ -679,7 +709,93 @@ def _verify_release_assets(
                 raise GitHubRecursiveGatewayError(
                     "recursive release closure repeats a digest with another size"
                 )
+        release_archive_expanded_bytes, release_archive_entries = (
+            _extend_release_asset_inventory_closure(
+                closure,
+                cas,
+                verified,
+                expanded_bytes=release_archive_expanded_bytes,
+                entry_count=release_archive_entries,
+                member_digests=release_archive_member_digests,
+            )
+        )
     return closure
+
+
+def _extend_release_asset_inventory_closure(
+    closure: dict[str, int],
+    cas: CAS,
+    result: dict[str, Any],
+    *,
+    expanded_bytes: int,
+    entry_count: int,
+    member_digests: set[str],
+) -> tuple[int, int]:
+    schema = result.get("schema")
+    if schema == RELEASE_ASSET_SCHEMA:
+        return expanded_bytes, entry_count
+    if schema != RELEASE_ASSET_ZIP_SCHEMA:
+        raise GitHubRecursiveGatewayError(
+            "recursive release asset result schema is unsupported"
+        )
+    asset = result.get("asset")
+    inventory_digest = result.get("inventory_digest")
+    if (
+        not isinstance(asset, dict)
+        or not isinstance(asset.get("name"), str)
+        or not isinstance(asset.get("digest"), str)
+        or not isinstance(inventory_digest, str)
+    ):
+        raise GitHubRecursiveGatewayError(
+            "recursive release asset inventory binding is invalid"
+        )
+    try:
+        evidence_cas = CAS(cas.root, read_only=True)
+        inventory = verify_zip_inventory(
+            evidence_cas,
+            inventory_digest,
+            expected_archive_digest=asset["digest"],
+            expected_archive_name=asset["name"],
+        )
+        inventory_raw = cas.read(
+            inventory_digest,
+            max_bytes=MAX_INVENTORY_BYTES,
+        )
+    except (CASError, ZipInventoryError) as exc:
+        raise GitHubRecursiveGatewayError(
+            "recursive release asset inventory verification failed"
+        ) from exc
+    expanded_bytes += inventory["totals"]["expanded_bytes"]
+    entry_count += inventory["totals"]["entries"]
+    member_digests.update(entry["digest"] for entry in inventory["files"])
+    if expanded_bytes > MAX_EXPANDED_BYTES:
+        raise GitHubRecursiveGatewayError(
+            "recursive release ZIP expanded bytes exceed their aggregate bound"
+        )
+    if entry_count > MAX_ENTRIES:
+        raise GitHubRecursiveGatewayError(
+            "recursive release ZIP entries exceed their aggregate bound"
+        )
+    if len(member_digests) > MAX_ENTRIES:
+        raise GitHubRecursiveGatewayError(
+            "recursive release ZIP member blobs exceed their aggregate bound"
+        )
+    inventory_closure = {inventory_digest: len(inventory_raw)}
+    for entry in inventory["files"]:
+        digest = entry["digest"]
+        size = entry["size"]
+        previous = inventory_closure.setdefault(digest, size)
+        if previous != size:
+            raise GitHubRecursiveGatewayError(
+                "recursive release inventory repeats a digest with another size"
+            )
+    for digest, size in inventory_closure.items():
+        previous = closure.setdefault(digest, size)
+        if previous != size:
+            raise GitHubRecursiveGatewayError(
+                "recursive release closure repeats a digest with another size"
+            )
+    return expanded_bytes, entry_count
 
 
 def _freeze_release_asset_pins(value: object | None) -> dict[str, dict[str, Any]]:

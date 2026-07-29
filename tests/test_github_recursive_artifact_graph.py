@@ -4,13 +4,14 @@ import hashlib
 import os
 import tempfile
 import unittest
+import zipfile
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
 from aragorn.admission_artifact_graph import verify_admission_artifact_graph
-from aragorn.artifact_closure import canonical_json
+from aragorn.artifact_closure import canonical_json, load_verified_retained_manifest
 from aragorn.benchmark_handoff_v2 import build_handoff_manifest
 from aragorn.cas import CAS
 from aragorn.github_expansion_proof import retain_github_expansion_proof
@@ -30,8 +31,15 @@ from aragorn.github_recursive_artifact_graph_v4 import (
 from aragorn.github_recursive_artifact_graph_v4 import (
     retain_recursive_github_artifact_graph as retain_recursive_github_artifact_graph_v4,
 )
+from aragorn.github_recursive_artifact_graph_v5 import (
+    _validate_combined_analysis_files,
+)
+from aragorn.github_recursive_artifact_graph_v5 import (
+    retain_recursive_github_artifact_graph as retain_recursive_github_artifact_graph_v5,
+)
 from aragorn.github_source_proof import retain_github_source_proof
 from aragorn.policy import Policy, evaluate_policy
+from aragorn.zip_inventory import retain_zip_inventory
 
 _VERIFIER_DIGEST = "sha256:" + "1" * 64
 _PYTHON_DIGEST = "sha256:" + "2" * 64
@@ -74,10 +82,15 @@ def _release_result(
     content: bytes,
     asset_id: int,
     github_digest: bool,
+    inventory_digest: str | None = None,
 ) -> tuple[str, str]:
     asset_digest = cas.put(BytesIO(content), max_bytes=len(content))
     document = {
-        "schema": "aragorn/github-release-asset/v1",
+        "schema": (
+            "aragorn/github-release-asset/v2"
+            if inventory_digest is not None
+            else "aragorn/github-release-asset/v1"
+        ),
         "source": {
             "kind": "github_release_asset",
             "host": "github.com",
@@ -102,11 +115,44 @@ def _release_result(
         },
         "closure": {"scope": "release_asset", "status": "complete"},
     }
+    if inventory_digest is not None:
+        document["inventory_digest"] = inventory_digest
     raw = canonical_json(document)
     return cas.put(BytesIO(raw), max_bytes=len(raw)), asset_digest
 
 
+def _zip_bytes(files: dict[str, bytes]) -> bytes:
+    output = BytesIO()
+    with zipfile.ZipFile(output, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path, content in files.items():
+            archive.writestr(path, content)
+    return output.getvalue()
+
+
 class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
+    def test_analysis_manifest_bounds_and_collisions_fail_closed(self) -> None:
+        def entry(path: str, size: int = 0) -> dict[str, object]:
+            return {
+                "path": path,
+                "size": size,
+                "digest": _VERIFIER_DIGEST,
+                "executable": False,
+            }
+
+        for files in (
+            [entry("Release.bin"), entry("release.bin")],
+            [entry("__aragorn_release_assets__"), entry(
+                "__aragorn_release_assets__/1/2/raw/asset.bin"
+            )],
+            [entry(f"file-{index}") for index in range(10_001)],
+            [entry(f"file-{index}", 16 * 1024 * 1024) for index in range(9)],
+        ):
+            with (
+                self.subTest(files=len(files)),
+                self.assertRaises(GitHubRecursiveArtifactGraphError),
+            ):
+                _validate_combined_analysis_files(files)
+
     def test_cross_commit_markdown_closes_and_replays(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             cas = CAS(Path(temporary) / "state")
@@ -358,10 +404,12 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
             archive_url = f"{release_base}/agent-bundle.tar.gz"
             checksums_url = f"{release_base}/checksums.txt"
             unsigned_url = f"{release_base}/release-notes.txt"
+            zip_carrier_url = f"{release_base}/agent-bundle.bin"
             release_reference = (
                 f"[archive]({archive_url})\n"
                 f"[checksums]({checksums_url})\n"
                 f"[notes]({unsigned_url})\n"
+                f"[ZIP carrier]({zip_carrier_url})\n"
             ).encode("ascii")
             release_blob = _oid("blob", release_reference)
             release_tree, release_tree_raw = _tree(
@@ -428,7 +476,16 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                     cas,
                     release_expansion_digest,
                 ),
-                tuple(sorted((archive_url, checksums_url, unsigned_url))),
+                tuple(
+                    sorted(
+                        (
+                            archive_url,
+                            checksums_url,
+                            unsigned_url,
+                            zip_carrier_url,
+                        )
+                    )
+                ),
             )
 
             archive_result_digest, archive_digest = _release_result(
@@ -455,10 +512,19 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 asset_id=493071345,
                 github_digest=False,
             )
+            carrier_v1_result_digest, carrier_v1_digest = _release_result(
+                cas,
+                url=zip_carrier_url,
+                name="agent-bundle.bin",
+                content=b"opaque binary fixture",
+                asset_id=493071346,
+                github_digest=True,
+            )
             release_result_digests = (
                 archive_result_digest,
                 checksums_result_digest,
                 unsigned_result_digest,
+                carrier_v1_result_digest,
             )
             with (
                 mock.patch(
@@ -489,6 +555,20 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                     expected_gateway_profile_digest=gateway_profile,
                     expected_verifier_digest=_VERIFIER_DIGEST,
                     expected_release_asset_result_digests=release_result_digests,
+                )
+                self.assertEqual(
+                    retain_recursive_github_artifact_graph_v5(
+                        cas,
+                        release_manifest_digest,
+                        root_manifest_digest=root_manifest_digest,
+                        expansion_digest=release_expansion_digest,
+                        expansion_proof_digest=release_expansion_proof_digest,
+                        expected_quarantine_receipt_digest=receipt_digest,
+                        expected_gateway_profile_digest=gateway_profile,
+                        verifier_implementation_digest=_VERIFIER_DIGEST,
+                        release_asset_result_digests=release_result_digests,
+                    ),
+                    release_graph_digest,
                 )
                 with self.assertRaises(GitHubRecursiveArtifactGraphError):
                     verify_admission_artifact_graph(
@@ -523,13 +603,19 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 "ARCHIVE_INVENTORY_UNSUPPORTED",
             )
             self.assertEqual(archive_edge["status"], "unresolved")
-            self.assertEqual(checksums_digest, release_edges[checksums_url]["target"]["digest"])
+            self.assertEqual(
+                checksums_digest,
+                release_edges[checksums_url]["target"]["digest"],
+            )
             self.assertEqual(release_edges[checksums_url]["status"], "unresolved")
             self.assertEqual(
                 release_edges[checksums_url]["reason_code"],
                 "GITHUB_RELEASE_ASSET_NOT_ANALYZED",
             )
-            self.assertEqual(unsigned_digest, release_edges[unsigned_url]["target"]["digest"])
+            self.assertEqual(
+                unsigned_digest,
+                release_edges[unsigned_url]["target"]["digest"],
+            )
             self.assertIsNone(
                 release_edges[unsigned_url]["target"]["github_digest"]
             )
@@ -570,12 +656,13 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 archive_digest,
                 checksums_digest,
                 unsigned_digest,
+                carrier_v1_digest,
                 *release_result_digests,
             ):
                 self.assertNotIn(digest, retained_artifact_digests)
             self.assertEqual(
                 release_graph["coverage"]["statically_resolvable"],
-                {"captured": 4, "total": 4},
+                {"captured": 5, "total": 5},
             )
             self.assertEqual(
                 evaluate_policy(
@@ -585,6 +672,278 @@ class GitHubRecursiveArtifactGraphTests(unittest.TestCase):
                 ).verdict,
                 "ERROR",
             )
+
+            zip_content = _zip_bytes(
+                {
+                    "agent/main.py": b"print('retained')\n",
+                    "prompts/system.txt": b"analyze me\n",
+                }
+            )
+            zip_digest = cas.put(BytesIO(zip_content), max_bytes=len(zip_content))
+            inventory_digest = retain_zip_inventory(
+                cas,
+                zip_digest,
+                archive_name="agent-bundle.bin",
+            )
+            carrier_v2_result_digest, carrier_v2_digest = _release_result(
+                cas,
+                url=zip_carrier_url,
+                name="agent-bundle.bin",
+                content=zip_content,
+                asset_id=493071346,
+                github_digest=True,
+                inventory_digest=inventory_digest,
+            )
+            self.assertEqual(carrier_v2_digest, zip_digest)
+            analysis_result_digests = (
+                archive_result_digest,
+                checksums_result_digest,
+                unsigned_result_digest,
+                carrier_v2_result_digest,
+            )
+            with (
+                mock.patch(
+                    "aragorn.github_quarantine_receipt.sys.platform",
+                    "linux",
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_artifact_graph_v4._REQUIRED_BROKER_UID",
+                    os.geteuid(),
+                ),
+            ):
+                analysis_graph_digest = retain_recursive_github_artifact_graph_v5(
+                    cas,
+                    release_manifest_digest,
+                    root_manifest_digest=root_manifest_digest,
+                    expansion_digest=release_expansion_digest,
+                    expansion_proof_digest=release_expansion_proof_digest,
+                    expected_quarantine_receipt_digest=receipt_digest,
+                    expected_gateway_profile_digest=gateway_profile,
+                    verifier_implementation_digest=_VERIFIER_DIGEST,
+                    release_asset_result_digests=analysis_result_digests,
+                )
+                analysis_graph = verify_admission_artifact_graph(
+                    cas,
+                    analysis_graph_digest,
+                    expected_manifest_digest=release_manifest_digest,
+                    expected_quarantine_receipt_digest=receipt_digest,
+                    expected_gateway_profile_digest=gateway_profile,
+                    expected_verifier_digest=_VERIFIER_DIGEST,
+                    expected_release_asset_result_digests=analysis_result_digests,
+                )
+
+            self.assertEqual(
+                analysis_graph["schema"],
+                "aragorn/admission-artifact-graph/v5",
+            )
+            self.assertEqual(
+                analysis_graph["profile"],
+                "recursive-github-markdown/v3",
+            )
+            self.assertEqual(
+                analysis_graph["root_manifest_digest"],
+                release_graph["root_manifest_digest"],
+            )
+            self.assertEqual(
+                analysis_graph["tree_digest"],
+                release_graph["tree_digest"],
+            )
+            self.assertEqual(
+                analysis_graph["artifacts"],
+                release_graph["artifacts"],
+            )
+            analysis_manifest = load_verified_retained_manifest(
+                cas,
+                analysis_graph["analysis_manifest_digest"],
+            )
+            self.assertEqual(
+                analysis_manifest["tree_digest"],
+                analysis_graph["analysis_tree_digest"],
+            )
+            self.assertNotEqual(
+                analysis_graph["analysis_tree_digest"],
+                analysis_graph["tree_digest"],
+            )
+            analysis_paths = {
+                artifact["path"]: artifact for artifact in analysis_manifest["files"]
+            }
+            release_prefix = (
+                "__aragorn_release_assets__/361308705/493071346"
+            )
+            self.assertNotIn(
+                f"{release_prefix}/raw/agent-bundle.bin",
+                analysis_paths,
+            )
+            self.assertIn(
+                f"{release_prefix}/members/agent/main.py",
+                analysis_paths,
+            )
+            self.assertIn(
+                f"{release_prefix}/members/prompts/system.txt",
+                analysis_paths,
+            )
+            self.assertEqual(
+                analysis_paths[
+                    "__aragorn_release_assets__/361308705/"
+                    "493071344/raw/checksums.txt"
+                ]["digest"],
+                checksums_digest,
+            )
+            self.assertFalse(
+                any("493071343" in path for path in analysis_paths)
+            )
+            self.assertFalse(
+                any("493071345" in path for path in analysis_paths)
+            )
+
+            analysis_edges = {
+                edge["literal"]: edge
+                for edge in analysis_graph["edges"]
+                if edge["reference_kind"] == "github_release_asset"
+            }
+            self.assertEqual(
+                analysis_edges[zip_carrier_url]["status"],
+                "unresolved",
+            )
+            self.assertEqual(
+                analysis_edges[zip_carrier_url]["reason_code"],
+                "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN",
+            )
+            self.assertEqual(
+                analysis_edges[zip_carrier_url]["target"]["inventory_digest"],
+                inventory_digest,
+            )
+            self.assertEqual(
+                analysis_edges[checksums_url]["status"],
+                "unresolved",
+            )
+            self.assertEqual(
+                analysis_edges[checksums_url]["reason_code"],
+                "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN",
+            )
+            self.assertIsNone(
+                analysis_edges[checksums_url]["target"]["inventory_digest"],
+            )
+            self.assertEqual(analysis_edges[archive_url]["status"], "unresolved")
+            self.assertEqual(
+                analysis_edges[archive_url]["reason_code"],
+                "ARCHIVE_INVENTORY_UNSUPPORTED",
+            )
+            self.assertEqual(analysis_edges[unsigned_url]["status"], "unresolved")
+            self.assertEqual(
+                analysis_edges[unsigned_url]["reason_code"],
+                "GITHUB_RELEASE_ASSET_DIGEST_UNAVAILABLE",
+            )
+
+            unsigned_archive_inventory_digest = retain_zip_inventory(
+                cas,
+                zip_digest,
+                archive_name="agent-bundle.tar.gz",
+            )
+            unsigned_v2_result_digest, _ = _release_result(
+                cas,
+                url=archive_url,
+                name="agent-bundle.tar.gz",
+                content=zip_content,
+                asset_id=493071343,
+                github_digest=False,
+                inventory_digest=unsigned_archive_inventory_digest,
+            )
+            unsigned_analysis_digests = (
+                unsigned_v2_result_digest,
+                checksums_result_digest,
+                unsigned_result_digest,
+                carrier_v2_result_digest,
+            )
+            with (
+                mock.patch(
+                    "aragorn.github_quarantine_receipt.sys.platform",
+                    "linux",
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_artifact_graph_v4._REQUIRED_BROKER_UID",
+                    os.geteuid(),
+                ),
+            ):
+                unsigned_graph_digest = (
+                    retain_recursive_github_artifact_graph_v5(
+                        cas,
+                        release_manifest_digest,
+                        root_manifest_digest=root_manifest_digest,
+                        expansion_digest=release_expansion_digest,
+                        expansion_proof_digest=release_expansion_proof_digest,
+                        expected_quarantine_receipt_digest=receipt_digest,
+                        expected_gateway_profile_digest=gateway_profile,
+                        verifier_implementation_digest=_VERIFIER_DIGEST,
+                        release_asset_result_digests=unsigned_analysis_digests,
+                    )
+                )
+            with (
+                mock.patch(
+                    "aragorn.github_quarantine_receipt.sys.platform",
+                    "linux",
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_artifact_graph_v4._REQUIRED_BROKER_UID",
+                    os.geteuid(),
+                ),
+            ):
+                unsigned_graph = verify_admission_artifact_graph(
+                    cas,
+                    unsigned_graph_digest,
+                    expected_manifest_digest=release_manifest_digest,
+                    expected_quarantine_receipt_digest=receipt_digest,
+                    expected_gateway_profile_digest=gateway_profile,
+                    expected_verifier_digest=_VERIFIER_DIGEST,
+                    expected_release_asset_result_digests=(
+                        unsigned_analysis_digests
+                    ),
+                )
+            unsigned_manifest = load_verified_retained_manifest(
+                cas,
+                unsigned_graph["analysis_manifest_digest"],
+            )
+            self.assertFalse(
+                any(
+                    "493071343" in entry["path"]
+                    for entry in unsigned_manifest["files"]
+                )
+            )
+            unsigned_edges = {
+                edge["literal"]: edge for edge in unsigned_graph["edges"]
+            }
+            self.assertEqual(
+                unsigned_edges[archive_url]["reason_code"],
+                "GITHUB_RELEASE_ASSET_DIGEST_UNAVAILABLE",
+            )
+
+            tampered_graph = deepcopy(analysis_graph)
+            tampered_graph["analysis_tree_digest"] = "sha256:" + "f" * 64
+            tampered_raw = canonical_json(tampered_graph)
+            tampered_digest = cas.put(
+                BytesIO(tampered_raw),
+                max_bytes=len(tampered_raw),
+            )
+            with (
+                mock.patch(
+                    "aragorn.github_quarantine_receipt.sys.platform",
+                    "linux",
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_artifact_graph_v4._REQUIRED_BROKER_UID",
+                    os.geteuid(),
+                ),
+                self.assertRaises(GitHubRecursiveArtifactGraphError),
+            ):
+                verify_admission_artifact_graph(
+                    cas,
+                    tampered_digest,
+                    expected_manifest_digest=release_manifest_digest,
+                    expected_quarantine_receipt_digest=receipt_digest,
+                    expected_gateway_profile_digest=gateway_profile,
+                    expected_verifier_digest=_VERIFIER_DIGEST,
+                    expected_release_asset_result_digests=analysis_result_digests,
+                )
 
 
 if __name__ == "__main__":

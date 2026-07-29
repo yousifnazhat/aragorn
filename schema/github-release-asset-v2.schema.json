@@ -1,0 +1,94 @@
+{
+  "$id": "https://aragorn.dev/schema/github-release-asset-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn retained GitHub release asset with ZIP inventory v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source",
+    "asset",
+    "transport",
+    "inventory_digest",
+    "closure"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/github-release-asset/v2"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "host", "owner", "repository", "tag", "url"],
+      "properties": {
+        "kind": {"const": "github_release_asset"},
+        "host": {"const": "github.com"},
+        "owner": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"},
+        "repository": {"type": "string", "pattern": "^[a-z0-9_.-]{1,100}$"},
+        "tag": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"},
+        "url": {
+          "type": "string",
+          "pattern": "^https://github[.]com/[a-z0-9-]+/[a-z0-9_.-]+/releases/download/[A-Za-z0-9][A-Za-z0-9._-]{0,254}/[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "asset_id",
+        "name",
+        "size",
+        "digest",
+        "github_digest",
+        "content_type"
+      ],
+      "properties": {
+        "release_id": {"type": "integer", "minimum": 1},
+        "asset_id": {"type": "integer", "minimum": 1},
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"},
+        "size": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "digest": {"$ref": "#/$defs/digest"},
+        "github_digest": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/digest"}
+          ]
+        },
+        "content_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[ -~]+$"
+        }
+      }
+    },
+    "transport": {
+      "oneOf": [
+        {
+          "const": {
+            "api_version": "2026-03-10",
+            "redirected": false,
+            "final_host": "api.github.com"
+          }
+        },
+        {
+          "const": {
+            "api_version": "2026-03-10",
+            "redirected": true,
+            "final_host": "release-assets.githubusercontent.com"
+          }
+        }
+      ]
+    },
+    "inventory_digest": {"$ref": "#/$defs/digest"},
+    "closure": {
+      "const": {"scope": "release_asset", "status": "complete"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

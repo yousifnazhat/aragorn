@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 acquisition-lock exit metrics pass on the frozen workload and Phase 2 engineering is eligible; archive closure, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 acquisition-lock exit metrics pass on the frozen workload and Phase 2 engineering is eligible; general archive and public-release runtime-binding closure, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -479,11 +479,16 @@ it is trusted. Start contracts at version 1 and keep evidence separate from
 decisions. Phase 1 now has evidence-only `artifact_graph` contracts for
 self-contained local Markdown, proof-bound recursive GitHub expansion, and v4
 retained release assets. V4 replay requires caller-held release-result digests
-and rederives candidates from retained source bytes. Release assets remain
-separate from the installable source manifest and unresolved until analyzed;
-archive inventory/extraction is unsupported. Replay also requires a protected
-expected verifier implementation identity. Decision authority and publication
-wiring remain separate.
+and rederives candidates from retained source bytes. V5 adds bounded
+ZIP/WHL/PYZ inventory and a separate analysis manifest containing extracted
+members, or raw bytes for exact GitHub-digest-bound non-archive assets. Release
+assets remain outside the installable source manifest, and public release URL
+edges remain unresolved with
+`GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN`. The current broker fails closed
+before analyzer invocation or publication while that reason is present; neither
+an analysis manifest nor an analyzer receipt grants installer/runtime
+authority. Replay also requires a protected expected verifier implementation
+identity. Decision authority and publication wiring remain separate.
 
 ### Acquisition manifest
 
@@ -755,9 +760,12 @@ bounded release resolver, recursive gateway/broker replay, and v4 fail-closed
 graph are implemented. The protected request-v3 path now binds recursive
 acquisition identities through graph and decision replay; release-bearing v4
 stops before analysis or publication. Automatic independent release-pin
-acquisition, archive inventory/extraction, live public out-of-root recursive
-evidence, runtime conformance, installer eligibility, and public release remain
-blocked.
+acquisition remains blocked. V5 now inventories bounded ZIP/WHL/PYZ assets and
+builds a separate analysis input, but leaves each analyzed public release URL
+unresolved with `GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN`. Runtime binding
+of those exact bytes, general archive closure, live public out-of-root
+recursive evidence, runtime conformance, installer eligibility, and public
+release remain blocked.
 
 The
 `benchmark/receipts/phase1-protected-recursive-v3-live-qualification-2026-07-29.json`

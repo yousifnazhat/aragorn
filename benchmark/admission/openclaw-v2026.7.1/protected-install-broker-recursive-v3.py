@@ -22,6 +22,7 @@ import aragorn.admission_artifact_graph as artifact_graph_module
 import aragorn.analyzer_receipt as analyzer_receipt_module
 import aragorn.github_recursive_artifact_graph as recursive_graph_v3_module
 import aragorn.github_recursive_artifact_graph_v4 as recursive_graph_v4_module
+import aragorn.github_recursive_artifact_graph_v5 as recursive_graph_v5_module
 from aragorn.acquire import ingest_local
 from aragorn.admission_artifact_graph import (
     retain_admission_artifact_graph,
@@ -312,10 +313,13 @@ def _github_analyzer_script(
         "with tempfile.TemporaryDirectory("
         "prefix='aragorn-analyzer-state-',dir='/tmp') as state:\n"
         " cas=CAS(Path(state))\n"
-        " manifest=ingest_local(Path(request['workspace']),cas)\n"
-        " if manifest['tree_digest']!=request['subject_digest']:\n"
+        " manifest=ingest_local(Path(request['workspace']),cas,max_depth=40)\n"
+        " expected_input=request.get('input',{}).get("
+        "'tree_digest',request['subject_digest'])\n"
+        " if manifest['tree_digest']!=expected_input:\n"
         "  raise RuntimeError('analyzer workspace identity changed')\n"
-        " for observation in detect_first_party_observations(manifest,cas):\n"
+        " for observation in detect_first_party_observations("
+        "manifest,cas,subject_digest=request['subject_digest']):\n"
         "  sys.stdout.write(observation.document_json+'\\n')\n"
     )
 
@@ -1386,6 +1390,7 @@ def _run_github_live(
             else [
                 "recursive-github-markdown/v1",
                 "recursive-github-markdown/v2",
+                "recursive-github-markdown/v3",
             ]
         ),
     }
@@ -1446,7 +1451,12 @@ def _run_github_live(
         )
     else:
         recursive_graph_module = (
-            recursive_graph_v4_module
+            recursive_graph_v5_module
+            if recursive_graph_v5_module.release_assets_require_v5(
+                cas,
+                release_asset_result_digests,
+            )
+            else recursive_graph_v4_module
             if release_asset_result_digests
             else recursive_graph_v3_module
         )
@@ -1478,6 +1488,18 @@ def _run_github_live(
             expected_verifier_digest=graph_verifier_digest,
             expected_release_asset_result_digests=release_asset_result_digests,
         )
+    if graph["profile"] == "recursive-github-markdown/v3":
+        github_limitations = [
+            (
+                "ARTIFACT_CLOSURE_LIMITED_TO_RECURSIVE_GITHUB_MARKDOWN_V3_"
+                "WITH_SEPARATE_ANALYSIS_INPUT"
+                if limitation
+                == "ARTIFACT_CLOSURE_LIMITED_TO_RECURSIVE_GITHUB_MARKDOWN_V2_"
+                "WITH_UNANALYZED_RELEASE_ASSETS"
+                else limitation
+            )
+            for limitation in github_limitations
+        ]
 
     retained_policy_digest = _retain_document(cas, policy)
     if retained_policy_digest != policy_digest:
@@ -1576,6 +1598,36 @@ def _run_github_live(
         raise BrokerConformanceError(
             "GitHub source is not an Agent Skill root; SKILL.md is missing"
         )
+    analysis_fields = {"analysis_manifest_digest", "analysis_tree_digest"}
+    present_analysis_fields = analysis_fields.intersection(graph)
+    if present_analysis_fields and present_analysis_fields != analysis_fields:
+        raise BrokerConformanceError(
+            "GitHub artifact graph analysis input is incomplete"
+        )
+    analysis_manifest_digest = graph.get(
+        "analysis_manifest_digest",
+        manifest_digest,
+    )
+    analysis_manifest = load_verified_retained_manifest(
+        cas,
+        analysis_manifest_digest,
+    )
+    analysis_tree_digest = graph.get(
+        "analysis_tree_digest",
+        manifest["tree_digest"],
+    )
+    if analysis_manifest["tree_digest"] != analysis_tree_digest:
+        raise BrokerConformanceError(
+            "GitHub artifact graph analysis input changed"
+        )
+    analyzer_input = (
+        {}
+        if not present_analysis_fields
+        else {
+            "input_manifest_digest": analysis_manifest_digest,
+            "input_tree_digest": analysis_tree_digest,
+        }
+    )
     with executable.open("rb") as stream:
         retained_executable_digest = cas.put(
             stream,
@@ -1593,14 +1645,14 @@ def _run_github_live(
         staging = Path(temporary)
         staging_fd = os.open(staging, _DIRECTORY_FLAGS)
         try:
-            _materialize_verified_manifest(cas, manifest, staging_fd)
-            _freeze_materialized_source_tree(staging_fd, manifest)
+            _materialize_verified_manifest(cas, analysis_manifest, staging_fd)
+            _freeze_materialized_source_tree(staging_fd, analysis_manifest)
             if analyzer_execution_identity is not None:
                 os.fchmod(staging_fd, 0o555)
                 os.fsync(staging_fd)
             staged_tree_digest = verify_materialized_source_tree(
                 cas,
-                manifest_digest,
+                analysis_manifest_digest,
                 staging_fd,
             )
             analyzer_result = run_analyzer(
@@ -1611,6 +1663,7 @@ def _run_github_live(
                 config_digest=configuration_digest,
                 executable_digest=executable_digest,
                 subject_digest=graph["tree_digest"],
+                **analyzer_input,
                 configuration_bytes=configuration_raw,
                 timeout_seconds=2,
                 output_limit_bytes=4096,
@@ -1631,7 +1684,11 @@ def _run_github_live(
                     f"{analyzer_result.error_code}"
                 )
             if (
-                verify_materialized_source_tree(cas, manifest_digest, staging_fd)
+                verify_materialized_source_tree(
+                    cas,
+                    analysis_manifest_digest,
+                    staging_fd,
+                )
                 != staged_tree_digest
             ):
                 raise BrokerConformanceError(
@@ -2015,7 +2072,12 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         artifact_graph_module
         if recursive is None
         else (
-            recursive_graph_v4_module
+            recursive_graph_v5_module
+            if recursive_graph_v5_module.release_assets_require_v5(
+                cas,
+                recursive["release_asset_result_digests"],
+            )
+            else recursive_graph_v4_module
             if recursive["release_asset_result_digests"]
             else recursive_graph_v3_module
         )

@@ -16,7 +16,6 @@ from typing import Any
 from .cas import CAS, CASError
 from .oci_worker_protocol import canonical_json
 
-
 SCHEMA = "aragorn/zip-archive-inventory/v1"
 PROFILE = "bounded-zip-members/v1"
 AUTHORITY = "ARCHIVE_INVENTORY_ONLY_NOT_INSTALLER_AUTHORITY"
@@ -57,17 +56,31 @@ def retain_zip_inventory(
     archive_digest: str,
     *,
     archive_name: str,
+    max_expanded_bytes: int | None = None,
+    max_entries: int | None = None,
 ) -> str:
-    """Extract regular members into *cas* and retain their canonical inventory."""
+    """Extract regular members into *cas* within optional lower work limits."""
 
     if cas.read_only:
         raise ZipInventoryError("cannot retain ZIP inventory in a read-only CAS")
+    expanded_limit = _bounded_limit(
+        max_expanded_bytes,
+        maximum=MAX_EXPANDED_BYTES,
+        label="max_expanded_bytes",
+    )
+    entry_limit = _bounded_limit(
+        max_entries,
+        maximum=MAX_ENTRIES,
+        label="max_entries",
+    )
     try:
         document = _derive_inventory(
             cas,
             _digest(archive_digest, "archive digest"),
             _archive_name(archive_name),
             retain_members=True,
+            max_expanded_bytes=expanded_limit,
+            max_entries=entry_limit,
         )
         raw = canonical_json(document)
         if len(raw) > MAX_INVENTORY_BYTES:
@@ -109,6 +122,8 @@ def verify_zip_inventory(
             _digest(expected_archive_digest, "expected archive digest"),
             _archive_name(expected_archive_name),
             retain_members=False,
+            max_expanded_bytes=MAX_EXPANDED_BYTES,
+            max_entries=MAX_ENTRIES,
         )
         if raw != canonical_json(expected):
             raise ZipInventoryError(
@@ -137,6 +152,8 @@ def _derive_inventory(
     archive_name: str,
     *,
     retain_members: bool,
+    max_expanded_bytes: int,
+    max_entries: int,
 ) -> dict[str, Any]:
     raw = cas.read(archive_digest, max_bytes=MAX_ARCHIVE_BYTES)
     payload_offset, prefix = _zip_payload(raw)
@@ -147,7 +164,7 @@ def _derive_inventory(
 
     with zipfile.ZipFile(BytesIO(raw), mode="r") as archive:
         infos = archive.infolist()
-        if not 1 <= len(infos) <= MAX_ENTRIES:
+        if not 1 <= len(infos) <= max_entries:
             raise ZipInventoryError("ZIP entry count is outside its bounded range")
         if min(info.header_offset for info in infos) != payload_offset:
             raise ZipInventoryError("ZIP payload has an unsupported leading prefix")
@@ -176,7 +193,7 @@ def _derive_inventory(
                 raise ZipInventoryError(
                     "ZIP member compressed sizes exceed the archive size"
                 )
-            if expanded_total > MAX_EXPANDED_BYTES:
+            if expanded_total > max_expanded_bytes:
                 raise ZipInventoryError("ZIP expanded bytes exceed their limit")
             entries.append((path, is_directory, info))
 
@@ -271,6 +288,18 @@ def _derive_inventory(
     }
 
 
+def _bounded_limit(value: object, *, maximum: int, label: str) -> int:
+    if value is None:
+        return maximum
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 0 <= value <= maximum
+    ):
+        raise ZipInventoryError(f"{label} must be between 0 and {maximum}")
+    return value
+
+
 def _zip_payload(raw: bytes) -> tuple[int, str]:
     if raw.startswith(_ZIP_MAGIC):
         return 0, "none"
@@ -312,6 +341,8 @@ def _member_path(info: zipfile.ZipInfo) -> tuple[str, bool]:
     except UnicodeEncodeError as exc:
         raise ZipInventoryError("ZIP member path is not UTF-8") from exc
     parts = path.split("/")
+    if any(component != component.strip() for component in parts):
+        raise ZipInventoryError("ZIP member path is not canonical")
     if (
         len(path_bytes) > MAX_PATH_BYTES
         or len(parts) > MAX_PATH_DEPTH

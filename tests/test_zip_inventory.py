@@ -110,6 +110,8 @@ class ZipInventoryTests(unittest.TestCase):
             ("absolute", _zip([("/escape", b"x")]), "path"),
             ("backslash", _zip([("dir\\escape", b"x")]), "path"),
             ("drive", _zip([("C:/escape", b"x")]), "path"),
+            ("leading-space", _zip([("dir/ file", b"x")]), "canonical"),
+            ("trailing-space", _zip([("dir /file", b"x")]), "canonical"),
             (
                 "deep",
                 _zip([("/".join(["d"] * 33) + "/file", b"x")]),
@@ -237,6 +239,31 @@ class ZipInventoryTests(unittest.TestCase):
                 finally:
                     for patcher in reversed(patches):
                         patcher.stop()
+
+    def test_remaining_limits_reject_before_member_retention(self) -> None:
+        raw = _zip([("one", b"12"), ("two", b"34")])
+        digest = self._retain_archive(raw)
+        with mock.patch.object(
+            self.cas,
+            "put_expected",
+            wraps=self.cas.put_expected,
+        ) as retain_member:
+            for limits, message in (
+                ({"max_expanded_bytes": 3}, "expanded bytes"),
+                ({"max_entries": 1}, "entry count"),
+                ({"max_entries": True}, "max_entries"),
+            ):
+                with (
+                    self.subTest(limits=limits),
+                    self.assertRaisesRegex(ZipInventoryError, message),
+                ):
+                    retain_zip_inventory(
+                        self.cas,
+                        digest,
+                        archive_name="remaining.zip",
+                        **limits,
+                    )
+            retain_member.assert_not_called()
 
     def test_crc_mismatch_and_missing_retained_member_fail_closed(self) -> None:
         corrupt = bytearray(_zip([("file.txt", b"content")]))

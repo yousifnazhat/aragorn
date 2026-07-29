@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+import zipfile
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
@@ -82,6 +83,19 @@ def _connection(response: MagicMock) -> MagicMock:
     return connection
 
 
+def _zip_bytes(*, shebang: bool = False) -> bytes:
+    output = BytesIO()
+    with zipfile.ZipFile(
+        output,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        archive.writestr("package/main.py", b"print('retained')\n")
+        archive.writestr("README.md", b"bounded release archive\n")
+    raw = output.getvalue()
+    return b"#!/usr/bin/env python3\n" + raw if shebang else raw
+
+
 class GitHubReleaseAssetTests(unittest.TestCase):
     def _acquire(
         self,
@@ -118,6 +132,58 @@ class GitHubReleaseAssetTests(unittest.TestCase):
             "/repos/astral-sh/uv/releases/tags/0.12.0",
         )
         return result, cas, connections
+
+    def _acquire_named(self, name: str, content: bytes) -> tuple[dict, CAS, str, str]:
+        url = (
+            "https://github.com/astral-sh/uv/releases/download/"
+            f"0.12.0/{name}"
+        )
+        digest = "sha256:" + hashlib.sha256(content).hexdigest()
+        metadata = {
+            "id": 361308705,
+            "tag_name": "0.12.0",
+            "draft": False,
+            "assets": [
+                {
+                    "id": 493071343,
+                    "name": name,
+                    "size": len(content),
+                    "digest": digest,
+                    "state": "uploaded",
+                    "content_type": "application/octet-stream",
+                    "url": (
+                        "https://api.github.com/repos/astral-sh/uv/"
+                        "releases/assets/493071343"
+                    ),
+                    "browser_download_url": url,
+                }
+            ],
+        }
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        cas = CAS(Path(temporary.name) / "cas")
+        connection = _connection(_response(content))
+        with (
+            patch(
+                "aragorn.github_release_asset._request_before_deadline",
+                return_value=metadata,
+            ),
+            patch(
+                "aragorn.github_release_asset._PinnedHTTPSConnection",
+                return_value=connection,
+            ),
+            patch(
+                "aragorn.github_release_asset._server_tls_context",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = acquire_github_release_asset(
+                url,
+                cas,
+                _pinned_api_addresses=_API_ADDRESS,
+                _pinned_asset_addresses=_ASSET_ADDRESS,
+            )
+        return result, cas, url, digest
 
     def test_direct_stream_is_digest_bound_and_retained(self) -> None:
         result, cas, connections = self._acquire((_response(),))
@@ -159,6 +225,116 @@ class GitHubReleaseAssetTests(unittest.TestCase):
         )
         self.assertNotIn("Authorization", request.kwargs["headers"])
         self.assertNotIn("Proxy-Authorization", request.kwargs["headers"])
+
+    def test_zip_family_and_magic_only_assets_bind_v2_inventory(self) -> None:
+        for name, shebang, expected_kind in (
+            ("bundle.zip", False, "zip"),
+            ("bundle.whl", False, "wheel"),
+            ("bundle.pyz", True, "zipapp"),
+            ("bundle.bin", False, "zip"),
+        ):
+            with self.subTest(name=name):
+                result, cas, url, digest = self._acquire_named(
+                    name,
+                    _zip_bytes(shebang=shebang),
+                )
+                self.assertEqual(result["schema"], "aragorn/github-release-asset/v2")
+                self.assertIsInstance(result["inventory_digest"], str)
+                replay = verify_github_release_asset_result(
+                    result,
+                    evidence_cas=CAS(cas.root, read_only=True),
+                    expected_url=url,
+                    expected_release_id=361308705,
+                    expected_asset_id=493071343,
+                    expected_digest=digest,
+                    expected_github_digest=digest,
+                    expected_content_type="application/octet-stream",
+                    expected_redirected=False,
+                )
+                inventory = json.loads(cas.read(result["inventory_digest"]))
+                self.assertEqual(inventory["archive"]["kind"], expected_kind)
+                self.assertEqual(inventory["totals"]["files"], 2)
+                self.assertEqual(replay, result)
+
+    def test_zip_intent_cannot_downgrade_or_bind_incomplete_inventory(self) -> None:
+        for name, content in (
+            ("malformed.zip", b"not a ZIP"),
+            ("malformed.pyz", b"#!/usr/bin/env python3\nnot a ZIP"),
+            ("sfx.bin", b"MZ-bounded-prefix" + _zip_bytes()),
+        ):
+            with (
+                self.subTest(name=name),
+                self.assertRaisesRegex(
+                    GitHubReleaseAssetError,
+                    "cannot inventory",
+                ),
+            ):
+                self._acquire_named(name, content)
+
+        result, cas, url, digest = self._acquire_named(
+            "bundle.pyz",
+            _zip_bytes(shebang=True),
+        )
+        downgraded = deepcopy(result)
+        downgraded["schema"] = "aragorn/github-release-asset/v1"
+        downgraded.pop("inventory_digest")
+        self.assertEqual(
+            verify_github_release_asset_result(
+                downgraded,
+                evidence_cas=CAS(cas.root, read_only=True),
+                expected_url=url,
+                expected_release_id=361308705,
+                expected_asset_id=493071343,
+                expected_digest=digest,
+                expected_github_digest=digest,
+                expected_content_type="application/octet-stream",
+                expected_redirected=False,
+            ),
+            downgraded,
+        )
+        with self.assertRaisesRegex(GitHubReleaseAssetError, "require a v2"):
+            verify_github_release_asset_result(
+                downgraded,
+                evidence_cas=CAS(cas.root, read_only=True),
+                expected_url=url,
+                expected_release_id=361308705,
+                expected_asset_id=493071343,
+                expected_digest=digest,
+                expected_github_digest=digest,
+                expected_content_type="application/octet-stream",
+                expected_redirected=False,
+                require_zip_inventory=True,
+            )
+
+        inventory_raw = cas.read(result["inventory_digest"])
+        archive_raw = cas.read(digest)
+        with tempfile.TemporaryDirectory() as temporary:
+            incomplete = CAS(Path(temporary) / "cas")
+            incomplete.put_expected(
+                BytesIO(archive_raw),
+                expected_digest=digest,
+                max_bytes=len(archive_raw),
+            )
+            incomplete.put_expected(
+                BytesIO(inventory_raw),
+                expected_digest=result["inventory_digest"],
+                max_bytes=len(inventory_raw),
+            )
+            with self.assertRaisesRegex(
+                GitHubReleaseAssetError,
+                "cannot verify retained.*inventory",
+            ):
+                verify_github_release_asset_result(
+                    result,
+                    evidence_cas=CAS(incomplete.root, read_only=True),
+                    expected_url=url,
+                    expected_release_id=361308705,
+                    expected_asset_id=493071343,
+                    expected_digest=digest,
+                    expected_github_digest=digest,
+                    expected_content_type="application/octet-stream",
+                    expected_redirected=False,
+                )
 
     def test_one_pinned_release_host_redirect_is_supported_without_retention(
         self,

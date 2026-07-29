@@ -192,11 +192,15 @@ This earns a Linux process/IP containment primitive with durable broker-replayed
 raw Git commit/tree proof, not supported acquisition: the root filesystem is
 not sealed, and the host kernel/systemd/Python trust boundary is not attested.
 Private repositories, scoped credential injection, retry policy, automatic
-independent release-pin acquisition, archive inventory/extraction, live public
+independent release-pin acquisition, general archive closure, live public
 out-of-root recursive evidence, admission-authorized protected installation,
-and install/update enforcement remain unsupported. The internal request-v3
-broker path is evidence-only and fails closed before protected publication when
-recursive closure is incomplete.
+and install/update enforcement remain unsupported. Bounded ZIP/WHL/PYZ
+inventory and extraction are bound into a separate analysis input, but public
+release URL edges remain fail-closed with
+`GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN`. The current broker does not
+invoke analyzers or publish bytes while recursive closure is incomplete;
+neither the retained members nor an analyzer receipt grants installer/runtime
+authority. The internal request-v3 broker path remains evidence-only.
 One operator-retained qualification archive replays exact request credentials,
 systemd controls, recursive install, byte-identical update sequencing, and a
 release-bearing `ERROR` path. The protected-state comparison remains an

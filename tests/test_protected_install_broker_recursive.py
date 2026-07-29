@@ -88,6 +88,7 @@ def _live_args(producer, release_digests: list[str]) -> tuple[argparse.Namespace
         "allowed_artifact_graph_profiles": [
             "recursive-github-markdown/v1",
             "recursive-github-markdown/v2",
+            "recursive-github-markdown/v3",
         ],
     }
     request = _source("2")
@@ -239,6 +240,11 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
                     return_value=_digest("4"),
                 ) as retain_graph,
                 mock.patch.object(
+                    producer.recursive_graph_v5_module,
+                    "release_assets_require_v5",
+                    return_value=False,
+                ),
+                mock.patch.object(
                     producer,
                     "verify_admission_artifact_graph",
                     return_value=graph,
@@ -314,7 +320,10 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
                 "unresolved": [],
             },
         }
-        manifest = {"files": [{"path": "SKILL.md"}]}
+        manifest = {
+            "tree_digest": graph["tree_digest"],
+            "files": [{"path": "SKILL.md"}],
+        }
 
         with TemporaryDirectory() as temporary:
             cas = CAS(Path(temporary) / "cas")
@@ -442,6 +451,116 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
             ],
             (),
         )
+
+    def test_recursive_v5_runtime_binding_gap_fails_before_analyzer(
+        self,
+    ) -> None:
+        producer = _load_producer()
+        release_digest = _digest("d")
+        args, receipt = _live_args(producer, [release_digest])
+        install_tree_digest = _digest("2")
+        analysis_manifest_digest = _digest("1")
+        analysis_tree_digest = _digest("5")
+        graph = {
+            "profile": "recursive-github-markdown/v3",
+            "tree_digest": install_tree_digest,
+            "source_proof_digest": _digest("3"),
+            "artifacts": [{"digest": _digest("4")}],
+            "analysis_manifest_digest": analysis_manifest_digest,
+            "analysis_tree_digest": analysis_tree_digest,
+            "closure": {
+                "scope": "artifact_graph",
+                "profile": "recursive-github-markdown/v3",
+                "status": "incomplete",
+                "unresolved": [
+                    "GITHUB_RELEASE_ASSET_RUNTIME_BINDING_UNPROVEN"
+                ],
+            },
+        }
+        with TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "cas")
+            protected = Path(temporary) / "protected"
+            protected.mkdir()
+            root_state = protected.stat()
+
+            with (
+                mock.patch.object(
+                    producer,
+                    "_load_revocation_snapshot",
+                    return_value=((), {}),
+                ),
+                mock.patch.object(
+                    producer,
+                    "verify_github_quarantine_receipt",
+                    return_value=receipt,
+                ),
+                mock.patch.object(
+                    producer,
+                    "_prepare_github_transition",
+                    return_value=(
+                        None,
+                        {
+                            "operation": "install",
+                            "expected_active": None,
+                            "manifest_diff": None,
+                        },
+                    ),
+                ),
+                mock.patch.object(
+                    producer.recursive_graph_v5_module,
+                    "retain_recursive_github_artifact_graph",
+                    return_value=_digest("6"),
+                ) as retain_v5,
+                mock.patch.object(
+                    producer.recursive_graph_v5_module,
+                    "release_assets_require_v5",
+                    return_value=True,
+                ),
+                mock.patch.object(
+                    producer,
+                    "verify_admission_artifact_graph",
+                    return_value=graph,
+                ),
+                mock.patch.object(
+                    producer,
+                    "_materialize_verified_manifest",
+                ) as materialize,
+                mock.patch.object(producer, "run_analyzer") as analyzer,
+                mock.patch.object(
+                    producer,
+                    "retain_decision_v3",
+                    return_value=_digest("8"),
+                ),
+                mock.patch.object(
+                    producer,
+                    "verify_decision_v3",
+                    return_value={"verdict": "ERROR"},
+                ),
+                mock.patch.object(
+                    producer,
+                    "_publish",
+                ) as publish,
+            ):
+                result = producer._run_github_live(
+                    args,
+                    cas=cas,
+                    previous_cas=None,
+                    protected_root=protected,
+                    root_state=root_state,
+                    analyzer_verifier_digest=_digest("e"),
+                    graph_verifier_digest=_digest("f"),
+                )
+
+        self.assertEqual(result["slice_status"], "ERROR")
+        self.assertIn(
+            "ARTIFACT_CLOSURE_LIMITED_TO_RECURSIVE_GITHUB_MARKDOWN_V3_"
+            "WITH_SEPARATE_ANALYSIS_INPUT",
+            result["limitations"],
+        )
+        retain_v5.assert_called_once()
+        materialize.assert_not_called()
+        analyzer.assert_not_called()
+        publish.assert_not_called()
 
 
 if __name__ == "__main__":

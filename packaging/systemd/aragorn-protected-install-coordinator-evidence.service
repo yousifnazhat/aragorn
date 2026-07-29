@@ -42,4 +42,4 @@ KeyringMode=private
 IPAddressDeny=any
 IPAddressAllow=localhost
 SystemCallArchitectures=native
-SystemCallFilter=~@mount @reboot @swap @raw-io @clock @ipc
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock ipc mq_getsetattr mq_notify mq_open mq_timedreceive mq_timedreceive_time64 mq_timedsend mq_timedsend_time64 mq_unlink msgctl msgget msgrcv msgsnd process_vm_readv process_vm_writev semctl semget semop semtimedop semtimedop_time64 shmat shmctl shmdt shmget

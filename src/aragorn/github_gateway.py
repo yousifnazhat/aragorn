@@ -912,12 +912,49 @@ def _require_success_output(process: _ProcessResult) -> bytes:
     if process.io_error is not None:
         raise GitHubGatewayError(f"gateway I/O failed: {process.io_error}")
     if process.returncode != 0:
+        error = _decode_gateway_error(process.stderr)
+        if error is not None:
+            error_type, message = error
+            raise GitHubGatewayError(
+                f"gateway exited unsuccessfully with status {process.returncode}: "
+                f"{error_type}: {message}"
+            )
         raise GitHubGatewayError(
             f"gateway exited unsuccessfully with status {process.returncode}"
         )
     if process.stderr:
         raise GitHubGatewayError("successful gateway wrote to standard error")
     return process.stdout
+
+
+def _decode_gateway_error(raw: bytes) -> tuple[str, str] | None:
+    try:
+        document = _decode_canonical_line(raw, "gateway error")
+    except (GitHubGatewayError, TypeError, ValueError):
+        return None
+    if (
+        set(document) != {"schema", "error", "message"}
+        or document.get("schema") != "aragorn/error/v1"
+    ):
+        return None
+    error_type = document.get("error")
+    message = document.get("message")
+    if (
+        not isinstance(error_type, str)
+        or not error_type
+        or len(error_type) > 128
+        or not error_type.isascii()
+        or not (error_type[0].isalpha() or error_type[0] == "_")
+        or any(
+            not (character.isalnum() or character == "_") for character in error_type
+        )
+        or not isinstance(message, str)
+        or not message
+        or len(message) > 2048
+        or not message.isprintable()
+    ):
+        return None
+    return error_type, message
 
 
 def _require_distinct_principal(worker_uid: int, worker_gid: int) -> None:

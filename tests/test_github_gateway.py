@@ -835,6 +835,56 @@ class GitHubGatewayTests(unittest.TestCase):
                 _ProcessResult(b"", b"", -9, output_exceeded=True)
             )
 
+    def test_failed_gateway_surfaces_only_canonical_structured_error(self) -> None:
+        structured = (
+            canonical_json(
+                {
+                    "schema": "aragorn/error/v1",
+                    "error": "GitHubExpansionError",
+                    "message": "external artifact is unsupported",
+                }
+            )
+            + b"\n"
+        )
+        with self.assertRaisesRegex(
+            GitHubGatewayError,
+            ("status 4: GitHubExpansionError: external artifact is unsupported"),
+        ):
+            github_gateway._require_success_output(_ProcessResult(b"", structured, 4))
+
+        secret = "SHOULD_NOT_BE_SURFACED"
+        malformed = (
+            canonical_json(
+                {
+                    "schema": "aragorn/error/v1",
+                    "error": "GitHubExpansionError",
+                    "message": secret,
+                    "unexpected": True,
+                }
+            )
+            + b"\n"
+        )
+        oversized = (
+            canonical_json(
+                {
+                    "schema": "aragorn/error/v1",
+                    "error": "GitHubExpansionError",
+                    "message": secret * 256,
+                }
+            )
+            + b"\n"
+        )
+        for stderr in (b"", malformed, oversized):
+            with (
+                self.subTest(stderr=bool(stderr)),
+                self.assertRaisesRegex(
+                    GitHubGatewayError,
+                    r"gateway exited unsuccessfully with status 4$",
+                ) as raised,
+            ):
+                github_gateway._require_success_output(_ProcessResult(b"", stderr, 4))
+            self.assertNotIn(secret, str(raised.exception))
+
     def test_shared_runner_bounds_process_group_deadline_and_output(self) -> None:
         timeout = _run_bounded(
             (sys.executable, "-I", "-c", "import time; time.sleep(60)"),

@@ -459,8 +459,11 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         )
         self.assertNotIn("LoadCredential=", unit)
         self.assertNotIn("PrivateMounts=", unit)
+        self.assertNotIn("PrivateIPC=", unit)
         self.assertNotIn("PrivateNetwork=", unit)
         self.assertNotIn("ProtectSystem=", unit)
+        self.assertNotIn("ProtectKernelLogs=", unit)
+        self.assertIn("@ipc", unit)
         self.assertIn("IPAddressDeny=any", unit)
         self.assertIn("IPAddressAllow=localhost", unit)
         self.assertIn(

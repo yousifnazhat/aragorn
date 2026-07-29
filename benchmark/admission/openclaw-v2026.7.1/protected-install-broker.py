@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import stat
 import sys
+import time
+from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -23,24 +26,44 @@ from aragorn.admission_artifact_graph import (  # noqa: E402
 )
 from aragorn.analyze import run_analyzer  # noqa: E402
 from aragorn.analyzer_receipt import retain_analyzer_run  # noqa: E402
+from aragorn.artifact_closure import (  # noqa: E402
+    load_verified_retained_manifest,
+)
 from aragorn.cas import CAS  # noqa: E402
 from aragorn.decision_receipt import (  # noqa: E402
     retain_decision_v3,
     verify_decision_v3,
 )
+from aragorn.github_quarantine_receipt import (  # noqa: E402
+    verify_github_quarantine_receipt,
+)
+from aragorn.materialization import (  # noqa: E402
+    _freeze_materialized_source_tree,
+    verify_materialized_source_tree,
+)
 from aragorn.oci_worker_protocol import (  # noqa: E402
     canonical_digest,
     canonical_json,
 )
+from aragorn.phase0_candidate import (  # noqa: E402
+    candidate_implementation_digest,
+)
 from aragorn.protected_install import (  # noqa: E402
     ProtectedInstallTransactionError,
+    _materialize_verified_manifest,
     _publish_protected_install_transaction,
 )
 
 _SCHEMA = "aragorn/openclaw-protected-install-broker-producer-receipt/v1"
+_GITHUB_SCHEMA = "aragorn/openclaw-github-protected-install-broker-evidence/v1"
 _ASSURANCE = "LOCAL_BROKER_CONFORMANCE_ONLY_NOT_INSTALLER_AUTHORITY"
+_GITHUB_ASSURANCE = (
+    "LIVE_GITHUB_CUSTODY_TO_PROTECTED_INSTALL_EVIDENCE_ONLY_NOT_INSTALLER_AUTHORITY"
+)
 _TARGET = "aragorn-admitted"
 _SCANNER = "aragorn-inert-fixture-scanner"
+_GITHUB_SCANNER = "aragorn-agent-skill-threats"
+_GITHUB_ANALYZER_VERSION = "0.1.0-phase0-v7"
 _LIMITATIONS = [
     "LOCAL_INERT_FIXTURE_NOT_LIVE_GITHUB_ACQUISITION_CUSTODY",
     "BROKER_DERIVED_CANONICAL_DIGEST_NOT_INDEPENDENT_SIGNATURE",
@@ -51,6 +74,19 @@ _LIMITATIONS = [
     "CLAIM_TIME_REUSES_PRE_STAGING_CLOCK_NOT_EXPIRY_OR_REVOCATION_FRESHNESS",
     "BOUNDED_TREE_SNAPSHOT_EXCLUDES_CTIME_FLAGS_XATTRS_AND_ACLS",
     "CONTEXT_IDS_ARE_DETERMINISTIC_FIXTURE_IDS_NOT_EXTERNAL_AUTHORSHIP_NONCES",
+    "NO_INSTALLER_AUTHORITY",
+]
+_GITHUB_LIMITATIONS = [
+    "PHASE0_FIRST_PARTY_ANALYZER_NOT_PRODUCTION_ANALYSIS",
+    "ANALYZER_EXECUTES_AS_ROOT_WITHOUT_OS_SANDBOX_OR_UID_DROP",
+    "PYTHON_STDLIB_AND_DYNAMIC_RUNTIME_CLOSURE_NOT_PINNED",
+    "CALLER_SUPPLIED_RUNTIME_DIGESTS_NOT_SEMANTICALLY_VERIFIED",
+    "HOST_SYSTEM_CLOCK_AND_REVOCATION_INPUT_NOT_EXTERNALLY_ATTESTED",
+    "CALLER_SUPPLIED_CONTEXT_ID_NOT_EXTERNALLY_ATTESTED",
+    "SELF_DERIVED_CONTEXT_DIGEST_NOT_INDEPENDENT_AUTHORIZATION",
+    "ARTIFACT_CLOSURE_LIMITED_TO_SELF_CONTAINED_GITHUB_MARKDOWN_V1",
+    "PRODUCER_RECEIPT_NOT_OPENCLAW_ROUTE_OR_ADM02_CONFORMANCE_EVIDENCE",
+    "PROTECTED_TRANSACTION_EXECUTION_NOT_INSTALLER_AUTHORITY",
     "NO_INSTALLER_AUTHORITY",
 ]
 _FIXTURE_BYTES = {
@@ -87,6 +123,40 @@ def _digest_bytes(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def _require_digest(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value.startswith("sha256:")
+        or len(value) != 71
+        or any(character not in "0123456789abcdef" for character in value[7:])
+    ):
+        raise BrokerConformanceError(f"{label} is invalid")
+    return value
+
+
+def _github_analyzer_script(expected_implementation_digest: str) -> str:
+    source_root = str(_REPOSITORY / "src")
+    return (
+        "import json,sys\n"
+        "from pathlib import Path\n"
+        f"sys.path.insert(0,{source_root!r})\n"
+        "from aragorn.acquire import ingest_local\n"
+        "from aragorn.cas import CAS\n"
+        "from aragorn.phase0_candidate import "
+        "candidate_implementation_digest,detect_first_party_observations\n"
+        f"expected={expected_implementation_digest!r}\n"
+        "if candidate_implementation_digest()!=expected:\n"
+        " raise RuntimeError('analyzer implementation identity changed')\n"
+        "request=json.load(sys.stdin)\n"
+        "cas=CAS(Path.cwd()/'.aragorn-analyzer-state')\n"
+        "manifest=ingest_local(Path(request['workspace']),cas)\n"
+        "if manifest['tree_digest']!=request['subject_digest']:\n"
+        " raise RuntimeError('analyzer workspace identity changed')\n"
+        "for observation in detect_first_party_observations(manifest,cas):\n"
+        " sys.stdout.write(observation.document_json+'\\n')\n"
+    )
+
+
 def _module_digest(module: Any) -> str:
     return _digest_bytes(Path(module.__file__).resolve(strict=True).read_bytes())
 
@@ -117,6 +187,46 @@ def _require_root(path: Path, expected_uid: int) -> os.stat_result:
             "protected root must be broker-owned, writable, and protected"
         )
     return state
+
+
+def _require_initial_protected_root(
+    path: Path,
+    expected_uid: int,
+    *,
+    allow_empty_control_layout: bool,
+) -> None:
+    entries = sorted(child.name for child in path.iterdir())
+    if not entries:
+        return
+    if not allow_empty_control_layout or entries != [
+        ".aragorn-install-claims",
+        ".aragorn-versions",
+    ]:
+        raise BrokerConformanceError(
+            "protected root must start empty or contain empty broker controls"
+        )
+    controls = (
+        (path / ".aragorn-install-claims", 0o700, ()),
+        (path / ".aragorn-versions", 0o755, (_TARGET,)),
+    )
+    for control, expected_mode, allowed_names in controls:
+        state = _require_root(control, expected_uid)
+        names = sorted(child.name for child in control.iterdir())
+        if stat.S_IMODE(state.st_mode) != expected_mode or (
+            names and tuple(names) != allowed_names
+        ):
+            raise BrokerConformanceError(
+                "protected broker control layout is not empty and exact"
+            )
+    target_versions = path / ".aragorn-versions" / _TARGET
+    if os.path.lexists(target_versions):
+        state = _require_root(target_versions, expected_uid)
+        if stat.S_IMODE(state.st_mode) != 0o755 or list(
+            target_versions.iterdir()
+        ):
+            raise BrokerConformanceError(
+                "protected target versions control is not empty and exact"
+            )
 
 
 def _build_fixture_evidence(
@@ -254,21 +364,24 @@ def _publish(
     context: dict[str, Any],
     *,
     now_unix: int,
+    claim_now_unix: int | None = None,
     runtime_conformance_digest: str,
     target_runtime_digest: str,
     revoked_context_ids: tuple[str, ...] = (),
+    claim_state_provider: Callable[[], tuple[int, tuple[str, ...]]] | None = None,
 ) -> dict[str, Any]:
     return _publish_protected_install_transaction(
         cas,
         context,
         root_fd,
         now_unix=now_unix,
-        claim_now_unix=now_unix,
+        claim_now_unix=now_unix if claim_now_unix is None else claim_now_unix,
         expected_context_digest=canonical_digest(context),
         expected_target_name=_TARGET,
         expected_runtime_conformance_digest=runtime_conformance_digest,
         measured_target_runtime_digest=target_runtime_digest,
         revoked_context_ids=revoked_context_ids,
+        claim_state_provider=claim_state_provider,
     )
 
 
@@ -282,6 +395,79 @@ def _metadata(state: os.stat_result) -> dict[str, int]:
         "mtime_ns": state.st_mtime_ns,
         "size": state.st_size,
         "uid": state.st_uid,
+    }
+
+
+def _load_revocation_snapshot(
+    path_value: str,
+    expected_uid: int,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    path = Path(path_value)
+    if not path.is_absolute():
+        raise BrokerConformanceError("revocation file path must be absolute")
+    parent = path.parent.resolve(strict=True)
+    _require_root(parent, expected_uid)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    descriptor = os.open(path, flags)
+    try:
+        before = os.fstat(descriptor)
+        mode = stat.S_IMODE(before.st_mode)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != expected_uid
+            or before.st_nlink != 1
+            or mode & 0o022
+            or before.st_size > 64 * 1024
+        ):
+            raise BrokerConformanceError(
+                "revocation file must be a bounded broker-owned regular file"
+            )
+        raw = bytearray()
+        while chunk := os.read(descriptor, min(8192, 64 * 1024 + 1 - len(raw))):
+            raw.extend(chunk)
+            if len(raw) > 64 * 1024:
+                raise BrokerConformanceError("revocation file exceeds 64 KiB")
+        after = os.fstat(descriptor)
+        if _metadata(before) != _metadata(after) or len(raw) != after.st_size:
+            raise BrokerConformanceError("revocation file changed while read")
+    finally:
+        os.close(descriptor)
+    try:
+        document = json.loads(bytes(raw).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+        raise BrokerConformanceError(f"revocation file is invalid: {exc}") from exc
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema", "context_ids"}
+        or document["schema"] != "aragorn/protected-install-revocations/v1"
+        or canonical_json(document) != bytes(raw)
+    ):
+        raise BrokerConformanceError(
+            "revocation file must be one canonical revocation object"
+        )
+    values = document["context_ids"]
+    if not isinstance(values, list):
+        raise BrokerConformanceError("revocation context ids must be a list")
+    context_ids = tuple(
+        _require_digest(value, "revoked context id") for value in values
+    )
+    if list(context_ids) != sorted(set(context_ids)):
+        raise BrokerConformanceError(
+            "revoked context ids must be sorted and unique"
+        )
+    return context_ids, {
+        "schema": document["schema"],
+        "path": str(path.resolve(strict=True)),
+        "digest": _digest_bytes(bytes(raw)),
+        "device": after.st_dev,
+        "inode": after.st_ino,
+        "owner_uid": after.st_uid,
+        "mode": stat.S_IMODE(after.st_mode),
+        "context_ids": list(context_ids),
     }
 
 
@@ -403,6 +589,431 @@ def _require_active(
     }
 
 
+def _run_github_live(
+    args: argparse.Namespace,
+    *,
+    cas: CAS,
+    protected_root: Path,
+    root_state: os.stat_result,
+    analyzer_verifier_digest: str,
+    graph_verifier_digest: str,
+) -> dict[str, Any]:
+    manifest_digest = _require_digest(args.manifest_digest, "manifest digest")
+    quarantine_receipt_digest = _require_digest(
+        args.quarantine_receipt_digest,
+        "quarantine receipt digest",
+    )
+    gateway_profile_digest = _require_digest(
+        args.gateway_profile_digest,
+        "gateway profile digest",
+    )
+    context_id = _require_digest(args.context_id, "context id")
+    expected_producer_digest = _require_digest(
+        args.expected_producer_implementation_digest,
+        "expected producer implementation digest",
+    )
+    expected_analyzer_implementation_digest = _require_digest(
+        args.expected_analyzer_implementation_digest,
+        "expected analyzer implementation digest",
+    )
+    expected_executable_digest = _require_digest(
+        args.expected_analyzer_executable_digest,
+        "expected analyzer executable digest",
+    )
+    expected_configuration_digest = _require_digest(
+        args.expected_analyzer_configuration_digest,
+        "expected analyzer configuration digest",
+    )
+    expected_policy_digest = _require_digest(
+        args.expected_policy_digest,
+        "expected policy digest",
+    )
+    expected_analyzer_verifier_digest = _require_digest(
+        args.expected_analyzer_verifier_digest,
+        "expected analyzer verifier digest",
+    )
+    expected_graph_verifier_digest = _require_digest(
+        args.expected_artifact_graph_verifier_digest,
+        "expected artifact graph verifier digest",
+    )
+    producer_implementation_digest = _digest_bytes(
+        Path(__file__).resolve(strict=True).read_bytes()
+    )
+    analyzer_implementation_digest = candidate_implementation_digest()
+    if producer_implementation_digest != expected_producer_digest:
+        raise BrokerConformanceError("producer implementation identity changed")
+    if analyzer_implementation_digest != expected_analyzer_implementation_digest:
+        raise BrokerConformanceError("analyzer implementation identity changed")
+    if analyzer_verifier_digest != expected_analyzer_verifier_digest:
+        raise BrokerConformanceError("analyzer verifier identity changed")
+    if graph_verifier_digest != expected_graph_verifier_digest:
+        raise BrokerConformanceError("artifact graph verifier identity changed")
+
+    executable = Path(sys.executable).resolve(strict=True)
+    executable_digest = _digest_bytes(executable.read_bytes())
+    if executable_digest != expected_executable_digest:
+        raise BrokerConformanceError("analyzer executable identity changed")
+    script = _github_analyzer_script(analyzer_implementation_digest)
+    configuration = {
+        "name": _GITHUB_SCANNER,
+        "version": _GITHUB_ANALYZER_VERSION,
+        "argv": [str(executable), "-c", script],
+        "operator_argv0": str(executable),
+        "executable_digest": executable_digest,
+    }
+    configuration_raw = canonical_json(configuration)
+    configuration_digest = _digest_bytes(configuration_raw)
+    if configuration_digest != expected_configuration_digest:
+        raise BrokerConformanceError("analyzer configuration identity changed")
+    policy = {
+        "schema": "aragorn/policy/v2",
+        "id": "openclaw-live-github-broker-evidence",
+        "version": 1,
+        "required_analyzers": [_GITHUB_SCANNER],
+        "hard_deny_reason_codes": [],
+        "review_severities": ["critical", "high", "medium"],
+        "allowed_artifact_graph_profiles": [
+            "self-contained-github-markdown/v1"
+        ],
+    }
+    policy_digest = canonical_digest(policy)
+    if policy_digest != expected_policy_digest:
+        raise BrokerConformanceError("policy identity changed")
+    (
+        initial_revoked_context_ids,
+        initial_revocation_snapshot,
+    ) = _load_revocation_snapshot(
+        args.revocation_file,
+        args.expected_broker_uid,
+    )
+    if context_id in initial_revoked_context_ids:
+        raise BrokerConformanceError("protected install context is revoked")
+
+    quarantine_receipt = verify_github_quarantine_receipt(
+        cas,
+        quarantine_receipt_digest,
+        expected_manifest_digest=manifest_digest,
+        expected_gateway_profile_digest=gateway_profile_digest,
+    )
+    expected_request = {
+        "schema": "aragorn/github-gateway-request/v1",
+        "owner": args.expected_owner,
+        "repository": args.expected_repository,
+        "commit": args.expected_commit,
+        "skill_path": args.expected_skill_path,
+    }
+    if quarantine_receipt["request"] != expected_request:
+        raise BrokerConformanceError(
+            "quarantine receipt source request is not caller-authorized"
+        )
+    graph_digest = artifact_graph_module.retain_github_admission_artifact_graph_v2(
+        cas,
+        manifest_digest,
+        expected_quarantine_receipt_digest=quarantine_receipt_digest,
+        expected_gateway_profile_digest=gateway_profile_digest,
+        verifier_implementation_digest=graph_verifier_digest,
+    )
+    graph = artifact_graph_module.verify_github_admission_artifact_graph_v2(
+        cas,
+        graph_digest,
+        expected_manifest_digest=manifest_digest,
+        expected_quarantine_receipt_digest=quarantine_receipt_digest,
+        expected_gateway_profile_digest=gateway_profile_digest,
+        expected_verifier_digest=graph_verifier_digest,
+    )
+    if graph["closure"]["status"] != "complete":
+        raise BrokerConformanceError(
+            "GitHub artifact closure is incomplete; protected install is blocked"
+        )
+
+    manifest = load_verified_retained_manifest(cas, manifest_digest)
+    with executable.open("rb") as stream:
+        retained_executable_digest = cas.put(
+            stream,
+            max_bytes=128 * 1024 * 1024,
+        )
+    if retained_executable_digest != executable_digest:
+        raise BrokerConformanceError("retained analyzer executable identity changed")
+    retained_configuration_digest = cas.put(
+        BytesIO(configuration_raw),
+        max_bytes=len(configuration_raw),
+    )
+    if retained_configuration_digest != configuration_digest:
+        raise BrokerConformanceError("retained analyzer configuration identity changed")
+    retained_policy_digest = _retain_document(cas, policy)
+    if retained_policy_digest != policy_digest:
+        raise BrokerConformanceError("retained policy identity changed")
+    with TemporaryDirectory(prefix="aragorn-github-analyzer-") as temporary:
+        staging = Path(temporary)
+        staging_fd = os.open(staging, _DIRECTORY_FLAGS)
+        try:
+            _materialize_verified_manifest(cas, manifest, staging_fd)
+            _freeze_materialized_source_tree(staging_fd, manifest)
+            staged_tree_digest = verify_materialized_source_tree(
+                cas,
+                manifest_digest,
+                staging_fd,
+            )
+            analyzer_result = run_analyzer(
+                (str(executable), "-c", script),
+                workspace=staging,
+                name=_GITHUB_SCANNER,
+                version=_GITHUB_ANALYZER_VERSION,
+                config_digest=configuration_digest,
+                executable_digest=executable_digest,
+                subject_digest=graph["tree_digest"],
+                configuration_bytes=configuration_raw,
+                timeout_seconds=2,
+                output_limit_bytes=4096,
+            )
+            if not analyzer_result.ok:
+                raise BrokerConformanceError(
+                    "evidence analyzer failed closed: "
+                    f"{analyzer_result.error_code}"
+                )
+            if (
+                verify_materialized_source_tree(cas, manifest_digest, staging_fd)
+                != staged_tree_digest
+            ):
+                raise BrokerConformanceError(
+                    "materialized GitHub source changed during analysis"
+                )
+        finally:
+            os.close(staging_fd)
+    analyzer_run_receipt_digest = retain_analyzer_run(
+        cas,
+        analyzer_result,
+        verifier_implementation_digest=analyzer_verifier_digest,
+    )
+    decision_digest = retain_decision_v3(
+        cas,
+        manifest_digest=manifest_digest,
+        artifact_graph_digest=graph_digest,
+        policy_digest=policy_digest,
+        analyzer_run_receipt_digests=[analyzer_run_receipt_digest],
+        analyzer_verifier_digest=analyzer_verifier_digest,
+        artifact_graph_verifier_digest=graph_verifier_digest,
+        expected_quarantine_receipt_digest=quarantine_receipt_digest,
+        expected_gateway_profile_digest=gateway_profile_digest,
+    )
+    decision = verify_decision_v3(
+        cas,
+        decision_digest,
+        expected_manifest_digest=manifest_digest,
+        expected_artifact_graph_digest=graph_digest,
+        expected_policy_digest=policy_digest,
+        expected_analyzer_run_receipt_digests=[analyzer_run_receipt_digest],
+        expected_analyzer_verifier_digest=analyzer_verifier_digest,
+        expected_artifact_graph_verifier_digest=graph_verifier_digest,
+        expected_quarantine_receipt_digest=quarantine_receipt_digest,
+        expected_gateway_profile_digest=gateway_profile_digest,
+    )
+    if decision["verdict"] != "ALLOW":
+        raise BrokerConformanceError(
+            f"GitHub evidence decision is not ALLOW: {decision['verdict']}"
+        )
+
+    context = {
+        "schema": "aragorn/protected-install-context/v2",
+        "authority": "BROKER_CONTEXT_ONLY_NOT_INSTALLER_AUTHORITY",
+        "context_id": context_id,
+        "status": "active",
+        "expires_at_unix": args.expires_at_unix,
+        "operation": "install",
+        "expected_active": None,
+        "decision_digest": decision_digest,
+        "manifest_digest": manifest_digest,
+        "artifact_graph_digest": graph_digest,
+        "policy_digest": policy_digest,
+        "analyzer_run_receipt_digests": [analyzer_run_receipt_digest],
+        "analyzer_verifier_digest": analyzer_verifier_digest,
+        "artifact_graph_verifier_digest": graph_verifier_digest,
+        "quarantine_receipt_digest": quarantine_receipt_digest,
+        "gateway_profile_digest": gateway_profile_digest,
+        "target_runtime_digest": args.target_runtime_digest,
+        "runtime_conformance_digest": args.runtime_conformance_digest,
+        "destination": {
+            "root_device": root_state.st_dev,
+            "root_inode": root_state.st_ino,
+            "target_name": _TARGET,
+        },
+    }
+    source_record = {
+        "request": expected_request,
+        "manifest_digest": manifest_digest,
+        "tree_digest": graph["tree_digest"],
+        "source_proof_digest": graph["source_proof_digest"],
+        "source_closure_digest": quarantine_receipt["source_closure_digest"],
+        "quarantine_receipt_digest": quarantine_receipt_digest,
+        "gateway_profile_digest": gateway_profile_digest,
+        "containment_profile": quarantine_receipt["containment_profile"],
+        "gateway": quarantine_receipt["gateway"],
+        "quarantine_protected_cas": quarantine_receipt["protected_cas"],
+        "artifact_graph_digest": graph_digest,
+        "artifact_graph_profile": graph["profile"],
+        "artifact_graph_verifier_implementation_digest": graph_verifier_digest,
+        "artifact_count": len(graph["artifacts"]),
+        "closure": graph["closure"],
+    }
+    analyzer_record = {
+        "name": _GITHUB_SCANNER,
+        "version": _GITHUB_ANALYZER_VERSION,
+        "implementation_digest": analyzer_implementation_digest,
+        "configuration_digest": configuration_digest,
+        "executable_digest": executable_digest,
+        "run_receipt_digest": analyzer_run_receipt_digest,
+        "verifier_implementation_digest": analyzer_verifier_digest,
+    }
+    decision_record = {
+        "digest": decision_digest,
+        "verdict": decision["verdict"],
+        "policy_digest": policy_digest,
+        "installer_work_eligible": False,
+    }
+    context_record = {
+        "context_id": context_id,
+        "digest": canonical_digest(context),
+        "target_runtime_digest": args.target_runtime_digest,
+        "runtime_conformance_digest": args.runtime_conformance_digest,
+        "destination": context["destination"],
+    }
+    claim_state: dict[str, Any] = {}
+
+    def fresh_claim_state() -> tuple[int, tuple[str, ...]]:
+        context_ids, snapshot = _load_revocation_snapshot(
+            args.revocation_file,
+            args.expected_broker_uid,
+        )
+        claim_now_unix = int(time.time())
+        claim_state.update(
+            {
+                "claim_now_unix": claim_now_unix,
+                "revocation_snapshot": snapshot,
+            }
+        )
+        return claim_now_unix, context_ids
+
+    def recovery_result(
+        transaction_record: dict[str, Any],
+        error: Exception,
+    ) -> dict[str, Any]:
+        return {
+            "schema": _GITHUB_SCHEMA,
+            "assurance": _GITHUB_ASSURANCE,
+            "slice_status": "ERROR",
+            "mode": "github-live",
+            "producer_implementation_digest": producer_implementation_digest,
+            "source": source_record,
+            "analyzer": analyzer_record,
+            "decision": decision_record,
+            "context": context_record,
+            "transaction": transaction_record,
+            "claim": {
+                "initial_revocation_snapshot": initial_revocation_snapshot,
+                "fresh": claim_state,
+            },
+            "error": {
+                "type": "POST_COMMIT_RECOVERY_REQUIRED",
+                "message": str(error),
+            },
+            "recovery": {
+                "active_target": _TARGET,
+                "claim_consumed": True,
+                "version_path": transaction_record["version_path"],
+            },
+            "limitations": _GITHUB_LIMITATIONS,
+        }
+
+    root_fd = os.open(protected_root, _DIRECTORY_FLAGS)
+    try:
+        try:
+            transaction = _publish(
+                cas,
+                root_fd,
+                context,
+                now_unix=args.now_unix,
+                claim_now_unix=args.now_unix,
+                runtime_conformance_digest=args.runtime_conformance_digest,
+                target_runtime_digest=args.target_runtime_digest,
+                revoked_context_ids=initial_revoked_context_ids,
+                claim_state_provider=fresh_claim_state,
+            )
+        except ProtectedInstallTransactionError as exc:
+            if exc.recovery is None:
+                raise
+            return recovery_result(exc.recovery, exc)
+    finally:
+        os.close(root_fd)
+    try:
+        active_link = protected_root / _TARGET
+        if (
+            not active_link.is_symlink()
+            or os.readlink(active_link) != transaction["version_path"]
+        ):
+            raise BrokerConformanceError(
+                "active GitHub protected link is not exact"
+            )
+        version_fd = os.open(
+            protected_root / transaction["version_path"],
+            _DIRECTORY_FLAGS,
+        )
+        try:
+            active_tree_digest = verify_materialized_source_tree(
+                cas,
+                manifest_digest,
+                version_fd,
+            )
+        finally:
+            os.close(version_fd)
+        if (
+            active_tree_digest != graph["tree_digest"]
+            or transaction["tree_digest"] != graph["tree_digest"]
+        ):
+            raise BrokerConformanceError("installed GitHub tree digest is not exact")
+        if sorted(path.name for path in protected_root.iterdir()) != [
+            ".aragorn-install-claims",
+            ".aragorn-versions",
+            _TARGET,
+        ]:
+            raise BrokerConformanceError(
+                "protected root namespace contains residue"
+            )
+    except Exception as exc:  # noqa: BLE001 - retain committed recovery identity
+        return recovery_result(transaction, exc)
+
+    return {
+        "schema": _GITHUB_SCHEMA,
+        "assurance": _GITHUB_ASSURANCE,
+        "slice_status": "PASS",
+        "mode": "github-live",
+        "producer_implementation_digest": producer_implementation_digest,
+        "source": source_record,
+        "analyzer": analyzer_record,
+        "decision": decision_record,
+        "context": context_record,
+        "claim": {
+            "initial_revocation_snapshot": initial_revocation_snapshot,
+            "fresh": claim_state,
+        },
+        "transaction": transaction,
+        "active": {
+            "link_target": transaction["version_path"],
+            "tree_digest": active_tree_digest,
+        },
+        "verified_sequence": [
+            "quarantine-custody",
+            "self-contained-github-markdown-v1-closure",
+            "exact-source-materialization",
+            "digest-bound-first-party-analyzer-run",
+            "decision-v3-replay",
+            "protected-install-context-v2",
+            "protected-install-transaction",
+            "active-tree-reverification",
+        ],
+        "limitations": _GITHUB_LIMITATIONS,
+    }
+
+
 def _run(args: argparse.Namespace) -> dict[str, Any]:
     if os.name != "posix":
         raise BrokerConformanceError("protected install conformance requires POSIX")
@@ -410,28 +1021,62 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         raise BrokerConformanceError("effective UID is not the expected broker UID")
     if args.now_unix < 0 or args.expires_at_unix <= args.now_unix:
         raise BrokerConformanceError("trusted time window is invalid")
-    for value in (
-        args.target_runtime_digest,
+    _require_digest(args.target_runtime_digest, "target runtime digest")
+    _require_digest(
         args.runtime_conformance_digest,
-    ):
-        if (
-            not value.startswith("sha256:")
-            or len(value) != 71
-            or any(character not in "0123456789abcdef" for character in value[7:])
-        ):
-            raise BrokerConformanceError("runtime digest is invalid")
+        "runtime conformance digest",
+    )
+    github_arguments = (
+        args.manifest_digest,
+        args.quarantine_receipt_digest,
+        args.gateway_profile_digest,
+        args.context_id,
+        args.expected_owner,
+        args.expected_repository,
+        args.expected_commit,
+        args.expected_skill_path,
+        args.expected_producer_implementation_digest,
+        args.expected_analyzer_implementation_digest,
+        args.expected_analyzer_executable_digest,
+        args.expected_analyzer_configuration_digest,
+        args.expected_policy_digest,
+        args.expected_analyzer_verifier_digest,
+        args.expected_artifact_graph_verifier_digest,
+        args.revocation_file,
+    )
+    if args.github_live and any(value is None for value in github_arguments):
+        raise BrokerConformanceError(
+            "GitHub live mode requires manifest, quarantine receipt, "
+            "gateway profile, context, and source request inputs"
+        )
+    if not args.github_live and any(value is not None for value in github_arguments):
+        raise BrokerConformanceError(
+            "GitHub trust inputs require --github-live"
+        )
 
     protected_root = Path(args.protected_root).resolve(strict=True)
-    cas_root = Path(args.cas_root).resolve(strict=False)
+    cas_root = Path(args.cas_root).resolve(strict=args.github_live)
     common = Path(os.path.commonpath((protected_root, cas_root)))
     if common in {protected_root, cas_root}:
         raise BrokerConformanceError("CAS and protected roots must be disjoint")
     root_state = _require_root(protected_root, args.expected_broker_uid)
-    if list(protected_root.iterdir()):
-        raise BrokerConformanceError("protected root must start empty")
+    _require_initial_protected_root(
+        protected_root,
+        args.expected_broker_uid,
+        allow_empty_control_layout=args.github_live,
+    )
     cas = CAS(cas_root)
     analyzer_verifier_digest = _module_digest(analyzer_receipt_module)
     graph_verifier_digest = _module_digest(artifact_graph_module)
+    if args.github_live:
+        return _run_github_live(
+            args,
+            cas=cas,
+            protected_root=protected_root,
+            root_state=root_state,
+            analyzer_verifier_digest=analyzer_verifier_digest,
+            graph_verifier_digest=graph_verifier_digest,
+        )
     executable = Path(sys.executable).resolve(strict=True)
     with executable.open("rb") as stream:
         executable_digest = cas.put(stream, max_bytes=128 * 1024 * 1024)
@@ -625,6 +1270,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--github-live", action="store_true")
     parser.add_argument("--cas-root", required=True)
     parser.add_argument("--protected-root", required=True)
     parser.add_argument("--expected-broker-uid", required=True, type=int)
@@ -632,24 +1278,44 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--expires-at-unix", required=True, type=int)
     parser.add_argument("--target-runtime-digest", required=True)
     parser.add_argument("--runtime-conformance-digest", required=True)
+    parser.add_argument("--manifest-digest")
+    parser.add_argument("--quarantine-receipt-digest")
+    parser.add_argument("--gateway-profile-digest")
+    parser.add_argument("--context-id")
+    parser.add_argument("--expected-owner")
+    parser.add_argument("--expected-repository")
+    parser.add_argument("--expected-commit")
+    parser.add_argument("--expected-skill-path")
+    parser.add_argument("--expected-producer-implementation-digest")
+    parser.add_argument("--expected-analyzer-implementation-digest")
+    parser.add_argument("--expected-analyzer-executable-digest")
+    parser.add_argument("--expected-analyzer-configuration-digest")
+    parser.add_argument("--expected-policy-digest")
+    parser.add_argument("--expected-analyzer-verifier-digest")
+    parser.add_argument("--expected-artifact-graph-verifier-digest")
+    parser.add_argument("--revocation-file")
     return parser
 
 
 def main() -> int:
+    args = _parser().parse_args()
+    schema = _GITHUB_SCHEMA if args.github_live else _SCHEMA
+    assurance = _GITHUB_ASSURANCE if args.github_live else _ASSURANCE
+    limitations = _GITHUB_LIMITATIONS if args.github_live else _LIMITATIONS
     try:
-        receipt = _run(_parser().parse_args())
+        receipt = _run(args)
     except Exception as exc:  # noqa: BLE001 - emit one canonical fail-closed receipt
         receipt = {
-            "schema": _SCHEMA,
-            "assurance": _ASSURANCE,
+            "schema": schema,
+            "assurance": assurance,
             "slice_status": "ERROR",
             "error": {"type": type(exc).__name__, "message": str(exc)},
-            "limitations": _LIMITATIONS,
+            "limitations": limitations,
         }
         sys.stdout.buffer.write(canonical_json(receipt) + b"\n")
         return 1
     sys.stdout.buffer.write(canonical_json(receipt) + b"\n")
-    return 0
+    return 0 if receipt["slice_status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

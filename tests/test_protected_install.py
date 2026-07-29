@@ -395,12 +395,35 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
         self.assertFalse(os.path.lexists(self.protected / self._version_path(updated)))
 
     def test_claim_recheck_rejects_revocation_and_binding_drift(self) -> None:
+        nested_source = self.root / "source-nested"
+        (nested_source / "references").mkdir(parents=True)
+        (nested_source / "SKILL.md").write_bytes(b"A")
+        (nested_source / "references" / "note.md").write_bytes(b"nested")
+        nested_manifest = ingest_local(nested_source, self.cas)
+        nested_raw = canonical_json(nested_manifest)
+        nested_manifest_digest = self.cas.put(
+            BytesIO(nested_raw),
+            max_bytes=len(nested_raw),
+        )
         revoked = self._context(
             context_character="1",
-            manifest_digest=self.manifest_a_digest,
+            manifest_digest=nested_manifest_digest,
             operation="install",
             expected_active=None,
         )
+
+        def fresh_claim_state() -> tuple[int, tuple[str, ...]]:
+            staged = list(
+                (
+                    self.protected
+                    / ".aragorn-versions"
+                    / "admitted-skill"
+                ).glob(".aragorn-stage-*/SKILL.md")
+            )
+            self.assertEqual(len(staged), 1)
+            self.assertEqual(staged[0].read_bytes(), b"A")
+            return 101, (revoked.context_id,)
+
         with (
             patch(
                 "aragorn.protected_install.verify_protected_install_context_v2",
@@ -427,10 +450,19 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
                 ),
                 measured_target_runtime_digest=revoked.target_runtime_digest,
                 revoked_context_ids=(),
+                claim_state_provider=fresh_claim_state,
             )
         self.assertEqual(verifier.call_count, 2)
         self.assertEqual(verifier.call_args_list[0].kwargs["now_unix"], 100)
         self.assertEqual(verifier.call_args_list[1].kwargs["now_unix"], 101)
+        self.assertEqual(
+            verifier.call_args_list[1].kwargs["revoked_context_ids"],
+            (revoked.context_id,),
+        )
+        target_versions = (
+            self.protected / ".aragorn-versions" / "admitted-skill"
+        )
+        self.assertEqual(list(target_versions.glob(".aragorn-stage-*")), [])
 
         changed = self._context(
             context_character="2",
@@ -468,6 +500,7 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
 
         claims = self.protected / ".aragorn-install-claims"
         self.assertEqual(list(claims.glob("*.json")), [])
+        self.assertEqual(list(target_versions.glob(".aragorn-stage-*")), [])
         self.assertFalse(os.path.lexists(self.protected / "admitted-skill"))
 
     def test_post_claim_activation_failure_retains_recoverable_state(self) -> None:
@@ -485,12 +518,12 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
             ),
             patch(
                 "aragorn.protected_install._rename_activation_link",
-                side_effect=OSError("injected activation failure"),
+                side_effect=RuntimeError("injected activation failure"),
             ),
             self.assertRaisesRegex(
                 ProtectedInstallTransactionError,
                 "after consuming.*no rollback was attempted",
-            ),
+            ) as raised,
         ):
             _publish_protected_install_transaction(
                 self.cas,
@@ -507,6 +540,16 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
                 revoked_context_ids=(),
             )
 
+        self.assertIsNotNone(raised.exception.recovery)
+        assert raised.exception.recovery is not None
+        self.assertEqual(
+            raised.exception.recovery["context_id"],
+            installed.context_id,
+        )
+        self.assertEqual(
+            raised.exception.recovery["version_path"],
+            self._version_path(installed),
+        )
         claim = (
             self.protected
             / ".aragorn-install-claims"

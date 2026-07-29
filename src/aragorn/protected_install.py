@@ -5,23 +5,18 @@ from __future__ import annotations
 import os
 import secrets
 import stat
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import PurePosixPath
 from typing import Any
 
-from .artifact_closure import (
-    ArtifactClosureError,
-    load_verified_retained_manifest,
-)
-from .cas import CAS, CASError
+from .artifact_closure import load_verified_retained_manifest
+from .cas import CAS
 from .materialization import (
-    MaterializationVerificationError,
     _freeze_materialized_source_tree,
     verify_materialized_source_tree,
 )
 from .oci_worker_protocol import canonical_json
 from .protected_install_context import (
-    ProtectedInstallContextError,
     VerifiedInstallContextV2,
     verify_protected_install_context_v2,
 )
@@ -41,6 +36,15 @@ _DIRECTORY_FLAGS = (
 class ProtectedInstallTransactionError(ValueError):
     """A private exact-byte transaction failed without granting authority."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        recovery: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.recovery = None if recovery is None else dict(recovery)
+
 
 def _publish_protected_install_transaction(
     cas: CAS,
@@ -54,6 +58,7 @@ def _publish_protected_install_transaction(
     expected_runtime_conformance_digest: str,
     measured_target_runtime_digest: str,
     revoked_context_ids: Collection[str],
+    claim_state_provider: Callable[[], tuple[int, Collection[str]]] | None = None,
 ) -> dict[str, Any]:
     """Apply one context-bound link switch without granting installer authority.
 
@@ -67,8 +72,10 @@ def _publish_protected_install_transaction(
     state for explicit recovery and never attempts or reports an automatic
     rollback.
 
-    ``claim_now_unix`` is an injected trusted clock reading taken after staging
-    and must not precede ``now_unix``.
+    ``claim_state_provider``, when supplied, is called after staging and replaces
+    ``claim_now_unix`` plus ``revoked_context_ids`` for the final pre-claim
+    verification. Otherwise ``claim_now_unix`` is an injected trusted clock
+    reading taken after staging and must not precede ``now_unix``.
     """
 
     broker_root_fd = -1
@@ -81,6 +88,7 @@ def _publish_protected_install_transaction(
     staging_name: str | None = None
     claim_temporary_name: str | None = None
     activation_temporary_name: str | None = None
+    record: dict[str, Any] | None = None
     try:
         if os.name != "posix":
             raise ProtectedInstallTransactionError(
@@ -212,6 +220,22 @@ def _publish_protected_install_transaction(
         os.fchmod(staging_fd, 0o555)
         os.fsync(staging_fd)
 
+        claim_revoked_context_ids = revoked_context_ids
+        if claim_state_provider is not None:
+            try:
+                claim_now_unix, claim_revoked_context_ids = claim_state_provider()
+            except Exception as exc:  # noqa: BLE001 - fail closed before claim
+                raise ProtectedInstallTransactionError(
+                    f"cannot obtain fresh protected install claim state: {exc}"
+                ) from exc
+            if (
+                isinstance(claim_now_unix, bool)
+                or not isinstance(claim_now_unix, int)
+                or claim_now_unix < now_unix
+            ):
+                raise ProtectedInstallTransactionError(
+                    "fresh protected install claim time is invalid"
+                )
         claim_context = verify_protected_install_context_v2(
             cas,
             context,
@@ -221,7 +245,7 @@ def _publish_protected_install_transaction(
             expected_target_name=expected_target_name,
             expected_runtime_conformance_digest=(expected_runtime_conformance_digest),
             measured_target_runtime_digest=measured_target_runtime_digest,
-            revoked_context_ids=revoked_context_ids,
+            revoked_context_ids=claim_revoked_context_ids,
         )
         if claim_context != verified:
             raise ProtectedInstallTransactionError(
@@ -359,22 +383,31 @@ def _publish_protected_install_transaction(
         )
         os.fsync(broker_root_fd)
         return record
-    except (
-        ArtifactClosureError,
-        CASError,
-        MaterializationVerificationError,
-        ProtectedInstallContextError,
-        ProtectedInstallTransactionError,
-        OSError,
-        TypeError,
-        ValueError,
-    ) as exc:
+    except Exception as exc:
         if claimed:
             raise ProtectedInstallTransactionError(
                 "protected install transaction failed after consuming its "
                 "single-use context; recoverable state was retained and no "
-                f"rollback was attempted: {exc}"
+                f"rollback was attempted: {exc}",
+                recovery=record,
             ) from exc
+        if (
+            staging_name is not None
+            and staging_fd >= 0
+            and target_versions_fd >= 0
+        ):
+            try:
+                _remove_staging_tree(
+                    target_versions_fd,
+                    staging_fd,
+                    staging_name,
+                )
+                staging_name = None
+            except Exception as cleanup_exc:
+                raise ProtectedInstallTransactionError(
+                    "protected install transaction failed before consuming its "
+                    f"context and staging cleanup failed: {cleanup_exc}"
+                ) from cleanup_exc
         raise ProtectedInstallTransactionError(
             f"protected install transaction failed before consuming its context: {exc}"
         ) from exc
@@ -672,6 +705,56 @@ def _create_staging_directory(parent_fd: int) -> tuple[str, int]:
     raise ProtectedInstallTransactionError(
         "cannot allocate protected install staging directory"
     )
+
+
+def _remove_staging_tree(parent_fd: int, staging_fd: int, name: str) -> None:
+    opened = os.fstat(staging_fd)
+    named = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    if (
+        _inode(opened) != _inode(named)
+        or not stat.S_ISDIR(opened.st_mode)
+        or opened.st_uid != os.geteuid()
+    ):
+        raise ProtectedInstallTransactionError(
+            "protected install staging identity changed during cleanup"
+        )
+
+    def remove_children(directory_fd: int, depth: int) -> None:
+        if depth > _MAX_DEPTH:
+            raise ProtectedInstallTransactionError(
+                "protected install staging cleanup exceeded supported depth"
+            )
+        os.fchmod(directory_fd, 0o700)
+        with os.scandir(directory_fd) as iterator:
+            entries = sorted(iterator, key=lambda entry: entry.name)
+        for entry in entries:
+            metadata = entry.stat(follow_symlinks=False)
+            if metadata.st_uid != os.geteuid():
+                raise ProtectedInstallTransactionError(
+                    "protected install staging cleanup found foreign ownership"
+                )
+            if stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1:
+                os.unlink(entry.name, dir_fd=directory_fd)
+                continue
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise ProtectedInstallTransactionError(
+                    "protected install staging cleanup found a special entry"
+                )
+            child_fd = os.open(entry.name, _DIRECTORY_FLAGS, dir_fd=directory_fd)
+            try:
+                if _inode(os.fstat(child_fd)) != _inode(metadata):
+                    raise ProtectedInstallTransactionError(
+                        "protected install staging cleanup identity changed"
+                    )
+                remove_children(child_fd, depth + 1)
+            finally:
+                os.close(child_fd)
+            os.rmdir(entry.name, dir_fd=directory_fd)
+        os.fsync(directory_fd)
+
+    remove_children(staging_fd, 0)
+    os.rmdir(name, dir_fd=parent_fd)
+    os.fsync(parent_fd)
 
 
 def _create_record_file(parent_fd: int, *, prefix: str) -> tuple[str, int]:

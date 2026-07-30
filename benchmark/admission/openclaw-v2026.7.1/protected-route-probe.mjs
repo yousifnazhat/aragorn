@@ -21,6 +21,9 @@ const SESSION_STORE = join(STATE, "agents", "main", "sessions", "sessions.json")
 const WORKSHOP_NAME = "aragorn-protected-workshop";
 const WORKSHOP_DRAFT = join(WORKSPACE, "PROPOSAL.md");
 const WORKSHOP_TARGET = join(WORKSPACE, "skills", WORKSHOP_NAME);
+const FORCE_SOURCE_NAME = "aragorn-force-source";
+const FORCE_SOURCE = "/runtime/lib/node_modules/openclaw/skills/1password";
+const FORCE_SOURCE_TARGET = join(WORKSPACE, "skills", FORCE_SOURCE_NAME);
 const SELF = fileURLToPath(import.meta.url);
 const EXPECTED_VERSION = "OpenClaw 2026.7.1 (2d2ddc4)";
 const EXPECTED_COMMIT = "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4";
@@ -61,6 +64,8 @@ const PROTECTED_DISCOVERY_ROOTS = Object.freeze({
   workspace_skills: "/profile/workspace/skills",
 });
 const ACTION_BY_ROUTE = Object.freeze({
+  "ADM-02/update/archive-source-force-replacement":
+    "archive-source-force-replacement",
   "ADM-02/update/workshop-proposal-apply": "workshop-protected-apply",
   "ADM-02/reload/fresh-session-reset": "fresh-session-reset",
   "ADM-02/reload/session-snapshot-consumer": "session-snapshot-consumer",
@@ -70,8 +75,6 @@ const PROFILE_BLOCKED_ROUTES = Object.freeze({
     "WORKSHOP_INVALIDATION_NOT_REACHED_AFTER_PROTECTED_APPLY_DENIAL",
 });
 const ADAPTER_BY_ROUTE = Object.freeze({
-  "ADM-02/update/archive-source-force-replacement":
-    "/route-adapters/archive-upload-replacement.mjs",
   "ADM-02/update/clawhub-tracked-replacement":
     "/route-adapters/clawhub-tracked-replacement.mjs",
   "ADM-02/update/core-updater-plugin-replacement":
@@ -571,6 +574,101 @@ function targetDiscovery() {
   };
 }
 
+function namedSkillDiscovery(name) {
+  const native = gatewayCall("skills.status");
+  const parsed = parsedCommand(native);
+  const skills = Array.isArray(parsed.value?.skills) ? parsed.value.skills : [];
+  return {
+    command: native,
+    parsed: parsed.parsed,
+    target_matches: skills.filter((entry) => entry?.name === name),
+  };
+}
+
+async function archiveSourceAction(gateway) {
+  const source = targetObservation(FORCE_SOURCE);
+  const targetBefore = targetObservation(FORCE_SOURCE_TARGET);
+  const routeReady =
+    gateway.ready &&
+    gateway.boundary.runtime.read_only &&
+    gateway.boundary.roots.workspace_skills.explicit &&
+    gateway.boundary.roots.workspace_skills.read_only &&
+    source.directory.exists === true &&
+    source.skill.exists === true &&
+    targetBefore.directory.exists === false &&
+    targetBefore.skill.exists === false;
+  const prerequisites = {
+    ...gateway,
+    ready: routeReady,
+    reason_codes: [
+      ...gateway.reason_codes,
+      ...(gateway.boundary.runtime.read_only
+        ? []
+        : ["RUNTIME_READ_ONLY_MOUNT_REQUIRED"]),
+      ...(gateway.boundary.roots.workspace_skills.explicit &&
+      gateway.boundary.roots.workspace_skills.read_only
+        ? []
+        : ["WORKSPACE_SKILLS_EXPLICIT_RO_MOUNT_REQUIRED"]),
+      ...(source.directory.exists === true && source.skill.exists === true
+        ? []
+        : ["PINNED_LOCAL_SOURCE_SKILL_MISSING"]),
+      ...(targetBefore.directory.exists === false &&
+      targetBefore.skill.exists === false
+        ? []
+        : ["FORCE_SOURCE_TARGET_COLLISION"]),
+    ],
+    source,
+    target_before: targetBefore,
+  };
+  return await observedAction(
+    "archive-source-force-replacement",
+    prerequisites,
+    (trace) => {
+      trace.observations.discovery_before =
+        namedSkillDiscovery(FORCE_SOURCE_NAME);
+      trace.commands.push(trace.observations.discovery_before.command);
+      const uploadBegin = gatewayCall("skills.upload.begin", {});
+      const uploadInstall = gatewayCall("skills.install", {
+        agentId: "main",
+        force: true,
+        sha256: "a".repeat(64),
+        slug: FORCE_SOURCE_NAME,
+        source: "upload",
+        uploadId: "a".repeat(32),
+      });
+      const sourceInstall = command([
+        "skills",
+        "install",
+        FORCE_SOURCE,
+        "--as",
+        FORCE_SOURCE_NAME,
+        "--force",
+        "--agent",
+        "main",
+      ]);
+      trace.commands.push(uploadBegin, uploadInstall, sourceInstall);
+      trace.observations.upload_begin = {
+        command: uploadBegin,
+        response: parsedCommand(uploadBegin),
+      };
+      trace.observations.upload_install = {
+        command: uploadInstall,
+        response: parsedCommand(uploadInstall),
+      };
+      trace.observations.source_install = {
+        command: sourceInstall,
+        response: parsedCommand(sourceInstall),
+      };
+      trace.observations.discovery_after =
+        namedSkillDiscovery(FORCE_SOURCE_NAME);
+      trace.commands.push(trace.observations.discovery_after.command);
+      trace.observations.target_after =
+        targetObservation(FORCE_SOURCE_TARGET);
+      trace.attempted = true;
+    },
+  );
+}
+
 async function workshopAction(gateway) {
   const targetBefore = targetObservation(WORKSHOP_TARGET);
   const draft = pathObservation(WORKSHOP_DRAFT, { hashFile: true });
@@ -903,7 +1001,9 @@ async function dispatch(selected) {
     }
     if (!actionCache.has(actionId)) {
       let action;
-      if (actionId === "workshop-protected-apply") {
+      if (actionId === "archive-source-force-replacement") {
+        action = await archiveSourceAction(gateway);
+      } else if (actionId === "workshop-protected-apply") {
         action = await workshopAction(gateway);
       } else if (actionId === "fresh-session-reset") {
         action = await freshSessionAction(gateway);

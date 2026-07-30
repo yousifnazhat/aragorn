@@ -30,23 +30,19 @@ _CONFIG = (
     / "protected-route-config-v1.json"
 )
 _WORKSHOP = (
-    _ROOT
-    / "benchmark"
-    / "fixtures"
-    / "phase1-protected-workshop"
-    / "PROPOSAL.md"
+    _ROOT / "benchmark" / "fixtures" / "phase1-protected-workshop" / "PROPOSAL.md"
 )
 _EVIDENCE = (
     _ROOT
     / "benchmark"
     / "evidence"
-    / "openclaw-v2026.7.1-protected-route-actions-v3-2026-07-29.json"
+    / "openclaw-v2026.7.1-protected-route-actions-v4-2026-07-29.json"
 )
 _RECEIPT = (
     _ROOT
     / "benchmark"
     / "receipts"
-    / "phase1-openclaw-protected-route-actions-v3-2026-07-29.json"
+    / "phase1-openclaw-protected-route-actions-v4-2026-07-29.json"
 )
 _NODE = shutil.which("node")
 
@@ -92,9 +88,7 @@ class ProtectedRouteProbeTests(unittest.TestCase):
             )
         self.assertEqual(evidence["run_nonce"], receipt["evidence"]["run_nonce"])
         self.assertTrue(evidence["protected_boundary"]["ready"])
-        statuses = {
-            route["id"]: route["status"] for route in evidence["routes"]
-        }
+        statuses = {route["id"]: route["status"] for route in evidence["routes"]}
         self.assertEqual(
             sorted(
                 route_id
@@ -110,6 +104,24 @@ class ProtectedRouteProbeTests(unittest.TestCase):
                 if status == "NOT_TESTED"
             ),
             sorted(receipt["results"]["not_tested"]),
+        )
+        archive = next(
+            action
+            for action in evidence["actions"]
+            if action["id"] == "archive-source-force-replacement"
+        )
+        self.assertEqual(archive["status"], "OBSERVED")
+        self.assertFalse(archive["observations"]["target_after"]["directory"]["exists"])
+        self.assertFalse(archive["observations"]["target_after"]["skill"]["exists"])
+        self.assertEqual(
+            archive["observations"]["upload_begin"]["response"]["value"]["error"][
+                "code"
+            ],
+            "UNAVAILABLE",
+        )
+        self.assertIn(
+            "EROFS",
+            archive["observations"]["source_install"]["command"]["stderr_excerpt"],
         )
 
     def test_source_is_exactly_bounded_and_selector_only(self) -> None:
@@ -168,8 +180,8 @@ class ProtectedRouteProbeTests(unittest.TestCase):
         )
 
         selected = [
-            "ADM-02/update/archive-source-force-replacement",
             "ADM-02/update/clawhub-tracked-replacement",
+            "ADM-02/update/curator-restore-activation",
             "ADM-02/reload/manual-plugin-invalidation",
         ]
         command = [_NODE, str(_PROBE)]
@@ -245,9 +257,7 @@ class ProtectedRouteProbeTests(unittest.TestCase):
         self.assertEqual(invalidation_result["actions"], [])
         self.assertEqual(
             invalidation_result["routes"][0]["reason_codes"],
-            [
-                "WORKSHOP_INVALIDATION_NOT_REACHED_AFTER_PROTECTED_APPLY_DENIAL"
-            ],
+            ["WORKSHOP_INVALIDATION_NOT_REACHED_AFTER_PROTECTED_APPLY_DENIAL"],
         )
 
 

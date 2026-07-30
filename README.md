@@ -66,8 +66,8 @@ remains `NOT_TESTED`. The next production decision is to mediate and protect
 workspace skill writes externally or evaluate another harness.
 
 A separate
-[protected-route raw-action receipt](./benchmark/receipts/phase1-openclaw-protected-route-actions-v3-2026-07-29.json)
-binds one hardened read-only-root profile to three `OBSERVED` actions and nine
+[protected-route raw-action receipt](./benchmark/receipts/phase1-openclaw-protected-route-actions-v4-2026-07-29.json)
+binds one hardened read-only-root profile to four `OBSERVED` actions and eight
 `NOT_TESTED` routes. It records no `PASS` or `FAIL`, grants no installer
 authority, and does not alter the cumulative conformance ledger.
 

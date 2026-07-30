@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch for an Aragorn protected-install submission
+After=local-fs.target
+Conflicts=aragorn-protected-install-coordinator-evidence.path
+
+[Path]
+PathChanged=/run/aragorn-protected-install/intent.json
+Unit=aragorn-protected-install-coordinator.service
+
+[Install]
+WantedBy=multi-user.target

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import grp
 import hashlib
 import importlib.util
@@ -14,6 +15,7 @@ import stat
 import subprocess
 import sys
 import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -38,11 +40,13 @@ from .oci_worker_protocol import canonical_digest, canonical_json
 from .phase0_candidate import candidate_implementation_digest
 
 INTENT_SCHEMA = "aragorn/protected-install-intent/v1"
+PRODUCTION_SUBMISSION_SCHEMA = "aragorn/protected-install-submission/v1"
 REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v4"
 STATE_SCHEMA_V1 = "aragorn/protected-install-coordinator-state/v1"
 STATE_SCHEMA_V2 = "aragorn/protected-install-coordinator-state/v2"
 STATE_SCHEMA = "aragorn/protected-install-coordinator-state/v3"
 RESULT_SCHEMA = "aragorn/protected-install-coordinator-result/v1"
+SUBMISSION_RESULT_SCHEMA = "aragorn/protected-install-submission-result/v1"
 ASSURANCE = "TRUSTED_COORDINATOR_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
 
 _INTENT_FIELDS = {
@@ -86,9 +90,21 @@ _FETCH_GROUP = "aragorn-fetch"
 _SERVICE_UNIT = "aragorn-protected-install.service"
 _SYSTEMCTL = Path("/usr/bin/systemctl")
 _INTENT_PATH = Path("/run/aragorn-protected-install/intent.json")
+_SUBMISSION_LOCK_PATH = Path("/run/aragorn-protected-install/submission.lock")
+_PRODUCTION_PATH_UNIT = "aragorn-protected-install-coordinator.path"
+_NESTED_COORDINATION_MAX_SECONDS = 630
+_PRODUCTION_SERVICE_TIMEOUT_SECONDS = 12 * 60
+_SUBMISSION_TIMEOUT_SECONDS = 13 * 60
 _MAX_INTENT_BYTES = 8 * 1024
 _MAX_DOCUMENT_BYTES = 64 * 1024
 _REQUEST_TTL_SECONDS = 15 * 60
+
+if not (
+    _NESTED_COORDINATION_MAX_SECONDS
+    < _PRODUCTION_SERVICE_TIMEOUT_SECONDS
+    < _SUBMISSION_TIMEOUT_SECONDS
+):
+    raise RuntimeError("protected install timeout margins are invalid")
 
 # These are release-owned Phase 1 pins, not a claim that the current runtime
 # conformance ledger passes. The coordinator removes caller control over them.
@@ -102,6 +118,16 @@ _RUNTIME_CONFORMANCE_DIGEST = (
 
 class ProtectedInstallCoordinatorError(ValueError):
     """A protected transition could not be coordinated safely."""
+
+
+class _ProtectedFileTooLarge(ProtectedInstallCoordinatorError):
+    def __init__(
+        self,
+        message: str,
+        token: tuple[tuple[int, ...], str],
+    ) -> None:
+        super().__init__(message)
+        self.token = token
 
 
 def coordinate_intent(
@@ -122,6 +148,7 @@ def coordinate_intent(
     ),
     expected_uid: int = 0,
     now_unix: int | None = None,
+    expected_intent_digest: str | None = None,
 ) -> dict[str, Any]:
     """Acquire, bind, publish, and invoke one internal install/update intent."""
 
@@ -130,7 +157,14 @@ def coordinate_intent(
             "coordinator effective UID is not its fixed broker UID"
         )
     intent = _load_intent(intent_path, expected_uid)
-    _remove_request(intent_path)
+    if (
+        expected_intent_digest is not None
+        and canonical_digest(intent)
+        != _require_digest(expected_intent_digest, "expected intent digest")
+    ):
+        raise ProtectedInstallCoordinatorError(
+            "coordinator intent changed after submission"
+        )
     source_request = build_gateway_request(
         intent["owner"],
         intent["repository"],
@@ -283,16 +317,391 @@ def coordinate_intent(
     }
 
 
+def submit_intent(
+    operation: str,
+    owner: str,
+    repository: str,
+    commit: str,
+    skill_path: str,
+    *,
+    intent_path: Path = _INTENT_PATH,
+    lock_path: Path = _SUBMISSION_LOCK_PATH,
+    expected_uid: int = 0,
+    timeout_seconds: float = _SUBMISSION_TIMEOUT_SECONDS,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """Submit one release-owned install/update intent and await its result."""
+
+    if os.geteuid() != expected_uid:
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission requires its fixed root UID"
+        )
+    if operation not in {"install", "update"}:
+        raise ProtectedInstallCoordinatorError(
+            "protected install operation must be install or update"
+        )
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, (int, float))
+        or not 0 < timeout_seconds <= _SUBMISSION_TIMEOUT_SECONDS
+    ):
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission timeout is invalid"
+        )
+    intent = _build_intent(
+        operation,
+        owner,
+        repository,
+        commit,
+        skill_path,
+    )
+    submission_id = _new_submission_id()
+    submission = {
+        "schema": PRODUCTION_SUBMISSION_SCHEMA,
+        "submission_id": submission_id,
+        "intent": intent,
+    }
+    raw_submission = canonical_json(submission)
+    submission_digest = _digest(raw_submission)
+    intent_digest = canonical_digest(intent)
+    result_path = _submission_result_path(intent_path.parent, submission_id)
+    lock_descriptor = _open_submission_lock(lock_path, expected_uid)
+    intent_token = None
+    published = False
+    try:
+        _require_production_path()
+        if os.path.lexists(intent_path) or os.path.lexists(result_path):
+            raise ProtectedInstallCoordinatorError(
+                "protected install submission namespace is occupied"
+            )
+        intent_token = _atomic_publish(
+            intent_path,
+            raw_submission,
+            expected_uid,
+            replace=False,
+        )
+        published = True
+        return _wait_for_submission_result(
+            result_path,
+            submission_id,
+            submission_digest,
+            intent_digest,
+            expected_uid=expected_uid,
+            deadline=monotonic() + timeout_seconds,
+            monotonic=monotonic,
+            sleep=sleep,
+        )
+    finally:
+        if intent_token is not None:
+            _unlink_matching(intent_path, intent_token, expected_uid)
+        if published:
+            _unlink_current_file(result_path, expected_uid)
+        os.close(lock_descriptor)
+
+
+def _open_submission_lock(path: Path, expected_uid: int) -> int:
+    parent = _protected_directory(
+        path.parent,
+        expected_uid,
+        "protected install submission directory",
+    )
+    if parent / path.name != path:
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission lock path is not canonical"
+        )
+    descriptor = os.open(
+        path,
+        os.O_RDWR
+        | os.O_CREAT
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0),
+        0o600,
+    )
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != expected_uid
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise ProtectedInstallCoordinatorError(
+                "protected install submission lock is unsafe"
+            )
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ProtectedInstallCoordinatorError(
+                "another protected install submission is active"
+            ) from exc
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _require_production_path() -> None:
+    _require_root_executable(_SYSTEMCTL)
+    try:
+        result = subprocess.run(
+            (
+                str(_SYSTEMCTL),
+                "--no-ask-password",
+                "is-active",
+                "--quiet",
+                _PRODUCTION_PATH_UNIT,
+            ),
+            check=False,
+            cwd="/",
+            env={
+                "HOME": "/nonexistent",
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin",
+            },
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ProtectedInstallCoordinatorError(
+            f"cannot inspect protected install ingress: {exc}"
+        ) from exc
+    if result.returncode != 0:
+        raise ProtectedInstallCoordinatorError(
+            "protected install ingress path is not active"
+        )
+
+
+def _wait_for_submission_result(
+    path: Path,
+    submission_id: str,
+    submission_digest: str,
+    intent_digest: str,
+    *,
+    expected_uid: int,
+    deadline: float,
+    monotonic: Callable[[], float],
+    sleep: Callable[[float], None],
+) -> dict[str, Any]:
+    while not os.path.lexists(path):
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise ProtectedInstallCoordinatorError(
+                "protected install submission timed out"
+            )
+        sleep(min(0.1, remaining))
+    token = None
+    try:
+        try:
+            raw, token = _read_protected_bytes(
+                path,
+                max_bytes=_MAX_DOCUMENT_BYTES,
+                expected_uid=expected_uid,
+                exact_mode=0o400,
+                label="protected install submission result",
+            )
+        except _ProtectedFileTooLarge as exc:
+            token = exc.token
+            raise
+        document = _parse_canonical_document(
+            raw,
+            "protected install submission result",
+        )
+        if (
+            set(document)
+            != {
+                "schema",
+                "submission_id",
+                "submission_digest",
+                "intent_digest",
+                "coordinator_result",
+            }
+            or document.get("schema") != SUBMISSION_RESULT_SCHEMA
+            or document.get("submission_id") != submission_id
+            or document.get("submission_digest") != submission_digest
+            or document.get("intent_digest") != intent_digest
+        ):
+            raise ProtectedInstallCoordinatorError(
+                "protected install submission result is not correlated"
+            )
+        return _validate_coordinator_result(document["coordinator_result"])
+    finally:
+        if token is not None:
+            _unlink_matching(path, token, expected_uid)
+
+
+def _build_intent(
+    operation: str,
+    owner: str,
+    repository: str,
+    commit: str,
+    skill_path: str,
+) -> dict[str, str]:
+    source_request = build_gateway_request(
+        owner,
+        repository,
+        commit,
+        skill_path,
+    )
+    source_request.pop("schema")
+    return {
+        "schema": INTENT_SCHEMA,
+        "operation": operation,
+        **source_request,
+    }
+
+
+def _submission_id(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission ID is invalid"
+        )
+    return value
+
+
+def _new_submission_id() -> str:
+    return _submission_id(secrets.token_hex(32))
+
+
+def _submission_result_path(parent: Path, submission_id: str) -> Path:
+    return parent / f"submission-result-{_submission_id(submission_id)}.json"
+
+
+def _derived_intent_path(parent: Path, submission_id: str) -> Path:
+    return parent / f".coordinator-intent-{_submission_id(submission_id)}.json"
+
+
+def _validate_production_submission(
+    document: dict[str, Any],
+) -> tuple[str, dict[str, str]]:
+    if (
+        set(document) != {"schema", "submission_id", "intent"}
+        or document.get("schema") != PRODUCTION_SUBMISSION_SCHEMA
+    ):
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission is invalid"
+        )
+    return (
+        _submission_id(document["submission_id"]),
+        _validate_intent(document["intent"]),
+    )
+
+
+def _validate_coordinator_result(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission result is invalid"
+        )
+    common = (
+        value.get("schema") == RESULT_SCHEMA
+        and value.get("assurance") == ASSURANCE
+        and value.get("installer_work_eligible") is False
+        and value.get("runtime_conformance_qualified") is False
+    )
+    if value.get("status") == "ERROR":
+        error = value.get("error")
+        if (
+            not common
+            or set(value)
+            != {
+                "schema",
+                "assurance",
+                "status",
+                "error",
+                "installer_work_eligible",
+                "runtime_conformance_qualified",
+            }
+            or not isinstance(error, dict)
+            or set(error) != {"type", "message"}
+            or not isinstance(error.get("type"), str)
+            or not error["type"]
+            or not isinstance(error.get("message"), str)
+            or not error["message"]
+        ):
+            raise ProtectedInstallCoordinatorError(
+                "protected install submission error result is invalid"
+            )
+        return value
+    success_fields = {
+        "schema",
+        "assurance",
+        "operation",
+        "source_request",
+        "manifest_digest",
+        "quarantine_receipt_digest",
+        "gateway_profile_digest",
+        "context_id",
+        "service_request_digest",
+        "installer_work_eligible",
+        "runtime_conformance_qualified",
+        "quarantine_authority",
+        "status",
+    }
+    source = value.get("source_request")
+    try:
+        if not isinstance(source, dict):
+            raise ProtectedInstallCoordinatorError(
+                "submission result source request is invalid"
+            )
+        expected_source = build_gateway_request(
+            source.get("owner"),
+            source.get("repository"),
+            source.get("commit"),
+            source.get("skill_path"),
+        )
+        for field in (
+            "manifest_digest",
+            "quarantine_receipt_digest",
+            "gateway_profile_digest",
+            "context_id",
+            "service_request_digest",
+        ):
+            _require_digest(value.get(field), f"submission result {field}")
+    except (ProtectedInstallCoordinatorError, ValueError) as exc:
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission success result is invalid"
+        ) from exc
+    if (
+        not common
+        or set(value) != success_fields
+        or value.get("status") != "COMPLETED_NOT_INSTALLER_AUTHORITY"
+        or value.get("operation") not in {"install", "update"}
+        or source != expected_source
+        or value.get("quarantine_authority") != QUARANTINE_AUTHORITY
+    ):
+        raise ProtectedInstallCoordinatorError(
+            "protected install submission success result is invalid"
+        )
+    return value
+
+
 def _load_intent(path: Path, expected_uid: int) -> dict[str, str]:
-    document = _read_canonical_document(
+    document, token = _read_canonical_document_snapshot(
         path,
         max_bytes=_MAX_INTENT_BYTES,
         expected_uid=expected_uid,
         exact_mode=0o400,
         label="coordinator intent",
     )
+    intent = _validate_intent(document)
+    if not _unlink_matching(path, token, expected_uid):
+        raise ProtectedInstallCoordinatorError(
+            "coordinator intent changed before consumption"
+        )
+    return intent
+
+
+def _validate_intent(document: object) -> dict[str, str]:
     if (
-        set(document) != _INTENT_FIELDS
+        not isinstance(document, dict)
+        or set(document) != _INTENT_FIELDS
         or document.get("schema") != INTENT_SCHEMA
         or document.get("operation") not in {"install", "update"}
     ):
@@ -967,7 +1376,13 @@ def _start_fixed_service() -> None:
         )
 
 
-def _atomic_publish(path: Path, raw: bytes, expected_uid: int) -> None:
+def _atomic_publish(
+    path: Path,
+    raw: bytes,
+    expected_uid: int,
+    *,
+    replace: bool = True,
+) -> tuple[tuple[int, ...], str]:
     if len(raw) > _MAX_DOCUMENT_BYTES:
         raise ProtectedInstallCoordinatorError(
             "coordinator document exceeds 64 KiB"
@@ -1013,13 +1428,35 @@ def _atomic_publish(path: Path, raw: bytes, expected_uid: int) -> None:
                 )
         finally:
             os.close(descriptor)
-        os.replace(temporary, path)
+        if replace:
+            os.replace(temporary, path)
+        else:
+            os.link(temporary, path, follow_symlinks=False)
+            temporary.unlink()
         _fsync_directory(parent)
-    except Exception:
+        retained, token = _read_protected_bytes(
+            path,
+            max_bytes=_MAX_DOCUMENT_BYTES,
+            expected_uid=expected_uid,
+            exact_mode=0o400,
+            label="coordinator publication",
+        )
+        if retained != raw:
+            raise ProtectedInstallCoordinatorError(
+                "coordinator publication bytes changed"
+            )
+        return token
+    except BaseException:
         try:
             temporary.unlink()
         except OSError:
             pass
+        if not replace:
+            _unlink_current_file(
+                path,
+                expected_uid,
+                expected_digest=_digest(raw),
+            )
         raise
 
 
@@ -1039,6 +1476,42 @@ def _read_canonical_document(
     label: str,
     exact_mode: int | None = None,
 ) -> dict[str, Any]:
+    document, _token = _read_canonical_document_snapshot(
+        path,
+        max_bytes=max_bytes,
+        expected_uid=expected_uid,
+        label=label,
+        exact_mode=exact_mode,
+    )
+    return document
+
+
+def _read_canonical_document_snapshot(
+    path: Path,
+    *,
+    max_bytes: int,
+    expected_uid: int,
+    label: str,
+    exact_mode: int | None = None,
+) -> tuple[dict[str, Any], tuple[tuple[int, ...], str]]:
+    raw, token = _read_protected_bytes(
+        path,
+        max_bytes=max_bytes,
+        expected_uid=expected_uid,
+        label=label,
+        exact_mode=exact_mode,
+    )
+    return _parse_canonical_document(raw, label), token
+
+
+def _read_protected_bytes(
+    path: Path,
+    *,
+    max_bytes: int,
+    expected_uid: int,
+    label: str,
+    exact_mode: int | None = None,
+) -> tuple[bytes, tuple[tuple[int, ...], str]]:
     try:
         resolved = path.resolve(strict=True)
     except (OSError, RuntimeError) as exc:
@@ -1065,45 +1538,127 @@ def _read_canonical_document(
             or before.st_nlink != 1
             or mode & 0o022
             or (exact_mode is not None and mode != exact_mode)
-            or before.st_size > max_bytes
         ):
             raise ProtectedInstallCoordinatorError(
                 f"{label} metadata is unsafe"
             )
         raw = bytearray()
-        while chunk := os.read(descriptor, min(8192, max_bytes + 1 - len(raw))):
-            raw.extend(chunk)
-            if len(raw) > max_bytes:
-                raise ProtectedInstallCoordinatorError(
-                    f"{label} exceeds its byte limit"
-                )
+        content_digest = hashlib.sha256()
+        size = 0
+        oversized = before.st_size > max_bytes
+        while chunk := os.read(descriptor, 8192):
+            content_digest.update(chunk)
+            size += len(chunk)
+            if not oversized and size <= max_bytes:
+                raw.extend(chunk)
+            else:
+                oversized = True
+                raw.clear()
         after = os.fstat(descriptor)
     finally:
         os.close(descriptor)
     if (
         _file_identity(before) != _file_identity(after)
-        or len(raw) != after.st_size
+        or size != after.st_size
     ):
         raise ProtectedInstallCoordinatorError(
             f"{label} changed while read"
         )
+    token = (
+        _file_identity(after),
+        "sha256:" + content_digest.hexdigest(),
+    )
+    if oversized:
+        raise _ProtectedFileTooLarge(
+            f"{label} exceeds its byte limit",
+            token,
+        )
+    return bytes(raw), token
+
+
+def _parse_canonical_document(raw: bytes, label: str) -> dict[str, Any]:
     try:
         document = json.loads(
-            bytes(raw).decode("utf-8"),
+            raw.decode("utf-8"),
             object_pairs_hook=_reject_duplicate_pairs,
             parse_constant=_reject_constant,
         )
     except ProtectedInstallCoordinatorError:
         raise
     except (UnicodeDecodeError, ValueError, RecursionError) as exc:
-        raise ProtectedInstallCoordinatorError(
-            f"{label} is invalid: {exc}"
-        ) from exc
-    if not isinstance(document, dict) or canonical_json(document) != bytes(raw):
+        raise ProtectedInstallCoordinatorError(f"{label} is invalid: {exc}") from exc
+    if not isinstance(document, dict) or canonical_json(document) != raw:
         raise ProtectedInstallCoordinatorError(
             f"{label} must be canonical JSON"
         )
     return document
+
+
+def _unlink_matching(
+    path: Path,
+    token: tuple[tuple[int, ...], str],
+    expected_uid: int,
+) -> bool:
+    try:
+        _raw, current = _read_protected_bytes(
+            path,
+            max_bytes=_MAX_DOCUMENT_BYTES,
+            expected_uid=expected_uid,
+            exact_mode=0o400,
+            label="coordinator cleanup target",
+        )
+    except _ProtectedFileTooLarge as exc:
+        current = exc.token
+    except ProtectedInstallCoordinatorError:
+        return False
+    if current != token:
+        return False
+    parent = _protected_directory(
+        path.parent,
+        expected_uid,
+        "coordinator cleanup directory",
+    )
+    descriptor = os.open(
+        parent,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0),
+    )
+    try:
+        metadata = os.stat(path.name, dir_fd=descriptor, follow_symlinks=False)
+        if _file_identity(metadata) != token[0]:
+            return False
+        os.unlink(path.name, dir_fd=descriptor)
+        os.fsync(descriptor)
+    except FileNotFoundError:
+        return False
+    finally:
+        os.close(descriptor)
+    return True
+
+
+def _unlink_current_file(
+    path: Path,
+    expected_uid: int,
+    *,
+    expected_digest: str | None = None,
+) -> bool:
+    try:
+        _raw, token = _read_protected_bytes(
+            path,
+            max_bytes=_MAX_DOCUMENT_BYTES,
+            expected_uid=expected_uid,
+            exact_mode=0o400,
+            label="coordinator cleanup target",
+        )
+    except _ProtectedFileTooLarge as exc:
+        token = exc.token
+    except ProtectedInstallCoordinatorError:
+        return False
+    if expected_digest is not None and token[1] != expected_digest:
+        return False
+    return _unlink_matching(path, token, expected_uid)
 
 
 def _protected_directory(
@@ -1378,23 +1933,173 @@ def _reject_constant(value: str) -> None:
     )
 
 
-def main() -> int:
+def _run_coordinator(
+    *,
+    intent_path: Path = _INTENT_PATH,
+    expected_uid: int = 0,
+) -> int:
     try:
-        result = coordinate_intent(_INTENT_PATH)
+        result = coordinate_intent(
+            intent_path,
+            expected_uid=expected_uid,
+        )
     except Exception as exc:  # noqa: BLE001 - one fail-closed service result
-        result = {
-            "schema": RESULT_SCHEMA,
-            "assurance": ASSURANCE,
-            "status": "ERROR",
-            "error": {"type": type(exc).__name__, "message": str(exc)},
-            "installer_work_eligible": False,
-            "runtime_conformance_qualified": False,
-        }
-        sys.stdout.buffer.write(canonical_json(result) + b"\n")
-        return 4
-    result["status"] = "COMPLETED_NOT_INSTALLER_AUTHORITY"
+        result = _coordinator_error(exc)
+        status = 4
+    else:
+        result["status"] = "COMPLETED_NOT_INSTALLER_AUTHORITY"
+        status = 0
     sys.stdout.buffer.write(canonical_json(result) + b"\n")
-    return 0
+    return status
+
+
+def _run_submitted(
+    *,
+    submission_path: Path = _INTENT_PATH,
+    expected_uid: int = 0,
+) -> int:
+    submission_token = None
+    derived_token = None
+    derived_path = None
+    result_path = None
+    submission_id = None
+    submission_digest = None
+    intent_digest = None
+    try:
+        try:
+            raw, submission_token = _read_protected_bytes(
+                submission_path,
+                max_bytes=_MAX_INTENT_BYTES,
+                expected_uid=expected_uid,
+                exact_mode=0o400,
+                label="protected install submission",
+            )
+        except _ProtectedFileTooLarge as exc:
+            submission_token = exc.token
+            raise
+        submission_digest = _digest(raw)
+        document = _parse_canonical_document(
+            raw,
+            "protected install submission",
+        )
+        submission_id, intent = _validate_production_submission(document)
+        intent_digest = canonical_digest(intent)
+        result_path = _submission_result_path(
+            submission_path.parent,
+            submission_id,
+        )
+        derived_path = _derived_intent_path(
+            submission_path.parent,
+            submission_id,
+        )
+        if os.path.lexists(result_path) or os.path.lexists(derived_path):
+            raise ProtectedInstallCoordinatorError(
+                "protected install submission namespace is occupied"
+            )
+        if not _unlink_matching(
+            submission_path,
+            submission_token,
+            expected_uid,
+        ):
+            raise ProtectedInstallCoordinatorError(
+                "protected install submission changed before consumption"
+            )
+        submission_token = None
+        derived_token = _atomic_publish(
+            derived_path,
+            canonical_json(intent),
+            expected_uid,
+            replace=False,
+        )
+        result = coordinate_intent(
+            derived_path,
+            expected_uid=expected_uid,
+            expected_intent_digest=intent_digest,
+        )
+    except Exception as exc:  # noqa: BLE001 - one fail-closed service result
+        result = _coordinator_error(exc)
+        status = 4
+    else:
+        result["status"] = "COMPLETED_NOT_INSTALLER_AUTHORITY"
+        status = 0
+    finally:
+        if submission_token is not None:
+            _unlink_matching(
+                submission_path,
+                submission_token,
+                expected_uid,
+            )
+        if derived_token is not None and derived_path is not None:
+            _unlink_matching(derived_path, derived_token, expected_uid)
+    if (
+        result_path is not None
+        and submission_id is not None
+        and submission_digest is not None
+        and intent_digest is not None
+    ):
+        try:
+            _atomic_publish(
+                result_path,
+                canonical_json(
+                    {
+                        "schema": SUBMISSION_RESULT_SCHEMA,
+                        "submission_id": submission_id,
+                        "submission_digest": submission_digest,
+                        "intent_digest": intent_digest,
+                        "coordinator_result": result,
+                    }
+                ),
+                expected_uid,
+                replace=False,
+            )
+        except Exception as exc:  # noqa: BLE001 - publication must fail closed
+            result = _coordinator_error(exc)
+            status = 4
+    sys.stdout.buffer.write(canonical_json(result) + b"\n")
+    return status
+
+
+def _coordinator_error(exc: Exception) -> dict[str, Any]:
+    message = str(exc) or "protected install coordination failed"
+    return {
+        "schema": RESULT_SCHEMA,
+        "assurance": ASSURANCE,
+        "status": "ERROR",
+        "error": {"type": type(exc).__name__, "message": message},
+        "installer_work_eligible": False,
+        "runtime_conformance_qualified": False,
+    }
+
+
+def _submission_error(exc: Exception) -> int:
+    sys.stderr.buffer.write(canonical_json(_coordinator_error(exc)) + b"\n")
+    return 4
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = tuple(sys.argv[1:] if argv is None else argv)
+    if not arguments:
+        return _run_coordinator()
+    if arguments == ("run-submitted",):
+        return _run_submitted()
+    if len(arguments) == 6 and arguments[0] == "submit":
+        try:
+            result = submit_intent(*arguments[1:])
+        except Exception as exc:  # noqa: BLE001 - one fail-closed CLI result
+            return _submission_error(exc)
+        sys.stdout.buffer.write(canonical_json(result) + b"\n")
+        return (
+            0
+            if result.get("status") == "COMPLETED_NOT_INSTALLER_AUTHORITY"
+            else 4
+        )
+    print(
+        "usage: aragorn-protected-install-coordinator "
+        "[run-submitted | submit INSTALL_OR_UPDATE OWNER REPOSITORY "
+        "40_HEX_COMMIT SKILL_PATH]",
+        file=sys.stderr,
+    )
+    return 64
 
 
 if __name__ == "__main__":

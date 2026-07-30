@@ -1,0 +1,45 @@
+[Unit]
+Description=Aragorn protected-install request coordinator
+After=local-fs.target nss-user-lookup.target
+RequiresMountsFor=/var/lib/aragorn-gateway /var/lib/aragorn-quarantine /var/lib/aragorn-protected/skills
+ConditionPathExists=/etc/aragorn/protected-broker-release.json
+ConditionPathExists=/run/aragorn-protected-install/intent.json
+Conflicts=aragorn-protected-install-coordinator-evidence.service
+RefuseManualStart=yes
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3.14 -I -S -B /usr/libexec/aragorn/aragorn-protected-install-coordinator.py run-submitted
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC ARAGORN_DROP_HOST_INSPECTION_CAPABILITY=1
+UMask=0077
+Restart=no
+TimeoutStartSec=12min
+KillMode=control-group
+TasksMax=16
+MemoryMax=2G
+MemorySwapMax=0
+LimitNOFILE=256
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-protected-install-coordinator
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_SYS_PTRACE
+AmbientCapabilities=CAP_DAC_OVERRIDE CAP_SYS_PTRACE
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallArchitectures=native
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock ipc mq_getsetattr mq_notify mq_open mq_timedreceive mq_timedreceive_time64 mq_timedsend mq_timedsend_time64 mq_unlink msgctl msgget msgrcv msgsnd process_vm_readv process_vm_writev semctl semget semop semtimedop semtimedop_time64 shmat shmctl shmdt shmget

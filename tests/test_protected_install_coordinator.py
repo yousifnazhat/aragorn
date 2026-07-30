@@ -7,6 +7,7 @@ import os
 import stat
 import sys
 import unittest
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -21,13 +22,20 @@ from aragorn.protected_install_coordinator import (
     ASSURANCE,
     INTENT_SCHEMA,
     ProtectedInstallCoordinatorError,
+    _atomic_publish,
     _derive_release_pins,
     _load_release_asset_pins,
     _recursive_artifact_graph_verifier_digest,
     _release_analyzer_script,
+    _run_submitted,
     _start_fixed_service,
+    _submission_error,
+    _submission_result_path,
+    _validate_coordinator_result,
     _verify_recursive_gateway_receipt,
+    _wait_for_submission_result,
     coordinate_intent,
+    submit_intent,
 )
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +57,18 @@ _ENTRYPOINT = (
     / "libexec"
     / "aragorn-protected-install-coordinator.py"
 )
+_PRODUCTION_SERVICE = (
+    _ROOT
+    / "packaging"
+    / "systemd"
+    / "aragorn-protected-install-coordinator.service"
+)
+_PRODUCTION_PATH_UNIT = (
+    _ROOT
+    / "packaging"
+    / "systemd"
+    / "aragorn-protected-install-coordinator.path"
+)
 
 
 def _load_entrypoint():
@@ -65,6 +85,30 @@ def _load_entrypoint():
 
 def _digest(character: str) -> str:
     return "sha256:" + character * 64
+
+
+def _success_result() -> dict[str, object]:
+    return {
+        "schema": "aragorn/protected-install-coordinator-result/v1",
+        "assurance": "TRUSTED_COORDINATOR_RECORD_ONLY_NOT_INSTALLER_AUTHORITY",
+        "operation": "install",
+        "source_request": {
+            "schema": "aragorn/github-gateway-request/v1",
+            "owner": "example",
+            "repository": "skills",
+            "commit": "1" * 40,
+            "skill_path": "sample",
+        },
+        "manifest_digest": _digest("1"),
+        "quarantine_receipt_digest": _digest("2"),
+        "gateway_profile_digest": _digest("3"),
+        "context_id": _digest("4"),
+        "service_request_digest": _digest("5"),
+        "installer_work_eligible": False,
+        "runtime_conformance_qualified": False,
+        "quarantine_authority": QUARANTINE_AUTHORITY,
+        "status": "COMPLETED_NOT_INSTALLER_AUTHORITY",
+    }
 
 
 class ProtectedInstallCoordinatorTests(unittest.TestCase):
@@ -479,6 +523,466 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             )
         gateway.assert_not_called()
 
+    def test_supported_submit_publishes_only_the_exact_high_level_intent(
+        self,
+    ) -> None:
+        intent_path = self.control / "submitted-intent.json"
+        lock_path = self.control / "submission.lock"
+        observed: list[tuple[Path, str, str, str, dict]] = []
+
+        def wait(path, submission_id, submission_digest, intent_digest, **_kwargs):
+            observed.append(
+                (
+                    path,
+                    submission_id,
+                    submission_digest,
+                    intent_digest,
+                    json.loads(intent_path.read_bytes()),
+                )
+            )
+            return _success_result()
+
+        with (
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "_require_production_path"
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "_wait_for_submission_result",
+                side_effect=wait,
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator._new_submission_id",
+                return_value="a" * 64,
+            ),
+        ):
+            result = submit_intent(
+                "install",
+                "example",
+                "skills",
+                "1" * 40,
+                "sample",
+                intent_path=intent_path,
+                lock_path=lock_path,
+                expected_uid=self.uid,
+            )
+
+        self.assertEqual(result, _success_result())
+        self.assertFalse(intent_path.exists())
+        self.assertEqual(len(observed), 1)
+        path, submission_id, submission_digest, intent_digest, submission = observed[0]
+        self.assertEqual(submission_id, "a" * 64)
+        self.assertEqual(
+            path,
+            self.control / f"submission-result-{'a' * 64}.json",
+        )
+        self.assertEqual(
+            submission,
+            {
+                "schema": "aragorn/protected-install-submission/v1",
+                "submission_id": "a" * 64,
+                "intent": {
+                    "schema": INTENT_SCHEMA,
+                    "operation": "install",
+                    "owner": "example",
+                    "repository": "skills",
+                    "commit": "1" * 40,
+                    "skill_path": "sample",
+                },
+            },
+        )
+        self.assertEqual(
+            submission_digest,
+            "sha256:" + hashlib.sha256(canonical_json(submission)).hexdigest(),
+        )
+        self.assertEqual(
+            intent_digest,
+            "sha256:"
+            + hashlib.sha256(canonical_json(submission["intent"])).hexdigest(),
+        )
+
+    def test_supported_submit_is_root_only(self) -> None:
+        with (
+            mock.patch(
+                "aragorn.protected_install_coordinator.os.geteuid",
+                return_value=self.uid + 1,
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "_require_production_path"
+            ) as active,
+            self.assertRaisesRegex(
+                ProtectedInstallCoordinatorError,
+                "fixed root UID",
+            ),
+        ):
+            submit_intent(
+                "install",
+                "example",
+                "skills",
+                "1" * 40,
+                "sample",
+                intent_path=self.control / "intent.json",
+                lock_path=self.control / "lock",
+                expected_uid=self.uid,
+            )
+        active.assert_not_called()
+
+    def test_identical_retry_gets_a_distinct_result_namespace(self) -> None:
+        intent_path = self.control / "intent.json"
+        observed = []
+
+        def wait(path, submission_id, *_args, **_kwargs):
+            observed.append((path, submission_id))
+            return _success_result()
+
+        with (
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "_require_production_path"
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "_wait_for_submission_result",
+                side_effect=wait,
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator._new_submission_id",
+                side_effect=("a" * 64, "b" * 64),
+            ),
+        ):
+            for _attempt in range(2):
+                submit_intent(
+                    "install",
+                    "example",
+                    "skills",
+                    "1" * 40,
+                    "sample",
+                    intent_path=intent_path,
+                    lock_path=self.control / "lock",
+                    expected_uid=self.uid,
+                )
+
+        self.assertEqual(
+            observed,
+            [
+                (
+                    self.control / f"submission-result-{'a' * 64}.json",
+                    "a" * 64,
+                ),
+                (
+                    self.control / f"submission-result-{'b' * 64}.json",
+                    "b" * 64,
+                ),
+            ],
+        )
+
+    def test_timeout_cleans_only_the_current_submission(self) -> None:
+        intent_path = self.control / "intent.json"
+        old_result = _submission_result_path(self.control, "a" * 64)
+        old_result.write_bytes(b"old")
+        old_result.chmod(0o400)
+        with (
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "_require_production_path"
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "_wait_for_submission_result",
+                side_effect=ProtectedInstallCoordinatorError(
+                    "protected install submission timed out"
+                ),
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator._new_submission_id",
+                return_value="b" * 64,
+            ),
+            self.assertRaisesRegex(
+                ProtectedInstallCoordinatorError,
+                "timed out",
+            ),
+        ):
+            submit_intent(
+                "install",
+                "example",
+                "skills",
+                "1" * 40,
+                "sample",
+                intent_path=intent_path,
+                lock_path=self.control / "lock",
+                expected_uid=self.uid,
+            )
+
+        self.assertFalse(intent_path.exists())
+        self.assertEqual(old_result.read_bytes(), b"old")
+
+    def test_submission_result_must_match_and_is_cleaned(self) -> None:
+        submission_id = "a" * 64
+        path = _submission_result_path(self.control, submission_id)
+        path.write_bytes(
+            canonical_json(
+                {
+                    "schema": "aragorn/protected-install-submission-result/v1",
+                    "submission_id": submission_id,
+                    "submission_digest": _digest("2"),
+                    "intent_digest": _digest("3"),
+                    "coordinator_result": _success_result(),
+                }
+            )
+        )
+        path.chmod(0o400)
+        with self.assertRaisesRegex(
+            ProtectedInstallCoordinatorError,
+            "not correlated",
+        ):
+            _wait_for_submission_result(
+                path,
+                submission_id,
+                _digest("1"),
+                _digest("3"),
+                expected_uid=self.uid,
+                deadline=1,
+                monotonic=lambda: 0,
+                sleep=lambda _seconds: None,
+            )
+        self.assertFalse(path.exists())
+
+        path.write_bytes(
+            canonical_json(
+                {
+                    "schema": "aragorn/protected-install-submission-result/v1",
+                    "submission_id": submission_id,
+                    "submission_digest": _digest("1"),
+                    "intent_digest": _digest("3"),
+                    "coordinator_result": {
+                        **_success_result(),
+                        "assurance": "forged",
+                    },
+                }
+            )
+        )
+        path.chmod(0o400)
+        with self.assertRaisesRegex(
+            ProtectedInstallCoordinatorError,
+            "success result is invalid",
+        ):
+            _wait_for_submission_result(
+                path,
+                submission_id,
+                _digest("1"),
+                _digest("3"),
+                expected_uid=self.uid,
+                deadline=1,
+                monotonic=lambda: 0,
+                sleep=lambda _seconds: None,
+            )
+        self.assertFalse(path.exists())
+
+    def test_coordinator_result_shapes_are_exact(self) -> None:
+        self.assertEqual(
+            _validate_coordinator_result(_success_result()),
+            _success_result(),
+        )
+        error = {
+            "schema": "aragorn/protected-install-coordinator-result/v1",
+            "assurance": (
+                "TRUSTED_COORDINATOR_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
+            ),
+            "status": "ERROR",
+            "error": {"type": "ValueError", "message": "blocked"},
+            "installer_work_eligible": False,
+            "runtime_conformance_qualified": False,
+        }
+        self.assertEqual(_validate_coordinator_result(error), error)
+        with self.assertRaisesRegex(
+            ProtectedInstallCoordinatorError,
+            "error result is invalid",
+        ):
+            _validate_coordinator_result({**error, "extra": True})
+        with self.assertRaisesRegex(
+            ProtectedInstallCoordinatorError,
+            "success result is invalid",
+        ):
+            _validate_coordinator_result(
+                {**_success_result(), "source_request": None}
+            )
+
+    def test_submitted_service_derives_v1_and_correlates_result(self) -> None:
+        submission_id = "a" * 64
+        submission_path = self.control / "submission.json"
+        intent = {
+            "schema": INTENT_SCHEMA,
+            "operation": "install",
+            "owner": "example",
+            "repository": "skills",
+            "commit": "1" * 40,
+            "skill_path": "sample",
+        }
+        submission = {
+            "schema": "aragorn/protected-install-submission/v1",
+            "submission_id": submission_id,
+            "intent": intent,
+        }
+        submission_path.write_bytes(canonical_json(submission))
+        submission_path.chmod(0o400)
+        output = BytesIO()
+        coordinator_result = _success_result()
+        coordinator_result.pop("status")
+        with (
+            mock.patch(
+                "aragorn.protected_install_coordinator.coordinate_intent",
+                return_value=coordinator_result,
+            ) as coordinate,
+            mock.patch(
+                "aragorn.protected_install_coordinator.sys.stdout",
+                SimpleNamespace(buffer=output),
+            ),
+        ):
+            status = _run_submitted(
+                submission_path=submission_path,
+                expected_uid=self.uid,
+            )
+
+        result_path = _submission_result_path(self.control, submission_id)
+        envelope = json.loads(result_path.read_bytes())
+        self.assertEqual(status, 0)
+        self.assertFalse(submission_path.exists())
+        self.assertEqual(envelope["submission_id"], submission_id)
+        self.assertEqual(
+            envelope["submission_digest"],
+            "sha256:"
+            + hashlib.sha256(canonical_json(submission)).hexdigest(),
+        )
+        self.assertEqual(
+            envelope["intent_digest"],
+            "sha256:" + hashlib.sha256(canonical_json(intent)).hexdigest(),
+        )
+        derived_path = coordinate.call_args.args[0]
+        self.assertEqual(
+            derived_path.name,
+            f".coordinator-intent-{submission_id}.json",
+        )
+        self.assertFalse(derived_path.exists())
+
+    def test_malformed_submitted_input_does_not_wedge_the_path(self) -> None:
+        submission_path = self.control / "submission.json"
+        submission_path.write_bytes(b"not-json")
+        submission_path.chmod(0o400)
+        output = BytesIO()
+        with mock.patch(
+            "aragorn.protected_install_coordinator.sys.stdout",
+            SimpleNamespace(buffer=output),
+        ):
+            status = _run_submitted(
+                submission_path=submission_path,
+                expected_uid=self.uid,
+            )
+
+        self.assertEqual(status, 4)
+        self.assertFalse(submission_path.exists())
+        self.assertEqual(
+            json.loads(output.getvalue())["status"],
+            "ERROR",
+        )
+
+        submission_path.write_bytes(b"x" * (8 * 1024 + 1))
+        submission_path.chmod(0o400)
+        output = BytesIO()
+        with mock.patch(
+            "aragorn.protected_install_coordinator.sys.stdout",
+            SimpleNamespace(buffer=output),
+        ):
+            status = _run_submitted(
+                submission_path=submission_path,
+                expected_uid=self.uid,
+            )
+
+        self.assertEqual(status, 4)
+        self.assertFalse(submission_path.exists())
+
+    def test_invalid_result_does_not_survive_cleanup(self) -> None:
+        path = _submission_result_path(self.control, "a" * 64)
+        path.write_bytes(
+            canonical_json(
+                {
+                    "schema": "aragorn/protected-install-submission-result/v1",
+                    "submission_id": "a" * 64,
+                    "submission_digest": _digest("1"),
+                    "intent_digest": _digest("2"),
+                    "coordinator_result": {"status": "ERROR"},
+                }
+            )
+        )
+        path.chmod(0o400)
+        with self.assertRaisesRegex(
+            ProtectedInstallCoordinatorError,
+            "result is invalid",
+        ):
+            _wait_for_submission_result(
+                path,
+                "a" * 64,
+                _digest("1"),
+                _digest("2"),
+                expected_uid=self.uid,
+                deadline=1,
+                monotonic=lambda: 0,
+                sleep=lambda _seconds: None,
+            )
+        self.assertFalse(path.exists())
+
+        path.write_bytes(b"x" * (64 * 1024 + 1))
+        path.chmod(0o400)
+        with self.assertRaisesRegex(
+            ProtectedInstallCoordinatorError,
+            "byte limit",
+        ):
+            _wait_for_submission_result(
+                path,
+                "a" * 64,
+                _digest("1"),
+                _digest("2"),
+                expected_uid=self.uid,
+                deadline=1,
+                monotonic=lambda: 0,
+                sleep=lambda _seconds: None,
+            )
+        self.assertFalse(path.exists())
+
+    def test_interrupted_fresh_publication_is_cleaned(self) -> None:
+        path = self.control / "interrupted.json"
+        link = os.link
+
+        def interrupt_after_link(*args, **kwargs):
+            link(*args, **kwargs)
+            raise KeyboardInterrupt
+
+        with (
+            mock.patch(
+                "aragorn.protected_install_coordinator.os.link",
+                side_effect=interrupt_after_link,
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            _atomic_publish(
+                path,
+                canonical_json({"submission_id": "a" * 64}),
+                self.uid,
+                replace=False,
+            )
+        self.assertFalse(path.exists())
+
+    def test_public_submission_error_uses_exact_fail_closed_shape(self) -> None:
+        output = BytesIO()
+        with mock.patch(
+            "aragorn.protected_install_coordinator.sys.stderr",
+            SimpleNamespace(buffer=output),
+        ):
+            self.assertEqual(_submission_error(ValueError("blocked")), 4)
+        error = json.loads(output.getvalue())
+        self.assertEqual(_validate_coordinator_result(error), error)
+
     def test_release_asset_pins_require_a_protected_operator_file(self) -> None:
         path = self.control / "release-pins.json"
         path.write_bytes(canonical_json({}))
@@ -666,6 +1170,45 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             path_unit,
         )
 
+    def test_production_ingress_reuses_the_fixed_coordinator_boundary(
+        self,
+    ) -> None:
+        unit = _PRODUCTION_SERVICE.read_text()
+        path_unit = _PRODUCTION_PATH_UNIT.read_text()
+        self.assertNotIn("phase1-coordinator-evidence-enabled", unit)
+        self.assertIn(
+            "ConditionPathExists="
+            "/run/aragorn-protected-install/intent.json",
+            unit,
+        )
+        self.assertIn(
+            "ExecStart=/usr/bin/python3.14 -I -S -B "
+            "/usr/libexec/aragorn/"
+            "aragorn-protected-install-coordinator.py run-submitted",
+            unit,
+        )
+        self.assertIn("RefuseManualStart=yes", unit)
+        self.assertIn(
+            "Conflicts="
+            "aragorn-protected-install-coordinator-evidence.service",
+            unit,
+        )
+        self.assertIn("TimeoutStartSec=12min", unit)
+        self.assertIn("TimeoutStartSec=10min", _SERVICE.read_text())
+        self.assertIn(
+            "PathChanged=/run/aragorn-protected-install/intent.json",
+            path_unit,
+        )
+        self.assertIn(
+            "Unit=aragorn-protected-install-coordinator.service",
+            path_unit,
+        )
+        self.assertIn(
+            "Conflicts="
+            "aragorn-protected-install-coordinator-evidence.path",
+            path_unit,
+        )
+
     def test_coordinator_starts_only_the_fixed_service_without_a_shell(
         self,
     ) -> None:
@@ -728,3 +1271,30 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                 16,
                 expected_uid=self.uid,
             )
+
+    def test_entrypoint_forwards_only_after_release_verification(self) -> None:
+        entrypoint = _load_entrypoint()
+        arguments = (
+            "submit",
+            "install",
+            "example",
+            "skills",
+            "1" * 40,
+            "sample",
+        )
+        with (
+            mock.patch.object(entrypoint.sys, "platform", "linux"),
+            mock.patch.object(entrypoint.os, "geteuid", return_value=0),
+            mock.patch.object(
+                entrypoint,
+                "_verified_package_root",
+                return_value=_ROOT,
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator.main",
+                return_value=0,
+            ) as coordinate,
+            mock.patch.object(sys, "argv", [str(_ENTRYPOINT), *arguments]),
+        ):
+            self.assertEqual(entrypoint.main(), 0)
+        coordinate.assert_called_once_with()

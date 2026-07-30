@@ -28,15 +28,20 @@ from .github_gateway import (
     build_gateway_request,
 )
 from .github_quarantine_receipt import verify_github_quarantine_receipt
-from .github_recursive_gateway import quarantine_recursive_through_gateway
+from .github_recursive_gateway import (
+    GitHubRecursiveGatewayError,
+    quarantine_recursive_through_gateway,
+    verify_retained_release_pin_set,
+)
 from .manifest_diff import diff_verified_manifests_between
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .phase0_candidate import candidate_implementation_digest
 
 INTENT_SCHEMA = "aragorn/protected-install-intent/v1"
-REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v3"
+REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v4"
 STATE_SCHEMA_V1 = "aragorn/protected-install-coordinator-state/v1"
-STATE_SCHEMA = "aragorn/protected-install-coordinator-state/v2"
+STATE_SCHEMA_V2 = "aragorn/protected-install-coordinator-state/v2"
+STATE_SCHEMA = "aragorn/protected-install-coordinator-state/v3"
 RESULT_SCHEMA = "aragorn/protected-install-coordinator-result/v1"
 ASSURANCE = "TRUSTED_COORDINATOR_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
 
@@ -56,12 +61,13 @@ _EXPECTED_ACTIVE_V1_FIELDS = {
     "gateway_profile_digest",
 }
 _EXPECTED_ACTIVE_FIELDS = _EXPECTED_ACTIVE_V1_FIELDS | {"recursive"}
-_RECURSIVE_FIELDS = {
+_RECURSIVE_V3_FIELDS = {
     "root_manifest_digest",
     "expansion_digest",
     "expansion_proof_digest",
     "release_asset_result_digests",
 }
+_RECURSIVE_FIELDS = _RECURSIVE_V3_FIELDS | {"release_pin_set_digest"}
 _STATE_FIELDS = {
     "schema",
     "assurance",
@@ -161,6 +167,11 @@ def coordinate_intent(
         )
 
     worker_uid, worker_gid = _service_identity(_FETCH_USER, _FETCH_GROUP)
+    release_asset_pins = _load_release_asset_pins(
+        release_asset_pins_path,
+        expected_uid,
+    )
+    automatic_release_pin_preflight = release_asset_pins is None
     receipt = quarantine_recursive_through_gateway(
         source_request,
         gateway_root=gateway_root,
@@ -169,15 +180,13 @@ def coordinate_intent(
         worker_gid=worker_gid,
         python_executable=release["python_path"],
         package_root=release["package_root"] / "src",
-        release_asset_pins=_load_release_asset_pins(
-            release_asset_pins_path,
-            expected_uid,
-        ),
+        release_asset_pins=release_asset_pins,
     )
     replay = _verify_recursive_gateway_receipt(
         receipt,
         source_request,
         quarantine,
+        require_release_pin_set=automatic_release_pin_preflight,
     )
     recursive = replay["recursive"]
     pins["expected_artifact_graph_verifier_digest"] = (
@@ -236,6 +245,7 @@ def coordinate_intent(
             receipt,
             source_request,
             quarantine,
+            require_release_pin_set=automatic_release_pin_preflight,
         )
         active = {
             "context_id": context_id,
@@ -495,8 +505,10 @@ def _recursive_identity(receipt: Any) -> dict[str, Any]:
             "expansion_digest": receipt.expansion_digest,
             "expansion_proof_digest": receipt.expansion_proof_digest,
             "release_asset_result_digests": release_digests,
+            "release_pin_set_digest": receipt.release_pin_set_digest,
         },
         "recursive acquisition",
+        require_release_pin_set_field=True,
     )
 
 
@@ -515,8 +527,15 @@ def _recursive_artifact_graph_verifier_digest(
 def _verify_recursive_identity(
     value: object,
     label: str,
+    *,
+    require_release_pin_set_field: bool,
 ) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != _RECURSIVE_FIELDS:
+    expected_fields = (
+        _RECURSIVE_FIELDS
+        if require_release_pin_set_field
+        else _RECURSIVE_V3_FIELDS
+    )
+    if not isinstance(value, dict) or set(value) != expected_fields:
         raise ProtectedInstallCoordinatorError(f"{label} is invalid")
     proof = value["expansion_proof_digest"]
     if proof is not None:
@@ -535,7 +554,7 @@ def _verify_recursive_identity(
     )
     if release_digests != ordered_release_digests:
         raise ProtectedInstallCoordinatorError(f"{label} is not canonical")
-    return {
+    verified = {
         "root_manifest_digest": _require_digest(
             value["root_manifest_digest"],
             f"{label} root manifest digest",
@@ -547,6 +566,17 @@ def _verify_recursive_identity(
         "expansion_proof_digest": proof,
         "release_asset_result_digests": ordered_release_digests,
     }
+    if require_release_pin_set_field:
+        pin_set_digest = value["release_pin_set_digest"]
+        verified["release_pin_set_digest"] = (
+            None
+            if pin_set_digest is None
+            else _require_digest(
+                pin_set_digest,
+                f"{label} release pin-set digest",
+            )
+        )
+    return verified
 
 
 def _prepare_predecessor(
@@ -578,7 +608,7 @@ def _prepare_predecessor(
     schema = state.get("schema")
     if (
         set(state) != _STATE_FIELDS
-        or schema not in {STATE_SCHEMA_V1, STATE_SCHEMA}
+        or schema not in {STATE_SCHEMA_V1, STATE_SCHEMA_V2, STATE_SCHEMA}
         or state.get("assurance") != ASSURANCE
     ):
         raise ProtectedInstallCoordinatorError(
@@ -611,10 +641,11 @@ def _prepare_predecessor(
     ):
         _require_digest(active[field], f"coordinator predecessor {field}")
     recursive = None
-    if schema == STATE_SCHEMA:
+    if schema in {STATE_SCHEMA_V2, STATE_SCHEMA}:
         recursive = _verify_recursive_identity(
             active["recursive"],
             "coordinator predecessor recursive identity",
+            require_release_pin_set_field=(schema == STATE_SCHEMA),
         )
     _require_digest(state["tree_digest"], "coordinator predecessor tree digest")
     _require_digest(
@@ -650,6 +681,23 @@ def _prepare_predecessor(
         raise ProtectedInstallCoordinatorError(
             "coordinator predecessor quarantine source changed"
         )
+    if (
+        recursive is not None
+        and recursive.get("release_pin_set_digest") is not None
+    ):
+        try:
+            verify_retained_release_pin_set(
+                CAS(previous_cas, read_only=True),
+                recursive["release_pin_set_digest"],
+                expected_request=active_source,
+                expected_manifest_digest=active["manifest_digest"],
+                expected_source_proof_digest=receipt["source_proof_digest"],
+                expected_recursive=recursive,
+            )
+        except GitHubRecursiveGatewayError as exc:
+            raise ProtectedInstallCoordinatorError(
+                f"coordinator predecessor release pin set is invalid: {exc}"
+            ) from exc
     return state
 
 
@@ -694,6 +742,8 @@ def _verify_recursive_gateway_receipt(
     receipt: Any,
     source_request: dict[str, str],
     quarantine_path: Path,
+    *,
+    require_release_pin_set: bool,
 ) -> dict[str, Any]:
     recursive = _recursive_identity(receipt)
     if (
@@ -724,6 +774,25 @@ def _verify_recursive_gateway_receipt(
         raise ProtectedInstallCoordinatorError(
             "gateway quarantine replay does not match its intent"
         )
+    pin_set_digest = recursive["release_pin_set_digest"]
+    if require_release_pin_set != (pin_set_digest is not None):
+        raise ProtectedInstallCoordinatorError(
+            "gateway release pin-set mode changed"
+        )
+    if pin_set_digest is not None:
+        try:
+            verify_retained_release_pin_set(
+                CAS(quarantine_path, read_only=True),
+                pin_set_digest,
+                expected_request=source_request,
+                expected_manifest_digest=receipt.manifest_digest,
+                expected_source_proof_digest=receipt.source_proof_digest,
+                expected_recursive=recursive,
+            )
+        except GitHubRecursiveGatewayError as exc:
+            raise ProtectedInstallCoordinatorError(
+                f"gateway release pin set is invalid: {exc}"
+            ) from exc
     return {
         "receipt": replay,
         "recursive": recursive,

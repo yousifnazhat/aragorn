@@ -33,6 +33,7 @@ from aragorn.github_recursive_gateway import (
     run_recursive_worker,
     validate_recursive_pin_preflight_result,
     verify_recursive_pin_preflight_output,
+    verify_retained_release_pin_set,
 )
 from aragorn.github_source_proof import retain_github_source_proof
 from aragorn.zip_inventory import (
@@ -1016,6 +1017,60 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                 CAS(quarantine, read_only=True).read(pin_set_digest),
                 canonical_json(pin_set),
             )
+            recursive = {
+                "root_manifest_digest": release_result["root_manifest_digest"],
+                "expansion_digest": release_result["expansion_digest"],
+                "expansion_proof_digest": release_result[
+                    "expansion_proof_digest"
+                ],
+                "release_asset_result_digests": [
+                    entry["result_digest"]
+                    for entry in release_result["release_assets"]
+                ],
+                "release_pin_set_digest": pin_set_digest,
+            }
+            with mock.patch(
+                "aragorn.github_recursive_gateway."
+                "discover_recursive_github_release_asset_urls",
+                return_value=(release_url,),
+            ):
+                replayed_pin_set = verify_retained_release_pin_set(
+                    CAS(quarantine, read_only=True),
+                    pin_set_digest,
+                    expected_request=request,
+                    expected_manifest_digest=release_result["manifest_digest"],
+                    expected_source_proof_digest=release_result[
+                        "source_proof_digest"
+                    ],
+                    expected_recursive=recursive,
+                )
+            self.assertEqual(replayed_pin_set, pin_set)
+
+            changed_recursive = deepcopy(recursive)
+            changed_recursive["root_manifest_digest"] = (
+                "sha256:" + "f" * 64
+            )
+            with (
+                mock.patch(
+                    "aragorn.github_recursive_gateway."
+                    "discover_recursive_github_release_asset_urls",
+                    return_value=(release_url,),
+                ),
+                self.assertRaisesRegex(
+                    GitHubRecursiveGatewayError,
+                    "changed its source identity",
+                ),
+            ):
+                verify_retained_release_pin_set(
+                    CAS(quarantine, read_only=True),
+                    pin_set_digest,
+                    expected_request=request,
+                    expected_manifest_digest=release_result["manifest_digest"],
+                    expected_source_proof_digest=release_result[
+                        "source_proof_digest"
+                    ],
+                    expected_recursive=changed_recursive,
+                )
 
 
 if __name__ == "__main__":

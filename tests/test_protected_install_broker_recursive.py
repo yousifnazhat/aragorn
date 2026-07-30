@@ -60,6 +60,45 @@ def _recursive(*, release_digests: list[str]) -> dict[str, object]:
     }
 
 
+def _service_request(
+    schema: str,
+    recursive: dict[str, object],
+    *,
+    expected_recursive: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return {
+        "schema": schema,
+        "expires_at_unix": 200,
+        "operation": "update",
+        "expected_active": {
+            "context_id": _digest("1"),
+            "manifest_digest": _digest("2"),
+            "source_request": _source("1"),
+            "quarantine_receipt_digest": _digest("3"),
+            "gateway_profile_digest": _digest("4"),
+            "recursive": (
+                recursive if expected_recursive is None else expected_recursive
+            ),
+        },
+        "expected_manifest_diff_digest": _digest("5"),
+        "target_runtime_digest": _digest("6"),
+        "runtime_conformance_digest": _digest("7"),
+        "manifest_digest": _digest("8"),
+        "quarantine_receipt_digest": _digest("9"),
+        "gateway_profile_digest": _digest("a"),
+        "context_id": _digest("b"),
+        "source_request": _source("2"),
+        "recursive": recursive,
+        "expected_producer_implementation_digest": _digest("c"),
+        "expected_analyzer_implementation_digest": _digest("d"),
+        "expected_analyzer_executable_digest": _digest("e"),
+        "expected_analyzer_configuration_digest": _digest("f"),
+        "expected_policy_digest": _digest("0"),
+        "expected_analyzer_verifier_digest": _digest("1"),
+        "expected_artifact_graph_verifier_digest": _digest("2"),
+    }
+
+
 def _live_args(producer, release_digests: list[str]) -> tuple[argparse.Namespace, dict]:
     executable = Path(sys.executable).resolve(strict=True)
     executable_digest = "sha256:" + hashlib.sha256(
@@ -123,6 +162,7 @@ def _live_args(producer, release_digests: list[str]) -> tuple[argparse.Namespace
     ), {
         "request": request,
         "source_closure_digest": _digest("1"),
+        "source_proof_digest": _digest("3"),
         "containment_profile": "test",
         "gateway": {},
         "protected_cas": {},
@@ -135,35 +175,10 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
     ) -> None:
         producer = _load_producer()
         recursive = _recursive(release_digests=[_digest("d")])
-        request = {
-            "schema": "aragorn/protected-install-broker-request/v3",
-            "expires_at_unix": 200,
-            "operation": "update",
-            "expected_active": {
-                "context_id": _digest("1"),
-                "manifest_digest": _digest("2"),
-                "source_request": _source("1"),
-                "quarantine_receipt_digest": _digest("3"),
-                "gateway_profile_digest": _digest("4"),
-                "recursive": recursive,
-            },
-            "expected_manifest_diff_digest": _digest("5"),
-            "target_runtime_digest": _digest("6"),
-            "runtime_conformance_digest": _digest("7"),
-            "manifest_digest": _digest("8"),
-            "quarantine_receipt_digest": _digest("9"),
-            "gateway_profile_digest": _digest("a"),
-            "context_id": _digest("b"),
-            "source_request": _source("2"),
-            "recursive": recursive,
-            "expected_producer_implementation_digest": _digest("c"),
-            "expected_analyzer_implementation_digest": _digest("d"),
-            "expected_analyzer_executable_digest": _digest("e"),
-            "expected_analyzer_configuration_digest": _digest("f"),
-            "expected_policy_digest": _digest("0"),
-            "expected_analyzer_verifier_digest": _digest("1"),
-            "expected_artifact_graph_verifier_digest": _digest("2"),
-        }
+        request = _service_request(
+            "aragorn/protected-install-broker-request/v3",
+            recursive,
+        )
         with TemporaryDirectory() as temporary:
             path = Path(temporary).resolve() / "request.json"
             path.write_bytes(canonical_json(request))
@@ -188,12 +203,154 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
             ):
                 producer._load_service_request(str(path), os.geteuid())
 
+    def test_service_request_v4_requires_nullable_pin_digest_and_accepts_v3_predecessor(
+        self,
+    ) -> None:
+        producer = _load_producer()
+        previous_recursive = _recursive(release_digests=[_digest("d")])
+        current_recursive = {
+            **_recursive(release_digests=[_digest("e")]),
+            "release_pin_set_digest": None,
+        }
+        request = _service_request(
+            "aragorn/protected-install-broker-request/v4",
+            current_recursive,
+            expected_recursive=previous_recursive,
+        )
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary).resolve() / "request.json"
+            path.write_bytes(canonical_json(request))
+            path.chmod(0o400)
+            loaded, authority = producer._load_service_request(
+                str(path),
+                os.geteuid(),
+            )
+            self.assertEqual(loaded, request)
+            self.assertEqual(
+                authority["request_schema"],
+                "aragorn/protected-install-broker-request/v4",
+            )
+
+            request["recursive"] = {
+                **current_recursive,
+                "release_pin_set_digest": _digest("f"),
+            }
+            path.chmod(0o600)
+            path.write_bytes(canonical_json(request))
+            path.chmod(0o400)
+            loaded, _authority = producer._load_service_request(
+                str(path),
+                os.geteuid(),
+            )
+            self.assertEqual(loaded, request)
+
+            missing_digest = dict(current_recursive)
+            missing_digest.pop("release_pin_set_digest")
+            request["recursive"] = missing_digest
+            path.chmod(0o600)
+            path.write_bytes(canonical_json(request))
+            path.chmod(0o400)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "service recursive source is invalid",
+            ):
+                producer._load_service_request(str(path), os.geteuid())
+
+            request["recursive"] = {
+                **current_recursive,
+                "release_pin_set_digest": "invalid",
+            }
+            path.chmod(0o600)
+            path.write_bytes(canonical_json(request))
+            path.chmod(0o400)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "release pin set digest is invalid",
+            ):
+                producer._load_service_request(str(path), os.geteuid())
+
+    def test_v4_update_verifies_predecessor_pin_set_before_diff(self) -> None:
+        producer = _load_producer()
+        pin_set_digest = _digest("0")
+        previous_recursive = {
+            **_recursive(release_digests=[_digest("d")]),
+            "release_pin_set_digest": pin_set_digest,
+        }
+        previous_request = _source("1")
+        expected_active = {
+            "context_id": _digest("1"),
+            "manifest_digest": _digest("2"),
+            "source_request": previous_request,
+            "quarantine_receipt_digest": _digest("3"),
+            "gateway_profile_digest": _digest("4"),
+            "recursive": previous_recursive,
+        }
+        args = SimpleNamespace(
+            operation="update",
+            expected_active=expected_active,
+            expected_manifest_diff_digest=_digest("5"),
+            manifest_digest=_digest("8"),
+        )
+        previous_receipt = {
+            "request": previous_request,
+            "source_proof_digest": _digest("6"),
+            "source_closure_digest": _digest("7"),
+        }
+        order: list[str] = []
+        with TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "current")
+            previous_root = Path(temporary) / "previous"
+            CAS(previous_root)
+            previous_cas = CAS(previous_root, read_only=True)
+            with (
+                mock.patch.object(
+                    producer,
+                    "verify_github_quarantine_receipt",
+                    return_value=previous_receipt,
+                ),
+                mock.patch.object(
+                    producer,
+                    "verify_retained_release_pin_set",
+                    side_effect=lambda *_args, **_kwargs: (
+                        order.append("pin-set") or {}
+                    ),
+                ) as verify_pin_set,
+                mock.patch.object(
+                    producer,
+                    "diff_verified_manifests_between",
+                    side_effect=lambda *_args, **_kwargs: (
+                        order.append("manifest-diff") or {"status": "changed"}
+                    ),
+                ),
+                mock.patch.object(
+                    producer,
+                    "_retain_document",
+                    return_value=args.expected_manifest_diff_digest,
+                ),
+            ):
+                producer._prepare_github_transition(
+                    args,
+                    cas,
+                    previous_cas,
+                )
+
+        self.assertEqual(order, ["pin-set", "manifest-diff"])
+        self.assertIs(verify_pin_set.call_args.args[0], previous_cas)
+        self.assertEqual(verify_pin_set.call_args.args[1], pin_set_digest)
+        self.assertEqual(
+            verify_pin_set.call_args.kwargs["expected_recursive"],
+            previous_recursive,
+        )
+
     def test_recursive_v4_incomplete_replays_error_before_analyzer_or_publish(
         self,
     ) -> None:
         producer = _load_producer()
         release_digest = _digest("d")
+        pin_set_digest = _digest("0")
         args, receipt = _live_args(producer, [release_digest])
+        args.recursive["release_pin_set_digest"] = pin_set_digest
+        order: list[str] = []
         graph = {
             "profile": "recursive-github-markdown/v2",
             "tree_digest": _digest("2"),
@@ -224,6 +381,13 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
                 ),
                 mock.patch.object(
                     producer,
+                    "verify_retained_release_pin_set",
+                    side_effect=lambda *_args, **_kwargs: (
+                        order.append("pin-set") or {}
+                    ),
+                ) as verify_pin_set,
+                mock.patch.object(
+                    producer,
                     "_prepare_github_transition",
                     return_value=(
                         None,
@@ -237,7 +401,9 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
                 mock.patch.object(
                     producer.recursive_graph_v4_module,
                     "retain_recursive_github_artifact_graph",
-                    return_value=_digest("4"),
+                    side_effect=lambda *_args, **_kwargs: (
+                        order.append("artifact-graph") or _digest("4")
+                    ),
                 ) as retain_graph,
                 mock.patch.object(
                     producer.recursive_graph_v6_module,
@@ -282,6 +448,22 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
         )
         analyzer.assert_not_called()
         publish.assert_not_called()
+        self.assertEqual(order[:2], ["pin-set", "artifact-graph"])
+        verified_cas = verify_pin_set.call_args.args[0]
+        self.assertTrue(verified_cas.read_only)
+        self.assertEqual(verified_cas.root, cas.root)
+        self.assertEqual(verify_pin_set.call_args.args[1], pin_set_digest)
+        self.assertEqual(
+            verify_pin_set.call_args.kwargs,
+            {
+                "expected_request": receipt["request"],
+                "expected_manifest_digest": args.manifest_digest,
+                "expected_source_proof_digest": receipt[
+                    "source_proof_digest"
+                ],
+                "expected_recursive": args.recursive,
+            },
+        )
         self.assertEqual(
             retain_graph.call_args.kwargs["release_asset_result_digests"],
             (release_digest,),

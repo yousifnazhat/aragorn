@@ -390,9 +390,9 @@ verdict drift. Current inspection still has only `source_tree` closure, so
 faithful replay returns `ERROR`. The parallel evidence-only
 `aragorn/decision/v3` retains and replays an admission artifact graph bound to
 caller-held expected identities, including the exact analyzer-run receipts,
-and evaluates only its verified closure. The internal protected request-v3
-broker now composes that replay with recursive source identities, runtime,
-destination, expiry, revocation, and protected publication. It remains absent
+and evaluates only its verified closure. The internal protected request-v4
+broker now composes that replay with recursive source and pin-set identities,
+runtime, destination, expiry, revocation, and protected publication. It remains absent
 from the CLI and evidence-only rather than installer authority.
 
 The source-screen-only Git identities and commit-pinned evidence anchors are
@@ -769,11 +769,13 @@ artifacts covered by a fail-closed `ERROR` outcome. This is evidence-set
 eligibility under the Phase 1 exit column and makes Phase 2 engineering
 eligible; it is not production completion of the full deliverable column. The
 bounded release resolver, recursive gateway/broker replay, and v4 fail-closed
-graph are implemented. The protected request-v3 path now binds recursive
-acquisition identities through graph and decision replay; release-bearing v4
+graph are implemented. The protected request-v4 path now binds recursive
+acquisition identities and the nullable retained pin-set digest through
+pre-analysis, pre-publication, graph, and decision replay; release-bearing v4
 stops before analysis or publication. Automatic independent release-pin
-preflight is implemented and unit-verified, while its live systemd path remains
-unqualified. V6 now vendors only exact
+preflight plus coordinator-state-v3 custody is implemented and unit-verified,
+while a fresh request-v4 archive and its live systemd path remain unqualified.
+V6 now vendors only exact
 GitHub-digest-backed inventory archives into a deterministic runtime-candidate
 manifest and builds a separate extracted-member analysis input. V6 still leaves
 the public release edge unresolved until a pinned runtime consumer is

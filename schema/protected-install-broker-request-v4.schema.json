@@ -1,0 +1,211 @@
+{
+  "$id": "https://aragorn.dev/schema/protected-install-broker-request-v4.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn recursive protected install broker request v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "expires_at_unix",
+    "operation",
+    "expected_active",
+    "expected_manifest_diff_digest",
+    "target_runtime_digest",
+    "runtime_conformance_digest",
+    "manifest_digest",
+    "quarantine_receipt_digest",
+    "gateway_profile_digest",
+    "context_id",
+    "source_request",
+    "recursive",
+    "expected_producer_implementation_digest",
+    "expected_analyzer_implementation_digest",
+    "expected_analyzer_executable_digest",
+    "expected_analyzer_configuration_digest",
+    "expected_policy_digest",
+    "expected_analyzer_verifier_digest",
+    "expected_artifact_graph_verifier_digest"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/protected-install-broker-request/v4"},
+    "expires_at_unix": {"type": "integer", "minimum": 0},
+    "operation": {"enum": ["install", "update"]},
+    "expected_active": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/expectedActive"}
+      ]
+    },
+    "expected_manifest_diff_digest": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/digest"}
+      ]
+    },
+    "target_runtime_digest": {"$ref": "#/$defs/digest"},
+    "runtime_conformance_digest": {"$ref": "#/$defs/digest"},
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "quarantine_receipt_digest": {"$ref": "#/$defs/digest"},
+    "gateway_profile_digest": {"$ref": "#/$defs/digest"},
+    "context_id": {"$ref": "#/$defs/digest"},
+    "source_request": {"$ref": "github-gateway-request-v1.schema.json"},
+    "recursive": {"$ref": "#/$defs/recursiveV4"},
+    "expected_producer_implementation_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_implementation_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_executable_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_configuration_digest": {"$ref": "#/$defs/digest"},
+    "expected_policy_digest": {"$ref": "#/$defs/digest"},
+    "expected_analyzer_verifier_digest": {"$ref": "#/$defs/digest"},
+    "expected_artifact_graph_verifier_digest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"const": "install"}},
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {
+          "expected_active": {"type": "null"},
+          "expected_manifest_diff_digest": {"type": "null"}
+        }
+      },
+      "else": {
+        "properties": {
+          "expected_active": {"$ref": "#/$defs/expectedActive"},
+          "expected_manifest_diff_digest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "recursiveV3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root_manifest_digest",
+        "expansion_digest",
+        "expansion_proof_digest",
+        "release_asset_result_digests"
+      ],
+      "properties": {
+        "root_manifest_digest": {"$ref": "#/$defs/digest"},
+        "expansion_digest": {"$ref": "#/$defs/digest"},
+        "expansion_proof_digest": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/digest"}
+          ]
+        },
+        "release_asset_result_digests": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "recursiveV4": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root_manifest_digest",
+        "expansion_digest",
+        "expansion_proof_digest",
+        "release_asset_result_digests",
+        "release_pin_set_digest"
+      ],
+      "properties": {
+        "root_manifest_digest": {"$ref": "#/$defs/digest"},
+        "expansion_digest": {"$ref": "#/$defs/digest"},
+        "expansion_proof_digest": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/digest"}
+          ]
+        },
+        "release_asset_result_digests": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/digest"}
+        },
+        "release_pin_set_digest": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/digest"}
+          ]
+        }
+      }
+    },
+    "expectedActive": {
+      "oneOf": [
+        {"$ref": "#/$defs/expectedActiveLegacy"},
+        {"$ref": "#/$defs/expectedActiveRecursiveV3"},
+        {"$ref": "#/$defs/expectedActiveRecursiveV4"}
+      ]
+    },
+    "expectedActiveLegacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_id",
+        "manifest_digest",
+        "source_request",
+        "quarantine_receipt_digest",
+        "gateway_profile_digest"
+      ],
+      "properties": {
+        "context_id": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "source_request": {"$ref": "github-gateway-request-v1.schema.json"},
+        "quarantine_receipt_digest": {"$ref": "#/$defs/digest"},
+        "gateway_profile_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "expectedActiveRecursiveV3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_id",
+        "manifest_digest",
+        "source_request",
+        "quarantine_receipt_digest",
+        "gateway_profile_digest",
+        "recursive"
+      ],
+      "properties": {
+        "context_id": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "source_request": {"$ref": "github-gateway-request-v1.schema.json"},
+        "quarantine_receipt_digest": {"$ref": "#/$defs/digest"},
+        "gateway_profile_digest": {"$ref": "#/$defs/digest"},
+        "recursive": {"$ref": "#/$defs/recursiveV3"}
+      }
+    },
+    "expectedActiveRecursiveV4": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_id",
+        "manifest_digest",
+        "source_request",
+        "quarantine_receipt_digest",
+        "gateway_profile_digest",
+        "recursive"
+      ],
+      "properties": {
+        "context_id": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "source_request": {"$ref": "github-gateway-request-v1.schema.json"},
+        "quarantine_receipt_digest": {"$ref": "#/$defs/digest"},
+        "gateway_profile_digest": {"$ref": "#/$defs/digest"},
+        "recursive": {"$ref": "#/$defs/recursiveV4"}
+      }
+    }
+  }
+}

@@ -26,6 +26,7 @@ from aragorn.protected_install_coordinator import (
     _recursive_artifact_graph_verifier_digest,
     _release_analyzer_script,
     _start_fixed_service,
+    _verify_recursive_gateway_receipt,
     coordinate_intent,
 )
 
@@ -147,6 +148,8 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             expansion_digest=_digest("2" if suffix == "1" else "3"),
             expansion_proof_digest=_digest("4" if suffix == "1" else "5"),
             release_asset_result_digests=(),
+            handoff_manifest_digest=_digest("7"),
+            release_pin_set_digest=_digest("7" if suffix == "1" else "0"),
         )
 
     def _verify_receipt(
@@ -243,6 +246,11 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             ),
             mock.patch(
                 "aragorn.protected_install_coordinator."
+                "verify_retained_release_pin_set",
+                return_value={},
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
                 "load_verified_retained_manifest",
                 side_effect=lambda _cas, digest: {
                     "tree_digest": (
@@ -281,9 +289,10 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             patches[1],
             patches[2],
             patches[3],
-            patches[4],
+            patches[4] as verify_pin_set,
             patches[5],
             patches[6],
+            patches[7],
         ):
             installed = coordinate_intent(
                 self._intent("install", "1" * 40),
@@ -319,7 +328,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         self.assertEqual(first["operation"], "install")
         self.assertEqual(
             first["schema"],
-            "aragorn/protected-install-broker-request/v3",
+            "aragorn/protected-install-broker-request/v4",
         )
         self.assertIsNone(first["expected_active"])
         self.assertIsNone(first["expected_manifest_diff_digest"])
@@ -342,6 +351,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
                 "expansion_digest": _digest("2"),
                 "expansion_proof_digest": _digest("4"),
                 "release_asset_result_digests": [],
+                "release_pin_set_digest": _digest("7"),
             },
         )
         self.assertEqual(second["operation"], "update")
@@ -365,6 +375,70 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
             second["expected_manifest_diff_digest"],
             first["expected_manifest_diff_digest"],
         )
+        self.assertEqual(verify_pin_set.call_count, 5)
+        state = json.loads(self.state.read_bytes())
+        self.assertEqual(
+            state["schema"],
+            "aragorn/protected-install-coordinator-state/v3",
+        )
+        self.assertEqual(
+            state["expected_active"]["recursive"]["release_pin_set_digest"],
+            _digest("0"),
+        )
+
+    def test_automatic_pin_preflight_cannot_downgrade_to_explicit_null(
+        self,
+    ) -> None:
+        source = {
+            "schema": "aragorn/github-gateway-request/v1",
+            "owner": "example",
+            "repository": "skills",
+            "commit": "1" * 40,
+            "skill_path": "sample",
+        }
+        quarantine = self.quarantine / "automatic"
+        receipt = self._gateway_result(
+            source,
+            release_asset_pins=None,
+            quarantine_state=quarantine,
+        )
+        receipt.release_pin_set_digest = None
+        with (
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "verify_github_quarantine_receipt",
+                side_effect=self._verify_receipt,
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "load_verified_retained_manifest",
+                return_value={"tree_digest": _digest("e")},
+            ),
+            mock.patch(
+                "aragorn.protected_install_coordinator."
+                "verify_retained_release_pin_set",
+            ) as verify_pin_set,
+        ):
+            explicit = _verify_recursive_gateway_receipt(
+                receipt,
+                source,
+                quarantine,
+                require_release_pin_set=False,
+            )
+            self.assertIsNone(
+                explicit["recursive"]["release_pin_set_digest"],
+            )
+            verify_pin_set.assert_not_called()
+            with self.assertRaisesRegex(
+                ProtectedInstallCoordinatorError,
+                "mode changed",
+            ):
+                _verify_recursive_gateway_receipt(
+                    receipt,
+                    source,
+                    quarantine,
+                    require_release_pin_set=True,
+                )
 
     def test_intent_cannot_supply_a_trust_pin(self) -> None:
         path = self.control / "bad-intent.json"

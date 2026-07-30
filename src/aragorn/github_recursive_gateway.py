@@ -15,9 +15,11 @@ from typing import Any
 
 from .artifact_closure import canonical_json, load_verified_retained_manifest
 from .benchmark_handoff_v2 import (
+    HandoffError,
     build_handoff_manifest,
     export_declared_byte_transport,
     import_declared_byte_transport,
+    validate_handoff_manifest,
 )
 from .cas import CAS, CASError
 from .github_expand import acquire_github_expansion
@@ -558,6 +560,158 @@ def _validate_release_pin_set(value: object) -> dict[str, Any]:
     frozen = dict(value)
     frozen["release_asset_pins"] = pins
     return frozen
+
+
+def verify_retained_release_pin_set(
+    cas: CAS,
+    pin_set_digest: str,
+    *,
+    expected_request: dict[str, str],
+    expected_manifest_digest: str,
+    expected_source_proof_digest: str,
+    expected_recursive: dict[str, Any],
+) -> dict[str, Any]:
+    """Replay one retained independent pin set against its exact CAS closure."""
+
+    try:
+        if not cas.read_only:
+            raise GitHubRecursiveGatewayError(
+                "release pin-set replay requires a read-only CAS"
+            )
+        digest = _digest(pin_set_digest, "release pin-set digest")
+        raw = cas.read(digest, max_bytes=_MAX_RECORD_BYTES)
+        document = json.loads(raw)
+        if canonical_json(document) != raw:
+            raise GitHubRecursiveGatewayError(
+                "retained recursive release pin set is not canonical"
+            )
+        pin_set = _validate_release_pin_set(document)
+        recursive_fields = {
+            "root_manifest_digest",
+            "expansion_digest",
+            "expansion_proof_digest",
+            "release_asset_result_digests",
+            "release_pin_set_digest",
+        }
+        if (
+            not isinstance(expected_recursive, dict)
+            or set(expected_recursive) != recursive_fields
+            or expected_recursive["release_pin_set_digest"] != digest
+        ):
+            raise GitHubRecursiveGatewayError(
+                "recursive release pin-set identity is invalid"
+            )
+        request_digest = _sha256(canonical_json(expected_request))
+        manifest_digest = _digest(
+            expected_manifest_digest,
+            "expected release pin-set manifest digest",
+        )
+        source_proof_digest = _digest(
+            expected_source_proof_digest,
+            "expected release pin-set source proof digest",
+        )
+        root_manifest_digest = _digest(
+            expected_recursive["root_manifest_digest"],
+            "expected release pin-set root manifest digest",
+        )
+        expansion_digest = _digest(
+            expected_recursive["expansion_digest"],
+            "expected release pin-set expansion digest",
+        )
+        expansion_proof_digest = expected_recursive["expansion_proof_digest"]
+        if expansion_proof_digest is not None:
+            expansion_proof_digest = _digest(
+                expansion_proof_digest,
+                "expected release pin-set expansion proof digest",
+            )
+        if (
+            pin_set["request_digest"] != request_digest
+            or pin_set["manifest_digest"] != manifest_digest
+            or pin_set["root_manifest_digest"] != root_manifest_digest
+            or pin_set["source_proof_digest"] != source_proof_digest
+            or pin_set["expansion_digest"] != expansion_digest
+            or pin_set["expansion_proof_digest"] != expansion_proof_digest
+        ):
+            raise GitHubRecursiveGatewayError(
+                "retained recursive release pin set changed its source identity"
+            )
+
+        handoff_raw = cas.read(
+            pin_set["handoff_manifest_digest"],
+            max_bytes=_MAX_RECORD_BYTES,
+        )
+        handoff = json.loads(handoff_raw)
+        if canonical_json(handoff) != handoff_raw:
+            raise GitHubRecursiveGatewayError(
+                "retained release pin-set handoff is not canonical"
+            )
+        validate_handoff_manifest(handoff)
+        if (
+            handoff["kind"] != "github_source"
+            or handoff["root_digest"] != manifest_digest
+        ):
+            raise GitHubRecursiveGatewayError(
+                "retained release pin-set handoff changed"
+            )
+        for blob in handoff["blobs"]:
+            cas.verify(blob["digest"], max_bytes=blob["size"])
+
+        release_digests = expected_recursive["release_asset_result_digests"]
+        if (
+            not isinstance(release_digests, list)
+            or len(release_digests) > _MAX_RELEASE_ASSETS
+            or release_digests != sorted(set(release_digests))
+        ):
+            raise GitHubRecursiveGatewayError(
+                "recursive release pin-set result digests are invalid"
+            )
+        entries: list[dict[str, str]] = []
+        for result_digest in release_digests:
+            result_digest = _digest(
+                result_digest,
+                "recursive release pin-set result digest",
+            )
+            result_raw = cas.read(result_digest, max_bytes=_MAX_RECORD_BYTES)
+            result = json.loads(result_raw)
+            source = result.get("source") if isinstance(result, dict) else None
+            url = source.get("url") if isinstance(source, dict) else None
+            if (
+                canonical_json(result) != result_raw
+                or not isinstance(url, str)
+            ):
+                raise GitHubRecursiveGatewayError(
+                    "retained release pin-set result is invalid"
+                )
+            entries.append({"url": url, "result_digest": result_digest})
+        entries.sort(key=lambda entry: entry["url"])
+        if len({entry["url"] for entry in entries}) != len(entries):
+            raise GitHubRecursiveGatewayError(
+                "retained release pin-set results repeat a URL"
+            )
+        discovered_urls = discover_recursive_github_release_asset_urls(
+            cas,
+            expansion_digest,
+        )
+        _verify_release_assets(
+            cas,
+            tuple(entries),
+            discovered_urls,
+            release_asset_pins=pin_set["release_asset_pins"],
+        )
+        return pin_set
+    except GitHubRecursiveGatewayError:
+        raise
+    except (
+        CASError,
+        HandoffError,
+        OSError,
+        TypeError,
+        UnicodeDecodeError,
+        ValueError,
+    ) as exc:
+        raise GitHubRecursiveGatewayError(
+            f"cannot verify retained recursive release pin set: {exc}"
+        ) from exc
 
 
 def _require_release_pin_set_matches(

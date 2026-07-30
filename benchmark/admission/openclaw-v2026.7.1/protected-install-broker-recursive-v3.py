@@ -42,6 +42,7 @@ from aragorn.github_gateway import build_gateway_request
 from aragorn.github_quarantine_receipt import (
     verify_github_quarantine_receipt,
 )
+from aragorn.github_recursive_gateway import verify_retained_release_pin_set
 from aragorn.manifest_diff import diff_verified_manifests_between
 from aragorn.materialization import (
     _freeze_materialized_source_tree,
@@ -77,6 +78,7 @@ _GROUP_PATH = Path("/etc/group")
 _SERVICE_REQUEST_SCHEMA = "aragorn/protected-install-broker-request/v1"
 _SERVICE_REQUEST_SCHEMA_V2 = "aragorn/protected-install-broker-request/v2"
 _SERVICE_REQUEST_SCHEMA_V3 = "aragorn/protected-install-broker-request/v3"
+_SERVICE_REQUEST_SCHEMA_V4 = "aragorn/protected-install-broker-request/v4"
 _MAX_SERVICE_REQUEST_BYTES = 64 * 1024
 _SERVICE_REQUEST_DIGEST_FIELDS = (
     "target_runtime_digest",
@@ -111,6 +113,7 @@ _RECURSIVE_FIELDS = {
     "expansion_proof_digest",
     "release_asset_result_digests",
 }
+_RECURSIVE_V4_FIELDS = _RECURSIVE_FIELDS | {"release_pin_set_digest"}
 _SERVICE_DYNAMIC_ARGUMENTS = (
     "now_unix",
     "expires_at_unix",
@@ -331,6 +334,10 @@ def _module_digest(module: Any) -> str:
 def _retain_document(cas: CAS, document: object) -> str:
     raw = canonical_json(document)
     return cas.put(BytesIO(raw), max_bytes=len(raw))
+
+
+def _read_only_cas(cas: CAS) -> CAS:
+    return cas if cas.read_only else CAS(cas.root, read_only=True)
 
 
 def _context_id(label: str) -> str:
@@ -765,6 +772,22 @@ def _canonical_recursive(value: object, label: str) -> dict[str, Any]:
     return value
 
 
+def _canonical_recursive_v4(value: object, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != _RECURSIVE_V4_FIELDS:
+        raise BrokerConformanceError(f"{label} is invalid")
+    _canonical_recursive(
+        {field: value[field] for field in _RECURSIVE_FIELDS},
+        label,
+    )
+    release_pin_set_digest = value["release_pin_set_digest"]
+    if release_pin_set_digest is not None:
+        _require_digest(
+            release_pin_set_digest,
+            f"{label} release pin set digest",
+        )
+    return value
+
+
 def _service_transition(document: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     if document["schema"] == _SERVICE_REQUEST_SCHEMA:
         return "install", None
@@ -786,7 +809,11 @@ def _service_transition(document: dict[str, Any]) -> tuple[str, dict[str, Any] |
         "quarantine_receipt_digest",
         "gateway_profile_digest",
     }
-    if document["schema"] == _SERVICE_REQUEST_SCHEMA_V3 and "recursive" in expected_active:
+    if (
+        document["schema"]
+        in (_SERVICE_REQUEST_SCHEMA_V3, _SERVICE_REQUEST_SCHEMA_V4)
+        and "recursive" in expected_active
+    ):
         expected_active_fields.add("recursive")
     if set(expected_active) != expected_active_fields:
         raise BrokerConformanceError(
@@ -804,10 +831,21 @@ def _service_transition(document: dict[str, Any]) -> tuple[str, dict[str, Any] |
         "expected active source request",
     )
     if "recursive" in expected_active:
-        _canonical_recursive(
-            expected_active["recursive"],
-            "expected active recursive source",
-        )
+        expected_recursive = expected_active["recursive"]
+        if (
+            document["schema"] == _SERVICE_REQUEST_SCHEMA_V4
+            and isinstance(expected_recursive, dict)
+            and set(expected_recursive) == _RECURSIVE_V4_FIELDS
+        ):
+            _canonical_recursive_v4(
+                expected_recursive,
+                "expected active recursive source",
+            )
+        else:
+            _canonical_recursive(
+                expected_recursive,
+                "expected active recursive source",
+            )
     _require_digest(expected_diff_digest, "expected manifest diff digest")
     if expected_active["manifest_digest"] == document["manifest_digest"]:
         raise BrokerConformanceError(
@@ -903,6 +941,7 @@ def _load_service_request(
         _SERVICE_REQUEST_SCHEMA: _SERVICE_REQUEST_FIELDS,
         _SERVICE_REQUEST_SCHEMA_V2: _SERVICE_REQUEST_V2_FIELDS,
         _SERVICE_REQUEST_SCHEMA_V3: _SERVICE_REQUEST_V3_FIELDS,
+        _SERVICE_REQUEST_SCHEMA_V4: _SERVICE_REQUEST_V3_FIELDS,
     }.get(schema)
     if (
         not isinstance(document, dict)
@@ -924,6 +963,11 @@ def _load_service_request(
     )
     if document["schema"] == _SERVICE_REQUEST_SCHEMA_V3:
         _canonical_recursive(document["recursive"], "service recursive source")
+    elif document["schema"] == _SERVICE_REQUEST_SCHEMA_V4:
+        _canonical_recursive_v4(
+            document["recursive"],
+            "service recursive source",
+        )
     _service_transition(document)
     request_digest = _digest_bytes(bytes(raw))
     return document, {
@@ -1155,6 +1199,22 @@ def _prepare_github_transition(
         raise BrokerConformanceError(
             "active predecessor quarantine source is not request-authorized"
         )
+    previous_release_pin_set_digest = (
+        None
+        if previous_recursive is None
+        else previous_recursive.get("release_pin_set_digest")
+    )
+    if previous_release_pin_set_digest is not None:
+        verify_retained_release_pin_set(
+            _read_only_cas(previous_cas),
+            previous_release_pin_set_digest,
+            expected_request=expected_active["source_request"],
+            expected_manifest_digest=expected_active["manifest_digest"],
+            expected_source_proof_digest=previous_receipt[
+                "source_proof_digest"
+            ],
+            expected_recursive=previous_recursive,
+        )
     manifest_diff = diff_verified_manifests_between(
         previous_cas,
         expected_active["manifest_digest"],
@@ -1222,6 +1282,23 @@ def _reverify_github_transition(
         raise BrokerConformanceError(
             "current quarantine custody changed before publication"
         )
+    current_recursive = getattr(args, "recursive", None)
+    current_release_pin_set_digest = (
+        None
+        if current_recursive is None
+        else current_recursive.get("release_pin_set_digest")
+    )
+    if current_release_pin_set_digest is not None:
+        verify_retained_release_pin_set(
+            _read_only_cas(cas),
+            current_release_pin_set_digest,
+            expected_request=expected_request,
+            expected_manifest_digest=args.manifest_digest,
+            expected_source_proof_digest=replayed_current[
+                "source_proof_digest"
+            ],
+            expected_recursive=current_recursive,
+        )
     if transition["operation"] == "install":
         return
     if previous_cas is None:
@@ -1243,6 +1320,22 @@ def _reverify_github_transition(
     if replayed_previous["request"] != expected_active["source_request"]:
         raise BrokerConformanceError(
             "active predecessor custody changed before publication"
+        )
+    previous_release_pin_set_digest = (
+        None
+        if previous_recursive is None
+        else previous_recursive.get("release_pin_set_digest")
+    )
+    if previous_release_pin_set_digest is not None:
+        verify_retained_release_pin_set(
+            _read_only_cas(previous_cas),
+            previous_release_pin_set_digest,
+            expected_request=expected_active["source_request"],
+            expected_manifest_digest=expected_active["manifest_digest"],
+            expected_source_proof_digest=replayed_previous[
+                "source_proof_digest"
+            ],
+            expected_recursive=previous_recursive,
         )
     manifest_diff = diff_verified_manifests_between(
         previous_cas,
@@ -1282,7 +1375,10 @@ def _run_github_live(
         [] if recursive is None else recursive["release_asset_result_digests"]
     )
     if recursive is not None:
-        _canonical_recursive(recursive, "recursive source")
+        if isinstance(recursive, dict) and set(recursive) == _RECURSIVE_V4_FIELDS:
+            _canonical_recursive_v4(recursive, "recursive source")
+        else:
+            _canonical_recursive(recursive, "recursive source")
         recursive_limit = (
             "ARTIFACT_CLOSURE_LIMITED_TO_RECURSIVE_GITHUB_MARKDOWN_V2_"
             "WITH_UNANALYZED_RELEASE_ASSETS"
@@ -1427,6 +1523,22 @@ def _run_github_live(
     if quarantine_receipt["request"] != expected_request:
         raise BrokerConformanceError(
             "quarantine receipt source request is not caller-authorized"
+        )
+    release_pin_set_digest = (
+        None
+        if recursive is None
+        else recursive.get("release_pin_set_digest")
+    )
+    if release_pin_set_digest is not None:
+        verify_retained_release_pin_set(
+            _read_only_cas(cas),
+            release_pin_set_digest,
+            expected_request=expected_request,
+            expected_manifest_digest=manifest_digest,
+            expected_source_proof_digest=quarantine_receipt[
+                "source_proof_digest"
+            ],
+            expected_recursive=recursive,
         )
     context_expected_active, transition_record = _prepare_github_transition(
         args,
@@ -1983,7 +2095,10 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
     protected_root = Path(args.protected_root).resolve(strict=True)
     recursive = getattr(args, "recursive", None)
     if recursive is not None:
-        _canonical_recursive(recursive, "recursive source")
+        if isinstance(recursive, dict) and set(recursive) == _RECURSIVE_V4_FIELDS:
+            _canonical_recursive_v4(recursive, "recursive source")
+        else:
+            _canonical_recursive(recursive, "recursive source")
     operation = getattr(args, "operation", "install")
     service_request = getattr(args, "service_request", None)
     previous_cas: CAS | None = None

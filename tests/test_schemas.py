@@ -135,6 +135,7 @@ EXPECTED_CONTRACTS = {
     "protected-install-broker-request-v1.schema.json": "aragorn/protected-install-broker-request/v1",
     "protected-install-broker-request-v2.schema.json": "aragorn/protected-install-broker-request/v2",
     "protected-install-broker-request-v3.schema.json": "aragorn/protected-install-broker-request/v3",
+    "protected-install-broker-request-v4.schema.json": "aragorn/protected-install-broker-request/v4",
     "protected-install-context-v1.schema.json": "aragorn/protected-install-context/v1",
     "protected-install-context-v2.schema.json": "aragorn/protected-install-context/v2",
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
@@ -281,6 +282,49 @@ class SchemaTests(unittest.TestCase):
                 "maxItems"
             ],
             16,
+        )
+
+    def test_v4_recursive_protected_request_binds_only_the_pin_set_digest(
+        self,
+    ) -> None:
+        document = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "protected-install-broker-request-v4.schema.json"
+            ).read_text()
+        )
+        recursive_v4 = document["$defs"]["recursiveV4"]
+
+        self.assertEqual(
+            document["properties"]["recursive"],
+            {"$ref": "#/$defs/recursiveV4"},
+        )
+        self.assertEqual(
+            set(recursive_v4["required"]),
+            set(recursive_v4["properties"]),
+        )
+        self.assertFalse(recursive_v4["additionalProperties"])
+        self.assertEqual(
+            recursive_v4["properties"]["release_pin_set_digest"],
+            {
+                "oneOf": [
+                    {"type": "null"},
+                    {"$ref": "#/$defs/digest"},
+                ]
+            },
+        )
+        self.assertNotIn("release_asset_pins", document["properties"])
+        self.assertNotIn("release_asset_pins", recursive_v4["properties"])
+        self.assertEqual(
+            {
+                item["$ref"]
+                for item in document["$defs"]["expectedActive"]["oneOf"]
+            },
+            {
+                "#/$defs/expectedActiveLegacy",
+                "#/$defs/expectedActiveRecursiveV3",
+                "#/$defs/expectedActiveRecursiveV4",
+            },
         )
 
     def test_v6_corpus_and_freeze_schema_pin_external_reference(self) -> None:

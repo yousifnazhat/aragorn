@@ -118,7 +118,7 @@ authority, and does not alter the cumulative conformance ledger.
 - Graph-bound `decision/v3` retention and replay: the verifier requires
   caller-held expected manifest, graph, policy, exact analyzer-run receipts,
   graph-verifier, and analyzer-verifier identities before evaluating the
-  verified artifact closure. The internal request-v3 broker consumes it before
+  verified artifact closure. The internal request-v4 broker consumes it before
   protected publication, but it remains evidence-only, absent from the CLI,
   and grants no installer authority.
 - A broker-context-only install contract requires a caller-held context digest
@@ -363,9 +363,12 @@ unresolved with `GITHUB_RELEASE_ASSET_RUNTIME_CONSUMER_UNPROVEN`: retaining
 candidate bytes does not prove that an installer or runtime consumes them.
 The receipt still cannot authorize admission, promotion, or installation.
 The root coordinator now carries the recursive root manifest, expansion proof,
-and exact release-result digests through
-`aragorn/protected-install-broker-request/v3`. A versioned broker independently
-replays graph v3, v4, or v6 and the decision receipt. Release-bearing v6
+exact release-result digests, and the nullable retained release pin-set digest
+through `aragorn/protected-install-broker-request/v4`. A non-null digest records
+automatic independent preflight; null records explicit operator-held pins. The
+versioned broker replays non-null pin evidence before analysis and again before
+publication, then independently replays graph v3, v4, or v6 and the decision
+receipt. Release-bearing v6
 closure remains incomplete and records `ERROR` without analyzer invocation,
 context creation, or protected publication.
 
@@ -374,7 +377,7 @@ Linux service boundary covers process and IP-address containment but does not
 seal a dedicated root filesystem or attest the host platform. The retained
 Phase 1 v2 receipt proves its frozen acquisition-lock metrics; it does not make
 this a supported production acquisition boundary. The bounded release resolver,
-recursive gateway/broker replay, protected request-v3 composition, and v4
+recursive gateway/broker replay, protected request-v4 composition, and v4
 fail-closed decision path are implemented.
 The
 [recursive-v3 live qualification](./benchmark/receipts/phase1-protected-recursive-v3-live-qualification-2026-07-29.json)
@@ -386,7 +389,9 @@ returns `ERROR` with nine unresolved reasons, including an unanalyzed release
 asset, zero analyzer receipts, no publication, and operator-recorded empty
 protected state; the asset is not isolated as the sole cause.
 Automatic independent release-pin preflight is implemented and unit-verified;
-live systemd-path qualification remains incomplete. A pinned release-asset
+request-v4 and coordinator-state-v3 custody are unit-verified, but a fresh
+request-v4 live archive and systemd-path qualification remain incomplete. A
+pinned release-asset
 runtime consumer, general archive closure beyond the bounded ZIP/WHL/PYZ
 profile, live public release-bearing and out-of-root recursive coverage,
 systemd provisioning-unit retention, control-plane promotion, runtime
@@ -818,8 +823,9 @@ and makes Phase 2 engineering eligible. It does not make the current runtime
 profile admission-conformant or installer-eligible, authorize the publisher, or
 establish general recursive acquisition. The bounded release gateway and v4
 fail-closed graph are implemented. Automatic independent release-pin preflight
-is implemented and unit-verified, but its live systemd path remains
-unqualified. V5 additionally provides bounded ZIP/WHL/PYZ inventory and a
+is implemented and unit-verified; request-v4 carries and replays the retained
+pin-set digest, but its live systemd path remains unqualified. V5 additionally
+provides bounded ZIP/WHL/PYZ inventory and a
 separate analyzer input. V6 retains exact
 GitHub-digest-backed inventory archives in a deterministic runtime-candidate
 manifest but leaves each public release edge unresolved until a pinned consumer

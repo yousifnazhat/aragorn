@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; Phase 1 acquisition-lock exit metrics pass on the frozen workload and Phase 2 engineering is eligible; general archive and public-release runtime-binding closure, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile and Phase 2 engineering eligible; general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -63,8 +63,9 @@ separate `source_reference_graph`, not the admission `artifact_graph`, so the
 current CLI cannot produce `ALLOW`. The evaluation-only expansion path can
 recursively retain supported exact blobs from the same repository and commit
 for comparator input, but its complete result is still not an admission
-manifest. Phase 1 turns acquisition into a supported quarantine, recursive
-artifact-closure, dedicated fetch-gateway, and protected install boundary.
+manifest. Phase 1 now provides a supported quarantine, recursive
+artifact-closure, dedicated fetch-gateway, and protected transaction-record
+boundary for the bounded public-GitHub exact-commit profile.
 
 Phase 0 sanitizes adapter environment, retains raw streams, bounds output plus the lifetime of the adapter's process group, and launches a private CAS materialization of the entrypoint bytes opened during validation. It does not sandbox adapter code. Non-writable staging permissions are not an OS security boundary, and interpreters, imported packages, dynamic libraries, detached descendants, host filesystem access, and network access are not confined. Until the existing sandbox backend and complete dependency-closure identity are integrated, adapters are trusted dependencies and should run on a disposable analysis host.
 
@@ -745,7 +746,11 @@ python -m aragorn.label_blind_collect <suite.json> --dispatch-digest <digest> --
   not-attested assurance level. Exact retries are idempotent.
 - None of these commands is an OS isolation boundary, signature service, or
   hardware/platform attestation verifier yet.
-- `install`, `verify`, `diff`, and runtime hooks remain roadmap commands; they are not exposed before their enforcement boundaries exist.
+- The evaluator CLI does not expose `install`, `verify`, or `diff`. A package
+  manager or runtime integration invokes the installed root-owned
+  `aragorn-protected-install-coordinator.py submit INSTALL_OR_UPDATE OWNER
+  REPOSITORY COMMIT SKILL_PATH` interface automatically; this is not a command
+  developers repeatedly type and does not grant installer authority.
 
 No public HTTP API is needed initially. Versioned JSON and SARIF cover local automation and CI. When multi-host deployment is proven, model analysis as an asynchronous resource (`POST /v1/analyses`, `GET /v1/analyses/{id}`), use idempotency keys, cursor pagination for events, and a stable error envelope with a request ID.
 
@@ -754,29 +759,40 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 | Phase | Time | Deliverable | Security property earned | Exit gate |
 |---|---:|---|---|---|
 | 0. Validate | 2–3 weeks | Threat model, versioned corpus, private evaluation-only immutable-commit acquisition and literal source-reference candidate, strongest current scanners as baselines | Demonstrates a real gap rather than a product category | At least +10 percentage points hidden attack flag rate over the best comparator satisfying the same burden ceiling; no more than 5% benign intervention (`REVIEW + DENY + ERROR`); machine-validated OWASP, MITRE, and NIST evidence packs with zero unresolved selected items |
-| 1. Acquisition Lock | 4–6 weeks | Supported GitHub Agent Skills acquisition, quarantine, redirect/release resolution, recursive closure, decision receipt, exact-digest install, update diff | Reviewed bytes equal installed bytes | Zero digest mismatches installed; at least 95% of statically resolvable artifacts captured; all unresolved required artifacts return `REVIEW` or `ERROR` |
+| 1. Acquisition Lock | 4–6 weeks | Supported GitHub Agent Skills acquisition, quarantine, redirect/release resolution, recursive closure, decision receipt, exact-digest install, update diff | Reviewed bytes equal installed bytes | Zero digest mismatches installed; at least 95% of statically resolvable references resolved; all unresolved requirements return `REVIEW` or `ERROR` |
 | 2. Deep Analysis | 8–10 weeks | Bounded normalization, canaries, one existing isolated detonation backend, declared-versus-observed behavior | Effects reached in exercised profiles are observable and attributable; unexercised paths remain unknown | At least 90% held-out attack flag rate and 80% in every attack family; no more than 5% benign intervention; at least 95% verdict agreement across five runs |
 | 3. Runtime Detect and Respond | 10–12 weeks | One real runtime, out-of-process sensor, digest attribution, process/file/network/tool events, block/kill/quarantine/revoke | Known skill digest can be contained before protected impact | At least 99% event attribution; benchmark exfiltration and destructive actions blocked before protected sink; p95 synchronous decision under 500 ms; task overhead under 10% |
 | 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× the frozen reference workload without dropped evidence |
 | 5. OSS 1.0 | Ongoing | Signed releases, SBOM, reproducible builds, parser fuzzing, disclosure process, compatibility policy | The security tool's own supply chain is defensible | Independent review; no unresolved critical/high findings; 72-hour parser fuzz run; clean supported install and upgrade tests |
 
-The checked-in
+The historical
 `benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json`
 records `PASS` and `acquisition_lock_exit_eligible: true` for its bound
 workload: zero mismatches across two installed trees and four file instances,
-13/13 statically resolvable artifacts captured, and all 18 unresolved required
-artifacts covered by a fail-closed `ERROR` outcome. This is evidence-set
-eligibility under the Phase 1 exit column and makes Phase 2 engineering
-eligible; it is not production completion of the full deliverable column. The
-bounded release resolver, recursive gateway/broker replay, and v4 fail-closed
-graph are implemented. The protected request-v4 path now binds recursive
-acquisition identities and the nullable retained pin-set digest through
-pre-analysis, pre-publication, graph, and decision replay; release-bearing v4
-stops before analysis or publication. Automatic independent release-pin
-preflight plus coordinator-state-v3 custody is implemented and unit-verified,
-and the fresh request-v4 archive now qualifies its exact retained live systemd
-path and automatic pin custody. That operator-retained replay remains
-evidence-only and grants neither runtime nor installer authority.
+13/13 statically resolvable references covered, and all 18 unresolved
+requirements covered by a fail-closed `ERROR` outcome.
+
+The machine-derived
+`benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json`
+retains the v2 numerical receipt as a historical baseline but derives the
+current gate from the signed `c87b82b9` production ingress. That leaf observes
+six live production-path cases but fully replays three: two successful
+install/update cases and one recursive fail-closed case. They cover 13/13
+statically resolvable reference edges, 18/18 unresolved fail-closed coverage,
+and a two-tree/four-file-instance byte-changing update with zero digest
+mismatches. The three older cases are summary-only and are excluded from the
+replay-qualified count. The leaf also replays the exact 267-member
+current-numerical transfer and both successful analyzer/decision chains. The
+aggregate cross-binds the separate request-v4
+release-pin-custody capture by request, pin-set digest, and asset-result digest.
+It records `bounded_acquisition_lock_complete: true` for the
+public-GitHub exact-commit profile and moves active engineering to Phase 2. The
+protected request-v4 path binds recursive acquisition identities and the
+nullable retained pin-set digest through pre-analysis, pre-publication, graph,
+and decision replay; release-bearing v4 stops before analysis or publication.
+Neither the completion aggregate nor its leaves grant runtime-conformance,
+installer, publisher, or public-release authority.
+
 V6 now vendors only exact
 GitHub-digest-backed inventory archives into a deterministic runtime-candidate
 manifest and builds a separate extracted-member analysis input. V6 still leaves
@@ -794,8 +810,9 @@ Recursive install and a byte-identical update sequence publish their
 digest-matching trees. The release-bearing fixture retains its asset bytes but
 returns `ERROR` for nine unresolved reasons (one is the unanalyzed asset),
 creates no analyzer receipt, and has operator-recorded empty protected state.
-The capture does not isolate the asset as the sole cause, retain provisioning
-units, grant installer authority, or make full Phase 1 complete.
+The historical capture does not isolate the asset as the sole cause, retain
+provisioning units, or grant installer authority; it is only one leaf in the
+later bounded Phase 1 completion.
 
 The qualified Phase 0 validation milestone is complete under the checked-in
 aggregate phase-evidence rule in

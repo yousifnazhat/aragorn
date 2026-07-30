@@ -192,20 +192,41 @@ Protected skill roots are `root:aragorn-runtime` mode `0750`: the broker remains
 the only writer, while a runtime receives only the supplementary group needed
 to traverse an explicitly read-only bind mount. Group membership alone is not
 an admission decision and must never be paired with a writable mount.
-This earns a Linux process/IP containment primitive with durable broker-replayed
-raw Git commit/tree proof, not supported acquisition: the root filesystem is
-not sealed, and the host kernel/systemd/Python trust boundary is not attested.
-Private repositories, scoped credential injection, retry policy, general
-archive closure, live public out-of-root recursive evidence,
+This qualifies bounded supported acquisition for an unauthenticated public
+GitHub repository at an exact 40-hex commit and a supported skill path. A
+package-manager or runtime integration invokes the root-owned coordinator
+`submit` interface; developers do not repeatedly call Aragorn. The retained
+evidence reproduces the signed Git tree and all 507 package files from the full
+source archive, cryptographically verifies the pinned SSH signing key, and
+binds each broker result to its exact systemd invocation through the complete
+invocation-scoped journal record.
+This profile still trusts the host kernel, systemd, Python, Git, SSH signature
+implementation, and Aragorn release key; its root filesystem is not sealed or
+attested. Private repositories, scoped credential injection, retry policy,
+general archives, LFS, submodules, cross-repository or dynamic fetches,
 admission-authorized protected installation, and install/update enforcement
 remain unsupported. Automatic independent release-pin preflight is implemented
 and unit-verified. Protected request v4 and coordinator state v3 carry its
-nullable retained digest through downstream replay. Their fresh retained
-transient-service path now passes strict offline replay for install,
-byte-identical update, and one release-bearing fail-closed case. That
-operator-retained qualification proves only the exact captured path and pin
-custody; it is not independent attestation, runtime conformance, or installer
-authority.
+nullable retained digest through downstream replay. The supported-ingress
+capture observes six live production-path cases. Three have full CAS replay:
+two successful current install/update cases and one recursive fail-closed case.
+The three older install, update, and release-error cases retain live summaries
+without their CAS and do not count toward the replay-qualified gate. The
+current signed implementation resolves 13/13 statically resolvable reference
+edges,
+fails closed on all 18 unresolved requirements without analysis or publication,
+and rehashes two two-file installed trees with zero mismatches while only
+`SKILL.md` changes. The verifier also replays the retained 267-member numerical
+transfer, including every declared removal, mapping, and mode normalization,
+and independently replays the exact analyzer receipt and decision chain for
+both successful current cases. The numerical invocations bind the observed
+running broker digest; the archive separately re-verifies the signed `c87`
+source and package tree, rather than claiming that every invocation
+contemporaneously remeasured the entire package.
+The separate request-v4 leaf proves pin custody; the aggregate binds its exact
+request, pin-set digest, and asset-result digest to the current release-error
+case. These operator-retained qualifications are not independent attestation,
+runtime conformance, or installer authority.
 Bounded ZIP/WHL/PYZ
 inventory archives with an exact GitHub digest are retained as raw CAS bytes at
 a deterministic reserved runtime-candidate path; verified extracted members are
@@ -214,12 +235,13 @@ bound into a separate analysis input. The edge remains fail-closed with
 resolver or rewriter consumes the candidate path. The broker does not invoke
 analyzers or publish bytes while recursive closure is incomplete; neither the
 retained members nor an analyzer receipt grants installer/runtime authority.
-The internal request-v4 broker path remains evidence-only.
+The release-asset candidate path inside request v4 remains evidence-only.
 The operator-retained qualification archives replay exact request credentials,
 systemd controls, recursive install, byte-identical update sequencing, and a
 release-bearing `ERROR` path. The protected-state comparison remains an
-operator record, the asset is only one of nine unresolved reasons, and this is
-neither independent attestation nor supported acquisition.
+operator record, and the asset is only one of nine unresolved reasons. That
+record does not qualify release-asset acquisition or provide independent
+attestation.
 
 ## Attack Surface, Mitigations, and Attacker Stories
 
@@ -234,13 +256,13 @@ fail-closed verdicts.
 A realistic attacker can control an inspected skill and attempt to escape its root, exhaust resources, exploit a parser, confuse an analyzer, or cause analyzed bytes to differ from installed bytes. A compromised host kernel, administrator, Python runtime, or Aragorn release key is outside the containment guarantee and must be addressed by host and release security.
 
 The bounded canonical same-repository release slice is implemented as
-quarantine evidence; its bytes remain unresolved until analyzed. Supported
-production GitHub acquisition, general external-artifact and archive
-resolution, general analyzer sandboxing, detonation, network mediation, MCP,
-and runtime response remain future phases. The Phase 0 literal graph performs
-no acquisition, and the exact GitHub expansion candidate covers only supported
-same-commit blobs for comparison. Unsupported acquisition must return an
-explicit incomplete result rather than a security claim. A
+quarantine evidence; its bytes remain unresolved until analyzed. Acquisition
+outside the public-GitHub exact-commit profile, general external-artifact and
+archive resolution, general analyzer sandboxing, detonation, network mediation,
+MCP, and runtime response remain future phases. The Phase 0 literal graph
+performs no acquisition, and the exact GitHub expansion candidate covers only
+supported same-commit blobs for comparison. Unsupported acquisition must return
+an explicit incomplete result rather than a security claim. A
 compromised Phase 0 process adapter can access the host as the current user,
 read suite labels or evidence state, use the network, race a non-fd-bound launch
 pathname, and detach descendants from Aragorn's supervised process group; run

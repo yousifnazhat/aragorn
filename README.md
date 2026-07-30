@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; the Phase 1 acquisition-lock exit receipt passes for its frozen workload, while Phase 1 product hardening remains incomplete**. That receipt records `acquisition_lock_exit_eligible: true`; it does not make a runtime admission-conformant, grant installer authority, or authorize release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installation boundary, general OpenClaw security finding, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; the bounded Phase 1 acquisition lock is complete for the public-GitHub exact-commit profile, and Phase 2 engineering is eligible**. The machine-derived [Phase 1 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json) derives its numerical gate from the signed `c87b82b9` production ingress and cross-binds request-v4 release-pin custody; the earlier v2 numerical receipt remains historical evidence only. It does not make a runtime admission-conformant, grant installer authority, or authorize public release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installer-authority claim, general OpenClaw security finding, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
@@ -374,13 +374,37 @@ context creation, or protected publication.
 Automatic preflight may retain pins for that incomplete source closure; the
 retained expansion binds the exact closure state and grants no admission authority.
 
-This is an internal primitive, not a command developers repeatedly run. The
-Linux service boundary covers process and IP-address containment but does not
-seal a dedicated root filesystem or attest the host platform. The retained
-Phase 1 v2 receipt proves its frozen acquisition-lock metrics; it does not make
-this a supported production acquisition boundary. The bounded release resolver,
-recursive gateway/broker replay, protected request-v4 composition, and v4
-fail-closed decision path are implemented.
+This is an automatic integration chokepoint, not a command developers repeatedly
+run. A package manager or runtime integration invokes the installed root-owned
+`aragorn-protected-install-coordinator.py submit INSTALL_OR_UPDATE OWNER
+REPOSITORY COMMIT SKILL_PATH` interface; the systemd path unit consumes the
+submission and returns the correlated result. The Linux service boundary covers
+process and IP-address containment but does not seal a dedicated root filesystem
+or attest the host platform.
+
+| Acquisition input | Phase 1 status | Behavior |
+|---|---|---|
+| Public GitHub repository, exact 40-hex commit, supported skill path | Supported | Automatic production ingress, quarantine, recursive replay, analysis, and protected transaction record |
+| Release-bearing source under request v4 | Fail closed | Pins are retained; unresolved runtime-consumer closure returns `ERROR` before analysis or publication |
+| Private repositories, general archives, LFS, submodules, cross-repository or dynamic fetches | Unsupported | No acquisition-lock completion claim |
+
+The Phase 1 v2 receipt preserves the historical numerical baseline. The
+[current `c87` supported-ingress receipt](./benchmark/receipts/phase1-supported-ingress-live-qualification-2026-07-29.json)
+reruns the completion properties through one signed implementation: 13/13
+statically resolvable reference edges resolved, all 18 unresolved requirements
+failed closed, two two-file installed trees rehashed with zero mismatches, and
+exactly `SKILL.md` changed during the byte-changing update. The
+sealed capture retains and replays the exact 267-member numerical transfer,
+including every declared path mapping, removal, and mode normalization. Its two
+successful current-runtime cases also replay the exact analyzer receipt,
+request, configuration, policy, streams, and deterministic decision. The
+older install, update, and release-error observations retain live summaries
+without their CAS and are excluded from replay-qualified case counts. The
+[Phase 1 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json)
+derives its numerical gate from that current leaf and cross-binds the separate
+request-v4 pin-custody leaf by request, pin-set digest, and asset-result digest.
+The bounded release resolver, recursive gateway/broker replay, protected
+request-v4 composition, and v4 fail-closed decision path are implemented.
 The
 [recursive-v3 live qualification](./benchmark/receipts/phase1-protected-recursive-v3-live-qualification-2026-07-29.json)
 now binds one retained Linux service path: exact request credentials, three
@@ -817,22 +841,32 @@ same-UID, VM, hardware, nor platform attestation. The acquisition lock's
 pre-outcome ordering remains operator-asserted without trusted timestamping.
 Independent review remains a Phase 5 release requirement.
 
-The checked-in
-[Phase 1 acquisition-lock receipt](./benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json)
+The historical
+[Phase 1 v2 numerical receipt](./benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json)
 records `PASS` and `acquisition_lock_exit_eligible: true` for its frozen
 workload: zero installed digest mismatches across two install/update trees and
-four file instances; 13/13 statically resolvable artifacts captured (100%,
-above the 95% threshold); and 18/18 unresolved required artifacts covered by
-the fail-closed `ERROR` outcome.
+four file instances; 13/13 statically resolvable references covered (100%,
+above the 95% threshold); and 18/18 unresolved requirements covered by the
+fail-closed `ERROR` outcome.
 
-This closes the roadmap's Phase 1 exit metrics only for the bound evidence set
-and makes Phase 2 engineering eligible. It does not make the current runtime
-profile admission-conformant or installer-eligible, authorize the publisher, or
-establish general recursive acquisition. The bounded release gateway and v4
-fail-closed graph are implemented. Automatic independent release-pin preflight
-is implemented and unit-verified; request-v4 carries and replays the retained
-pin-set digest, and its exact retained live systemd path is qualified by the
-request-v4 receipt above. V5 additionally
+The
+[Phase 1 v3 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json)
+re-verifies the historical v2 baseline without using it to authorize the
+current result. Its numerical gate comes from three fully replayed cases in the
+signed `c87b82b9` production-ingress capture: two successful install/update
+cases plus one recursive fail-closed case, including 13/13 statically
+resolvable reference edges, 18/18 unresolved requirements failed closed, and a
+byte-changing two-tree update. Three older live cases are summary-only and do
+not count toward that gate. The aggregate also cross-binds the separate
+request-v4 release-pin-custody
+capture to the current release-error case. It records
+`bounded_acquisition_lock_complete: true` for the public-GitHub exact-commit
+profile and makes Phase 2 engineering eligible. It does not make the current
+runtime profile admission-conformant or installer-eligible, authorize the
+publisher, or establish general recursive acquisition. The bounded release
+gateway and v4 fail-closed graph are implemented. Automatic independent
+release-pin preflight is implemented and unit-verified; request v4 carries and
+replays the retained pin-set digest. V5 additionally
 provides bounded ZIP/WHL/PYZ inventory and a
 separate analyzer input. V6 retains exact
 GitHub-digest-backed inventory archives in a deterministic runtime-candidate

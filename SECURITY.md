@@ -195,10 +195,12 @@ an admission decision and must never be paired with a writable mount.
 This earns a Linux process/IP containment primitive with durable broker-replayed
 raw Git commit/tree proof, not supported acquisition: the root filesystem is
 not sealed, and the host kernel/systemd/Python trust boundary is not attested.
-Private repositories, scoped credential injection, retry policy, automatic
-independent release-pin acquisition, general archive closure, live public
-out-of-root recursive evidence, admission-authorized protected installation,
-and install/update enforcement remain unsupported. Bounded ZIP/WHL/PYZ
+Private repositories, scoped credential injection, retry policy, general
+archive closure, live public out-of-root recursive evidence,
+admission-authorized protected installation, and install/update enforcement
+remain unsupported. Automatic independent release-pin preflight is implemented
+and unit-verified, but its transient-service path is not yet live-qualified.
+Bounded ZIP/WHL/PYZ
 inventory archives with an exact GitHub digest are retained as raw CAS bytes at
 a deterministic reserved runtime-candidate path; verified extracted members are
 bound into a separate analysis input. The edge remains fail-closed with

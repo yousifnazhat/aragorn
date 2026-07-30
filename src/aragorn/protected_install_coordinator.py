@@ -447,9 +447,9 @@ def _derive_release_pins(
 def _load_release_asset_pins(
     path: Path | None,
     expected_uid: int,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     if path is None:
-        return {}
+        return None
     if not path.is_absolute():
         raise ProtectedInstallCoordinatorError(
             "release asset pins path must be absolute"
@@ -466,7 +466,7 @@ def _load_release_asset_pins(
     try:
         os.lstat(path)
     except FileNotFoundError:
-        return {}
+        return None
     return _read_canonical_document(
         path,
         max_bytes=_MAX_DOCUMENT_BYTES,

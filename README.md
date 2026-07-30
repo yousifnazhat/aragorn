@@ -66,8 +66,8 @@ remains `NOT_TESTED`. The next production decision is to mediate and protect
 workspace skill writes externally or evaluate another harness.
 
 A separate
-[protected-route raw-action receipt](./benchmark/receipts/phase1-openclaw-protected-route-actions-v4-2026-07-29.json)
-binds one hardened read-only-root profile to four `OBSERVED` actions and eight
+[protected-route raw-action receipt](./benchmark/receipts/phase1-openclaw-protected-route-actions-v5-2026-07-29.json)
+binds one hardened read-only-root profile to five `OBSERVED` actions and seven
 `NOT_TESTED` routes. It records no `PASS` or `FAIL`, grants no installer
 authority, and does not alter the cumulative conformance ledger.
 
@@ -348,10 +348,13 @@ closure and the broker rehashes and rewalks it before publishing quarantine.
 Canonical same-repository release-download references use one bounded API
 lookup and at most one redirect to the separately pinned release-asset host.
 The worker retains at most 16 assets and 64 MiB total; the broker rescans the
-retained source and accepts the exact URL/result/blob set only against
-caller-held release pins. Release bytes remain outside the installable source
-manifest. V5 inventories downloaded ZIP, WHL, and PYZ assets under bounded entry
-and expanded-byte limits. V6 additionally retains an exact
+retained source and accepts the exact URL/result/blob set only against either
+caller-held pins or pins independently resolved by a source/proof-only worker
+before a distinct byte worker. The broker replays and retains the canonical pin
+set with explicit non-publisher, non-admission authority. Release bytes remain
+outside the installable source manifest. V5 inventories downloaded ZIP, WHL,
+and PYZ assets under bounded entry and expanded-byte limits. V6 additionally
+retains an exact
 GitHub-digest-backed v2 inventory archive as a raw CAS blob at a deterministic
 reserved runtime-candidate path and binds a separate analyzer input containing
 the retained source plus verified extracted members. Source-controlled files
@@ -382,11 +385,12 @@ sequence reach their exact protected trees. A pinned release-bearing source
 returns `ERROR` with nine unresolved reasons, including an unanalyzed release
 asset, zero analyzer receipts, no publication, and operator-recorded empty
 protected state; the asset is not isolated as the sole cause.
-Automatic independent release-pin acquisition, a pinned release-asset runtime
-consumer, general archive closure beyond the bounded ZIP/WHL/PYZ profile, live
-public release-bearing and out-of-root recursive coverage, systemd
-provisioning-unit retention, control-plane promotion, runtime conformance, and
-installer authority remain incomplete.
+Automatic independent release-pin preflight is implemented and unit-verified;
+live systemd-path qualification remains incomplete. A pinned release-asset
+runtime consumer, general archive closure beyond the bounded ZIP/WHL/PYZ
+profile, live public release-bearing and out-of-root recursive coverage,
+systemd provisioning-unit retention, control-plane promotion, runtime
+conformance, and installer authority also remain incomplete.
 The direct `acquire-github` command still runs with the operator's UID and
 remains evaluation-only.
 
@@ -813,9 +817,10 @@ This closes the roadmap's Phase 1 exit metrics only for the bound evidence set
 and makes Phase 2 engineering eligible. It does not make the current runtime
 profile admission-conformant or installer-eligible, authorize the publisher, or
 establish general recursive acquisition. The bounded release gateway and v4
-fail-closed graph are implemented; automatic independent release-pin
-acquisition remains incomplete. V5 additionally provides bounded ZIP/WHL/PYZ
-inventory and a separate analyzer input. V6 retains exact
+fail-closed graph are implemented. Automatic independent release-pin preflight
+is implemented and unit-verified, but its live systemd path remains
+unqualified. V5 additionally provides bounded ZIP/WHL/PYZ inventory and a
+separate analyzer input. V6 retains exact
 GitHub-digest-backed inventory archives in a deterministic runtime-candidate
 manifest but leaves each public release edge unresolved until a pinned consumer
 is implemented. General archive closure and live public

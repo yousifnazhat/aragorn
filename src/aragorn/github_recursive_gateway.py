@@ -53,6 +53,7 @@ from .github_release_asset import ZIP_SCHEMA as RELEASE_ASSET_ZIP_SCHEMA
 from .github_release_asset import (
     acquire_github_release_asset,
     parse_github_release_asset_url,
+    resolve_github_release_asset_pin,
     verify_github_release_asset_result,
 )
 from .zip_inventory import (
@@ -65,6 +66,10 @@ from .zip_inventory import (
 
 RESULT_SCHEMA_V1 = "aragorn/github-recursive-gateway-result/v1"
 RESULT_SCHEMA = "aragorn/github-recursive-gateway-result/v2"
+PIN_PREFLIGHT_SCHEMA = "aragorn/github-recursive-release-pin-preflight/v1"
+PIN_SET_SCHEMA = "aragorn/github-release-asset-pin-set/v1"
+PIN_PREFLIGHT_AUTHORITY = "PIN_EVIDENCE_ONLY_NOT_ADMISSION_AUTHORITY"
+PIN_PREFLIGHT_ASSURANCE = "GITHUB_API_DIGEST_PREFLIGHT_NOT_PUBLISHER_SIGNATURE"
 _MAX_RECORD_BYTES = 16 * 1024 * 1024
 _MAX_RELEASE_ASSETS = 16
 _MAX_RELEASE_ASSET_BYTES = 64 * 1024 * 1024
@@ -98,6 +103,7 @@ class RecursiveGatewayQuarantineReceipt:
     release_asset_result_digests: tuple[str, ...]
     closure_status: str
     quarantine_state: Path
+    release_pin_set_digest: str | None = None
 
 
 def quarantine_recursive_through_gateway(
@@ -112,13 +118,12 @@ def quarantine_recursive_through_gateway(
     package_root: str | os.PathLike[str] | None = None,
     release_asset_pins: object | None = None,
 ) -> RecursiveGatewayQuarantineReceipt:
-    """Run recursive acquisition with optional broker-held release pins.
+    """Run recursive acquisition with broker-held or independently preflighted pins.
 
-    Automatic pin derivation is intentionally unsupported. A release-bearing
-    result cannot enter broker quarantine unless the caller supplied exact pins
-    before the worker was launched. Pins are keyed by canonical URL and contain
-    ``release_id``, ``asset_id``, ``digest``, ``github_digest``,
-    ``content_type``, and ``redirected``.
+    ``None`` selects an evidence-only preflight worker before the distinct byte
+    worker. An explicit mapping, including ``{}``, keeps the single-worker path.
+    Pins are keyed by canonical URL and contain ``release_id``, ``asset_id``,
+    ``digest``, ``github_digest``, ``content_type``, and ``redirected``.
     """
 
     from . import github_gateway
@@ -151,6 +156,45 @@ def run_recursive_worker(
 ) -> dict[str, Any]:
     """Acquire, prove, and export one recursive same-repository closure."""
 
+    return _run_recursive_worker(
+        request,
+        job_root,
+        pinned_api_addresses=pinned_api_addresses,
+        pinned_git_addresses=pinned_git_addresses,
+        pinned_release_asset_addresses=pinned_release_asset_addresses,
+        pin_preflight=False,
+    )
+
+
+def run_recursive_pin_preflight_worker(
+    request: object,
+    job_root: str | Path,
+    *,
+    pinned_api_addresses: list[str] | tuple[str, ...],
+    pinned_git_addresses: list[str] | tuple[str, ...],
+    pinned_release_asset_addresses: list[str] | tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Resolve release pins while exporting only recursive source proof."""
+
+    return _run_recursive_worker(
+        request,
+        job_root,
+        pinned_api_addresses=pinned_api_addresses,
+        pinned_git_addresses=pinned_git_addresses,
+        pinned_release_asset_addresses=pinned_release_asset_addresses,
+        pin_preflight=True,
+    )
+
+
+def _run_recursive_worker(
+    request: object,
+    job_root: str | Path,
+    *,
+    pinned_api_addresses: list[str] | tuple[str, ...],
+    pinned_git_addresses: list[str] | tuple[str, ...],
+    pinned_release_asset_addresses: list[str] | tuple[str, ...],
+    pin_preflight: bool,
+) -> dict[str, Any]:
     frozen = _freeze_request(request)
     deadline = time.monotonic() + float(_FIXED_LIMITS["timeout_seconds"])
     root = Path(job_root)
@@ -243,7 +287,12 @@ def run_recursive_worker(
                 expected_root_manifest_digest=root_manifest_digest,
             )
         )
+    if pin_preflight and not complete:
+        raise GitHubRecursiveGatewayError(
+            "release-pin preflight requires complete recursive closure"
+        )
     release_asset_entries: list[dict[str, str]] = []
+    release_asset_pins: dict[str, dict[str, Any]] = {}
     release_asset_bytes = 0
     release_archive_expanded_bytes = 0
     release_archive_entries = 0
@@ -252,11 +301,22 @@ def run_recursive_worker(
         source_cas,
         expansion_digest,
     )
-    if len(release_asset_urls) > _MAX_RELEASE_ASSETS:
+    if len(release_asset_urls) > _MAX_RELEASE_ASSETS or release_asset_urls != tuple(
+        sorted(set(release_asset_urls))
+    ):
         raise GitHubRecursiveGatewayError(
-            "recursive release asset count exceeds its bound"
+            "recursive release asset URLs are not bounded, unique, and ordered"
         )
     for url in release_asset_urls:
+        if pin_preflight:
+            release_asset_pins[url] = resolve_github_release_asset_pin(
+                url,
+                timeout_seconds=_remaining_recursive_seconds(deadline),
+                max_asset_bytes=_MAX_RECORD_BYTES,
+                _pinned_api_addresses=pinned_api_addresses,
+                _pinned_asset_addresses=pinned_release_asset_addresses,
+            )
+            continue
         remaining_asset_bytes = _MAX_RELEASE_ASSET_BYTES - release_asset_bytes
         acquired_asset = acquire_github_release_asset(
             url,
@@ -312,7 +372,13 @@ def run_recursive_worker(
         root / "bundle",
     )
     recursive_result: dict[str, Any] = {
-        "schema": RESULT_SCHEMA if release_asset_entries else RESULT_SCHEMA_V1,
+        "schema": (
+            PIN_PREFLIGHT_SCHEMA
+            if pin_preflight
+            else RESULT_SCHEMA
+            if release_asset_entries
+            else RESULT_SCHEMA_V1
+        ),
         "request_digest": _sha256(canonical_json(frozen)),
         "manifest_digest": manifest_digest,
         "root_manifest_digest": root_manifest_digest,
@@ -323,9 +389,19 @@ def run_recursive_worker(
         "handoff_manifest_digest": transport_digest,
         "closure_status": result["closure"]["status"],
     }
-    if release_asset_entries:
-        recursive_result["release_assets"] = release_asset_entries
-    validate_recursive_result(recursive_result)
+    if pin_preflight:
+        recursive_result.update(
+            {
+                "authority": PIN_PREFLIGHT_AUTHORITY,
+                "assurance": PIN_PREFLIGHT_ASSURANCE,
+                "release_asset_pins": release_asset_pins,
+            }
+        )
+        validate_recursive_pin_preflight_result(recursive_result)
+    else:
+        if release_asset_entries:
+            recursive_result["release_assets"] = release_asset_entries
+        validate_recursive_result(recursive_result)
     return recursive_result
 
 
@@ -376,6 +452,139 @@ def validate_recursive_result(value: object) -> None:
     _release_asset_entries(value)
 
 
+def validate_recursive_pin_preflight_result(value: object) -> None:
+    """Validate one source-bound, evidence-only automatic pin proposal."""
+
+    expected = {
+        "schema",
+        "request_digest",
+        "manifest_digest",
+        "root_manifest_digest",
+        "source_proof_digest",
+        "root_handoff_manifest_digest",
+        "expansion_digest",
+        "expansion_proof_digest",
+        "handoff_manifest_digest",
+        "closure_status",
+        "authority",
+        "assurance",
+        "release_asset_pins",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != expected
+        or value.get("schema") != PIN_PREFLIGHT_SCHEMA
+        or value.get("authority") != PIN_PREFLIGHT_AUTHORITY
+        or value.get("assurance") != PIN_PREFLIGHT_ASSURANCE
+    ):
+        raise GitHubRecursiveGatewayError(
+            "recursive release-pin preflight result is invalid"
+        )
+    source_result = {
+        key: item
+        for key, item in value.items()
+        if key not in {"authority", "assurance", "release_asset_pins"}
+    }
+    source_result["schema"] = RESULT_SCHEMA_V1
+    validate_recursive_result(source_result)
+    if value["closure_status"] != "complete":
+        raise GitHubRecursiveGatewayError(
+            "recursive release-pin preflight closure is incomplete"
+        )
+    raw_pins = value["release_asset_pins"]
+    pins = _freeze_release_asset_pins(raw_pins)
+    if (
+        not isinstance(raw_pins, dict)
+        or list(raw_pins) != sorted(raw_pins)
+        or raw_pins != pins
+        or any(pin["github_digest"] != pin["digest"] for pin in pins.values())
+    ):
+        raise GitHubRecursiveGatewayError(
+            "recursive release-pin preflight pins are invalid"
+        )
+
+
+def _validate_release_pin_set(value: object) -> dict[str, Any]:
+    expected = {
+        "schema",
+        "authority",
+        "assurance",
+        "request_digest",
+        "manifest_digest",
+        "root_manifest_digest",
+        "source_proof_digest",
+        "expansion_digest",
+        "expansion_proof_digest",
+        "handoff_manifest_digest",
+        "release_asset_pins",
+        "closure",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != expected
+        or value.get("schema") != PIN_SET_SCHEMA
+        or value.get("authority") != PIN_PREFLIGHT_AUTHORITY
+        or value.get("assurance") != PIN_PREFLIGHT_ASSURANCE
+        or value.get("closure")
+        != {"scope": "github_release_asset_pins", "status": "complete"}
+    ):
+        raise GitHubRecursiveGatewayError(
+            "recursive release pin set is invalid"
+        )
+    for field in (
+        "request_digest",
+        "manifest_digest",
+        "root_manifest_digest",
+        "source_proof_digest",
+        "expansion_digest",
+        "handoff_manifest_digest",
+    ):
+        _digest(value[field], f"recursive release pin set {field}")
+    expansion_proof_digest = value["expansion_proof_digest"]
+    if expansion_proof_digest is not None:
+        _digest(
+            expansion_proof_digest,
+            "recursive release pin set expansion_proof_digest",
+        )
+    pins = _freeze_release_asset_pins(value["release_asset_pins"])
+    if (
+        value["release_asset_pins"] != pins
+        or list(value["release_asset_pins"]) != sorted(value["release_asset_pins"])
+        or any(pin["github_digest"] != pin["digest"] for pin in pins.values())
+    ):
+        raise GitHubRecursiveGatewayError(
+            "recursive release pin set pins are invalid"
+        )
+    frozen = dict(value)
+    frozen["release_asset_pins"] = pins
+    return frozen
+
+
+def _require_release_pin_set_matches(
+    pin_set: dict[str, Any],
+    *,
+    request_digest: str,
+    result: dict[str, Any],
+    release_asset_pins: dict[str, dict[str, Any]],
+) -> None:
+    source_fields = (
+        "manifest_digest",
+        "root_manifest_digest",
+        "source_proof_digest",
+        "expansion_digest",
+        "expansion_proof_digest",
+    )
+    if (
+        pin_set["request_digest"] != request_digest
+        or result["closure_status"] != "complete"
+        or any(pin_set[field] != result[field] for field in source_fields)
+        or pin_set["release_asset_pins"] != release_asset_pins
+    ):
+        raise GitHubRecursiveGatewayError(
+            "recursive byte worker source identity changed after release-pin preflight"
+        )
+
+
 def require_recursive_success_result(process: object) -> dict[str, Any]:
     """Decode one bounded successful recursive worker result."""
 
@@ -383,6 +592,209 @@ def require_recursive_success_result(process: object) -> dict[str, Any]:
     document = _decode_canonical_line(raw, "recursive gateway result")
     validate_recursive_result(document)
     return document
+
+
+def require_recursive_pin_preflight_success_result(
+    process: object,
+) -> dict[str, Any]:
+    """Decode one bounded successful recursive pin-preflight result."""
+
+    raw = _require_success_output(process)
+    document = _decode_canonical_line(raw, "recursive release-pin preflight result")
+    validate_recursive_pin_preflight_result(document)
+    return document
+
+
+def verify_recursive_pin_preflight_output(
+    request: dict[str, str],
+    result: dict[str, Any],
+    *,
+    job_root: Path,
+    broker_state: Path,
+    worker_uid: int,
+) -> tuple[str, dict[str, Any]]:
+    """Replay pins into a fresh CAS without removing the job or publishing."""
+
+    validate_recursive_pin_preflight_result(result)
+    expected_request_digest = _sha256(canonical_json(request))
+    if result["request_digest"] != expected_request_digest:
+        raise GitHubRecursiveGatewayError(
+            "recursive release-pin preflight is bound to another request"
+        )
+    _require_private_directory(job_root, expected_uid=worker_uid, label="gateway job")
+    bundle = job_root / "bundle"
+    _require_private_directory(bundle, expected_uid=worker_uid, label="gateway bundle")
+    parent = _require_private_directory(
+        broker_state.parent,
+        expected_uid=os.geteuid(),
+        label="release-pin preflight parent",
+    )
+    if (
+        not broker_state.is_absolute()
+        or parent / broker_state.name != broker_state
+        or os.path.lexists(broker_state)
+    ):
+        raise GitHubRecursiveGatewayError(
+            "release-pin preflight broker CAS is not a fresh canonical path"
+        )
+    retained = False
+    try:
+        destination = CAS(broker_state)
+        handoff, expected_closure, _proof_digest = _import_and_replay_recursive_source(
+            request,
+            result,
+            bundle,
+            destination,
+        )
+        _retain_exact_recursive_handoff(
+            destination,
+            result,
+            handoff,
+            expected_closure,
+        )
+        pins = _freeze_release_asset_pins(result["release_asset_pins"])
+        discovered_urls = discover_recursive_github_release_asset_urls(
+            destination,
+            result["expansion_digest"],
+        )
+        if tuple(pins) != discovered_urls:
+            raise GitHubRecursiveGatewayError(
+                "recursive release-pin preflight URLs changed during replay"
+            )
+        pin_set = {
+            "schema": PIN_SET_SCHEMA,
+            "authority": PIN_PREFLIGHT_AUTHORITY,
+            "assurance": PIN_PREFLIGHT_ASSURANCE,
+            "request_digest": expected_request_digest,
+            "manifest_digest": result["manifest_digest"],
+            "root_manifest_digest": result["root_manifest_digest"],
+            "source_proof_digest": result["source_proof_digest"],
+            "expansion_digest": result["expansion_digest"],
+            "expansion_proof_digest": result["expansion_proof_digest"],
+            "handoff_manifest_digest": result["handoff_manifest_digest"],
+            "release_asset_pins": pins,
+            "closure": {
+                "scope": "github_release_asset_pins",
+                "status": "complete",
+            },
+        }
+        pin_set_raw = canonical_json(pin_set)
+        pin_set_digest = destination.put(
+            BytesIO(pin_set_raw),
+            max_bytes=len(pin_set_raw),
+        )
+        retained = True
+        return pin_set_digest, pin_set
+    except GitHubRecursiveGatewayError:
+        raise
+    except (CASError, OSError, ValueError) as exc:
+        raise GitHubRecursiveGatewayError(
+            f"cannot verify recursive release-pin preflight: {exc}"
+        ) from exc
+    finally:
+        if not retained:
+            _remove_broker_staging(broker_state)
+
+
+def _import_and_replay_recursive_source(
+    request: dict[str, str],
+    result: dict[str, Any],
+    bundle: Path,
+    destination: CAS,
+) -> tuple[dict[str, Any], dict[str, int], str | None]:
+    handoff = import_declared_byte_transport(
+        bundle,
+        destination,
+        expected_manifest_digest=result["handoff_manifest_digest"],
+        expected_kind="github_source",
+        expected_root_digest=result["manifest_digest"],
+    )
+    root_manifest = load_verified_retained_manifest(
+        destination,
+        result["root_manifest_digest"],
+    )
+    _require_requested_source(root_manifest, request)
+    source_closure = _source_closure(
+        destination,
+        result["root_manifest_digest"],
+        root_manifest,
+        result["source_proof_digest"],
+    )
+    root_handoff = build_handoff_manifest(
+        kind="github_source",
+        root_digest=result["root_manifest_digest"],
+        blobs=source_closure,
+    )
+    root_handoff_raw = destination.read(
+        result["root_handoff_manifest_digest"],
+        max_bytes=_MAX_RECORD_BYTES,
+    )
+    if root_handoff_raw != canonical_json(root_handoff):
+        raise GitHubRecursiveGatewayError(
+            "recursive handoff root source subset changed"
+        )
+    expansion_raw = destination.read(
+        result["expansion_digest"],
+        max_bytes=_MAX_RECORD_BYTES,
+    )
+    if (
+        retain_expanded_github_manifest(
+            destination,
+            result["expansion_digest"],
+        )
+        != result["manifest_digest"]
+    ):
+        raise GitHubRecursiveGatewayError("recursive handoff install manifest changed")
+    manifest = load_verified_retained_manifest(
+        destination,
+        result["manifest_digest"],
+    )
+    manifest_raw = destination.read(
+        result["manifest_digest"],
+        max_bytes=_MAX_RECORD_BYTES,
+    )
+    expected_closure = {
+        **source_closure,
+        result["root_handoff_manifest_digest"]: len(root_handoff_raw),
+        result["expansion_digest"]: len(expansion_raw),
+        result["manifest_digest"]: len(manifest_raw),
+    }
+    for entry in manifest["files"]:
+        previous = expected_closure.setdefault(entry["digest"], entry["size"])
+        if previous != entry["size"]:
+            raise GitHubRecursiveGatewayError(
+                "recursive manifest repeats a digest with another size"
+            )
+    proof_digest = result["expansion_proof_digest"]
+    if proof_digest is not None:
+        expected_closure.update(
+            expansion_proof_closure(
+                destination,
+                proof_digest,
+                expected_expansion_digest=result["expansion_digest"],
+                expected_root_manifest_digest=result["root_manifest_digest"],
+            )
+        )
+    return handoff, expected_closure, proof_digest
+
+
+def _retain_exact_recursive_handoff(
+    destination: CAS,
+    result: dict[str, Any],
+    handoff: dict[str, Any],
+    expected_closure: dict[str, int],
+) -> None:
+    actual_closure = {entry["digest"]: entry["size"] for entry in handoff["blobs"]}
+    if actual_closure != expected_closure:
+        raise GitHubRecursiveGatewayError(
+            "recursive handoff contains bytes outside its verified closure"
+        )
+    handoff_raw = canonical_json(handoff)
+    destination.put_expected(
+        BytesIO(handoff_raw),
+        expected_digest=result["handoff_manifest_digest"],
+        max_bytes=len(handoff_raw),
+    )
 
 
 def accept_recursive_gateway_output(
@@ -396,6 +808,9 @@ def accept_recursive_gateway_output(
     python_executable_digest: str,
     gateway_package_tree_digest: str,
     release_asset_pins: object | None = None,
+    release_pin_set_digest: str | None = None,
+    release_pin_set: object | None = None,
+    broker_staging_state: Path | None = None,
 ) -> RecursiveGatewayQuarantineReceipt:
     """Import and independently replay the recursive gateway handoff."""
 
@@ -406,71 +821,89 @@ def accept_recursive_gateway_output(
         raise GitHubRecursiveGatewayError(
             "recursive gateway result is bound to another request"
         )
+    preflight_values = (
+        release_pin_set_digest,
+        release_pin_set,
+        broker_staging_state,
+    )
+    using_preflight = any(value is not None for value in preflight_values)
+    if using_preflight != all(value is not None for value in preflight_values):
+        raise GitHubRecursiveGatewayError(
+            "recursive release-pin preflight inputs are incomplete"
+        )
+    frozen_pin_set: dict[str, Any] | None = None
+    frozen_pin_set_digest: str | None = None
+    if using_preflight:
+        frozen_pin_set = _validate_release_pin_set(release_pin_set)
+        frozen_pin_set_digest = _digest(
+            release_pin_set_digest,
+            "release pin-set digest",
+        )
+        _require_release_pin_set_matches(
+            frozen_pin_set,
+            request_digest=expected_request_digest,
+            result=result,
+            release_asset_pins=frozen_release_asset_pins,
+        )
     _require_private_directory(job_root, expected_uid=worker_uid, label="gateway job")
     bundle = job_root / "bundle"
     _require_private_directory(bundle, expected_uid=worker_uid, label="gateway bundle")
-    staging = quarantine_state.parent / (
-        f".{quarantine_state.name}.import-{secrets.token_hex(16)}"
+    staging = (
+        broker_staging_state
+        if using_preflight
+        else quarantine_state.parent
+        / f".{quarantine_state.name}.import-{secrets.token_hex(16)}"
     )
-    if os.path.lexists(staging):
+    if not isinstance(staging, Path):
+        raise GitHubRecursiveGatewayError(
+            "recursive release-pin preflight staging path is invalid"
+        )
+    if using_preflight:
+        parent = _require_private_directory(
+            staging.parent,
+            expected_uid=os.geteuid(),
+            label="release-pin preflight parent",
+        )
+        prefix = f".{quarantine_state.name}.pin-preflight-"
+        suffix = staging.name.removeprefix(prefix)
+        if (
+            not staging.is_absolute()
+            or parent != quarantine_state.parent
+            or parent / staging.name != staging
+            or not staging.name.startswith(prefix)
+            or len(suffix) != 32
+            or any(character not in "0123456789abcdef" for character in suffix)
+        ):
+            raise GitHubRecursiveGatewayError(
+                "recursive release-pin preflight staging path is invalid"
+            )
+        _require_private_directory(
+            staging,
+            expected_uid=os.geteuid(),
+            label="release-pin preflight state",
+        )
+    elif os.path.lexists(staging):
         raise GitHubRecursiveGatewayError(
             "broker quarantine staging path already exists"
         )
     published = False
     try:
         destination = CAS(staging)
-        handoff = import_declared_byte_transport(
-            bundle,
-            destination,
-            expected_manifest_digest=result["handoff_manifest_digest"],
-            expected_kind="github_source",
-            expected_root_digest=result["manifest_digest"],
-        )
-        root_manifest = load_verified_retained_manifest(
-            destination,
-            result["root_manifest_digest"],
-        )
-        _require_requested_source(root_manifest, request)
-        source_closure = _source_closure(
-            destination,
-            result["root_manifest_digest"],
-            root_manifest,
-            result["source_proof_digest"],
-        )
-        root_handoff = build_handoff_manifest(
-            kind="github_source",
-            root_digest=result["root_manifest_digest"],
-            blobs=source_closure,
-        )
-        root_handoff_raw = destination.read(
-            result["root_handoff_manifest_digest"],
-            max_bytes=_MAX_RECORD_BYTES,
-        )
-        if root_handoff_raw != canonical_json(root_handoff):
-            raise GitHubRecursiveGatewayError(
-                "recursive handoff root source subset changed"
+        if frozen_pin_set is not None and (
+            destination.read(
+                frozen_pin_set_digest,
+                max_bytes=_MAX_RECORD_BYTES,
             )
-        expansion_raw = destination.read(
-            result["expansion_digest"],
-            max_bytes=_MAX_RECORD_BYTES,
-        )
-        if (
-            retain_expanded_github_manifest(
-                destination,
-                result["expansion_digest"],
-            )
-            != result["manifest_digest"]
+            != canonical_json(frozen_pin_set)
         ):
             raise GitHubRecursiveGatewayError(
-                "recursive handoff install manifest changed"
+                "retained recursive release pin set changed"
             )
-        manifest = load_verified_retained_manifest(
+        handoff, expected_closure, proof_digest = _import_and_replay_recursive_source(
+            request,
+            result,
+            bundle,
             destination,
-            result["manifest_digest"],
-        )
-        manifest_raw = destination.read(
-            result["manifest_digest"],
-            max_bytes=_MAX_RECORD_BYTES,
         )
         release_asset_entries = _release_asset_entries(result)
         discovered_release_assets = (
@@ -487,44 +920,17 @@ def accept_recursive_gateway_output(
             discovered_release_assets,
             release_asset_pins=frozen_release_asset_pins,
         )
-        expected_closure = {
-            **source_closure,
-            result["root_handoff_manifest_digest"]: len(root_handoff_raw),
-            result["expansion_digest"]: len(expansion_raw),
-            result["manifest_digest"]: len(manifest_raw),
-        }
-        for entry in manifest["files"]:
-            previous = expected_closure.setdefault(entry["digest"], entry["size"])
-            if previous != entry["size"]:
-                raise GitHubRecursiveGatewayError(
-                    "recursive manifest repeats a digest with another size"
-                )
-        proof_digest = result["expansion_proof_digest"]
-        if proof_digest is not None:
-            expected_closure.update(
-                expansion_proof_closure(
-                    destination,
-                    proof_digest,
-                    expected_expansion_digest=result["expansion_digest"],
-                    expected_root_manifest_digest=result["root_manifest_digest"],
-                )
-            )
         for digest, size in release_asset_closure.items():
             previous = expected_closure.setdefault(digest, size)
             if previous != size:
                 raise GitHubRecursiveGatewayError(
                     "recursive release closure repeats a digest with another size"
                 )
-        actual_closure = {entry["digest"]: entry["size"] for entry in handoff["blobs"]}
-        if actual_closure != expected_closure:
-            raise GitHubRecursiveGatewayError(
-                "recursive handoff contains bytes outside its verified closure"
-            )
-        handoff_raw = canonical_json(handoff)
-        destination.put_expected(
-            BytesIO(handoff_raw),
-            expected_digest=result["handoff_manifest_digest"],
-            max_bytes=len(handoff_raw),
+        _retain_exact_recursive_handoff(
+            destination,
+            result,
+            handoff,
+            expected_closure,
         )
         _remove_worker_job(job_root, expected_uid=worker_uid)
         _require_gateway_entries(
@@ -563,6 +969,7 @@ def accept_recursive_gateway_output(
             ),
             closure_status=result["closure_status"],
             quarantine_state=quarantine_state,
+            release_pin_set_digest=frozen_pin_set_digest,
         )
         if os.path.lexists(quarantine_state):
             raise GitHubRecursiveGatewayError(
@@ -577,14 +984,14 @@ def accept_recursive_gateway_output(
                 expected_manifest_digest=result["root_manifest_digest"],
                 expected_gateway_profile_digest=gateway_profile_digest,
             )
-        except (OSError, ValueError):
+        except (CASError, OSError, ValueError):
             _remove_broker_staging(quarantine_state)
             raise
         published = True
         return receipt
     except GitHubRecursiveGatewayError:
         raise
-    except (OSError, ValueError) as exc:
+    except (CASError, OSError, ValueError) as exc:
         raise GitHubRecursiveGatewayError(
             f"cannot publish recursive broker quarantine: {exc}"
         ) from exc

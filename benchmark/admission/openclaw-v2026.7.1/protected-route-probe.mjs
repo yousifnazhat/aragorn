@@ -66,6 +66,8 @@ const PROTECTED_DISCOVERY_ROOTS = Object.freeze({
 const ACTION_BY_ROUTE = Object.freeze({
   "ADM-02/update/archive-source-force-replacement":
     "archive-source-force-replacement",
+  "ADM-02/update/core-updater-plugin-replacement":
+    "core-updater-plugin-replacement",
   "ADM-02/update/workshop-proposal-apply": "workshop-protected-apply",
   "ADM-02/reload/fresh-session-reset": "fresh-session-reset",
   "ADM-02/reload/session-snapshot-consumer": "session-snapshot-consumer",
@@ -77,8 +79,6 @@ const PROFILE_BLOCKED_ROUTES = Object.freeze({
 const ADAPTER_BY_ROUTE = Object.freeze({
   "ADM-02/update/clawhub-tracked-replacement":
     "/route-adapters/clawhub-tracked-replacement.mjs",
-  "ADM-02/update/core-updater-plugin-replacement":
-    "/route-adapters/core-updater-plugin-replacement.mjs",
   "ADM-02/update/curator-restore-activation":
     "/route-adapters/curator-restore-activation.mjs",
   "ADM-02/update/plugin-package-skill-replacement":
@@ -203,6 +203,19 @@ function parsedCommand(commandResult) {
     }
   }
   return { parsed: false, value: null };
+}
+
+function parsedTrailingCommand(commandResult) {
+  const raw = commandResult._stdout ?? "";
+  const start = raw.lastIndexOf("\n{");
+  if (start < 0) {
+    return parsedCommand(commandResult);
+  }
+  try {
+    return { parsed: true, value: JSON.parse(raw.slice(start + 1)) };
+  } catch {
+    return { parsed: false, value: null };
+  }
 }
 
 function pathObservation(path, { hashFile = false } = {}) {
@@ -669,6 +682,58 @@ async function archiveSourceAction(gateway) {
   );
 }
 
+async function coreUpdaterPluginAction(gateway) {
+  return await observedAction(
+    "core-updater-plugin-replacement",
+    gateway,
+    (trace) => {
+      const inventoryBefore = command(["plugins", "list", "--json"]);
+      trace.commands.push(inventoryBefore);
+      trace.observations.inventory_before = {
+        command: inventoryBefore,
+        response: parsedCommand(inventoryBefore),
+      };
+      trace.observations.roots_before = {
+        extensions: pathObservation(PROTECTED_DISCOVERY_ROOTS.extensions),
+        plugin_skills: pathObservation(
+          PROTECTED_DISCOVERY_ROOTS.plugin_skills,
+        ),
+      };
+      const repair = command(
+        [
+          "update",
+          "repair",
+          "--timeout",
+          "10",
+          "--yes",
+          "--json",
+          "--no-restart",
+        ],
+        30_000,
+      );
+      trace.commands.push(repair);
+      trace.observations.update_repair = {
+        command: repair,
+        response: parsedTrailingCommand(repair),
+      };
+      const inventoryAfter = command(["plugins", "list", "--json"]);
+      trace.commands.push(inventoryAfter);
+      trace.observations.inventory_after = {
+        command: inventoryAfter,
+        response: parsedCommand(inventoryAfter),
+      };
+      trace.observations.configuration_after = configObservation();
+      trace.observations.roots_after = {
+        extensions: pathObservation(PROTECTED_DISCOVERY_ROOTS.extensions),
+        plugin_skills: pathObservation(
+          PROTECTED_DISCOVERY_ROOTS.plugin_skills,
+        ),
+      };
+      trace.attempted = repair.pid !== null;
+    },
+  );
+}
+
 async function workshopAction(gateway) {
   const targetBefore = targetObservation(WORKSHOP_TARGET);
   const draft = pathObservation(WORKSHOP_DRAFT, { hashFile: true });
@@ -1003,6 +1068,8 @@ async function dispatch(selected) {
       let action;
       if (actionId === "archive-source-force-replacement") {
         action = await archiveSourceAction(gateway);
+      } else if (actionId === "core-updater-plugin-replacement") {
+        action = await coreUpdaterPluginAction(gateway);
       } else if (actionId === "workshop-protected-apply") {
         action = await workshopAction(gateway);
       } else if (actionId === "fresh-session-reset") {

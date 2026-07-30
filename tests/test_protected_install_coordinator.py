@@ -117,7 +117,7 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         }
 
     def _gateway_result(self, source_request, **kwargs):
-        self.assertEqual(kwargs["release_asset_pins"], {})
+        self.assertIsNone(kwargs["release_asset_pins"])
         quarantine = Path(kwargs["quarantine_state"])
         CAS(quarantine)
         suffix = source_request["commit"][0]
@@ -411,10 +411,10 @@ class ProtectedInstallCoordinatorTests(unittest.TestCase):
         path.chmod(0o400)
 
         self.assertEqual(_load_release_asset_pins(path, self.uid), {})
-        self.assertEqual(
+        self.assertIsNone(
             _load_release_asset_pins(self.control / "absent.json", self.uid),
-            {},
         )
+        self.assertIsNone(_load_release_asset_pins(None, self.uid))
         path.chmod(0o600)
         with self.assertRaisesRegex(
             ProtectedInstallCoordinatorError,

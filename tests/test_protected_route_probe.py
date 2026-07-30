@@ -36,18 +36,17 @@ _EVIDENCE = (
     _ROOT
     / "benchmark"
     / "evidence"
-    / "openclaw-v2026.7.1-protected-route-actions-v4-2026-07-29.json"
+    / "openclaw-v2026.7.1-protected-route-actions-v5-2026-07-29.json"
 )
 _RECEIPT = (
     _ROOT
     / "benchmark"
     / "receipts"
-    / "phase1-openclaw-protected-route-actions-v4-2026-07-29.json"
+    / "phase1-openclaw-protected-route-actions-v5-2026-07-29.json"
 )
 _NODE = shutil.which("node")
 
 
-@unittest.skipUnless(_NODE, "Node.js is required for the route dispatcher check")
 class ProtectedRouteProbeTests(unittest.TestCase):
     def test_retained_live_evidence_remains_raw_only(self) -> None:
         receipt = json.loads(_RECEIPT.read_bytes())
@@ -89,6 +88,21 @@ class ProtectedRouteProbeTests(unittest.TestCase):
         self.assertEqual(evidence["run_nonce"], receipt["evidence"]["run_nonce"])
         self.assertTrue(evidence["protected_boundary"]["ready"])
         statuses = {route["id"]: route["status"] for route in evidence["routes"]}
+        route_ids = [route["id"] for route in evidence["routes"]]
+        self.assertEqual(len(route_ids), len(set(route_ids)))
+        self.assertLessEqual(set(statuses.values()), {"OBSERVED", "NOT_TESTED"})
+        result_groups = [
+            receipt["results"][name]
+            for name in ("observed", "not_tested", "pass", "fail")
+        ]
+        self.assertEqual(
+            sum(len(group) for group in result_groups),
+            len(set().union(*(set(group) for group in result_groups))),
+        )
+        self.assertEqual(
+            set(route_ids),
+            set().union(*(set(group) for group in result_groups)),
+        )
         self.assertEqual(
             sorted(
                 route_id
@@ -123,7 +137,55 @@ class ProtectedRouteProbeTests(unittest.TestCase):
             "EROFS",
             archive["observations"]["source_install"]["command"]["stderr_excerpt"],
         )
+        core_update = next(
+            action
+            for action in evidence["actions"]
+            if action["id"] == "core-updater-plugin-replacement"
+        )
+        self.assertEqual(core_update["status"], "OBSERVED")
+        response = core_update["observations"]["update_repair"]["response"]
+        self.assertTrue(response["parsed"])
+        repair = core_update["observations"]["update_repair"]["command"]
+        self.assertEqual(
+            repair["argv"][-7:],
+            [
+                "update",
+                "repair",
+                "--timeout",
+                "10",
+                "--yes",
+                "--json",
+                "--no-restart",
+            ],
+        )
+        self.assertEqual(repair["exit_code"], 0)
+        self.assertIsNone(repair["error"])
+        self.assertIsNone(repair["signal"])
+        self.assertEqual(response["value"]["mode"], "finalize")
+        self.assertEqual(response["value"]["status"], "ok")
+        self.assertFalse(response["value"]["restart"])
+        plugins = response["value"]["postUpdate"]["plugins"]
+        self.assertFalse(plugins["changed"])
+        self.assertEqual(plugins["npm"]["outcomes"], [])
+        inventory_before = core_update["observations"]["inventory_before"]
+        inventory_after = core_update["observations"]["inventory_after"]
+        self.assertEqual(inventory_before["command"]["exit_code"], 0)
+        self.assertEqual(inventory_after["command"]["exit_code"], 0)
+        self.assertEqual(
+            inventory_before["response"]["value"],
+            inventory_after["response"]["value"],
+        )
+        self.assertEqual(inventory_after["response"]["value"]["plugins"], [])
+        self.assertEqual(
+            core_update["observations"]["roots_before"],
+            core_update["observations"]["roots_after"],
+        )
+        self.assertEqual(
+            core_update["observations"]["configuration_after"],
+            evidence["protected_boundary"]["configuration"],
+        )
 
+    @unittest.skipUnless(_NODE, "Node.js is required for the route dispatcher check")
     def test_source_is_exactly_bounded_and_selector_only(self) -> None:
         source = _PROBE.read_text(encoding="utf-8")
         coverage = json.loads(_COVERAGE.read_bytes())

@@ -13,7 +13,7 @@ from unittest import mock
 
 from aragorn.artifact_closure import canonical_json
 from aragorn.benchmark_handoff_v2 import import_declared_byte_transport
-from aragorn.cas import CAS
+from aragorn.cas import CAS, CASError
 from aragorn.github_expansion_proof import retain_github_expansion_proof
 from aragorn.github_gateway import build_gateway_request
 from aragorn.github_quarantine_receipt import (
@@ -21,12 +21,18 @@ from aragorn.github_quarantine_receipt import (
     github_gateway_profile_digest,
 )
 from aragorn.github_recursive_gateway import (
+    PIN_PREFLIGHT_ASSURANCE,
+    PIN_PREFLIGHT_AUTHORITY,
     GitHubRecursiveGatewayError,
     _extend_release_asset_inventory_closure,
+    _require_release_pin_set_matches,
     _verify_release_assets,
     accept_recursive_gateway_output,
     quarantine_recursive_through_gateway,
+    run_recursive_pin_preflight_worker,
     run_recursive_worker,
+    validate_recursive_pin_preflight_result,
+    verify_recursive_pin_preflight_output,
 )
 from aragorn.github_source_proof import retain_github_source_proof
 from aragorn.zip_inventory import (
@@ -56,6 +62,98 @@ def _zip_bytes(*, shebang: bool = False) -> bytes:
 
 
 class GitHubRecursiveGatewayTests(unittest.TestCase):
+    def test_pin_preflight_contract_rejects_non_authoritative_pins(self) -> None:
+        digest = "sha256:" + "1" * 64
+        url = "https://github.com/example/skills/releases/download/v1/bundle.pyz"
+        result = {
+            "schema": "aragorn/github-recursive-release-pin-preflight/v1",
+            "authority": PIN_PREFLIGHT_AUTHORITY,
+            "assurance": PIN_PREFLIGHT_ASSURANCE,
+            "request_digest": digest,
+            "manifest_digest": digest,
+            "root_manifest_digest": digest,
+            "source_proof_digest": digest,
+            "root_handoff_manifest_digest": digest,
+            "expansion_digest": digest,
+            "expansion_proof_digest": digest,
+            "handoff_manifest_digest": digest,
+            "closure_status": "complete",
+            "release_asset_pins": {
+                url: {
+                    "release_id": 1,
+                    "asset_id": 2,
+                    "digest": digest,
+                    "github_digest": digest,
+                    "content_type": "application/octet-stream",
+                    "redirected": True,
+                }
+            },
+        }
+        validate_recursive_pin_preflight_result(result)
+
+        for mutation in (
+            "incomplete",
+            "missing-github-digest",
+            "authority",
+            "assurance",
+        ):
+            forged = deepcopy(result)
+            if mutation == "incomplete":
+                forged["closure_status"] = "incomplete"
+            elif mutation == "missing-github-digest":
+                forged["release_asset_pins"][url]["github_digest"] = None
+            elif mutation == "authority":
+                forged["authority"] = "ADMISSION_AUTHORITY"
+            else:
+                forged["assurance"] = "PUBLISHER_SIGNATURE"
+            with (
+                self.subTest(mutation=mutation),
+                self.assertRaises(GitHubRecursiveGatewayError),
+            ):
+                validate_recursive_pin_preflight_result(forged)
+
+        source_fields = (
+            "manifest_digest",
+            "root_manifest_digest",
+            "source_proof_digest",
+            "expansion_digest",
+            "expansion_proof_digest",
+        )
+        pin_set = {
+            field: result[field]
+            for field in ("request_digest", *source_fields)
+        }
+        pin_set["release_asset_pins"] = result["release_asset_pins"]
+        byte_result = {
+            field: result[field] for field in source_fields
+        }
+        byte_result["closure_status"] = "complete"
+        _require_release_pin_set_matches(
+            pin_set,
+            request_digest=digest,
+            result=byte_result,
+            release_asset_pins=result["release_asset_pins"],
+        )
+        for mutation in (*source_fields, "closure_status", "pins"):
+            forged_result = deepcopy(byte_result)
+            forged_pins = result["release_asset_pins"]
+            if mutation == "closure_status":
+                forged_result["closure_status"] = "incomplete"
+            elif mutation == "pins":
+                forged_pins = {}
+            else:
+                forged_result[mutation] = "sha256:" + "2" * 64
+            with (
+                self.subTest(source_mutation=mutation),
+                self.assertRaises(GitHubRecursiveGatewayError),
+            ):
+                _require_release_pin_set_matches(
+                    pin_set,
+                    request_digest=digest,
+                    result=forged_result,
+                    release_asset_pins=forged_pins,
+                )
+
     def test_release_asset_replay_requires_broker_pins_and_rejects_forgery(
         self,
     ) -> None:
@@ -608,6 +706,148 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
             )
             release_bytes = _zip_bytes(shebang=True)
             release_digest = "sha256:" + hashlib.sha256(release_bytes).hexdigest()
+            closure_status = "complete"
+            release_pin = {
+                "release_id": 1,
+                "asset_id": 2,
+                "digest": release_digest,
+                "github_digest": release_digest,
+                "content_type": "application/octet-stream",
+                "redirected": True,
+            }
+            preflight_job = gateway / "preflight-job"
+            with (
+                mock.patch(
+                    "aragorn.github_recursive_gateway.acquire_github_expansion",
+                    side_effect=fake_expansion,
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_gateway."
+                    "discover_recursive_github_release_asset_urls",
+                    return_value=(release_url,),
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_gateway.resolve_github_release_asset_pin",
+                    return_value=release_pin,
+                ) as resolve_pin,
+                mock.patch(
+                    "aragorn.github_recursive_gateway.acquire_github_release_asset",
+                    side_effect=AssertionError("preflight retained asset bytes"),
+                ),
+            ):
+                preflight = run_recursive_pin_preflight_worker(
+                    request,
+                    preflight_job,
+                    pinned_api_addresses=("1.1.1.1",),
+                    pinned_git_addresses=("8.8.8.8",),
+                    pinned_release_asset_addresses=("9.9.9.9",),
+                )
+
+            self.assertEqual(
+                preflight["schema"],
+                "aragorn/github-recursive-release-pin-preflight/v1",
+            )
+            self.assertEqual(preflight["authority"], PIN_PREFLIGHT_AUTHORITY)
+            self.assertEqual(preflight["assurance"], PIN_PREFLIGHT_ASSURANCE)
+            self.assertEqual(
+                preflight["release_asset_pins"], {release_url: release_pin}
+            )
+            self.assertEqual(
+                resolve_pin.call_args.kwargs["_pinned_api_addresses"],
+                ("1.1.1.1",),
+            )
+            self.assertEqual(
+                resolve_pin.call_args.kwargs["_pinned_asset_addresses"],
+                ("9.9.9.9",),
+            )
+            self.assertEqual(
+                resolve_pin.call_args.kwargs["max_asset_bytes"],
+                16 * 1024 * 1024,
+            )
+            preflight_imported = CAS(root / "preflight-imported")
+            preflight_handoff = import_declared_byte_transport(
+                preflight_job / "bundle",
+                preflight_imported,
+                expected_manifest_digest=preflight["handoff_manifest_digest"],
+                expected_kind="github_source",
+                expected_root_digest=preflight["manifest_digest"],
+            )
+            self.assertNotIn(
+                release_digest,
+                {entry["digest"] for entry in preflight_handoff["blobs"]},
+            )
+
+            preflight_broker = (root / "preflight-broker").resolve()
+            preflight_broker.mkdir(mode=0o700)
+            broker_state = preflight_broker / (
+                ".quarantine.pin-preflight-" + "a" * 32
+            )
+            with mock.patch(
+                "aragorn.github_recursive_gateway."
+                "discover_recursive_github_release_asset_urls",
+                return_value=(release_url,),
+            ):
+                pin_set_digest, pin_set = verify_recursive_pin_preflight_output(
+                    request,
+                    preflight,
+                    job_root=preflight_job,
+                    broker_state=broker_state,
+                    worker_uid=os.geteuid(),
+                )
+            self.assertEqual(pin_set["authority"], PIN_PREFLIGHT_AUTHORITY)
+            self.assertEqual(pin_set["assurance"], PIN_PREFLIGHT_ASSURANCE)
+            self.assertEqual(pin_set["release_asset_pins"], {release_url: release_pin})
+            self.assertEqual(
+                CAS(broker_state, read_only=True).read(pin_set_digest),
+                canonical_json(pin_set),
+            )
+            self.assertTrue(preflight_job.is_dir())
+
+            forged_preflight = deepcopy(preflight)
+            forged_url = (
+                "https://github.com/example/skills/releases/download/v1/other.pyz"
+            )
+            forged_preflight["release_asset_pins"] = {
+                forged_url: release_pin,
+            }
+            rejected_state = preflight_broker / "rejected"
+            with (
+                mock.patch(
+                    "aragorn.github_recursive_gateway."
+                    "discover_recursive_github_release_asset_urls",
+                    return_value=(release_url,),
+                ),
+                self.assertRaises(GitHubRecursiveGatewayError),
+            ):
+                verify_recursive_pin_preflight_output(
+                    request,
+                    forged_preflight,
+                    job_root=preflight_job,
+                    broker_state=rejected_state,
+                    worker_uid=os.geteuid(),
+                )
+            self.assertFalse(rejected_state.exists())
+
+            failed_state = preflight_broker / "failed"
+            with (
+                mock.patch.object(
+                    CAS,
+                    "put",
+                    side_effect=CASError("synthetic storage failure"),
+                ),
+                self.assertRaisesRegex(
+                    GitHubRecursiveGatewayError,
+                    "cannot verify recursive release-pin preflight",
+                ),
+            ):
+                verify_recursive_pin_preflight_output(
+                    request,
+                    preflight,
+                    job_root=preflight_job,
+                    broker_state=failed_state,
+                    worker_uid=os.geteuid(),
+                )
+            self.assertFalse(failed_state.exists())
 
             def fake_release(
                 url: str,
@@ -655,7 +895,9 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                     },
                 }
 
-            release_job = gateway / "release-job"
+            release_gateway = root / "release-gateway"
+            release_gateway.mkdir(mode=0o700)
+            release_job = release_gateway / "release-job"
             with (
                 mock.patch(
                     "aragorn.github_recursive_gateway.acquire_github_expansion",
@@ -735,6 +977,45 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
             self.assertIn(retained_result["inventory_digest"], release_closure)
             for member in retained_inventory["files"]:
                 self.assertIn(member["digest"], release_closure)
+
+            quarantine = preflight_broker / "quarantine"
+            python_digest = "sha256:" + "1" * 64
+            package_digest = "sha256:" + "2" * 64
+            with (
+                mock.patch(
+                    "aragorn.github_quarantine_receipt.sys.platform",
+                    "linux",
+                ),
+                mock.patch(
+                    "aragorn.github_recursive_gateway."
+                    "discover_recursive_github_release_asset_urls",
+                    return_value=(release_url,),
+                ),
+            ):
+                accepted_release = accept_recursive_gateway_output(
+                    request,
+                    release_result,
+                    job_root=release_job,
+                    quarantine_state=quarantine,
+                    worker_uid=os.geteuid(),
+                    containment_profile=LINUX_CONTAINMENT_PROFILE,
+                    python_executable_digest=python_digest,
+                    gateway_package_tree_digest=package_digest,
+                    release_asset_pins=pin_set["release_asset_pins"],
+                    release_pin_set_digest=pin_set_digest,
+                    release_pin_set=pin_set,
+                    broker_staging_state=broker_state,
+                )
+
+            self.assertEqual(
+                accepted_release.release_pin_set_digest,
+                pin_set_digest,
+            )
+            self.assertFalse(broker_state.exists())
+            self.assertEqual(
+                CAS(quarantine, read_only=True).read(pin_set_digest),
+                canonical_json(pin_set),
+            )
 
 
 if __name__ == "__main__":

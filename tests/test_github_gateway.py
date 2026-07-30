@@ -547,7 +547,342 @@ class GitHubGatewayTests(unittest.TestCase):
         )
         accept.assert_called_once()
 
-    def test_recursive_worker_alone_receives_release_asset_network_pins(
+    def test_recursive_without_pins_preflights_before_fresh_byte_worker(
+        self,
+    ) -> None:
+        resolver_process = _ProcessResult(
+            canonical_json(
+                {
+                    "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
+                    "hosts": {
+                        github_gateway.API_HOST: ["1.1.1.1"],
+                        github_gateway.GIT_HOST: ["8.8.8.8"],
+                        github_gateway.RELEASE_ASSET_HOST: ["9.9.9.9"],
+                    },
+                }
+            )
+            + b"\n",
+            b"",
+            0,
+        )
+        preflight_process = _ProcessResult(b"{}\n", b"", 0)
+        worker_process = _ProcessResult(b"{}\n", b"", 0)
+        url = "https://github.com/example/skills/releases/download/v1/checksums.txt"
+        asset_digest = "sha256:" + "4" * 64
+        pins = {
+            url: {
+                "release_id": 1,
+                "asset_id": 2,
+                "digest": asset_digest,
+                "github_digest": asset_digest,
+                "content_type": "application/octet-stream",
+                "redirected": True,
+            }
+        }
+        identity = {
+            "request_digest": "sha256:" + "1" * 64,
+            "manifest_digest": "sha256:" + "2" * 64,
+            "root_manifest_digest": "sha256:" + "3" * 64,
+            "source_proof_digest": "sha256:" + "5" * 64,
+            "expansion_digest": "sha256:" + "6" * 64,
+            "expansion_proof_digest": "sha256:" + "7" * 64,
+        }
+        pin_set = {**identity, "release_asset_pins": pins}
+        result = {**identity, "closure_status": "complete"}
+        accepted = object()
+        preflight_job = Path("/gateway/job-" + "a" * 32)
+        worker_job = Path("/gateway/job-" + "b" * 32)
+        preflight_state = Path("/broker/.quarantine.pin-preflight-" + "c" * 32)
+        live = {preflight_job, worker_job, preflight_state}
+        events: list[tuple[str, object]] = []
+        processes = iter((resolver_process, preflight_process, worker_process))
+
+        def launch_process(
+            command: tuple[str, ...],
+            **_options: object,
+        ) -> _ProcessResult:
+            action = next(
+                item
+                for item in (
+                    "resolve",
+                    "recursive-pin-preflight-worker",
+                    "recursive-worker",
+                )
+                if item in command
+            )
+            events.append(("launch", action))
+            return next(processes)
+
+        def remove_path(path: Path, *, expected_uid: int) -> None:
+            if path in live:
+                events.append(("remove", (path, expected_uid)))
+                live.remove(path)
+
+        def verify_preflight(
+            *_args: object,
+            **_kwargs: object,
+        ) -> tuple[str, dict[str, object]]:
+            events.append(("verify", "preflight"))
+            return "sha256:" + "8" * 64, pin_set
+
+        def accept_output(
+            *_args: object,
+            **_kwargs: object,
+        ) -> object:
+            self.assertIn(preflight_state, live)
+            events.append(("accept", "recursive"))
+            live.remove(preflight_state)
+            return accepted
+
+        with (
+            mock.patch.object(github_gateway, "_broker_euid", return_value=0),
+            mock.patch.object(
+                github_gateway,
+                "_prepare_paths",
+                return_value=(Path("/gateway"), Path("/broker/quarantine")),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_trusted_python_executable",
+                return_value=Path("/usr/bin/python3"),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_trusted_package_root",
+                return_value=Path("/opt/aragorn-gateway"),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_gateway_runtime_measurements",
+                return_value=(_PYTHON_DIGEST, _PACKAGE_DIGEST),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_require_gateway_runtime_unchanged",
+            ) as unchanged,
+            mock.patch.object(
+                github_gateway,
+                "_exclusive_uid_lease",
+                return_value=nullcontext(),
+            ),
+            mock.patch.object(github_gateway, "_require_gateway_entries"),
+            mock.patch.object(github_gateway, "_require_idle_uid"),
+            mock.patch.object(
+                github_gateway.secrets,
+                "token_hex",
+                side_effect=("a" * 32, "b" * 32, "c" * 32),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_run_gateway_process",
+                side_effect=launch_process,
+            ) as launch,
+            mock.patch.object(
+                github_gateway,
+                "_remove_worker_job",
+                side_effect=remove_path,
+            ),
+            mock.patch(
+                "aragorn.github_recursive_gateway."
+                "require_recursive_pin_preflight_success_result",
+                return_value={"schema": "preflight"},
+            ),
+            mock.patch(
+                "aragorn.github_recursive_gateway."
+                "verify_recursive_pin_preflight_output",
+                side_effect=verify_preflight,
+            ) as verify,
+            mock.patch(
+                "aragorn.github_recursive_gateway.require_recursive_success_result",
+                return_value=result,
+            ),
+            mock.patch(
+                "aragorn.github_recursive_gateway.accept_recursive_gateway_output",
+                side_effect=accept_output,
+            ) as accept,
+        ):
+            observed = github_gateway._quarantine_through_gateway(
+                self.request,
+                gateway_root="/gateway",
+                quarantine_state="/broker/quarantine",
+                worker_uid=501,
+                worker_gid=20,
+                process_timeout_seconds=130.0,
+                python_executable="/usr/bin/python3",
+                package_root="/opt/aragorn-gateway",
+                recursive=True,
+            )
+
+        self.assertIs(observed, accepted)
+        self.assertEqual(
+            events,
+            [
+                ("launch", "resolve"),
+                ("launch", "recursive-pin-preflight-worker"),
+                ("verify", "preflight"),
+                ("remove", (preflight_job, 501)),
+                ("launch", "recursive-worker"),
+                ("accept", "recursive"),
+                ("remove", (worker_job, 501)),
+            ],
+        )
+        self.assertEqual(unchanged.call_count, 2)
+        self.assertEqual(
+            verify.call_args.kwargs["broker_state"],
+            preflight_state,
+        )
+        self.assertEqual(
+            accept.call_args.kwargs["release_asset_pins"],
+            pins,
+        )
+        self.assertEqual(
+            accept.call_args.kwargs["release_pin_set_digest"],
+            "sha256:" + "8" * 64,
+        )
+        self.assertEqual(
+            accept.call_args.kwargs["release_pin_set"],
+            pin_set,
+        )
+        self.assertEqual(
+            accept.call_args.kwargs["broker_staging_state"],
+            preflight_state,
+        )
+        preflight_command = launch.call_args_list[1].args[0]
+        worker_command = launch.call_args_list[2].args[0]
+        self.assertIn(os.fspath(preflight_job), preflight_command)
+        self.assertIn(os.fspath(worker_job), worker_command)
+        self.assertNotEqual(preflight_job, worker_job)
+        self.assertNotIn(asset_digest, worker_command)
+
+    def test_preflight_cleanup_failure_prevents_byte_worker(self) -> None:
+        resolver_process = _ProcessResult(
+            canonical_json(
+                {
+                    "schema": github_gateway.ADDRESS_RESULT_SCHEMA,
+                    "hosts": {
+                        github_gateway.API_HOST: ["1.1.1.1"],
+                        github_gateway.GIT_HOST: ["8.8.8.8"],
+                        github_gateway.RELEASE_ASSET_HOST: ["9.9.9.9"],
+                    },
+                }
+            )
+            + b"\n",
+            b"",
+            0,
+        )
+        preflight_process = _ProcessResult(b"{}\n", b"", 0)
+        pin_set = {
+            "release_asset_pins": {},
+            **{
+                field: "sha256:" + character * 64
+                for field, character in zip(
+                    (
+                        "request_digest",
+                        "manifest_digest",
+                        "root_manifest_digest",
+                        "source_proof_digest",
+                        "expansion_digest",
+                        "expansion_proof_digest",
+                    ),
+                    "123456",
+                    strict=True,
+                )
+            },
+        }
+        preflight_job = Path("/gateway/job-" + "a" * 32)
+        cleanup_attempts = 0
+
+        def remove_path(path: Path, *, expected_uid: int) -> None:
+            nonlocal cleanup_attempts
+            if path == preflight_job and expected_uid == 501:
+                cleanup_attempts += 1
+                if cleanup_attempts == 1:
+                    raise GitHubGatewayError("preflight cleanup failed")
+
+        with (
+            mock.patch.object(github_gateway, "_broker_euid", return_value=0),
+            mock.patch.object(
+                github_gateway,
+                "_prepare_paths",
+                return_value=(Path("/gateway"), Path("/broker/quarantine")),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_trusted_python_executable",
+                return_value=Path("/usr/bin/python3"),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_trusted_package_root",
+                return_value=Path("/opt/aragorn-gateway"),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_gateway_runtime_measurements",
+                return_value=(_PYTHON_DIGEST, _PACKAGE_DIGEST),
+            ),
+            mock.patch.object(github_gateway, "_require_gateway_runtime_unchanged"),
+            mock.patch.object(
+                github_gateway,
+                "_exclusive_uid_lease",
+                return_value=nullcontext(),
+            ),
+            mock.patch.object(github_gateway, "_require_gateway_entries"),
+            mock.patch.object(github_gateway, "_require_idle_uid"),
+            mock.patch.object(
+                github_gateway.secrets,
+                "token_hex",
+                side_effect=("a" * 32, "b" * 32, "c" * 32),
+            ),
+            mock.patch.object(
+                github_gateway,
+                "_run_gateway_process",
+                side_effect=(resolver_process, preflight_process),
+            ) as launch,
+            mock.patch.object(
+                github_gateway,
+                "_remove_worker_job",
+                side_effect=remove_path,
+            ) as remove,
+            mock.patch(
+                "aragorn.github_recursive_gateway."
+                "require_recursive_pin_preflight_success_result",
+                return_value={"schema": "preflight"},
+            ),
+            mock.patch(
+                "aragorn.github_recursive_gateway."
+                "verify_recursive_pin_preflight_output",
+                return_value=("sha256:" + "7" * 64, pin_set),
+            ),
+            mock.patch(
+                "aragorn.github_recursive_gateway.accept_recursive_gateway_output",
+            ) as accept,
+            self.assertRaisesRegex(
+                GitHubGatewayError,
+                "preflight cleanup failed",
+            ),
+        ):
+            github_gateway._quarantine_through_gateway(
+                self.request,
+                gateway_root="/gateway",
+                quarantine_state="/broker/quarantine",
+                worker_uid=501,
+                worker_gid=20,
+                process_timeout_seconds=130.0,
+                python_executable="/usr/bin/python3",
+                package_root="/opt/aragorn-gateway",
+                recursive=True,
+            )
+
+        self.assertEqual(launch.call_count, 2)
+        self.assertEqual(cleanup_attempts, 2)
+        remove.assert_any_call(
+            Path("/broker/.quarantine.pin-preflight-" + "c" * 32),
+            expected_uid=0,
+        )
+        accept.assert_not_called()
+
+    def test_recursive_worker_alone_receives_explicit_release_asset_pins(
         self,
     ) -> None:
         resolver_process = _ProcessResult(
@@ -629,6 +964,14 @@ class GitHubGatewayTests(unittest.TestCase):
                 "aragorn.github_recursive_gateway.accept_recursive_gateway_output",
                 return_value=accepted,
             ) as accept,
+            mock.patch(
+                "aragorn.github_recursive_gateway."
+                "require_recursive_pin_preflight_success_result",
+            ) as require_preflight,
+            mock.patch(
+                "aragorn.github_recursive_gateway."
+                "verify_recursive_pin_preflight_output",
+            ) as verify_preflight,
         ):
             observed = github_gateway._quarantine_through_gateway(
                 self.request,
@@ -644,6 +987,12 @@ class GitHubGatewayTests(unittest.TestCase):
             )
 
         self.assertIs(observed, accepted)
+        require_preflight.assert_not_called()
+        verify_preflight.assert_not_called()
+        self.assertNotIn(
+            "release_pin_set_digest",
+            accept.call_args.kwargs,
+        )
         resolver_command = launch.call_args_list[0].args[0]
         self.assertEqual(
             resolver_command[-2:],
@@ -747,6 +1096,27 @@ class GitHubGatewayTests(unittest.TestCase):
             )
         )
         self.assertEqual(recursive_args.release_asset_endpoint, ["9.9.9.9"])
+        preflight_args = github_gateway._parser().parse_args(
+            (
+                "recursive-pin-preflight-worker",
+                "--job-root",
+                "/gateway/preflight",
+                "--api-endpoint",
+                "1.1.1.1",
+                "--git-endpoint",
+                "8.8.8.8",
+                "--release-asset-endpoint",
+                "9.9.9.9",
+            )
+        )
+        self.assertIs(
+            preflight_args.action,
+            github_gateway._recursive_pin_preflight_worker_command,
+        )
+        self.assertEqual(
+            preflight_args.release_asset_endpoint,
+            ["9.9.9.9"],
+        )
         with self.assertRaises(GitHubGatewayError):
             github_gateway._parser().parse_args(
                 (

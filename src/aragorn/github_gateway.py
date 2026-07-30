@@ -425,11 +425,14 @@ def _quarantine_through_gateway(
     broker_release_asset_pins: object | None = None,
 ) -> Any:
     frozen = _freeze_request(request)
+    automatic_release_asset_pins = recursive and broker_release_asset_pins is None
     if recursive:
         from .github_recursive_gateway import _freeze_release_asset_pins
 
-        frozen_release_asset_pins = _freeze_release_asset_pins(
-            broker_release_asset_pins
+        frozen_release_asset_pins = (
+            {}
+            if automatic_release_asset_pins
+            else _freeze_release_asset_pins(broker_release_asset_pins)
         )
     else:
         if broker_release_asset_pins is not None:
@@ -459,7 +462,25 @@ def _quarantine_through_gateway(
         protected_package,
     )
     containment_profile = _gateway_containment_profile()
+    preflight_job_root = (
+        gateway / f"job-{secrets.token_hex(16)}"
+        if automatic_release_asset_pins
+        else None
+    )
     job_root = gateway / f"job-{secrets.token_hex(16)}"
+    preflight_state = (
+        quarantine.parent / f".{quarantine.name}.pin-preflight-{secrets.token_hex(16)}"
+        if automatic_release_asset_pins
+        else None
+    )
+    if preflight_job_root == job_root or (
+        preflight_state is not None and _paths_overlap(gateway, preflight_state)
+    ):
+        raise GitHubGatewayError(
+            "recursive release-pin preflight paths are not distinct"
+        )
+    verified_pin_set: dict[str, Any] | None = None
+    verified_pin_set_digest: str | None = None
     environment = {
         "HOME": os.fspath(gateway),
         "LANG": "C",
@@ -524,14 +545,7 @@ def _quarantine_through_gateway(
                         max_entries=_MAX_GATEWAY_ENDPOINTS,
                     )
                 )
-                command = _gateway_command(
-                    executable,
-                    protected_package,
-                    worker_uid,
-                    worker_gid,
-                    "recursive-worker" if recursive else "worker",
-                    "--job-root",
-                    os.fspath(job_root),
+                endpoint_arguments = (
                     *(
                         item
                         for address in api_addresses
@@ -547,6 +561,82 @@ def _quarantine_through_gateway(
                         for address in release_asset_addresses
                         for item in ("--release-asset-endpoint", address)
                     ),
+                )
+                if automatic_release_asset_pins:
+                    if preflight_job_root is None or preflight_state is None:
+                        raise GitHubGatewayError(
+                            "recursive release-pin preflight state is unavailable"
+                        )
+                    preflight_process = _run_gateway_process(
+                        _gateway_command(
+                            executable,
+                            protected_package,
+                            worker_uid,
+                            worker_gid,
+                            "recursive-pin-preflight-worker",
+                            "--job-root",
+                            os.fspath(preflight_job_root),
+                            *endpoint_arguments,
+                        ),
+                        timeout=float(process_timeout_seconds),
+                        environment=environment,
+                        worker_uid=worker_uid,
+                        worker_gid=worker_gid,
+                        allowed_addresses=allowed_addresses,
+                        writable_root=gateway,
+                        postflight_stage="after release-pin preflight shutdown",
+                        stdin_bytes=raw_request + b"\n",
+                    )
+                    _require_gateway_entries(
+                        gateway,
+                        (preflight_job_root.name,),
+                        worker_uid=worker_uid,
+                        stage="after release-pin preflight shutdown",
+                    )
+                    from .github_recursive_gateway import (
+                        require_recursive_pin_preflight_success_result,
+                        verify_recursive_pin_preflight_output,
+                    )
+
+                    preflight_result = require_recursive_pin_preflight_success_result(
+                        preflight_process
+                    )
+                    _require_gateway_runtime_unchanged(
+                        executable,
+                        protected_package,
+                        runtime_measurements,
+                    )
+                    verified_pin_set_digest, verified_pin_set = (
+                        verify_recursive_pin_preflight_output(
+                            frozen,
+                            preflight_result,
+                            job_root=preflight_job_root,
+                            broker_state=preflight_state,
+                            worker_uid=worker_uid,
+                        )
+                    )
+                    frozen_release_asset_pins = _freeze_release_asset_pins(
+                        verified_pin_set["release_asset_pins"]
+                    )
+                    _remove_worker_job(
+                        preflight_job_root,
+                        expected_uid=worker_uid,
+                    )
+                    _require_gateway_entries(
+                        gateway,
+                        (),
+                        worker_uid=worker_uid,
+                        stage="before recursive byte worker launch",
+                    )
+                command = _gateway_command(
+                    executable,
+                    protected_package,
+                    worker_uid,
+                    worker_gid,
+                    "recursive-worker" if recursive else "worker",
+                    "--job-root",
+                    os.fspath(job_root),
+                    *endpoint_arguments,
                 )
                 process = _run_gateway_process(
                     command,
@@ -584,6 +674,24 @@ def _quarantine_through_gateway(
                 protected_package,
                 runtime_measurements,
             )
+            if verified_pin_set is not None and (
+                result.get("closure_status") != "complete"
+                or any(
+                    result.get(field) != verified_pin_set[field]
+                    for field in (
+                        "request_digest",
+                        "manifest_digest",
+                        "root_manifest_digest",
+                        "source_proof_digest",
+                        "expansion_digest",
+                        "expansion_proof_digest",
+                    )
+                )
+            ):
+                raise GitHubGatewayError(
+                    "recursive byte worker source identity changed after "
+                    "release-pin preflight"
+                )
             acceptance = _accept_gateway_output
             if recursive:
                 from .github_recursive_gateway import (
@@ -593,8 +701,14 @@ def _quarantine_through_gateway(
                 acceptance = accept_recursive_gateway_output
             acceptance_options: dict[str, object] = {}
             if recursive:
-                acceptance_options["release_asset_pins"] = (
-                    frozen_release_asset_pins
+                acceptance_options["release_asset_pins"] = frozen_release_asset_pins
+            if verified_pin_set is not None:
+                acceptance_options.update(
+                    {
+                        "release_pin_set_digest": verified_pin_set_digest,
+                        "release_pin_set": verified_pin_set,
+                        "broker_staging_state": preflight_state,
+                    }
                 )
             return acceptance(
                 frozen,
@@ -608,7 +722,21 @@ def _quarantine_through_gateway(
                 **acceptance_options,
             )
         finally:
-            _remove_worker_job(job_root, expected_uid=worker_uid)
+            try:
+                _remove_worker_job(job_root, expected_uid=worker_uid)
+            finally:
+                try:
+                    if preflight_job_root is not None:
+                        _remove_worker_job(
+                            preflight_job_root,
+                            expected_uid=worker_uid,
+                        )
+                finally:
+                    if preflight_state is not None:
+                        _remove_worker_job(
+                            preflight_state,
+                            expected_uid=_broker_euid(),
+                        )
 
 
 def _accept_gateway_output(
@@ -2243,6 +2371,32 @@ def _parser() -> ArgumentParser:
         required=True,
     )
     recursive_worker.set_defaults(action=_recursive_worker_command)
+    recursive_pin_preflight_worker = commands.add_parser(
+        "recursive-pin-preflight-worker"
+    )
+    recursive_pin_preflight_worker.add_argument(
+        "--job-root",
+        type=Path,
+        required=True,
+    )
+    recursive_pin_preflight_worker.add_argument(
+        "--api-endpoint",
+        action="append",
+        required=True,
+    )
+    recursive_pin_preflight_worker.add_argument(
+        "--git-endpoint",
+        action="append",
+        required=True,
+    )
+    recursive_pin_preflight_worker.add_argument(
+        "--release-asset-endpoint",
+        action="append",
+        required=True,
+    )
+    recursive_pin_preflight_worker.set_defaults(
+        action=_recursive_pin_preflight_worker_command
+    )
     resolver = commands.add_parser("resolve")
     resolver.add_argument("--include-release-asset", action="store_true")
     resolver.set_defaults(action=_resolver_command)
@@ -2266,6 +2420,22 @@ def _recursive_worker_command(args: argparse.Namespace) -> dict[str, Any]:
     from .github_recursive_gateway import run_recursive_worker
 
     return run_recursive_worker(
+        request,
+        args.job_root,
+        pinned_api_addresses=args.api_endpoint,
+        pinned_git_addresses=args.git_endpoint,
+        pinned_release_asset_addresses=args.release_asset_endpoint,
+    )
+
+
+def _recursive_pin_preflight_worker_command(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    _require_worker_process_limit()
+    request = _decode_request_line(sys.stdin.buffer.read(_MAX_WIRE_BYTES + 1))
+    from .github_recursive_gateway import run_recursive_pin_preflight_worker
+
+    return run_recursive_pin_preflight_worker(
         request,
         args.job_root,
         pinned_api_addresses=args.api_endpoint,

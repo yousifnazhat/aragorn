@@ -212,6 +212,66 @@ def verify_github_release_asset_result(
     return dict(result)
 
 
+def resolve_github_release_asset_pin(
+    url: str,
+    *,
+    timeout_seconds: float = 60.0,
+    max_asset_bytes: int = _MAX_ASSET_BYTES,
+    _pinned_api_addresses: list[str] | tuple[str, ...] | None = None,
+    _pinned_asset_addresses: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    """Resolve one GitHub-digest-backed asset identity without reading its body."""
+
+    owner, repository, tag, name = parse_github_release_asset_url(url)
+    _validate_acquisition_limits(timeout_seconds, max_asset_bytes)
+    budget = _RequestBudget(3, _MAX_METADATA_BYTES + max_asset_bytes)
+    deadline = time.monotonic() + float(timeout_seconds)
+    api_endpoints = _PinnedEndpoints(_pinned_api_addresses, host=API_HOST)
+    asset_endpoints = _PinnedEndpoints(
+        _pinned_asset_addresses,
+        host=RELEASE_ASSET_HOST,
+    )
+    release = _request_before_deadline(
+        f"/repos/{owner}/{repository}/releases/tags/{tag}",
+        max_bytes=_MAX_METADATA_BYTES,
+        budget=budget,
+        deadline=deadline,
+        authorization=None,
+        endpoints=api_endpoints,
+    )
+    asset = _select_asset(
+        release,
+        url,
+        owner,
+        repository,
+        tag,
+        name,
+        max_asset_bytes=max_asset_bytes,
+    )
+    digest = asset["digest"]
+    if digest is None:
+        raise GitHubReleaseAssetError(
+            "GitHub release asset lacks an API-reported SHA-256 digest"
+        )
+    redirected = _probe_download(
+        f"/repos/{owner}/{repository}/releases/assets/{asset['id']}",
+        expected_size=asset["size"],
+        budget=budget,
+        deadline=deadline,
+        api_endpoints=api_endpoints,
+        asset_endpoints=asset_endpoints,
+    )
+    _remaining_seconds(deadline)
+    return {
+        "release_id": release["id"],
+        "asset_id": asset["id"],
+        "digest": digest,
+        "github_digest": digest,
+        "content_type": asset["content_type"],
+        "redirected": redirected,
+    }
+
+
 def acquire_github_release_asset(
     url: str,
     cas: CAS,
@@ -231,23 +291,7 @@ def acquire_github_release_asset(
     """
 
     owner, repository, tag, name = parse_github_release_asset_url(url)
-    if (
-        isinstance(timeout_seconds, bool)
-        or not isinstance(timeout_seconds, (int, float))
-        or not 0 < timeout_seconds <= _MAX_ACQUISITION_SECONDS
-    ):
-        raise GitHubReleaseAssetError(
-            f"timeout_seconds must be between 0 and {_MAX_ACQUISITION_SECONDS:g}"
-        )
-    if (
-        isinstance(max_asset_bytes, bool)
-        or not isinstance(max_asset_bytes, int)
-        or not 0 <= max_asset_bytes <= _MAX_ASSET_BYTES
-    ):
-        raise GitHubReleaseAssetError(
-            f"max_asset_bytes must be between 0 and {_MAX_ASSET_BYTES}"
-        )
-
+    _validate_acquisition_limits(timeout_seconds, max_asset_bytes)
     budget = _RequestBudget(3, _MAX_METADATA_BYTES + max_asset_bytes)
     deadline = time.monotonic() + float(timeout_seconds)
     api_endpoints = _PinnedEndpoints(_pinned_api_addresses, host=API_HOST)
@@ -333,6 +377,28 @@ def acquire_github_release_asset(
     if inventory_digest is not None:
         result["inventory_digest"] = inventory_digest
     return result
+
+
+def _validate_acquisition_limits(
+    timeout_seconds: object,
+    max_asset_bytes: object,
+) -> None:
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, (int, float))
+        or not 0 < timeout_seconds <= _MAX_ACQUISITION_SECONDS
+    ):
+        raise GitHubReleaseAssetError(
+            f"timeout_seconds must be between 0 and {_MAX_ACQUISITION_SECONDS:g}"
+        )
+    if (
+        isinstance(max_asset_bytes, bool)
+        or not isinstance(max_asset_bytes, int)
+        or not 0 <= max_asset_bytes <= _MAX_ASSET_BYTES
+    ):
+        raise GitHubReleaseAssetError(
+            f"max_asset_bytes must be between 0 and {_MAX_ASSET_BYTES}"
+        )
 
 
 def _zip_intended(name: str, content: bytes) -> bool:
@@ -488,6 +554,48 @@ def _download(
     return second, True, RELEASE_ASSET_HOST
 
 
+def _probe_download(
+    path: str,
+    *,
+    expected_size: int,
+    budget: _RequestBudget,
+    deadline: float,
+    api_endpoints: _PinnedEndpoints,
+    asset_endpoints: _PinnedEndpoints,
+) -> bool:
+    first = _request_asset(
+        API_HOST,
+        path,
+        expected_size=expected_size,
+        budget=budget,
+        deadline=deadline,
+        endpoints=api_endpoints,
+        allow_redirect=True,
+        retain_body=False,
+    )
+    if first is None:
+        return False
+    if not isinstance(first, str):
+        raise GitHubReleaseAssetError(
+            "GitHub release asset probe returned unexpected content"
+        )
+    second = _request_asset(
+        RELEASE_ASSET_HOST,
+        _redirect_path(first),
+        expected_size=expected_size,
+        budget=budget,
+        deadline=deadline,
+        endpoints=asset_endpoints,
+        allow_redirect=False,
+        retain_body=False,
+    )
+    if second is not None:
+        raise GitHubReleaseAssetError(
+            "GitHub release asset probe returned unexpected content"
+        )
+    return True
+
+
 def _request_asset(
     host: str,
     path: str,
@@ -497,7 +605,8 @@ def _request_asset(
     deadline: float,
     endpoints: _PinnedEndpoints,
     allow_redirect: bool,
-) -> bytes | str:
+    retain_body: bool = True,
+) -> bytes | str | None:
     if (
         host not in {API_HOST, RELEASE_ASSET_HOST}
         or endpoints.host != host
@@ -589,6 +698,9 @@ def _request_asset(
             raise GitHubReleaseAssetError(
                 "GitHub release asset size differs from its metadata"
             )
+        if not retain_body:
+            _remaining_seconds(deadline)
+            return None
         raw = _read_response_before_deadline(
             response,
             connection,

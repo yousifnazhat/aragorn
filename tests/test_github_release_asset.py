@@ -18,6 +18,7 @@ from aragorn.github_acquire import API_HOST, RELEASE_ASSET_HOST
 from aragorn.github_release_asset import (
     GitHubReleaseAssetError,
     acquire_github_release_asset,
+    resolve_github_release_asset_pin,
     verify_github_release_asset_result,
 )
 from aragorn.oci_worker_protocol import canonical_json
@@ -97,6 +98,34 @@ def _zip_bytes(*, shebang: bool = False) -> bytes:
 
 
 class GitHubReleaseAssetTests(unittest.TestCase):
+    def _resolve_pin(
+        self,
+        responses: tuple[MagicMock, ...],
+        *,
+        metadata: dict | None = None,
+    ) -> tuple[dict, tuple[MagicMock, ...]]:
+        connections = tuple(_connection(response) for response in responses)
+        with (
+            patch(
+                "aragorn.github_release_asset._request_before_deadline",
+                return_value=_metadata() if metadata is None else metadata,
+            ),
+            patch(
+                "aragorn.github_release_asset._PinnedHTTPSConnection",
+                side_effect=connections,
+            ),
+            patch(
+                "aragorn.github_release_asset._server_tls_context",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = resolve_github_release_asset_pin(
+                _URL,
+                _pinned_api_addresses=_API_ADDRESS,
+                _pinned_asset_addresses=_ASSET_ADDRESS,
+            )
+        return result, connections
+
     def _acquire(
         self,
         responses: tuple[MagicMock, ...],
@@ -133,11 +162,97 @@ class GitHubReleaseAssetTests(unittest.TestCase):
         )
         return result, cas, connections
 
-    def _acquire_named(self, name: str, content: bytes) -> tuple[dict, CAS, str, str]:
-        url = (
-            "https://github.com/astral-sh/uv/releases/download/"
-            f"0.12.0/{name}"
+    def test_pin_resolution_probes_without_reading_asset_bytes(self) -> None:
+        location = f"https://{RELEASE_ASSET_HOST}/asset/path?token=ephemeral"
+        cases = (
+            (
+                (_response(),),
+                False,
+            ),
+            (
+                (
+                    _response(
+                        b"",
+                        status=302,
+                        headers={"Location": location, "Content-Length": "0"},
+                    ),
+                    _response(),
+                ),
+                True,
+            ),
         )
+        for responses, redirected in cases:
+            with self.subTest(redirected=redirected):
+                pin, connections = self._resolve_pin(responses)
+                self.assertEqual(
+                    pin,
+                    {
+                        "release_id": 361308705,
+                        "asset_id": 493071343,
+                        "digest": _DIGEST,
+                        "github_digest": _DIGEST,
+                        "content_type": "text/plain",
+                        "redirected": redirected,
+                    },
+                )
+                self.assertEqual(len(connections), 2 if redirected else 1)
+                for response in responses:
+                    response.read.assert_not_called()
+                    response.read1.assert_not_called()
+
+    def test_pin_resolution_requires_github_digest_before_probe(self) -> None:
+        with (
+            patch(
+                "aragorn.github_release_asset._request_before_deadline",
+                return_value=_metadata(digest=None),
+            ),
+            patch(
+                "aragorn.github_release_asset._PinnedHTTPSConnection",
+            ) as connection,
+            self.assertRaisesRegex(
+                GitHubReleaseAssetError,
+                "API-reported SHA-256 digest",
+            ),
+        ):
+            resolve_github_release_asset_pin(
+                _URL,
+                _pinned_api_addresses=_API_ADDRESS,
+                _pinned_asset_addresses=_ASSET_ADDRESS,
+            )
+        connection.assert_not_called()
+
+    def test_pin_resolution_probe_fails_closed_without_reading_body(self) -> None:
+        wrong_size = _response(headers={"Content-Length": str(len(_CONTENT) + 1)})
+        with self.assertRaisesRegex(
+            GitHubReleaseAssetError,
+            "size differs from its metadata",
+        ):
+            self._resolve_pin((wrong_size,))
+        wrong_size.read.assert_not_called()
+        wrong_size.read1.assert_not_called()
+
+        location = f"https://{RELEASE_ASSET_HOST}/one?token=x"
+        redirect = _response(
+            b"",
+            status=302,
+            headers={"Location": location, "Content-Length": "0"},
+        )
+        second_redirect = _response(
+            b"",
+            status=302,
+            headers={"Location": location, "Content-Length": "0"},
+        )
+        with self.assertRaisesRegex(
+            GitHubReleaseAssetError,
+            "status 302",
+        ):
+            self._resolve_pin((redirect, second_redirect))
+        for response in (redirect, second_redirect):
+            response.read.assert_not_called()
+            response.read1.assert_not_called()
+
+    def _acquire_named(self, name: str, content: bytes) -> tuple[dict, CAS, str, str]:
+        url = f"https://github.com/astral-sh/uv/releases/download/0.12.0/{name}"
         digest = "sha256:" + hashlib.sha256(content).hexdigest()
         metadata = {
             "id": 361308705,

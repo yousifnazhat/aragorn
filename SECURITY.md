@@ -200,8 +200,12 @@ archive closure, live public out-of-root recursive evidence,
 admission-authorized protected installation, and install/update enforcement
 remain unsupported. Automatic independent release-pin preflight is implemented
 and unit-verified. Protected request v4 and coordinator state v3 carry its
-nullable retained digest through downstream replay, but their transient-service
-path and fresh live archive are not yet qualified.
+nullable retained digest through downstream replay. Their fresh retained
+transient-service path now passes strict offline replay for install,
+byte-identical update, and one release-bearing fail-closed case. That
+operator-retained qualification proves only the exact captured path and pin
+custody; it is not independent attestation, runtime conformance, or installer
+authority.
 Bounded ZIP/WHL/PYZ
 inventory archives with an exact GitHub digest are retained as raw CAS bytes at
 a deterministic reserved runtime-candidate path; verified extracted members are
@@ -211,7 +215,7 @@ resolver or rewriter consumes the candidate path. The broker does not invoke
 analyzers or publish bytes while recursive closure is incomplete; neither the
 retained members nor an analyzer receipt grants installer/runtime authority.
 The internal request-v4 broker path remains evidence-only.
-One operator-retained qualification archive replays exact request credentials,
+The operator-retained qualification archives replay exact request credentials,
 systemd controls, recursive install, byte-identical update sequencing, and a
 release-bearing `ERROR` path. The protected-state comparison remains an
 operator record, the asset is only one of nine unresolved reasons, and this is

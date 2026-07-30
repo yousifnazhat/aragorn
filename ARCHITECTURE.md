@@ -774,7 +774,9 @@ acquisition identities and the nullable retained pin-set digest through
 pre-analysis, pre-publication, graph, and decision replay; release-bearing v4
 stops before analysis or publication. Automatic independent release-pin
 preflight plus coordinator-state-v3 custody is implemented and unit-verified,
-while a fresh request-v4 archive and its live systemd path remain unqualified.
+and the fresh request-v4 archive now qualifies its exact retained live systemd
+path and automatic pin custody. That operator-retained replay remains
+evidence-only and grants neither runtime nor installer authority.
 V6 now vendors only exact
 GitHub-digest-backed inventory archives into a deterministic runtime-candidate
 manifest and builds a separate extracted-member analysis input. V6 still leaves

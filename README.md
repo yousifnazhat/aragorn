@@ -391,8 +391,13 @@ returns `ERROR` with nine unresolved reasons, including an unanalyzed release
 asset, zero analyzer receipts, no publication, and operator-recorded empty
 protected state; the asset is not isolated as the sole cause.
 Automatic independent release-pin preflight is implemented and unit-verified;
-request-v4 and coordinator-state-v3 custody are unit-verified, but a fresh
-request-v4 live archive and systemd-path qualification remain incomplete. A
+request-v4 and coordinator-state-v3 custody are unit-verified. The
+[request-v4 live qualification](./benchmark/receipts/phase1-protected-recursive-v4-live-qualification-2026-07-29.json)
+now replays the fresh retained systemd path: install and byte-identical update
+carry non-null empty pin sets through publication, while one pinned
+release-bearing v6 graph returns `ERROR` with zero analyzer receipts and no
+publication. This qualifies only the exact operator-retained VM path and
+automatic pin custody, not installer or runtime authority. A
 pinned release-asset
 runtime consumer, general archive closure beyond the bounded ZIP/WHL/PYZ
 profile, live public release-bearing and out-of-root recursive coverage,
@@ -826,7 +831,8 @@ profile admission-conformant or installer-eligible, authorize the publisher, or
 establish general recursive acquisition. The bounded release gateway and v4
 fail-closed graph are implemented. Automatic independent release-pin preflight
 is implemented and unit-verified; request-v4 carries and replays the retained
-pin-set digest, but its live systemd path remains unqualified. V5 additionally
+pin-set digest, and its exact retained live systemd path is qualified by the
+request-v4 receipt above. V5 additionally
 provides bounded ZIP/WHL/PYZ inventory and a
 separate analyzer input. V6 retains exact
 GitHub-digest-backed inventory archives in a deterministic runtime-candidate

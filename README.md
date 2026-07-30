@@ -371,6 +371,8 @@ publication, then independently replays graph v3, v4, or v6 and the decision
 receipt. Release-bearing v6
 closure remains incomplete and records `ERROR` without analyzer invocation,
 context creation, or protected publication.
+Automatic preflight may retain pins for that incomplete source closure; the
+retained expansion binds the exact closure state and grants no admission authority.
 
 This is an internal primitive, not a command developers repeatedly run. The
 Linux service boundary covers process and IP-address containment but does not

@@ -547,7 +547,7 @@ class GitHubGatewayTests(unittest.TestCase):
         )
         accept.assert_called_once()
 
-    def test_recursive_without_pins_preflights_before_fresh_byte_worker(
+    def test_recursive_without_pins_preflights_incomplete_source_before_byte_worker(
         self,
     ) -> None:
         resolver_process = _ProcessResult(
@@ -588,7 +588,7 @@ class GitHubGatewayTests(unittest.TestCase):
             "expansion_proof_digest": "sha256:" + "7" * 64,
         }
         pin_set = {**identity, "release_asset_pins": pins}
-        result = {**identity, "closure_status": "complete"}
+        result = {**identity, "closure_status": "incomplete"}
         accepted = object()
         preflight_job = Path("/gateway/job-" + "a" * 32)
         worker_job = Path("/gateway/job-" + "b" * 32)

@@ -675,8 +675,7 @@ def _quarantine_through_gateway(
                 runtime_measurements,
             )
             if verified_pin_set is not None and (
-                result.get("closure_status") != "complete"
-                or any(
+                any(
                     result.get(field) != verified_pin_set[field]
                     for field in (
                         "request_digest",

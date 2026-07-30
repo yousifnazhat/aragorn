@@ -91,17 +91,17 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
             },
         }
         validate_recursive_pin_preflight_result(result)
+        incomplete = deepcopy(result)
+        incomplete["closure_status"] = "incomplete"
+        validate_recursive_pin_preflight_result(incomplete)
 
         for mutation in (
-            "incomplete",
             "missing-github-digest",
             "authority",
             "assurance",
         ):
             forged = deepcopy(result)
-            if mutation == "incomplete":
-                forged["closure_status"] = "incomplete"
-            elif mutation == "missing-github-digest":
+            if mutation == "missing-github-digest":
                 forged["release_asset_pins"][url]["github_digest"] = None
             elif mutation == "authority":
                 forged["authority"] = "ADMISSION_AUTHORITY"
@@ -135,12 +135,18 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
             result=byte_result,
             release_asset_pins=result["release_asset_pins"],
         )
-        for mutation in (*source_fields, "closure_status", "pins"):
+        incomplete_byte_result = deepcopy(byte_result)
+        incomplete_byte_result["closure_status"] = "incomplete"
+        _require_release_pin_set_matches(
+            pin_set,
+            request_digest=digest,
+            result=incomplete_byte_result,
+            release_asset_pins=result["release_asset_pins"],
+        )
+        for mutation in (*source_fields, "pins"):
             forged_result = deepcopy(byte_result)
             forged_pins = result["release_asset_pins"]
-            if mutation == "closure_status":
-                forged_result["closure_status"] = "incomplete"
-            elif mutation == "pins":
+            if mutation == "pins":
                 forged_pins = {}
             else:
                 forged_result[mutation] = "sha256:" + "2" * 64
@@ -828,6 +834,29 @@ class GitHubRecursiveGatewayTests(unittest.TestCase):
                     worker_uid=os.geteuid(),
                 )
             self.assertFalse(rejected_state.exists())
+
+            changed_status = deepcopy(preflight)
+            changed_status["closure_status"] = "incomplete"
+            changed_status_state = preflight_broker / "changed-status"
+            with (
+                mock.patch(
+                    "aragorn.github_recursive_gateway."
+                    "discover_recursive_github_release_asset_urls",
+                    return_value=(release_url,),
+                ),
+                self.assertRaisesRegex(
+                    GitHubRecursiveGatewayError,
+                    "closure status changed",
+                ),
+            ):
+                verify_recursive_pin_preflight_output(
+                    request,
+                    changed_status,
+                    job_root=preflight_job,
+                    broker_state=changed_status_state,
+                    worker_uid=os.geteuid(),
+                )
+            self.assertFalse(changed_status_state.exists())
 
             failed_state = preflight_broker / "failed"
             with (

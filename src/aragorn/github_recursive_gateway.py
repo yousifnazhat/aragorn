@@ -289,10 +289,6 @@ def _run_recursive_worker(
                 expected_root_manifest_digest=root_manifest_digest,
             )
         )
-    if pin_preflight and not complete:
-        raise GitHubRecursiveGatewayError(
-            "release-pin preflight requires complete recursive closure"
-        )
     release_asset_entries: list[dict[str, str]] = []
     release_asset_pins: dict[str, dict[str, Any]] = {}
     release_asset_bytes = 0
@@ -489,10 +485,6 @@ def validate_recursive_pin_preflight_result(value: object) -> None:
     }
     source_result["schema"] = RESULT_SCHEMA_V1
     validate_recursive_result(source_result)
-    if value["closure_status"] != "complete":
-        raise GitHubRecursiveGatewayError(
-            "recursive release-pin preflight closure is incomplete"
-        )
     raw_pins = value["release_asset_pins"]
     pins = _freeze_release_asset_pins(raw_pins)
     if (
@@ -730,7 +722,6 @@ def _require_release_pin_set_matches(
     )
     if (
         pin_set["request_digest"] != request_digest
-        or result["closure_status"] != "complete"
         or any(pin_set[field] != result[field] for field in source_fields)
         or pin_set["release_asset_pins"] != release_asset_pins
     ):
@@ -891,6 +882,16 @@ def _import_and_replay_recursive_source(
         result["expansion_digest"],
         max_bytes=_MAX_RECORD_BYTES,
     )
+    expansion = json.loads(expansion_raw)
+    if (
+        canonical_json(expansion) != expansion_raw
+        or not isinstance(expansion, dict)
+        or not isinstance(expansion.get("closure"), dict)
+        or expansion["closure"].get("status") != result["closure_status"]
+    ):
+        raise GitHubRecursiveGatewayError(
+            "recursive handoff closure status changed"
+        )
     if (
         retain_expanded_github_manifest(
             destination,

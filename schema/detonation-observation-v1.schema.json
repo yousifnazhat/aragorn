@@ -1,0 +1,60 @@
+{
+  "$id": "https://aragorn.dev/schema/detonation-observation-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn CAS-bound normalized detonation source event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "subject_digest",
+    "input_manifest_digest",
+    "input_tree_digest",
+    "run_request_digest",
+    "normalizer_implementation_digest",
+    "source_event_digest",
+    "capability"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/detonation-observation/v1"
+    },
+    "authority": {
+      "const": "NORMALIZED_SOURCE_EVENT_ONLY_NOT_EXECUTION_OR_BEHAVIOR_AUTHORITY"
+    },
+    "subject_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "input_manifest_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "input_tree_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "run_request_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "normalizer_implementation_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "source_event_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "capability": {
+      "enum": [
+        "file-read",
+        "file-write",
+        "memory-write",
+        "network-connect",
+        "process-exec",
+        "tool-call"
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

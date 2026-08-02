@@ -1,0 +1,28 @@
+{
+  "$id": "https://aragorn.dev/schema/detonation-source-event-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn bounded detonation source event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "operation", "detail"],
+  "properties": {
+    "schema": {
+      "const": "aragorn/detonation-source-event/v1"
+    },
+    "operation": {
+      "enum": [
+        "file-open-read",
+        "file-open-write",
+        "memory-write",
+        "network-connect",
+        "process-exec",
+        "tool-call"
+      ]
+    },
+    "detail": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^[^\\u0000]*$"
+    }
+  }
+}

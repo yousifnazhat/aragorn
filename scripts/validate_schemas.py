@@ -80,6 +80,7 @@ from aragorn.benchmark_worker_measurement import (
 )
 from aragorn.cas import CAS
 from aragorn.corpus_audit import audit_suite
+from aragorn.detonation_observation import SOURCE_SCHEMA, retain_detonation_observation
 from aragorn.github_gateway_live_evidence import (
     verify_github_gateway_live_evidence,
 )
@@ -819,6 +820,30 @@ def main() -> int:
     validators["behavior-capability-diff-v1.schema.json"].validate(
         behavior_capability_diff
     )
+    with TemporaryDirectory() as temporary:
+        cas = CAS(Path(temporary) / "detonation-observation-cas")
+        source_event = canonical_json(
+            {
+                "schema": SOURCE_SCHEMA,
+                "operation": "file-open-read",
+                "detail": "schema validation source event",
+            }
+        )
+        validators["detonation-source-event-v1.schema.json"].validate(
+            json.loads(source_event)
+        )
+        observation_digest = retain_detonation_observation(
+            cas,
+            source_event,
+            subject_digest=digest,
+            input_manifest_digest=digest,
+            input_tree_digest=digest,
+            run_request_digest=digest,
+            normalizer_implementation_digest=digest,
+        )
+        validators["detonation-observation-v1.schema.json"].validate(
+            json.loads(cas.read(observation_digest))
+        )
     admission_conformance = {
         "schema": "aragorn/admission-conformance-result/v1",
         "profile": "admission-conformant/v1",

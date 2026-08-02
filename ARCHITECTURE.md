@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.1 category-diff contract implemented; detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.2 source-event normalization contract implemented; live detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -257,6 +257,11 @@ Detonation is evidence, not proof. A quiet run can still receive `REVIEW`, and a
 P2.1 implements only the deterministic category-level declared-versus-observed
 diff for the six roadmap action kinds. It does not attest that an action was
 observed, select a backend, execute artifact bytes, or grant admission authority.
+
+P2.2 accepts one strict bounded source-event grammar, derives its capability,
+and binds both in CAS to exact subject, input manifest/tree, run request, and
+normalizer identities. Verification reopens the source event and independently
+re-derives the category. This is not proof of real or isolated execution.
 
 ### 5. Decision plane
 

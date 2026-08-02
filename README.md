@@ -10,6 +10,10 @@ Phase 2 P2.1 now has a deterministic category-only declared-versus-observed
 behavior diff contract. It verifies set arithmetic only; it is not detonation
 evidence, isolation, admission, installer, runtime, or public-release authority.
 
+Phase 2 P2.2 now provides one strict source-event grammar and derives its
+normalized category during both CAS retention and replay, bound to exact subject,
+input, run-request, and normalizer identities. No execution is claimed.
+
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
 verifier rejects promotion and aggregate `PASS`; it grants no installer

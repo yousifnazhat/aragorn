@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile and Phase 2 engineering eligible; general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.1 category-diff contract implemented; detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -253,6 +253,10 @@ The detonation profile provides:
 - A declared-versus-observed capability diff.
 
 Detonation is evidence, not proof. A quiet run can still receive `REVIEW`, and a sandbox escape is a release-blocking critical vulnerability.
+
+P2.1 implements only the deterministic category-level declared-versus-observed
+diff for the six roadmap action kinds. It does not attest that an action was
+observed, select a backend, execute artifact bytes, or grant admission authority.
 
 ### 5. Decision plane
 

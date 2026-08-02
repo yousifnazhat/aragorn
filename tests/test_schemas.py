@@ -26,6 +26,7 @@ EXPECTED_CONTRACTS = {
     "analyzers-v1.schema.json": "aragorn/analyzers/v1",
     "baseline-image-verification-v1.schema.json": "aragorn/baseline-image-verification/v1",
     "baseline-lock-v1.schema.json": "aragorn/baseline-lock/v1",
+    "behavior-capability-diff-v1.schema.json": "aragorn/behavior-capability-diff/v1",
     "benchmark-cas-handoff-v1.schema.json": "aragorn/benchmark-cas-handoff/v1",
     "benchmark-authenticated-worker-evidence-v1.schema.json": "aragorn/benchmark-authenticated-worker-evidence/v1",
     "benchmark-candidate-composition-v1.schema.json": "aragorn/benchmark-candidate-composition/v1",

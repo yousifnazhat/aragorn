@@ -1,0 +1,71 @@
+{
+  "$id": "https://aragorn.dev/schema/behavior-capability-diff-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn category-only behavior capability diff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "scope",
+    "subject_digest",
+    "declared_capabilities",
+    "observed_capabilities",
+    "matched_capabilities",
+    "undeclared_observed_capabilities",
+    "declared_not_observed_capabilities"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/behavior-capability-diff/v1"
+    },
+    "authority": {
+      "const": "CATEGORY_DIFF_ONLY_NOT_BEHAVIOR_EVIDENCE_OR_AUTHORITY"
+    },
+    "scope": {
+      "const": "category-only/v1"
+    },
+    "subject_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "declared_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "observed_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "matched_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "undeclared_observed_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "declared_not_observed_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "capability": {
+      "enum": [
+        "file-read",
+        "file-write",
+        "memory-write",
+        "network-connect",
+        "process-exec",
+        "tool-call"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/capability"
+      }
+    }
+  }
+}

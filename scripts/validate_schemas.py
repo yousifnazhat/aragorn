@@ -62,6 +62,7 @@ from aragorn.admission_evidence_workshop import (
 from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.artifact_closure import resolve_source_graph
+from aragorn.behavior_capability_diff import derive_behavior_capability_diff
 from aragorn.benchmark import evaluate_files
 from aragorn.benchmark_handoff_v2 import build_handoff_manifest
 from aragorn.benchmark_protocol_v2 import (
@@ -810,6 +811,14 @@ def main() -> int:
         )
 
     digest = "sha256:" + "0" * 64
+    behavior_capability_diff = derive_behavior_capability_diff(
+        subject_digest=digest,
+        declared_capabilities=["file-read"],
+        observed_capabilities=["file-read", "network-connect"],
+    )
+    validators["behavior-capability-diff-v1.schema.json"].validate(
+        behavior_capability_diff
+    )
     admission_conformance = {
         "schema": "aragorn/admission-conformance-result/v1",
         "profile": "admission-conformant/v1",

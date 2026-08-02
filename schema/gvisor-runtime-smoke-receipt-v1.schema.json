@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/gvisor-runtime-smoke-receipt-v1.schema.json",
+  "title": "Aragorn gVisor runtime-path smoke receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "lock_digest",
+    "implementation_digest",
+    "run_id",
+    "captured_at",
+    "evidence",
+    "status"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/gvisor-runtime-smoke-receipt/v1"},
+    "authority": {
+      "const": "RUNTIME_PATH_SMOKE_ONLY_NOT_RUNTIME_ATTESTATION_ISOLATION_OR_DETONATION_AUTHORITY"
+    },
+    "lock_digest": {"$ref": "#/$defs/digest"},
+    "implementation_digest": {"$ref": "#/$defs/digest"},
+    "run_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "captured_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_version",
+        "installed_binaries",
+        "daemon_config",
+        "runtime_registration",
+        "docker_executable",
+        "helper_implementations",
+        "runner_pre",
+        "runner_post",
+        "image_inspect",
+        "container_pre_inspect",
+        "container_live_inspect",
+        "container_processes",
+        "container_stdout",
+        "container_stderr",
+        "container_post_inspect"
+      ],
+      "properties": {
+        "runtime_version": {"$ref": "#/$defs/digest"},
+        "installed_binaries": {"$ref": "#/$defs/digest"},
+        "daemon_config": {"$ref": "#/$defs/digest"},
+        "runtime_registration": {"$ref": "#/$defs/digest"},
+        "docker_executable": {"$ref": "#/$defs/digest"},
+        "helper_implementations": {"$ref": "#/$defs/digest"},
+        "runner_pre": {"$ref": "#/$defs/digest"},
+        "runner_post": {"$ref": "#/$defs/digest"},
+        "image_inspect": {"$ref": "#/$defs/digest"},
+        "container_pre_inspect": {"$ref": "#/$defs/digest"},
+        "container_live_inspect": {"$ref": "#/$defs/digest"},
+        "container_processes": {"$ref": "#/$defs/digest"},
+        "container_stdout": {"$ref": "#/$defs/digest"},
+        "container_stderr": {"$ref": "#/$defs/digest"},
+        "container_post_inspect": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "status": {"const": "PASS"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

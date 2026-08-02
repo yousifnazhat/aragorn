@@ -1,0 +1,74 @@
+{
+  "schema": "aragorn/gvisor-runtime-lock/v1",
+  "authority": "PIN_ONLY_NOT_RUNTIME_ATTESTATION",
+  "release": {
+    "version": "20260727.0",
+    "tag": "release-20260727.0",
+    "tag_object": "4a8ee7ba0add0d46228348499c0820fdab02db79",
+    "source_commit": "9f3e9a3fba9416ea1f5832d82923d95830479096",
+    "archive_url": "https://storage.googleapis.com/gvisor/releases/release/20260727.0/aarch64/gvisor.tar.bz2",
+    "archive_size": 132196070,
+    "archive_sha512": "sha512:5ab1dc60454bdd89511a3706081481ef94f67ed01fc67db010e93cf35bbebb553ca0c5e15a9d12ed5c2877c9da0218e9bc4fde023715fae44205f353ec394775",
+    "archive_sha256": "sha256:4a54f2c5ace3da0d6b02cce384e6db253d1de8da55648ff96a0b560ef8e2a6c7"
+  },
+  "runtime": {
+    "name": "runsc-systrap",
+    "path": "/usr/local/bin/runsc",
+    "arguments": [
+      "--platform=systrap",
+      "--directfs=false"
+    ],
+    "version_output": "runsc version release-20260727.0\nspec: 1.2.1\n"
+  },
+  "binaries": [
+    {
+      "path": "/usr/local/bin/containerd-shim-runsc-v1",
+      "digest": "sha256:6dcf8dba5e34f59916b2c82332e3f39b49d80f8e803f001d3f01bf8624c7c8eb"
+    },
+    {
+      "path": "/usr/local/bin/gvisor-bin/checkpointgofer",
+      "digest": "sha256:cdfa50529ea11641816b03c06a42c2b8fa9d02864cf63e6ca2b3bf974e7fddde"
+    },
+    {
+      "path": "/usr/local/bin/gvisor-bin/runsc-metric-server",
+      "digest": "sha256:b2f7f0c11c6814a3faf1283a93b99cd850bce8a812b029765250427f62888654"
+    },
+    {
+      "path": "/usr/local/bin/runsc",
+      "digest": "sha256:c49724b2cd937d785eaf5008a860daf8fcf37d8801ec792d9e17aeded5caa33a"
+    }
+  ],
+  "daemon_config_digest": "sha256:62dce6acd7dce08561696323d07aa859a2af1308bceb3557f9953b5f644e68e9",
+  "image": {
+    "reference": "docker.io/library/busybox@sha256:f10e809bcf667d8e9f01d2baf82869049a495cd448cdfe1f4dee94078b960ae9",
+    "repo_digest": "busybox@sha256:f10e809bcf667d8e9f01d2baf82869049a495cd448cdfe1f4dee94078b960ae9",
+    "digest": "sha256:f10e809bcf667d8e9f01d2baf82869049a495cd448cdfe1f4dee94078b960ae9",
+    "os": "linux",
+    "architecture": "arm64",
+    "variant": "v8"
+  },
+  "smoke": {
+    "command": [
+      "sleep",
+      "10"
+    ],
+    "environment": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
+    "user": "65534:65534",
+    "network_mode": "none",
+    "read_only": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "security_opt": [
+      "no-new-privileges=true"
+    ],
+    "pids_limit": 256,
+    "memory_bytes": 67108864,
+    "memory_swap_bytes": 67108864,
+    "nano_cpus": 250000000,
+    "nofile_soft": 1024,
+    "nofile_hard": 1024
+  }
+}

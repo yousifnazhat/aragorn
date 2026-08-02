@@ -7,7 +7,9 @@
   "required": ["schema", "kind", "root_digest", "blobs", "total_bytes"],
   "properties": {
     "schema": {"const": "aragorn/benchmark-cas-handoff/v1"},
-    "kind": {"enum": ["github_source", "worker_input", "worker_output"]},
+    "kind": {
+      "enum": ["github_source", "runtime_evidence", "worker_input", "worker_output"]
+    },
     "root_digest": {"$ref": "#/$defs/digest"},
     "blobs": {
       "type": "array",
@@ -62,6 +64,25 @@
             }
           },
           "total_bytes": {"maximum": 226492416}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "runtime_evidence"}},
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "blobs": {
+            "maxItems": 26,
+            "items": {
+              "properties": {
+                "size": {"maximum": 1048576}
+              }
+            }
+          },
+          "total_bytes": {"maximum": 4194304}
         }
       }
     }

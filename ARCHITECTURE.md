@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.2 source-event normalization contract implemented; live detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.3 gVisor runtime-path smoke retained and replayed; live detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -262,6 +262,16 @@ P2.2 accepts one strict bounded source-event grammar, derives its capability,
 and binds both in CAS to exact subject, input manifest/tree, run request, and
 normalizer identities. Verification reopens the source event and independently
 re-derives the category. This is not proof of real or isolated execution.
+
+P2.3 retains and replays the pinned gVisor binary identities, its exact
+collector/helper source closure, Docker daemon registration, inert Linux/arm64
+image, exact container controls, pre/live/post inspection, and the live
+runtime-process graph for one run. The collector binds the Docker
+endpoint and normalized daemon self-report before and after execution and binds
+the sandbox and gofer `/proc` executable identities to the held-open `runsc`
+inode. These remain operator-captured self-reports, not runtime, worker, VM, or
+host attestation. P2.3 does not establish isolation, detonation, egress
+mediation, backend qualification, admission authority, or a Phase 2 exit.
 
 ### 5. Decision plane
 

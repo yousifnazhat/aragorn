@@ -1460,6 +1460,40 @@ def _inspect_container(
     return _parse_single_inspect(result.stdout, "docker container inspect"), result.stdout
 
 
+def _verify_container_security_profile(
+    container: dict[str, Any],
+    *,
+    expected_host: dict[str, Any],
+    expected_networks: set[str],
+) -> tuple[dict[str, Any], list[Any]]:
+    """Verify the shared fail-closed Docker isolation envelope."""
+
+    host = _object(container.get("HostConfig"), "container HostConfig")
+    for field, expected in expected_host.items():
+        _expect(host.get(field), expected, f"container {field}")
+    if (
+        host.get("Privileged") is not False
+        or host.get("CapAdd") not in (None, [])
+        or host.get("Devices") not in (None, [])
+        or host.get("DeviceRequests") not in (None, [])
+        or host.get("PublishAllPorts") is not False
+        or host.get("PortBindings") not in (None, {})
+    ):
+        raise VerificationError("container has an unexpected host capability")
+    mounts = container.get("Mounts")
+    if not isinstance(mounts, list):
+        raise VerificationError("container Mounts must be an array")
+    network_settings = _object(
+        container.get("NetworkSettings"), "container NetworkSettings"
+    )
+    networks = _object(network_settings.get("Networks"), "container networks")
+    if set(networks) not in (set(), expected_networks):
+        raise VerificationError("container has an unexpected network")
+    if network_settings.get("Ports") not in (None, {}):
+        raise VerificationError("container has published ports")
+    return host, mounts
+
+
 def _verify_container(
     container: dict[str, Any],
     *,
@@ -1526,39 +1560,26 @@ def _verify_container(
         "container environment",
     )
 
-    host = _object(container.get("HostConfig"), "container HostConfig")
-    _expect(host.get("NetworkMode"), runtime["network"], "container network")
-    _expect(host.get("ReadonlyRootfs"), True, "read-only root filesystem")
-    _expect(host.get("CapDrop"), runtime["cap_drop"], "dropped capabilities")
-    _expect(
-        host.get("SecurityOpt"),
-        ["no-new-privileges=true"],
-        "security options",
-    )
-    _expect(host.get("Privileged"), False, "privileged mode")
-    if host.get("CapAdd") not in (None, []):
-        raise VerificationError("container has added capabilities")
-    if host.get("Devices") not in (None, []):
-        raise VerificationError("container has host devices")
-    if host.get("DeviceRequests") not in (None, []):
-        raise VerificationError("container has device requests")
-    _expect(host.get("PublishAllPorts"), False, "published ports")
-    if host.get("PortBindings") not in (None, {}):
-        raise VerificationError("container has port bindings")
-    _expect(host.get("PidsLimit"), runtime["pids_limit"], "PID limit")
-    _expect(host.get("Memory"), runtime["memory_bytes"], "memory limit")
-    _expect(host.get("MemorySwap"), runtime["memory_swap_bytes"], "swap limit")
-    _expect(host.get("NanoCpus"), int(runtime["cpus"] * 1_000_000_000), "CPU limit")
-    _expect(
-        host.get("Ulimits"),
-        [
-            {
-                "Name": "nofile",
-                "Hard": runtime["nofile_hard"],
-                "Soft": runtime["nofile_soft"],
-            }
-        ],
-        "nofile limit",
+    host, mounts = _verify_container_security_profile(
+        container,
+        expected_host={
+            "NetworkMode": runtime["network"],
+            "ReadonlyRootfs": True,
+            "CapDrop": runtime["cap_drop"],
+            "SecurityOpt": ["no-new-privileges=true"],
+            "PidsLimit": runtime["pids_limit"],
+            "Memory": runtime["memory_bytes"],
+            "MemorySwap": runtime["memory_swap_bytes"],
+            "NanoCpus": int(runtime["cpus"] * 1_000_000_000),
+            "Ulimits": [
+                {
+                    "Name": "nofile",
+                    "Hard": runtime["nofile_hard"],
+                    "Soft": runtime["nofile_soft"],
+                }
+            ],
+        },
+        expected_networks={"none"},
     )
     tmpfs = runtime["tmpfs"]
     expected_tmpfs = ",".join(
@@ -1586,8 +1607,7 @@ def _verify_container(
     )
     _expect(host_mount.get("ReadOnly"), True, "HostConfig mount mode")
 
-    mounts = container.get("Mounts")
-    if not isinstance(mounts, list) or len(mounts) != 1:
+    if len(mounts) != 1:
         raise VerificationError("container must have exactly one resolved mount")
     mount = _object(mounts[0], "container mount")
     _expect(mount.get("Type"), "bind", "mount type")
@@ -1600,14 +1620,6 @@ def _verify_container(
     _expect(mount.get("RW"), False, "mount read-only mode")
     if mount.get("Mode") not in ("", "ro"):
         raise VerificationError("mount mode is not read-only")
-    network_settings = _object(
-        container.get("NetworkSettings"), "container NetworkSettings"
-    )
-    networks = _object(network_settings.get("Networks"), "container networks")
-    if set(networks) not in (set(), {"none"}):
-        raise VerificationError("container has a network other than none")
-    if network_settings.get("Ports") not in (None, {}):
-        raise VerificationError("container has published ports")
 
 
 def _stop_and_inspect_container(

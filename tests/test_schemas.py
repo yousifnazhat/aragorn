@@ -124,6 +124,7 @@ EXPECTED_CONTRACTS = {
     "github-release-asset-v1.schema.json": "aragorn/github-release-asset/v1",
     "github-release-asset-v2.schema.json": "aragorn/github-release-asset/v2",
     "github-source-proof-v1.schema.json": "aragorn/github-source-proof/v1",
+    "gvisor-runtime-smoke-receipt-v1.schema.json": "aragorn/gvisor-runtime-smoke-receipt/v1",
     "inspect-result-v1.schema.json": "aragorn/inspect-result/v1",
     "inspect-result-v2.schema.json": "aragorn/inspect-result/v2",
     "inventory-result-v1.schema.json": "aragorn/inventory-result/v1",

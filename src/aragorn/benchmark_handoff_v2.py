@@ -44,6 +44,11 @@ _LIMITS = {
         "blob_bytes": 64 * 1024 * 1024,
         "total_bytes": 216 * 1024 * 1024,
     },
+    "runtime_evidence": {
+        "blobs": 26,
+        "blob_bytes": 1024 * 1024,
+        "total_bytes": 4 * 1024 * 1024,
+    },
 }
 _MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 _COPY_CHUNK_BYTES = 1024 * 1024

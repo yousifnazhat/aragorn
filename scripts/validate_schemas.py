@@ -80,7 +80,11 @@ from aragorn.benchmark_worker_measurement import (
 )
 from aragorn.cas import CAS
 from aragorn.corpus_audit import audit_suite
-from aragorn.detonation_observation import SOURCE_SCHEMA, retain_detonation_observation
+from aragorn.detonation_observation import (
+    SOURCE_SCHEMA,
+    retain_detonation_capability_diff,
+    retain_detonation_observation,
+)
 from aragorn.github_gateway_live_evidence import (
     verify_github_gateway_live_evidence,
 )
@@ -843,6 +847,20 @@ def main() -> int:
         )
         validators["detonation-observation-v1.schema.json"].validate(
             json.loads(cas.read(observation_digest))
+        )
+        source_event_digest = "sha256:" + hashlib.sha256(source_event).hexdigest()
+        diff_receipt_digest = retain_detonation_capability_diff(
+            cas,
+            {observation_digest: source_event_digest},
+            subject_digest=digest,
+            input_manifest_digest=digest,
+            input_tree_digest=digest,
+            run_request_digest=digest,
+            normalizer_implementation_digest=digest,
+            declared_capabilities=["file-read"],
+        )
+        validators["detonation-capability-diff-receipt-v1.schema.json"].validate(
+            json.loads(cas.read(diff_receipt_digest))
         )
     validators["gvisor-runtime-smoke-receipt-v1.schema.json"].validate(
         load(

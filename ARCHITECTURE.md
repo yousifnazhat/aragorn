@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.3 gVisor runtime-path smoke retained and replayed; live detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation-set composition implemented after the retained P2.3 gVisor runtime-path smoke; live detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -272,6 +272,13 @@ the sandbox and gofer `/proc` executable identities to the held-open `runsc`
 inode. These remain operator-captured self-reports, not runtime, worker, VM, or
 host attestation. P2.3 does not establish isolation, detonation, egress
 mediation, backend qualification, admission authority, or a Phase 2 exit.
+
+P2.4 retains a canonical caller-selected observation/source binding set and
+independently replays every P2.2 observation into the exact P2.1 capability
+diff. Its closure contains the receipt, diff, observations, and raw canonical
+source events. It proves integrity only relative to the caller-held selected
+set; it does not prove that a backend executed, that capture was complete, or
+that any P2.3 runtime evidence came from the same run.
 
 ### 5. Decision plane
 

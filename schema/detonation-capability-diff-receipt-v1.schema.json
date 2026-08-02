@@ -1,0 +1,90 @@
+{
+  "$id": "https://aragorn.dev/schema/detonation-capability-diff-receipt-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aragorn selected detonation observation-set capability diff receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "subject_digest",
+    "input_manifest_digest",
+    "input_tree_digest",
+    "run_request_digest",
+    "normalizer_implementation_digest",
+    "declared_capabilities",
+    "observation_bindings",
+    "capability_diff_digest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/detonation-capability-diff-receipt/v1"
+    },
+    "authority": {
+      "const": "SELECTED_OBSERVATION_SET_DIFF_ONLY_NOT_EXECUTION_COMPLETENESS_ISOLATION_OR_ADMISSION_AUTHORITY"
+    },
+    "subject_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "input_manifest_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "input_tree_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "run_request_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "normalizer_implementation_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "declared_capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "observation_bindings": {
+      "type": "array",
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observation_digest", "source_event_digest"],
+        "properties": {
+          "observation_digest": {
+            "$ref": "#/$defs/digest"
+          },
+          "source_event_digest": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      }
+    },
+    "capability_diff_digest": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "capability": {
+      "enum": [
+        "file-read",
+        "file-write",
+        "memory-write",
+        "network-connect",
+        "process-exec",
+        "tool-call"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/capability"
+      }
+    }
+  }
+}

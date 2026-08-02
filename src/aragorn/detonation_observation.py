@@ -4,18 +4,29 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Collection
 from io import BytesIO
 from types import MappingProxyType
 from typing import Any
 
 from .analyze import _reject_duplicate_json_keys, _reject_json_constant
-from .behavior_capability_diff import CAPABILITY_KINDS
+from .behavior_capability_diff import (
+    CAPABILITY_KINDS,
+    BehaviorCapabilityDiffError,
+    derive_behavior_capability_diff,
+    verify_behavior_capability_diff,
+)
 from .cas import CAS, CASError
 from .oci_worker_protocol import WorkerProtocolError, canonical_json
 
 SCHEMA = "aragorn/detonation-observation/v1"
 SOURCE_SCHEMA = "aragorn/detonation-source-event/v1"
 AUTHORITY = "NORMALIZED_SOURCE_EVENT_ONLY_NOT_EXECUTION_OR_BEHAVIOR_AUTHORITY"
+DIFF_RECEIPT_SCHEMA = "aragorn/detonation-capability-diff-receipt/v1"
+DIFF_RECEIPT_AUTHORITY = (
+    "SELECTED_OBSERVATION_SET_DIFF_ONLY_NOT_EXECUTION_COMPLETENESS_ISOLATION_OR_"
+    "ADMISSION_AUTHORITY"
+)
 MAX_SOURCE_EVENT_BYTES = 4 * 1024
 MAX_OBSERVATIONS = 10_000
 
@@ -31,6 +42,8 @@ SOURCE_OPERATIONS = MappingProxyType(
 )
 
 _MAX_OBSERVATION_BYTES = 16 * 1024
+_MAX_CAPABILITY_DIFF_BYTES = 16 * 1024
+_MAX_DIFF_RECEIPT_BYTES = 2 * 1024 * 1024
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IDENTITY_FIELDS = (
     "subject_digest",
@@ -46,6 +59,15 @@ _FIELDS = {
     "source_event_digest",
     "capability",
 }
+_DIFF_RECEIPT_FIELDS = {
+    "schema",
+    "authority",
+    *_IDENTITY_FIELDS,
+    "declared_capabilities",
+    "observation_bindings",
+    "capability_diff_digest",
+}
+_BINDING_FIELDS = {"observation_digest", "source_event_digest"}
 
 
 class DetonationObservationError(ValueError):
@@ -168,6 +190,225 @@ def observed_capabilities(
 ) -> tuple[str, ...]:
     """Verify a bounded observation-to-source map and return its categories."""
 
+    identity = _identity(
+        expected_subject_digest,
+        expected_input_manifest_digest,
+        expected_input_tree_digest,
+        expected_run_request_digest,
+        expected_normalizer_implementation_digest,
+    )
+    bindings = _snapshot_observation_bindings(expected_observations)
+    return _observed_capabilities_from_bindings(cas, bindings, identity)
+
+
+def retain_detonation_capability_diff(
+    cas: CAS,
+    observation_bindings: dict[str, str],
+    *,
+    subject_digest: str,
+    input_manifest_digest: str,
+    input_tree_digest: str,
+    run_request_digest: str,
+    normalizer_implementation_digest: str,
+    declared_capabilities: Collection[str],
+) -> str:
+    """Retain one selected observation set and its re-derived category diff."""
+
+    identity = _identity(
+        subject_digest,
+        input_manifest_digest,
+        input_tree_digest,
+        run_request_digest,
+        normalizer_implementation_digest,
+    )
+    bindings = _snapshot_observation_bindings(observation_bindings)
+    categories = _observed_capabilities_from_bindings(cas, bindings, identity)
+    capability_diff = _derive_capability_diff(
+        subject_digest=identity["subject_digest"],
+        declared_capabilities=declared_capabilities,
+        observed_capabilities=categories,
+    )
+    try:
+        capability_diff_digest = cas.put(
+            BytesIO(canonical_json(capability_diff)),
+            max_bytes=_MAX_CAPABILITY_DIFF_BYTES,
+        )
+        receipt = {
+            "schema": DIFF_RECEIPT_SCHEMA,
+            "authority": DIFF_RECEIPT_AUTHORITY,
+            **identity,
+            "declared_capabilities": capability_diff["declared_capabilities"],
+            "observation_bindings": [
+                {
+                    "observation_digest": observation_digest,
+                    "source_event_digest": source_event_digest,
+                }
+                for observation_digest, source_event_digest in bindings
+            ],
+            "capability_diff_digest": capability_diff_digest,
+        }
+        return cas.put(
+            BytesIO(canonical_json(receipt)), max_bytes=_MAX_DIFF_RECEIPT_BYTES
+        )
+    except (CASError, WorkerProtocolError) as exc:
+        raise DetonationObservationError(
+            "CAS_FAILURE", f"cannot retain detonation capability diff: {exc}"
+        ) from exc
+
+
+def verify_detonation_capability_diff(
+    cas: CAS,
+    receipt_digest: str,
+    *,
+    expected_observations: dict[str, str],
+    expected_subject_digest: str,
+    expected_input_manifest_digest: str,
+    expected_input_tree_digest: str,
+    expected_run_request_digest: str,
+    expected_normalizer_implementation_digest: str,
+    expected_declared_capabilities: Collection[str],
+) -> dict[str, Any]:
+    """Replay a selected observation set into its exact retained category diff."""
+
+    expected_identity = _identity(
+        expected_subject_digest,
+        expected_input_manifest_digest,
+        expected_input_tree_digest,
+        expected_run_request_digest,
+        expected_normalizer_implementation_digest,
+    )
+    expected_bindings = _snapshot_observation_bindings(expected_observations)
+    expected_declared = _derive_capability_diff(
+        subject_digest=expected_identity["subject_digest"],
+        declared_capabilities=expected_declared_capabilities,
+        observed_capabilities=(),
+    )["declared_capabilities"]
+    try:
+        receipt = _canonical_document(
+            cas.read(
+                _digest(receipt_digest, "capability diff receipt"),
+                max_bytes=_MAX_DIFF_RECEIPT_BYTES,
+            ),
+            code="DIFF_RECEIPT_INVALID",
+            label="detonation capability diff receipt",
+        )
+        if set(receipt) != _DIFF_RECEIPT_FIELDS:
+            raise DetonationObservationError(
+                "DIFF_RECEIPT_INVALID",
+                "detonation capability diff receipt fields are invalid",
+            )
+        if (
+            receipt["schema"] != DIFF_RECEIPT_SCHEMA
+            or receipt["authority"] != DIFF_RECEIPT_AUTHORITY
+        ):
+            raise DetonationObservationError(
+                "DIFF_RECEIPT_INVALID",
+                "detonation capability diff receipt schema or authority is invalid",
+            )
+        if {field: receipt[field] for field in _IDENTITY_FIELDS} != expected_identity:
+            raise DetonationObservationError(
+                "IDENTITY_MISMATCH",
+                "detonation capability diff receipt identity changed",
+            )
+        if receipt["declared_capabilities"] != expected_declared:
+            raise DetonationObservationError(
+                "IDENTITY_MISMATCH",
+                "detonation declared capabilities changed",
+            )
+        receipt_bindings = _receipt_observation_bindings(
+            receipt["observation_bindings"]
+        )
+        if receipt_bindings != expected_bindings:
+            raise DetonationObservationError(
+                "IDENTITY_MISMATCH",
+                "detonation selected observation set changed",
+            )
+        categories = _observed_capabilities_from_bindings(
+            cas, receipt_bindings, expected_identity
+        )
+        capability_diff_digest = _digest(
+            receipt["capability_diff_digest"], "capability diff"
+        )
+        capability_diff = _canonical_document(
+            cas.read(
+                capability_diff_digest,
+                max_bytes=_MAX_CAPABILITY_DIFF_BYTES,
+            ),
+            code="CAPABILITY_DIFF_INVALID",
+            label="detonation capability diff",
+        )
+        try:
+            verify_behavior_capability_diff(
+                capability_diff,
+                expected_subject_digest=expected_identity["subject_digest"],
+                expected_declared_capabilities=expected_declared,
+                expected_observed_capabilities=categories,
+            )
+        except BehaviorCapabilityDiffError as exc:
+            raise DetonationObservationError(
+                "CAPABILITY_DIFF_INVALID",
+                f"detonation capability diff is invalid: {exc}",
+            ) from exc
+        return receipt
+    except DetonationObservationError:
+        raise
+    except CASError as exc:
+        raise DetonationObservationError(
+            "CAS_FAILURE", f"cannot verify detonation capability diff: {exc}"
+        ) from exc
+
+
+def derive_detonation_capability_diff_closure(
+    cas: CAS,
+    receipt_digest: str,
+    *,
+    expected_observations: dict[str, str],
+    expected_subject_digest: str,
+    expected_input_manifest_digest: str,
+    expected_input_tree_digest: str,
+    expected_run_request_digest: str,
+    expected_normalizer_implementation_digest: str,
+    expected_declared_capabilities: Collection[str],
+) -> dict[str, int]:
+    """Return the exact verified receipt, diff, observation, and source closure."""
+
+    receipt_id = _digest(receipt_digest, "capability diff receipt")
+    receipt = verify_detonation_capability_diff(
+        cas,
+        receipt_id,
+        expected_observations=expected_observations,
+        expected_subject_digest=expected_subject_digest,
+        expected_input_manifest_digest=expected_input_manifest_digest,
+        expected_input_tree_digest=expected_input_tree_digest,
+        expected_run_request_digest=expected_run_request_digest,
+        expected_normalizer_implementation_digest=(
+            expected_normalizer_implementation_digest
+        ),
+        expected_declared_capabilities=expected_declared_capabilities,
+    )
+    limits = {
+        receipt_id: _MAX_DIFF_RECEIPT_BYTES,
+        receipt["capability_diff_digest"]: _MAX_CAPABILITY_DIFF_BYTES,
+    }
+    for observation_digest, source_event_digest in _receipt_observation_bindings(
+        receipt["observation_bindings"]
+    ):
+        limits[observation_digest] = _MAX_OBSERVATION_BYTES
+        limits[source_event_digest] = MAX_SOURCE_EVENT_BYTES
+    try:
+        return {
+            digest: len(cas.read(digest, max_bytes=limit))
+            for digest, limit in sorted(limits.items())
+        }
+    except CASError as exc:
+        raise DetonationObservationError(
+            "CAS_FAILURE", f"cannot derive detonation capability diff closure: {exc}"
+        ) from exc
+
+
+def _snapshot_observation_bindings(
+    expected_observations: object,
+) -> tuple[tuple[str, str], ...]:
     if (
         type(expected_observations) is not dict
         or len(expected_observations) > MAX_OBSERVATIONS
@@ -181,6 +422,12 @@ def observed_capabilities(
         raise DetonationObservationError(
             "OBSERVATION_SET_INVALID", "observation set changed during snapshot"
         ) from exc
+    return _canonical_observation_bindings(bindings)
+
+
+def _canonical_observation_bindings(
+    bindings: tuple[tuple[object, object], ...],
+) -> tuple[tuple[str, str], ...]:
     if len(bindings) > MAX_OBSERVATIONS:
         raise DetonationObservationError(
             "OBSERVATION_SET_INVALID", "observation set exceeds its bound"
@@ -192,26 +439,93 @@ def observed_capabilities(
         raise DetonationObservationError(
             "OBSERVATION_SET_INVALID", "observation set contains a non-digest value"
         )
-    if len({source for _, source in bindings}) != len(bindings):
+    normalized = tuple(
+        (
+            _digest(observation, "observation"),
+            _digest(source, "source event"),
+        )
+        for observation, source in bindings
+    )
+    if len({observation for observation, _ in normalized}) != len(normalized):
+        raise DetonationObservationError(
+            "OBSERVATION_SET_INVALID", "observation is bound more than once"
+        )
+    if len({source for _, source in normalized}) != len(normalized):
         raise DetonationObservationError(
             "OBSERVATION_SET_INVALID", "source event is bound more than once"
         )
+    return tuple(sorted(normalized))
+
+
+def _receipt_observation_bindings(value: object) -> tuple[tuple[str, str], ...]:
+    if not isinstance(value, list) or len(value) > MAX_OBSERVATIONS:
+        raise DetonationObservationError(
+            "DIFF_RECEIPT_INVALID",
+            "detonation receipt observation bindings are not a bounded array",
+        )
+    raw_bindings: list[tuple[object, object]] = []
+    for raw_binding in value:
+        if not isinstance(raw_binding, dict) or set(raw_binding) != _BINDING_FIELDS:
+            raise DetonationObservationError(
+                "DIFF_RECEIPT_INVALID",
+                "detonation receipt observation binding fields are invalid",
+            )
+        raw_bindings.append(
+            (
+                raw_binding["observation_digest"],
+                raw_binding["source_event_digest"],
+            )
+        )
+    bindings = tuple(raw_bindings)
+    canonical = _canonical_observation_bindings(bindings)
+    if bindings != canonical:
+        raise DetonationObservationError(
+            "DIFF_RECEIPT_INVALID",
+            "detonation receipt observation bindings are not canonical",
+        )
+    return canonical
+
+
+def _observed_capabilities_from_bindings(
+    cas: CAS,
+    bindings: tuple[tuple[str, str], ...],
+    identity: dict[str, str],
+) -> tuple[str, ...]:
     categories = {
         verify_detonation_observation(
             cas,
             observation_digest,
-            expected_subject_digest=expected_subject_digest,
-            expected_input_manifest_digest=expected_input_manifest_digest,
-            expected_input_tree_digest=expected_input_tree_digest,
-            expected_run_request_digest=expected_run_request_digest,
+            expected_subject_digest=identity["subject_digest"],
+            expected_input_manifest_digest=identity["input_manifest_digest"],
+            expected_input_tree_digest=identity["input_tree_digest"],
+            expected_run_request_digest=identity["run_request_digest"],
             expected_normalizer_implementation_digest=(
-                expected_normalizer_implementation_digest
+                identity["normalizer_implementation_digest"]
             ),
             expected_source_event_digest=source_event_digest,
         )["capability"]
-        for observation_digest, source_event_digest in sorted(bindings)
+        for observation_digest, source_event_digest in bindings
     }
     return tuple(sorted(categories))
+
+
+def _derive_capability_diff(
+    *,
+    subject_digest: str,
+    declared_capabilities: Collection[str],
+    observed_capabilities: Collection[str],
+) -> dict[str, Any]:
+    try:
+        return derive_behavior_capability_diff(
+            subject_digest=subject_digest,
+            declared_capabilities=declared_capabilities,
+            observed_capabilities=observed_capabilities,
+        )
+    except BehaviorCapabilityDiffError as exc:
+        raise DetonationObservationError(
+            "CAPABILITY_DIFF_INVALID",
+            f"detonation capability diff inputs are invalid: {exc}",
+        ) from exc
 
 
 def _canonical_document(raw: bytes, *, code: str, label: str) -> dict[str, Any]:

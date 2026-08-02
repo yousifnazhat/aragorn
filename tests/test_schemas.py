@@ -111,6 +111,7 @@ EXPECTED_CONTRACTS = {
     "decision-v1.schema.json": "aragorn/decision/v1",
     "decision-v2.schema.json": "aragorn/decision/v2",
     "decision-v3.schema.json": "aragorn/decision/v3",
+    "detonation-capability-diff-receipt-v1.schema.json": "aragorn/detonation-capability-diff-receipt/v1",
     "detonation-observation-v1.schema.json": "aragorn/detonation-observation/v1",
     "detonation-source-event-v1.schema.json": "aragorn/detonation-source-event/v1",
     "error-v1.schema.json": "aragorn/error/v1",

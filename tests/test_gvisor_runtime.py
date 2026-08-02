@@ -1113,6 +1113,106 @@ class GVisorRuntimeTests(unittest.TestCase):
                 label="Docker canary",
             )
 
+    def test_canary_trace_store_requires_bounded_headroom(self) -> None:
+        _raw, lock = runtime.load_gvisor_detonation_canary_lock()
+        directory = Path(lock["trace"]["directory"])
+        metadata = mock.Mock(
+            st_mode=runtime.stat.S_IFDIR | 0o700,
+            st_uid=0,
+        )
+        filesystem = runtime.os.statvfs_result(
+            (4096, 4096, 2048, 1536, 1280, 32, 28, 5, 0, 255)
+        )
+        with (
+            mock.patch.object(runtime, "_verify_protected_path"),
+            mock.patch.object(
+                runtime.os,
+                "stat",
+                return_value=mock.Mock(st_dev=9, st_ino=11),
+            ),
+            mock.patch.object(runtime.Path, "lstat", return_value=metadata),
+            mock.patch.object(
+                runtime,
+                "_require_bounded_tmpfs_mount",
+                return_value=filesystem,
+            ) as require,
+        ):
+            self.assertEqual(
+                runtime._canary_log_directory(lock, require_headroom=True),
+                directory,
+            )
+        require.assert_called_once_with(
+            directory,
+            maximum_bytes=8 * 1024 * 1024,
+            maximum_inodes=32,
+            label="gVisor canary trace store",
+        )
+
+        for insufficient in (
+            runtime.os.statvfs_result(
+                (4096, 4096, 2048, 1536, 1279, 32, 28, 5, 0, 255)
+            ),
+            runtime.os.statvfs_result(
+                (4096, 4096, 2048, 1536, 1280, 32, 28, 4, 0, 255)
+            ),
+        ):
+            with (
+                self.subTest(insufficient=insufficient),
+                mock.patch.object(runtime, "_verify_protected_path"),
+                mock.patch.object(
+                    runtime.os,
+                    "stat",
+                    return_value=mock.Mock(st_dev=9, st_ino=11),
+                ),
+                mock.patch.object(runtime.Path, "lstat", return_value=metadata),
+                mock.patch.object(
+                    runtime,
+                    "_require_bounded_tmpfs_mount",
+                    return_value=insufficient,
+                ),
+                self.assertRaisesRegex(
+                    runtime.GVisorRuntimeError, "lacks bounded run headroom"
+                ),
+            ):
+                runtime._canary_log_directory(lock, require_headroom=True)
+
+        with (
+            mock.patch.object(
+                runtime.os,
+                "stat",
+                side_effect=(
+                    mock.Mock(st_dev=9, st_ino=11),
+                    mock.Mock(st_dev=9, st_ino=12),
+                ),
+            ),
+            self.assertRaisesRegex(
+                runtime.GVisorRuntimeError, "outside the host mount namespace"
+            ),
+        ):
+            runtime._require_host_mount_namespace()
+
+    def test_canary_log_cleanup_removes_only_current_container(self) -> None:
+        _raw, lock = runtime.load_gvisor_detonation_canary_lock()
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            current = (
+                f"{_CONTAINER_ID}.{_CONTAINER_ID}.boot.jsonl",
+                f"{_CONTAINER_ID}.{_CONTAINER_ID}.delete.jsonl",
+            )
+            other_id = "b" * 64
+            other = directory / f"{other_id}.{other_id}.boot.jsonl"
+            for name in current:
+                (directory / name).write_bytes(b"trace\n")
+            other.write_bytes(b"other\n")
+
+            with mock.patch.object(
+                runtime, "_canary_log_directory", return_value=directory
+            ):
+                runtime._cleanup_canary_logs_strict(lock, _CONTAINER_ID)
+
+            self.assertFalse(any((directory / name).exists() for name in current))
+            self.assertEqual(other.read_bytes(), b"other\n")
+
     def test_public_collector_does_not_accept_caller_evidence(self) -> None:
         with (
             tempfile.TemporaryDirectory() as temporary,

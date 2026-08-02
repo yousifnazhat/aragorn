@@ -289,32 +289,24 @@ class GitHubGatewaySystemdTests(unittest.TestCase):
         self.assertEqual(events, ["stop", "census"])
 
     def test_transfer_root_requires_bounded_hardened_tmpfs(self) -> None:
-        mount = (
-            f"36 25 0:32 / {self.root} "
-            "rw,nosuid,nodev,noexec,relatime - "
-            "tmpfs tmpfs rw,size=524288k,nr_inodes=25000\n"
-        ).encode("ascii")
-        filesystem = os.statvfs_result(
-            (4096, 4096, 131072, 65536, 65536, 25000, 12500, 12500, 0, 255)
-        )
-        with (
-            mock.patch.object(
-                github_gateway,
-                "_read_virtual_file",
-                return_value=mount,
-            ),
-            mock.patch.object(github_gateway.os, "statvfs", return_value=filesystem),
-        ):
+        with mock.patch.object(
+            github_gateway, "_require_bounded_tmpfs_mount"
+        ) as require:
             github_gateway._require_bounded_transfer_mount(self.root)
+        require.assert_called_once_with(
+            self.root,
+            maximum_bytes=512 * 1024 * 1024,
+            maximum_inodes=25_000,
+            label="gateway root",
+        )
 
-        weak = mount.replace(b",noexec", b"")
         with (
             mock.patch.object(
                 github_gateway,
-                "_read_virtual_file",
-                return_value=weak,
+                "_require_bounded_tmpfs_mount",
+                side_effect=github_gateway.VerificationError("weak mount"),
             ),
-            self.assertRaisesRegex(GitHubGatewayError, "tmpfs mount"),
+            self.assertRaisesRegex(GitHubGatewayError, "weak mount"),
         ):
             github_gateway._require_bounded_transfer_mount(self.root)
 

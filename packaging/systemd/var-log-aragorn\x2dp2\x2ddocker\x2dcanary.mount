@@ -1,0 +1,13 @@
+[Unit]
+Description=Aragorn bounded gVisor trace store
+Before=docker.service containerd.service
+
+[Mount]
+What=tmpfs
+Where=/var/log/aragorn-p2-docker-canary
+Type=tmpfs
+Options=rw,nosuid,nodev,noexec,mode=0700,uid=root,gid=root,size=8M,nr_inodes=32
+
+[Install]
+WantedBy=local-fs.target
+RequiredBy=docker.service containerd.service

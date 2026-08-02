@@ -4,3 +4,4 @@ __pycache__/
 .aragorn/
 .venv/
 benchmark-state/
+graphify-out/

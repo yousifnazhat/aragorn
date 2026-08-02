@@ -5,4 +5,5 @@ d /var/lib/aragorn-gateway 0700 aragorn-fetch aragorn-fetch -
 d /var/lib/aragorn-quarantine 0700 root root -
 d /var/lib/aragorn-protected 0750 root aragorn-runtime -
 d /var/lib/aragorn-protected/skills 0750 root aragorn-runtime -
+d /var/log/aragorn-p2-docker-canary 0700 root root -
 f /etc/aragorn/protected-install-revocations.json 0400 root root - {\"context_ids\":[],\"schema\":\"aragorn/protected-install-revocations/v1\"}

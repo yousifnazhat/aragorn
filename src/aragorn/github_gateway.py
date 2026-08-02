@@ -56,8 +56,10 @@ from .oci_runtime import (
     VerificationError,
     _hash_regular_file,
     _ProcessResult,
+    _require_bounded_tmpfs_mount,
     _run_bounded,
 )
+from .oci_runtime import _read_virtual_file as _read_virtual_file_bounded
 
 REQUEST_SCHEMA = "aragorn/github-gateway-request/v1"
 RESULT_SCHEMA = "aragorn/github-gateway-result/v2"
@@ -86,7 +88,6 @@ _MAX_SYSTEMD_EXECUTABLE_BYTES = 4 * 1024 * 1024
 _MAX_PYTHON_EXECUTABLE_BYTES = 256 * 1024 * 1024
 _MAX_PACKAGE_FILE_BYTES = 16 * 1024 * 1024
 _MAX_PACKAGE_TOTAL_BYTES = 128 * 1024 * 1024
-_MAX_MOUNTINFO_BYTES = 1024 * 1024
 _SYSTEMD_CLEANUP_SECONDS = 10.0
 _GATEWAY_TRANSFER_BYTES = 512 * 1024 * 1024
 _GATEWAY_TRANSFER_INODES = 25_000
@@ -1461,47 +1462,15 @@ def _systemd_writable_root(value: Path) -> str:
 
 
 def _require_bounded_transfer_mount(path: Path) -> None:
-    raw = _read_virtual_file(
-        Path("/proc/self/mountinfo"),
-        _MAX_MOUNTINFO_BYTES,
-        "gateway mount table",
-    )
     try:
-        lines = raw.decode("ascii").splitlines()
-    except UnicodeDecodeError as exc:
-        raise GitHubGatewayError("gateway mount table is not ASCII") from exc
-    matches: list[tuple[set[str], str]] = []
-    for line in lines:
-        fields = line.split()
-        try:
-            separator = fields.index("-")
-        except ValueError:
-            continue
-        if (
-            separator >= 6
-            and len(fields) >= separator + 4
-            and fields[4] == os.fspath(path)
-        ):
-            matches.append((set(fields[5].split(",")), fields[separator + 1]))
-    required_options = {"rw", "nosuid", "nodev", "noexec"}
-    if (
-        len(matches) != 1
-        or matches[0][1] != "tmpfs"
-        or not required_options.issubset(matches[0][0])
-    ):
-        raise GitHubGatewayError(
-            "gateway root must be one rw,nosuid,nodev,noexec tmpfs mount"
+        _require_bounded_tmpfs_mount(
+            path,
+            maximum_bytes=_GATEWAY_TRANSFER_BYTES,
+            maximum_inodes=_GATEWAY_TRANSFER_INODES,
+            label="gateway root",
         )
-    try:
-        filesystem = os.statvfs(path)
-    except OSError as exc:
-        raise GitHubGatewayError(f"cannot inspect gateway tmpfs limits: {exc}") from exc
-    total_bytes = filesystem.f_frsize * filesystem.f_blocks
-    if (
-        not 0 < total_bytes <= _GATEWAY_TRANSFER_BYTES
-        or not 0 < filesystem.f_files <= _GATEWAY_TRANSFER_INODES
-    ):
-        raise GitHubGatewayError("gateway tmpfs limits exceed the fixed boundary")
+    except VerificationError as exc:
+        raise GitHubGatewayError(str(exc)) from exc
 
 
 def _require_systemd_host() -> None:
@@ -1771,26 +1740,10 @@ def _reverify_root_executable(
 
 
 def _read_virtual_file(path: Path, maximum: int, label: str) -> bytes:
-    descriptor = -1
     try:
-        descriptor = os.open(
-            path,
-            os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
-        )
-        opened = os.fstat(descriptor)
-        if not stat.S_ISREG(opened.st_mode):
-            raise GitHubGatewayError(f"{label} is not a regular file")
-        raw = os.read(descriptor, maximum + 1)
-    except GitHubGatewayError:
-        raise
-    except OSError as exc:
-        raise GitHubGatewayError(f"cannot read {label}: {exc}") from exc
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-    if len(raw) > maximum:
-        raise GitHubGatewayError(f"{label} exceeds its byte limit")
-    return raw
+        return _read_virtual_file_bounded(path, maximum, label)
+    except VerificationError as exc:
+        raise GitHubGatewayError(str(exc)) from exc
 
 
 def _uid_processes(worker_uid: int) -> tuple[int, ...]:

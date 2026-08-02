@@ -28,6 +28,7 @@ from .oci_runtime import (
     _capture_pre_runner_identity,
     _cleanup_container,
     _inspect_container,
+    _require_bounded_tmpfs_mount,
     _require_command,
     _run_bounded,
     _RunnerReceiptBuffer,
@@ -80,6 +81,8 @@ _MAX_CANARY_RUN_REQUEST_BYTES = 64 * 1024
 _MAX_CANARY_LOG_MANIFEST_BYTES = 64 * 1024
 _MAX_CANARY_CLEANUP_BYTES = 4 * 1024
 _MAX_ARTIFACT_BYTES = 64 * 1024
+_CANARY_LOG_STORE_BYTES = 8 * 1024 * 1024
+_CANARY_LOG_STORE_INODES = 32
 _DOCKER_TIMEOUT_SECONDS = 30.0
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _SHA512 = re.compile(r"sha512:[0-9a-f]{128}\Z")
@@ -733,6 +736,8 @@ def _collect_gvisor_detonation(
     )
     opened: list[_FileCapability] = []
     container_name: str | None = None
+    trace_container_id: str | None = None
+    canary_lock: dict[str, Any] | None = None
     docker_environment: dict[str, str] | None = None
     docker_path: Path | None = None
     coordination = -1
@@ -905,7 +910,10 @@ def _collect_gvisor_detonation(
                 label="Docker image inspect",
             )
             prior_canary_logs = frozenset(
-                path.name for path in _canary_log_directory(canary_lock).iterdir()
+                path.name
+                for path in _canary_log_directory(
+                    canary_lock, require_headroom=True
+                ).iterdir()
             )
 
             container_name = (
@@ -942,6 +950,7 @@ def _collect_gvisor_detonation(
                 raise GVisorRuntimeError(
                     "Docker canary create returned an invalid container ID"
                 )
+            trace_container_id = container_id
             pre, evidence["container_pre_inspect"] = _inspect_container(
                 docker.path, container_id, docker_environment
             )
@@ -1045,6 +1054,10 @@ def _collect_gvisor_detonation(
         _verify_docker_unchanged(docker)
         for capability in opened:
             _verify_file_capability(capability)
+        if trace_container_id is None:
+            raise GVisorRuntimeError("gVisor canary trace identity is absent")
+        _cleanup_canary_logs_strict(canary_lock, trace_container_id)
+        trace_container_id = None
         evidence_limits = (
             _ARTIFACT_EVIDENCE_LIMITS
             if artifact is not None
@@ -1191,10 +1204,14 @@ def _collect_gvisor_detonation(
                     label="Docker canary",
                 )
         finally:
-            for capability in reversed(opened):
-                os.close(capability.descriptor)
-            if coordination >= 0:
-                os.close(coordination)
+            try:
+                if trace_container_id is not None and canary_lock is not None:
+                    _cleanup_canary_logs_strict(canary_lock, trace_container_id)
+            finally:
+                for capability in reversed(opened):
+                    os.close(capability.descriptor)
+                if coordination >= 0:
+                    os.close(coordination)
 
 
 def _cleanup_container_strict(
@@ -1331,9 +1348,12 @@ def _canary_log_paths(
     }
 
 
-def _canary_log_directory(canary_lock: dict[str, Any]) -> Path:
+def _canary_log_directory(
+    canary_lock: dict[str, Any], *, require_headroom: bool = False
+) -> Path:
     directory = Path(canary_lock["trace"]["directory"])
     _verify_protected_path(directory / "placeholder")
+    _require_host_mount_namespace()
     value = directory.lstat()
     if (
         not stat.S_ISDIR(value.st_mode)
@@ -1341,7 +1361,69 @@ def _canary_log_directory(canary_lock: dict[str, Any]) -> Path:
         or stat.S_IMODE(value.st_mode) != 0o700
     ):
         raise GVisorRuntimeError("gVisor canary trace directory is unsafe")
+    try:
+        filesystem = _require_bounded_tmpfs_mount(
+            directory,
+            maximum_bytes=_CANARY_LOG_STORE_BYTES,
+            maximum_inodes=_CANARY_LOG_STORE_INODES,
+            label="gVisor canary trace store",
+        )
+    except VerificationError as exc:
+        raise GVisorRuntimeError(str(exc)) from exc
+    if require_headroom:
+        required_files = len(canary_lock["trace"]["commands"]) + 1
+        required_bytes = canary_lock["trace"]["max_log_bytes"] * required_files
+        if (
+            filesystem.f_frsize * filesystem.f_bavail < required_bytes
+            or filesystem.f_favail < required_files
+        ):
+            raise GVisorRuntimeError(
+                "gVisor canary trace store lacks bounded run headroom"
+            )
     return directory
+
+
+def _mount_namespace_identity(pid: int | str) -> tuple[int, int]:
+    if (
+        not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0
+    ) and pid != "self":
+        raise GVisorRuntimeError("mount namespace process identity is invalid")
+    try:
+        value = os.stat(f"/proc/{pid}/ns/mnt")
+    except OSError as exc:
+        raise GVisorRuntimeError(f"cannot inspect mount namespace for {pid}: {exc}") from exc
+    return value.st_dev, value.st_ino
+
+
+def _require_host_mount_namespace() -> tuple[int, int]:
+    identity = _mount_namespace_identity("self")
+    if identity != _mount_namespace_identity(1):
+        raise GVisorRuntimeError("collector is outside the host mount namespace")
+    return identity
+
+
+def _cleanup_canary_logs_strict(
+    canary_lock: dict[str, Any], container_id: str
+) -> None:
+    if _CONTAINER.fullmatch(container_id) is None:
+        raise GVisorRuntimeError("gVisor canary trace identity is invalid")
+    prefix = f"{container_id}.{container_id}."
+    try:
+        directory = _canary_log_directory(canary_lock)
+        for path in tuple(directory.iterdir()):
+            name = path.name
+            if (
+                name.startswith(prefix)
+                and name.endswith(".jsonl")
+                and len(name) > len(prefix) + len(".jsonl")
+            ):
+                path.unlink()
+        if any(path.name.startswith(prefix) for path in directory.iterdir()):
+            raise GVisorRuntimeError("gVisor canary trace cleanup was incomplete")
+    except GVisorRuntimeError:
+        raise
+    except OSError as exc:
+        raise GVisorRuntimeError(f"gVisor canary trace cleanup failed: {exc}") from exc
 
 
 def _require_canary_logs_new(
@@ -2295,6 +2377,9 @@ def _capture_processes(
         roles[role] = process
     if set(roles) != {"gofer", "sandbox", "shim"}:
         raise GVisorRuntimeError("live gVisor process graph is incomplete")
+    host_mount_namespace = _require_host_mount_namespace()
+    if _mount_namespace_identity(roles["shim"]["pid"]) != host_mount_namespace:
+        raise GVisorRuntimeError("gVisor shim is outside the host mount namespace")
     for role in ("gofer", "sandbox"):
         executable = roles[role]["exe"]
         if (

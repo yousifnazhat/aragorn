@@ -66,6 +66,67 @@ class StrictLockTests(unittest.TestCase):
 
         self.assertEqual(len(baselines), 2)
 
+    def test_bounded_tmpfs_mount_requires_hardening_and_fixed_limits(self) -> None:
+        path = Path("/bounded")
+        mount = (
+            "36 25 0:32 / /bounded rw,nosuid,nodev,noexec,relatime - "
+            "tmpfs tmpfs rw,size=8192k,nr_inodes=32\n"
+        ).encode("ascii")
+        filesystem = os.statvfs_result(
+            (4096, 4096, 2048, 1536, 1536, 32, 28, 28, 0, 255)
+        )
+        with (
+            patch.object(runtime, "_read_virtual_file", return_value=mount),
+            patch.object(runtime.os, "statvfs", return_value=filesystem),
+        ):
+            self.assertEqual(
+                runtime._require_bounded_tmpfs_mount(
+                    path,
+                    maximum_bytes=8 * 1024 * 1024,
+                    maximum_inodes=32,
+                    label="test store",
+                ),
+                filesystem,
+            )
+
+        for weak in (
+            mount.replace(b",noexec", b""),
+            mount.replace(b"tmpfs tmpfs", b"ext4 /dev/vda1"),
+            mount + mount,
+        ):
+            with (
+                self.subTest(weak=weak),
+                patch.object(runtime, "_read_virtual_file", return_value=weak),
+                self.assertRaisesRegex(runtime.VerificationError, "tmpfs mount"),
+            ):
+                runtime._require_bounded_tmpfs_mount(
+                    path,
+                    maximum_bytes=8 * 1024 * 1024,
+                    maximum_inodes=32,
+                    label="test store",
+                )
+
+        for oversized in (
+            os.statvfs_result(
+                (4096, 4096, 2049, 1536, 1536, 32, 28, 28, 0, 255)
+            ),
+            os.statvfs_result(
+                (4096, 4096, 2048, 1536, 1536, 33, 28, 28, 0, 255)
+            ),
+        ):
+            with (
+                self.subTest(oversized=oversized),
+                patch.object(runtime, "_read_virtual_file", return_value=mount),
+                patch.object(runtime.os, "statvfs", return_value=oversized),
+                self.assertRaisesRegex(runtime.VerificationError, "fixed boundary"),
+            ):
+                runtime._require_bounded_tmpfs_mount(
+                    path,
+                    maximum_bytes=8 * 1024 * 1024,
+                    maximum_inodes=32,
+                    label="test store",
+                )
+
     def test_resolved_docker_is_hashed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             executable = Path(temporary) / "docker"

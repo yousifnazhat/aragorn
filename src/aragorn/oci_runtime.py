@@ -40,6 +40,7 @@ _MAX_ARCHIVE_OVERHEAD = 16 * 1024 * 1024
 _MAX_ARCHIVE_MEMBERS = 10_000
 _MAX_METADATA_BLOB = 16 * 1024 * 1024
 _MAX_INSPECT_BYTES = 1024 * 1024
+_MAX_MOUNTINFO_BYTES = 1024 * 1024
 _MAX_DOCKER_BYTES = 512 * 1024 * 1024
 MAX_RUNTIME_OUTPUT_BYTES = 8 * 1024 * 1024
 _DOCKER_TIMEOUT_SECONDS = 30.0
@@ -299,6 +300,79 @@ def _read_file_bounded(path: Path, limit: int, label: str) -> bytes:
     if _file_identity(opened) != _file_identity(closed) or len(raw) != opened.st_size:
         raise VerificationError(f"{label} changed while it was read")
     return raw
+
+
+def _read_virtual_file(path: Path, maximum: int, label: str) -> bytes:
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+        )
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise VerificationError(f"{label} is not a regular file")
+        raw = os.read(descriptor, maximum + 1)
+    except VerificationError:
+        raise
+    except OSError as exc:
+        raise VerificationError(f"cannot read {label}: {exc}") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if len(raw) > maximum:
+        raise VerificationError(f"{label} exceeds its byte limit")
+    return raw
+
+
+def _require_bounded_tmpfs_mount(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    maximum_inodes: int,
+    label: str,
+) -> os.statvfs_result:
+    raw = _read_virtual_file(
+        Path("/proc/self/mountinfo"),
+        _MAX_MOUNTINFO_BYTES,
+        f"{label} mount table",
+    )
+    try:
+        lines = raw.decode("ascii").splitlines()
+    except UnicodeDecodeError as exc:
+        raise VerificationError(f"{label} mount table is not ASCII") from exc
+    matches: list[tuple[set[str], str]] = []
+    for line in lines:
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+        except ValueError:
+            continue
+        if (
+            separator >= 6
+            and len(fields) >= separator + 4
+            and fields[4] == os.fspath(path)
+        ):
+            matches.append((set(fields[5].split(",")), fields[separator + 1]))
+    required_options = {"rw", "nosuid", "nodev", "noexec"}
+    if (
+        len(matches) != 1
+        or matches[0][1] != "tmpfs"
+        or not required_options.issubset(matches[0][0])
+    ):
+        raise VerificationError(
+            f"{label} must be one rw,nosuid,nodev,noexec tmpfs mount"
+        )
+    try:
+        filesystem = os.statvfs(path)
+    except OSError as exc:
+        raise VerificationError(f"cannot inspect {label} limits: {exc}") from exc
+    total_bytes = filesystem.f_frsize * filesystem.f_blocks
+    if (
+        not 0 < total_bytes <= maximum_bytes
+        or not 0 < filesystem.f_files <= maximum_inodes
+    ):
+        raise VerificationError(f"{label} limits exceed the fixed boundary")
+    return filesystem
 
 
 def load_baseline_lock(

@@ -9,6 +9,7 @@ _SYSTEMD = _ROOT / "packaging" / "systemd"
 _SERVICE = _SYSTEMD / "aragorn-protected-install.service"
 _TMPFILES = _SYSTEMD / "aragorn-gateway.tmpfiles"
 _SYSUSERS = _SYSTEMD / "aragorn-gateway.sysusers"
+_TRACE_MOUNT = _SYSTEMD / r"var-log-aragorn\x2dp2\x2ddocker\x2dcanary.mount"
 
 
 def _section(raw: str, name: str) -> list[str]:
@@ -171,6 +172,7 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
                 "d /var/lib/aragorn-protected/skills "
                 "0750 root aragorn-runtime -"
             ),
+            "d /var/log/aragorn-p2-docker-canary 0700 root root -",
             revocations,
         ):
             self.assertIn(required, lines)
@@ -195,6 +197,35 @@ class ProtectedInstallSystemdTests(unittest.TestCase):
                 line.startswith("f /run/aragorn-protected-install/")
                 for line in lines
             )
+        )
+
+    def test_packaged_canary_trace_mount_matches_runtime_boundary(self) -> None:
+        raw = _TRACE_MOUNT.read_text(encoding="utf-8")
+        self.assertEqual(
+            _section(raw, "Unit"),
+            [
+                "Description=Aragorn bounded gVisor trace store",
+                "Before=docker.service containerd.service",
+            ],
+        )
+        self.assertEqual(
+            _section(raw, "Mount"),
+            [
+                "What=tmpfs",
+                "Where=/var/log/aragorn-p2-docker-canary",
+                "Type=tmpfs",
+                (
+                    "Options=rw,nosuid,nodev,noexec,mode=0700,uid=root,gid=root,"
+                    "size=8M,nr_inodes=32"
+                ),
+            ],
+        )
+        self.assertEqual(
+            _section(raw, "Install"),
+            [
+                "WantedBy=local-fs.target",
+                "RequiredBy=docker.service containerd.service",
+            ],
         )
 
 

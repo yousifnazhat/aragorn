@@ -881,17 +881,18 @@ def main() -> int:
             )
         )
     )
-    validators["gvisor-acquired-artifact-receipt-v1.schema.json"].validate(
-        load(
-            ROOT
-            / "benchmark"
-            / "receipts"
-            / (
-                "phase2-gvisor-acquired-artifact-"
-                "4147e7ee2b15c6ada9832112122225f4-2026-08-02.json"
+    for run_id in (
+        "4147e7ee2b15c6ada9832112122225f4",
+        "a34474048ae9cdd792c2d2c37c9cb4c0",
+    ):
+        validators["gvisor-acquired-artifact-receipt-v1.schema.json"].validate(
+            load(
+                ROOT
+                / "benchmark"
+                / "receipts"
+                / f"phase2-gvisor-acquired-artifact-{run_id}-2026-08-02.json"
             )
         )
-    )
     admission_conformance = {
         "schema": "aragorn/admission-conformance-result/v1",
         "profile": "admission-conformant/v1",

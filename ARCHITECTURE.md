@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, and one exact public-acquisition-to-gVisor artifact result retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, one exact public-acquisition-to-gVisor artifact result, and one bounded-host-trace rerun retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -288,6 +288,13 @@ quarantine receipt, copies its complete source closure into a separate CAS,
 materializes only the implementation-pinned inert entrypoint, and mounts that
 exact file read-only for the same gVisor evidence path. Portable replay verifies
 the recorded acquisition bytes without promoting cross-host filesystem custody.
+The fixed systemd profile now also fails closed unless its trace directory is a
+root-owned hardened tmpfs capped at 8 MiB and 32 inodes with five-file headroom,
+the collector shares PID 1's mount namespace, and the live container shim shares
+that namespace. The packaged mount is ordered before and required by Docker and
+containerd, and current-container trace files are removed after container cleanup.
+The receipt does not retain mount tables, attest every short-lived runtime writer,
+or generalize to other service layouts or daemon namespaces.
 `RECORDED` grants no capture completeness, backend qualification, runtime
 attestation, isolation, admission authority, or Phase 2 exit.
 

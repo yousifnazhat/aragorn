@@ -147,6 +147,41 @@ def verify_github_quarantine_receipt(
 ) -> dict[str, Any]:
     """Replay one caller-selected receipt against its live protected CAS."""
 
+    return _verify_github_quarantine_receipt(
+        cas,
+        expected_receipt_digest,
+        expected_manifest_digest=expected_manifest_digest,
+        expected_gateway_profile_digest=expected_gateway_profile_digest,
+        require_live_custody=True,
+    )
+
+
+def verify_transported_github_quarantine_receipt(
+    cas: CAS,
+    expected_receipt_digest: str,
+    *,
+    expected_manifest_digest: str,
+    expected_gateway_profile_digest: str,
+) -> dict[str, Any]:
+    """Replay exact source bytes without claiming cross-host custody."""
+
+    return _verify_github_quarantine_receipt(
+        cas,
+        expected_receipt_digest,
+        expected_manifest_digest=expected_manifest_digest,
+        expected_gateway_profile_digest=expected_gateway_profile_digest,
+        require_live_custody=False,
+    )
+
+
+def _verify_github_quarantine_receipt(
+    cas: CAS,
+    expected_receipt_digest: str,
+    *,
+    expected_manifest_digest: str,
+    expected_gateway_profile_digest: str,
+    require_live_custody: bool,
+) -> dict[str, Any]:
     try:
         receipt_digest = _digest(
             expected_receipt_digest,
@@ -214,7 +249,8 @@ def verify_github_quarantine_receipt(
         ):
             _digest(document[field], label)
         containment_profile = _containment_profile(document["containment_profile"])
-        _require_host_containment_profile(containment_profile)
+        if require_live_custody:
+            _require_host_containment_profile(containment_profile)
 
         manifest = load_verified_retained_manifest(cas, manifest_digest)
         if manifest["schema"] != "aragorn/github-manifest/v1":
@@ -255,16 +291,30 @@ def verify_github_quarantine_receipt(
             {"root_device", "root_inode", "owner_uid", "mode"},
             "quarantine protected CAS",
         )
-        root_state = _protected_cas_state(cas)
-        expected_custody = {
-            "root_device": root_state.st_dev,
-            "root_inode": root_state.st_ino,
-            "owner_uid": root_state.st_uid,
-            "mode": stat.S_IMODE(root_state.st_mode),
-        }
-        if protected_cas != expected_custody:
+        if require_live_custody:
+            root_state = _protected_cas_state(cas)
+            expected_custody = {
+                "root_device": root_state.st_dev,
+                "root_inode": root_state.st_ino,
+                "owner_uid": root_state.st_uid,
+                "mode": stat.S_IMODE(root_state.st_mode),
+            }
+            if protected_cas != expected_custody:
+                raise GitHubQuarantineReceiptError(
+                    "quarantine receipt protected CAS custody changed"
+                )
+        elif protected_cas["mode"] != 0o700 or any(
+            isinstance(protected_cas[field], bool)
+            or not isinstance(protected_cas[field], int)
+            or protected_cas[field] < minimum
+            for field, minimum in (
+                ("root_device", 1),
+                ("root_inode", 1),
+                ("owner_uid", 0),
+            )
+        ):
             raise GitHubQuarantineReceiptError(
-                "quarantine receipt protected CAS custody changed"
+                "transported quarantine custody record is invalid"
             )
 
         gateway = _exact_object(
@@ -304,6 +354,66 @@ def verify_github_quarantine_receipt(
         raise GitHubQuarantineReceiptError(
             f"cannot verify GitHub quarantine receipt: {exc}"
         ) from exc
+
+
+def derive_github_quarantine_closure(
+    cas: CAS,
+    expected_receipt_digest: str,
+    *,
+    expected_manifest_digest: str,
+    expected_gateway_profile_digest: str,
+) -> dict[str, int]:
+    """Return the exact live verified source-and-receipt closure."""
+
+    document = verify_github_quarantine_receipt(
+        cas,
+        expected_receipt_digest,
+        expected_manifest_digest=expected_manifest_digest,
+        expected_gateway_profile_digest=expected_gateway_profile_digest,
+    )
+    return _quarantine_closure(cas, expected_receipt_digest, document)
+
+
+def derive_transported_github_quarantine_closure(
+    cas: CAS,
+    expected_receipt_digest: str,
+    *,
+    expected_manifest_digest: str,
+    expected_gateway_profile_digest: str,
+) -> dict[str, int]:
+    """Return the exact portable closure without promoting custody."""
+
+    document = verify_transported_github_quarantine_receipt(
+        cas,
+        expected_receipt_digest,
+        expected_manifest_digest=expected_manifest_digest,
+        expected_gateway_profile_digest=expected_gateway_profile_digest,
+    )
+    return _quarantine_closure(cas, expected_receipt_digest, document)
+
+
+def _quarantine_closure(
+    cas: CAS,
+    expected_receipt_digest: str,
+    document: dict[str, Any],
+) -> dict[str, int]:
+    receipt_digest = _digest(expected_receipt_digest, "quarantine receipt digest")
+    closure = _github_source_closure(
+        cas,
+        manifest_digest=document["manifest_digest"],
+        source_proof_digest=document["source_proof_digest"],
+    )
+    for digest, maximum, label in (
+        (
+            document["handoff_manifest_digest"],
+            _MAX_HANDOFF_MANIFEST_BYTES,
+            "handoff manifest",
+        ),
+        (receipt_digest, _MAX_RECEIPT_BYTES, "quarantine receipt"),
+    ):
+        raw = cas.read(digest, max_bytes=maximum)
+        _add_closure_entry(closure, digest, len(raw), label)
+    return dict(sorted(closure.items()))
 
 
 def github_source_closure_digest(

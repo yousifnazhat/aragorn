@@ -11,7 +11,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
-from aragorn import github_gateway
+from aragorn import github_gateway, github_quarantine_receipt
 from aragorn.artifact_closure import canonical_json, load_verified_retained_manifest
 from aragorn.cas import CAS
 from aragorn.github_gateway import (
@@ -214,6 +214,43 @@ class GitHubGatewayTests(unittest.TestCase):
         )
         self.assertEqual(manifest["source"]["commit"], COMMIT)
         self.assertEqual(manifest["files"][0]["path"], "SKILL.md")
+
+        source = CAS(quarantine, read_only=True)
+        with mock.patch(
+            "aragorn.github_quarantine_receipt.sys.platform",
+            "linux",
+        ):
+            closure = github_quarantine_receipt.derive_github_quarantine_closure(
+                source,
+                accepted.quarantine_receipt_digest,
+                expected_manifest_digest=accepted.manifest_digest,
+                expected_gateway_profile_digest=_GATEWAY_PROFILE_DIGEST,
+            )
+        portable = CAS(self.root / "portable")
+        for digest, size in closure.items():
+            portable.put_expected(
+                BytesIO(source.read(digest, max_bytes=size)),
+                expected_digest=digest,
+                max_bytes=size,
+            )
+        replayed = (
+            github_quarantine_receipt.verify_transported_github_quarantine_receipt(
+                portable,
+                accepted.quarantine_receipt_digest,
+                expected_manifest_digest=accepted.manifest_digest,
+                expected_gateway_profile_digest=_GATEWAY_PROFILE_DIGEST,
+            )
+        )
+        self.assertEqual(replayed, retained_receipt)
+        self.assertEqual(
+            github_quarantine_receipt.derive_transported_github_quarantine_closure(
+                portable,
+                accepted.quarantine_receipt_digest,
+                expected_manifest_digest=accepted.manifest_digest,
+                expected_gateway_profile_digest=_GATEWAY_PROFILE_DIGEST,
+            ),
+            closure,
+        )
 
     def test_wire_request_rejects_credentials_ambiguity_and_noncanonical_bytes(
         self,

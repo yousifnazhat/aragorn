@@ -6,8 +6,10 @@ import json
 import tarfile
 import tempfile
 import unittest
+from contextlib import nullcontext
 from io import BytesIO
 from pathlib import Path
+from unittest import mock
 
 from aragorn import gvisor_runtime as runtime
 from aragorn.benchmark_handoff_v2 import (
@@ -61,10 +63,17 @@ _LIVE_CANARY_ARCHIVE_SHA256 = (
 _LIVE_CANARY_RUN_ID = "7838a22fbd2de49b6f833443ca60f45e"
 
 
-def _canary_trace(container_id: str = _CONTAINER_ID) -> bytes:
+def _canary_trace(
+    container_id: str = _CONTAINER_ID,
+    *,
+    artifact: bool = False,
+) -> bytes:
     _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
     _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
-    command = canary_lock["canary"]["command"]
+    profile = (
+        runtime._artifact_profile(canary_lock) if artifact else canary_lock["canary"]
+    )
+    command = profile["command"]
     go_command = ", ".join(json.dumps(value) for value in command)
     environment = json.dumps(
         [
@@ -76,13 +85,29 @@ def _canary_trace(container_id: str = _CONTAINER_ID) -> bytes:
         ],
         separators=(", ", ": "),
     )
-    token = canary_lock["canary"]["token_path"]
-    write = f"AT_FDCWD /, 0xaaa {token}, O_WRONLY|O_CREAT|O_TRUNC, 0o666"
+    target = runtime._ARTIFACT_TARGET if artifact else profile["token_path"]
     execute = (
-        f'0xbbb /bin/sha256sum, 0xccc ["/bin/sha256sum", "{token}"], '
+        f'0xbbb /bin/sha256sum, 0xccc ["/bin/sha256sum", "{target}"], '
         f"0xddd {environment}"
     )
-    read = f"AT_FDCWD /, 0xeee {token}, O_RDONLY|0x0, 0o0"
+    read = f"AT_FDCWD /, 0xeee {target}, O_RDONLY|0x0, 0o0"
+    syscalls = []
+    if not artifact:
+        write = f"AT_FDCWD /, 0xaaa {target}, O_WRONLY|O_CREAT|O_TRUNC, 0o666"
+        syscalls.extend(
+            (
+                f"strace.go:570] [   1:   1] sh E openat({write})",
+                f"strace.go:608] [   1:   1] sh X openat({write}) = 3 (0x3) (2.1µs)",
+            )
+        )
+    syscalls.extend(
+        (
+            f"strace.go:567] [   2:   2] sh E execve({execute})",
+            f"strace.go:605] [   2:   2] sh X execve({execute}) = 0 (0x0) (3µs)",
+            f"strace.go:570] [   2:   2] sha256sum E openat({read})",
+            f"strace.go:608] [   2:   2] sha256sum X openat({read}) = 3 (0x3) (2.6µs)",
+        )
+    )
     messages = [
         (
             "cli.go:276] Version release-"
@@ -101,12 +126,7 @@ def _canary_trace(container_id: str = _CONTAINER_ID) -> bytes:
             "syscalls: openat,execve"
         ),
         f"kernel.go:1293] EXEC: []string{{{go_command}}}",
-        f"strace.go:570] [   1:   1] sh E openat({write})",
-        f"strace.go:608] [   1:   1] sh X openat({write}) = 3 (0x3) (2.1µs)",
-        f"strace.go:567] [   2:   2] sh E execve({execute})",
-        f"strace.go:605] [   2:   2] sh X execve({execute}) = 0 (0x0) (3µs)",
-        f"strace.go:570] [   2:   2] sha256sum E openat({read})",
-        (f"strace.go:608] [   2:   2] sha256sum X openat({read}) = 3 (0x3) (2.6µs)"),
+        *syscalls,
         "cli.go:316] Exiting with status: 0",
     ]
     return b"".join(
@@ -268,6 +288,65 @@ def _container(lock: dict[str, object], phase: str) -> dict[str, object]:
         "NetworkSettings": {"Ports": {}, "Networks": {"none": {}}},
         "State": state,
     }
+
+
+def _artifact_container(
+    runtime_lock: dict[str, object],
+    canary_lock: dict[str, object],
+    phase: str,
+    source: str,
+) -> dict[str, object]:
+    container = _container(runtime_lock, phase)
+    profile = runtime._artifact_profile(canary_lock)
+    container["Path"] = profile["command"][0]
+    container["Args"] = profile["command"][1:]
+    config = container["Config"]
+    host = container["HostConfig"]
+    assert isinstance(config, dict) and isinstance(host, dict)
+    config["Cmd"] = profile["command"]
+    config["User"] = profile["user"]
+    config["Env"] = profile["environment"]
+    config["Labels"] = {"aragorn.acquired-artifact.run_id": _RUN_ID}
+    host.update(
+        {
+            "Runtime": "runsc-systrap-canary",
+            "NetworkMode": profile["network_mode"],
+            "ReadonlyRootfs": profile["read_only"],
+            "CapDrop": profile["cap_drop"],
+            "SecurityOpt": profile["security_opt"],
+            "PidsLimit": profile["pids_limit"],
+            "Memory": profile["memory_bytes"],
+            "MemorySwap": profile["memory_swap_bytes"],
+            "NanoCpus": profile["nano_cpus"],
+            "Ulimits": [
+                {
+                    "Name": "nofile",
+                    "Hard": profile["nofile_hard"],
+                    "Soft": profile["nofile_soft"],
+                }
+            ],
+            "Tmpfs": {profile["tmpfs"]["destination"]: profile["tmpfs"]["options"]},
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": source,
+                    "Target": runtime._ARTIFACT_TARGET,
+                    "ReadOnly": True,
+                }
+            ],
+        }
+    )
+    container["Mounts"] = [
+        {
+            "Type": "bind",
+            "Source": source,
+            "Destination": runtime._ARTIFACT_TARGET,
+            "Mode": "ro",
+            "RW": False,
+            "Propagation": "rprivate",
+        }
+    ]
+    return container
 
 
 def _runner() -> bytes:
@@ -667,6 +746,301 @@ class GVisorRuntimeTests(unittest.TestCase):
                 runtime._parse_canary_trace(
                     changed, runtime_lock, canary_lock, _CONTAINER_ID
                 )
+
+    def test_acquired_artifact_profile_is_bound_and_normalized(self) -> None:
+        _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
+        _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
+        artifact = runtime._AcquiredArtifact(
+            quarantine_receipt_digest="sha256:" + "1" * 64,
+            gateway_profile_digest="sha256:" + "2" * 64,
+            source_closure_digest="sha256:" + "3" * 64,
+            manifest_digest="sha256:" + "4" * 64,
+            tree_digest="sha256:" + "5" * 64,
+            entrypoint_digest="sha256:" + "6" * 64,
+            entrypoint_size=80,
+            materialized_path=Path("/run/aragorn-gvisor-artifact/run.sh"),
+        )
+        expected_events = tuple(
+            canonical_json(event)
+            for event in runtime._artifact_profile(canary_lock)["source_events"]
+        )
+        self.assertEqual(
+            runtime._parse_artifact_trace(
+                _canary_trace(artifact=True),
+                runtime_lock,
+                canary_lock,
+                _CONTAINER_ID,
+            ),
+            expected_events,
+        )
+        bind = {
+            "source": str(artifact.materialized_path),
+            "destination": runtime._ARTIFACT_TARGET,
+        }
+        self.assertEqual(
+            runtime._verify_detonation_container(
+                runtime_lock,
+                canary_lock,
+                _artifact_container(
+                    runtime_lock,
+                    canary_lock,
+                    "prestart",
+                    bind["source"],
+                ),
+                phase="prestart",
+                run_id=_RUN_ID,
+                artifact=artifact,
+                bind_mount=bind,
+            ),
+            _CONTAINER_ID,
+        )
+        request = json.loads(
+            runtime._artifact_run_request(
+                runtime_lock,
+                canary_lock,
+                artifact,
+                run_id=_RUN_ID,
+                container_id=_CONTAINER_ID,
+                implementation_digest="sha256:" + "7" * 64,
+            )
+        )
+        self.assertEqual(request["subject_digest"], artifact.tree_digest)
+        self.assertEqual(request["input_manifest_digest"], artifact.manifest_digest)
+        self.assertEqual(request["input_tree_digest"], artifact.tree_digest)
+        self.assertEqual(request["command"], ["/bin/sh", runtime._ARTIFACT_TARGET])
+        self.assertEqual(
+            request["mount"],
+            {"destination": runtime._ARTIFACT_TARGET, "read_only": True},
+        )
+
+        writable = _artifact_container(
+            runtime_lock,
+            canary_lock,
+            "prestart",
+            bind["source"],
+        )
+        writable["HostConfig"]["Mounts"][0]["ReadOnly"] = False
+        with self.assertRaises(runtime.GVisorRuntimeError):
+            runtime._verify_detonation_container(
+                runtime_lock,
+                canary_lock,
+                writable,
+                phase="prestart",
+                run_id=_RUN_ID,
+                artifact=artifact,
+                bind_mount=bind,
+            )
+
+    def test_acquired_artifact_pins_fail_before_runtime_access(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_root = root / "source-cas"
+            writable_source = CAS(source_root)
+            fixture = (
+                Path(__file__).parents[1]
+                / "benchmark"
+                / "fixtures"
+                / "phase2-inert-detonation"
+            )
+            files = []
+            for path in sorted(item for item in fixture.iterdir() if item.is_file()):
+                raw = path.read_bytes()
+                digest = writable_source.put(BytesIO(raw), max_bytes=len(raw))
+                files.append(
+                    {
+                        "path": path.name,
+                        "size": len(raw),
+                        "digest": digest,
+                        "git_blob_sha1": hashlib.sha1(
+                            f"blob {len(raw)}\0".encode("ascii") + raw
+                        ).hexdigest(),
+                        "executable": path.name == "run.sh",
+                    }
+                )
+            tree_files = [
+                {key: item[key] for key in ("path", "size", "digest", "executable")}
+                for item in files
+            ]
+            tree_digest = (
+                "sha256:" + hashlib.sha256(canonical_json(tree_files)).hexdigest()
+            )
+            self.assertEqual(tree_digest, runtime._ARTIFACT_TREE_DIGEST)
+            manifest = {
+                "schema": "aragorn/github-manifest/v1",
+                "source": {
+                    "kind": "github_commit",
+                    "host": "github.com",
+                    "owner": "yousifnazhat",
+                    "repository": "aragorn",
+                    "commit": "a" * 40,
+                    "repository_hash_algorithm": "sha1",
+                    "commit_tree": "b" * 40,
+                    "skill_path": "benchmark/fixtures/phase2-inert-detonation",
+                    "skill_tree": "c" * 40,
+                    "api_version": "2026-03-10",
+                },
+                "tree_digest": tree_digest,
+                "files": files,
+                "closure": {"scope": "source_tree", "status": "complete"},
+            }
+            for change in ("source", "tree", "entrypoint"):
+                changed_manifest = copy.deepcopy(manifest)
+                if change == "source":
+                    changed_manifest["source"]["owner"] = "other"
+                elif change == "tree":
+                    changed_manifest["tree_digest"] = "sha256:" + "0" * 64
+                else:
+                    next(
+                        item
+                        for item in changed_manifest["files"]
+                        if item["path"] == "run.sh"
+                    )["digest"] = "sha256:" + "0" * 64
+                with (
+                    self.subTest(fixed_profile_change=change),
+                    self.assertRaises(runtime.GVisorRuntimeError),
+                ):
+                    runtime._fixed_artifact_entrypoint(changed_manifest)
+            raw_manifest = canonical_json(manifest)
+            manifest_digest = writable_source.put(
+                BytesIO(raw_manifest),
+                max_bytes=len(raw_manifest),
+            )
+            source = CAS(source_root, read_only=True)
+            output = CAS(root / "output-cas")
+            materialized = root / "materialized"
+            materialized.mkdir(mode=0o700)
+            quarantine_digest = "sha256:" + "d" * 64
+            gateway_digest = "sha256:" + "e" * 64
+            source_closure_digest = "sha256:" + "f" * 64
+            entrypoint_digest = next(
+                item["digest"] for item in files if item["path"] == "run.sh"
+            )
+            self.assertEqual(entrypoint_digest, runtime._ARTIFACT_ENTRYPOINT_DIGEST)
+            expected = {
+                "expected_manifest_digest": manifest_digest,
+                "expected_gateway_profile_digest": gateway_digest,
+            }
+            arguments = {
+                "expected_quarantine_receipt_digest": quarantine_digest,
+                "expected_manifest_digest": manifest_digest,
+                "expected_tree_digest": tree_digest,
+                "expected_gateway_profile_digest": gateway_digest,
+                "expected_entrypoint_digest": entrypoint_digest,
+                "expected_lock_digest": "sha256:" + "1" * 64,
+                "expected_verifier_implementation_digest": "sha256:" + "2" * 64,
+            }
+
+            def verify(_cas: CAS, receipt: str, **pins: str) -> dict[str, object]:
+                if receipt != quarantine_digest or pins != expected:
+                    raise ValueError("wrong caller-held acquisition pin")
+                return {
+                    "tree_digest": tree_digest,
+                    "source_closure_digest": source_closure_digest,
+                }
+
+            def closure(_cas: CAS, receipt: str, **pins: str) -> dict[str, int]:
+                verify(_cas, receipt, **pins)
+                return {
+                    manifest_digest: len(raw_manifest),
+                    **{item["digest"]: item["size"] for item in files},
+                }
+
+            with (
+                mock.patch(
+                    "aragorn.github_quarantine_receipt."
+                    "verify_github_quarantine_receipt",
+                    side_effect=verify,
+                ),
+                mock.patch(
+                    "aragorn.github_quarantine_receipt."
+                    "derive_github_quarantine_closure",
+                    side_effect=closure,
+                ),
+                mock.patch.object(
+                    runtime.tempfile,
+                    "TemporaryDirectory",
+                    return_value=nullcontext(str(materialized)),
+                ),
+                mock.patch.object(
+                    runtime,
+                    "_collect_gvisor_detonation",
+                    return_value="sha256:" + "9" * 64,
+                ) as collect,
+            ):
+                observed = runtime.collect_gvisor_acquired_artifact(
+                    output,
+                    source,
+                    **arguments,
+                )
+                self.assertEqual(observed, "sha256:" + "9" * 64)
+                artifact = collect.call_args.kwargs["artifact"]
+                self.assertEqual(artifact.manifest_digest, manifest_digest)
+                self.assertEqual(artifact.tree_digest, tree_digest)
+                self.assertEqual(artifact.entrypoint_digest, entrypoint_digest)
+                self.assertEqual(
+                    artifact.source_closure_digest,
+                    source_closure_digest,
+                )
+
+                for changed in (
+                    {"expected_quarantine_receipt_digest": "sha256:" + "0" * 64},
+                    {"expected_manifest_digest": "sha256:" + "0" * 64},
+                    {"expected_tree_digest": "sha256:" + "0" * 64},
+                    {"expected_gateway_profile_digest": "sha256:" + "0" * 64},
+                    {"expected_entrypoint_digest": "sha256:" + "0" * 64},
+                ):
+                    collect.reset_mock()
+                    with (
+                        self.subTest(changed=next(iter(changed))),
+                        self.assertRaises(runtime.GVisorRuntimeError),
+                    ):
+                        runtime.collect_gvisor_acquired_artifact(
+                            output,
+                            source,
+                            **(arguments | changed),
+                        )
+                    collect.assert_not_called()
+
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime.collect_gvisor_acquired_artifact(
+                    output,
+                    writable_source,
+                    **arguments,
+                )
+
+            nested_output = CAS(source_root / "nested-output")
+            nested_source_root = output.root / "nested-source"
+            CAS(nested_source_root)
+            nested_source = CAS(nested_source_root, read_only=True)
+            for unsafe_output, unsafe_source in (
+                (nested_output, source),
+                (output, nested_source),
+            ):
+                with self.assertRaises(runtime.GVisorRuntimeError):
+                    runtime.collect_gvisor_acquired_artifact(
+                        unsafe_output,
+                        unsafe_source,
+                        **arguments,
+                    )
+
+    def test_container_cleanup_error_fails_closed(self) -> None:
+        with (
+            mock.patch.object(
+                runtime,
+                "_cleanup_container",
+                return_value="container still exists",
+            ),
+            self.assertRaisesRegex(
+                runtime.GVisorRuntimeError,
+                "Docker canary cleanup failed: container still exists",
+            ),
+        ):
+            runtime._cleanup_container_strict(
+                Path("/usr/bin/docker"),
+                "aragorn-gvisor-artifact-test",
+                {},
+                label="Docker canary",
+            )
 
     def test_public_collector_does_not_accept_caller_evidence(self) -> None:
         with (

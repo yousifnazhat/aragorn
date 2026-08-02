@@ -43,6 +43,87 @@ _LIVE_RECEIPT_DIGEST = (
 _LIVE_HANDOFF_DIGEST = (
     "sha256:125898f127d08f7afa36f4ff63dcdb75bf99b7a6deda63765923436eb6f5baf3"
 )
+_LIVE_CANARY_RECEIPT_DIGEST = (
+    "sha256:8e520d91b4782e806e7e28a5892e90f1be41dc5785d09cecb699dc42c0d040d0"
+)
+_LIVE_CANARY_HANDOFF_DIGEST = (
+    "sha256:8053b7d191f9ad779de8b3b52060860af6fd2ff423fed058eed2e282a536e6f4"
+)
+_LIVE_CANARY_IMPLEMENTATION_DIGEST = (
+    "sha256:bb60beb32bb620b1025dcdf5fdc874819d4e08b894285b79e1e883846f8bc79d"
+)
+_LIVE_CANARY_LOCK_DIGEST = (
+    "sha256:70556d2b8ae0d30f199f5bd6d7df2c1df11071a9b61120954f9b76f6870839ed"
+)
+_LIVE_CANARY_ARCHIVE_SHA256 = (
+    "abc8bd333047ab02511cba63ae06e08e90a627d8665fb6994bebeac582bf5bf9"
+)
+_LIVE_CANARY_RUN_ID = "7838a22fbd2de49b6f833443ca60f45e"
+
+
+def _canary_trace(container_id: str = _CONTAINER_ID) -> bytes:
+    _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
+    _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
+    command = canary_lock["canary"]["command"]
+    go_command = ", ".join(json.dumps(value) for value in command)
+    environment = json.dumps(
+        [
+            f"HOSTNAME={container_id[:12]}",
+            "SHLVL=1",
+            "HOME=/home",
+            "PATH=/bin",
+            "PWD=/",
+        ],
+        separators=(", ", ": "),
+    )
+    token = canary_lock["canary"]["token_path"]
+    write = f"AT_FDCWD /, 0xaaa {token}, O_WRONLY|O_CREAT|O_TRUNC, 0o666"
+    execute = (
+        f'0xbbb /bin/sha256sum, 0xccc ["/bin/sha256sum", "{token}"], '
+        f"0xddd {environment}"
+    )
+    read = f"AT_FDCWD /, 0xeee {token}, O_RDONLY|0x0, 0o0"
+    messages = [
+        (
+            "cli.go:276] Version release-"
+            f"{runtime_lock['release']['version']}, go1.test, arm64, 2 CPUs, linux, "
+            "PID 1, PPID 0, UID 65534, GID 65534"
+        ),
+        (
+            "cli.go:278] Args: [runsc-sandbox --network=none boot "
+            f"--bundle=/runtime/{container_id} {container_id}]"
+        ),
+        "config.go:533] Platform: systrap",
+        "config.go:535] FileAccess: exclusive / Directfs: false / Overlay: root:self",
+        "config.go:536] Network: none",
+        (
+            "config.go:539] Debug: true. Strace: true, max size: 256, "
+            "syscalls: openat,execve"
+        ),
+        f"kernel.go:1293] EXEC: []string{{{go_command}}}",
+        f"strace.go:570] [   1:   1] sh E openat({write})",
+        f"strace.go:608] [   1:   1] sh X openat({write}) = 3 (0x3) (2.1µs)",
+        f"strace.go:567] [   2:   2] sh E execve({execute})",
+        f"strace.go:605] [   2:   2] sh X execve({execute}) = 0 (0x0) (3µs)",
+        f"strace.go:570] [   2:   2] sha256sum E openat({read})",
+        (f"strace.go:608] [   2:   2] sha256sum X openat({read}) = 3 (0x3) (2.6µs)"),
+        "cli.go:316] Exiting with status: 0",
+    ]
+    return b"".join(
+        json.dumps(
+            {
+                "msg": message,
+                "level": "info",
+                "time": "2026-08-02T14:00:00.000001-04:00",
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        + b"\n"
+        for message in messages
+    )
+
+
 _LIVE_IMPLEMENTATION_DIGEST = (
     "sha256:92594d82e743616019846bcb5af94def01cb7637f967722efa8422ed50e9178c"
 )
@@ -418,6 +499,47 @@ class GVisorRuntimeTests(unittest.TestCase):
             self.assertEqual(cas.read(_LIVE_RECEIPT_DIGEST), checked_in_receipt)
             self.assertEqual(receipt["run_id"], "b86096ddeed564a5938ae9dc1819c7a8")
 
+    def test_checked_in_live_canary_closure_imports_and_replays(self) -> None:
+        root = Path(__file__).parents[1]
+        stem = f"phase2-gvisor-detonation-canary-{_LIVE_CANARY_RUN_ID}-2026-08-02"
+        archive = root / "benchmark" / "evidence" / f"{stem}.tar.gz"
+        checked_in_receipt = (
+            root / "benchmark" / "receipts" / f"{stem}.json"
+        ).read_bytes()
+        self.assertEqual(
+            _LIVE_CANARY_ARCHIVE_SHA256,
+            hashlib.sha256(archive.read_bytes()).hexdigest(),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            handoff = Path(temporary) / "handoff"
+            handoff.mkdir(mode=0o700)
+            with tarfile.open(archive, "r:gz") as bundle:
+                bundle.extractall(handoff, filter="data")
+            cas = CAS(Path(temporary) / "cas")
+            imported = import_declared_byte_transport(
+                handoff,
+                cas,
+                expected_manifest_digest=_LIVE_CANARY_HANDOFF_DIGEST,
+                expected_kind="runtime_evidence",
+                expected_root_digest=_LIVE_CANARY_RECEIPT_DIGEST,
+            )
+            closure = runtime.derive_gvisor_detonation_canary_closure(
+                cas,
+                _LIVE_CANARY_RECEIPT_DIGEST,
+                expected_lock_digest=_LIVE_CANARY_LOCK_DIGEST,
+                expected_verifier_implementation_digest=(
+                    _LIVE_CANARY_IMPLEMENTATION_DIGEST
+                ),
+            )
+            self.assertEqual(
+                {item["digest"]: item["size"] for item in imported["blobs"]},
+                closure,
+            )
+            self.assertEqual(cas.read(_LIVE_CANARY_RECEIPT_DIGEST), checked_in_receipt)
+            receipt = json.loads(checked_in_receipt)
+            self.assertEqual(receipt["run_id"], _LIVE_CANARY_RUN_ID)
+            self.assertEqual(receipt["status"], "RECORDED")
+
     def test_runtime_path_smoke_replays_and_fails_closed_on_drift(self) -> None:
         lock_raw, lock = runtime.load_gvisor_runtime_lock()
         evidence = _evidence(lock)
@@ -509,6 +631,41 @@ class GVisorRuntimeTests(unittest.TestCase):
                     forged_digest,
                     expected_lock_digest=lock_digest,
                     expected_verifier_implementation_digest=_IMPLEMENTATION_DIGEST,
+                )
+
+    def test_canary_trace_is_strictly_paired_and_normalized(self) -> None:
+        _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
+        _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
+        trace = _canary_trace()
+        self.assertEqual(
+            runtime._parse_canary_trace(
+                trace, runtime_lock, canary_lock, _CONTAINER_ID
+            ),
+            tuple(
+                canonical_json(event)
+                for event in canary_lock["canary"]["source_events"]
+            ),
+        )
+
+        mutations = (
+            trace.replace(b"Network: none", b"Network: sandbox", 1),
+            trace.replace(b"O_RDONLY|0x0", b"O_RDONLY|O_CLOEXEC", 1),
+            trace.replace(b"= 0 (0x0)", b"= -1 errno=1", 1),
+            trace.replace(
+                b"cli.go:316] Exiting with status: 0",
+                b"cli.go:316] Exiting with status: 1",
+                1,
+            ),
+            trace.replace(b"sha256sum X openat", b"sha256sum E openat", 1),
+            trace[:-1],
+        )
+        for changed in mutations:
+            with (
+                self.subTest(changed=hashlib.sha256(changed).hexdigest()),
+                self.assertRaises(runtime.GVisorRuntimeError),
+            ):
+                runtime._parse_canary_trace(
+                    changed, runtime_lock, canary_lock, _CONTAINER_ID
                 )
 
     def test_public_collector_does_not_accept_caller_evidence(self) -> None:

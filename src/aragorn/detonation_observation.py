@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Collection
@@ -90,6 +91,45 @@ def retain_detonation_observation(
 ) -> str:
     """Retain one raw source event and its non-authoritative normalized category."""
 
+    source_event_digest, observation_digest, raw = (
+        derive_detonation_observation_binding(
+            source_event,
+            subject_digest=subject_digest,
+            input_manifest_digest=input_manifest_digest,
+            input_tree_digest=input_tree_digest,
+            run_request_digest=run_request_digest,
+            normalizer_implementation_digest=normalizer_implementation_digest,
+        )
+    )
+    try:
+        cas.put_expected(
+            BytesIO(source_event),
+            expected_digest=source_event_digest,
+            max_bytes=MAX_SOURCE_EVENT_BYTES,
+        )
+        cas.put_expected(
+            BytesIO(raw),
+            expected_digest=observation_digest,
+            max_bytes=_MAX_OBSERVATION_BYTES,
+        )
+        return observation_digest
+    except CASError as exc:
+        raise DetonationObservationError(
+            "CAS_FAILURE", f"cannot retain detonation observation: {exc}"
+        ) from exc
+
+
+def derive_detonation_observation_binding(
+    source_event: bytes,
+    *,
+    subject_digest: str,
+    input_manifest_digest: str,
+    input_tree_digest: str,
+    run_request_digest: str,
+    normalizer_implementation_digest: str,
+) -> tuple[str, str, bytes]:
+    """Derive one source/observation binding without mutating the CAS."""
+
     identity = _identity(
         subject_digest,
         input_manifest_digest,
@@ -99,9 +139,7 @@ def retain_detonation_observation(
     )
     category = _source_capability(source_event)
     try:
-        source_event_digest = cas.put(
-            BytesIO(source_event), max_bytes=MAX_SOURCE_EVENT_BYTES
-        )
+        source_event_digest = "sha256:" + hashlib.sha256(source_event).hexdigest()
         document = {
             "schema": SCHEMA,
             "authority": AUTHORITY,
@@ -110,10 +148,11 @@ def retain_detonation_observation(
             "capability": category,
         }
         raw = canonical_json(document)
-        return cas.put(BytesIO(raw), max_bytes=_MAX_OBSERVATION_BYTES)
-    except (CASError, WorkerProtocolError) as exc:
+        observation_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+        return source_event_digest, observation_digest, raw
+    except WorkerProtocolError as exc:
         raise DetonationObservationError(
-            "CAS_FAILURE", f"cannot retain detonation observation: {exc}"
+            "OBSERVATION_INVALID", f"cannot derive detonation observation: {exc}"
         ) from exc
 
 

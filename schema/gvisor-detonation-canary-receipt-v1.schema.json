@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/gvisor-detonation-canary-receipt-v1.schema.json",
+  "title": "Aragorn fixed same-run gVisor detonation canary receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "lock_digest",
+    "runtime_lock_digest",
+    "implementation_digest",
+    "run_id",
+    "captured_at",
+    "subject_digest",
+    "input_manifest_digest",
+    "input_tree_digest",
+    "run_request_digest",
+    "normalizer_implementation_digest",
+    "capability_diff_receipt_digest",
+    "evidence",
+    "status"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/gvisor-detonation-canary-receipt/v1"
+    },
+    "authority": {
+      "const": "SAME_RUN_PINNED_GVISOR_CANARY_EVIDENCE_ONLY_NOT_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_OR_ADMISSION_AUTHORITY"
+    },
+    "lock_digest": {"$ref": "#/$defs/digest"},
+    "runtime_lock_digest": {"$ref": "#/$defs/digest"},
+    "implementation_digest": {"$ref": "#/$defs/digest"},
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "captured_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "subject_digest": {"$ref": "#/$defs/digest"},
+    "input_manifest_digest": {"$ref": "#/$defs/digest"},
+    "input_tree_digest": {"$ref": "#/$defs/digest"},
+    "run_request_digest": {"$ref": "#/$defs/digest"},
+    "normalizer_implementation_digest": {"$ref": "#/$defs/digest"},
+    "capability_diff_receipt_digest": {"$ref": "#/$defs/digest"},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_version",
+        "installed_binaries",
+        "daemon_config",
+        "runtime_registration",
+        "docker_executable",
+        "helper_implementations",
+        "runner_pre",
+        "runner_post",
+        "image_inspect",
+        "container_pre_inspect",
+        "container_live_inspect",
+        "container_processes",
+        "container_stdout",
+        "container_stderr",
+        "container_post_inspect",
+        "backend_log_manifest",
+        "container_cleanup"
+      ],
+      "properties": {
+        "runtime_version": {"$ref": "#/$defs/digest"},
+        "installed_binaries": {"$ref": "#/$defs/digest"},
+        "daemon_config": {"$ref": "#/$defs/digest"},
+        "runtime_registration": {"$ref": "#/$defs/digest"},
+        "docker_executable": {"$ref": "#/$defs/digest"},
+        "helper_implementations": {"$ref": "#/$defs/digest"},
+        "runner_pre": {"$ref": "#/$defs/digest"},
+        "runner_post": {"$ref": "#/$defs/digest"},
+        "image_inspect": {"$ref": "#/$defs/digest"},
+        "container_pre_inspect": {"$ref": "#/$defs/digest"},
+        "container_live_inspect": {"$ref": "#/$defs/digest"},
+        "container_processes": {"$ref": "#/$defs/digest"},
+        "container_stdout": {"$ref": "#/$defs/digest"},
+        "container_stderr": {"$ref": "#/$defs/digest"},
+        "container_post_inspect": {"$ref": "#/$defs/digest"},
+        "backend_log_manifest": {"$ref": "#/$defs/digest"},
+        "container_cleanup": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "status": {"const": "RECORDED"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

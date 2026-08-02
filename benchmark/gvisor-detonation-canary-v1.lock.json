@@ -1,0 +1,83 @@
+{
+  "schema": "aragorn/gvisor-detonation-canary-lock/v1",
+  "authority": "PIN_ONLY_NOT_RUNTIME_ATTESTATION_OR_DETONATION_AUTHORITY",
+  "runtime_lock_digest": "sha256:f56bfc3e06e26e682c609d51811edf341d3f688b67f13104883265f515efe602",
+  "daemon_config_digest": "sha256:524100d9568a3bd3bdd3fede8596b9f94d79866528bbe3d9af1ae6e394876330",
+  "runtime": {
+    "name": "runsc-systrap-canary",
+    "path": "/usr/local/bin/runsc",
+    "arguments": [
+      "--platform=systrap",
+      "--directfs=false",
+      "--network=none",
+      "--strace=true",
+      "--strace-syscalls=openat,execve",
+      "--strace-log-size=256",
+      "--debug=true",
+      "--debug-log=/var/log/aragorn-p2-docker-canary/%ID%.%CID%.%COMMAND%.jsonl",
+      "--debug-log-format=json"
+    ]
+  },
+  "trace": {
+    "directory": "/var/log/aragorn-p2-docker-canary",
+    "format": "json-lines",
+    "syscalls": [
+      "execve",
+      "openat"
+    ],
+    "commands": [
+      "boot",
+      "create",
+      "gofer",
+      "start"
+    ],
+    "max_log_bytes": 1048576,
+    "max_log_lines": 4096,
+    "max_line_bytes": 32768
+  },
+  "canary": {
+    "command": [
+      "/bin/sh",
+      "-c",
+      "umask 077; printf Aragorn-P2-canary-v1 > /tmp/aragorn-canary; /bin/sha256sum /tmp/aragorn-canary >/dev/null; /bin/sleep 5; /bin/true"
+    ],
+    "environment": [
+      "PATH=/bin"
+    ],
+    "user": "65534:65534",
+    "network_mode": "none",
+    "read_only": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "security_opt": [
+      "no-new-privileges=true"
+    ],
+    "pids_limit": 64,
+    "memory_bytes": 67108864,
+    "memory_swap_bytes": 67108864,
+    "nano_cpus": 250000000,
+    "nofile_soft": 1024,
+    "nofile_hard": 1024,
+    "tmpfs": {
+      "destination": "/tmp",
+      "options": "rw,noexec,nosuid,nodev,size=1048576"
+    },
+    "token": "Aragorn-P2-canary-v1",
+    "token_path": "/tmp/aragorn-canary",
+    "token_digest": "sha256:52346b7fee353aa2ee254570c19868ded80af2a0115e92359312ee83b06d5000",
+    "declared_capabilities": [],
+    "source_events": [
+      {
+        "schema": "aragorn/detonation-source-event/v1",
+        "operation": "file-open-read",
+        "detail": "gvisor-json-strace:openat:O_RDONLY:/tmp/aragorn-canary"
+      },
+      {
+        "schema": "aragorn/detonation-source-event/v1",
+        "operation": "process-exec",
+        "detail": "gvisor-json-strace:execve:/bin/sha256sum"
+      }
+    ]
+  }
+}

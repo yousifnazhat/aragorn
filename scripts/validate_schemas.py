@@ -870,6 +870,17 @@ def main() -> int:
             / "phase2-gvisor-runtime-smoke-b86096ddeed564a5938ae9dc1819c7a8-2026-08-02.json"
         )
     )
+    validators["gvisor-detonation-canary-receipt-v1.schema.json"].validate(
+        load(
+            ROOT
+            / "benchmark"
+            / "receipts"
+            / (
+                "phase2-gvisor-detonation-canary-"
+                "7838a22fbd2de49b6f833443ca60f45e-2026-08-02.json"
+            )
+        )
+    )
     admission_conformance = {
         "schema": "aragorn/admission-conformance-result/v1",
         "profile": "admission-conformant/v1",

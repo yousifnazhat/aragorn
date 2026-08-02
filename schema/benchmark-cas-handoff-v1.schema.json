@@ -75,14 +75,14 @@
       "then": {
         "properties": {
           "blobs": {
-            "maxItems": 26,
+            "maxItems": 64,
             "items": {
               "properties": {
-                "size": {"maximum": 1048576}
+                "size": {"maximum": 2097152}
               }
             }
           },
-          "total_bytes": {"maximum": 4194304}
+          "total_bytes": {"maximum": 33554432}
         }
       }
     }

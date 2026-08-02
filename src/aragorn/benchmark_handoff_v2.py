@@ -45,9 +45,9 @@ _LIMITS = {
         "total_bytes": 216 * 1024 * 1024,
     },
     "runtime_evidence": {
-        "blobs": 26,
-        "blob_bytes": 1024 * 1024,
-        "total_bytes": 4 * 1024 * 1024,
+        "blobs": 64,
+        "blob_bytes": 2 * 1024 * 1024,
+        "total_bytes": 32 * 1024 * 1024,
     },
 }
 _MAX_MANIFEST_BYTES = 8 * 1024 * 1024

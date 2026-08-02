@@ -115,6 +115,7 @@ EXPECTED_CONTRACTS = {
     "detonation-observation-v1.schema.json": "aragorn/detonation-observation/v1",
     "detonation-source-event-v1.schema.json": "aragorn/detonation-source-event/v1",
     "error-v1.schema.json": "aragorn/error/v1",
+    "gvisor-detonation-canary-receipt-v1.schema.json": "aragorn/gvisor-detonation-canary-receipt/v1",
     "github-expansion-result-v1.schema.json": "aragorn/github-expansion-result/v1",
     "github-expansion-v1.schema.json": "aragorn/github-expansion/v1",
     "github-gateway-request-v1.schema.json": "aragorn/github-gateway-request/v1",

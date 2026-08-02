@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -38,13 +39,25 @@ from .oci_worker_protocol import WorkerProtocolError, canonical_json
 
 ROOT = Path(__file__).parents[2]
 LOCK = ROOT / "benchmark" / "gvisor-runtime-v1.lock.json"
+CANARY_LOCK = ROOT / "benchmark" / "gvisor-detonation-canary-v1.lock.json"
 SCHEMA = "aragorn/gvisor-runtime-smoke-receipt/v1"
 LOCK_SCHEMA = "aragorn/gvisor-runtime-lock/v1"
 IMPLEMENTATION_SCHEMA = "aragorn/gvisor-runtime-implementation/v1"
+CANARY_SCHEMA = "aragorn/gvisor-detonation-canary-receipt/v1"
+CANARY_LOCK_SCHEMA = "aragorn/gvisor-detonation-canary-lock/v1"
+CANARY_IMPLEMENTATION_SCHEMA = "aragorn/gvisor-detonation-canary-implementation/v1"
+CANARY_RUN_REQUEST_SCHEMA = "aragorn/gvisor-detonation-canary-run-request/v1"
+CANARY_LOG_MANIFEST_SCHEMA = "aragorn/gvisor-detonation-canary-log-manifest/v1"
+CANARY_CLEANUP_SCHEMA = "aragorn/gvisor-detonation-canary-cleanup/v1"
 AUTHORITY = (
     "RUNTIME_PATH_SMOKE_ONLY_NOT_RUNTIME_ATTESTATION_ISOLATION_OR_DETONATION_AUTHORITY"
 )
 LOCK_AUTHORITY = "PIN_ONLY_NOT_RUNTIME_ATTESTATION"
+CANARY_AUTHORITY = (
+    "SAME_RUN_PINNED_GVISOR_CANARY_EVIDENCE_ONLY_NOT_CAPTURE_COMPLETENESS_RUNTIME_"
+    "ATTESTATION_ISOLATION_OR_ADMISSION_AUTHORITY"
+)
+CANARY_LOCK_AUTHORITY = "PIN_ONLY_NOT_RUNTIME_ATTESTATION_OR_DETONATION_AUTHORITY"
 
 _MAX_LOCK_BYTES = 64 * 1024
 _MAX_RECEIPT_BYTES = 64 * 1024
@@ -55,6 +68,9 @@ _MAX_IMPLEMENTATION_MANIFEST_BYTES = 64 * 1024
 _MAX_IMPLEMENTATION_SOURCE_BYTES = 1024 * 1024
 _MAX_RUNTIME_BINARY_BYTES = 128 * 1024 * 1024
 _MAX_DOCKER_BINARY_BYTES = 512 * 1024 * 1024
+_MAX_CANARY_RUN_REQUEST_BYTES = 64 * 1024
+_MAX_CANARY_LOG_MANIFEST_BYTES = 64 * 1024
+_MAX_CANARY_CLEANUP_BYTES = 4 * 1024
 _DOCKER_TIMEOUT_SECONDS = 30.0
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _SHA512 = re.compile(r"sha512:[0-9a-f]{128}\Z")
@@ -77,6 +93,11 @@ _EVIDENCE_LIMITS = {
     "container_stderr": _MAX_STREAM_BYTES,
     "container_post_inspect": _MAX_JSON_EVIDENCE_BYTES,
 }
+_CANARY_EVIDENCE_LIMITS = {
+    **_EVIDENCE_LIMITS,
+    "backend_log_manifest": _MAX_CANARY_LOG_MANIFEST_BYTES,
+    "container_cleanup": _MAX_CANARY_CLEANUP_BYTES,
+}
 _RECEIPT_FIELDS = {
     "schema",
     "authority",
@@ -84,6 +105,23 @@ _RECEIPT_FIELDS = {
     "implementation_digest",
     "run_id",
     "captured_at",
+    "evidence",
+    "status",
+}
+_CANARY_RECEIPT_FIELDS = {
+    "schema",
+    "authority",
+    "lock_digest",
+    "runtime_lock_digest",
+    "implementation_digest",
+    "run_id",
+    "captured_at",
+    "subject_digest",
+    "input_manifest_digest",
+    "input_tree_digest",
+    "run_request_digest",
+    "normalizer_implementation_digest",
+    "capability_diff_receipt_digest",
     "evidence",
     "status",
 }
@@ -100,6 +138,21 @@ _HELPER_MODULES = (
     "oci_worker_protocol.py",
 )
 _IMPLEMENTATION_MODULES = ("gvisor_runtime.py", *_HELPER_MODULES)
+_CANARY_HELPER_MODULES = (
+    *_HELPER_MODULES,
+    "behavior_capability_diff.py",
+    "detonation_observation.py",
+)
+_CANARY_IMPLEMENTATION_MODULES = ("gvisor_runtime.py", *_CANARY_HELPER_MODULES)
+_TRACE_MESSAGE = re.compile(
+    r"strace\.go:\d+\] \[\s*(?P<tgid>\d+):\s*(?P<tid>\d+)\] "
+    r"(?P<process>\S+) (?P<phase>[EX]) (?P<body>.+)\Z"
+)
+_TRACE_CALL = re.compile(r"(?P<syscall>openat|execve)\((?P<arguments>.*)\)\Z")
+_TRACE_DURATION = re.compile(r"[0-9.]+(?:ns|µs|ms|s)\Z")
+_TRACE_TIME = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:\d{2}\Z"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +164,16 @@ class _FileCapability:
     metadata: dict[str, int | str]
 
 
+@dataclass(frozen=True, slots=True)
+class _VerifiedCanary:
+    receipt: dict[str, Any]
+    lock: dict[str, Any]
+    implementation_files: dict[str, str]
+    evidence: dict[str, bytes]
+    identity: dict[str, str]
+    observation_bindings: dict[str, str]
+
+
 class GVisorRuntimeError(ValueError):
     """A gVisor pin or runtime-path smoke failed closed."""
 
@@ -120,6 +183,20 @@ def load_gvisor_runtime_lock(
 ) -> tuple[bytes, dict[str, Any]]:
     """Load and validate the signed-repository trust pin."""
 
+    raw = _read_lock(path, "gVisor runtime")
+    return raw, _runtime_lock(raw)
+
+
+def load_gvisor_detonation_canary_lock(
+    path: str | Path = CANARY_LOCK,
+) -> tuple[bytes, dict[str, Any]]:
+    """Load and validate the fixed traced-canary trust pin."""
+
+    raw = _read_lock(path, "gVisor detonation canary")
+    return raw, _canary_lock(raw)
+
+
+def _read_lock(path: str | Path, label: str) -> bytes:
     try:
         candidate = Path(path).expanduser().resolve(strict=True)
         with candidate.open("rb") as source:
@@ -128,15 +205,52 @@ def load_gvisor_runtime_lock(
                 not stat.S_ISREG(metadata.st_mode)
                 or not 0 < metadata.st_size <= _MAX_LOCK_BYTES
             ):
-                raise GVisorRuntimeError(
-                    "gVisor runtime lock is not a bounded regular file"
-                )
+                raise GVisorRuntimeError(f"{label} lock is not a bounded regular file")
             raw = source.read(_MAX_LOCK_BYTES + 1)
             if len(raw) != metadata.st_size or os.fstat(source.fileno()) != metadata:
-                raise GVisorRuntimeError("gVisor runtime lock changed while read")
+                raise GVisorRuntimeError(f"{label} lock changed while read")
     except (OSError, RuntimeError) as exc:
-        raise GVisorRuntimeError(f"cannot read gVisor runtime lock: {exc}") from exc
-    return raw, _runtime_lock(raw)
+        raise GVisorRuntimeError(f"cannot read {label} lock: {exc}") from exc
+    return raw
+
+
+def _retain_implementation(
+    cas: CAS,
+    *,
+    expected_digest: str,
+    schema: str,
+    modules: tuple[str, ...],
+    opened: list[_FileCapability],
+    label: str,
+) -> tuple[dict[str, str], dict[str, _FileCapability]]:
+    source_root = Path(__file__).resolve(strict=True).parent
+    capabilities: dict[str, _FileCapability] = {}
+    for module_name in modules:
+        capability = _open_file_capability(
+            source_root / module_name,
+            expected_digest=None,
+            maximum=_MAX_IMPLEMENTATION_SOURCE_BYTES,
+            executable=False,
+            label=f"{label} implementation {module_name}",
+        )
+        opened.append(capability)
+        capabilities[module_name] = capability
+    files = {module: capability.digest for module, capability in capabilities.items()}
+    raw = canonical_json({"schema": schema, "files": files})
+    if _raw_digest(raw) != expected_digest:
+        raise GVisorRuntimeError(f"{label} implementation identity changed")
+    cas.put_expected(
+        BytesIO(raw),
+        expected_digest=expected_digest,
+        max_bytes=_MAX_IMPLEMENTATION_MANIFEST_BYTES,
+    )
+    for capability in capabilities.values():
+        cas.put_expected(
+            BytesIO(_read_open_file(capability, _MAX_IMPLEMENTATION_SOURCE_BYTES)),
+            expected_digest=capability.digest,
+            max_bytes=_MAX_IMPLEMENTATION_SOURCE_BYTES,
+        )
+    return files, capabilities
 
 
 def collect_gvisor_runtime_smoke(
@@ -160,43 +274,14 @@ def collect_gvisor_runtime_smoke(
     container_name: str | None = None
     docker_environment: dict[str, str] | None = None
     try:
-        source_root = Path(__file__).resolve(strict=True).parent
-        implementation_capabilities: dict[str, _FileCapability] = {}
-        for module_name in _IMPLEMENTATION_MODULES:
-            capability = _open_file_capability(
-                source_root / module_name,
-                expected_digest=None,
-                maximum=_MAX_IMPLEMENTATION_SOURCE_BYTES,
-                executable=False,
-                label=f"gVisor runtime implementation {module_name}",
-            )
-            opened.append(capability)
-            implementation_capabilities[module_name] = capability
-        implementation_files = {
-            module: capability.digest
-            for module, capability in implementation_capabilities.items()
-        }
-        implementation_raw = canonical_json(
-            {
-                "schema": IMPLEMENTATION_SCHEMA,
-                "files": implementation_files,
-            }
-        )
-        if _raw_digest(implementation_raw) != expected_implementation:
-            raise GVisorRuntimeError("gVisor runtime implementation identity changed")
-        cas.put_expected(
-            BytesIO(implementation_raw),
+        implementation_files, implementation_capabilities = _retain_implementation(
+            cas,
             expected_digest=expected_implementation,
-            max_bytes=_MAX_IMPLEMENTATION_MANIFEST_BYTES,
+            schema=IMPLEMENTATION_SCHEMA,
+            modules=_IMPLEMENTATION_MODULES,
+            opened=opened,
+            label="gVisor runtime",
         )
-        for capability in implementation_capabilities.values():
-            cas.put_expected(
-                BytesIO(
-                    _read_open_file(capability, _MAX_IMPLEMENTATION_SOURCE_BYTES)
-                ),
-                expected_digest=capability.digest,
-                max_bytes=_MAX_IMPLEMENTATION_SOURCE_BYTES,
-            )
         helper_implementations = [
             {
                 "module": module,
@@ -290,7 +375,13 @@ def collect_gvisor_runtime_smoke(
             container_name = f"aragorn-gvisor-smoke-{run_id}"
             create = _docker_result(
                 docker.path,
-                _create_arguments(lock, container_name, run_id),
+                _create_arguments(
+                    image=lock["image"]["reference"],
+                    profile=lock["smoke"],
+                    runtime=lock["runtime"]["name"],
+                    container_name=container_name,
+                    run_label=f"aragorn.runtime-smoke.run_id={run_id}",
+                ),
                 env=docker_environment,
                 label="Docker create",
             )
@@ -418,6 +509,383 @@ def collect_gvisor_runtime_smoke(
             os.close(capability.descriptor)
 
 
+def collect_gvisor_detonation_canary(
+    cas: CAS,
+    *,
+    expected_lock_digest: str,
+    expected_verifier_implementation_digest: str,
+    lock_path: str | Path = CANARY_LOCK,
+    runtime_lock_path: str | Path = LOCK,
+    docker_executable: str | os.PathLike[str] = "docker",
+) -> str:
+    """Capture one fixed same-run gVisor trace and replay its category diff."""
+
+    if not sys.platform.startswith("linux") or os.geteuid() != 0:
+        raise GVisorRuntimeError("gVisor detonation canary capture requires Linux root")
+    expected_lock = _digest(expected_lock_digest, "expected canary lock")
+    expected_implementation = _digest(
+        expected_verifier_implementation_digest,
+        "expected canary verifier implementation",
+    )
+    opened: list[_FileCapability] = []
+    container_name: str | None = None
+    docker_environment: dict[str, str] | None = None
+    docker_path: Path | None = None
+    coordination = -1
+    try:
+        coordination = os.open(
+            "/run/lock/aragorn-gvisor-canary.lock",
+            os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        try:
+            fcntl.flock(coordination, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise GVisorRuntimeError(
+                "another gVisor detonation canary capture is active"
+            ) from exc
+
+        implementation_files, implementation_capabilities = _retain_implementation(
+            cas,
+            expected_digest=expected_implementation,
+            schema=CANARY_IMPLEMENTATION_SCHEMA,
+            modules=_CANARY_IMPLEMENTATION_MODULES,
+            opened=opened,
+            label="gVisor detonation canary",
+        )
+        helper_implementations = [
+            {
+                "module": module,
+                "file": implementation_capabilities[module].metadata,
+            }
+            for module in _CANARY_HELPER_MODULES
+        ]
+        canary_file = _open_file_capability(
+            Path(lock_path).expanduser().resolve(strict=True),
+            expected_digest=expected_lock,
+            maximum=_MAX_LOCK_BYTES,
+            executable=False,
+            label="gVisor detonation canary lock",
+            retain=cas,
+        )
+        opened.append(canary_file)
+        canary_lock = _canary_lock(_read_open_file(canary_file, _MAX_LOCK_BYTES))
+        runtime_lock_digest = canary_lock["runtime_lock_digest"]
+        runtime_file = _open_file_capability(
+            Path(runtime_lock_path).expanduser().resolve(strict=True),
+            expected_digest=runtime_lock_digest,
+            maximum=_MAX_LOCK_BYTES,
+            executable=False,
+            label="gVisor runtime lock",
+            retain=cas,
+        )
+        opened.append(runtime_file)
+        runtime_lock = _runtime_lock(_read_open_file(runtime_file, _MAX_LOCK_BYTES))
+
+        installed = []
+        runsc: _FileCapability | None = None
+        for binary in runtime_lock["binaries"]:
+            capability = _open_file_capability(
+                Path(binary["path"]),
+                expected_digest=binary["digest"],
+                maximum=_MAX_RUNTIME_BINARY_BYTES,
+                executable=True,
+                label=f"gVisor binary {binary['path']}",
+            )
+            opened.append(capability)
+            installed.append(capability.metadata)
+            if binary["path"] == canary_lock["runtime"]["path"]:
+                runsc = capability
+        if runsc is None:
+            raise GVisorRuntimeError("gVisor canary runtime binary is absent")
+        daemon = _open_file_capability(
+            Path("/etc/docker/daemon.json"),
+            expected_digest=canary_lock["daemon_config_digest"],
+            maximum=_MAX_JSON_EVIDENCE_BYTES,
+            executable=False,
+            label="Docker daemon configuration",
+        )
+        opened.append(daemon)
+
+        docker = resolve_docker(docker_executable)
+        docker_path = docker.path
+        _verify_protected_path(docker.path)
+        run_id = secrets.token_hex(16)
+        captured_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        evidence: dict[str, bytes] = {
+            "installed_binaries": canonical_json(installed),
+            "daemon_config": _read_open_file(daemon, _MAX_JSON_EVIDENCE_BYTES),
+            "docker_executable": canonical_json(
+                _path_metadata(docker.path, docker.digest)
+            ),
+            "helper_implementations": canonical_json(helper_implementations),
+        }
+        pre_runner = _RunnerReceiptBuffer()
+        post_runner = _RunnerReceiptBuffer()
+
+        with tempfile.TemporaryDirectory(
+            prefix="aragorn-gvisor-canary-control-"
+        ) as control:
+            control_path = Path(control)
+            runtime_version = _run_bounded(
+                [os.fspath(runsc.path), "--version"],
+                timeout=_DOCKER_TIMEOUT_SECONDS,
+                stdout_limit=_MAX_STREAM_BYTES,
+                stderr_limit=_MAX_STREAM_BYTES,
+                shared_limit=2 * _MAX_STREAM_BYTES,
+                env=_command_environment(control_path),
+            )
+            _require_success(runtime_version, "runsc --version")
+            if runtime_version.stderr:
+                raise GVisorRuntimeError("runsc --version produced stderr")
+            evidence["runtime_version"] = runtime_version.stdout
+
+            discovery_environment, docker_environment, runner_identity = (
+                _capture_pre_runner_identity(docker, control_path, pre_runner)
+            )
+            evidence["runner_pre"] = _runner_bundle(pre_runner)
+            runtime_name = canary_lock["runtime"]["name"]
+            evidence["runtime_registration"] = _capture_docker_document(
+                docker,
+                (
+                    "info",
+                    "--format",
+                    f'{{{{json (index .Runtimes "{runtime_name}")}}}}',
+                ),
+                env=docker_environment,
+                label="Docker canary runtime registration",
+            )
+            evidence["image_inspect"] = _docker_output(
+                docker.path,
+                ("image", "inspect", runtime_lock["image"]["reference"]),
+                env=docker_environment,
+                label="Docker image inspect",
+            )
+            prior_canary_logs = frozenset(
+                path.name for path in _canary_log_directory(canary_lock).iterdir()
+            )
+
+            container_name = f"aragorn-gvisor-canary-{run_id}"
+            create = _docker_result(
+                docker.path,
+                _create_arguments(
+                    image=runtime_lock["image"]["reference"],
+                    profile=canary_lock["canary"],
+                    runtime=canary_lock["runtime"]["name"],
+                    container_name=container_name,
+                    run_label=f"aragorn.detonation-canary.run_id={run_id}",
+                    tmpfs=canary_lock["canary"]["tmpfs"],
+                ),
+                env=docker_environment,
+                label="Docker canary create",
+            )
+            try:
+                container_id = create.stdout.decode("ascii").strip()
+            except UnicodeDecodeError as exc:
+                raise GVisorRuntimeError(
+                    "Docker canary create returned non-ASCII"
+                ) from exc
+            if _CONTAINER.fullmatch(container_id) is None:
+                raise GVisorRuntimeError(
+                    "Docker canary create returned an invalid container ID"
+                )
+            pre, evidence["container_pre_inspect"] = _inspect_container(
+                docker.path, container_id, docker_environment
+            )
+            _verify_canary_container(
+                runtime_lock,
+                canary_lock,
+                pre,
+                phase="prestart",
+                run_id=run_id,
+            )
+            _require_canary_logs_new(
+                canary_lock,
+                container_id,
+                prior_canary_logs,
+            )
+            started = _docker_result(
+                docker.path,
+                ("start", container_id),
+                env=docker_environment,
+                label="Docker canary start",
+            )
+            if started.stdout.strip() != container_id.encode("ascii"):
+                raise GVisorRuntimeError(
+                    "Docker canary start returned a different container ID"
+                )
+
+            live, evidence["container_live_inspect"] = _wait_for_live_container(
+                docker.path, container_id, docker_environment
+            )
+            _verify_canary_container(
+                runtime_lock,
+                canary_lock,
+                live,
+                phase="live",
+                run_id=run_id,
+            )
+            evidence["container_processes"] = _capture_processes(
+                runtime_lock,
+                container_id=container_id,
+                sandbox_pid=live["State"]["Pid"],
+                runsc=runsc,
+            )
+            waited = _docker_result(
+                docker.path,
+                ("wait", container_id),
+                env=docker_environment,
+                label="Docker canary wait",
+                timeout=20.0,
+            )
+            if waited.stdout != b"0\n" or waited.stderr:
+                raise GVisorRuntimeError(
+                    "gVisor detonation canary did not exit cleanly"
+                )
+            logs = _docker_result(
+                docker.path,
+                ("logs", container_id),
+                env=docker_environment,
+                label="Docker canary logs",
+            )
+            evidence["container_stdout"] = logs.stdout
+            evidence["container_stderr"] = logs.stderr
+            post, evidence["container_post_inspect"] = _inspect_container(
+                docker.path, container_id, docker_environment
+            )
+            _verify_canary_container(
+                runtime_lock,
+                canary_lock,
+                post,
+                phase="postrun",
+                run_id=run_id,
+            )
+            evidence["backend_log_manifest"] = _capture_canary_logs(
+                cas, canary_lock, container_id, opened
+            )
+
+            cleanup_error = _cleanup_container(
+                docker.path, container_name, docker_environment
+            )
+            container_name = None
+            if cleanup_error is not None:
+                raise GVisorRuntimeError(
+                    f"Docker canary cleanup failed: {cleanup_error}"
+                )
+            evidence["container_cleanup"] = _capture_cleanup_absence(
+                docker.path, container_id, docker_environment
+            )
+            _capture_post_runner_identity(
+                docker,
+                discovery_environment=discovery_environment,
+                execution_environment=docker_environment,
+                expected=runner_identity,
+                evidence=post_runner,
+            )
+            evidence["runner_post"] = _runner_bundle(post_runner)
+
+        _verify_docker_unchanged(docker)
+        for capability in opened:
+            _verify_file_capability(capability)
+        captured = _evidence_snapshot(evidence, expected=_CANARY_EVIDENCE_LIMITS)
+        source_events, container_id = _verify_canary_evidence(
+            cas,
+            runtime_lock,
+            canary_lock,
+            captured,
+            run_id=run_id,
+            implementation_files=implementation_files,
+        )
+        run_request = _canary_run_request(
+            runtime_lock,
+            canary_lock,
+            run_id=run_id,
+            container_id=container_id,
+            input_manifest_digest=expected_lock,
+            implementation_digest=expected_implementation,
+        )
+        run_request_digest = cas.put(
+            BytesIO(run_request), max_bytes=_MAX_CANARY_RUN_REQUEST_BYTES
+        )
+        from .detonation_observation import (
+            retain_detonation_capability_diff,
+            retain_detonation_observation,
+        )
+
+        observation_bindings: dict[str, str] = {}
+        identity = _canary_identity(
+            runtime_lock,
+            expected_lock,
+            run_request_digest,
+            expected_implementation,
+        )
+        for source_event in source_events:
+            observation_digest = retain_detonation_observation(
+                cas, source_event, **identity
+            )
+            observation_bindings[observation_digest] = _raw_digest(source_event)
+        capability_diff_receipt_digest = retain_detonation_capability_diff(
+            cas,
+            observation_bindings,
+            **identity,
+            declared_capabilities=canary_lock["canary"]["declared_capabilities"],
+        )
+        evidence_digests = {
+            name: cas.put(BytesIO(raw), max_bytes=_CANARY_EVIDENCE_LIMITS[name])
+            for name, raw in sorted(captured.items())
+        }
+        receipt = {
+            "schema": CANARY_SCHEMA,
+            "authority": CANARY_AUTHORITY,
+            "lock_digest": expected_lock,
+            "runtime_lock_digest": runtime_lock_digest,
+            "implementation_digest": expected_implementation,
+            "run_id": run_id,
+            "captured_at": captured_at,
+            **identity,
+            "capability_diff_receipt_digest": capability_diff_receipt_digest,
+            "evidence": evidence_digests,
+            "status": "RECORDED",
+        }
+        receipt_digest = cas.put(
+            BytesIO(canonical_json(receipt)), max_bytes=_MAX_RECEIPT_BYTES
+        )
+        verify_gvisor_detonation_canary(
+            cas,
+            receipt_digest,
+            expected_lock_digest=expected_lock,
+            expected_verifier_implementation_digest=expected_implementation,
+        )
+        return receipt_digest
+    except GVisorRuntimeError:
+        raise
+    except (
+        CASError,
+        DockerIdentityError,
+        OSError,
+        RuntimeError,
+        VerificationError,
+        WorkerProtocolError,
+    ) as exc:
+        raise GVisorRuntimeError(
+            f"gVisor detonation canary capture failed: {exc}"
+        ) from exc
+    finally:
+        if (
+            container_name is not None
+            and docker_environment is not None
+            and docker_path is not None
+        ):
+            try:
+                _cleanup_container(docker_path, container_name, docker_environment)
+            except OSError:
+                pass
+        for capability in reversed(opened):
+            os.close(capability.descriptor)
+        if coordination >= 0:
+            os.close(coordination)
+
+
 def _command_environment(control: Path) -> dict[str, str]:
     return {
         "HOME": os.fspath(control),
@@ -469,10 +937,15 @@ def _docker_output(
 
 
 def _create_arguments(
-    lock: dict[str, Any], container_name: str, run_id: str
+    *,
+    image: str,
+    profile: dict[str, Any],
+    runtime: str,
+    container_name: str,
+    run_label: str,
+    tmpfs: dict[str, str] | None = None,
 ) -> tuple[str, ...]:
-    smoke = lock["smoke"]
-    return (
+    arguments = [
         "create",
         "--pull",
         "never",
@@ -481,33 +954,431 @@ def _create_arguments(
         "--name",
         container_name,
         "--label",
-        f"aragorn.runtime-smoke.run_id={run_id}",
+        run_label,
         "--runtime",
-        lock["runtime"]["name"],
+        runtime,
         "--network",
-        smoke["network_mode"],
+        profile["network_mode"],
         "--read-only",
         "--cap-drop",
         "ALL",
         "--security-opt",
         "no-new-privileges=true",
         "--user",
-        smoke["user"],
+        profile["user"],
         "--pids-limit",
-        str(smoke["pids_limit"]),
+        str(profile["pids_limit"]),
         "--memory",
-        str(smoke["memory_bytes"]),
+        str(profile["memory_bytes"]),
         "--memory-swap",
-        str(smoke["memory_swap_bytes"]),
+        str(profile["memory_swap_bytes"]),
         "--cpus",
-        f"{smoke['nano_cpus'] / 1_000_000_000:g}",
+        f"{profile['nano_cpus'] / 1_000_000_000:g}",
         "--ulimit",
-        f"nofile={smoke['nofile_soft']}:{smoke['nofile_hard']}",
+        f"nofile={profile['nofile_soft']}:{profile['nofile_hard']}",
+    ]
+    if tmpfs is not None:
+        arguments.extend(("--tmpfs", f"{tmpfs['destination']}:{tmpfs['options']}"))
+    return (
+        *arguments,
         "--env",
-        smoke["environment"][0],
-        lock["image"]["reference"],
-        *smoke["command"],
+        profile["environment"][0],
+        image,
+        *profile["command"],
     )
+
+
+def _canary_log_paths(
+    canary_lock: dict[str, Any], container_id: str
+) -> dict[str, Path]:
+    directory = Path(canary_lock["trace"]["directory"])
+    return {
+        command: directory / f"{container_id}.{container_id}.{command}.jsonl"
+        for command in canary_lock["trace"]["commands"]
+    }
+
+
+def _canary_log_directory(canary_lock: dict[str, Any]) -> Path:
+    directory = Path(canary_lock["trace"]["directory"])
+    _verify_protected_path(directory / "placeholder")
+    value = directory.lstat()
+    if (
+        not stat.S_ISDIR(value.st_mode)
+        or value.st_uid != 0
+        or stat.S_IMODE(value.st_mode) != 0o700
+    ):
+        raise GVisorRuntimeError("gVisor canary trace directory is unsafe")
+    return directory
+
+
+def _require_canary_logs_new(
+    canary_lock: dict[str, Any],
+    container_id: str,
+    prior_names: frozenset[str],
+) -> None:
+    _canary_log_directory(canary_lock)
+    for path in _canary_log_paths(canary_lock, container_id).values():
+        if path.name in prior_names:
+            raise GVisorRuntimeError(f"gVisor canary trace path was reused: {path}")
+
+
+def _capture_canary_logs(
+    cas: CAS,
+    canary_lock: dict[str, Any],
+    container_id: str,
+    opened: list[_FileCapability],
+) -> bytes:
+    _canary_log_directory(canary_lock)
+    files = []
+    maximum = canary_lock["trace"]["max_log_bytes"]
+    for command, path in _canary_log_paths(canary_lock, container_id).items():
+        capability = _open_file_capability(
+            path,
+            expected_digest=None,
+            maximum=maximum,
+            executable=False,
+            label=f"gVisor canary {command} log",
+        )
+        opened.append(capability)
+        raw = _read_open_file(capability, maximum)
+        if cas.put(BytesIO(raw), max_bytes=maximum) != capability.digest:
+            raise GVisorRuntimeError("gVisor canary log CAS identity changed")
+        files.append({"command": command, "file": capability.metadata})
+    return canonical_json(
+        {
+            "schema": CANARY_LOG_MANIFEST_SCHEMA,
+            "container_id": container_id,
+            "files": files,
+        }
+    )
+
+
+def _capture_cleanup_absence(
+    docker: Path, container_id: str, env: dict[str, str]
+) -> bytes:
+    result = _run_bounded(
+        [os.fspath(docker), "container", "inspect", container_id],
+        timeout=_DOCKER_TIMEOUT_SECONDS,
+        stdout_limit=_MAX_STREAM_BYTES,
+        stderr_limit=_MAX_STREAM_BYTES,
+        shared_limit=2 * _MAX_STREAM_BYTES,
+        env=env,
+    )
+    _require_command(result, "Docker canary cleanup inspect")
+    try:
+        stderr = result.stderr.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise GVisorRuntimeError("Docker canary cleanup response is not UTF-8") from exc
+    if (
+        result.returncode != 1
+        or result.stdout != b"[]\n"
+        or container_id not in stderr
+        or "No such container" not in stderr
+    ):
+        raise GVisorRuntimeError("Docker canary cleanup absence was not observed")
+    return canonical_json(
+        {
+            "schema": CANARY_CLEANUP_SCHEMA,
+            "container_id": container_id,
+            "absent": True,
+        }
+    )
+
+
+def _canary_identity(
+    runtime_lock: dict[str, Any],
+    input_manifest_digest: str,
+    run_request_digest: str,
+    implementation_digest: str,
+) -> dict[str, str]:
+    subject = runtime_lock["image"]["digest"]
+    return {
+        "subject_digest": subject,
+        "input_manifest_digest": input_manifest_digest,
+        "input_tree_digest": subject,
+        "run_request_digest": run_request_digest,
+        "normalizer_implementation_digest": implementation_digest,
+    }
+
+
+def _canary_run_request(
+    runtime_lock: dict[str, Any],
+    canary_lock: dict[str, Any],
+    *,
+    run_id: str,
+    container_id: str,
+    input_manifest_digest: str,
+    implementation_digest: str,
+) -> bytes:
+    profile = canary_lock["canary"]
+    return canonical_json(
+        {
+            "schema": CANARY_RUN_REQUEST_SCHEMA,
+            "authority": "FIXED_CANARY_REQUEST_ONLY_NOT_ARTIFACT_EXECUTION_AUTHORITY",
+            "run_id": run_id,
+            "container_id": container_id,
+            "subject_digest": runtime_lock["image"]["digest"],
+            "input_manifest_digest": input_manifest_digest,
+            "input_tree_digest": runtime_lock["image"]["digest"],
+            "normalizer_implementation_digest": implementation_digest,
+            "runtime_lock_digest": canary_lock["runtime_lock_digest"],
+            "runtime": canary_lock["runtime"],
+            "image_digest": runtime_lock["image"]["digest"],
+            "command": profile["command"],
+            "environment": profile["environment"],
+            "token_digest": profile["token_digest"],
+            "declared_capabilities": profile["declared_capabilities"],
+        }
+    )
+
+
+def _read_canary_logs(
+    cas: CAS,
+    raw_manifest: bytes,
+    canary_lock: dict[str, Any],
+    container_id: str,
+) -> dict[str, bytes]:
+    manifest = _json_object(raw_manifest, "gVisor canary log manifest", canonical=True)
+    _exact_keys(
+        manifest,
+        {"schema", "container_id", "files"},
+        "gVisor canary log manifest",
+    )
+    commands = canary_lock["trace"]["commands"]
+    if (
+        manifest["schema"] != CANARY_LOG_MANIFEST_SCHEMA
+        or manifest["container_id"] != container_id
+        or not isinstance(manifest["files"], list)
+        or len(manifest["files"]) != len(commands)
+    ):
+        raise GVisorRuntimeError("gVisor canary log manifest identity changed")
+    expected_paths = _canary_log_paths(canary_lock, container_id)
+    maximum = canary_lock["trace"]["max_log_bytes"]
+    logs: dict[str, bytes] = {}
+    for expected_command, item in zip(commands, manifest["files"], strict=True):
+        entry = _object(item, "gVisor canary log entry")
+        _exact_keys(entry, {"command", "file"}, "gVisor canary log entry")
+        metadata = _file_metadata_document(entry["file"], "gVisor canary log")
+        if (
+            entry["command"] != expected_command
+            or metadata["path"] != os.fspath(expected_paths[expected_command])
+            or metadata["uid"] != 0
+            or metadata["gid"] != 0
+            or metadata["mode"] & 0o022
+            or not 0 < metadata["size"] <= maximum
+        ):
+            raise GVisorRuntimeError("gVisor canary log metadata changed")
+        digest = _digest(metadata["digest"], "gVisor canary log")
+        try:
+            raw = cas.read(digest, max_bytes=maximum)
+        except CASError as exc:
+            raise GVisorRuntimeError(f"cannot read gVisor canary log: {exc}") from exc
+        if len(raw) != metadata["size"]:
+            raise GVisorRuntimeError("gVisor canary log size changed")
+        logs[expected_command] = raw
+    return logs
+
+
+def _parse_canary_trace(
+    raw: bytes,
+    runtime_lock: dict[str, Any],
+    canary_lock: dict[str, Any],
+    container_id: str,
+) -> tuple[bytes, ...]:
+    trace = canary_lock["trace"]
+    records = _canary_log_records(raw, canary_lock, "boot")
+    pending: dict[tuple[int, int], tuple[str, str, str, int]] = {}
+    pairs: list[tuple[tuple[int, int], str, str, str, str, int, int]] = []
+    headers = {
+        name: 0
+        for name in (
+            "version",
+            "args",
+            "platform",
+            "filesystem",
+            "network",
+            "strace",
+            "exec",
+        )
+    }
+    messages: list[str] = []
+    version = runtime_lock["release"]["version"]
+    command = canary_lock["canary"]["command"]
+    for index, record in enumerate(records):
+        message = record["msg"]
+        messages.append(message)
+        if message.startswith("cli.go:276] Version "):
+            if (
+                not message.startswith(f"cli.go:276] Version release-{version}, ")
+                or ", arm64, " not in message
+                or ", linux, " not in message
+            ):
+                raise GVisorRuntimeError("gVisor canary trace version changed")
+            headers["version"] += 1
+        elif message.startswith("cli.go:278] Args: "):
+            if (
+                container_id not in message
+                or " boot " not in message
+                or not message.endswith(f" {container_id}]")
+            ):
+                raise GVisorRuntimeError("gVisor canary trace process identity changed")
+            headers["args"] += 1
+        elif message.startswith("config.go:533] Platform:"):
+            if message != "config.go:533] Platform: systrap":
+                raise GVisorRuntimeError("gVisor canary trace platform changed")
+            headers["platform"] += 1
+        elif message.startswith("config.go:535] FileAccess:"):
+            if not message.startswith(
+                "config.go:535] FileAccess: exclusive / Directfs: false / Overlay:"
+            ):
+                raise GVisorRuntimeError("gVisor canary trace filesystem changed")
+            headers["filesystem"] += 1
+        elif message.startswith("config.go:536] Network:"):
+            if message != "config.go:536] Network: none":
+                raise GVisorRuntimeError("gVisor canary trace network changed")
+            headers["network"] += 1
+        elif message.startswith("config.go:539] Debug:"):
+            if message != (
+                "config.go:539] Debug: true. Strace: true, max size: 256, "
+                "syscalls: openat,execve"
+            ):
+                raise GVisorRuntimeError("gVisor canary trace configuration changed")
+            headers["strace"] += 1
+        elif message.startswith("kernel.go:1293] EXEC: []string"):
+            encoded = message.removeprefix("kernel.go:1293] EXEC: []string")
+            if not encoded.startswith("{") or not encoded.endswith("}"):
+                raise GVisorRuntimeError("gVisor canary command record is malformed")
+            try:
+                observed_command = json.loads("[" + encoded[1:-1] + "]")
+            except (ValueError, RecursionError) as exc:
+                raise GVisorRuntimeError(
+                    f"gVisor canary command record is invalid: {exc}"
+                ) from exc
+            if observed_command != command:
+                raise GVisorRuntimeError("gVisor canary command changed")
+            headers["exec"] += 1
+
+        if not message.startswith("strace.go:"):
+            continue
+        matched = _TRACE_MESSAGE.fullmatch(message)
+        if matched is None:
+            raise GVisorRuntimeError("gVisor canary syscall record is malformed")
+        key = (int(matched["tgid"]), int(matched["tid"]))
+        body = matched["body"]
+        result: str | None = None
+        if matched["phase"] == "X":
+            call_body, separator, outcome = body.rpartition(") = ")
+            if not separator:
+                raise GVisorRuntimeError("gVisor canary syscall exit is malformed")
+            value, duration_separator, duration = outcome.rpartition(" (")
+            if (
+                not duration_separator
+                or not duration.endswith(")")
+                or _TRACE_DURATION.fullmatch(duration[:-1]) is None
+            ):
+                raise GVisorRuntimeError("gVisor canary syscall duration is malformed")
+            body = call_body + ")"
+            result = value
+        call = _TRACE_CALL.fullmatch(body)
+        if call is None or call["syscall"] not in trace["syscalls"]:
+            raise GVisorRuntimeError("gVisor canary syscall is unsupported")
+        process = matched["process"]
+        arguments = call["arguments"]
+        if matched["phase"] == "E":
+            if key in pending:
+                raise GVisorRuntimeError("gVisor canary syscall entry is interleaved")
+            pending[key] = (process, call["syscall"], arguments, index)
+            continue
+        entered = pending.pop(key, None)
+        if entered is None or entered[:3] != (process, call["syscall"], arguments):
+            raise GVisorRuntimeError("gVisor canary syscall pair changed")
+        pairs.append(
+            (key, process, call["syscall"], arguments, result or "", entered[3], index)
+        )
+    if pending:
+        raise GVisorRuntimeError("gVisor canary syscall trace is truncated")
+    if any(count == 0 for count in headers.values()):
+        raise GVisorRuntimeError("gVisor canary trace headers are incomplete")
+    if not messages or messages[-1] != "cli.go:316] Exiting with status: 0":
+        raise GVisorRuntimeError("gVisor canary trace did not terminate cleanly")
+
+    token_path = canary_lock["canary"]["token_path"]
+    write: tuple[tuple[int, int], int] | None = None
+    execute: tuple[tuple[int, int], int] | None = None
+    read: tuple[tuple[int, int], int] | None = None
+    for key, process, syscall, arguments, result, entered_at, _exited_at in pairs:
+        if syscall == "openat" and token_path in arguments:
+            if _canary_open_arguments(arguments, token_path, write=True):
+                if write is not None or process != "sh" or not _successful_fd(result):
+                    raise GVisorRuntimeError("gVisor canary token write is ambiguous")
+                write = (key, entered_at)
+            elif _canary_open_arguments(arguments, token_path, write=False):
+                if (
+                    read is not None
+                    or process != "sha256sum"
+                    or not _successful_fd(result)
+                ):
+                    raise GVisorRuntimeError("gVisor canary token read is ambiguous")
+                read = (key, entered_at)
+            else:
+                raise GVisorRuntimeError("gVisor canary token access changed")
+        elif syscall == "execve" and (
+            "/bin/sha256sum" in arguments or token_path in arguments
+        ):
+            if (
+                execute is not None
+                or process != "sh"
+                or result != "0 (0x0)"
+                or not _canary_exec_arguments(arguments, container_id, token_path)
+            ):
+                raise GVisorRuntimeError("gVisor canary process execution is ambiguous")
+            execute = (key, entered_at)
+    if write is None or execute is None or read is None:
+        raise GVisorRuntimeError("gVisor canary target events are incomplete")
+    if not (write[1] < execute[1] < read[1] and execute[0] == read[0]):
+        raise GVisorRuntimeError("gVisor canary target event ordering changed")
+    return tuple(
+        canonical_json(event) for event in canary_lock["canary"]["source_events"]
+    )
+
+
+def _canary_open_arguments(arguments: str, path: str, *, write: bool) -> bool:
+    flags = "O_WRONLY|O_CREAT|O_TRUNC" if write else "O_RDONLY|0x0"
+    mode = "0o666" if write else "0o0"
+    return (
+        re.fullmatch(
+            rf"AT_FDCWD /, 0x[0-9a-f]+ {re.escape(path)}, {re.escape(flags)}, {mode}",
+            arguments,
+        )
+        is not None
+    )
+
+
+def _successful_fd(result: str) -> bool:
+    matched = re.fullmatch(r"([0-9]+) \(0x([0-9a-f]+)\)", result)
+    return matched is not None and int(matched[1]) == int(matched[2], 16)
+
+
+def _canary_exec_arguments(arguments: str, container_id: str, token_path: str) -> bool:
+    matched = re.fullmatch(
+        rf"0x[0-9a-f]+ /bin/sha256sum, 0x[0-9a-f]+ "
+        rf"\[\"/bin/sha256sum\", \"{re.escape(token_path)}\"\], "
+        r"0x[0-9a-f]+ (?P<environment>\[.*\])",
+        arguments,
+    )
+    if matched is None:
+        return False
+    try:
+        environment = json.loads(matched["environment"])
+    except (ValueError, RecursionError):
+        return False
+    return environment == [
+        f"HOSTNAME={container_id[:12]}",
+        "SHLVL=1",
+        "HOME=/home",
+        "PATH=/bin",
+        "PWD=/",
+    ]
 
 
 def _wait_for_live_container(
@@ -927,37 +1798,51 @@ def _capture_processes(
     return raw
 
 
-def _implementation_manifest(raw: bytes) -> dict[str, str]:
-    document = _json_object(
-        raw, "gVisor runtime implementation manifest", canonical=True
-    )
+def _implementation_manifest(
+    raw: bytes,
+    *,
+    schema: str = IMPLEMENTATION_SCHEMA,
+    modules: tuple[str, ...] = _IMPLEMENTATION_MODULES,
+    label: str = "gVisor runtime",
+) -> dict[str, str]:
+    document = _json_object(raw, f"{label} implementation manifest", canonical=True)
     _exact_keys(
         document,
         {"schema", "files"},
-        "gVisor runtime implementation manifest",
+        f"{label} implementation manifest",
     )
-    if document["schema"] != IMPLEMENTATION_SCHEMA:
-        raise GVisorRuntimeError("gVisor runtime implementation schema changed")
-    files = _object(document["files"], "gVisor runtime implementation files")
-    if set(files) != set(_IMPLEMENTATION_MODULES):
-        raise GVisorRuntimeError("gVisor runtime implementation inventory changed")
+    if document["schema"] != schema:
+        raise GVisorRuntimeError(f"{label} implementation schema changed")
+    files = _object(document["files"], f"{label} implementation files")
+    if set(files) != set(modules):
+        raise GVisorRuntimeError(f"{label} implementation inventory changed")
     return {
-        module: _digest(files[module], f"gVisor runtime implementation {module}")
-        for module in _IMPLEMENTATION_MODULES
+        module: _digest(files[module], f"{label} implementation {module}")
+        for module in modules
     }
 
 
-def _read_implementation(cas: CAS, digest: str) -> dict[str, str]:
+def _read_implementation(
+    cas: CAS,
+    digest: str,
+    *,
+    schema: str = IMPLEMENTATION_SCHEMA,
+    modules: tuple[str, ...] = _IMPLEMENTATION_MODULES,
+    label: str = "gVisor runtime",
+) -> dict[str, str]:
     try:
         files = _implementation_manifest(
-            cas.read(digest, max_bytes=_MAX_IMPLEMENTATION_MANIFEST_BYTES)
+            cas.read(digest, max_bytes=_MAX_IMPLEMENTATION_MANIFEST_BYTES),
+            schema=schema,
+            modules=modules,
+            label=label,
         )
         for source_digest in files.values():
             cas.verify(source_digest, max_bytes=_MAX_IMPLEMENTATION_SOURCE_BYTES)
         return files
     except CASError as exc:
         raise GVisorRuntimeError(
-            f"cannot verify gVisor runtime implementation: {exc}"
+            f"cannot verify {label} implementation: {exc}"
         ) from exc
 
 
@@ -1036,6 +1921,176 @@ def verify_gvisor_runtime_smoke(
         raise GVisorRuntimeError(f"cannot verify gVisor runtime smoke: {exc}") from exc
 
 
+def verify_gvisor_detonation_canary(
+    cas: CAS,
+    receipt_digest: str,
+    *,
+    expected_lock_digest: str,
+    expected_verifier_implementation_digest: str,
+) -> dict[str, Any]:
+    """Replay one fixed same-run canary against caller-held trust identities."""
+
+    return _verify_gvisor_detonation_canary(
+        cas,
+        receipt_digest,
+        expected_lock_digest=expected_lock_digest,
+        expected_verifier_implementation_digest=(
+            expected_verifier_implementation_digest
+        ),
+    ).receipt
+
+
+def _verify_gvisor_detonation_canary(
+    cas: CAS,
+    receipt_digest: str,
+    *,
+    expected_lock_digest: str,
+    expected_verifier_implementation_digest: str,
+) -> _VerifiedCanary:
+    expected_lock = _digest(expected_lock_digest, "expected canary lock")
+    expected_implementation = _digest(
+        expected_verifier_implementation_digest,
+        "expected canary verifier implementation",
+    )
+    try:
+        receipt = _json_object(
+            cas.read(
+                _digest(receipt_digest, "canary receipt"), max_bytes=_MAX_RECEIPT_BYTES
+            ),
+            "gVisor detonation canary receipt",
+            canonical=True,
+        )
+        if set(receipt) != _CANARY_RECEIPT_FIELDS:
+            raise GVisorRuntimeError("gVisor canary receipt fields are invalid")
+        if (
+            receipt["schema"] != CANARY_SCHEMA
+            or receipt["authority"] != CANARY_AUTHORITY
+            or receipt["status"] != "RECORDED"
+            or _digest(receipt["lock_digest"], "canary lock") != expected_lock
+            or _digest(receipt["implementation_digest"], "canary implementation")
+            != expected_implementation
+        ):
+            raise GVisorRuntimeError("gVisor canary receipt authority changed")
+        if (
+            not isinstance(receipt["run_id"], str)
+            or _RUN_ID.fullmatch(receipt["run_id"]) is None
+            or not isinstance(receipt["captured_at"], str)
+            or _CAPTURED_AT.fullmatch(receipt["captured_at"]) is None
+        ):
+            raise GVisorRuntimeError("gVisor canary capture identity is invalid")
+        canary_lock = _canary_lock(cas.read(expected_lock, max_bytes=_MAX_LOCK_BYTES))
+        runtime_lock_digest = _digest(
+            receipt["runtime_lock_digest"], "gVisor runtime lock"
+        )
+        if runtime_lock_digest != canary_lock["runtime_lock_digest"]:
+            raise GVisorRuntimeError("gVisor canary runtime lock identity changed")
+        runtime_lock = _runtime_lock(
+            cas.read(runtime_lock_digest, max_bytes=_MAX_LOCK_BYTES)
+        )
+        implementation_files = _read_implementation(
+            cas,
+            expected_implementation,
+            schema=CANARY_IMPLEMENTATION_SCHEMA,
+            modules=_CANARY_IMPLEMENTATION_MODULES,
+            label="gVisor detonation canary",
+        )
+        expected_identity = _canary_identity(
+            runtime_lock,
+            expected_lock,
+            _digest(receipt["run_request_digest"], "canary run request"),
+            expected_implementation,
+        )
+        if {
+            field: receipt[field]
+            for field in (
+                "subject_digest",
+                "input_manifest_digest",
+                "input_tree_digest",
+                "run_request_digest",
+                "normalizer_implementation_digest",
+            )
+        } != expected_identity:
+            raise GVisorRuntimeError("gVisor canary evidence identity changed")
+        evidence_digests = receipt["evidence"]
+        if not isinstance(evidence_digests, dict) or set(evidence_digests) != set(
+            _CANARY_EVIDENCE_LIMITS
+        ):
+            raise GVisorRuntimeError("gVisor canary evidence inventory is invalid")
+        evidence = {
+            name: cas.read(
+                _digest(evidence_digests[name], f"{name} evidence"),
+                max_bytes=_CANARY_EVIDENCE_LIMITS[name],
+            )
+            for name in _CANARY_EVIDENCE_LIMITS
+        }
+        source_events, container_id = _verify_canary_evidence(
+            cas,
+            runtime_lock,
+            canary_lock,
+            evidence,
+            run_id=receipt["run_id"],
+            implementation_files=implementation_files,
+        )
+        expected_run_request = _canary_run_request(
+            runtime_lock,
+            canary_lock,
+            run_id=receipt["run_id"],
+            container_id=container_id,
+            input_manifest_digest=expected_lock,
+            implementation_digest=expected_implementation,
+        )
+        if (
+            cas.read(
+                expected_identity["run_request_digest"],
+                max_bytes=_MAX_CANARY_RUN_REQUEST_BYTES,
+            )
+            != expected_run_request
+        ):
+            raise GVisorRuntimeError("gVisor canary run request changed")
+        from .detonation_observation import (
+            derive_detonation_observation_binding,
+            verify_detonation_capability_diff,
+        )
+
+        observation_bindings = {}
+        for source_event in source_events:
+            source_digest, observation_digest, _raw = (
+                derive_detonation_observation_binding(
+                    source_event,
+                    **expected_identity,
+                )
+            )
+            observation_bindings[observation_digest] = source_digest
+        verify_detonation_capability_diff(
+            cas,
+            _digest(
+                receipt["capability_diff_receipt_digest"],
+                "canary capability diff receipt",
+            ),
+            expected_observations=observation_bindings,
+            **{
+                f"expected_{field}": value for field, value in expected_identity.items()
+            },
+            expected_declared_capabilities=canary_lock["canary"][
+                "declared_capabilities"
+            ],
+        )
+        return _VerifiedCanary(
+            receipt=receipt,
+            lock=canary_lock,
+            implementation_files=implementation_files,
+            evidence=evidence,
+            identity=expected_identity,
+            observation_bindings=observation_bindings,
+        )
+    except GVisorRuntimeError:
+        raise
+    except CASError as exc:
+        raise GVisorRuntimeError(
+            f"cannot verify gVisor detonation canary: {exc}"
+        ) from exc
+
+
 def derive_gvisor_runtime_smoke_closure(
     cas: CAS,
     receipt_digest: str,
@@ -1054,9 +2109,7 @@ def derive_gvisor_runtime_smoke_closure(
             expected_verifier_implementation_digest
         ),
     )
-    implementation_files = _read_implementation(
-        cas, receipt["implementation_digest"]
-    )
+    implementation_files = _read_implementation(cas, receipt["implementation_digest"])
     limits = {
         receipt_id: _MAX_RECEIPT_BYTES,
         receipt["lock_digest"]: _MAX_LOCK_BYTES,
@@ -1081,6 +2134,77 @@ def derive_gvisor_runtime_smoke_closure(
         ) from exc
 
 
+def derive_gvisor_detonation_canary_closure(
+    cas: CAS,
+    receipt_digest: str,
+    *,
+    expected_lock_digest: str,
+    expected_verifier_implementation_digest: str,
+) -> dict[str, int]:
+    """Return the complete verified CAS closure for one traced canary."""
+
+    receipt_id = _digest(receipt_digest, "canary receipt")
+    verified = _verify_gvisor_detonation_canary(
+        cas,
+        receipt_id,
+        expected_lock_digest=expected_lock_digest,
+        expected_verifier_implementation_digest=(
+            expected_verifier_implementation_digest
+        ),
+    )
+    receipt = verified.receipt
+    canary_lock = verified.lock
+    from .detonation_observation import derive_detonation_capability_diff_closure
+
+    diff_closure = derive_detonation_capability_diff_closure(
+        cas,
+        receipt["capability_diff_receipt_digest"],
+        expected_observations=verified.observation_bindings,
+        **{f"expected_{field}": value for field, value in verified.identity.items()},
+        expected_declared_capabilities=canary_lock["canary"]["declared_capabilities"],
+    )
+    log_manifest = _json_object(
+        verified.evidence["backend_log_manifest"],
+        "gVisor canary log manifest",
+        canonical=True,
+    )
+    log_digests = {
+        _file_metadata_document(item["file"], "gVisor canary log")["digest"]
+        for item in log_manifest["files"]
+    }
+    limits = {
+        receipt_id: _MAX_RECEIPT_BYTES,
+        receipt["lock_digest"]: _MAX_LOCK_BYTES,
+        receipt["runtime_lock_digest"]: _MAX_LOCK_BYTES,
+        receipt["implementation_digest"]: _MAX_IMPLEMENTATION_MANIFEST_BYTES,
+        receipt["run_request_digest"]: _MAX_CANARY_RUN_REQUEST_BYTES,
+        **{
+            digest: _MAX_IMPLEMENTATION_SOURCE_BYTES
+            for digest in verified.implementation_files.values()
+        },
+        **{
+            digest: _CANARY_EVIDENCE_LIMITS[name]
+            for name, digest in receipt["evidence"].items()
+        },
+        **{digest: canary_lock["trace"]["max_log_bytes"] for digest in log_digests},
+    }
+    limits.update(
+        {
+            digest: max(limits.get(digest, 0), size)
+            for digest, size in diff_closure.items()
+        }
+    )
+    try:
+        return {
+            digest: len(cas.read(digest, max_bytes=limit))
+            for digest, limit in sorted(limits.items())
+        }
+    except CASError as exc:
+        raise GVisorRuntimeError(
+            f"cannot derive gVisor detonation canary closure: {exc}"
+        ) from exc
+
+
 def _verify_evidence(
     lock: dict[str, Any],
     evidence: dict[str, bytes],
@@ -1088,77 +2212,15 @@ def _verify_evidence(
     run_id: str,
     implementation_files: dict[str, str],
 ) -> None:
-    if set(implementation_files) != set(_IMPLEMENTATION_MODULES):
-        raise GVisorRuntimeError("gVisor runtime implementation inventory changed")
-    if evidence["runtime_version"] != lock["runtime"]["version_output"].encode():
-        raise GVisorRuntimeError("gVisor runtime version changed")
-    binaries = _json_value(evidence["installed_binaries"], "installed binaries")
-    if not isinstance(binaries, list) or len(binaries) != len(lock["binaries"]):
-        raise GVisorRuntimeError("installed gVisor binary inventory changed")
-    expected_binaries = {item["path"]: item["digest"] for item in lock["binaries"]}
-    observed_binaries: dict[str, dict[str, Any]] = {}
-    for binary in binaries:
-        metadata = _file_metadata_document(binary, "installed gVisor binary")
-        if (
-            metadata["uid"] != 0
-            or metadata["mode"] & 0o022
-            or not metadata["mode"] & 0o111
-        ):
-            raise GVisorRuntimeError("installed gVisor binary permissions are unsafe")
-        observed_binaries[metadata["path"]] = metadata
-    if {
-        path: metadata["digest"] for path, metadata in observed_binaries.items()
-    } != expected_binaries:
-        raise GVisorRuntimeError("installed gVisor binary identities changed")
-
-    daemon = _json_object(evidence["daemon_config"], "Docker daemon configuration")
-    if _raw_digest(evidence["daemon_config"]) != lock["daemon_config_digest"]:
-        raise GVisorRuntimeError("Docker daemon configuration identity changed")
-    registration = _json_object(
-        evidence["runtime_registration"], "Docker runtime registration"
+    observed_binaries = _verify_runtime_identity_evidence(
+        lock,
+        evidence,
+        implementation_files=implementation_files,
+        runtime=lock["runtime"],
+        daemon_config_digest=lock["daemon_config_digest"],
+        helper_modules=_HELPER_MODULES,
+        label="gVisor runtime",
     )
-    expected_registration = {
-        "path": lock["runtime"]["path"],
-        "runtimeArgs": lock["runtime"]["arguments"],
-    }
-    if (
-        set(registration) != {"path", "runtimeArgs", "status"}
-        or {field: registration[field] for field in expected_registration}
-        != expected_registration
-        or not isinstance(registration["status"], dict)
-    ):
-        raise GVisorRuntimeError("Docker runtime registration changed")
-    daemon_runtime = daemon.get("runtimes", {}).get(lock["runtime"]["name"])
-    if daemon_runtime != expected_registration:
-        raise GVisorRuntimeError("Docker daemon runtime configuration changed")
-
-    docker = _file_metadata_document(
-        _json_value(evidence["docker_executable"], "Docker executable"),
-        "Docker executable",
-    )
-    if docker["uid"] != 0 or docker["mode"] & 0o022 or not docker["mode"] & 0o111:
-        raise GVisorRuntimeError("Docker executable permissions are unsafe")
-    helpers = _json_value(evidence["helper_implementations"], "gVisor runtime helpers")
-    if not isinstance(helpers, list) or len(helpers) != len(_HELPER_MODULES):
-        raise GVisorRuntimeError("gVisor runtime helper inventory changed")
-    for expected_module, item in zip(_HELPER_MODULES, helpers, strict=True):
-        helper = _object(item, "gVisor runtime helper")
-        _exact_keys(helper, {"module", "file"}, "gVisor runtime helper")
-        metadata = _file_metadata_document(helper["file"], "gVisor runtime helper")
-        if (
-            helper["module"] != expected_module
-            or Path(metadata["path"]).name != expected_module
-            or metadata["digest"] != implementation_files[expected_module]
-            or metadata["uid"] != 0
-            or metadata["mode"] & 0o022
-        ):
-            raise GVisorRuntimeError("gVisor runtime helper identity is unsafe")
-    pre_runner = _runner_receipt(evidence["runner_pre"], "pre-run Docker identity")
-    post_runner = _runner_receipt(evidence["runner_post"], "post-run Docker identity")
-    if pre_runner.document_json != post_runner.document_json:
-        raise GVisorRuntimeError("Docker runner identity changed during the smoke")
-
-    _verify_image(lock, evidence["image_inspect"])
     pre = _inspect(evidence["container_pre_inspect"], "prestart container")
     live = _inspect(evidence["container_live_inspect"], "live container")
     post = _inspect(evidence["container_post_inspect"], "postrun container")
@@ -1179,6 +2241,214 @@ def _verify_evidence(
     )
     if evidence["container_stdout"] or evidence["container_stderr"]:
         raise GVisorRuntimeError("inert gVisor smoke produced unexpected output")
+
+
+def _verify_runtime_identity_evidence(
+    runtime_lock: dict[str, Any],
+    evidence: dict[str, bytes],
+    *,
+    implementation_files: dict[str, str],
+    runtime: dict[str, Any],
+    daemon_config_digest: str,
+    helper_modules: tuple[str, ...],
+    label: str,
+) -> dict[str, dict[str, Any]]:
+    if set(implementation_files) != {"gvisor_runtime.py", *helper_modules}:
+        raise GVisorRuntimeError(f"{label} implementation inventory changed")
+    if (
+        evidence["runtime_version"]
+        != runtime_lock["runtime"]["version_output"].encode()
+    ):
+        raise GVisorRuntimeError("gVisor runtime version changed")
+    binaries = _json_value(evidence["installed_binaries"], "installed binaries")
+    if not isinstance(binaries, list) or len(binaries) != len(runtime_lock["binaries"]):
+        raise GVisorRuntimeError("installed gVisor binary inventory changed")
+    expected_binaries = {
+        item["path"]: item["digest"] for item in runtime_lock["binaries"]
+    }
+    observed_binaries: dict[str, dict[str, Any]] = {}
+    for binary in binaries:
+        metadata = _file_metadata_document(binary, "installed gVisor binary")
+        if (
+            metadata["uid"] != 0
+            or metadata["mode"] & 0o022
+            or not metadata["mode"] & 0o111
+            or metadata["path"] in observed_binaries
+        ):
+            raise GVisorRuntimeError("installed gVisor binary permissions are unsafe")
+        observed_binaries[metadata["path"]] = metadata
+    if {
+        path: metadata["digest"] for path, metadata in observed_binaries.items()
+    } != expected_binaries:
+        raise GVisorRuntimeError("installed gVisor binary identities changed")
+
+    daemon = _json_object(evidence["daemon_config"], "Docker daemon configuration")
+    if _raw_digest(evidence["daemon_config"]) != daemon_config_digest:
+        raise GVisorRuntimeError("Docker daemon configuration identity changed")
+    registration = _json_object(
+        evidence["runtime_registration"], "Docker runtime registration"
+    )
+    expected_registration = {
+        "path": runtime["path"],
+        "runtimeArgs": runtime["arguments"],
+    }
+    if (
+        set(registration) != {"path", "runtimeArgs", "status"}
+        or {field: registration[field] for field in expected_registration}
+        != expected_registration
+        or not isinstance(registration["status"], dict)
+    ):
+        raise GVisorRuntimeError("Docker runtime registration changed")
+    daemon_runtime = daemon.get("runtimes", {}).get(runtime["name"])
+    if daemon_runtime != expected_registration:
+        raise GVisorRuntimeError("Docker daemon runtime configuration changed")
+
+    docker = _file_metadata_document(
+        _json_value(evidence["docker_executable"], "Docker executable"),
+        "Docker executable",
+    )
+    if docker["uid"] != 0 or docker["mode"] & 0o022 or not docker["mode"] & 0o111:
+        raise GVisorRuntimeError("Docker executable permissions are unsafe")
+    helpers = _json_value(evidence["helper_implementations"], f"{label} helpers")
+    if not isinstance(helpers, list) or len(helpers) != len(helper_modules):
+        raise GVisorRuntimeError(f"{label} helper inventory changed")
+    for expected_module, item in zip(helper_modules, helpers, strict=True):
+        helper = _object(item, f"{label} helper")
+        _exact_keys(helper, {"module", "file"}, f"{label} helper")
+        metadata = _file_metadata_document(helper["file"], f"{label} helper")
+        if (
+            helper["module"] != expected_module
+            or Path(metadata["path"]).name != expected_module
+            or metadata["digest"] != implementation_files[expected_module]
+            or metadata["uid"] != 0
+            or metadata["mode"] & 0o022
+        ):
+            raise GVisorRuntimeError(f"{label} helper identity is unsafe")
+    pre_runner = _runner_receipt(evidence["runner_pre"], "pre-run Docker identity")
+    post_runner = _runner_receipt(evidence["runner_post"], "post-run Docker identity")
+    if pre_runner.document_json != post_runner.document_json:
+        raise GVisorRuntimeError("Docker runner identity changed during the capture")
+    _verify_image(runtime_lock, evidence["image_inspect"])
+    return observed_binaries
+
+
+def _verify_canary_evidence(
+    cas: CAS,
+    runtime_lock: dict[str, Any],
+    canary_lock: dict[str, Any],
+    evidence: dict[str, bytes],
+    *,
+    run_id: str,
+    implementation_files: dict[str, str],
+) -> tuple[tuple[bytes, ...], str]:
+    observed_binaries = _verify_runtime_identity_evidence(
+        runtime_lock,
+        evidence,
+        implementation_files=implementation_files,
+        runtime=canary_lock["runtime"],
+        daemon_config_digest=canary_lock["daemon_config_digest"],
+        helper_modules=_CANARY_HELPER_MODULES,
+        label="gVisor detonation canary",
+    )
+    pre = _inspect(evidence["container_pre_inspect"], "prestart canary container")
+    live = _inspect(evidence["container_live_inspect"], "live canary container")
+    post = _inspect(evidence["container_post_inspect"], "postrun canary container")
+    container_id = _verify_canary_container(
+        runtime_lock, canary_lock, pre, phase="prestart", run_id=run_id
+    )
+    if (
+        _verify_canary_container(
+            runtime_lock, canary_lock, live, phase="live", run_id=run_id
+        )
+        != container_id
+        or _verify_canary_container(
+            runtime_lock, canary_lock, post, phase="postrun", run_id=run_id
+        )
+        != container_id
+    ):
+        raise GVisorRuntimeError("gVisor canary container identity changed")
+    for field in ("Created", "Image", "Path", "Args"):
+        if pre.get(field) != live.get(field) or pre.get(field) != post.get(field):
+            raise GVisorRuntimeError(f"gVisor canary container {field} changed")
+    _verify_processes(
+        runtime_lock,
+        evidence["container_processes"],
+        container_id=container_id,
+        sandbox_pid=live["State"]["Pid"],
+        installed_runsc=observed_binaries[canary_lock["runtime"]["path"]],
+    )
+    if evidence["container_stdout"] or evidence["container_stderr"]:
+        raise GVisorRuntimeError("gVisor detonation canary produced output")
+    cleanup = _json_object(
+        evidence["container_cleanup"], "gVisor canary cleanup", canonical=True
+    )
+    if cleanup != {
+        "schema": CANARY_CLEANUP_SCHEMA,
+        "container_id": container_id,
+        "absent": True,
+    }:
+        raise GVisorRuntimeError("gVisor canary cleanup evidence changed")
+    logs = _read_canary_logs(
+        cas, evidence["backend_log_manifest"], canary_lock, container_id
+    )
+    for command, raw in logs.items():
+        if command != "boot":
+            _verify_canary_log_envelope(raw, canary_lock, container_id, command)
+    return (
+        _parse_canary_trace(logs["boot"], runtime_lock, canary_lock, container_id),
+        container_id,
+    )
+
+
+def _verify_canary_log_envelope(
+    raw: bytes,
+    canary_lock: dict[str, Any],
+    container_id: str,
+    command: str,
+) -> None:
+    records = _canary_log_records(raw, canary_lock, command)
+    if not any(container_id in record["msg"] for record in records):
+        raise GVisorRuntimeError(f"gVisor canary {command} log is not run-bound")
+
+
+def _canary_log_records(
+    raw: bytes,
+    canary_lock: dict[str, Any],
+    command: str,
+) -> tuple[dict[str, Any], ...]:
+    trace = canary_lock["trace"]
+    if (
+        not raw
+        or len(raw) > trace["max_log_bytes"]
+        or not raw.endswith(b"\n")
+        or b"\x00" in raw
+        or b"\r" in raw
+    ):
+        raise GVisorRuntimeError(f"gVisor canary {command} log framing is invalid")
+    lines = raw.splitlines()
+    if not lines or len(lines) > trace["max_log_lines"]:
+        raise GVisorRuntimeError(f"gVisor canary {command} log line count is invalid")
+    records = []
+    for line in lines:
+        if not line or len(line) > trace["max_line_bytes"]:
+            raise GVisorRuntimeError(f"gVisor canary {command} log line is invalid")
+        record = _json_object(line, f"gVisor canary {command} log record")
+        _exact_keys(
+            record,
+            {"msg", "level", "time"},
+            f"gVisor canary {command} log record",
+        )
+        if (
+            record["level"] not in {"debug", "info", "warning"}
+            or not isinstance(record["msg"], str)
+            or not record["msg"]
+            or "\x00" in record["msg"]
+            or not isinstance(record["time"], str)
+            or _TRACE_TIME.fullmatch(record["time"]) is None
+        ):
+            raise GVisorRuntimeError(f"gVisor canary {command} log record is invalid")
+        records.append(record)
+    return tuple(records)
 
 
 def _runtime_lock(raw: object) -> dict[str, Any]:
@@ -1335,6 +2605,156 @@ def _runtime_lock(raw: object) -> dict[str, Any]:
     return lock
 
 
+def _canary_lock(raw: object) -> dict[str, Any]:
+    if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_LOCK_BYTES:
+        raise GVisorRuntimeError("gVisor detonation canary lock is empty or oversized")
+    lock = _json_object(raw, "gVisor detonation canary lock")
+    _exact_keys(
+        lock,
+        {
+            "schema",
+            "authority",
+            "runtime_lock_digest",
+            "daemon_config_digest",
+            "runtime",
+            "trace",
+            "canary",
+        },
+        "gVisor detonation canary lock",
+    )
+    if (
+        lock["schema"] != CANARY_LOCK_SCHEMA
+        or lock["authority"] != CANARY_LOCK_AUTHORITY
+    ):
+        raise GVisorRuntimeError("gVisor detonation canary lock authority is invalid")
+    _digest(lock["runtime_lock_digest"], "gVisor runtime lock")
+    _digest(lock["daemon_config_digest"], "Docker daemon configuration")
+
+    runtime = _object(lock["runtime"], "gVisor detonation canary runtime")
+    _exact_keys(
+        runtime,
+        {"name", "path", "arguments"},
+        "gVisor detonation canary runtime",
+    )
+    expected_log = "/var/log/aragorn-p2-docker-canary/%ID%.%CID%.%COMMAND%.jsonl"
+    if runtime != {
+        "name": "runsc-systrap-canary",
+        "path": "/usr/local/bin/runsc",
+        "arguments": [
+            "--platform=systrap",
+            "--directfs=false",
+            "--network=none",
+            "--strace=true",
+            "--strace-syscalls=openat,execve",
+            "--strace-log-size=256",
+            "--debug=true",
+            f"--debug-log={expected_log}",
+            "--debug-log-format=json",
+        ],
+    }:
+        raise GVisorRuntimeError("gVisor detonation canary runtime pin changed")
+
+    trace = _object(lock["trace"], "gVisor detonation canary trace")
+    _exact_keys(
+        trace,
+        {
+            "directory",
+            "format",
+            "syscalls",
+            "commands",
+            "max_log_bytes",
+            "max_log_lines",
+            "max_line_bytes",
+        },
+        "gVisor detonation canary trace",
+    )
+    if trace != {
+        "directory": "/var/log/aragorn-p2-docker-canary",
+        "format": "json-lines",
+        "syscalls": ["execve", "openat"],
+        "commands": ["boot", "create", "gofer", "start"],
+        "max_log_bytes": 1024 * 1024,
+        "max_log_lines": 4096,
+        "max_line_bytes": 32768,
+    }:
+        raise GVisorRuntimeError("gVisor detonation canary trace pin changed")
+
+    canary = _object(lock["canary"], "gVisor detonation canary profile")
+    _exact_keys(
+        canary,
+        {
+            "command",
+            "environment",
+            "user",
+            "network_mode",
+            "read_only",
+            "cap_drop",
+            "security_opt",
+            "pids_limit",
+            "memory_bytes",
+            "memory_swap_bytes",
+            "nano_cpus",
+            "nofile_soft",
+            "nofile_hard",
+            "tmpfs",
+            "token",
+            "token_path",
+            "token_digest",
+            "declared_capabilities",
+            "source_events",
+        },
+        "gVisor detonation canary profile",
+    )
+    expected_token = "Aragorn-P2-canary-v1"
+    expected_path = "/tmp/aragorn-canary"
+    expected_events = [
+        {
+            "schema": "aragorn/detonation-source-event/v1",
+            "operation": "file-open-read",
+            "detail": f"gvisor-json-strace:openat:O_RDONLY:{expected_path}",
+        },
+        {
+            "schema": "aragorn/detonation-source-event/v1",
+            "operation": "process-exec",
+            "detail": "gvisor-json-strace:execve:/bin/sha256sum",
+        },
+    ]
+    if canary != {
+        "command": [
+            "/bin/sh",
+            "-c",
+            (
+                "umask 077; printf Aragorn-P2-canary-v1 > /tmp/aragorn-canary; "
+                "/bin/sha256sum /tmp/aragorn-canary >/dev/null; /bin/sleep 5; "
+                "/bin/true"
+            ),
+        ],
+        "environment": ["PATH=/bin"],
+        "user": "65534:65534",
+        "network_mode": "none",
+        "read_only": True,
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges=true"],
+        "pids_limit": 64,
+        "memory_bytes": 64 * 1024 * 1024,
+        "memory_swap_bytes": 64 * 1024 * 1024,
+        "nano_cpus": 250_000_000,
+        "nofile_soft": 1024,
+        "nofile_hard": 1024,
+        "tmpfs": {
+            "destination": "/tmp",
+            "options": "rw,noexec,nosuid,nodev,size=1048576",
+        },
+        "token": expected_token,
+        "token_path": expected_path,
+        "token_digest": _raw_digest(expected_token.encode("ascii")),
+        "declared_capabilities": [],
+        "source_events": expected_events,
+    }:
+        raise GVisorRuntimeError("gVisor detonation canary profile pin changed")
+    return lock
+
+
 def _verify_image(lock: dict[str, Any], raw: bytes) -> None:
     document = _json_value(raw, "Docker image inspect")
     if not isinstance(document, list) or len(document) != 1:
@@ -1353,16 +2773,54 @@ def _verify_image(lock: dict[str, Any], raw: bytes) -> None:
 def _verify_container(
     lock: dict[str, Any], container: dict[str, Any], *, phase: str, run_id: str
 ) -> str:
+    return _verify_container_profile(
+        image=lock["image"],
+        profile=lock["smoke"],
+        runtime=lock["runtime"],
+        container=container,
+        phase=phase,
+        labels={"aragorn.runtime-smoke.run_id": run_id},
+        tmpfs=None,
+    )
+
+
+def _verify_canary_container(
+    runtime_lock: dict[str, Any],
+    canary_lock: dict[str, Any],
+    container: dict[str, Any],
+    *,
+    phase: str,
+    run_id: str,
+) -> str:
+    profile = canary_lock["canary"]
+    return _verify_container_profile(
+        image=runtime_lock["image"],
+        profile=profile,
+        runtime=canary_lock["runtime"],
+        container=container,
+        phase=phase,
+        labels={"aragorn.detonation-canary.run_id": run_id},
+        tmpfs={profile["tmpfs"]["destination"]: profile["tmpfs"]["options"]},
+    )
+
+
+def _verify_container_profile(
+    *,
+    image: dict[str, Any],
+    profile: dict[str, Any],
+    runtime: dict[str, Any],
+    container: dict[str, Any],
+    phase: str,
+    labels: dict[str, str],
+    tmpfs: dict[str, str] | None,
+) -> str:
     container_id = container.get("Id")
     if not isinstance(container_id, str) or _CONTAINER.fullmatch(container_id) is None:
         raise GVisorRuntimeError("Docker container identity is invalid")
-    image = lock["image"]
-    smoke = lock["smoke"]
-    runtime = lock["runtime"]
     if (
         container.get("Image") != image["digest"]
-        or container.get("Path") != smoke["command"][0]
-        or container.get("Args") != smoke["command"][1:]
+        or container.get("Path") != profile["command"][0]
+        or container.get("Args") != profile["command"][1:]
         or container.get("Platform") != "linux"
     ):
         raise GVisorRuntimeError("Docker container execution identity changed")
@@ -1384,36 +2842,39 @@ def _verify_container(
     config = _object(container.get("Config"), "container configuration")
     if (
         config.get("Image") != image["reference"]
-        or config.get("Cmd") != smoke["command"]
-        or config.get("User") != smoke["user"]
-        or config.get("Env") != smoke["environment"]
+        or config.get("Cmd") != profile["command"]
+        or config.get("User") != profile["user"]
+        or config.get("Env") != profile["environment"]
         or config.get("Volumes") is not None
         or config.get("Entrypoint") is not None
-        or config.get("Labels") != {"aragorn.runtime-smoke.run_id": run_id}
+        or config.get("Labels") != labels
     ):
         raise GVisorRuntimeError("Docker container configuration changed")
 
+    expected_host = {
+        "Runtime": runtime["name"],
+        "NetworkMode": profile["network_mode"],
+        "ReadonlyRootfs": profile["read_only"],
+        "CapDrop": profile["cap_drop"],
+        "SecurityOpt": profile["security_opt"],
+        "PidsLimit": profile["pids_limit"],
+        "Memory": profile["memory_bytes"],
+        "MemorySwap": profile["memory_swap_bytes"],
+        "NanoCpus": profile["nano_cpus"],
+        "Ulimits": [
+            {
+                "Name": "nofile",
+                "Hard": profile["nofile_hard"],
+                "Soft": profile["nofile_soft"],
+            }
+        ],
+    }
+    if tmpfs is not None:
+        expected_host["Tmpfs"] = tmpfs
     try:
         host, mounts = _verify_container_security_profile(
             container,
-            expected_host={
-                "Runtime": runtime["name"],
-                "NetworkMode": smoke["network_mode"],
-                "ReadonlyRootfs": smoke["read_only"],
-                "CapDrop": smoke["cap_drop"],
-                "SecurityOpt": smoke["security_opt"],
-                "PidsLimit": smoke["pids_limit"],
-                "Memory": smoke["memory_bytes"],
-                "MemorySwap": smoke["memory_swap_bytes"],
-                "NanoCpus": smoke["nano_cpus"],
-                "Ulimits": [
-                    {
-                        "Name": "nofile",
-                        "Hard": smoke["nofile_hard"],
-                        "Soft": smoke["nofile_soft"],
-                    }
-                ],
-            },
+            expected_host=expected_host,
             expected_networks={"none"},
         )
     except VerificationError as exc:
@@ -1606,7 +3067,9 @@ def _verify_processes(
             )
 
 
-def _evidence_snapshot(value: object) -> dict[str, bytes]:
+def _evidence_snapshot(
+    value: object, *, expected: dict[str, int] = _EVIDENCE_LIMITS
+) -> dict[str, bytes]:
     if type(value) is not dict:
         raise GVisorRuntimeError("gVisor runtime evidence must be a plain mapping")
     try:
@@ -1615,11 +3078,11 @@ def _evidence_snapshot(value: object) -> dict[str, bytes]:
         raise GVisorRuntimeError(
             "gVisor runtime evidence changed during snapshot"
         ) from exc
-    if {name for name, _raw in items} != set(_EVIDENCE_LIMITS):
+    if {name for name, _raw in items} != set(expected):
         raise GVisorRuntimeError("gVisor runtime evidence inventory is incomplete")
     captured = dict(items)
     for name, raw in captured.items():
-        if type(raw) is not bytes or len(raw) > _EVIDENCE_LIMITS[name]:
+        if type(raw) is not bytes or len(raw) > expected[name]:
             raise GVisorRuntimeError(f"{name} evidence is invalid or oversized")
     return captured
 

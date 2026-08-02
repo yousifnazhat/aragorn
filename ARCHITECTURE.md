@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation-set composition implemented after the retained P2.3 gVisor runtime-path smoke; live detonation, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition and one fixed same-run gVisor canary result retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -277,8 +277,14 @@ P2.4 retains a canonical caller-selected observation/source binding set and
 independently replays every P2.2 observation into the exact P2.1 capability
 diff. Its closure contains the receipt, diff, observations, and raw canonical
 source events. It proves integrity only relative to the caller-held selected
-set; it does not prove that a backend executed, that capture was complete, or
-that any P2.3 runtime evidence came from the same run.
+set; it does not prove that a backend executed or that capture was complete.
+The fixed-canary collector adds a new run-local composition path: when invoked,
+it binds one pinned container's pre/live/post state, gVisor process graph,
+cleanup, and bounded JSON `openat`/`execve` trace to the normalized observations
+and capability diff under one run identifier. It neither imports historical
+P2.3 execution as same-run evidence nor executes arbitrary acquired artifacts.
+`RECORDED` grants no backend qualification, runtime attestation, isolation,
+admission authority, or Phase 2 exit.
 
 ### 5. Decision plane
 

@@ -187,8 +187,8 @@ _ARTIFACT_ENTRYPOINT_SIZE = 79
 _ARTIFACT_GITHUB_SOURCE = {
     "host": "github.com",
     "owner": "yousifnazhat",
-    "repository": "aragorn",
-    "skill_path": "benchmark/fixtures/phase2-inert-detonation",
+    "repository": "agent-skill-inert-fixture",
+    "skill_path": ".",
 }
 _TRACE_MESSAGE = re.compile(
     r"strace\.go:\d+\] \[\s*(?P<tgid>\d+):\s*(?P<tid>\d+)\] "

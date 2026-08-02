@@ -61,6 +61,33 @@ _LIVE_CANARY_ARCHIVE_SHA256 = (
     "abc8bd333047ab02511cba63ae06e08e90a627d8665fb6994bebeac582bf5bf9"
 )
 _LIVE_CANARY_RUN_ID = "7838a22fbd2de49b6f833443ca60f45e"
+_LIVE_ARTIFACT_RUN_ID = "4147e7ee2b15c6ada9832112122225f4"
+_LIVE_ARTIFACT_RECEIPT_DIGEST = (
+    "sha256:b44239596290137d43d76dd834cf5f81937e264bdfbd497d8a52070527f5aedf"
+)
+_LIVE_ARTIFACT_HANDOFF_DIGEST = (
+    "sha256:5314c6d62f16b4a00a14578d4e733404b4b146f8aa346a497303311bf052f089"
+)
+_LIVE_ARTIFACT_ARCHIVE_SHA256 = (
+    "07d7225a99b4f6da836ccbb2d41b8333513560e710c34bc5280b6cf07b7b564b"
+)
+_LIVE_ARTIFACT_PINS = {
+    "expected_quarantine_receipt_digest": (
+        "sha256:295b14aff90d6daddac8e435f54863cbe7133d910aa05243d9579f92b41fc475"
+    ),
+    "expected_manifest_digest": (
+        "sha256:aa2952790d95fabbdfcbe97ded12e9802f382097bc9441af1400f3068fdde1bd"
+    ),
+    "expected_tree_digest": runtime._ARTIFACT_TREE_DIGEST,
+    "expected_gateway_profile_digest": (
+        "sha256:b15767734e21048d2c25c94b0dede208618a0b0640c4819750a3bfb6f85477fc"
+    ),
+    "expected_entrypoint_digest": runtime._ARTIFACT_ENTRYPOINT_DIGEST,
+    "expected_lock_digest": _LIVE_CANARY_LOCK_DIGEST,
+    "expected_verifier_implementation_digest": (
+        "sha256:9642904785f64fcf42f8edb5cb3023deb4eb6cbef15819bc6afd58f3b29fe585"
+    ),
+}
 
 
 def _canary_trace(
@@ -617,6 +644,50 @@ class GVisorRuntimeTests(unittest.TestCase):
             self.assertEqual(cas.read(_LIVE_CANARY_RECEIPT_DIGEST), checked_in_receipt)
             receipt = json.loads(checked_in_receipt)
             self.assertEqual(receipt["run_id"], _LIVE_CANARY_RUN_ID)
+            self.assertEqual(receipt["status"], "RECORDED")
+
+    def test_checked_in_live_acquired_artifact_imports_and_replays(self) -> None:
+        root = Path(__file__).parents[1]
+        stem = f"phase2-gvisor-acquired-artifact-{_LIVE_ARTIFACT_RUN_ID}-2026-08-02"
+        archive = root / "benchmark" / "evidence" / f"{stem}.tar.gz"
+        checked_in_receipt = (
+            root / "benchmark" / "receipts" / f"{stem}.json"
+        ).read_bytes()
+        self.assertEqual(
+            _LIVE_ARTIFACT_ARCHIVE_SHA256,
+            hashlib.sha256(archive.read_bytes()).hexdigest(),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            handoff = Path(temporary) / "handoff"
+            handoff.mkdir(mode=0o700)
+            with tarfile.open(archive, "r:gz") as bundle:
+                bundle.extractall(handoff, filter="data")
+            cas = CAS(Path(temporary) / "cas")
+            imported = import_declared_byte_transport(
+                handoff,
+                cas,
+                expected_manifest_digest=_LIVE_ARTIFACT_HANDOFF_DIGEST,
+                expected_kind="runtime_evidence",
+                expected_root_digest=_LIVE_ARTIFACT_RECEIPT_DIGEST,
+            )
+            closure = runtime.derive_gvisor_acquired_artifact_closure(
+                cas,
+                _LIVE_ARTIFACT_RECEIPT_DIGEST,
+                **_LIVE_ARTIFACT_PINS,
+            )
+            self.assertEqual(
+                {item["digest"]: item["size"] for item in imported["blobs"]},
+                closure,
+            )
+            self.assertEqual(
+                cas.read(_LIVE_ARTIFACT_RECEIPT_DIGEST), checked_in_receipt
+            )
+            receipt = runtime.verify_gvisor_acquired_artifact(
+                cas,
+                _LIVE_ARTIFACT_RECEIPT_DIGEST,
+                **_LIVE_ARTIFACT_PINS,
+            )
+            self.assertEqual(receipt["run_id"], _LIVE_ARTIFACT_RUN_ID)
             self.assertEqual(receipt["status"], "RECORDED")
 
     def test_runtime_path_smoke_replays_and_fails_closed_on_drift(self) -> None:

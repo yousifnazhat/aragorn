@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition and one fixed same-run gVisor canary result retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, and one exact public-acquisition-to-gVisor artifact result retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -283,8 +283,13 @@ it binds one pinned container's pre/live/post state, gVisor process graph,
 cleanup, and bounded JSON `openat`/`execve` trace to the normalized observations
 and capability diff under one run identifier. It neither imports historical
 P2.3 execution as same-run evidence nor executes arbitrary acquired artifacts.
-`RECORDED` grants no backend qualification, runtime attestation, isolation,
-admission authority, or Phase 2 exit.
+A second fixed-profile path live-verifies one ordinary Phase 1 public-GitHub
+quarantine receipt, copies its complete source closure into a separate CAS,
+materializes only the implementation-pinned inert entrypoint, and mounts that
+exact file read-only for the same gVisor evidence path. Portable replay verifies
+the recorded acquisition bytes without promoting cross-host filesystem custody.
+`RECORDED` grants no capture completeness, backend qualification, runtime
+attestation, isolation, admission authority, or Phase 2 exit.
 
 ### 5. Decision plane
 

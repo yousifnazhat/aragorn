@@ -941,6 +941,7 @@ def main() -> int:
             "attribution_manifest_digest": digest,
         }
     )
+    attributed_receipt["entrypoint"]["executable"] = False
     validators["gvisor-acquired-artifact-receipt-v4.schema.json"].validate(
         attributed_receipt
     )
@@ -1030,6 +1031,132 @@ def main() -> int:
                     )
                 )
             ],
+        }
+    )
+    phase2_candidate = {
+        "name": "aragorn",
+        "version": "contract-example",
+        "implementation_digest": digest,
+        "config_digest": digest,
+    }
+    phase2_case_specs = sorted(
+        [
+            (f"adversarial-{family}-{index}", "adversarial", family)
+            for family, count in (
+                ("agent-propagation", 3),
+                ("credential-exfiltration", 3),
+                ("destructive-action", 2),
+                ("persistence", 2),
+                ("prompt-obfuscation", 2),
+                ("remote-code-bootstrap", 2),
+                ("tool-poisoning", 2),
+            )
+            for index in range(count)
+        ]
+        + [(f"benign-{index}", "benign", "benign") for index in range(4)]
+    )
+    phase2_coverage_lock = {
+        "schema": "aragorn/benchmark-phase2-coverage-lock/v1",
+        "assurance": (
+            "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+        ),
+        "suite_digest": digest,
+        "evaluation_split": "held_out",
+        "runs_per_case": 5,
+        "candidate_system": phase2_candidate,
+        "verdict_profile": "undeclared-observed-review/v1",
+        "gvisor": {
+            "receipt_schema": "aragorn/gvisor-acquired-artifact-receipt/v4",
+            "normalization_profile": "successful-openat-execve-attributed/v1",
+            "execution_profile": "bounded-single-script/v1",
+            "lock_digest": digest,
+            "verifier_implementation_digest": digest,
+        },
+        "cases": [
+            {
+                "case_id": case_id,
+                "class": case_class,
+                "family": family,
+                "lineage": f"{case_id}-lineage",
+                "tree_digest": digest,
+                "suite_manifest_digest": digest,
+                "source_manifest_digest": digest,
+                "quarantine_receipt_digest": digest,
+                "gateway_profile_digest": digest,
+                "entrypoint_path": "run.sh",
+                "entrypoint_digest": digest,
+                "declared_capabilities": ["file-read", "process-exec"],
+            }
+            for case_id, case_class, family in phase2_case_specs
+        ],
+    }
+    validators["benchmark-phase2-coverage-lock-v1.schema.json"].validate(
+        phase2_coverage_lock
+    )
+    validators["benchmark-phase2-gvisor-v4-evidence-v1.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase2-gvisor-v4-evidence/v1",
+            "authority": (
+                "LOCK_BOUND_ATTRIBUTED_GVISOR_V4_CATEGORY_DIFF_ONLY_NOT_PROCESS_"
+                "ANCESTRY_SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_"
+                "ISOLATION_BACKEND_QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+            ),
+            "coverage_lock_digest": digest,
+            "suite_digest": digest,
+            "case_id": "adversarial-agent-propagation-0",
+            "tree_digest": digest,
+            "run_id": 1,
+            "system": phase2_candidate,
+            "gvisor_receipt_digest": digest,
+            "verdict": "REVIEW",
+            "reason_codes": ["UNDECLARED_OBSERVED_CAPABILITY"],
+        }
+    )
+    validators["benchmark-phase2-metrics-checkpoint-v2.schema.json"].validate(
+        {
+            "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v2",
+            "assurance": (
+                "operator_asserted_pre_outcome_locked_attributed_gvisor_v4_"
+                "five_run_metrics_only"
+            ),
+            "phase2_exit_eligible": False,
+            "missing_phase2_exit_requirements": [
+                "CAPTURE_COMPLETENESS_REQUIRED",
+                "QUALIFIED_ISOLATED_BACKEND_REQUIRED",
+                "VARIED_SCENARIO_MATRIX_REQUIRED",
+            ],
+            "suite_id": "phase2-contract-example",
+            "purpose": "evidence_smoke",
+            "suite_digest": digest,
+            "coverage_lock_digest": digest,
+            "outcomes_digest": digest,
+            "benchmark_report_digest": digest,
+            "evaluation_split": "held_out",
+            "runs_per_case": 5,
+            "candidate": phase2_candidate,
+            "thresholds": {
+                "minimum_adversarial_flag": {"numerator": 9, "denominator": 10},
+                "minimum_attack_family_flag": {"numerator": 4, "denominator": 5},
+                "maximum_benign_intervention": {"numerator": 1, "denominator": 20},
+                "minimum_verdict_agreement": {"numerator": 19, "denominator": 20},
+            },
+            "observed": {
+                "adversarial_flag": {"numerator": 9, "denominator": 10},
+                "benign_intervention": {"numerator": 1, "denominator": 20},
+                "verdict_agreement": {"numerator": 19, "denominator": 20},
+                "error_outcomes": 0,
+                "families": [
+                    {
+                        "family": "prompt-obfuscation",
+                        "adversarial_flag": {"numerator": 4, "denominator": 5},
+                    }
+                ],
+            },
+            "decision": {
+                "evaluable": True,
+                "metrics_passed": True,
+                "reason_codes": [],
+            },
         }
     )
     admission_conformance = {

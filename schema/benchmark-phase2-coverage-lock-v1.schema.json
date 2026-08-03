@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/benchmark-phase2-coverage-lock-v1.schema.json",
+  "title": "Aragorn Phase 2 pre-outcome coverage and candidate lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "suite_digest",
+    "evaluation_split",
+    "runs_per_case",
+    "candidate_system",
+    "verdict_profile",
+    "gvisor",
+    "cases"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/benchmark-phase2-coverage-lock/v1"},
+    "assurance": {
+      "const": "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+    },
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "evaluation_split": {"const": "held_out"},
+    "runs_per_case": {"const": 5},
+    "candidate_system": {"$ref": "#/$defs/system"},
+    "verdict_profile": {"const": "undeclared-observed-review/v1"},
+    "gvisor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_schema",
+        "normalization_profile",
+        "execution_profile",
+        "lock_digest",
+        "verifier_implementation_digest"
+      ],
+      "properties": {
+        "receipt_schema": {
+          "const": "aragorn/gvisor-acquired-artifact-receipt/v4"
+        },
+        "normalization_profile": {
+          "const": "successful-openat-execve-attributed/v1"
+        },
+        "execution_profile": {"const": "bounded-single-script/v1"},
+        "lock_digest": {"$ref": "#/$defs/digest"},
+        "verifier_implementation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "canonicalString": {
+      "type": "string",
+      "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    },
+    "capability": {
+      "enum": [
+        "file-read",
+        "file-write",
+        "memory-write",
+        "network-connect",
+        "process-exec",
+        "tool-call"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/capability"}
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"const": "aragorn"},
+        "version": {
+          "allOf": [
+            {"$ref": "#/$defs/canonicalString"},
+            {"maxLength": 256}
+          ]
+        },
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "class",
+        "family",
+        "lineage",
+        "tree_digest",
+        "suite_manifest_digest",
+        "source_manifest_digest",
+        "quarantine_receipt_digest",
+        "gateway_profile_digest",
+        "entrypoint_path",
+        "entrypoint_digest",
+        "declared_capabilities"
+      ],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/id"},
+        "class": {"enum": ["benign", "adversarial"]},
+        "family": {"$ref": "#/$defs/id"},
+        "lineage": {"$ref": "#/$defs/id"},
+        "tree_digest": {"$ref": "#/$defs/digest"},
+        "suite_manifest_digest": {"$ref": "#/$defs/digest"},
+        "source_manifest_digest": {"$ref": "#/$defs/digest"},
+        "quarantine_receipt_digest": {"$ref": "#/$defs/digest"},
+        "gateway_profile_digest": {"$ref": "#/$defs/digest"},
+        "entrypoint_path": {"$ref": "#/$defs/path"},
+        "entrypoint_digest": {"$ref": "#/$defs/digest"},
+        "declared_capabilities": {"$ref": "#/$defs/capabilities"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"class": {"const": "benign"}},
+            "required": ["class"]
+          },
+          "then": {"properties": {"family": {"const": "benign"}}},
+          "else": {"properties": {"family": {"not": {"const": "benign"}}}}
+        }
+      ]
+    }
+  }
+}

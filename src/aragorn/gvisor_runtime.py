@@ -295,6 +295,7 @@ class _AcquiredArtifact:
     entrypoint_path: str
     entrypoint_digest: str
     entrypoint_size: int
+    entrypoint_executable: bool
     execution_profile: str | None
     declared_capabilities: tuple[str, ...]
     materialized_path: Path
@@ -748,6 +749,12 @@ def collect_gvisor_acquired_artifact(
             expected_tree_digest=tree_digest,
             expected_path=entrypoint_path,
             expected_digest=entrypoint_digest,
+            expected_executable=(
+                None
+                if selected_normalization
+                == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+                else True
+            ),
         )
         _verify_artifact_script(
             source_cas.read(entrypoint_digest, max_bytes=_MAX_ARTIFACT_BYTES),
@@ -783,6 +790,7 @@ def collect_gvisor_acquired_artifact(
                 entrypoint_path=entrypoint_path,
                 entrypoint_digest=entrypoint_digest,
                 entrypoint_size=entrypoint["size"],
+                entrypoint_executable=entrypoint["executable"],
                 execution_profile=selected_execution,
                 declared_capabilities=declared_capabilities,
                 materialized_path=materialized_path,
@@ -1777,11 +1785,13 @@ def _artifact_entrypoint(artifact: _AcquiredArtifact) -> dict[str, Any]:
         or not 1 <= artifact.entrypoint_size <= _MAX_ARTIFACT_BYTES
     ):
         raise GVisorRuntimeError("acquired artifact entrypoint size is invalid")
+    if type(artifact.entrypoint_executable) is not bool:
+        raise GVisorRuntimeError("acquired artifact executable fact is invalid")
     return {
         "path": _artifact_entrypoint_path(artifact.entrypoint_path),
         "digest": _digest(artifact.entrypoint_digest, "artifact entrypoint"),
         "size": artifact.entrypoint_size,
-        "executable": True,
+        "executable": artifact.entrypoint_executable,
         "container_path": _ARTIFACT_TARGET,
     }
 
@@ -1792,7 +1802,10 @@ def _pinned_artifact_entrypoint(
     expected_tree_digest: str,
     expected_path: object,
     expected_digest: str,
+    expected_executable: bool | None = True,
 ) -> dict[str, Any]:
+    if expected_executable is not None and type(expected_executable) is not bool:
+        raise GVisorRuntimeError("expected artifact executable fact is invalid")
     if (
         manifest.get("schema") != "aragorn/github-manifest/v1"
         or manifest.get("tree_digest") != expected_tree_digest
@@ -1808,7 +1821,11 @@ def _pinned_artifact_entrypoint(
         or isinstance(entrypoint["size"], bool)
         or not isinstance(entrypoint["size"], int)
         or not 1 <= entrypoint["size"] <= _MAX_ARTIFACT_BYTES
-        or entrypoint["executable"] is not True
+        or type(entrypoint["executable"]) is not bool
+        or (
+            expected_executable is not None
+            and entrypoint["executable"] is not expected_executable
+        )
     ):
         raise GVisorRuntimeError("acquired artifact entrypoint profile changed")
     return entrypoint
@@ -3354,6 +3371,7 @@ def _verify_gvisor_acquired_artifact(
                 expected_tree_digest=expected_tree,
                 expected_path=expected_path,
                 expected_digest=expected_entrypoint,
+                expected_executable=None if expected_attribution else True,
             )
         )
         if expected_execution is not None:
@@ -3371,7 +3389,7 @@ def _verify_gvisor_acquired_artifact(
             "path": expected_path,
             "digest": expected_entrypoint,
             "size": manifest_entrypoint["size"],
-            "executable": True,
+            "executable": manifest_entrypoint["executable"],
             "container_path": _ARTIFACT_TARGET,
         }:
             raise GVisorRuntimeError("gVisor acquired entrypoint identity changed")
@@ -3401,6 +3419,7 @@ def _verify_gvisor_acquired_artifact(
             entrypoint_path=expected_path,
             entrypoint_digest=expected_entrypoint,
             entrypoint_size=manifest_entrypoint["size"],
+            entrypoint_executable=manifest_entrypoint["executable"],
             execution_profile=expected_execution,
             declared_capabilities=(
                 expected_declared

@@ -58,6 +58,7 @@ _VERDICTS = ("ALLOW", "REVIEW", "DENY", "ERROR")
 _SPLITS = frozenset({"development", "held_out", "hidden"})
 _PURPOSES = frozenset({"contract_smoke", "evidence_smoke"})
 _REASON_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,127}\Z")
+_PHASE2_GVISOR_RUN_ID = re.compile(r"[0-9a-f]{32}\Z")
 _MAX_INPUT_BYTES = 16 * 1024 * 1024
 _MAX_CASES = 10_000
 _MAX_SYSTEMS = 32
@@ -66,7 +67,7 @@ _MAX_OUTCOMES = 200_000
 _MAX_SUITE_ENTRIES = 100_000
 _MAX_FIXTURE_BYTES = 16 * 1024 * 1024
 _MAX_SUITE_BYTES = 128 * 1024 * 1024
-_TEXT_SUFFIXES = frozenset({".json", ".md", ".txt", ".yaml", ".yml"})
+_TEXT_SUFFIXES = frozenset({".json", ".md", ".sh", ".txt", ".yaml", ".yml"})
 _SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 _MAX_EVIDENCE_BYTES = 8 * 1024 * 1024
 _MAX_EXECUTABLE_BYTES = 128 * 1024 * 1024
@@ -82,6 +83,28 @@ _PHASE2_MINIMUM_ATTACK_FLAG = Fraction(9, 10)
 _PHASE2_MINIMUM_FAMILY_FLAG = Fraction(4, 5)
 _PHASE2_BENIGN_INTERVENTION_CEILING = Fraction(1, 20)
 _PHASE2_MINIMUM_VERDICT_AGREEMENT = Fraction(19, 20)
+_PHASE2_COVERAGE_LOCK_SCHEMA = "aragorn/benchmark-phase2-coverage-lock/v1"
+_PHASE2_COVERAGE_LOCK_ASSURANCE = (
+    "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
+)
+_PHASE2_GVISOR_EVIDENCE_SCHEMA = "aragorn/benchmark-phase2-gvisor-v4-evidence/v1"
+_PHASE2_GVISOR_EVIDENCE_AUTHORITY = (
+    "LOCK_BOUND_ATTRIBUTED_GVISOR_V4_CATEGORY_DIFF_ONLY_NOT_PROCESS_ANCESTRY_"
+    "SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_BACKEND_"
+    "QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+)
+_PHASE2_VERDICT_PROFILE = "undeclared-observed-review/v1"
+_PHASE2_REQUIRED_FAMILIES = frozenset(
+    {
+        "agent-propagation",
+        "credential-exfiltration",
+        "destructive-action",
+        "persistence",
+        "prompt-obfuscation",
+        "remote-code-bootstrap",
+        "tool-poisoning",
+    }
+)
 _PHASE0_EXPANSION_CONTRACTS = {
     GITHUB_EXPANSION_PROFILE: (
         GITHUB_EXPANSION_ASSURANCE,
@@ -320,6 +343,8 @@ def evaluate_files(
     evidence_state: str | os.PathLike[str] | None = None,
     acceptance_ledger: str | os.PathLike[str] | None = None,
     phase2_metrics_checkpoint: bool = False,
+    phase2_coverage_lock: str | os.PathLike[str] | None = None,
+    expected_phase2_coverage_lock_digest: str | None = None,
 ) -> dict[str, Any]:
     """Verify an inert corpus and return deterministic aggregate metrics."""
 
@@ -348,6 +373,10 @@ def evaluate_files(
             evidence_cas=evidence_cas,
             acceptance_ledger=trusted_ledger,
             phase2_metrics_checkpoint=phase2_metrics_checkpoint,
+            phase2_coverage_lock=(
+                Path(phase2_coverage_lock) if phase2_coverage_lock is not None else None
+            ),
+            expected_phase2_coverage_lock_digest=(expected_phase2_coverage_lock_digest),
         )
     finally:
         os.close(suite_root_fd)
@@ -361,6 +390,8 @@ def evaluate(
     evidence_state: str | os.PathLike[str] | None = None,
     acceptance_ledger: str | os.PathLike[str] | None = None,
     phase2_metrics_checkpoint: bool = False,
+    phase2_coverage_lock: str | os.PathLike[str] | None = None,
+    expected_phase2_coverage_lock_digest: str | None = None,
 ) -> dict[str, Any]:
     """Evaluate already-decoded documents after strict contract validation."""
 
@@ -381,6 +412,10 @@ def evaluate(
             evidence_cas=evidence_cas,
             acceptance_ledger=trusted_ledger,
             phase2_metrics_checkpoint=phase2_metrics_checkpoint,
+            phase2_coverage_lock=(
+                Path(phase2_coverage_lock) if phase2_coverage_lock is not None else None
+            ),
+            expected_phase2_coverage_lock_digest=(expected_phase2_coverage_lock_digest),
         )
     finally:
         os.close(suite_root_fd)
@@ -574,6 +609,8 @@ def _evaluate(
     phase0_candidate_policy: Path | None = None,
     phase0_label_ledger_digest: str | None = None,
     phase2_metrics_checkpoint: bool = False,
+    phase2_coverage_lock: Path | None = None,
+    expected_phase2_coverage_lock_digest: str | None = None,
 ) -> dict[str, Any]:
     if phase0_accounting is not None and phase0_hidden_gate:
         raise BenchmarkError(
@@ -584,6 +621,20 @@ def _evaluate(
     ):
         raise BenchmarkError(
             "Phase 0 gates and the Phase 2 metrics checkpoint are mutually exclusive"
+        )
+    phase2_lock_inputs = (
+        phase2_coverage_lock,
+        expected_phase2_coverage_lock_digest,
+    )
+    if (phase2_lock_inputs[0] is None) != (phase2_lock_inputs[1] is None):
+        raise BenchmarkError(
+            "Phase 2 coverage lock and caller-held expected digest are paired inputs"
+        )
+    if not phase2_metrics_checkpoint and any(
+        value is not None for value in phase2_lock_inputs
+    ):
+        raise BenchmarkError(
+            "Phase 2 coverage lock inputs require the Phase 2 metrics checkpoint"
         )
     (
         suite_id,
@@ -605,6 +656,21 @@ def _evaluate(
             raise BenchmarkError(
                 "Phase 2 metrics checkpoint requires exactly five runs per case"
             )
+        if phase2_coverage_lock is not None:
+            assert expected_phase2_coverage_lock_digest is not None
+            phase2_binding = _validate_phase2_coverage_lock(
+                phase2_coverage_lock,
+                expected_digest=expected_phase2_coverage_lock_digest,
+                suite_digest=suite_digest,
+                runs_per_case=runs_per_case,
+                cases=cases,
+                systems=systems,
+                manifests=manifests,
+            )
+        else:
+            phase2_binding = None
+    else:
+        phase2_binding = None
     hidden_binding = None
     if phase0_hidden_gate:
         if purpose != "evidence_smoke":
@@ -671,6 +737,7 @@ def _evaluate(
             else None
         ),
         phase0_expansion_digests=phase0_expansion_digests,
+        phase2_binding=phase2_binding,
     )
     canonical_outcomes = sorted(
         normalized_outcomes,
@@ -740,6 +807,11 @@ def _evaluate(
             cases=cases,
             systems=systems,
             outcomes=canonical_outcomes,
+            coverage_lock_digest=(
+                phase2_binding["coverage_lock_digest"]
+                if phase2_binding is not None
+                else None
+            ),
         )
     if phase0_hidden_gate:
         assert hidden_binding is not None
@@ -788,7 +860,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--phase2-metrics-checkpoint",
         action="store_true",
-        help="opt-in non-authoritative five-run held-out Phase 2 metrics checkpoint",
+        help="opt-in locked attributed five-run held-out Phase 2 metrics checkpoint",
+    )
+    parser.add_argument(
+        "--phase2-coverage-lock",
+        type=Path,
+        help="canonical pre-outcome Phase 2 coverage and candidate lock",
+    )
+    parser.add_argument(
+        "--expected-phase2-coverage-lock-digest",
+        help="caller-held SHA-256 identity for the Phase 2 coverage lock",
     )
     parser.add_argument(
         "--phase0-corpus-lock",
@@ -825,6 +906,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         ):
             raise BenchmarkError(
                 "Phase 0 gates and the Phase 2 metrics checkpoint are mutually exclusive"
+            )
+        phase2_lock_inputs = (
+            arguments.phase2_coverage_lock,
+            arguments.expected_phase2_coverage_lock_digest,
+        )
+        if (phase2_lock_inputs[0] is None) != (phase2_lock_inputs[1] is None):
+            raise BenchmarkError(
+                "--phase2-coverage-lock and "
+                "--expected-phase2-coverage-lock-digest are paired inputs"
+            )
+        if not arguments.phase2_metrics_checkpoint and any(
+            value is not None for value in phase2_lock_inputs
+        ):
+            raise BenchmarkError(
+                "Phase 2 coverage lock inputs require --phase2-metrics-checkpoint"
             )
         hidden_inputs = (
             arguments.phase0_corpus_lock,
@@ -871,6 +967,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 evidence_state=arguments.state,
                 acceptance_ledger=arguments.acceptance_ledger,
                 phase2_metrics_checkpoint=arguments.phase2_metrics_checkpoint,
+                phase2_coverage_lock=arguments.phase2_coverage_lock,
+                expected_phase2_coverage_lock_digest=(
+                    arguments.expected_phase2_coverage_lock_digest
+                ),
             )
         else:
             report = evaluate_phase0_files(
@@ -1240,6 +1340,7 @@ def _validate_outcomes(
     require_candidate_composition: bool = False,
     expected_candidate_policy_digest: str | None = None,
     phase0_expansion_digests: dict[str, str] | None = None,
+    phase2_binding: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     if require_candidate_composition and purpose != "evidence_smoke":
         raise BenchmarkError("Phase 0 hidden gate requires evidence_smoke")
@@ -1266,6 +1367,7 @@ def _validate_outcomes(
     normalized = []
     v4_bindings: list[dict[str, str]] = []
     candidate_bindings: list[dict[str, Any]] = []
+    phase2_bindings: list[dict[str, Any]] = []
     seen: set[tuple[tuple[str, str, str, str], str, int]] = set()
     for index, raw_outcome in enumerate(raw_outcomes):
         label = f"outcomes[{index}]"
@@ -1345,28 +1447,43 @@ def _validate_outcomes(
         }
         if purpose == "evidence_smoke":
             assert evidence_cas is not None
-            phase0_expansion_digest = None
-            if phase0_expansion_digests is not None and system["name"] == "aragorn":
-                if case_id not in phase0_expansion_digests:
-                    raise BenchmarkError(
-                        "terminal Phase 0 accounting has no source context for "
-                        f"candidate case: {case_id}"
+            if (
+                phase2_binding is not None
+                and system_key == phase2_binding["candidate_key"]
+                and case_id in phase2_binding["cases"]
+            ):
+                phase2_bindings.append(
+                    _verify_phase2_gvisor_v4_evidence(
+                        evidence_cas,
+                        normalized_outcome,
+                        coverage_lock_digest=phase2_binding["coverage_lock_digest"],
+                        pins=phase2_binding["cases"][case_id],
+                        label=label,
                     )
-                phase0_expansion_digest = phase0_expansion_digests[case_id]
-            evidence_binding = _verify_evidence(
-                evidence_cas,
-                normalized_outcome,
-                expected_manifest=manifests[case_id],
-                label=label,
-                expected_dispatch_matrix=expected_dispatch_matrix,
-                acceptance_ledger=acceptance_ledger,
-                phase0_expansion_digest=phase0_expansion_digest,
-            )
-            if evidence_binding is not None:
-                if "evidence_kind" in evidence_binding:
-                    candidate_bindings.append(evidence_binding)
-                else:
-                    v4_bindings.append(evidence_binding)
+                )
+            else:
+                phase0_expansion_digest = None
+                if phase0_expansion_digests is not None and system["name"] == "aragorn":
+                    if case_id not in phase0_expansion_digests:
+                        raise BenchmarkError(
+                            "terminal Phase 0 accounting has no source context for "
+                            f"candidate case: {case_id}"
+                        )
+                    phase0_expansion_digest = phase0_expansion_digests[case_id]
+                evidence_binding = _verify_evidence(
+                    evidence_cas,
+                    normalized_outcome,
+                    expected_manifest=manifests[case_id],
+                    label=label,
+                    expected_dispatch_matrix=expected_dispatch_matrix,
+                    acceptance_ledger=acceptance_ledger,
+                    phase0_expansion_digest=phase0_expansion_digest,
+                )
+                if evidence_binding is not None:
+                    if "evidence_kind" in evidence_binding:
+                        candidate_bindings.append(evidence_binding)
+                    else:
+                        v4_bindings.append(evidence_binding)
         normalized.append(normalized_outcome)
 
     expected_count = len(systems) * len(cases) * runs_per_case
@@ -1398,28 +1515,39 @@ def _validate_outcomes(
             "Phase 0 hidden gate requires candidate-composition evidence "
             "for the entire outcome matrix"
         )
+    phase2_expected_count = (
+        len(phase2_binding["cases"]) * runs_per_case
+        if phase2_binding is not None
+        else 0
+    )
+    generic_expected_count = expected_count - phase2_expected_count
     _verify_v4_batch_bindings(
         v4_bindings,
-        expected_count=expected_count,
+        expected_count=generic_expected_count,
         suite_digest=suite_digest,
     )
     if candidate_bindings and all(
         item["evidence_kind"] == "authenticated_worker"
-        and item["dispatch"].get("schema")
-        == "aragorn/benchmark-private-dispatch/v1"
+        and item["dispatch"].get("schema") == "aragorn/benchmark-private-dispatch/v1"
         for item in candidate_bindings
     ):
         _verify_authenticated_worker_batch_bindings(
             candidate_bindings,
-            expected_count=expected_count,
+            expected_count=generic_expected_count,
             suite_digest=suite_digest,
         )
     else:
         _verify_candidate_batch_bindings(
             candidate_bindings,
-            expected_count=expected_count,
+            expected_count=generic_expected_count,
             suite_digest=suite_digest,
             expected_policy_digest=expected_candidate_policy_digest,
+        )
+    if phase2_binding is not None:
+        _verify_phase2_gvisor_batch_bindings(
+            phase2_bindings,
+            phase2_binding=phase2_binding,
+            runs_per_case=runs_per_case,
         )
     return normalized
 
@@ -2179,6 +2307,299 @@ def _verify_candidate_evidence(
         "source_graph": source_graph,
         "first_party_observations": first_party_observations,
     }
+
+
+def _verify_phase2_gvisor_v4_evidence(
+    cas: CAS,
+    outcome: dict[str, Any],
+    *,
+    coverage_lock_digest: str,
+    pins: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    """Verify one lock-bound candidate cell through the public gVisor v4 replay."""
+
+    evidence_label = f"{label}.evidence"
+    envelope = _read_canonical_document(
+        cas,
+        outcome["evidence_digest"],
+        evidence_label,
+        max_bytes=_MAX_EVIDENCE_BYTES,
+    )
+    _exact_keys(
+        envelope,
+        {
+            "schema",
+            "authority",
+            "coverage_lock_digest",
+            "suite_digest",
+            "case_id",
+            "tree_digest",
+            "run_id",
+            "system",
+            "gvisor_receipt_digest",
+            "verdict",
+            "reason_codes",
+        },
+        evidence_label,
+    )
+    if envelope["schema"] != _PHASE2_GVISOR_EVIDENCE_SCHEMA:
+        raise BenchmarkError(
+            f"{evidence_label} is not dedicated Phase 2 gVisor v4 evidence"
+        )
+    if envelope["authority"] != _PHASE2_GVISOR_EVIDENCE_AUTHORITY:
+        raise BenchmarkError(f"{evidence_label} authority is unsupported")
+    envelope_system = _validate_system(envelope["system"], evidence_label)
+    envelope_run_id = envelope["run_id"]
+    if isinstance(envelope_run_id, bool) or not isinstance(envelope_run_id, int):
+        raise BenchmarkError(f"{evidence_label}.run_id must be an integer")
+    if (
+        _digest(
+            envelope["coverage_lock_digest"],
+            f"{evidence_label}.coverage_lock_digest",
+        )
+        != coverage_lock_digest
+        or envelope["suite_digest"] != outcome["suite_digest"]
+        or envelope["case_id"] != outcome["case_id"]
+        or envelope["tree_digest"] != outcome["tree_digest"]
+        or envelope_run_id != outcome["run_id"]
+        or envelope_system != outcome["system"]
+    ):
+        raise BenchmarkError(f"{evidence_label} does not bind the locked outcome cell")
+    reason_codes = envelope["reason_codes"]
+    if (
+        not isinstance(reason_codes, list)
+        or any(
+            _reason_code(reason, f"{evidence_label}.reason_codes") != reason
+            for reason in reason_codes
+        )
+        or reason_codes != sorted(set(reason_codes))
+    ):
+        raise BenchmarkError(f"{evidence_label}.reason_codes are not canonical")
+    if (
+        envelope["verdict"] != outcome["verdict"]
+        or reason_codes != outcome["reason_codes"]
+    ):
+        raise BenchmarkError(f"{evidence_label} verdict binding changed")
+    receipt_digest = _digest(
+        envelope["gvisor_receipt_digest"],
+        f"{evidence_label}.gvisor_receipt_digest",
+    )
+
+    from .gvisor_runtime import (
+        ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+        ARTIFACT_ATTRIBUTION_AUTHORITY,
+        ARTIFACT_ATTRIBUTION_SCHEMA,
+        ARTIFACT_EXECUTION_PROFILE,
+        ARTIFACT_SCHEMA_V4,
+        verify_gvisor_acquired_artifact,
+    )
+
+    try:
+        receipt = verify_gvisor_acquired_artifact(cas, receipt_digest, **pins)
+    except (CASError, OSError, RuntimeError, ValueError) as exc:
+        raise BenchmarkError(
+            f"{evidence_label} gVisor v4 replay failed: {exc}"
+        ) from exc
+    if not isinstance(receipt, dict) or receipt.get("schema") != ARTIFACT_SCHEMA_V4:
+        raise BenchmarkError(f"{evidence_label} did not verify a gVisor v4 receipt")
+    receipt_run_id = receipt.get("run_id")
+    if (
+        not isinstance(receipt_run_id, str)
+        or _PHASE2_GVISOR_RUN_ID.fullmatch(receipt_run_id) is None
+    ):
+        raise BenchmarkError(f"{evidence_label} gVisor run_id is invalid")
+    if (
+        receipt.get("normalization_profile")
+        != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+        or receipt.get("execution_profile") != ARTIFACT_EXECUTION_PROFILE
+        or receipt.get("subject_digest") != pins["expected_tree_digest"]
+        or receipt.get("input_manifest_digest") != pins["expected_manifest_digest"]
+        or receipt.get("input_tree_digest") != pins["expected_tree_digest"]
+        or receipt.get("quarantine_receipt_digest")
+        != pins["expected_quarantine_receipt_digest"]
+        or receipt.get("gateway_profile_digest")
+        != pins["expected_gateway_profile_digest"]
+        or receipt.get("lock_digest") != pins["expected_lock_digest"]
+        or receipt.get("implementation_digest")
+        != pins["expected_verifier_implementation_digest"]
+    ):
+        raise BenchmarkError(f"{evidence_label} gVisor receipt pins changed")
+    entrypoint = receipt.get("entrypoint")
+    if not isinstance(entrypoint, dict) or (
+        entrypoint.get("path") != pins["expected_entrypoint_path"]
+        or entrypoint.get("digest") != pins["expected_entrypoint_digest"]
+    ):
+        raise BenchmarkError(f"{evidence_label} gVisor entrypoint pins changed")
+    run_request_digest = _digest(
+        receipt.get("run_request_digest"),
+        f"{evidence_label}.gvisor_receipt.run_request_digest",
+    )
+    diff_receipt_digest = _digest(
+        receipt.get("capability_diff_receipt_digest"),
+        f"{evidence_label}.gvisor_receipt.capability_diff_receipt_digest",
+    )
+    attribution_digest = _digest(
+        receipt.get("attribution_manifest_digest"),
+        f"{evidence_label}.gvisor_receipt.attribution_manifest_digest",
+    )
+
+    attribution = _read_canonical_document(
+        cas,
+        attribution_digest,
+        f"{evidence_label}.attribution_manifest",
+        max_bytes=2 * 1024 * 1024,
+    )
+    if (
+        attribution.get("schema") != ARTIFACT_ATTRIBUTION_SCHEMA
+        or attribution.get("authority") != ARTIFACT_ATTRIBUTION_AUTHORITY
+        or attribution.get("normalization_profile")
+        != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+        or not isinstance(attribution.get("events"), list)
+    ):
+        raise BenchmarkError(f"{evidence_label} attribution manifest is unsupported")
+    for event in attribution["events"]:
+        if not isinstance(event, dict) or event.get("scope") not in {
+            "harness",
+            "entrypoint",
+            "subject",
+            "unknown",
+        }:
+            raise BenchmarkError(f"{evidence_label} has an invalid attribution scope")
+        if event["scope"] == "unknown":
+            raise BenchmarkError(f"{evidence_label} has an unknown attribution scope")
+
+    from .behavior_capability_diff import (
+        AUTHORITY as CAPABILITY_DIFF_AUTHORITY,
+        SCHEMA as CAPABILITY_DIFF_SCHEMA,
+        SCOPE as CAPABILITY_DIFF_SCOPE,
+        BehaviorCapabilityDiffError,
+        verify_behavior_capability_diff,
+    )
+    from .detonation_observation import (
+        DIFF_RECEIPT_AUTHORITY,
+        DIFF_RECEIPT_SCHEMA,
+    )
+
+    diff_receipt = _read_canonical_document(
+        cas,
+        diff_receipt_digest,
+        f"{evidence_label}.capability_diff_receipt",
+        max_bytes=2 * 1024 * 1024,
+    )
+    _exact_keys(
+        diff_receipt,
+        {
+            "schema",
+            "authority",
+            "subject_digest",
+            "input_manifest_digest",
+            "input_tree_digest",
+            "run_request_digest",
+            "normalizer_implementation_digest",
+            "declared_capabilities",
+            "observation_bindings",
+            "capability_diff_digest",
+        },
+        f"{evidence_label}.capability_diff_receipt",
+    )
+    if (
+        diff_receipt["schema"] != DIFF_RECEIPT_SCHEMA
+        or diff_receipt["authority"] != DIFF_RECEIPT_AUTHORITY
+        or diff_receipt["subject_digest"] != pins["expected_tree_digest"]
+        or diff_receipt["input_manifest_digest"] != pins["expected_manifest_digest"]
+        or diff_receipt["input_tree_digest"] != pins["expected_tree_digest"]
+        or diff_receipt["run_request_digest"] != run_request_digest
+        or diff_receipt["normalizer_implementation_digest"]
+        != pins["expected_verifier_implementation_digest"]
+        or diff_receipt["declared_capabilities"]
+        != pins["expected_declared_capabilities"]
+        or not isinstance(diff_receipt["observation_bindings"], list)
+    ):
+        raise BenchmarkError(f"{evidence_label} capability diff receipt changed")
+    capability_diff_digest = _digest(
+        diff_receipt["capability_diff_digest"],
+        f"{evidence_label}.capability_diff_receipt.capability_diff_digest",
+    )
+    capability_diff = _read_canonical_document(
+        cas,
+        capability_diff_digest,
+        f"{evidence_label}.capability_diff",
+        max_bytes=16 * 1024,
+    )
+    if (
+        capability_diff.get("schema") != CAPABILITY_DIFF_SCHEMA
+        or capability_diff.get("authority") != CAPABILITY_DIFF_AUTHORITY
+        or capability_diff.get("scope") != CAPABILITY_DIFF_SCOPE
+    ):
+        raise BenchmarkError(f"{evidence_label} capability diff is unsupported")
+    try:
+        verified_diff = verify_behavior_capability_diff(
+            capability_diff,
+            expected_subject_digest=pins["expected_tree_digest"],
+            expected_declared_capabilities=pins["expected_declared_capabilities"],
+            expected_observed_capabilities=capability_diff.get("observed_capabilities"),
+        )
+    except BehaviorCapabilityDiffError as exc:
+        raise BenchmarkError(
+            f"{evidence_label} capability diff is invalid: {exc}"
+        ) from exc
+    if verified_diff["undeclared_observed_capabilities"]:
+        expected_verdict = "REVIEW"
+        expected_reasons = ["UNDECLARED_OBSERVED_CAPABILITY"]
+    else:
+        expected_verdict = "ALLOW"
+        expected_reasons = []
+    if (
+        envelope["verdict"] != expected_verdict
+        or reason_codes != expected_reasons
+        or outcome["verdict"] != expected_verdict
+        or outcome["reason_codes"] != expected_reasons
+    ):
+        raise BenchmarkError(
+            f"{evidence_label} verdict does not re-derive from the verified diff"
+        )
+    return {
+        "case_id": outcome["case_id"],
+        "run_id": outcome["run_id"],
+        "evidence_digest": outcome["evidence_digest"],
+        "gvisor_receipt_digest": receipt_digest,
+        "gvisor_run_id": receipt_run_id,
+        "run_request_digest": run_request_digest,
+        "capability_diff_receipt_digest": diff_receipt_digest,
+        "capability_diff_digest": capability_diff_digest,
+        "attribution_manifest_digest": attribution_digest,
+    }
+
+
+def _verify_phase2_gvisor_batch_bindings(
+    bindings: list[dict[str, Any]],
+    *,
+    phase2_binding: dict[str, Any],
+    runs_per_case: int,
+) -> None:
+    expected_cells = {
+        (case_id, run_id)
+        for case_id in phase2_binding["cases"]
+        for run_id in range(1, runs_per_case + 1)
+    }
+    cells = [(item["case_id"], item["run_id"]) for item in bindings]
+    if len(bindings) != len(expected_cells) or set(cells) != expected_cells:
+        raise BenchmarkError(
+            "Phase 2 gVisor evidence does not close every locked candidate case x5"
+        )
+    if len(cells) != len(set(cells)):
+        raise BenchmarkError("Phase 2 gVisor evidence repeats a locked outcome cell")
+    for field in (
+        "evidence_digest",
+        "gvisor_receipt_digest",
+        "gvisor_run_id",
+        "run_request_digest",
+        "capability_diff_receipt_digest",
+    ):
+        values = [item[field] for item in bindings]
+        if len(values) != len(set(values)):
+            raise BenchmarkError(f"Phase 2 gVisor evidence repeats {field}")
 
 
 def _verify_evidence(
@@ -5053,6 +5474,246 @@ def _validate_system(value: object, label: str) -> dict[str, str]:
     }
 
 
+def _validate_phase2_coverage_lock(
+    path: Path,
+    *,
+    expected_digest: str,
+    suite_digest: str,
+    runs_per_case: int,
+    cases: dict[str, dict[str, Any]],
+    systems: dict[tuple[str, str, str, str], dict[str, str]],
+    manifests: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Bind the locked candidate and held-out gVisor inputs before outcomes."""
+
+    expected_lock_digest = _digest(
+        expected_digest, "expected Phase 2 coverage lock digest"
+    )
+    raw = _read_bounded(path)
+    if _digest_bytes(raw) != expected_lock_digest:
+        raise BenchmarkError(
+            "Phase 2 coverage lock does not match the caller-held expected digest"
+        )
+    document = _decode_json(raw, "Phase 2 coverage lock")
+    if not isinstance(document, dict):
+        raise BenchmarkError("Phase 2 coverage lock must be a JSON object")
+    if raw != _canonical_json_bytes(document):
+        raise BenchmarkError("Phase 2 coverage lock must use canonical JSON bytes")
+    _exact_keys(
+        document,
+        {
+            "schema",
+            "assurance",
+            "suite_digest",
+            "evaluation_split",
+            "runs_per_case",
+            "candidate_system",
+            "verdict_profile",
+            "gvisor",
+            "cases",
+        },
+        "Phase 2 coverage lock",
+    )
+    if (
+        document["schema"] != _PHASE2_COVERAGE_LOCK_SCHEMA
+        or document["assurance"] != _PHASE2_COVERAGE_LOCK_ASSURANCE
+        or document["evaluation_split"] != "held_out"
+        or document["verdict_profile"] != _PHASE2_VERDICT_PROFILE
+    ):
+        raise BenchmarkError("Phase 2 coverage lock authority is unsupported")
+    if document["suite_digest"] != suite_digest:
+        raise BenchmarkError("Phase 2 coverage lock suite digest changed")
+    if (
+        document["runs_per_case"] != runs_per_case
+        or runs_per_case != _PHASE2_RUNS_PER_CASE
+    ):
+        raise BenchmarkError("Phase 2 coverage lock requires exactly five runs")
+
+    candidates = [system for system in systems.values() if system["name"] == "aragorn"]
+    if len(candidates) != 1:
+        raise BenchmarkError(
+            "Phase 2 metrics checkpoint requires exactly one Aragorn candidate identity"
+        )
+    candidate = _validate_system(
+        document["candidate_system"], "Phase 2 coverage lock.candidate_system"
+    )
+    if candidate != candidates[0]:
+        raise BenchmarkError("Phase 2 coverage lock candidate identity changed")
+
+    from .gvisor_runtime import (
+        ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+        ARTIFACT_EXECUTION_PROFILE,
+        ARTIFACT_SCHEMA_V4,
+    )
+    from .behavior_capability_diff import CAPABILITY_KINDS
+
+    gvisor = document["gvisor"]
+    if not isinstance(gvisor, dict):
+        raise BenchmarkError("Phase 2 coverage lock.gvisor must be a JSON object")
+    _exact_keys(
+        gvisor,
+        {
+            "receipt_schema",
+            "normalization_profile",
+            "execution_profile",
+            "lock_digest",
+            "verifier_implementation_digest",
+        },
+        "Phase 2 coverage lock.gvisor",
+    )
+    if (
+        gvisor["receipt_schema"] != ARTIFACT_SCHEMA_V4
+        or gvisor["normalization_profile"] != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+        or gvisor["execution_profile"] != ARTIFACT_EXECUTION_PROFILE
+    ):
+        raise BenchmarkError("Phase 2 coverage lock gVisor profile is unsupported")
+    gvisor_lock_digest = _digest(
+        gvisor["lock_digest"], "Phase 2 coverage lock.gvisor.lock_digest"
+    )
+    verifier_digest = _digest(
+        gvisor["verifier_implementation_digest"],
+        "Phase 2 coverage lock.gvisor.verifier_implementation_digest",
+    )
+
+    raw_cases = document["cases"]
+    if not isinstance(raw_cases, list) or not 20 <= len(raw_cases) <= _MAX_CASES:
+        raise BenchmarkError(
+            "Phase 2 coverage lock cases must contain between 20 and "
+            f"{_MAX_CASES} entries"
+        )
+    expected_case_ids = sorted(
+        case_id for case_id, case in cases.items() if case["split"] == "held_out"
+    )
+    locked_cases: dict[str, dict[str, Any]] = {}
+    for index, raw_case in enumerate(raw_cases):
+        label = f"Phase 2 coverage lock.cases[{index}]"
+        if not isinstance(raw_case, dict):
+            raise BenchmarkError(f"{label} must be a JSON object")
+        _exact_keys(
+            raw_case,
+            {
+                "case_id",
+                "class",
+                "family",
+                "lineage",
+                "tree_digest",
+                "suite_manifest_digest",
+                "source_manifest_digest",
+                "quarantine_receipt_digest",
+                "gateway_profile_digest",
+                "entrypoint_path",
+                "entrypoint_digest",
+                "declared_capabilities",
+            },
+            label,
+        )
+        case_id = _identifier(raw_case["case_id"], f"{label}.case_id")
+        if case_id in locked_cases:
+            raise BenchmarkError("Phase 2 coverage lock repeats a case")
+        case = cases.get(case_id)
+        if case is None or case["split"] != "held_out":
+            raise BenchmarkError(
+                "Phase 2 coverage lock contains a non-held-out or unknown case"
+            )
+        if (
+            raw_case["class"] != case["class"]
+            or raw_case["family"] != case["family"]
+            or raw_case["lineage"] != case["lineage"]
+            or raw_case["tree_digest"] != case["tree_digest"]
+        ):
+            raise BenchmarkError(f"{label} does not match the suite case identity")
+        suite_manifest_digest = _digest(
+            raw_case["suite_manifest_digest"], f"{label}.suite_manifest_digest"
+        )
+        if suite_manifest_digest != _digest_json(manifests[case_id]):
+            raise BenchmarkError(
+                f"{label}.suite_manifest_digest changed from the suite"
+            )
+        source_manifest_digest = _digest(
+            raw_case["source_manifest_digest"], f"{label}.source_manifest_digest"
+        )
+        quarantine_digest = _digest(
+            raw_case["quarantine_receipt_digest"],
+            f"{label}.quarantine_receipt_digest",
+        )
+        gateway_digest = _digest(
+            raw_case["gateway_profile_digest"],
+            f"{label}.gateway_profile_digest",
+        )
+        entrypoint_digest = _digest(
+            raw_case["entrypoint_digest"], f"{label}.entrypoint_digest"
+        )
+        entrypoint_value = _canonical_string(
+            raw_case["entrypoint_path"], f"{label}.entrypoint_path", 4096
+        )
+        if any(
+            ord(character) < 32 or ord(character) == 127
+            for character in entrypoint_value
+        ):
+            raise BenchmarkError(f"{label}.entrypoint_path contains control characters")
+        entrypoint_path = _relative_path(
+            entrypoint_value, f"{label}.entrypoint_path"
+        ).as_posix()
+        declared = raw_case["declared_capabilities"]
+        if (
+            not isinstance(declared, list)
+            or len(declared) > len(CAPABILITY_KINDS)
+            or any(
+                not isinstance(capability, str) or capability not in CAPABILITY_KINDS
+                for capability in declared
+            )
+            or declared != sorted(set(declared))
+        ):
+            raise BenchmarkError(
+                f"{label}.declared_capabilities must be a canonical category array"
+            )
+        locked_cases[case_id] = {
+            "expected_quarantine_receipt_digest": quarantine_digest,
+            "expected_manifest_digest": source_manifest_digest,
+            "expected_tree_digest": case["tree_digest"],
+            "expected_gateway_profile_digest": gateway_digest,
+            "expected_entrypoint_digest": entrypoint_digest,
+            "expected_lock_digest": gvisor_lock_digest,
+            "expected_verifier_implementation_digest": verifier_digest,
+            "expected_normalization_profile": (
+                ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+            ),
+            "expected_execution_profile": ARTIFACT_EXECUTION_PROFILE,
+            "expected_entrypoint_path": entrypoint_path,
+            "expected_declared_capabilities": list(declared),
+        }
+    if list(locked_cases) != sorted(locked_cases):
+        raise BenchmarkError("Phase 2 coverage lock cases must be sorted by case_id")
+    if sorted(locked_cases) != expected_case_ids:
+        raise BenchmarkError(
+            "Phase 2 coverage lock does not exactly cover the held-out suite cases"
+        )
+    held_out = [cases[case_id] for case_id in expected_case_ids]
+    benign_count = sum(case["class"] == "benign" for case in held_out)
+    adversarial = [case for case in held_out if case["class"] == "adversarial"]
+    if benign_count < 4 or len(adversarial) < 16:
+        raise BenchmarkError(
+            "Phase 2 coverage lock requires at least 4 benign and 16 adversarial cases"
+        )
+    adversarial_families = {case["family"] for case in adversarial}
+    if adversarial_families != _PHASE2_REQUIRED_FAMILIES:
+        raise BenchmarkError(
+            "Phase 2 coverage lock must contain the exact required adversarial families"
+        )
+    for family in sorted(_PHASE2_REQUIRED_FAMILIES):
+        lineages = {case["lineage"] for case in adversarial if case["family"] == family}
+        if len(lineages) < 2:
+            raise BenchmarkError(
+                "Phase 2 coverage lock requires at least two distinct lineages "
+                f"for adversarial family {family}"
+            )
+    return {
+        "coverage_lock_digest": expected_lock_digest,
+        "candidate_key": _system_key(candidate),
+        "cases": locked_cases,
+    }
+
+
 def _phase0_gate_report(
     value: object,
     *,
@@ -5165,6 +5826,7 @@ def _phase2_metrics_checkpoint_report(
     cases: dict[str, dict[str, Any]],
     systems: dict[tuple[str, str, str, str], dict[str, str]],
     outcomes: list[dict[str, Any]],
+    coverage_lock_digest: str | None,
 ) -> dict[str, Any]:
     candidates = [system for system in systems.values() if system["name"] == "aragorn"]
     if len(candidates) != 1:
@@ -5192,17 +5854,35 @@ def _phase2_metrics_checkpoint_report(
             _PHASE2_MINIMUM_VERDICT_AGREEMENT
         ),
     }
+    if coverage_lock_digest is None:
+        profile = {
+            "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v1",
+            "assurance": "declared_unfrozen_held_out_five_run_metrics_only",
+            "missing_phase2_exit_requirements": [
+                "ATTRIBUTED_DETONATION_EVIDENCE_REQUIRED",
+                "CAPTURE_COMPLETENESS_REQUIRED",
+                "FROZEN_COVERAGE_AND_CANDIDATE_LOCK_REQUIRED",
+                "QUALIFIED_ISOLATED_BACKEND_REQUIRED",
+                "VARIED_SCENARIO_MATRIX_REQUIRED",
+            ],
+        }
+    else:
+        profile = {
+            "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v2",
+            "assurance": (
+                "operator_asserted_pre_outcome_locked_attributed_gvisor_v4_five_run_"
+                "metrics_only"
+            ),
+            "missing_phase2_exit_requirements": [
+                "CAPTURE_COMPLETENESS_REQUIRED",
+                "QUALIFIED_ISOLATED_BACKEND_REQUIRED",
+                "VARIED_SCENARIO_MATRIX_REQUIRED",
+            ],
+            "coverage_lock_digest": coverage_lock_digest,
+        }
     common = {
-        "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v1",
-        "assurance": "declared_unfrozen_held_out_five_run_metrics_only",
+        **profile,
         "phase2_exit_eligible": False,
-        "missing_phase2_exit_requirements": [
-            "ATTRIBUTED_DETONATION_EVIDENCE_REQUIRED",
-            "CAPTURE_COMPLETENESS_REQUIRED",
-            "FROZEN_COVERAGE_AND_CANDIDATE_LOCK_REQUIRED",
-            "QUALIFIED_ISOLATED_BACKEND_REQUIRED",
-            "VARIED_SCENARIO_MATRIX_REQUIRED",
-        ],
         "suite_id": benchmark_report["suite_id"],
         "purpose": benchmark_report["purpose"],
         "suite_digest": benchmark_report["suite_digest"],

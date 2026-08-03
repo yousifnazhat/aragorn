@@ -1056,6 +1056,7 @@ class GVisorRuntimeTests(unittest.TestCase):
                 entrypoint_path=historical["entrypoint"]["path"],
                 entrypoint_digest=historical["entrypoint"]["digest"],
                 entrypoint_size=historical["entrypoint"]["size"],
+                entrypoint_executable=historical["entrypoint"]["executable"],
                 execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE,
                 declared_capabilities=("file-read", "process-exec"),
                 materialized_path=Path(source["path"]),
@@ -1410,6 +1411,7 @@ class GVisorRuntimeTests(unittest.TestCase):
             entrypoint_path=runtime._ARTIFACT_ENTRYPOINT,
             entrypoint_digest="sha256:" + "6" * 64,
             entrypoint_size=80,
+            entrypoint_executable=True,
             execution_profile=None,
             declared_capabilities=(),
             materialized_path=Path("/run/aragorn-gvisor-artifact/run.sh"),
@@ -1524,6 +1526,7 @@ class GVisorRuntimeTests(unittest.TestCase):
             entrypoint_path="scripts/check.sh",
             entrypoint_digest=artifact.entrypoint_digest,
             entrypoint_size=artifact.entrypoint_size,
+            entrypoint_executable=True,
             execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE,
             declared_capabilities=("file-read", "process-exec"),
             materialized_path=artifact.materialized_path,
@@ -1737,6 +1740,7 @@ class GVisorRuntimeTests(unittest.TestCase):
             entrypoint_path="scripts/check.sh",
             entrypoint_digest="sha256:" + "6" * 64,
             entrypoint_size=80,
+            entrypoint_executable=True,
             execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE,
             declared_capabilities=("file-read", "process-exec"),
             materialized_path=Path("/run/aragorn-gvisor-artifact/run.sh"),
@@ -1983,6 +1987,25 @@ class GVisorRuntimeTests(unittest.TestCase):
             ),
             entrypoint,
         )
+        non_executable = copy.deepcopy(manifest)
+        non_executable["files"][0]["executable"] = False
+        self.assertFalse(
+            runtime._pinned_artifact_entrypoint(
+                non_executable,
+                expected_tree_digest=tree,
+                expected_path="scripts/check.sh",
+                expected_digest=digest,
+                expected_executable=None,
+            )["executable"]
+        )
+        with self.assertRaises(runtime.GVisorRuntimeError):
+            runtime._pinned_artifact_entrypoint(
+                non_executable,
+                expected_tree_digest=tree,
+                expected_path="scripts/check.sh",
+                expected_digest=digest,
+                expected_executable=True,
+            )
         variants = []
         for field, value in (
             ("digest", "sha256:" + "3" * 64),
@@ -2212,6 +2235,7 @@ class GVisorRuntimeTests(unittest.TestCase):
                 self.assertEqual(artifact.tree_digest, tree_digest)
                 self.assertEqual(artifact.entrypoint_path, "scripts/check.sh")
                 self.assertEqual(artifact.entrypoint_digest, entrypoint_digest)
+                self.assertTrue(artifact.entrypoint_executable)
                 self.assertEqual(
                     artifact.execution_profile,
                     runtime.ARTIFACT_EXECUTION_PROFILE,
@@ -2248,6 +2272,59 @@ class GVisorRuntimeTests(unittest.TestCase):
                             **(arguments | changed),
                         )
                     collect.assert_not_called()
+
+                entrypoint["executable"] = False
+                tree_files = [
+                    {
+                        key: item[key]
+                        for key in ("path", "size", "digest", "executable")
+                    }
+                    for item in files
+                ]
+                tree_digest = (
+                    "sha256:" + hashlib.sha256(canonical_json(tree_files)).hexdigest()
+                )
+                manifest["tree_digest"] = tree_digest
+                raw_manifest = canonical_json(manifest)
+                manifest_digest = writable_source.put(
+                    BytesIO(raw_manifest),
+                    max_bytes=len(raw_manifest),
+                )
+                expected["expected_manifest_digest"] = manifest_digest
+                attributed_arguments = arguments | {
+                    "expected_manifest_digest": manifest_digest,
+                    "expected_tree_digest": tree_digest,
+                    "normalization_profile": (
+                        runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+                    ),
+                }
+                collect.reset_mock()
+                with self.assertRaises(runtime.GVisorRuntimeError):
+                    runtime.collect_gvisor_acquired_artifact(
+                        output,
+                        source,
+                        **(
+                            attributed_arguments
+                            | {
+                                "normalization_profile": (
+                                    runtime.ARTIFACT_NORMALIZATION_PROFILE
+                                )
+                            }
+                        ),
+                    )
+                collect.assert_not_called()
+                (materialized / "entrypoint").unlink()
+                observed = runtime.collect_gvisor_acquired_artifact(
+                    output,
+                    source,
+                    **attributed_arguments,
+                )
+                self.assertEqual(observed, "sha256:" + "9" * 64)
+                attributed_artifact = collect.call_args.kwargs["artifact"]
+                self.assertFalse(attributed_artifact.entrypoint_executable)
+                self.assertFalse(
+                    runtime._artifact_entrypoint(attributed_artifact)["executable"]
+                )
 
                 for changed in (
                     {"expected_quarantine_receipt_digest": "sha256:" + "0" * 64},

@@ -87,7 +87,7 @@ launch completes become `subject`, and unrelated post-entrypoint events remain
 manifest and checks its CAS digest. This does not establish process ancestry,
 capture completeness, or a Phase 2 exit.
 
-The opt-in command is:
+The lockless compatibility command is:
 
 ```console
 python -m aragorn.benchmark SUITE OUTCOMES --state EVIDENCE_CAS --phase2-metrics-checkpoint
@@ -99,6 +99,23 @@ Its report always sets `phase2_exit_eligible` to `false`; attributed detonation
 evidence, capture completeness, a frozen coverage/candidate lock, a qualified
 isolated backend, and a varied-scenario matrix all remain required. A metric
 pass is not a phase exit.
+
+The locked v2 checkpoint additionally requires a caller-held digest for a
+canonical pre-outcome coverage lock:
+
+```console
+python -m aragorn.benchmark SUITE OUTCOMES --state EVIDENCE_CAS --phase2-metrics-checkpoint --phase2-coverage-lock LOCK --expected-phase2-coverage-lock-digest sha256:...
+```
+
+That lock binds the exact Aragorn candidate, every held-out suite case, separate
+suite and acquired-source manifests, bounded entrypoints, declared capability
+categories, and gVisor v4 replay pins. It requires at least 20 cases (4 benign
+and 16 adversarial), the seven required adversarial families with two lineages
+each, and five unique runtime evidence records per candidate case. Unknown
+attribution scopes fail closed, and the outcome verdict is re-derived from the
+verified capability diff. The v2 report still sets `phase2_exit_eligible` to
+`false`: capture completeness, a qualified isolated backend, and varied live
+scenarios remain unproven.
 
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The

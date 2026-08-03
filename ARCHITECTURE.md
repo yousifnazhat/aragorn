@@ -321,11 +321,16 @@ the launch completes as subject, and unrelated post-boundary events as unknown;
 only subject events enter the capability diff.
 Portable replay re-derives that manifest and verifies its CAS binding. No live
 v4 receipt is retained yet, and this bounded epoch classifier does not prove
-process ancestry or capture completeness. A separate metrics checkpoint applies
-the Phase 2 thresholds exactly but always reports `phase2_exit_eligible: false`
-and labels its input as caller-declared and unfrozen. Attributed evidence,
-capture completeness, frozen coverage/candidate identity, backend qualification,
-and varied-scenario binding remain separate requirements.
+process ancestry or capture completeness. The lockless metrics checkpoint keeps
+the original caller-declared, unfrozen v1 contract. Its opt-in v2 path requires a
+caller-held digest for a canonical pre-outcome lock over the exact candidate,
+held-out coverage, separate local-suite and acquired-source manifest identities,
+bounded entrypoint and declared-capability pins, and gVisor v4 verifier inputs.
+Only the locked Aragorn cells enter the dedicated v4 verifier; it rejects unknown
+attribution scopes and re-derives each verdict from the verified capability diff.
+Both checkpoint versions always report `phase2_exit_eligible: false`. V2 removes
+only the attributed-evidence and frozen-lock deficits; capture completeness,
+qualified-backend evidence, and varied live scenarios remain required.
 
 ### 5. Decision plane
 

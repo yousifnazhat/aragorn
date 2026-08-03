@@ -88,6 +88,13 @@ from aragorn.detonation_observation import (
 from aragorn.github_gateway_live_evidence import (
     verify_github_gateway_live_evidence,
 )
+from aragorn.gvisor_runtime import (
+    ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+    ARTIFACT_ATTRIBUTION_AUTHORITY,
+    ARTIFACT_ATTRIBUTION_SCHEMA,
+    ARTIFACT_AUTHORITY_V4,
+    ARTIFACT_SCHEMA_V4,
+)
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.standards_gate import validate_standards_gate
@@ -914,6 +921,116 @@ def main() -> int:
                 "0b6ec3ea4b469e9f0ad26728a8711ecf-2026-08-02.json"
             )
         )
+    )
+    attributed_receipt = deepcopy(
+        load(
+            ROOT
+            / "benchmark"
+            / "receipts"
+            / (
+                "phase2-gvisor-acquired-artifact-v3-"
+                "0b6ec3ea4b469e9f0ad26728a8711ecf-2026-08-02.json"
+            )
+        )
+    )
+    attributed_receipt.update(
+        {
+            "schema": ARTIFACT_SCHEMA_V4,
+            "authority": ARTIFACT_AUTHORITY_V4,
+            "normalization_profile": ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+            "attribution_manifest_digest": digest,
+        }
+    )
+    validators["gvisor-acquired-artifact-receipt-v4.schema.json"].validate(
+        attributed_receipt
+    )
+    validators[
+        "gvisor-artifact-actor-attribution-manifest-v1.schema.json"
+    ].validate(
+        {
+            "schema": ARTIFACT_ATTRIBUTION_SCHEMA,
+            "authority": ARTIFACT_ATTRIBUTION_AUTHORITY,
+            "normalization_profile": ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+            "entrypoint": {
+                "path": attributed_receipt["entrypoint"]["path"],
+                "container_path": attributed_receipt["entrypoint"]["container_path"],
+                "digest": attributed_receipt["entrypoint"]["digest"],
+            },
+            "boundary": {
+                "tgid": 1,
+                "tid": 1,
+                "entered_record": 10,
+                "exited_record": 11,
+            },
+            "events": [
+                {
+                    "sequence": sequence,
+                    "scope": scope,
+                    "tgid": 1,
+                    "tid": 1,
+                    "process": process,
+                    "syscall": syscall,
+                    "entered_record": entered,
+                    "exited_record": exited,
+                    "result": result,
+                    "operation": operation,
+                    "detail": detail,
+                }
+                for sequence, (
+                    scope,
+                    process,
+                    syscall,
+                    entered,
+                    exited,
+                    result,
+                    operation,
+                    detail,
+                ) in enumerate(
+                    (
+                        (
+                            "harness",
+                            "sh",
+                            "execve",
+                            1,
+                            2,
+                            "0 (0x0)",
+                            "process-exec",
+                            "gvisor-json-strace:execve:/bin/sha256sum",
+                        ),
+                        (
+                            "harness",
+                            "sha256sum",
+                            "openat",
+                            3,
+                            4,
+                            "3 (0x3)",
+                            "file-open-read",
+                            "gvisor-json-strace:openat:read:/aragorn-input/run.sh",
+                        ),
+                        (
+                            "entrypoint",
+                            "sh",
+                            "execve",
+                            10,
+                            11,
+                            "0 (0x0)",
+                            "process-exec",
+                            "gvisor-json-strace:execve:/bin/sh",
+                        ),
+                        (
+                            "subject",
+                            "sh",
+                            "openat",
+                            12,
+                            13,
+                            "3 (0x3)",
+                            "file-open-read",
+                            "gvisor-json-strace:openat:read:/aragorn-input/run.sh",
+                        ),
+                    )
+                )
+            ],
+        }
     )
     admission_conformance = {
         "schema": "aragorn/admission-conformance-result/v1",

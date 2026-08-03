@@ -314,6 +314,18 @@ to `/dev/null` in the bounded execution path; `RECORDED` is evidence, not a
 clean capability verdict. This profile does not establish script safety.
 `RECORDED` grants no capture completeness, backend qualification, runtime
 attestation, isolation, admission authority, or Phase 2 exit.
+The v4 `successful-openat-execve-attributed/v1` contract retains an ordered
+manifest around the exact script-entry boundary. It classifies pre-boundary
+events as harness, the wrapper launch as entrypoint, same-thread events after
+the launch completes as subject, and unrelated post-boundary events as unknown;
+only subject events enter the capability diff.
+Portable replay re-derives that manifest and verifies its CAS binding. No live
+v4 receipt is retained yet, and this bounded epoch classifier does not prove
+process ancestry or capture completeness. A separate metrics checkpoint applies
+the Phase 2 thresholds exactly but always reports `phase2_exit_eligible: false`
+and labels its input as caller-declared and unfrozen. Attributed evidence,
+capture completeness, frozen coverage/candidate identity, backend qualification,
+and varied-scenario binding remain separate requirements.
 
 ### 5. Decision plane
 

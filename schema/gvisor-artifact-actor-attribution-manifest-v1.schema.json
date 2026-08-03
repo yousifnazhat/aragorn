@@ -1,0 +1,192 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://aragorn.dev/schema/gvisor-artifact-actor-attribution-manifest-v1.schema.json",
+    "title": "Aragorn gVisor artifact actor attribution manifest v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schema",
+        "authority",
+        "normalization_profile",
+        "entrypoint",
+        "boundary",
+        "events"
+    ],
+    "properties": {
+        "schema": {
+            "const": "aragorn/gvisor-artifact-actor-attribution-manifest/v1"
+        },
+        "authority": {
+            "const": "ORDERED_ENTRYPOINT_EPOCH_CLASSIFICATION_ONLY_NOT_PROCESS_ANCESTRY_CAPTURE_COMPLETENESS_OR_BEHAVIOR_AUTHORITY"
+        },
+        "normalization_profile": {
+            "const": "successful-openat-execve-attributed/v1"
+        },
+        "entrypoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "path",
+                "container_path",
+                "digest"
+            ],
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+                },
+                "container_path": {
+                    "const": "/aragorn-input/run.sh"
+                },
+                "digest": {
+                    "$ref": "#/$defs/digest"
+                }
+            }
+        },
+        "boundary": {
+            "$ref": "#/$defs/record"
+        },
+        "events": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4096,
+            "allOf": [
+                {
+                    "contains": {
+                        "type": "object",
+                        "properties": {
+                            "scope": {"const": "entrypoint"},
+                            "operation": {"const": "process-exec"}
+                        },
+                        "required": ["scope", "operation"]
+                    },
+                    "minContains": 1,
+                    "maxContains": 1
+                },
+                {
+                    "contains": {
+                        "type": "object",
+                        "properties": {
+                            "scope": {"const": "subject"}
+                        },
+                        "required": ["scope"]
+                    },
+                    "minContains": 1
+                }
+            ],
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "sequence",
+                    "scope",
+                    "tgid",
+                    "tid",
+                    "process",
+                    "syscall",
+                    "entered_record",
+                    "exited_record",
+                    "result",
+                    "operation",
+                    "detail"
+                ],
+                "properties": {
+                    "sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "scope": {
+                        "enum": [
+                            "harness",
+                            "entrypoint",
+                            "subject",
+                            "unknown"
+                        ]
+                    },
+                    "tgid": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "tid": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "process": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256,
+                        "pattern": "^[^\\u0000\\r\\n]+$"
+                    },
+                    "syscall": {
+                        "enum": [
+                            "openat",
+                            "execve"
+                        ]
+                    },
+                    "entered_record": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "exited_record": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "result": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[^\\u0000\\r\\n]*$"
+                    },
+                    "operation": {
+                        "enum": [
+                            "file-open-read",
+                            "file-open-write",
+                            "process-exec"
+                        ]
+                    },
+                    "detail": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048,
+                        "pattern": "^[^\\u0000\\r\\n]+$"
+                    }
+                }
+            }
+        }
+    },
+    "$defs": {
+        "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "record": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "tgid",
+                "tid",
+                "entered_record",
+                "exited_record"
+            ],
+            "properties": {
+                "tgid": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "tid": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "entered_record": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "exited_record": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        }
+    }
+}

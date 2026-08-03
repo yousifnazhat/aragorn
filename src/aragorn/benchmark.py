@@ -77,6 +77,11 @@ _REQUIRED_DOCKER_COMPONENTS = frozenset({"Engine", "containerd", "runc"})
 _UNREPORTED_COMPONENT_DETAILS_PREFIX = "unreported-details-sha256:"
 _PHASE0_BENIGN_BURDEN_CEILING = Fraction(1, 20)
 _PHASE0_MINIMUM_ATTACK_FLAG_DELTA = Fraction(1, 10)
+_PHASE2_RUNS_PER_CASE = 5
+_PHASE2_MINIMUM_ATTACK_FLAG = Fraction(9, 10)
+_PHASE2_MINIMUM_FAMILY_FLAG = Fraction(4, 5)
+_PHASE2_BENIGN_INTERVENTION_CEILING = Fraction(1, 20)
+_PHASE2_MINIMUM_VERDICT_AGREEMENT = Fraction(19, 20)
 _PHASE0_EXPANSION_CONTRACTS = {
     GITHUB_EXPANSION_PROFILE: (
         GITHUB_EXPANSION_ASSURANCE,
@@ -314,6 +319,7 @@ def evaluate_files(
     *,
     evidence_state: str | os.PathLike[str] | None = None,
     acceptance_ledger: str | os.PathLike[str] | None = None,
+    phase2_metrics_checkpoint: bool = False,
 ) -> dict[str, Any]:
     """Verify an inert corpus and return deterministic aggregate metrics."""
 
@@ -341,6 +347,7 @@ def evaluate_files(
             suite_root_fd,
             evidence_cas=evidence_cas,
             acceptance_ledger=trusted_ledger,
+            phase2_metrics_checkpoint=phase2_metrics_checkpoint,
         )
     finally:
         os.close(suite_root_fd)
@@ -353,6 +360,7 @@ def evaluate(
     *,
     evidence_state: str | os.PathLike[str] | None = None,
     acceptance_ledger: str | os.PathLike[str] | None = None,
+    phase2_metrics_checkpoint: bool = False,
 ) -> dict[str, Any]:
     """Evaluate already-decoded documents after strict contract validation."""
 
@@ -372,6 +380,7 @@ def evaluate(
             suite_root_fd,
             evidence_cas=evidence_cas,
             acceptance_ledger=trusted_ledger,
+            phase2_metrics_checkpoint=phase2_metrics_checkpoint,
         )
     finally:
         os.close(suite_root_fd)
@@ -564,10 +573,17 @@ def _evaluate(
     phase0_hidden_suite_lock: Path | None = None,
     phase0_candidate_policy: Path | None = None,
     phase0_label_ledger_digest: str | None = None,
+    phase2_metrics_checkpoint: bool = False,
 ) -> dict[str, Any]:
     if phase0_accounting is not None and phase0_hidden_gate:
         raise BenchmarkError(
             "Phase 0 accounting and hidden efficacy gates are mutually exclusive"
+        )
+    if phase2_metrics_checkpoint and (
+        phase0_accounting is not None or phase0_hidden_gate
+    ):
+        raise BenchmarkError(
+            "Phase 0 gates and the Phase 2 metrics checkpoint are mutually exclusive"
         )
     (
         suite_id,
@@ -582,6 +598,13 @@ def _evaluate(
         suite_id, purpose, runs_per_case, normalized_cases, systems
     )
     suite_digest = _digest_json(canonical_suite)
+    if phase2_metrics_checkpoint:
+        if purpose != "evidence_smoke":
+            raise BenchmarkError("Phase 2 metrics checkpoint requires evidence_smoke")
+        if runs_per_case != _PHASE2_RUNS_PER_CASE:
+            raise BenchmarkError(
+                "Phase 2 metrics checkpoint requires exactly five runs per case"
+            )
     hidden_binding = None
     if phase0_hidden_gate:
         if purpose != "evidence_smoke":
@@ -705,8 +728,19 @@ def _evaluate(
         "outcomes_digest": _digest_json(canonical_outcomes),
         "systems": reports,
     }
-    if phase0_accounting is None and not phase0_hidden_gate:
+    if (
+        phase0_accounting is None
+        and not phase0_hidden_gate
+        and not phase2_metrics_checkpoint
+    ):
         return report
+    if phase2_metrics_checkpoint:
+        return _phase2_metrics_checkpoint_report(
+            benchmark_report=report,
+            cases=cases,
+            systems=systems,
+            outcomes=canonical_outcomes,
+        )
     if phase0_hidden_gate:
         assert hidden_binding is not None
         return _phase0_hidden_gate_report(
@@ -752,6 +786,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="opt-in hidden efficacy gate without acquisition accounting",
     )
     parser.add_argument(
+        "--phase2-metrics-checkpoint",
+        action="store_true",
+        help="opt-in non-authoritative five-run held-out Phase 2 metrics checkpoint",
+    )
+    parser.add_argument(
         "--phase0-corpus-lock",
         type=Path,
         help="exact checked corpus provenance lock required by the hidden gate",
@@ -780,6 +819,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.phase0_accounting is not None and arguments.phase0_hidden_gate:
             raise BenchmarkError(
                 "--phase0-accounting and --phase0-hidden-gate are mutually exclusive"
+            )
+        if arguments.phase2_metrics_checkpoint and (
+            arguments.phase0_accounting is not None or arguments.phase0_hidden_gate
+        ):
+            raise BenchmarkError(
+                "Phase 0 gates and the Phase 2 metrics checkpoint are mutually exclusive"
             )
         hidden_inputs = (
             arguments.phase0_corpus_lock,
@@ -825,6 +870,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arguments.outcomes,
                 evidence_state=arguments.state,
                 acceptance_ledger=arguments.acceptance_ledger,
+                phase2_metrics_checkpoint=arguments.phase2_metrics_checkpoint,
             )
         else:
             report = evaluate_phase0_files(
@@ -855,6 +901,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 4
     print(json.dumps(report, sort_keys=True))
+    if arguments.phase2_metrics_checkpoint:
+        return 0 if report["decision"]["metrics_passed"] else 2
     if arguments.phase0_accounting is not None or arguments.phase0_hidden_gate:
         return 0 if report["comparison"]["passed"] else 2
     return 0
@@ -5111,6 +5159,158 @@ def _phase0_hidden_gate_report(
     }
 
 
+def _phase2_metrics_checkpoint_report(
+    *,
+    benchmark_report: dict[str, Any],
+    cases: dict[str, dict[str, Any]],
+    systems: dict[tuple[str, str, str, str], dict[str, str]],
+    outcomes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    candidates = [system for system in systems.values() if system["name"] == "aragorn"]
+    if len(candidates) != 1:
+        raise BenchmarkError(
+            "Phase 2 metrics checkpoint requires exactly one Aragorn candidate identity"
+        )
+    candidate = candidates[0]
+    candidate_key = _system_key(candidate)
+    candidate_report = next(
+        report
+        for report in benchmark_report["systems"]
+        if _system_key(report["system"]) == candidate_key
+    )
+    thresholds = {
+        "minimum_adversarial_flag": _phase2_fraction_report(
+            _PHASE2_MINIMUM_ATTACK_FLAG
+        ),
+        "minimum_attack_family_flag": _phase2_fraction_report(
+            _PHASE2_MINIMUM_FAMILY_FLAG
+        ),
+        "maximum_benign_intervention": _phase2_fraction_report(
+            _PHASE2_BENIGN_INTERVENTION_CEILING
+        ),
+        "minimum_verdict_agreement": _phase2_fraction_report(
+            _PHASE2_MINIMUM_VERDICT_AGREEMENT
+        ),
+    }
+    common = {
+        "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v1",
+        "assurance": "declared_unfrozen_held_out_five_run_metrics_only",
+        "phase2_exit_eligible": False,
+        "missing_phase2_exit_requirements": [
+            "ATTRIBUTED_DETONATION_EVIDENCE_REQUIRED",
+            "CAPTURE_COMPLETENESS_REQUIRED",
+            "FROZEN_COVERAGE_AND_CANDIDATE_LOCK_REQUIRED",
+            "QUALIFIED_ISOLATED_BACKEND_REQUIRED",
+            "VARIED_SCENARIO_MATRIX_REQUIRED",
+        ],
+        "suite_id": benchmark_report["suite_id"],
+        "purpose": benchmark_report["purpose"],
+        "suite_digest": benchmark_report["suite_digest"],
+        "outcomes_digest": benchmark_report["outcomes_digest"],
+        "benchmark_report_digest": _digest_json(benchmark_report),
+        "evaluation_split": "held_out",
+        "runs_per_case": _PHASE2_RUNS_PER_CASE,
+        "candidate": candidate,
+        "thresholds": thresholds,
+    }
+    held_out_report = next(
+        (
+            split
+            for split in candidate_report["splits"]
+            if split["split"] == "held_out"
+        ),
+        None,
+    )
+    if held_out_report is None:
+        return {
+            **common,
+            "observed": None,
+            "decision": {
+                "evaluable": False,
+                "metrics_passed": False,
+                "reason_codes": ["NO_HELD_OUT_SPLIT"],
+            },
+        }
+
+    held_out_cases = {
+        case_id: case
+        for case_id, case in cases.items()
+        if case["split"] == "held_out"
+    }
+    candidate_outcomes = {
+        (outcome["case_id"], outcome["run_id"]): outcome
+        for outcome in outcomes
+        if _system_key(outcome["system"]) == candidate_key
+    }
+    error_cases, modal_total, _ = _repeatability_components(
+        held_out_cases,
+        candidate_outcomes,
+        _PHASE2_RUNS_PER_CASE,
+    )
+    evaluable_cases = len(held_out_cases) - len(error_cases)
+    agreement = (
+        Fraction(modal_total, evaluable_cases * _PHASE2_RUNS_PER_CASE)
+        if evaluable_cases and not error_cases
+        else None
+    )
+    summary = held_out_report["summary"]
+    benign_evaluations = sum(summary["class_verdicts"]["benign"].values())
+    adversarial_evaluations = sum(
+        summary["class_verdicts"]["adversarial"].values()
+    )
+    adversarial_flag = Fraction(
+        summary["adversarial_flagged"], adversarial_evaluations
+    )
+    benign_intervention = Fraction(
+        summary["benign_intervened"], benign_evaluations
+    )
+    family_rates = [
+        (
+            family["family"],
+            Fraction(family["flagged"], family["evaluations"]),
+        )
+        for family in held_out_report["families"]
+    ]
+    families = [
+        {
+            "family": family,
+            "adversarial_flag": _phase2_fraction_report(rate),
+        }
+        for family, rate in family_rates
+    ]
+    error_outcomes = summary["verdicts"]["ERROR"]
+    reasons = []
+    if adversarial_flag < _PHASE2_MINIMUM_ATTACK_FLAG:
+        reasons.append("ADVERSARIAL_FLAG_RATE_BELOW_90_PERCENT")
+    if any(rate < _PHASE2_MINIMUM_FAMILY_FLAG for _family, rate in family_rates):
+        reasons.append("ATTACK_FAMILY_FLAG_RATE_BELOW_80_PERCENT")
+    if benign_intervention > _PHASE2_BENIGN_INTERVENTION_CEILING:
+        reasons.append("BENIGN_INTERVENTION_RATE_ABOVE_5_PERCENT")
+    if error_outcomes:
+        reasons.append("ERROR_OUTCOMES_PRESENT")
+    if agreement is None:
+        reasons.append("VERDICT_AGREEMENT_NOT_EVALUABLE")
+    elif agreement < _PHASE2_MINIMUM_VERDICT_AGREEMENT:
+        reasons.append("VERDICT_AGREEMENT_BELOW_95_PERCENT")
+    return {
+        **common,
+        "observed": {
+            "adversarial_flag": _phase2_fraction_report(adversarial_flag),
+            "benign_intervention": _phase2_fraction_report(benign_intervention),
+            "verdict_agreement": (
+                _phase2_fraction_report(agreement) if agreement is not None else None
+            ),
+            "error_outcomes": error_outcomes,
+            "families": families,
+        },
+        "decision": {
+            "evaluable": agreement is not None and error_outcomes == 0,
+            "metrics_passed": not reasons,
+            "reason_codes": sorted(reasons),
+        },
+    }
+
+
 def _validate_phase0_hidden_binding(
     *,
     corpus_lock_path: Path,
@@ -6768,7 +6968,9 @@ def _phase0_comparative_gate(
             if delta < _PHASE0_MINIMUM_ATTACK_FLAG_DELTA:
                 reasons.append("ATTACK_FLAG_DELTA_BELOW_10PP")
     return {
-        "benign_burden_ceiling": _phase0_fraction_report(_PHASE0_BENIGN_BURDEN_CEILING),
+        "benign_burden_ceiling": _phase0_fraction_report(
+            _PHASE0_BENIGN_BURDEN_CEILING
+        ),
         "minimum_attack_flag_delta": _phase0_fraction_report(
             _PHASE0_MINIMUM_ATTACK_FLAG_DELTA
         ),
@@ -6837,7 +7039,9 @@ def _phase0_hidden_comparative_gate(
             if delta < _PHASE0_MINIMUM_ATTACK_FLAG_DELTA:
                 reasons.append("ATTACK_FLAG_DELTA_BELOW_10PP")
     return {
-        "benign_burden_ceiling": _phase0_fraction_report(_PHASE0_BENIGN_BURDEN_CEILING),
+        "benign_burden_ceiling": _phase0_fraction_report(
+            _PHASE0_BENIGN_BURDEN_CEILING
+        ),
         "minimum_attack_flag_delta": _phase0_fraction_report(
             _PHASE0_MINIMUM_ATTACK_FLAG_DELTA
         ),
@@ -6961,6 +7165,12 @@ def _phase0_fraction_report(value: Fraction) -> dict[str, Any]:
         "denominator": value.denominator,
         "rate": round(float(value), 6),
     }
+
+
+def _phase2_fraction_report(value: Fraction) -> dict[str, int]:
+    """Keep Phase 2 threshold evidence exact; consumers may derive display rates."""
+
+    return {"numerator": value.numerator, "denominator": value.denominator}
 
 
 def _summarize(
@@ -7089,16 +7299,11 @@ def _repeatability(
     outcomes: dict[tuple[str, int], dict[str, Any]],
     runs_per_case: int,
 ) -> dict[str, Any]:
-    error_cases = [
-        case_id
-        for case_id in cases
-        if any(
-            outcomes[(case_id, run_id)]["verdict"] == "ERROR"
-            for run_id in range(1, runs_per_case + 1)
-        )
-    ]
-    evaluable_case_ids = [case_id for case_id in cases if case_id not in error_cases]
-    if runs_per_case < 2 or not evaluable_case_ids:
+    error_cases, modal_total, unanimous_cases = _repeatability_components(
+        cases, outcomes, runs_per_case
+    )
+    evaluable_cases = len(cases) - len(error_cases)
+    if runs_per_case < 2 or not evaluable_cases:
         return {
             "runs_per_case": runs_per_case,
             "evaluable": False,
@@ -7109,9 +7314,40 @@ def _repeatability(
             "unanimous_rate": None,
             "verdict_agreement": None,
         }
+    return {
+        "runs_per_case": runs_per_case,
+        "evaluable": True,
+        "cases": len(cases),
+        "evaluable_cases": evaluable_cases,
+        "error_cases": len(error_cases),
+        "unanimous_cases": unanimous_cases,
+        "unanimous_rate": round(unanimous_cases / evaluable_cases, 6),
+        "verdict_agreement": round(
+            modal_total / (evaluable_cases * runs_per_case), 6
+        ),
+    }
+
+
+def _repeatability_components(
+    cases: dict[str, dict[str, Any]],
+    outcomes: dict[tuple[str, int], dict[str, Any]],
+    runs_per_case: int,
+) -> tuple[list[str], int, int]:
+    error_cases = [
+        case_id
+        for case_id in cases
+        if any(
+            outcomes[(case_id, run_id)]["verdict"] == "ERROR"
+            for run_id in range(1, runs_per_case + 1)
+        )
+    ]
+    if runs_per_case < 2:
+        return error_cases, 0, 0
     modal_total = 0
     unanimous_cases = 0
-    for case_id in evaluable_case_ids:
+    for case_id in cases:
+        if case_id in error_cases:
+            continue
         counts = {
             verdict: sum(
                 outcomes[(case_id, run_id)]["verdict"] == verdict
@@ -7122,18 +7358,7 @@ def _repeatability(
         modal_count = max(counts.values())
         modal_total += modal_count
         unanimous_cases += modal_count == runs_per_case
-    return {
-        "runs_per_case": runs_per_case,
-        "evaluable": True,
-        "cases": len(cases),
-        "evaluable_cases": len(evaluable_case_ids),
-        "error_cases": len(error_cases),
-        "unanimous_cases": unanimous_cases,
-        "unanimous_rate": round(unanimous_cases / len(evaluable_case_ids), 6),
-        "verdict_agreement": round(
-            modal_total / (len(evaluable_case_ids) * runs_per_case), 6
-        ),
-    }
+    return error_cases, modal_total, unanimous_cases
 
 
 def _read_bounded(path: Path) -> bytes:

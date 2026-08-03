@@ -163,6 +163,7 @@ def _canary_trace(
     *,
     artifact: bool = False,
     artifact_profile: runtime._AcquiredArtifact | None = None,
+    pre_entrypoint_syscalls: tuple[str, ...] = (),
     extra_syscalls: tuple[str, ...] = (),
 ) -> bytes:
     _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
@@ -208,6 +209,7 @@ def _canary_trace(
         )
     )
     if artifact_profile and artifact_profile.execution_profile:
+        syscalls.extend(pre_entrypoint_syscalls)
         script_read = read.replace("O_RDONLY|0x0", "O_RDONLY|O_CLOEXEC")
         shell_execute = (
             f'0x111 /bin/sh, 0x222 ["/bin/sh", "{target}"], '
@@ -1007,7 +1009,7 @@ class GVisorRuntimeTests(unittest.TestCase):
                         ):
                             self.assertNotIn(failed_only, normalized)
 
-    def test_v3_acquired_artifact_round_trips_and_binds_caller_pins(self) -> None:
+    def test_v4_acquired_artifact_binds_attributed_replay(self) -> None:
         root = Path(__file__).parents[1]
         archive = (
             root
@@ -1111,14 +1113,18 @@ class GVisorRuntimeTests(unittest.TestCase):
             boot_entry["file"]["size"] = len(boot)
             evidence["backend_log_manifest"] = canonical_json(log_manifest)
 
-            normalization_profile = runtime.ARTIFACT_NORMALIZATION_PROFILE
-            source_events = runtime._parse_artifact_trace(
+            normalization_profile = runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+            attributed = runtime._parse_attributed_artifact_trace(
                 boot,
                 runtime_lock,
                 canary_lock,
                 container_id,
-                normalization_profile=normalization_profile,
                 artifact=artifact,
+            )
+            source_events = attributed.subject_source_events
+            attribution_manifest_digest = cas.put(
+                BytesIO(attributed.manifest),
+                max_bytes=runtime._MAX_ATTRIBUTION_MANIFEST_BYTES,
             )
             run_request_digest = cas.put(
                 BytesIO(
@@ -1133,6 +1139,10 @@ class GVisorRuntimeTests(unittest.TestCase):
                     )
                 ),
                 max_bytes=runtime._MAX_CANARY_RUN_REQUEST_BYTES,
+            )
+            self.assertEqual(
+                json.loads(cas.read(run_request_digest))["schema"],
+                runtime.ARTIFACT_RUN_REQUEST_SCHEMA_V4,
             )
             identity = runtime._artifact_identity(
                 artifact,
@@ -1156,8 +1166,8 @@ class GVisorRuntimeTests(unittest.TestCase):
                 declared_capabilities=artifact.declared_capabilities,
             )
             receipt = {
-                "schema": runtime.ARTIFACT_SCHEMA_V3,
-                "authority": runtime.ARTIFACT_AUTHORITY_V3,
+                "schema": runtime.ARTIFACT_SCHEMA_V4,
+                "authority": runtime.ARTIFACT_AUTHORITY_V4,
                 "lock_digest": historical["lock_digest"],
                 "runtime_lock_digest": historical["runtime_lock_digest"],
                 "implementation_digest": implementation_digest,
@@ -1181,6 +1191,7 @@ class GVisorRuntimeTests(unittest.TestCase):
                 "entrypoint": runtime._artifact_entrypoint(artifact),
                 "normalization_profile": normalization_profile,
                 "execution_profile": artifact.execution_profile,
+                "attribution_manifest_digest": attribution_manifest_digest,
             }
             receipt_digest = cas.put(
                 BytesIO(canonical_json(receipt)),
@@ -1207,6 +1218,10 @@ class GVisorRuntimeTests(unittest.TestCase):
                 **pins,
             )
             self.assertEqual(verified, receipt)
+            self.assertEqual(
+                cas.read(receipt["attribution_manifest_digest"]),
+                attributed.manifest,
+            )
             closure = runtime.derive_gvisor_acquired_artifact_closure(
                 cas,
                 receipt_digest,
@@ -1219,6 +1234,21 @@ class GVisorRuntimeTests(unittest.TestCase):
                     for digest, size in closure.items()
                 },
             )
+            self.assertIn(attribution_manifest_digest, closure)
+            changed_receipt = receipt | {
+                "attribution_manifest_digest": cas.put(
+                    BytesIO(b"{}"),
+                    max_bytes=runtime._MAX_ATTRIBUTION_MANIFEST_BYTES,
+                )
+            }
+            changed_receipt_digest = cas.put(
+                BytesIO(canonical_json(changed_receipt)),
+                max_bytes=runtime._MAX_RECEIPT_BYTES,
+            )
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime.verify_gvisor_acquired_artifact(
+                    cas, changed_receipt_digest, **pins
+                )
 
             for changed in (
                 {"expected_entrypoint_path": "other.sh"},
@@ -1448,6 +1478,7 @@ class GVisorRuntimeTests(unittest.TestCase):
             ),
             _CONTAINER_ID,
         )
+
         request = json.loads(
             runtime._artifact_run_request(
                 runtime_lock,
@@ -1693,6 +1724,120 @@ class GVisorRuntimeTests(unittest.TestCase):
                 artifact=artifact,
                 bind_mount=bind,
             )
+
+    def test_attributed_script_excludes_non_subject_events_from_diff(self) -> None:
+        _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
+        _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
+        artifact = runtime._AcquiredArtifact(
+            quarantine_receipt_digest="sha256:" + "1" * 64,
+            gateway_profile_digest="sha256:" + "2" * 64,
+            source_closure_digest="sha256:" + "3" * 64,
+            manifest_digest="sha256:" + "4" * 64,
+            tree_digest="sha256:" + "5" * 64,
+            entrypoint_path="scripts/check.sh",
+            entrypoint_digest="sha256:" + "6" * 64,
+            entrypoint_size=80,
+            execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE,
+            declared_capabilities=("file-read", "process-exec"),
+            materialized_path=Path("/run/aragorn-gvisor-artifact/run.sh"),
+        )
+        null_write = "AT_FDCWD /, 0x444 /dev/null, O_WRONLY, 0o0"
+        unknown_write = "AT_FDCWD /, 0x555 /tmp/other, O_WRONLY, 0o0"
+        attributed = runtime._parse_attributed_artifact_trace(
+            _canary_trace(
+                artifact=True,
+                artifact_profile=artifact,
+                pre_entrypoint_syscalls=(
+                    f"strace.go:571] [   2:   2] sh E openat({null_write})",
+                    (
+                        f"strace.go:609] [   2:   2] sh X openat({null_write}) "
+                        "= 3 (0x3) (2.1µs)"
+                    ),
+                ),
+                extra_syscalls=(
+                    f"strace.go:572] [   4:   4] other E openat({unknown_write})",
+                    (
+                        f"strace.go:610] [   4:   4] other X openat({unknown_write}) "
+                        "= 3 (0x3) (2.1µs)"
+                    ),
+                ),
+            ),
+            runtime_lock,
+            canary_lock,
+            _CONTAINER_ID,
+            artifact=artifact,
+        )
+        manifest = json.loads(attributed.manifest)
+        self.assertEqual(attributed.manifest, canonical_json(manifest))
+        self.assertEqual(manifest["schema"], runtime.ARTIFACT_ATTRIBUTION_SCHEMA)
+        self.assertEqual(
+            manifest["normalization_profile"],
+            runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+        )
+        self.assertEqual(
+            [event["sequence"] for event in manifest["events"]],
+            list(range(len(manifest["events"]))),
+        )
+        self.assertEqual(
+            [(event["scope"], event["tgid"], event["tid"]) for event in manifest["events"] if event["operation"] == "file-open-write"],
+            [("harness", 2, 2), ("unknown", 4, 4)],
+        )
+        subject = [
+            event for event in manifest["events"] if event["scope"] == "subject"
+        ]
+        entrypoint = [
+            event for event in manifest["events"] if event["scope"] == "entrypoint"
+        ]
+        self.assertEqual(len(entrypoint), 1)
+        self.assertEqual(entrypoint[0]["operation"], "process-exec")
+        self.assertTrue(subject)
+        self.assertTrue(
+            all(
+                (event["tgid"], event["tid"])
+                == (manifest["boundary"]["tgid"], manifest["boundary"]["tid"])
+                and event["entered_record"]
+                > manifest["boundary"]["exited_record"]
+                for event in subject
+            )
+        )
+
+        identity = {
+            "subject_digest": artifact.tree_digest,
+            "input_manifest_digest": artifact.manifest_digest,
+            "input_tree_digest": artifact.tree_digest,
+            "run_request_digest": "sha256:" + "7" * 64,
+            "normalizer_implementation_digest": "sha256:" + "8" * 64,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "cas")
+            bindings = {}
+            for source_event in attributed.subject_source_events:
+                observation = retain_detonation_observation(
+                    cas, source_event, **identity
+                )
+                bindings[observation] = (
+                    "sha256:" + hashlib.sha256(source_event).hexdigest()
+                )
+            receipt = json.loads(
+                cas.read(
+                    retain_detonation_capability_diff(
+                        cas,
+                        bindings,
+                        **identity,
+                        declared_capabilities=artifact.declared_capabilities,
+                    )
+                )
+            )
+            capability_diff = json.loads(cas.read(receipt["capability_diff_digest"]))
+        self.assertEqual(
+            capability_diff["matched_capabilities"],
+            ["file-read"],
+        )
+        self.assertEqual(
+            capability_diff["declared_not_observed_capabilities"],
+            ["process-exec"],
+        )
+        self.assertEqual(capability_diff["undeclared_observed_capabilities"], [])
 
     def test_acquired_artifact_v2_normalization_is_fail_closed(self) -> None:
         _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()

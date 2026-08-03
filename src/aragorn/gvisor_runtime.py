@@ -54,11 +54,23 @@ CANARY_CLEANUP_SCHEMA = "aragorn/gvisor-detonation-canary-cleanup/v1"
 ARTIFACT_SCHEMA = "aragorn/gvisor-acquired-artifact-receipt/v1"
 ARTIFACT_SCHEMA_V2 = "aragorn/gvisor-acquired-artifact-receipt/v2"
 ARTIFACT_SCHEMA_V3 = "aragorn/gvisor-acquired-artifact-receipt/v3"
+ARTIFACT_SCHEMA_V4 = "aragorn/gvisor-acquired-artifact-receipt/v4"
 ARTIFACT_IMPLEMENTATION_SCHEMA = "aragorn/gvisor-acquired-artifact-implementation/v1"
 ARTIFACT_RUN_REQUEST_SCHEMA = "aragorn/gvisor-acquired-artifact-run-request/v1"
 ARTIFACT_RUN_REQUEST_SCHEMA_V2 = "aragorn/gvisor-acquired-artifact-run-request/v2"
 ARTIFACT_RUN_REQUEST_SCHEMA_V3 = "aragorn/gvisor-acquired-artifact-run-request/v3"
+ARTIFACT_RUN_REQUEST_SCHEMA_V4 = "aragorn/gvisor-acquired-artifact-run-request/v4"
 ARTIFACT_NORMALIZATION_PROFILE = "successful-openat-execve-set/v1"
+ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE = (
+    "successful-openat-execve-attributed/v1"
+)
+ARTIFACT_ATTRIBUTION_SCHEMA = (
+    "aragorn/gvisor-artifact-actor-attribution-manifest/v1"
+)
+ARTIFACT_ATTRIBUTION_AUTHORITY = (
+    "ORDERED_ENTRYPOINT_EPOCH_CLASSIFICATION_ONLY_NOT_PROCESS_ANCESTRY_CAPTURE_"
+    "COMPLETENESS_OR_BEHAVIOR_AUTHORITY"
+)
 ARTIFACT_EXECUTION_PROFILE = "bounded-single-script/v1"
 AUTHORITY = (
     "RUNTIME_PATH_SMOKE_ONLY_NOT_RUNTIME_ATTESTATION_ISOLATION_OR_DETONATION_AUTHORITY"
@@ -79,6 +91,11 @@ ARTIFACT_AUTHORITY_V3 = (
     "SAFETY_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_"
     "ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
 )
+ARTIFACT_AUTHORITY_V4 = (
+    "ONE_CALLER_PINNED_BOUNDED_SINGLE_SCRIPT_ATTRIBUTED_ENTRYPOINT_EPOCH_SAME_RUN_"
+    "EVIDENCE_ONLY_NOT_PROCESS_ANCESTRY_SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_"
+    "ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+)
 
 _MAX_LOCK_BYTES = 64 * 1024
 _MAX_RECEIPT_BYTES = 64 * 1024
@@ -93,6 +110,7 @@ _MAX_CANARY_RUN_REQUEST_BYTES = 64 * 1024
 _MAX_CANARY_LOG_MANIFEST_BYTES = 64 * 1024
 _MAX_CANARY_CLEANUP_BYTES = 4 * 1024
 _MAX_ARTIFACT_BYTES = 64 * 1024
+_MAX_ATTRIBUTION_MANIFEST_BYTES = 2 * 1024 * 1024
 _CANARY_LOG_STORE_BYTES = 8 * 1024 * 1024
 _CANARY_LOG_STORE_INODES = 32
 _DOCKER_TIMEOUT_SECONDS = 30.0
@@ -168,6 +186,10 @@ _ARTIFACT_RECEIPT_V3_FIELDS = {
     *_ARTIFACT_RECEIPT_V2_FIELDS,
     "execution_profile",
 }
+_ARTIFACT_RECEIPT_V4_FIELDS = {
+    *_ARTIFACT_RECEIPT_V3_FIELDS,
+    "attribution_manifest_digest",
+}
 _RUN_ID = re.compile(r"[0-9a-f]{32}\Z")
 _CAPTURED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _BOOT_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
@@ -241,6 +263,7 @@ _TRACE_EXECVE_ARGUMENTS = re.compile(
     r"(?P<argv>\[.*\]), 0x[0-9a-f]+ (?P<environment>\[.*\])\Z"
 )
 _TracePair = tuple[tuple[int, int], str, str, str, str, int, int]
+_TraceBoundary = tuple[tuple[int, int], int, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,6 +298,12 @@ class _AcquiredArtifact:
     execution_profile: str | None
     declared_capabilities: tuple[str, ...]
     materialized_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class _AttributedArtifactTrace:
+    manifest: bytes
+    subject_source_events: tuple[bytes, ...]
 
 
 class GVisorRuntimeError(ValueError):
@@ -1128,7 +1157,7 @@ def _collect_gvisor_detonation(
             else _CANARY_EVIDENCE_LIMITS
         )
         captured = _evidence_snapshot(evidence, expected=evidence_limits)
-        source_events, container_id = _verify_detonation_evidence(
+        source_events, container_id, attribution_manifest = _verify_detonation_evidence(
             cas,
             runtime_lock,
             canary_lock,
@@ -1137,6 +1166,14 @@ def _collect_gvisor_detonation(
             implementation_files=implementation_files,
             artifact=artifact,
             artifact_normalization_profile=artifact_normalization_profile,
+        )
+        attribution_manifest_digest = (
+            cas.put(
+                BytesIO(attribution_manifest),
+                max_bytes=_MAX_ATTRIBUTION_MANIFEST_BYTES,
+            )
+            if attribution_manifest is not None
+            else None
         )
         run_request = (
             _artifact_run_request(
@@ -1198,7 +1235,9 @@ def _collect_gvisor_detonation(
         }
         receipt = {
             "schema": (
-                ARTIFACT_SCHEMA_V3
+                ARTIFACT_SCHEMA_V4
+                if attribution_manifest_digest is not None
+                else ARTIFACT_SCHEMA_V3
                 if artifact is not None and artifact.execution_profile is not None
                 else ARTIFACT_SCHEMA_V2
                 if artifact is not None
@@ -1206,7 +1245,9 @@ def _collect_gvisor_detonation(
                 else ARTIFACT_SCHEMA if artifact is not None else CANARY_SCHEMA
             ),
             "authority": (
-                ARTIFACT_AUTHORITY_V3
+                ARTIFACT_AUTHORITY_V4
+                if attribution_manifest_digest is not None
+                else ARTIFACT_AUTHORITY_V3
                 if artifact is not None and artifact.execution_profile is not None
                 else ARTIFACT_AUTHORITY if artifact is not None else CANARY_AUTHORITY
             ),
@@ -1233,6 +1274,8 @@ def _collect_gvisor_detonation(
                 receipt["normalization_profile"] = artifact_normalization_profile
             if artifact.execution_profile is not None:
                 receipt["execution_profile"] = artifact.execution_profile
+            if attribution_manifest_digest is not None:
+                receipt["attribution_manifest_digest"] = attribution_manifest_digest
         receipt_digest = cas.put(
             BytesIO(canonical_json(receipt)), max_bytes=_MAX_RECEIPT_BYTES
         )
@@ -1631,7 +1674,11 @@ def _canary_run_request(
 
 
 def _artifact_normalization_profile(value: str | None) -> str | None:
-    if value not in (None, ARTIFACT_NORMALIZATION_PROFILE):
+    if value not in (
+        None,
+        ARTIFACT_NORMALIZATION_PROFILE,
+        ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+    ):
         raise GVisorRuntimeError(
             "gVisor acquired artifact normalization profile is unsupported"
         )
@@ -1639,12 +1686,14 @@ def _artifact_normalization_profile(value: str | None) -> str | None:
 
 
 def _artifact_capture_normalization_profile(value: object) -> str:
-    if value != ARTIFACT_NORMALIZATION_PROFILE:
-        raise GVisorRuntimeError(
-            "new gVisor acquired artifact captures require the current "
-            "normalization profile"
-        )
-    return ARTIFACT_NORMALIZATION_PROFILE
+    if value == ARTIFACT_NORMALIZATION_PROFILE:
+        return ARTIFACT_NORMALIZATION_PROFILE
+    if value == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE:
+        return ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+    raise GVisorRuntimeError(
+        "new gVisor acquired artifact captures require a current "
+        "normalization profile"
+    )
 
 
 def _artifact_execution_profile(value: object) -> str:
@@ -1835,7 +1884,9 @@ def _artifact_run_request(
     profile = _artifact_profile(canary_lock, artifact)
     request = {
         "schema": (
-            ARTIFACT_RUN_REQUEST_SCHEMA_V3
+            ARTIFACT_RUN_REQUEST_SCHEMA_V4
+            if selected_normalization == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+            else ARTIFACT_RUN_REQUEST_SCHEMA_V3
             if artifact.execution_profile is not None
             else ARTIFACT_RUN_REQUEST_SCHEMA_V2
             if selected_normalization is not None
@@ -2112,6 +2163,8 @@ def _parse_artifact_trace(
     artifact: _AcquiredArtifact | None = None,
 ) -> tuple[bytes, ...]:
     selected_normalization = _artifact_normalization_profile(normalization_profile)
+    if selected_normalization == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE:
+        raise GVisorRuntimeError("attributed artifact trace requires actor parsing")
     pairs = _parse_trace_pairs(
         raw,
         runtime_lock,
@@ -2132,15 +2185,45 @@ def _parse_artifact_trace(
     return _normalize_successful_artifact_events(pairs)
 
 
+def _parse_attributed_artifact_trace(
+    raw: bytes,
+    runtime_lock: dict[str, Any],
+    canary_lock: dict[str, Any],
+    container_id: str,
+    *,
+    artifact: _AcquiredArtifact,
+) -> _AttributedArtifactTrace:
+    """Classify successful events around one exact script-entry boundary."""
+
+    _artifact_execution_profile(artifact.execution_profile)
+    pairs = _parse_trace_pairs(
+        raw,
+        runtime_lock,
+        canary_lock,
+        container_id,
+        command=_artifact_profile(canary_lock, artifact)["command"],
+    )
+    boundary = _require_artifact_trace_anchors(
+        pairs,
+        container_id,
+        execution_profile=artifact.execution_profile,
+    )
+    if boundary is None:
+        raise GVisorRuntimeError(
+            "attributed gVisor artifact trace has no entrypoint boundary"
+        )
+    return _attribute_successful_artifact_events(pairs, boundary, artifact)
+
+
 def _require_artifact_trace_anchors(
     pairs: tuple[_TracePair, ...],
     container_id: str,
     *,
     execution_profile: str | None = None,
-) -> None:
+) -> _TraceBoundary | None:
     if execution_profile is None:
         _require_legacy_artifact_trace_anchors(pairs, container_id)
-        return
+        return None
     if execution_profile != ARTIFACT_EXECUTION_PROFILE:
         raise GVisorRuntimeError("gVisor acquired artifact execution profile changed")
 
@@ -2180,6 +2263,7 @@ def _require_artifact_trace_anchors(
         and hash_read[2] < execute[1]
     ):
         raise GVisorRuntimeError("gVisor acquired artifact event order changed")
+    return execute
 
 
 def _require_legacy_artifact_trace_anchors(
@@ -2346,6 +2430,93 @@ def _normalize_successful_artifact_events(
             )
             for operation, detail in events
         )
+    )
+
+
+def _attribute_successful_artifact_events(
+    pairs: tuple[_TracePair, ...],
+    boundary: _TraceBoundary,
+    artifact: _AcquiredArtifact,
+) -> _AttributedArtifactTrace:
+    events: list[dict[str, Any]] = []
+    subject_events: set[bytes] = set()
+    boundary_key, boundary_entered, boundary_exited = boundary
+    ordered_pairs = sorted(
+        pairs,
+        key=lambda pair: (pair[5], pair[6], pair[0][0], pair[0][1]),
+    )
+    for pair in ordered_pairs:
+        key, process, syscall, _arguments, result, entered, exited = pair
+        if (
+            min(key) < 1
+            or not 0 < len(process) <= 256
+            or any(character in process for character in "\x00\r\n")
+            or len(result) > 512
+            or any(character in result for character in "\x00\r\n")
+        ):
+            raise GVisorRuntimeError("gVisor artifact attribution record is invalid")
+        if (key, entered, exited) == (
+            boundary_key,
+            boundary_entered,
+            boundary_exited,
+        ):
+            scope = "entrypoint"
+        elif entered < boundary_entered:
+            scope = "harness"
+        elif key == boundary_key and entered > boundary_exited:
+            scope = "subject"
+        else:
+            scope = "unknown"
+        for source_event in _normalize_successful_artifact_events((pair,)):
+            normalized = json.loads(source_event)
+            events.append(
+                {
+                    "sequence": len(events),
+                    "scope": scope,
+                    "tgid": key[0],
+                    "tid": key[1],
+                    "process": process,
+                    "syscall": syscall,
+                    "entered_record": entered,
+                    "exited_record": exited,
+                    "result": result,
+                    "operation": normalized["operation"],
+                    "detail": normalized["detail"],
+                }
+            )
+            if scope == "subject":
+                subject_events.add(source_event)
+            if len(events) > 4096:
+                raise GVisorRuntimeError(
+                    "gVisor artifact attribution event count is oversized"
+                )
+    manifest = canonical_json(
+        {
+            "schema": ARTIFACT_ATTRIBUTION_SCHEMA,
+            "authority": ARTIFACT_ATTRIBUTION_AUTHORITY,
+            "normalization_profile": ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
+            "entrypoint": {
+                "path": _artifact_entrypoint_path(artifact.entrypoint_path),
+                "container_path": _ARTIFACT_TARGET,
+                "digest": _digest(
+                    artifact.entrypoint_digest,
+                    "attributed artifact entrypoint",
+                ),
+            },
+            "boundary": {
+                "tgid": boundary_key[0],
+                "tid": boundary_key[1],
+                "entered_record": boundary_entered,
+                "exited_record": boundary_exited,
+            },
+            "events": events,
+        }
+    )
+    if len(manifest) > _MAX_ATTRIBUTION_MANIFEST_BYTES:
+        raise GVisorRuntimeError("gVisor artifact attribution manifest is oversized")
+    return _AttributedArtifactTrace(
+        manifest=manifest,
+        subject_source_events=tuple(sorted(subject_events)),
     )
 
 
@@ -3041,6 +3212,13 @@ def _verify_gvisor_acquired_artifact(
         expected_declared = _artifact_declared_capabilities(
             expected_declared_capabilities
         )
+    expected_attribution = (
+        expected_normalization == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+    )
+    if expected_attribution and expected_execution is None:
+        raise GVisorRuntimeError(
+            "attributed gVisor artifact replay requires an execution profile"
+        )
     expected_receipt = _digest(receipt_digest, "acquired artifact receipt")
     expected_quarantine = _digest(
         expected_quarantine_receipt_digest,
@@ -3073,14 +3251,18 @@ def _verify_gvisor_acquired_artifact(
             canonical=True,
         )
         expected_fields = (
-            _ARTIFACT_RECEIPT_V3_FIELDS
+            _ARTIFACT_RECEIPT_V4_FIELDS
+            if expected_attribution
+            else _ARTIFACT_RECEIPT_V3_FIELDS
             if expected_execution is not None
             else _ARTIFACT_RECEIPT_V2_FIELDS
             if expected_normalization is not None
             else _ARTIFACT_RECEIPT_FIELDS
         )
         expected_schema = (
-            ARTIFACT_SCHEMA_V3
+            ARTIFACT_SCHEMA_V4
+            if expected_attribution
+            else ARTIFACT_SCHEMA_V3
             if expected_execution is not None
             else ARTIFACT_SCHEMA_V2
             if expected_normalization is not None
@@ -3092,7 +3274,9 @@ def _verify_gvisor_acquired_artifact(
             receipt["schema"] != expected_schema
             or receipt["authority"]
             != (
-                ARTIFACT_AUTHORITY_V3
+                ARTIFACT_AUTHORITY_V4
+                if expected_attribution
+                else ARTIFACT_AUTHORITY_V3
                 if expected_execution is not None
                 else ARTIFACT_AUTHORITY
             )
@@ -3245,7 +3429,7 @@ def _verify_gvisor_acquired_artifact(
             )
         } != expected_identity:
             raise GVisorRuntimeError("gVisor acquired artifact binding changed")
-        source_events, container_id = _verify_detonation_evidence(
+        source_events, container_id, attribution_manifest = _verify_detonation_evidence(
             cas,
             runtime_lock,
             canary_lock,
@@ -3255,6 +3439,22 @@ def _verify_gvisor_acquired_artifact(
             artifact=artifact,
             artifact_normalization_profile=expected_normalization,
         )
+        if expected_attribution:
+            attribution_digest = _digest(
+                receipt["attribution_manifest_digest"],
+                "artifact attribution manifest",
+            )
+            if attribution_manifest is None or cas.read(
+                attribution_digest,
+                max_bytes=_MAX_ATTRIBUTION_MANIFEST_BYTES,
+            ) != attribution_manifest:
+                raise GVisorRuntimeError(
+                    "gVisor artifact attribution manifest changed"
+                )
+        elif attribution_manifest is not None:
+            raise GVisorRuntimeError(
+                "historical gVisor artifact replay produced attribution"
+            )
         if cas.read(
             run_request_digest,
             max_bytes=_MAX_CANARY_RUN_REQUEST_BYTES,
@@ -3374,7 +3574,7 @@ def _verify_gvisor_detonation_canary(
             )
             for name in _CANARY_EVIDENCE_LIMITS
         }
-        source_events, container_id = _verify_detonation_evidence(
+        source_events, container_id, attribution_manifest = _verify_detonation_evidence(
             cas,
             runtime_lock,
             canary_lock,
@@ -3384,6 +3584,8 @@ def _verify_gvisor_detonation_canary(
             artifact=None,
             artifact_normalization_profile=None,
         )
+        if attribution_manifest is not None:
+            raise GVisorRuntimeError("gVisor canary produced artifact attribution")
         expected_run_request = _canary_run_request(
             runtime_lock,
             canary_lock,
@@ -3640,6 +3842,15 @@ def derive_gvisor_acquired_artifact_closure(
         receipt["runtime_lock_digest"]: _MAX_LOCK_BYTES,
         receipt["implementation_digest"]: _MAX_IMPLEMENTATION_MANIFEST_BYTES,
         receipt["run_request_digest"]: _MAX_CANARY_RUN_REQUEST_BYTES,
+        **(
+            {
+                receipt["attribution_manifest_digest"]: (
+                    _MAX_ATTRIBUTION_MANIFEST_BYTES
+                )
+            }
+            if "attribution_manifest_digest" in receipt
+            else {}
+        ),
         **{
             digest: _MAX_IMPLEMENTATION_SOURCE_BYTES
             for digest in verified.implementation_files.values()
@@ -3805,7 +4016,7 @@ def _verify_detonation_evidence(
     implementation_files: dict[str, str],
     artifact: _AcquiredArtifact | None,
     artifact_normalization_profile: str | None,
-) -> tuple[tuple[bytes, ...], str]:
+) -> tuple[tuple[bytes, ...], str, bytes | None]:
     helper_modules = (
         _ARTIFACT_HELPER_MODULES if artifact is not None else _CANARY_HELPER_MODULES
     )
@@ -3903,8 +4114,21 @@ def _verify_detonation_evidence(
     for command, raw in logs.items():
         if command != "boot":
             _verify_canary_log_envelope(raw, canary_lock, container_id, command)
-    source_events = (
-        _parse_artifact_trace(
+    attribution_manifest: bytes | None = None
+    if artifact is not None and (
+        artifact_normalization_profile == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+    ):
+        attributed = _parse_attributed_artifact_trace(
+            logs["boot"],
+            runtime_lock,
+            canary_lock,
+            container_id,
+            artifact=artifact,
+        )
+        source_events = attributed.subject_source_events
+        attribution_manifest = attributed.manifest
+    elif artifact is not None:
+        source_events = _parse_artifact_trace(
             logs["boot"],
             runtime_lock,
             canary_lock,
@@ -3912,10 +4136,11 @@ def _verify_detonation_evidence(
             normalization_profile=artifact_normalization_profile,
             artifact=artifact,
         )
-        if artifact is not None
-        else _parse_canary_trace(logs["boot"], runtime_lock, canary_lock, container_id)
-    )
-    return source_events, container_id
+    else:
+        source_events = _parse_canary_trace(
+            logs["boot"], runtime_lock, canary_lock, container_id
+        )
+    return source_events, container_id, attribution_manifest
 
 
 def _verify_canary_log_envelope(

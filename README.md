@@ -79,6 +79,27 @@ recorded undeclared `file-write` to `/dev/null` in the bounded execution path.
 capture completeness, runtime attestation, isolation, backend qualification,
 admission authority, or Phase 2 exit.
 
+The implemented but not yet live-retained v4 profile adds an ordered
+entrypoint-epoch attribution manifest. Successful pre-entrypoint events remain
+`harness`, the wrapper's launch is `entrypoint`, same-thread events after that
+launch completes become `subject`, and unrelated post-entrypoint events remain
+`unknown`; only `subject` events feed the capability diff. Replay re-derives the
+manifest and checks its CAS digest. This does not establish process ancestry,
+capture completeness, or a Phase 2 exit.
+
+The opt-in command is:
+
+```console
+python -m aragorn.benchmark SUITE OUTCOMES --state EVIDENCE_CAS --phase2-metrics-checkpoint
+```
+
+It applies the four Phase 2 numerical thresholds with exact fractions to a
+caller-declared, unfrozen five-run `held_out` matrix.
+Its report always sets `phase2_exit_eligible` to `false`; attributed detonation
+evidence, capture completeness, a frozen coverage/candidate lock, a qualified
+isolated backend, and a varied-scenario matrix all remain required. A metric
+pass is not a phase exit.
+
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
 verifier rejects promotion and aggregate `PASS`; it grants no installer

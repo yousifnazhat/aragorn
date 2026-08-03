@@ -4204,52 +4204,51 @@ def _canary_log_records(
         or b"\r" in raw
     ):
         raise GVisorRuntimeError(f"gVisor canary {command} log framing is invalid")
-    lines = raw[:-1].split(b"\n")
-    if not lines or len(lines) > trace["max_log_lines"]:
+    if raw.count(b"\n") > trace["max_log_lines"]:
         raise GVisorRuntimeError(f"gVisor canary {command} log line count is invalid")
+    label = f"gVisor canary {command} log record"
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise GVisorRuntimeError(f"{label} is invalid JSON: {exc}") from exc
     decoder = json.JSONDecoder(
         object_pairs_hook=_reject_duplicate_json_keys,
         parse_constant=_reject_json_constant,
     )
     records = []
-    label = f"gVisor canary {command} log record"
-    for line in lines:
-        if not line:
-            raise GVisorRuntimeError(f"gVisor canary {command} log line is invalid")
+    offset = 0
+    while offset < len(text):
+        if text[offset] != "{":
+            raise GVisorRuntimeError(f"{label} framing is invalid")
         try:
-            text = line.decode("utf-8")
-        except UnicodeDecodeError as exc:
+            record, end = decoder.raw_decode(text, offset)
+        except (ValueError, RecursionError) as exc:
             raise GVisorRuntimeError(f"{label} is invalid JSON: {exc}") from exc
-        offset = 0
-        while offset < len(text):
-            if text[offset] != "{":
-                raise GVisorRuntimeError(f"{label} framing is invalid")
-            try:
-                record, end = decoder.raw_decode(text, offset)
-            except (ValueError, RecursionError) as exc:
-                raise GVisorRuntimeError(f"{label} is invalid JSON: {exc}") from exc
-            if len(text[offset:end].encode("utf-8")) > trace["max_line_bytes"]:
-                raise GVisorRuntimeError(
-                    f"gVisor canary {command} log line is invalid"
-                )
-            if not isinstance(record, dict):
-                raise GVisorRuntimeError(f"{label} must be a JSON object")
-            _exact_keys(record, {"msg", "level", "time"}, label)
-            if (
-                record["level"] not in {"debug", "info", "warning"}
-                or not isinstance(record["msg"], str)
-                or not record["msg"]
-                or "\x00" in record["msg"]
-                or not isinstance(record["time"], str)
-                or _TRACE_TIME.fullmatch(record["time"]) is None
-            ):
-                raise GVisorRuntimeError(f"{label} is invalid")
-            records.append(record)
-            if len(records) > trace["max_log_lines"]:
-                raise GVisorRuntimeError(
-                    f"gVisor canary {command} log line count is invalid"
-                )
-            offset = end
+        frame = text[offset:end]
+        if "\n" in frame or len(frame.encode("utf-8")) > trace["max_line_bytes"]:
+            raise GVisorRuntimeError(f"gVisor canary {command} log line is invalid")
+        if not isinstance(record, dict):
+            raise GVisorRuntimeError(f"{label} must be a JSON object")
+        _exact_keys(record, {"msg", "level", "time"}, label)
+        if (
+            record["level"] not in {"debug", "info", "warning"}
+            or not isinstance(record["msg"], str)
+            or not record["msg"]
+            or "\x00" in record["msg"]
+            or not isinstance(record["time"], str)
+            or _TRACE_TIME.fullmatch(record["time"]) is None
+        ):
+            raise GVisorRuntimeError(f"{label} is invalid")
+        records.append(record)
+        if len(records) > trace["max_log_lines"]:
+            raise GVisorRuntimeError(
+                f"gVisor canary {command} log line count is invalid"
+            )
+        offset = end
+        if offset < len(text) and text[offset] == "\n":
+            offset += 1
+            while offset < len(text) and text[offset] == "\n":
+                offset += 1
     return tuple(records)
 
 

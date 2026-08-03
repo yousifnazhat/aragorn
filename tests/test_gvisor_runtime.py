@@ -1443,10 +1443,12 @@ class GVisorRuntimeTests(unittest.TestCase):
         trace = _canary_trace()
         lines = trace.splitlines(keepends=True)
         joined = b"".join(line[:-1] for line in lines) + b"\n"
-        self.assertEqual(
-            runtime._canary_log_records(joined, canary_lock, "boot"),
-            runtime._canary_log_records(trace, canary_lock, "boot"),
-        )
+        doubled = lines[0][:-1] + lines[1] + b"\n" + b"".join(lines[2:])
+        expected = runtime._canary_log_records(trace, canary_lock, "boot")
+        for raw in (joined, doubled):
+            self.assertEqual(
+                runtime._canary_log_records(raw, canary_lock, "boot"), expected
+            )
         for separator in (b" ", b"garbage"):
             with self.assertRaises(runtime.GVisorRuntimeError):
                 runtime._canary_log_records(

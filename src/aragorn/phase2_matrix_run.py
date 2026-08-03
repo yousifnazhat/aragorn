@@ -21,7 +21,9 @@ from .behavior_capability_diff import (
 from .benchmark import (
     _MAX_EVIDENCE_BYTES,
     _PHASE2_GVISOR_EVIDENCE_AUTHORITY,
+    _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2,
     _PHASE2_GVISOR_EVIDENCE_SCHEMA,
+    _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2,
     _PHASE2_RUNS_PER_CASE,
     BenchmarkError,
     _digest,
@@ -36,6 +38,7 @@ from .benchmark import (
 from .cas import CAS, CASError
 from .gvisor_runtime import (
     ARTIFACT_SCHEMA_V4,
+    ARTIFACT_SCHEMA_V5,
     GVisorRuntimeError,
     collect_gvisor_acquired_artifact,
     verify_gvisor_acquired_artifact,
@@ -151,11 +154,20 @@ def run_phase2_matrix(
     # ponytail: serial by design; the collector owns one host-global lock.
     for case_id in case_ids:
         pins = binding["cases"][case_id]
-        capture_pins = dict(pins)
-        capture_pins["normalization_profile"] = capture_pins.pop(
-            "expected_normalization_profile"
-        )
         for run_id in range(1, _PHASE2_RUNS_PER_CASE + 1):
+            run_pins = dict(pins)
+            scenario_schedule = binding["scenario_schedule"]
+            scenario_id = (
+                scenario_schedule[run_id - 1]
+                if scenario_schedule is not None
+                else None
+            )
+            if scenario_id is not None:
+                run_pins["expected_scenario_id"] = scenario_id
+            capture_pins = dict(run_pins)
+            capture_pins["normalization_profile"] = capture_pins.pop(
+                "expected_normalization_profile"
+            )
             receipt_digest = collector(
                 evidence,
                 source_states[case_id],
@@ -164,17 +176,25 @@ def run_phase2_matrix(
             receipt = verify_gvisor_acquired_artifact(
                 evidence,
                 receipt_digest,
-                **pins,
+                **run_pins,
             )
             _reject_unknown_attribution_scope(evidence, receipt)
             verdict, reason_codes = _verdict_from_verified_diff(
                 evidence,
                 receipt,
-                pins,
+                run_pins,
             )
             envelope = {
-                "schema": _PHASE2_GVISOR_EVIDENCE_SCHEMA,
-                "authority": _PHASE2_GVISOR_EVIDENCE_AUTHORITY,
+                "schema": (
+                    _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2
+                    if scenario_id is not None
+                    else _PHASE2_GVISOR_EVIDENCE_SCHEMA
+                ),
+                "authority": (
+                    _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2
+                    if scenario_id is not None
+                    else _PHASE2_GVISOR_EVIDENCE_AUTHORITY
+                ),
                 "coverage_lock_digest": expected_lock,
                 "suite_digest": suite["digest"],
                 "case_id": case_id,
@@ -185,6 +205,8 @@ def run_phase2_matrix(
                 "verdict": verdict,
                 "reason_codes": reason_codes,
             }
+            if scenario_id is not None:
+                envelope["scenario_id"] = scenario_id
             evidence_digest = evidence.put(
                 BytesIO(canonical_json(envelope)),
                 max_bytes=_MAX_EVIDENCE_BYTES,
@@ -235,8 +257,11 @@ def run_phase2_matrix(
 
 
 def _reject_unknown_attribution_scope(cas: CAS, receipt: object) -> None:
-    if not isinstance(receipt, dict) or receipt.get("schema") != ARTIFACT_SCHEMA_V4:
-        raise Phase2MatrixRunError("collector did not verify a gVisor v4 receipt")
+    if not isinstance(receipt, dict) or receipt.get("schema") not in {
+        ARTIFACT_SCHEMA_V4,
+        ARTIFACT_SCHEMA_V5,
+    }:
+        raise Phase2MatrixRunError("collector did not verify a supported gVisor receipt")
     attribution = _read_canonical_document(
         cas,
         receipt.get("attribution_manifest_digest"),
@@ -257,8 +282,11 @@ def _verdict_from_verified_diff(
     receipt: object,
     pins: dict[str, Any],
 ) -> tuple[str, list[str]]:
-    if not isinstance(receipt, dict) or receipt.get("schema") != ARTIFACT_SCHEMA_V4:
-        raise Phase2MatrixRunError("collector did not verify a gVisor v4 receipt")
+    if not isinstance(receipt, dict) or receipt.get("schema") not in {
+        ARTIFACT_SCHEMA_V4,
+        ARTIFACT_SCHEMA_V5,
+    }:
+        raise Phase2MatrixRunError("collector did not verify a supported gVisor receipt")
     diff_receipt = _read_canonical_document(
         cas,
         receipt.get("capability_diff_receipt_digest"),

@@ -24,6 +24,7 @@ from aragorn.phase2_matrix_prepare import (
 
 ROOT = Path(__file__).parents[1]
 CATALOG = ROOT / "benchmark" / "phase2-matrix-catalog-v1.json"
+CATALOG_V2 = ROOT / "benchmark" / "phase2-matrix-catalog-v2.json"
 
 
 class Phase2MatrixPrepareTests(unittest.TestCase):
@@ -126,6 +127,33 @@ class Phase2MatrixPrepareTests(unittest.TestCase):
             self.assertEqual(
                 digest, self._digest((work / "coverage-lock.json").read_bytes())
             )
+
+    def test_prepare_v2_binds_the_exact_scenario_schedule(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            work = base / "work"
+            digest = prepare_phase2_matrix(
+                CATALOG_V2,
+                work,
+                worker_uid=self._worker_uid(),
+                worker_gid=self._worker_gid(),
+                gateway=_FakeGateway(base / "fixtures"),
+            )
+            lock = json.loads((work / "coverage-lock.json").read_bytes())
+            suite = json.loads(
+                (work / "suite" / "phase2-suite.json").read_bytes()
+            )
+            self.assertEqual(digest, self._digest(canonical_json(lock)))
+            self.assertEqual(lock["schema"], "aragorn/benchmark-phase2-coverage-lock/v2")
+            self.assertEqual(
+                lock["scenario_matrix"]["run_schedule"],
+                ["primary", "alternate", "primary", "alternate", "primary"],
+            )
+            self.assertEqual(
+                lock["gvisor"]["receipt_schema"],
+                "aragorn/gvisor-acquired-artifact-receipt/v5",
+            )
+            self.assertEqual(suite["id"], "phase2-public-matrix-v2")
 
     def test_catalog_shape_and_capabilities_fail_before_work_creation(self) -> None:
         variants = []

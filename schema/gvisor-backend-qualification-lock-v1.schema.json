@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/gvisor-backend-qualification-lock-v1.schema.json",
+  "title": "Aragorn exact-profile gVisor backend qualification lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "profile",
+    "runs",
+    "runtime_lock_digest",
+    "probe_digest",
+    "controls"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/gvisor-backend-qualification-lock/v1"},
+    "authority": {
+      "const": "PIN_ONLY_NOT_BACKEND_QUALIFICATION_OR_PHASE2_EXIT_AUTHORITY"
+    },
+    "profile": {
+      "const": "colima-gvisor-runsc-systrap-canary-negative-controls/v1"
+    },
+    "runs": {"const": 3},
+    "runtime_lock_digest": {"$ref": "#/$defs/digest"},
+    "probe_digest": {"$ref": "#/$defs/digest"},
+    "controls": {
+      "const": [
+        "identity-profile",
+        "tmpfs-write-positive",
+        "tcp-sink-positive-control",
+        "udp-sink-positive-control",
+        "host-file-isolation",
+        "host-process-isolation",
+        "tcp-egress-denied",
+        "udp-egress-denied",
+        "rootfs-write-denied",
+        "input-mutation-denied",
+        "tmpfs-exec-denied",
+        "mount-denied",
+        "namespace-create-denied",
+        "device-create-denied",
+        "privilege-escalation-denied"
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

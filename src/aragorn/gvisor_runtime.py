@@ -55,11 +55,13 @@ ARTIFACT_SCHEMA = "aragorn/gvisor-acquired-artifact-receipt/v1"
 ARTIFACT_SCHEMA_V2 = "aragorn/gvisor-acquired-artifact-receipt/v2"
 ARTIFACT_SCHEMA_V3 = "aragorn/gvisor-acquired-artifact-receipt/v3"
 ARTIFACT_SCHEMA_V4 = "aragorn/gvisor-acquired-artifact-receipt/v4"
+ARTIFACT_SCHEMA_V5 = "aragorn/gvisor-acquired-artifact-receipt/v5"
 ARTIFACT_IMPLEMENTATION_SCHEMA = "aragorn/gvisor-acquired-artifact-implementation/v1"
 ARTIFACT_RUN_REQUEST_SCHEMA = "aragorn/gvisor-acquired-artifact-run-request/v1"
 ARTIFACT_RUN_REQUEST_SCHEMA_V2 = "aragorn/gvisor-acquired-artifact-run-request/v2"
 ARTIFACT_RUN_REQUEST_SCHEMA_V3 = "aragorn/gvisor-acquired-artifact-run-request/v3"
 ARTIFACT_RUN_REQUEST_SCHEMA_V4 = "aragorn/gvisor-acquired-artifact-run-request/v4"
+ARTIFACT_RUN_REQUEST_SCHEMA_V5 = "aragorn/gvisor-acquired-artifact-run-request/v5"
 ARTIFACT_NORMALIZATION_PROFILE = "successful-openat-execve-set/v1"
 ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE = (
     "successful-openat-execve-attributed/v1"
@@ -72,6 +74,9 @@ ARTIFACT_ATTRIBUTION_AUTHORITY = (
     "COMPLETENESS_OR_BEHAVIOR_AUTHORITY"
 )
 ARTIFACT_EXECUTION_PROFILE = "bounded-single-script/v1"
+ARTIFACT_EXECUTION_PROFILE_V2 = "bounded-single-script/v2"
+ARTIFACT_SCENARIO_IDS = frozenset({"alternate", "primary"})
+ARTIFACT_SCENARIO_ENVIRONMENT = "ARAGORN_SCENARIO"
 AUTHORITY = (
     "RUNTIME_PATH_SMOKE_ONLY_NOT_RUNTIME_ATTESTATION_ISOLATION_OR_DETONATION_AUTHORITY"
 )
@@ -95,6 +100,12 @@ ARTIFACT_AUTHORITY_V4 = (
     "ONE_CALLER_PINNED_BOUNDED_SINGLE_SCRIPT_ATTRIBUTED_ENTRYPOINT_EPOCH_SAME_RUN_"
     "EVIDENCE_ONLY_NOT_PROCESS_ANCESTRY_SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_"
     "ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+)
+ARTIFACT_AUTHORITY_V5 = (
+    "ONE_CALLER_PINNED_TWO_SCENARIO_BOUNDED_SINGLE_SCRIPT_ATTRIBUTED_ENTRYPOINT_"
+    "EPOCH_SAME_RUN_EVIDENCE_ONLY_NOT_PROCESS_ANCESTRY_SCRIPT_SAFETY_CAPTURE_"
+    "COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_ADMISSION_"
+    "OR_PHASE2_EXIT_AUTHORITY"
 )
 
 _MAX_LOCK_BYTES = 64 * 1024
@@ -190,6 +201,7 @@ _ARTIFACT_RECEIPT_V4_FIELDS = {
     *_ARTIFACT_RECEIPT_V3_FIELDS,
     "attribution_manifest_digest",
 }
+_ARTIFACT_RECEIPT_V5_FIELDS = {*_ARTIFACT_RECEIPT_V4_FIELDS, "scenario_id"}
 _RUN_ID = re.compile(r"[0-9a-f]{32}\Z")
 _CAPTURED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _BOOT_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
@@ -299,6 +311,7 @@ class _AcquiredArtifact:
     execution_profile: str | None
     declared_capabilities: tuple[str, ...]
     materialized_path: Path
+    scenario_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -701,6 +714,7 @@ def collect_gvisor_acquired_artifact(
     expected_entrypoint_digest: str,
     expected_declared_capabilities: Collection[str] | None = None,
     expected_execution_profile: str | None = None,
+    expected_scenario_id: str | None = None,
     expected_lock_digest: str,
     expected_verifier_implementation_digest: str,
     normalization_profile: str | None = None,
@@ -714,6 +728,17 @@ def collect_gvisor_acquired_artifact(
         normalization_profile
     )
     selected_execution = _artifact_execution_profile(expected_execution_profile)
+    selected_scenario = _artifact_scenario_id(
+        expected_scenario_id,
+        selected_execution,
+    )
+    if (
+        selected_execution == ARTIFACT_EXECUTION_PROFILE_V2
+        and selected_normalization != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+    ):
+        raise GVisorRuntimeError(
+            "scenario-bound artifact capture requires attributed normalization"
+        )
     entrypoint_path = _artifact_entrypoint_path(expected_entrypoint_path)
     declared_capabilities = _artifact_declared_capabilities(
         expected_declared_capabilities
@@ -811,6 +836,7 @@ def collect_gvisor_acquired_artifact(
                 execution_profile=selected_execution,
                 declared_capabilities=declared_capabilities,
                 materialized_path=materialized_path,
+                scenario_id=selected_scenario,
             )
             return _collect_gvisor_detonation(
                 cas,
@@ -1260,7 +1286,9 @@ def _collect_gvisor_detonation(
         }
         receipt = {
             "schema": (
-                ARTIFACT_SCHEMA_V4
+                ARTIFACT_SCHEMA_V5
+                if artifact is not None and artifact.scenario_id is not None
+                else ARTIFACT_SCHEMA_V4
                 if attribution_manifest_digest is not None
                 else ARTIFACT_SCHEMA_V3
                 if artifact is not None and artifact.execution_profile is not None
@@ -1270,7 +1298,9 @@ def _collect_gvisor_detonation(
                 else ARTIFACT_SCHEMA if artifact is not None else CANARY_SCHEMA
             ),
             "authority": (
-                ARTIFACT_AUTHORITY_V4
+                ARTIFACT_AUTHORITY_V5
+                if artifact is not None and artifact.scenario_id is not None
+                else ARTIFACT_AUTHORITY_V4
                 if attribution_manifest_digest is not None
                 else ARTIFACT_AUTHORITY_V3
                 if artifact is not None and artifact.execution_profile is not None
@@ -1301,6 +1331,15 @@ def _collect_gvisor_detonation(
                 receipt["execution_profile"] = artifact.execution_profile
             if attribution_manifest_digest is not None:
                 receipt["attribution_manifest_digest"] = attribution_manifest_digest
+            if artifact.scenario_id is not None:
+                if attribution_manifest_digest is None:
+                    raise GVisorRuntimeError(
+                        "scenario-bound artifact receipt requires attribution"
+                    )
+                receipt["scenario_id"] = _artifact_scenario_id(
+                    artifact.scenario_id,
+                    artifact.execution_profile,
+                )
         receipt_digest = cas.put(
             BytesIO(canonical_json(receipt)), max_bytes=_MAX_RECEIPT_BYTES
         )
@@ -1323,6 +1362,7 @@ def _collect_gvisor_detonation(
                 expected_entrypoint_digest=artifact.entrypoint_digest,
                 expected_declared_capabilities=artifact.declared_capabilities,
                 expected_execution_profile=artifact.execution_profile,
+                expected_scenario_id=artifact.scenario_id,
                 expected_lock_digest=expected_lock,
                 expected_verifier_implementation_digest=expected_implementation,
                 expected_normalization_profile=artifact_normalization_profile,
@@ -1480,13 +1520,9 @@ def _create_arguments(
                 ),
             )
         )
-    return (
-        *arguments,
-        "--env",
-        profile["environment"][0],
-        image,
-        *profile["command"],
-    )
+    for environment in profile["environment"]:
+        arguments.extend(("--env", environment))
+    return (*arguments, image, *profile["command"])
 
 
 def _canary_log_paths(
@@ -1722,11 +1758,25 @@ def _artifact_capture_normalization_profile(value: object) -> str:
 
 
 def _artifact_execution_profile(value: object) -> str:
-    if value != ARTIFACT_EXECUTION_PROFILE:
+    if value not in (ARTIFACT_EXECUTION_PROFILE, ARTIFACT_EXECUTION_PROFILE_V2):
         raise GVisorRuntimeError(
             "gVisor acquired artifact execution profile is unsupported"
         )
-    return ARTIFACT_EXECUTION_PROFILE
+    return value
+
+
+def _artifact_scenario_id(value: object, execution_profile: str | None) -> str | None:
+    if execution_profile == ARTIFACT_EXECUTION_PROFILE_V2:
+        if not isinstance(value, str) or value not in ARTIFACT_SCENARIO_IDS:
+            raise GVisorRuntimeError(
+                "scenario-bound artifact capture requires primary or alternate"
+            )
+        return value
+    if value is not None:
+        raise GVisorRuntimeError(
+            "historical artifact execution profiles do not accept a scenario"
+        )
+    return None
 
 
 def _artifact_entrypoint_path(value: object) -> str:
@@ -1768,16 +1818,22 @@ def _artifact_profile(
         "tmpfs",
     )
     if artifact is not None and artifact.execution_profile is not None:
-        _artifact_execution_profile(artifact.execution_profile)
+        execution_profile = _artifact_execution_profile(artifact.execution_profile)
+        scenario_id = _artifact_scenario_id(artifact.scenario_id, execution_profile)
         command = list(_ARTIFACT_WRAPPER_COMMAND)
         declared_capabilities = list(
             _artifact_declared_capabilities(artifact.declared_capabilities)
         )
+        environment = list(base["environment"])
+        if scenario_id is not None:
+            environment.append(f"{ARTIFACT_SCENARIO_ENVIRONMENT}={scenario_id}")
     else:
         command = ["/bin/sh", _ARTIFACT_TARGET]
         declared_capabilities = base["declared_capabilities"]
+        environment = base["environment"]
     return {
-        **{field: base[field] for field in fields},
+        **{field: base[field] for field in fields if field != "environment"},
+        "environment": environment,
         "command": command,
         "declared_capabilities": declared_capabilities,
         "source_events": [
@@ -1910,15 +1966,26 @@ def _artifact_run_request(
     normalization_profile: str | None = None,
 ) -> bytes:
     selected_normalization = _artifact_normalization_profile(normalization_profile)
+    scenario_id: str | None = None
     if artifact.execution_profile is not None:
-        _artifact_execution_profile(artifact.execution_profile)
+        execution_profile = _artifact_execution_profile(artifact.execution_profile)
+        scenario_id = _artifact_scenario_id(artifact.scenario_id, execution_profile)
         selected_normalization = _artifact_capture_normalization_profile(
             normalization_profile
         )
+        if (
+            execution_profile == ARTIFACT_EXECUTION_PROFILE_V2
+            and selected_normalization != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+        ):
+            raise GVisorRuntimeError(
+                "scenario-bound artifact request requires attributed normalization"
+            )
     profile = _artifact_profile(canary_lock, artifact)
     request = {
         "schema": (
-            ARTIFACT_RUN_REQUEST_SCHEMA_V4
+            ARTIFACT_RUN_REQUEST_SCHEMA_V5
+            if scenario_id is not None
+            else ARTIFACT_RUN_REQUEST_SCHEMA_V4
             if selected_normalization == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
             else ARTIFACT_RUN_REQUEST_SCHEMA_V3
             if artifact.execution_profile is not None
@@ -1927,8 +1994,11 @@ def _artifact_run_request(
             else ARTIFACT_RUN_REQUEST_SCHEMA
         ),
         "authority": (
-            "CALLER_PINNED_BOUNDED_SINGLE_SCRIPT_REQUEST_ONLY_NOT_SCRIPT_SAFETY_OR_"
-            "GENERAL_EXECUTION_OR_ADMISSION_AUTHORITY"
+            "CALLER_PINNED_TWO_SCENARIO_BOUNDED_SINGLE_SCRIPT_REQUEST_ONLY_NOT_"
+            "SCRIPT_SAFETY_GENERAL_EXECUTION_OR_ADMISSION_AUTHORITY"
+            if scenario_id is not None
+            else "CALLER_PINNED_BOUNDED_SINGLE_SCRIPT_REQUEST_ONLY_NOT_SCRIPT_"
+            "SAFETY_OR_GENERAL_EXECUTION_OR_ADMISSION_AUTHORITY"
             if artifact.execution_profile is not None
             else "ONE_INERT_ACQUIRED_ARTIFACT_REQUEST_ONLY_NOT_GENERAL_EXECUTION_"
             "OR_ADMISSION_AUTHORITY"
@@ -1958,6 +2028,8 @@ def _artifact_run_request(
         request["normalization_profile"] = selected_normalization
     if artifact.execution_profile is not None:
         request["execution_profile"] = artifact.execution_profile
+    if scenario_id is not None:
+        request["scenario_id"] = scenario_id
     return canonical_json(request)
 
 
@@ -2210,6 +2282,7 @@ def _parse_artifact_trace(
         pairs,
         container_id,
         execution_profile=artifact.execution_profile if artifact else None,
+        scenario_id=artifact.scenario_id if artifact else None,
     )
     if selected_normalization is None:
         return tuple(
@@ -2241,6 +2314,7 @@ def _parse_attributed_artifact_trace(
         pairs,
         container_id,
         execution_profile=artifact.execution_profile,
+        scenario_id=artifact.scenario_id,
     )
     if boundary is None:
         raise GVisorRuntimeError(
@@ -2254,18 +2328,22 @@ def _require_artifact_trace_anchors(
     container_id: str,
     *,
     execution_profile: str | None = None,
+    scenario_id: str | None = None,
 ) -> _TraceBoundary | None:
     if execution_profile is None:
+        _artifact_scenario_id(scenario_id, execution_profile)
         _require_legacy_artifact_trace_anchors(pairs, container_id)
         return None
-    if execution_profile != ARTIFACT_EXECUTION_PROFILE:
-        raise GVisorRuntimeError("gVisor acquired artifact execution profile changed")
+    selected_execution = _artifact_execution_profile(execution_profile)
+    selected_scenario = _artifact_scenario_id(scenario_id, selected_execution)
 
     execute: tuple[tuple[int, int], int, int] | None = None
     reads: list[tuple[tuple[int, int], int]] = []
     for key, process, syscall, arguments, result, entered_at, exited_at in pairs:
         if syscall == "execve" and _artifact_script_exec_arguments(
-            arguments, container_id
+            arguments,
+            container_id,
+            scenario_id=selected_scenario,
         ):
             if (
                 execute is not None
@@ -2291,6 +2369,7 @@ def _require_artifact_trace_anchors(
     hash_execute, hash_read = _require_legacy_artifact_trace_anchors(
         tuple(pair for pair in pairs if pair[5] < execute[1]),
         container_id,
+        scenario_id=selected_scenario,
     )
     if not (
         hash_execute[2] < hash_read[1]
@@ -2301,7 +2380,10 @@ def _require_artifact_trace_anchors(
 
 
 def _require_legacy_artifact_trace_anchors(
-    pairs: tuple[_TracePair, ...], container_id: str
+    pairs: tuple[_TracePair, ...],
+    container_id: str,
+    *,
+    scenario_id: str | None = None,
 ) -> tuple[tuple[tuple[int, int], int, int], tuple[tuple[int, int], int, int]]:
     execute: tuple[tuple[int, int], int, int] | None = None
     read: tuple[tuple[int, int], int, int] | None = None
@@ -2319,6 +2401,7 @@ def _require_legacy_artifact_trace_anchors(
                     arguments,
                     container_id,
                     _ARTIFACT_TARGET,
+                    scenario_id=scenario_id,
                 )
             ):
                 raise GVisorRuntimeError(
@@ -2350,7 +2433,12 @@ def _require_legacy_artifact_trace_anchors(
     return execute, read
 
 
-def _artifact_script_exec_arguments(arguments: str, container_id: str) -> bool:
+def _artifact_script_exec_arguments(
+    arguments: str,
+    container_id: str,
+    *,
+    scenario_id: str | None = None,
+) -> bool:
     matched = _TRACE_EXECVE_ARGUMENTS.fullmatch(arguments)
     if matched is None or matched["path"] != "/bin/sh":
         return False
@@ -2359,13 +2447,40 @@ def _artifact_script_exec_arguments(arguments: str, container_id: str) -> bool:
         environment = json.loads(matched["environment"])
     except (ValueError, RecursionError):
         return False
-    return argv == ["/bin/sh", _ARTIFACT_TARGET] and environment == [
+    return argv == ["/bin/sh", _ARTIFACT_TARGET] and _artifact_exec_environment(
+        environment,
+        container_id,
+        scenario_id=scenario_id,
+    )
+
+
+def _artifact_exec_environment(
+    environment: object,
+    container_id: str,
+    *,
+    scenario_id: str | None,
+) -> bool:
+    expected_environment = [
         f"HOSTNAME={container_id[:12]}",
         "SHLVL=1",
         "HOME=/home",
         "PATH=/bin",
         "PWD=/",
     ]
+    if scenario_id is None:
+        return environment == expected_environment
+    if not isinstance(environment, list) or any(
+        not isinstance(item, str) or "=" not in item for item in environment
+    ):
+        return False
+    values = dict(item.split("=", 1) for item in environment)
+    return len(values) == len(environment) and values == {
+        item.split("=", 1)[0]: item.split("=", 1)[1]
+        for item in [
+            *expected_environment,
+            f"{ARTIFACT_SCENARIO_ENVIRONMENT}={scenario_id}",
+        ]
+    }
 
 
 def _artifact_script_open_arguments(arguments: str) -> bool:
@@ -2582,7 +2697,13 @@ def _successful_fd(result: str) -> bool:
     return matched is not None and int(matched[1]) == int(matched[2], 16)
 
 
-def _canary_exec_arguments(arguments: str, container_id: str, token_path: str) -> bool:
+def _canary_exec_arguments(
+    arguments: str,
+    container_id: str,
+    token_path: str,
+    *,
+    scenario_id: str | None = None,
+) -> bool:
     matched = re.fullmatch(
         rf"0x[0-9a-f]+ /bin/sha256sum, 0x[0-9a-f]+ "
         rf"\[\"/bin/sha256sum\", \"{re.escape(token_path)}\"\], "
@@ -2595,13 +2716,11 @@ def _canary_exec_arguments(arguments: str, container_id: str, token_path: str) -
         environment = json.loads(matched["environment"])
     except (ValueError, RecursionError):
         return False
-    return environment == [
-        f"HOSTNAME={container_id[:12]}",
-        "SHLVL=1",
-        "HOME=/home",
-        "PATH=/bin",
-        "PWD=/",
-    ]
+    return _artifact_exec_environment(
+        environment,
+        container_id,
+        scenario_id=scenario_id,
+    )
 
 
 def _wait_for_live_container(
@@ -3179,6 +3298,7 @@ def verify_gvisor_acquired_artifact(
     expected_verifier_implementation_digest: str,
     expected_normalization_profile: str | None = None,
     expected_execution_profile: str | None = None,
+    expected_scenario_id: str | None = None,
     expected_entrypoint_path: str | None = None,
     expected_declared_capabilities: Collection[str] | None = None,
 ) -> dict[str, Any]:
@@ -3198,6 +3318,7 @@ def verify_gvisor_acquired_artifact(
         ),
         expected_normalization_profile=expected_normalization_profile,
         expected_execution_profile=expected_execution_profile,
+        expected_scenario_id=expected_scenario_id,
         expected_entrypoint_path=expected_entrypoint_path,
         expected_declared_capabilities=expected_declared_capabilities,
     ).receipt
@@ -3216,6 +3337,7 @@ def _verify_gvisor_acquired_artifact(
     expected_verifier_implementation_digest: str,
     expected_normalization_profile: str | None = None,
     expected_execution_profile: str | None = None,
+    expected_scenario_id: str | None = None,
     expected_entrypoint_path: str | None = None,
     expected_declared_capabilities: Collection[str] | None = None,
 ) -> _VerifiedCanary:
@@ -3226,15 +3348,21 @@ def _verify_gvisor_acquired_artifact(
         if (
             expected_entrypoint_path is not None
             or expected_declared_capabilities is not None
+            or expected_scenario_id is not None
         ):
             raise GVisorRuntimeError(
                 "historical gVisor artifact replay does not accept execution pins"
             )
         expected_execution = None
+        expected_scenario = None
         expected_path = _ARTIFACT_ENTRYPOINT
         expected_declared: tuple[str, ...] | None = None
     else:
         expected_execution = _artifact_execution_profile(expected_execution_profile)
+        expected_scenario = _artifact_scenario_id(
+            expected_scenario_id,
+            expected_execution,
+        )
         expected_normalization = _artifact_capture_normalization_profile(
             expected_normalization_profile
         )
@@ -3252,6 +3380,13 @@ def _verify_gvisor_acquired_artifact(
     if expected_attribution and expected_execution is None:
         raise GVisorRuntimeError(
             "attributed gVisor artifact replay requires an execution profile"
+        )
+    if (
+        expected_execution == ARTIFACT_EXECUTION_PROFILE_V2
+        and not expected_attribution
+    ):
+        raise GVisorRuntimeError(
+            "scenario-bound artifact replay requires attributed normalization"
         )
     expected_receipt = _digest(receipt_digest, "acquired artifact receipt")
     expected_quarantine = _digest(
@@ -3285,7 +3420,9 @@ def _verify_gvisor_acquired_artifact(
             canonical=True,
         )
         expected_fields = (
-            _ARTIFACT_RECEIPT_V4_FIELDS
+            _ARTIFACT_RECEIPT_V5_FIELDS
+            if expected_scenario is not None
+            else _ARTIFACT_RECEIPT_V4_FIELDS
             if expected_attribution
             else _ARTIFACT_RECEIPT_V3_FIELDS
             if expected_execution is not None
@@ -3294,7 +3431,9 @@ def _verify_gvisor_acquired_artifact(
             else _ARTIFACT_RECEIPT_FIELDS
         )
         expected_schema = (
-            ARTIFACT_SCHEMA_V4
+            ARTIFACT_SCHEMA_V5
+            if expected_scenario is not None
+            else ARTIFACT_SCHEMA_V4
             if expected_attribution
             else ARTIFACT_SCHEMA_V3
             if expected_execution is not None
@@ -3308,7 +3447,9 @@ def _verify_gvisor_acquired_artifact(
             receipt["schema"] != expected_schema
             or receipt["authority"]
             != (
-                ARTIFACT_AUTHORITY_V4
+                ARTIFACT_AUTHORITY_V5
+                if expected_scenario is not None
+                else ARTIFACT_AUTHORITY_V4
                 if expected_attribution
                 else ARTIFACT_AUTHORITY_V3
                 if expected_execution is not None
@@ -3336,6 +3477,8 @@ def _verify_gvisor_acquired_artifact(
             raise GVisorRuntimeError(
                 "gVisor acquired artifact execution profile changed"
             )
+        if expected_scenario is not None and receipt["scenario_id"] != expected_scenario:
+            raise GVisorRuntimeError("gVisor acquired artifact scenario changed")
         if (
             not isinstance(receipt["run_id"], str)
             or _RUN_ID.fullmatch(receipt["run_id"]) is None
@@ -3444,6 +3587,7 @@ def _verify_gvisor_acquired_artifact(
                 else tuple(canary_lock["canary"]["declared_capabilities"])
             ),
             materialized_path=Path(source["path"]),
+            scenario_id=expected_scenario,
         )
         run_request_digest = _digest(
             receipt["run_request_digest"],
@@ -3816,6 +3960,7 @@ def derive_gvisor_acquired_artifact_closure(
     expected_verifier_implementation_digest: str,
     expected_normalization_profile: str | None = None,
     expected_execution_profile: str | None = None,
+    expected_scenario_id: str | None = None,
     expected_entrypoint_path: str | None = None,
     expected_declared_capabilities: Collection[str] | None = None,
 ) -> dict[str, int]:
@@ -3836,6 +3981,7 @@ def derive_gvisor_acquired_artifact_closure(
         ),
         expected_normalization_profile=expected_normalization_profile,
         expected_execution_profile=expected_execution_profile,
+        expected_scenario_id=expected_scenario_id,
         expected_entrypoint_path=expected_entrypoint_path,
         expected_declared_capabilities=expected_declared_capabilities,
     )

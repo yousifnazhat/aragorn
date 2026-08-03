@@ -93,7 +93,10 @@ from aragorn.gvisor_runtime import (
     ARTIFACT_ATTRIBUTION_AUTHORITY,
     ARTIFACT_ATTRIBUTION_SCHEMA,
     ARTIFACT_AUTHORITY_V4,
+    ARTIFACT_AUTHORITY_V5,
+    ARTIFACT_EXECUTION_PROFILE_V2,
     ARTIFACT_SCHEMA_V4,
+    ARTIFACT_SCHEMA_V5,
 )
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
@@ -944,6 +947,18 @@ def main() -> int:
     attributed_receipt["entrypoint"]["executable"] = False
     validators["gvisor-acquired-artifact-receipt-v4.schema.json"].validate(
         attributed_receipt
+    )
+    scenario_receipt = deepcopy(attributed_receipt)
+    scenario_receipt.update(
+        {
+            "schema": ARTIFACT_SCHEMA_V5,
+            "authority": ARTIFACT_AUTHORITY_V5,
+            "execution_profile": ARTIFACT_EXECUTION_PROFILE_V2,
+            "scenario_id": "primary",
+        }
+    )
+    validators["gvisor-acquired-artifact-receipt-v5.schema.json"].validate(
+        scenario_receipt
     )
     validators[
         "gvisor-artifact-actor-attribution-manifest-v1.schema.json"

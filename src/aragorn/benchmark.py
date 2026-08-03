@@ -87,11 +87,23 @@ _PHASE2_COVERAGE_LOCK_SCHEMA = "aragorn/benchmark-phase2-coverage-lock/v1"
 _PHASE2_COVERAGE_LOCK_ASSURANCE = (
     "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
 )
+_PHASE2_COVERAGE_LOCK_SCHEMA_V2 = "aragorn/benchmark-phase2-coverage-lock/v2"
+_PHASE2_COVERAGE_LOCK_ASSURANCE_V2 = (
+    "operator_asserted_pre_outcome_scenario_binding_not_independent_or_timestamped"
+)
 _PHASE2_GVISOR_EVIDENCE_SCHEMA = "aragorn/benchmark-phase2-gvisor-v4-evidence/v1"
 _PHASE2_GVISOR_EVIDENCE_AUTHORITY = (
     "LOCK_BOUND_ATTRIBUTED_GVISOR_V4_CATEGORY_DIFF_ONLY_NOT_PROCESS_ANCESTRY_"
     "SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_BACKEND_"
     "QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+)
+_PHASE2_GVISOR_EVIDENCE_SCHEMA_V2 = (
+    "aragorn/benchmark-phase2-gvisor-v5-evidence/v2"
+)
+_PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2 = (
+    "LOCK_BOUND_TWO_SCENARIO_ATTRIBUTED_GVISOR_V5_CATEGORY_DIFF_ONLY_NOT_PROCESS_"
+    "ANCESTRY_SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_"
+    "BACKEND_QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
 )
 _PHASE2_VERDICT_PROFILE = "undeclared-observed-review/v1"
 _PHASE2_REQUIRED_FAMILIES = frozenset(
@@ -812,6 +824,11 @@ def _evaluate(
                 if phase2_binding is not None
                 else None
             ),
+            scenario_schedule=(
+                phase2_binding["scenario_schedule"]
+                if phase2_binding is not None
+                else None
+            ),
         )
     if phase0_hidden_gate:
         assert hidden_binding is not None
@@ -1455,12 +1472,16 @@ def _validate_outcomes(
                 and system_key == phase2_binding["candidate_key"]
                 and case_id in phase2_binding["cases"]
             ):
+                pins = dict(phase2_binding["cases"][case_id])
+                schedule = phase2_binding["scenario_schedule"]
+                if schedule is not None:
+                    pins["expected_scenario_id"] = schedule[run_id - 1]
                 phase2_bindings.append(
                     _verify_phase2_gvisor_v4_evidence(
                         evidence_cas,
                         normalized_outcome,
                         coverage_lock_digest=phase2_binding["coverage_lock_digest"],
-                        pins=phase2_binding["cases"][case_id],
+                        pins=pins,
                         label=label,
                     )
                 )
@@ -2320,37 +2341,52 @@ def _verify_phase2_gvisor_v4_evidence(
     pins: dict[str, Any],
     label: str,
 ) -> dict[str, Any]:
-    """Verify one lock-bound candidate cell through the public gVisor v4 replay."""
+    """Verify one lock-bound candidate cell through its pinned gVisor replay."""
 
     evidence_label = f"{label}.evidence"
+    scenario_id = pins.get("expected_scenario_id")
+    scenario_bound = scenario_id is not None
     envelope = _read_canonical_document(
         cas,
         outcome["evidence_digest"],
         evidence_label,
         max_bytes=_MAX_EVIDENCE_BYTES,
     )
+    evidence_fields = {
+        "schema",
+        "authority",
+        "coverage_lock_digest",
+        "suite_digest",
+        "case_id",
+        "tree_digest",
+        "run_id",
+        "system",
+        "gvisor_receipt_digest",
+        "verdict",
+        "reason_codes",
+    }
+    if scenario_bound:
+        evidence_fields.add("scenario_id")
     _exact_keys(
         envelope,
-        {
-            "schema",
-            "authority",
-            "coverage_lock_digest",
-            "suite_digest",
-            "case_id",
-            "tree_digest",
-            "run_id",
-            "system",
-            "gvisor_receipt_digest",
-            "verdict",
-            "reason_codes",
-        },
+        evidence_fields,
         evidence_label,
     )
-    if envelope["schema"] != _PHASE2_GVISOR_EVIDENCE_SCHEMA:
+    expected_evidence_schema = (
+        _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2
+        if scenario_bound
+        else _PHASE2_GVISOR_EVIDENCE_SCHEMA
+    )
+    expected_evidence_authority = (
+        _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2
+        if scenario_bound
+        else _PHASE2_GVISOR_EVIDENCE_AUTHORITY
+    )
+    if envelope["schema"] != expected_evidence_schema:
         raise BenchmarkError(
-            f"{evidence_label} is not dedicated Phase 2 gVisor v4 evidence"
+            f"{evidence_label} is not dedicated Phase 2 gVisor evidence"
         )
-    if envelope["authority"] != _PHASE2_GVISOR_EVIDENCE_AUTHORITY:
+    if envelope["authority"] != expected_evidence_authority:
         raise BenchmarkError(f"{evidence_label} authority is unsupported")
     envelope_system = _validate_system(envelope["system"], evidence_label)
     envelope_run_id = envelope["run_id"]
@@ -2367,6 +2403,7 @@ def _verify_phase2_gvisor_v4_evidence(
         or envelope["tree_digest"] != outcome["tree_digest"]
         or envelope_run_id != outcome["run_id"]
         or envelope_system != outcome["system"]
+        or (scenario_bound and envelope["scenario_id"] != scenario_id)
     ):
         raise BenchmarkError(f"{evidence_label} does not bind the locked outcome cell")
     reason_codes = envelope["reason_codes"]
@@ -2394,7 +2431,9 @@ def _verify_phase2_gvisor_v4_evidence(
         ARTIFACT_ATTRIBUTION_AUTHORITY,
         ARTIFACT_ATTRIBUTION_SCHEMA,
         ARTIFACT_EXECUTION_PROFILE,
+        ARTIFACT_EXECUTION_PROFILE_V2,
         ARTIFACT_SCHEMA_V4,
+        ARTIFACT_SCHEMA_V5,
         verify_gvisor_acquired_artifact,
     )
 
@@ -2402,10 +2441,21 @@ def _verify_phase2_gvisor_v4_evidence(
         receipt = verify_gvisor_acquired_artifact(cas, receipt_digest, **pins)
     except (CASError, OSError, RuntimeError, ValueError) as exc:
         raise BenchmarkError(
-            f"{evidence_label} gVisor v4 replay failed: {exc}"
+            f"{evidence_label} gVisor replay failed: {exc}"
         ) from exc
-    if not isinstance(receipt, dict) or receipt.get("schema") != ARTIFACT_SCHEMA_V4:
-        raise BenchmarkError(f"{evidence_label} did not verify a gVisor v4 receipt")
+    expected_receipt_schema = (
+        ARTIFACT_SCHEMA_V5 if scenario_bound else ARTIFACT_SCHEMA_V4
+    )
+    expected_execution_profile = (
+        ARTIFACT_EXECUTION_PROFILE_V2
+        if scenario_bound
+        else ARTIFACT_EXECUTION_PROFILE
+    )
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("schema") != expected_receipt_schema
+    ):
+        raise BenchmarkError(f"{evidence_label} did not verify a pinned gVisor receipt")
     receipt_run_id = receipt.get("run_id")
     if (
         not isinstance(receipt_run_id, str)
@@ -2415,7 +2465,8 @@ def _verify_phase2_gvisor_v4_evidence(
     if (
         receipt.get("normalization_profile")
         != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
-        or receipt.get("execution_profile") != ARTIFACT_EXECUTION_PROFILE
+        or receipt.get("execution_profile") != expected_execution_profile
+        or (scenario_bound and receipt.get("scenario_id") != scenario_id)
         or receipt.get("subject_digest") != pins["expected_tree_digest"]
         or receipt.get("input_manifest_digest") != pins["expected_manifest_digest"]
         or receipt.get("input_tree_digest") != pins["expected_tree_digest"]
@@ -2572,6 +2623,7 @@ def _verify_phase2_gvisor_v4_evidence(
         "capability_diff_receipt_digest": diff_receipt_digest,
         "capability_diff_digest": capability_diff_digest,
         "attribution_manifest_digest": attribution_digest,
+        "scenario_id": scenario_id,
     }
 
 
@@ -2593,6 +2645,11 @@ def _verify_phase2_gvisor_batch_bindings(
         )
     if len(cells) != len(set(cells)):
         raise BenchmarkError("Phase 2 gVisor evidence repeats a locked outcome cell")
+    schedule = phase2_binding.get("scenario_schedule")
+    if schedule is not None and any(
+        item["scenario_id"] != schedule[item["run_id"] - 1] for item in bindings
+    ):
+        raise BenchmarkError("Phase 2 gVisor evidence changed the locked scenario")
     for field in (
         "evidence_digest",
         "gvisor_receipt_digest",
@@ -5502,24 +5559,48 @@ def _validate_phase2_coverage_lock(
         raise BenchmarkError("Phase 2 coverage lock must be a JSON object")
     if raw != _canonical_json_bytes(document):
         raise BenchmarkError("Phase 2 coverage lock must use canonical JSON bytes")
+    scenario_bound = document.get("schema") == _PHASE2_COVERAGE_LOCK_SCHEMA_V2
+    scenario_schedule: tuple[str, ...] | None = None
+    expected_fields = {
+        "schema",
+        "assurance",
+        "suite_digest",
+        "evaluation_split",
+        "runs_per_case",
+        "candidate_system",
+        "verdict_profile",
+        "gvisor",
+        "cases",
+    }
+    if scenario_bound:
+        expected_fields.add("scenario_matrix")
+        from .phase2_scenario_contract import (
+            Phase2ScenarioContractError,
+            validate_phase2_scenario_coverage_lock,
+        )
+
+        try:
+            scenario_schedule = validate_phase2_scenario_coverage_lock(document)
+        except Phase2ScenarioContractError as exc:
+            raise BenchmarkError(str(exc)) from exc
     _exact_keys(
         document,
-        {
-            "schema",
-            "assurance",
-            "suite_digest",
-            "evaluation_split",
-            "runs_per_case",
-            "candidate_system",
-            "verdict_profile",
-            "gvisor",
-            "cases",
-        },
+        expected_fields,
         "Phase 2 coverage lock",
     )
     if (
-        document["schema"] != _PHASE2_COVERAGE_LOCK_SCHEMA
-        or document["assurance"] != _PHASE2_COVERAGE_LOCK_ASSURANCE
+        document["schema"]
+        != (
+            _PHASE2_COVERAGE_LOCK_SCHEMA_V2
+            if scenario_bound
+            else _PHASE2_COVERAGE_LOCK_SCHEMA
+        )
+        or document["assurance"]
+        != (
+            _PHASE2_COVERAGE_LOCK_ASSURANCE_V2
+            if scenario_bound
+            else _PHASE2_COVERAGE_LOCK_ASSURANCE
+        )
         or document["evaluation_split"] != "held_out"
         or document["verdict_profile"] != _PHASE2_VERDICT_PROFILE
     ):
@@ -5543,13 +5624,14 @@ def _validate_phase2_coverage_lock(
     if candidate != candidates[0]:
         raise BenchmarkError("Phase 2 coverage lock candidate identity changed")
 
+    from .behavior_capability_diff import CAPABILITY_KINDS
     from .gvisor_runtime import (
         ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
         ARTIFACT_EXECUTION_PROFILE,
+        ARTIFACT_EXECUTION_PROFILE_V2,
         ARTIFACT_SCHEMA_V4,
+        ARTIFACT_SCHEMA_V5,
     )
-    from .behavior_capability_diff import CAPABILITY_KINDS
-
     gvisor = document["gvisor"]
     if not isinstance(gvisor, dict):
         raise BenchmarkError("Phase 2 coverage lock.gvisor must be a JSON object")
@@ -5565,9 +5647,15 @@ def _validate_phase2_coverage_lock(
         "Phase 2 coverage lock.gvisor",
     )
     if (
-        gvisor["receipt_schema"] != ARTIFACT_SCHEMA_V4
+        gvisor["receipt_schema"]
+        != (ARTIFACT_SCHEMA_V5 if scenario_bound else ARTIFACT_SCHEMA_V4)
         or gvisor["normalization_profile"] != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
-        or gvisor["execution_profile"] != ARTIFACT_EXECUTION_PROFILE
+        or gvisor["execution_profile"]
+        != (
+            ARTIFACT_EXECUTION_PROFILE_V2
+            if scenario_bound
+            else ARTIFACT_EXECUTION_PROFILE
+        )
     ):
         raise BenchmarkError("Phase 2 coverage lock gVisor profile is unsupported")
     gvisor_lock_digest = _digest(
@@ -5681,7 +5769,11 @@ def _validate_phase2_coverage_lock(
             "expected_normalization_profile": (
                 ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
             ),
-            "expected_execution_profile": ARTIFACT_EXECUTION_PROFILE,
+            "expected_execution_profile": (
+                ARTIFACT_EXECUTION_PROFILE_V2
+                if scenario_bound
+                else ARTIFACT_EXECUTION_PROFILE
+            ),
             "expected_entrypoint_path": entrypoint_path,
             "expected_declared_capabilities": list(declared),
         }
@@ -5714,6 +5806,7 @@ def _validate_phase2_coverage_lock(
         "coverage_lock_digest": expected_lock_digest,
         "candidate_key": _system_key(candidate),
         "cases": locked_cases,
+        "scenario_schedule": scenario_schedule,
     }
 
 
@@ -5830,6 +5923,7 @@ def _phase2_metrics_checkpoint_report(
     systems: dict[tuple[str, str, str, str], dict[str, str]],
     outcomes: list[dict[str, Any]],
     coverage_lock_digest: str | None,
+    scenario_schedule: tuple[str, ...] | None,
 ) -> dict[str, Any]:
     candidates = [system for system in systems.values() if system["name"] == "aragorn"]
     if len(candidates) != 1:
@@ -5869,7 +5963,7 @@ def _phase2_metrics_checkpoint_report(
                 "VARIED_SCENARIO_MATRIX_REQUIRED",
             ],
         }
-    else:
+    elif scenario_schedule is None:
         profile = {
             "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v2",
             "assurance": (
@@ -5882,6 +5976,20 @@ def _phase2_metrics_checkpoint_report(
                 "VARIED_SCENARIO_MATRIX_REQUIRED",
             ],
             "coverage_lock_digest": coverage_lock_digest,
+        }
+    else:
+        profile = {
+            "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v3",
+            "assurance": (
+                "operator_asserted_pre_outcome_locked_two_scenario_attributed_"
+                "gvisor_v5_five_run_metrics_only"
+            ),
+            "missing_phase2_exit_requirements": [
+                "CAPTURE_COMPLETENESS_REQUIRED",
+                "QUALIFIED_ISOLATED_BACKEND_REQUIRED",
+            ],
+            "coverage_lock_digest": coverage_lock_digest,
+            "scenario_schedule": list(scenario_schedule),
         }
     common = {
         **profile,

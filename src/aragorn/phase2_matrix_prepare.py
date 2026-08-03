@@ -31,6 +31,15 @@ from .github_gateway import (
     quarantine_through_gateway,
 )
 from .phase0_candidate import candidate_implementation_digest
+from .phase2_scenario_contract import (
+    CATALOG_ASSURANCE as SCENARIO_CATALOG_ASSURANCE,
+    CATALOG_SCHEMA as SCENARIO_CATALOG_SCHEMA,
+    COVERAGE_LOCK_ASSURANCE as SCENARIO_COVERAGE_LOCK_ASSURANCE,
+    COVERAGE_LOCK_SCHEMA as SCENARIO_COVERAGE_LOCK_SCHEMA,
+    SCENARIO_ENVIRONMENT_VARIABLE,
+    SCENARIO_PROFILE,
+    validate_phase2_scenario_catalog,
+)
 
 CATALOG_SCHEMA = "aragorn/phase2-matrix-catalog/v1"
 CATALOG_ASSURANCE = "operator_authored_inert_plumbing_not_independent_efficacy"
@@ -191,20 +200,38 @@ def _prepare_staged_matrix(
             )
 
     canary_raw, _canary = gvisor_runtime.load_gvisor_detonation_canary_lock()
+    scenario_matrix = document.get("scenario_matrix")
+    scenario_bound = scenario_matrix is not None
     coverage_lock = {
-        "schema": _COVERAGE_LOCK_SCHEMA,
-        "assurance": _COVERAGE_LOCK_ASSURANCE,
+        "schema": (
+            SCENARIO_COVERAGE_LOCK_SCHEMA
+            if scenario_bound
+            else _COVERAGE_LOCK_SCHEMA
+        ),
+        "assurance": (
+            SCENARIO_COVERAGE_LOCK_ASSURANCE
+            if scenario_bound
+            else _COVERAGE_LOCK_ASSURANCE
+        ),
         "suite_digest": loaded["digest"],
         "evaluation_split": "held_out",
         "runs_per_case": 5,
         "candidate_system": candidate,
         "verdict_profile": _VERDICT_PROFILE,
         "gvisor": {
-            "receipt_schema": gvisor_runtime.ARTIFACT_SCHEMA_V4,
+            "receipt_schema": (
+                gvisor_runtime.ARTIFACT_SCHEMA_V5
+                if scenario_bound
+                else gvisor_runtime.ARTIFACT_SCHEMA_V4
+            ),
             "normalization_profile": (
                 gvisor_runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
             ),
-            "execution_profile": gvisor_runtime.ARTIFACT_EXECUTION_PROFILE,
+            "execution_profile": (
+                gvisor_runtime.ARTIFACT_EXECUTION_PROFILE_V2
+                if scenario_bound
+                else gvisor_runtime.ARTIFACT_EXECUTION_PROFILE
+            ),
             "lock_digest": _digest_bytes(canary_raw),
             "verifier_implementation_digest": (
                 _gvisor_artifact_implementation_digest()
@@ -238,6 +265,8 @@ def _prepare_staged_matrix(
             for case_id in sorted(acquired)
         ],
     }
+    if scenario_bound:
+        coverage_lock["scenario_matrix"] = scenario_matrix
     lock_raw = canonical_json(coverage_lock)
     lock_digest = _digest_bytes(lock_raw)
     lock_path = root / "coverage-lock.json"
@@ -296,14 +325,24 @@ def _load_catalog(value: object | str | os.PathLike[str]) -> dict[str, Any]:
 
 
 def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
+    scenario_bound = document.get("schema") == SCENARIO_CATALOG_SCHEMA
+    expected_fields = {"schema", "assurance", "source", "candidate", "cases"}
+    if scenario_bound:
+        expected_fields.add("scenario_matrix")
+        try:
+            validate_phase2_scenario_catalog(document)
+        except ValueError as exc:
+            raise Phase2MatrixPrepareError(str(exc)) from exc
     _exact_keys(
         document,
-        {"schema", "assurance", "source", "candidate", "cases"},
+        expected_fields,
         "catalog",
     )
     if (
-        document["schema"] != CATALOG_SCHEMA
-        or document["assurance"] != CATALOG_ASSURANCE
+        document["schema"]
+        != (SCENARIO_CATALOG_SCHEMA if scenario_bound else CATALOG_SCHEMA)
+        or document["assurance"]
+        != (SCENARIO_CATALOG_ASSURANCE if scenario_bound else CATALOG_ASSURANCE)
     ):
         raise Phase2MatrixPrepareError("catalog authority is unsupported")
 
@@ -345,11 +384,19 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
         "evaluation_split": "held_out",
         "runs_per_case": 5,
         "verdict_profile": _VERDICT_PROFILE,
-        "gvisor_receipt_schema": gvisor_runtime.ARTIFACT_SCHEMA_V4,
+        "gvisor_receipt_schema": (
+            gvisor_runtime.ARTIFACT_SCHEMA_V5
+            if scenario_bound
+            else gvisor_runtime.ARTIFACT_SCHEMA_V4
+        ),
         "normalization_profile": (
             gvisor_runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
         ),
-        "execution_profile": gvisor_runtime.ARTIFACT_EXECUTION_PROFILE,
+        "execution_profile": (
+            gvisor_runtime.ARTIFACT_EXECUTION_PROFILE_V2
+            if scenario_bound
+            else gvisor_runtime.ARTIFACT_EXECUTION_PROFILE
+        ),
         "entrypoint_path": _ENTRYPOINT,
     }
     if config != expected_config:
@@ -404,9 +451,11 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
                 "declared_capabilities": list(declared),
             }
         )
-    return {
-        "schema": CATALOG_SCHEMA,
-        "assurance": CATALOG_ASSURANCE,
+    validated = {
+        "schema": SCENARIO_CATALOG_SCHEMA if scenario_bound else CATALOG_SCHEMA,
+        "assurance": (
+            SCENARIO_CATALOG_ASSURANCE if scenario_bound else CATALOG_ASSURANCE
+        ),
         "source": {
             "owner": source["owner"],
             "repository": source["repository"],
@@ -420,6 +469,13 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
         },
         "cases": sorted(cases, key=lambda case: case["case_id"]),
     }
+    if scenario_bound:
+        validated["scenario_matrix"] = {
+            "profile": SCENARIO_PROFILE,
+            "environment_variable": SCENARIO_ENVIRONMENT_VARIABLE,
+            "run_schedule": list(validate_phase2_scenario_catalog(document)),
+        }
+    return validated
 
 
 def _fresh_destination(value: str | os.PathLike[str]) -> tuple[Path, Path]:
@@ -575,7 +631,11 @@ def _suite_document(
 ) -> dict[str, Any]:
     return {
         "schema": "aragorn/benchmark-suite/v1",
-        "id": _SUITE_ID,
+        "id": (
+            "phase2-public-matrix-v2"
+            if catalog["schema"] == SCENARIO_CATALOG_SCHEMA
+            else _SUITE_ID
+        ),
         "purpose": "evidence_smoke",
         "runs_per_case": 5,
         "systems": [candidate],

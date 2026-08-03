@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/gvisor-backend-qualification-receipt-v1.schema.json",
+  "title": "Aragorn exact-profile gVisor backend qualification receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "profile",
+    "status",
+    "lock_digest",
+    "runtime_lock_digest",
+    "probe_digest",
+    "implementation_digest",
+    "runs"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/gvisor-backend-qualification-receipt/v1"},
+    "authority": {
+      "const": "EXACT_COLIMA_GVISOR_RUNSC_SYSTRAP_CANARY_THREE_RUN_NEGATIVE_CONTROL_QUALIFICATION_ONLY_NOT_HOST_HYPERVISOR_HARDWARE_ATTESTATION_GENERAL_ESCAPE_ABSENCE_CAPTURE_COMPLETENESS_VARIED_SCENARIOS_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+    },
+    "profile": {
+      "const": "colima-gvisor-runsc-systrap-canary-negative-controls/v1"
+    },
+    "status": {"const": "PASS"},
+    "lock_digest": {"$ref": "#/$defs/digest"},
+    "runtime_lock_digest": {"$ref": "#/$defs/digest"},
+    "probe_digest": {"$ref": "#/$defs/digest"},
+    "implementation_digest": {"$ref": "#/$defs/digest"},
+    "runs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/run"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "container_id",
+        "run_request_digest",
+        "control_evidence_digest",
+        "cleanup_evidence_digest"
+      ],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "container_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "run_request_digest": {"$ref": "#/$defs/digest"},
+        "control_evidence_digest": {"$ref": "#/$defs/digest"},
+        "cleanup_evidence_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

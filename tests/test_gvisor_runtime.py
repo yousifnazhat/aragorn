@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 import unittest
 from contextlib import nullcontext
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -176,16 +177,19 @@ def _canary_trace(
     )
     command = profile["command"]
     go_command = ", ".join(json.dumps(value) for value in command)
-    environment = json.dumps(
-        [
-            f"HOSTNAME={container_id[:12]}",
-            "SHLVL=1",
-            "HOME=/home",
-            "PATH=/bin",
-            "PWD=/",
-        ],
-        separators=(", ", ": "),
-    )
+    environment_values = [
+        f"HOSTNAME={container_id[:12]}",
+        "SHLVL=1",
+        "HOME=/home",
+        "PATH=/bin",
+        "PWD=/",
+    ]
+    if artifact_profile is not None and artifact_profile.scenario_id is not None:
+        environment_values.append(
+            f"{runtime.ARTIFACT_SCENARIO_ENVIRONMENT}="
+            f"{artifact_profile.scenario_id}"
+        )
+    environment = json.dumps(environment_values, separators=(", ", ": "))
     target = runtime._ARTIFACT_TARGET if artifact else profile["token_path"]
     execute = (
         f'0xbbb /bin/sha256sum, 0xccc ["/bin/sha256sum", "{target}"], '
@@ -1048,7 +1052,7 @@ class GVisorRuntimeTests(unittest.TestCase):
                         ):
                             self.assertNotIn(failed_only, normalized)
 
-    def test_v4_acquired_artifact_binds_attributed_replay(self) -> None:
+    def test_v4_and_v5_acquired_artifact_bind_attributed_replay(self) -> None:
         root = Path(__file__).parents[1]
         archive = (
             root
@@ -1309,6 +1313,148 @@ class GVisorRuntimeTests(unittest.TestCase):
             ):
                 with self.assertRaises(runtime.GVisorRuntimeError):
                     action(cas, receipt_digest, **without_capabilities)
+
+            scenario = replace(
+                artifact,
+                execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE_V2,
+                scenario_id="primary",
+            )
+            scenario_evidence = dict(evidence)
+            scenario_profile = runtime._artifact_profile(canary_lock, scenario)
+            for name in (
+                "container_pre_inspect",
+                "container_live_inspect",
+                "container_post_inspect",
+            ):
+                document = json.loads(scenario_evidence[name])
+                document[0]["Config"]["Env"] = scenario_profile["environment"]
+                scenario_evidence[name] = canonical_json(document)
+            scenario_log_manifest = json.loads(
+                scenario_evidence["backend_log_manifest"]
+            )
+            scenario_boot = _canary_trace(
+                container_id,
+                artifact=True,
+                artifact_profile=scenario,
+            )
+            scenario_boot_digest = cas.put(
+                BytesIO(scenario_boot),
+                max_bytes=canary_lock["trace"]["max_log_bytes"],
+            )
+            scenario_boot_entry = next(
+                item
+                for item in scenario_log_manifest["files"]
+                if item["command"] == "boot"
+            )
+            scenario_boot_entry["file"]["digest"] = scenario_boot_digest
+            scenario_boot_entry["file"]["size"] = len(scenario_boot)
+            scenario_evidence["backend_log_manifest"] = canonical_json(
+                scenario_log_manifest
+            )
+            scenario_attributed = runtime._parse_attributed_artifact_trace(
+                scenario_boot,
+                runtime_lock,
+                canary_lock,
+                container_id,
+                artifact=scenario,
+            )
+            scenario_attribution_digest = cas.put(
+                BytesIO(scenario_attributed.manifest),
+                max_bytes=runtime._MAX_ATTRIBUTION_MANIFEST_BYTES,
+            )
+            scenario_run_request_digest = cas.put(
+                BytesIO(
+                    runtime._artifact_run_request(
+                        runtime_lock,
+                        canary_lock,
+                        scenario,
+                        run_id=historical["run_id"],
+                        container_id=container_id,
+                        implementation_digest=implementation_digest,
+                        normalization_profile=normalization_profile,
+                    )
+                ),
+                max_bytes=runtime._MAX_CANARY_RUN_REQUEST_BYTES,
+            )
+            self.assertEqual(
+                json.loads(cas.read(scenario_run_request_digest))["schema"],
+                runtime.ARTIFACT_RUN_REQUEST_SCHEMA_V5,
+            )
+            scenario_identity = runtime._artifact_identity(
+                scenario,
+                scenario_run_request_digest,
+                implementation_digest,
+            )
+            scenario_observations = {}
+            for source_event in scenario_attributed.subject_source_events:
+                observation_digest = retain_detonation_observation(
+                    cas,
+                    source_event,
+                    **scenario_identity,
+                )
+                scenario_observations[observation_digest] = runtime._raw_digest(
+                    source_event
+                )
+            scenario_diff_digest = retain_detonation_capability_diff(
+                cas,
+                scenario_observations,
+                **scenario_identity,
+                declared_capabilities=scenario.declared_capabilities,
+            )
+            scenario_receipt = receipt | {
+                "schema": runtime.ARTIFACT_SCHEMA_V5,
+                "authority": runtime.ARTIFACT_AUTHORITY_V5,
+                **scenario_identity,
+                "capability_diff_receipt_digest": scenario_diff_digest,
+                "evidence": {
+                    name: cas.put(
+                        BytesIO(raw),
+                        max_bytes=runtime._ARTIFACT_EVIDENCE_LIMITS[name],
+                    )
+                    for name, raw in sorted(scenario_evidence.items())
+                },
+                "execution_profile": runtime.ARTIFACT_EXECUTION_PROFILE_V2,
+                "scenario_id": "primary",
+                "attribution_manifest_digest": scenario_attribution_digest,
+            }
+            scenario_receipt_digest = cas.put(
+                BytesIO(canonical_json(scenario_receipt)),
+                max_bytes=runtime._MAX_RECEIPT_BYTES,
+            )
+            scenario_pins = pins | {
+                "expected_execution_profile": (
+                    runtime.ARTIFACT_EXECUTION_PROFILE_V2
+                ),
+                "expected_scenario_id": "primary",
+            }
+            self.assertEqual(
+                runtime.verify_gvisor_acquired_artifact(
+                    cas,
+                    scenario_receipt_digest,
+                    **scenario_pins,
+                ),
+                scenario_receipt,
+            )
+            scenario_closure = runtime.derive_gvisor_acquired_artifact_closure(
+                cas,
+                scenario_receipt_digest,
+                **scenario_pins,
+            )
+            self.assertIn(scenario_attribution_digest, scenario_closure)
+            for changed in (
+                {"expected_scenario_id": None},
+                {"expected_scenario_id": "alternate"},
+            ):
+                for action in (
+                    runtime.verify_gvisor_acquired_artifact,
+                    runtime.derive_gvisor_acquired_artifact_closure,
+                ):
+                    with self.assertRaises(runtime.GVisorRuntimeError):
+                        action(
+                            cas,
+                            scenario_receipt_digest,
+                            **(scenario_pins | changed),
+                        )
 
     def test_runtime_path_smoke_replays_and_fails_closed_on_drift(self) -> None:
         lock_raw, lock = runtime.load_gvisor_runtime_lock()
@@ -1782,6 +1928,95 @@ class GVisorRuntimeTests(unittest.TestCase):
                 implementation_digest="sha256:" + "7" * 64,
                 normalization_profile="other/v1",
             )
+
+        scenario = replace(
+            generalized,
+            execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE_V2,
+            scenario_id="primary",
+        )
+        scenario_profile = runtime._artifact_profile(canary_lock, scenario)
+        self.assertEqual(
+            scenario_profile["environment"],
+            ["PATH=/bin", "ARAGORN_SCENARIO=primary"],
+        )
+        self.assertEqual(
+            runtime._artifact_profile(
+                canary_lock,
+                replace(scenario, scenario_id="alternate"),
+            )["environment"],
+            ["PATH=/bin", "ARAGORN_SCENARIO=alternate"],
+        )
+        create_arguments = runtime._create_arguments(
+            image="busybox@sha256:" + "8" * 64,
+            profile=scenario_profile,
+            runtime="runsc-systrap-canary",
+            container_name="aragorn-scenario",
+            run_label="aragorn.acquired-artifact.run_id=" + _RUN_ID,
+        )
+        self.assertEqual(
+            [
+                create_arguments[index + 1]
+                for index, value in enumerate(create_arguments)
+                if value == "--env"
+            ],
+            scenario_profile["environment"],
+        )
+        request_v5 = json.loads(
+            runtime._artifact_run_request(
+                runtime_lock,
+                canary_lock,
+                scenario,
+                run_id=_RUN_ID,
+                container_id=_CONTAINER_ID,
+                implementation_digest="sha256:" + "7" * 64,
+                normalization_profile=(
+                    runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+                ),
+            )
+        )
+        self.assertEqual(
+            request_v5["schema"], runtime.ARTIFACT_RUN_REQUEST_SCHEMA_V5
+        )
+        self.assertEqual(request_v5["scenario_id"], "primary")
+        scenario_trace = _canary_trace(artifact=True, artifact_profile=scenario)
+        runtime._parse_attributed_artifact_trace(
+            scenario_trace,
+            runtime_lock,
+            canary_lock,
+            _CONTAINER_ID,
+            artifact=scenario,
+        )
+        self.assertTrue(
+            runtime._artifact_exec_environment(
+                [
+                    "ARAGORN_SCENARIO=primary",
+                    "PWD=/",
+                    "PATH=/bin",
+                    "HOME=/home",
+                    "SHLVL=1",
+                    f"HOSTNAME={_CONTAINER_ID[:12]}",
+                ],
+                _CONTAINER_ID,
+                scenario_id="primary",
+            )
+        )
+        with self.assertRaises(runtime.GVisorRuntimeError):
+            runtime._parse_attributed_artifact_trace(
+                scenario_trace.replace(
+                    b"ARAGORN_SCENARIO=primary",
+                    b"ARAGORN_SCENARIO=alternate",
+                ),
+                runtime_lock,
+                canary_lock,
+                _CONTAINER_ID,
+                artifact=scenario,
+            )
+        for changed in (
+            replace(scenario, scenario_id="other"),
+            replace(generalized, scenario_id="primary"),
+        ):
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime._artifact_profile(canary_lock, changed)
 
         writable = _artifact_container(
             runtime_lock,
@@ -2398,6 +2633,38 @@ class GVisorRuntimeTests(unittest.TestCase):
                 self.assertFalse(
                     runtime._artifact_entrypoint(attributed_artifact)["executable"]
                 )
+
+                (materialized / "entrypoint").unlink()
+                scenario_arguments = attributed_arguments | {
+                    "expected_execution_profile": (
+                        runtime.ARTIFACT_EXECUTION_PROFILE_V2
+                    ),
+                    "expected_scenario_id": "primary",
+                }
+                observed = runtime.collect_gvisor_acquired_artifact(
+                    output,
+                    source,
+                    **scenario_arguments,
+                )
+                self.assertEqual(observed, "sha256:" + "9" * 64)
+                scenario_artifact = collect.call_args.kwargs["artifact"]
+                self.assertEqual(
+                    scenario_artifact.execution_profile,
+                    runtime.ARTIFACT_EXECUTION_PROFILE_V2,
+                )
+                self.assertEqual(scenario_artifact.scenario_id, "primary")
+                for changed in (
+                    {"expected_scenario_id": None},
+                    {"expected_scenario_id": "other"},
+                ):
+                    collect.reset_mock()
+                    with self.assertRaises(runtime.GVisorRuntimeError):
+                        runtime.collect_gvisor_acquired_artifact(
+                            output,
+                            source,
+                            **(scenario_arguments | changed),
+                        )
+                    collect.assert_not_called()
 
                 for changed in (
                     {"expected_quarantine_receipt_digest": "sha256:" + "0" * 64},

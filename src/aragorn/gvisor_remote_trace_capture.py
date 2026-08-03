@@ -5,10 +5,14 @@ from __future__ import annotations
 import json
 import re
 import struct
-from typing import Any
+from io import BytesIO
+from typing import TYPE_CHECKING, Any
 
 from .cas import CAS, CASError
 from .oci_worker_protocol import WorkerProtocolError, _digest, canonical_json
+
+if TYPE_CHECKING:
+    from .gvisor_remote_trace_receiver import GVisorRemoteTraceResult
 
 SCHEMA = "aragorn/gvisor-remote-trace-capture-receipt/v1"
 AUTHORITY = (
@@ -77,6 +81,153 @@ _RECEIPT_FIELDS = {
 
 class GVisorRemoteTraceCaptureError(ValueError):
     """Remote-trace evidence is malformed, incomplete, or unbound."""
+
+
+def retain_gvisor_remote_trace_capture(
+    cas: CAS,
+    result: GVisorRemoteTraceResult,
+    *,
+    run_id: str,
+    sandbox_id: str,
+    container_id: str,
+    runtime_lock_digest: str,
+    session_config_digest: str,
+    monitor_implementation_digest: str,
+    workload_receipt_digest: str,
+    lifecycle_bytes: bytes,
+    final_trace_list_bytes: bytes,
+) -> str:
+    """Retain and replay one already-validated receiver result."""
+
+    try:
+        retained_run_id = _hex(run_id, _RUN_ID, "remote trace run ID")
+        retained_sandbox_id = _hex(
+            sandbox_id, _CONTAINER_ID, "remote trace sandbox ID"
+        )
+        retained_container_id = _hex(
+            container_id, _CONTAINER_ID, "remote trace container ID"
+        )
+        pins = {
+            "runtime_lock_digest": _digest(
+                runtime_lock_digest, "remote trace runtime lock"
+            ),
+            "session_config_digest": _digest(
+                session_config_digest, "remote trace session config"
+            ),
+            "monitor_implementation_digest": _digest(
+                monitor_implementation_digest,
+                "remote trace monitor implementation",
+            ),
+            "workload_receipt_digest": _digest(
+                workload_receipt_digest, "remote trace workload receipt"
+            ),
+        }
+        if (
+            type(result.sentry_handshake) is not bytes
+            or type(result.monitor_handshake) is not bytes
+            or not isinstance(result.frames, tuple)
+            or any(type(frame) is not bytes for frame in result.frames)
+            or type(lifecycle_bytes) is not bytes
+            or type(final_trace_list_bytes) is not bytes
+        ):
+            raise GVisorRemoteTraceCaptureError(
+                "gVisor remote trace retention inputs must be immutable bytes"
+            )
+        frame_count = _integer(
+            result.frame_count, 1, _MAX_FRAMES, "remote trace frame count"
+        )
+        raw_frame_bytes = _integer(
+            result.raw_frame_bytes,
+            _HEADER.size + 1,
+            _MAX_RAW_BYTES,
+            "remote trace raw byte count",
+        )
+        if frame_count != len(result.frames) or raw_frame_bytes != sum(
+            len(frame) for frame in result.frames
+        ):
+            raise GVisorRemoteTraceCaptureError(
+                "gVisor remote trace receiver accounting changed"
+            )
+
+        frames = []
+        for sequence, raw in enumerate(result.frames):
+            size = _integer(
+                len(raw),
+                _HEADER.size + 1,
+                _MAX_FRAME_BYTES,
+                "remote trace frame size",
+            )
+            _header_size, message_type, dropped_count = _HEADER.unpack_from(raw)
+            frame_digest = cas.put(BytesIO(raw), max_bytes=size)
+            frames.append(
+                {
+                    "sequence": sequence,
+                    "digest": frame_digest,
+                    "size": size,
+                    "message_type": message_type,
+                    "dropped_count": dropped_count,
+                }
+            )
+        frame_manifest = {
+            "schema": FRAME_MANIFEST_SCHEMA,
+            "run_id": retained_run_id,
+            "sandbox_id": retained_sandbox_id,
+            "container_id": retained_container_id,
+            "session_config_digest": pins["session_config_digest"],
+            "frames": frames,
+        }
+        frame_manifest_digest = cas.put(
+            BytesIO(canonical_json(frame_manifest)), max_bytes=_MAX_MANIFEST_BYTES
+        )
+        lifecycle_digest = cas.put(
+            BytesIO(lifecycle_bytes), max_bytes=_MAX_LIFECYCLE_BYTES
+        )
+        sentry_handshake_digest = cas.put(
+            BytesIO(result.sentry_handshake), max_bytes=_MAX_HANDSHAKE_BYTES
+        )
+        monitor_handshake_digest = cas.put(
+            BytesIO(result.monitor_handshake), max_bytes=_MAX_HANDSHAKE_BYTES
+        )
+        final_session_status_digest = cas.put(
+            BytesIO(final_trace_list_bytes), max_bytes=_MAX_STATUS_BYTES
+        )
+        receipt = {
+            "schema": SCHEMA,
+            "authority": AUTHORITY,
+            "profile": PROFILE,
+            "status": "RECORDED",
+            "run_id": retained_run_id,
+            "sandbox_id": retained_sandbox_id,
+            "container_id": retained_container_id,
+            **pins,
+            "lifecycle_digest": lifecycle_digest,
+            "sentry_handshake_digest": sentry_handshake_digest,
+            "monitor_handshake_digest": monitor_handshake_digest,
+            "final_session_status_digest": final_session_status_digest,
+            "frame_manifest_digest": frame_manifest_digest,
+            "frame_count": frame_count,
+            "raw_frame_bytes": raw_frame_bytes,
+        }
+        receipt_digest = cas.put(
+            BytesIO(canonical_json(receipt)), max_bytes=_MAX_RECEIPT_BYTES
+        )
+        verify_gvisor_remote_trace_capture(
+            cas,
+            receipt_digest,
+            expected_runtime_lock_digest=pins["runtime_lock_digest"],
+            expected_session_config_digest=pins["session_config_digest"],
+            expected_monitor_implementation_digest=(
+                pins["monitor_implementation_digest"]
+            ),
+            expected_workload_receipt_digest=pins["workload_receipt_digest"],
+        )
+        return receipt_digest
+    except GVisorRemoteTraceCaptureError:
+        raise
+    except (AttributeError, CASError, OSError, TypeError, ValueError) as exc:
+        raise GVisorRemoteTraceCaptureError(
+            f"cannot retain gVisor remote trace capture: {exc}"
+        ) from exc
 
 
 def verify_gvisor_remote_trace_capture(

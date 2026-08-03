@@ -5,15 +5,104 @@ import json
 import struct
 import tempfile
 import unittest
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 
 from aragorn import gvisor_remote_trace_capture as capture
 from aragorn.cas import CAS
+from aragorn.gvisor_remote_trace_receiver import GVisorRemoteTraceResult
 from aragorn.oci_worker_protocol import canonical_json
 
 
 class GVisorRemoteTraceCaptureTests(unittest.TestCase):
+    def test_validated_receiver_result_is_retained_and_replayed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(Path(temporary))
+            result = _receiver_result(fixture)
+            retained = CAS(Path(temporary) / "retained")
+            for digest in fixture["pins"].values():
+                raw = fixture["cas"].read(digest)
+                retained.put_expected(
+                    BytesIO(raw), expected_digest=digest, max_bytes=len(raw)
+                )
+
+            receipt_digest = capture.retain_gvisor_remote_trace_capture(
+                retained,
+                result,
+                run_id=fixture["receipt"]["run_id"],
+                sandbox_id=fixture["receipt"]["sandbox_id"],
+                container_id=fixture["receipt"]["container_id"],
+                runtime_lock_digest=fixture["pins"][
+                    "expected_runtime_lock_digest"
+                ],
+                session_config_digest=fixture["pins"][
+                    "expected_session_config_digest"
+                ],
+                monitor_implementation_digest=fixture["pins"][
+                    "expected_monitor_implementation_digest"
+                ],
+                workload_receipt_digest=fixture["pins"][
+                    "expected_workload_receipt_digest"
+                ],
+                lifecycle_bytes=fixture["cas"].read(
+                    fixture["receipt"]["lifecycle_digest"]
+                ),
+                final_trace_list_bytes=fixture["cas"].read(
+                    fixture["receipt"]["final_session_status_digest"]
+                ),
+            )
+
+            self.assertEqual(receipt_digest, fixture["receipt_digest"])
+            self.assertEqual(
+                capture.verify_gvisor_remote_trace_capture(
+                    retained, receipt_digest, **fixture["pins"]
+                ),
+                fixture["receipt"],
+            )
+            self.assertEqual(
+                set(
+                    capture.derive_gvisor_remote_trace_capture_closure(
+                        retained, receipt_digest, **fixture["pins"]
+                    )
+                ),
+                fixture["digests"],
+            )
+
+    def test_retention_rejects_accounting_drift_and_replays_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(Path(temporary))
+            result = _receiver_result(fixture)
+            arguments = _retention_arguments(fixture)
+
+            with self.assertRaisesRegex(
+                capture.GVisorRemoteTraceCaptureError,
+                "receiver accounting changed",
+            ):
+                capture.retain_gvisor_remote_trace_capture(
+                    fixture["cas"],
+                    replace(result, raw_frame_bytes=result.raw_frame_bytes + 1),
+                    **arguments,
+                )
+
+            with self.assertRaisesRegex(
+                capture.GVisorRemoteTraceCaptureError,
+                "final status",
+            ):
+                capture.retain_gvisor_remote_trace_capture(
+                    fixture["cas"],
+                    result,
+                    **(
+                        arguments
+                        | {
+                            "final_trace_list_bytes": (
+                                b'SESSIONS (1)\n"Default"\n'
+                                b'\tSink: "remote", dropped: 1\n'
+                            )
+                        }
+                    ),
+                )
+
     def test_exact_init_time_zero_drop_raw_capture_verifies_and_closes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = _fixture(Path(temporary))
@@ -268,6 +357,41 @@ def _fixture(
         }
     )
     return fixture
+
+
+def _receiver_result(fixture: dict) -> GVisorRemoteTraceResult:
+    frames = tuple(fixture["cas"].read(digest) for digest in fixture["frame_digests"])
+    return GVisorRemoteTraceResult(
+        sentry_handshake=b"\x08\x01",
+        monitor_handshake=b"\x08\x01",
+        frames=frames,
+        frame_count=len(frames),
+        raw_frame_bytes=sum(map(len, frames)),
+    )
+
+
+def _retention_arguments(fixture: dict) -> dict:
+    return {
+        "run_id": fixture["receipt"]["run_id"],
+        "sandbox_id": fixture["receipt"]["sandbox_id"],
+        "container_id": fixture["receipt"]["container_id"],
+        "runtime_lock_digest": fixture["pins"]["expected_runtime_lock_digest"],
+        "session_config_digest": fixture["pins"][
+            "expected_session_config_digest"
+        ],
+        "monitor_implementation_digest": fixture["pins"][
+            "expected_monitor_implementation_digest"
+        ],
+        "workload_receipt_digest": fixture["pins"][
+            "expected_workload_receipt_digest"
+        ],
+        "lifecycle_bytes": fixture["cas"].read(
+            fixture["receipt"]["lifecycle_digest"]
+        ),
+        "final_trace_list_bytes": fixture["cas"].read(
+            fixture["receipt"]["final_session_status_digest"]
+        ),
+    }
 
 
 def _put(fixture: dict, value: object) -> str:

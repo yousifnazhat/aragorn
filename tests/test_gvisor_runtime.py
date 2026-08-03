@@ -1483,12 +1483,16 @@ class GVisorRuntimeTests(unittest.TestCase):
             expected_v3_events,
         )
         changed_traces = []
-        changed_traces.append(
-            generalized_trace.replace(
-                b"O_RDONLY|O_CLOEXEC",
-                b"O_RDWR|O_CLOEXEC",
+        for flags in (
+            b"O_RDWR|O_CLOEXEC",
+            b"O_RDONLY|O_TRUNC",
+            b"O_RDONLY|O_CREAT",
+            b"O_RDONLY|O_PATH",
+            b"O_RDONLY|O_UNKNOWN",
+        ):
+            changed_traces.append(
+                generalized_trace.replace(b"O_RDONLY|O_CLOEXEC", flags)
             )
-        )
         for process in (b"other",):
             changed_traces.append(
                 generalized_trace.replace(

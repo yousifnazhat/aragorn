@@ -2251,15 +2251,14 @@ def _artifact_script_exec_arguments(arguments: str, container_id: str) -> bool:
 
 
 def _artifact_script_open_arguments(arguments: str) -> bool:
-    matched = _TRACE_OPENAT_ARGUMENTS.fullmatch(arguments)
-    if matched is None or matched["path"] != _ARTIFACT_TARGET:
-        return False
-    access = set(matched["flags"].split("|")) & {
-        "O_RDONLY",
-        "O_WRONLY",
-        "O_RDWR",
-    }
-    return access == {"O_RDONLY"}
+    return (
+        re.fullmatch(
+            rf"AT_FDCWD /, 0x[0-9a-f]+ {re.escape(_ARTIFACT_TARGET)}, "
+            r"O_RDONLY\|O_CLOEXEC, 0o0",
+            arguments,
+        )
+        is not None
+    )
 
 
 def _normalize_successful_artifact_events(

@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, one exact public-acquisition-to-gVisor artifact result, and one bounded-host-trace rerun retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, one exact public-acquisition-to-gVisor artifact result, one bounded-host-trace rerun, and one versioned successful-event-set rerun retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -295,6 +295,15 @@ that namespace. The packaged mount is ordered before and required by Docker and
 containerd, and current-container trace files are removed after container cleanup.
 The receipt does not retain mount tables, attest every short-lived runtime writer,
 or generalize to other service layouts or daemon namespaces.
+The versioned `successful-openat-execve-set/v1` path keeps the same fixed lock
+and artifact but binds the selected profile in both its run request and v2
+receipt. It strictly parses successful boot-log pairs, requires the existing
+`sha256sum` execution/read anchors, and emits a sorted set deduplicated by
+operation and path. The retained run contains four read opens, one write open,
+and two executions; nine failed calls remain available only in raw JSONL.
+This profile observes two syscall classes from one bounded boot log. It does
+not prove bytes were written, preserve process or temporal multiplicity,
+establish causal ancestry, or provide capture completeness.
 `RECORDED` grants no capture completeness, backend qualification, runtime
 attestation, isolation, admission authority, or Phase 2 exit.
 

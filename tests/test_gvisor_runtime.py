@@ -84,6 +84,19 @@ _BOUNDED_LIVE_ARTIFACT_ARCHIVE_SHA256 = (
 _BOUNDED_LIVE_ARTIFACT_IMPLEMENTATION_DIGEST = (
     "sha256:0091293a77b61270f73778cbbbf382e2e4770c48d10e43d80d5789e8e8e1434d"
 )
+_LIVE_ARTIFACT_V2_RUN_ID = "e55ef93d8538c50c94dee1c25899faf0"
+_LIVE_ARTIFACT_V2_RECEIPT_DIGEST = (
+    "sha256:e0529d77157210e7957dea3d87691951b9b68d9e49eaee57879035494e328b57"
+)
+_LIVE_ARTIFACT_V2_HANDOFF_DIGEST = (
+    "sha256:d7c9fcbdacf8019ca7f124798da228c1ad73c9cf78e4a6743c854bdd6ca9e596"
+)
+_LIVE_ARTIFACT_V2_ARCHIVE_SHA256 = (
+    "dcd37b03dedebe869e5984c124f7838c7b4e7db6c7f38f02a5e5e8d25365a8e3"
+)
+_LIVE_ARTIFACT_V2_IMPLEMENTATION_DIGEST = (
+    "sha256:322010616fe6750a8f37a57a68ea1d6b77883eacd5e7503b14bd4aa69429d1b8"
+)
 _LIVE_ARTIFACT_PINS = {
     "expected_quarantine_receipt_digest": (
         "sha256:295b14aff90d6daddac8e435f54863cbe7133d910aa05243d9579f92b41fc475"
@@ -665,26 +678,50 @@ class GVisorRuntimeTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         cases = (
             (
+                f"phase2-gvisor-acquired-artifact-{_LIVE_ARTIFACT_RUN_ID}-2026-08-02",
                 _LIVE_ARTIFACT_RUN_ID,
                 _LIVE_ARTIFACT_RECEIPT_DIGEST,
                 _LIVE_ARTIFACT_HANDOFF_DIGEST,
                 _LIVE_ARTIFACT_ARCHIVE_SHA256,
                 _LIVE_ARTIFACT_PINS["expected_verifier_implementation_digest"],
+                None,
             ),
             (
+                (
+                    "phase2-gvisor-acquired-artifact-"
+                    f"{_BOUNDED_LIVE_ARTIFACT_RUN_ID}-2026-08-02"
+                ),
                 _BOUNDED_LIVE_ARTIFACT_RUN_ID,
                 _BOUNDED_LIVE_ARTIFACT_RECEIPT_DIGEST,
                 _BOUNDED_LIVE_ARTIFACT_HANDOFF_DIGEST,
                 _BOUNDED_LIVE_ARTIFACT_ARCHIVE_SHA256,
                 _BOUNDED_LIVE_ARTIFACT_IMPLEMENTATION_DIGEST,
+                None,
+            ),
+            (
+                (
+                    "phase2-gvisor-acquired-artifact-v2-"
+                    f"{_LIVE_ARTIFACT_V2_RUN_ID}-2026-08-02"
+                ),
+                _LIVE_ARTIFACT_V2_RUN_ID,
+                _LIVE_ARTIFACT_V2_RECEIPT_DIGEST,
+                _LIVE_ARTIFACT_V2_HANDOFF_DIGEST,
+                _LIVE_ARTIFACT_V2_ARCHIVE_SHA256,
+                _LIVE_ARTIFACT_V2_IMPLEMENTATION_DIGEST,
+                runtime.ARTIFACT_NORMALIZATION_PROFILE,
             ),
         )
         for case in cases:
-            run_id, receipt_digest, handoff_digest, archive_sha256, implementation = (
-                case
-            )
+            (
+                stem,
+                run_id,
+                receipt_digest,
+                handoff_digest,
+                archive_sha256,
+                implementation,
+                normalization_profile,
+            ) = case
             with self.subTest(run_id=run_id):
-                stem = f"phase2-gvisor-acquired-artifact-{run_id}-2026-08-02"
                 archive = root / "benchmark" / "evidence" / f"{stem}.tar.gz"
                 checked_in_receipt = (
                     root / "benchmark" / "receipts" / f"{stem}.json"
@@ -709,10 +746,16 @@ class GVisorRuntimeTests(unittest.TestCase):
                     pins = _LIVE_ARTIFACT_PINS | {
                         "expected_verifier_implementation_digest": implementation
                     }
+                    profile_pin = (
+                        {"expected_normalization_profile": normalization_profile}
+                        if normalization_profile is not None
+                        else {}
+                    )
                     closure = runtime.derive_gvisor_acquired_artifact_closure(
                         cas,
                         receipt_digest,
                         **pins,
+                        **profile_pin,
                     )
                     self.assertEqual(
                         {
@@ -726,9 +769,21 @@ class GVisorRuntimeTests(unittest.TestCase):
                         cas,
                         receipt_digest,
                         **pins,
+                        **profile_pin,
                     )
                     self.assertEqual(receipt["run_id"], run_id)
                     self.assertEqual(receipt["status"], "RECORDED")
+                    if normalization_profile is not None:
+                        self.assertEqual(receipt["schema"], runtime.ARTIFACT_SCHEMA_V2)
+                        self.assertEqual(
+                            receipt["normalization_profile"], normalization_profile
+                        )
+                        for action in (
+                            runtime.verify_gvisor_acquired_artifact,
+                            runtime.derive_gvisor_acquired_artifact_closure,
+                        ):
+                            with self.assertRaises(runtime.GVisorRuntimeError):
+                                action(cas, receipt_digest, **pins)
                     if run_id == _BOUNDED_LIVE_ARTIFACT_RUN_ID:
                         with self.assertRaises(runtime.GVisorRuntimeError):
                             runtime.verify_gvisor_acquired_artifact(

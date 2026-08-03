@@ -267,7 +267,7 @@ def _verify(
 
 
 def _verify_session_config(raw: bytes) -> None:
-    config = _canonical_object(raw, "gVisor pod init config")
+    config = _canonical_object(raw.removesuffix(b"\n"), "gVisor pod init config")
     _exact(config, {"trace_session"}, "gVisor pod init config")
     session = _object(config["trace_session"], "gVisor trace session")
     _exact(
@@ -303,7 +303,12 @@ def _verify_session_config(raw: bytes) -> None:
     if session["sinks"] != [
         {
             "name": "remote",
-            "config": {"endpoint": SOCKET_ENDPOINT},
+            "config": {
+                "backoff": "25us",
+                "backoff_max": "1ms",
+                "endpoint": SOCKET_ENDPOINT,
+                "retries": 3,
+            },
             "ignore_setup_error": False,
         }
     ]:

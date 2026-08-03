@@ -43,6 +43,12 @@ class GVisorRemoteTraceCaptureTests(unittest.TestCase):
             self.assertEqual(
                 schema["properties"]["authority"]["const"], capture.AUTHORITY
             )
+            capture._verify_session_config(
+                (
+                    Path(__file__).parents[1]
+                    / "benchmark/gvisor-remote-trace-pod-init-v1.json"
+                ).read_bytes()
+            )
 
     def test_dynamic_or_loss_tolerant_session_config_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -154,7 +160,12 @@ def _fixture(
             "sinks": [
                 {
                     "name": "remote",
-                    "config": {"endpoint": capture.SOCKET_ENDPOINT},
+                    "config": {
+                        "backoff": "25us",
+                        "backoff_max": "1ms",
+                        "endpoint": capture.SOCKET_ENDPOINT,
+                        "retries": 3,
+                    },
                     "ignore_setup_error": ignore_setup_error,
                 }
             ],

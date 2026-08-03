@@ -170,6 +170,7 @@ def _canary_trace(
         )
     )
     if artifact_profile and artifact_profile.execution_profile:
+        script_read = read.replace("O_RDONLY|0x0", "O_RDONLY|O_CLOEXEC")
         shell_execute = (
             f'0x111 /bin/sh, 0x222 ["/bin/sh", "{target}"], '
             f"0x333 {environment}"
@@ -178,8 +179,8 @@ def _canary_trace(
             (
                 f"strace.go:567] [   3:   3] sh E execve({shell_execute})",
                 f"strace.go:605] [   3:   3] sh X execve({shell_execute}) = 0 (0x0) (3µs)",
-                f"strace.go:570] [   3:   3] sh E openat({read})",
-                f"strace.go:608] [   3:   3] sh X openat({read}) = 3 (0x3) (2.6µs)",
+                f"strace.go:570] [   3:   3] sh E openat({script_read})",
+                f"strace.go:608] [   3:   3] sh X openat({script_read}) = 3 (0x3) (2.6µs)",
             )
         )
     messages = [
@@ -1482,6 +1483,12 @@ class GVisorRuntimeTests(unittest.TestCase):
             expected_v3_events,
         )
         changed_traces = []
+        changed_traces.append(
+            generalized_trace.replace(
+                b"O_RDONLY|O_CLOEXEC",
+                b"O_RDWR|O_CLOEXEC",
+            )
+        )
         for process in (b"other",):
             changed_traces.append(
                 generalized_trace.replace(

@@ -2164,11 +2164,7 @@ def _require_artifact_trace_anchors(
             and process == "sh"
             and _ARTIFACT_TARGET in arguments
         ):
-            if _canary_open_arguments(
-                arguments,
-                _ARTIFACT_TARGET,
-                write=False,
-            ) and _successful_fd(result):
+            if _artifact_script_open_arguments(arguments) and _successful_fd(result):
                 reads.append((key, entered_at))
     if execute is None or not any(
         execute[2] < entered_at and execute[0] == key for key, entered_at in reads
@@ -2252,6 +2248,18 @@ def _artifact_script_exec_arguments(arguments: str, container_id: str) -> bool:
         "PATH=/bin",
         "PWD=/",
     ]
+
+
+def _artifact_script_open_arguments(arguments: str) -> bool:
+    matched = _TRACE_OPENAT_ARGUMENTS.fullmatch(arguments)
+    if matched is None or matched["path"] != _ARTIFACT_TARGET:
+        return False
+    access = set(matched["flags"].split("|")) & {
+        "O_RDONLY",
+        "O_WRONLY",
+        "O_RDWR",
+    }
+    return access == {"O_RDONLY"}
 
 
 def _normalize_successful_artifact_events(

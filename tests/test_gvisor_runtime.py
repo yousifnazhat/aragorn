@@ -107,6 +107,7 @@ def _canary_trace(
     container_id: str = _CONTAINER_ID,
     *,
     artifact: bool = False,
+    extra_syscalls: tuple[str, ...] = (),
 ) -> bytes:
     _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
     _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
@@ -167,6 +168,7 @@ def _canary_trace(
         ),
         f"kernel.go:1293] EXEC: []string{{{go_command}}}",
         *syscalls,
+        *extra_syscalls,
         "cli.go:316] Exiting with status: 0",
     ]
     return b"".join(
@@ -727,6 +729,100 @@ class GVisorRuntimeTests(unittest.TestCase):
                     )
                     self.assertEqual(receipt["run_id"], run_id)
                     self.assertEqual(receipt["status"], "RECORDED")
+                    if run_id == _BOUNDED_LIVE_ARTIFACT_RUN_ID:
+                        with self.assertRaises(runtime.GVisorRuntimeError):
+                            runtime.verify_gvisor_acquired_artifact(
+                                cas,
+                                receipt_digest,
+                                **pins,
+                                expected_normalization_profile=(
+                                    runtime.ARTIFACT_NORMALIZATION_PROFILE
+                                ),
+                            )
+                        canary_lock = runtime._canary_lock(
+                            cas.read(receipt["lock_digest"])
+                        )
+                        runtime_lock = runtime._runtime_lock(
+                            cas.read(receipt["runtime_lock_digest"])
+                        )
+                        log_manifest = json.loads(
+                            cas.read(receipt["evidence"]["backend_log_manifest"])
+                        )
+                        boot_digest = next(
+                            item["file"]["digest"]
+                            for item in log_manifest["files"]
+                            if item["command"] == "boot"
+                        )
+                        boot = cas.read(
+                            boot_digest,
+                            max_bytes=canary_lock["trace"]["max_log_bytes"],
+                        )
+                        events = runtime._parse_artifact_trace(
+                            boot,
+                            runtime_lock,
+                            canary_lock,
+                            json.loads(
+                                cas.read(
+                                    receipt["evidence"]["container_pre_inspect"]
+                                )
+                            )[0]["Id"],
+                            normalization_profile=(
+                                runtime.ARTIFACT_NORMALIZATION_PROFILE
+                            ),
+                        )
+                        expected = tuple(
+                            sorted(
+                                canonical_json(
+                                    {
+                                        "schema": (
+                                            "aragorn/detonation-source-event/v1"
+                                        ),
+                                        "operation": operation,
+                                        "detail": detail,
+                                    }
+                                )
+                                for operation, detail in (
+                                    (
+                                        "file-open-read",
+                                        "gvisor-json-strace:openat:read:/aragorn-input/run.sh",
+                                    ),
+                                    (
+                                        "file-open-read",
+                                        "gvisor-json-strace:openat:read:/lib/libc.so.6",
+                                    ),
+                                    (
+                                        "file-open-read",
+                                        "gvisor-json-strace:openat:read:/lib/libm.so.6",
+                                    ),
+                                    (
+                                        "file-open-read",
+                                        "gvisor-json-strace:openat:read:/lib/libresolv.so.2",
+                                    ),
+                                    (
+                                        "file-open-write",
+                                        "gvisor-json-strace:openat:write:/dev/null",
+                                    ),
+                                    (
+                                        "process-exec",
+                                        "gvisor-json-strace:execve:/bin/sha256sum",
+                                    ),
+                                    (
+                                        "process-exec",
+                                        "gvisor-json-strace:execve:/bin/sleep",
+                                    ),
+                                )
+                            )
+                        )
+                        self.assertEqual(events, expected)
+                        self.assertEqual(events, tuple(sorted(set(events))))
+                        self.assertEqual(boot.count(b" = -1 errno="), 9)
+                        normalized = b"\n".join(events)
+                        for failed_only in (
+                            b"/etc/ld.so.cache",
+                            b"/lib/aarch64-linux-gnu/libm.so.6",
+                            b"/usr/lib/aarch64-linux-gnu/libm.so.6",
+                        ):
+                            self.assertNotIn(failed_only, normalized)
 
     def test_runtime_path_smoke_replays_and_fails_closed_on_drift(self) -> None:
         lock_raw, lock = runtime.load_gvisor_runtime_lock()
@@ -882,6 +978,36 @@ class GVisorRuntimeTests(unittest.TestCase):
             ),
             expected_events,
         )
+        expected_v2_events = tuple(
+            sorted(
+                canonical_json(event)
+                for event in (
+                    {
+                        "schema": "aragorn/detonation-source-event/v1",
+                        "operation": "file-open-read",
+                        "detail": (
+                            "gvisor-json-strace:openat:read:"
+                            + runtime._ARTIFACT_TARGET
+                        ),
+                    },
+                    {
+                        "schema": "aragorn/detonation-source-event/v1",
+                        "operation": "process-exec",
+                        "detail": "gvisor-json-strace:execve:/bin/sha256sum",
+                    },
+                )
+            )
+        )
+        self.assertEqual(
+            runtime._parse_artifact_trace(
+                _canary_trace(artifact=True),
+                runtime_lock,
+                canary_lock,
+                _CONTAINER_ID,
+                normalization_profile=runtime.ARTIFACT_NORMALIZATION_PROFILE,
+            ),
+            expected_v2_events,
+        )
         bind = {
             "source": str(artifact.materialized_path),
             "destination": runtime._ARTIFACT_TARGET,
@@ -921,6 +1047,34 @@ class GVisorRuntimeTests(unittest.TestCase):
             request["mount"],
             {"destination": runtime._ARTIFACT_TARGET, "read_only": True},
         )
+        self.assertEqual(request["schema"], runtime.ARTIFACT_RUN_REQUEST_SCHEMA)
+        self.assertNotIn("normalization_profile", request)
+        request_v2 = json.loads(
+            runtime._artifact_run_request(
+                runtime_lock,
+                canary_lock,
+                artifact,
+                run_id=_RUN_ID,
+                container_id=_CONTAINER_ID,
+                implementation_digest="sha256:" + "7" * 64,
+                normalization_profile=runtime.ARTIFACT_NORMALIZATION_PROFILE,
+            )
+        )
+        self.assertEqual(request_v2["schema"], runtime.ARTIFACT_RUN_REQUEST_SCHEMA_V2)
+        self.assertEqual(
+            request_v2["normalization_profile"],
+            runtime.ARTIFACT_NORMALIZATION_PROFILE,
+        )
+        with self.assertRaises(runtime.GVisorRuntimeError):
+            runtime._artifact_run_request(
+                runtime_lock,
+                canary_lock,
+                artifact,
+                run_id=_RUN_ID,
+                container_id=_CONTAINER_ID,
+                implementation_digest="sha256:" + "7" * 64,
+                normalization_profile="other/v1",
+            )
 
         writable = _artifact_container(
             runtime_lock,
@@ -939,6 +1093,127 @@ class GVisorRuntimeTests(unittest.TestCase):
                 artifact=artifact,
                 bind_mount=bind,
             )
+
+    def test_acquired_artifact_v2_normalization_is_fail_closed(self) -> None:
+        _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
+        _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
+        profile = runtime.ARTIFACT_NORMALIZATION_PROFILE
+        baseline = runtime._parse_artifact_trace(
+            _canary_trace(artifact=True),
+            runtime_lock,
+            canary_lock,
+            _CONTAINER_ID,
+            normalization_profile=profile,
+        )
+        failed = (
+            "strace.go:570] [   8:   8] sh E openat(unparsed-open)",
+            (
+                "strace.go:608] [   8:   8] sh X openat(unparsed-open) "
+                "= -1 errno=2 (no such file or directory) (2.1µs)"
+            ),
+            "strace.go:567] [   9:   9] sh E execve(unparsed-exec)",
+            (
+                "strace.go:605] [   9:   9] sh X execve(unparsed-exec) "
+                "= -1 errno=2 (no such file or directory) (2.1µs)"
+            ),
+        )
+        self.assertEqual(
+            runtime._parse_artifact_trace(
+                _canary_trace(artifact=True, extra_syscalls=failed),
+                runtime_lock,
+                canary_lock,
+                _CONTAINER_ID,
+                normalization_profile=profile,
+            ),
+            baseline,
+        )
+
+        malformed_outcomes = (
+            (
+                "strace.go:570] [   8:   8] sh E openat(unparsed-open)",
+                (
+                    "strace.go:608] [   8:   8] sh X openat(unparsed-open) "
+                    "= 3 (0x3) (2.1µs)"
+                ),
+            ),
+            (
+                "strace.go:567] [   9:   9] sh E execve(unparsed-exec)",
+                (
+                    "strace.go:605] [   9:   9] sh X execve(unparsed-exec) "
+                    "= 0 (0x0) (2.1µs)"
+                ),
+            ),
+            (
+                "strace.go:570] [  10:  10] sh E openat(unparsed-open)",
+                (
+                    "strace.go:608] [  10:  10] sh X openat(unparsed-open) "
+                    "= -0 errno=0 (not a valid failure) (2.1µs)"
+                ),
+            ),
+        )
+        for malformed in malformed_outcomes:
+            with (
+                self.subTest(malformed=malformed[0]),
+                self.assertRaises(runtime.GVisorRuntimeError),
+            ):
+                runtime._parse_artifact_trace(
+                    _canary_trace(artifact=True, extra_syscalls=malformed),
+                    runtime_lock,
+                    canary_lock,
+                    _CONTAINER_ID,
+                    normalization_profile=profile,
+                )
+
+        read_write = (
+            (
+                "strace.go:570] [  10:  10] sh E openat(AT_FDCWD /, "
+                "0xabc /tmp/read-write, O_RDWR|O_CLOEXEC, 0o0)"
+            ),
+            (
+                "strace.go:608] [  10:  10] sh X openat(AT_FDCWD /, "
+                "0xabc /tmp/read-write, O_RDWR|O_CLOEXEC, 0o0) "
+                "= 3 (0x3) (2.1µs)"
+            ),
+        )
+        read_write_events = runtime._parse_artifact_trace(
+            _canary_trace(artifact=True, extra_syscalls=read_write),
+            runtime_lock,
+            canary_lock,
+            _CONTAINER_ID,
+            normalization_profile=profile,
+        )
+        decoded = [json.loads(event) for event in read_write_events]
+        self.assertIn(
+            {
+                "schema": "aragorn/detonation-source-event/v1",
+                "operation": "file-open-read",
+                "detail": "gvisor-json-strace:openat:read:/tmp/read-write",
+            },
+            decoded,
+        )
+        self.assertIn(
+            {
+                "schema": "aragorn/detonation-source-event/v1",
+                "operation": "file-open-write",
+                "detail": "gvisor-json-strace:openat:write:/tmp/read-write",
+            },
+            decoded,
+        )
+
+        trace = _canary_trace(artifact=True)
+        without_exec_anchor = trace.replace(b"/bin/sha256sum", b"/bin/sleep")
+        without_read_anchor = trace.replace(
+            b"sha256sum E openat", b"other E openat", 1
+        ).replace(b"sha256sum X openat", b"other X openat", 1)
+        for changed in (without_exec_anchor, without_read_anchor):
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime._parse_artifact_trace(
+                    changed,
+                    runtime_lock,
+                    canary_lock,
+                    _CONTAINER_ID,
+                    normalization_profile=profile,
+                )
 
     def test_acquired_artifact_pins_fail_before_runtime_access(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1080,8 +1355,13 @@ class GVisorRuntimeTests(unittest.TestCase):
                     output,
                     source,
                     **arguments,
+                    normalization_profile=(runtime.ARTIFACT_NORMALIZATION_PROFILE),
                 )
                 self.assertEqual(observed, "sha256:" + "9" * 64)
+                self.assertEqual(
+                    collect.call_args.kwargs["artifact_normalization_profile"],
+                    runtime.ARTIFACT_NORMALIZATION_PROFILE,
+                )
                 artifact = collect.call_args.kwargs["artifact"]
                 self.assertEqual(artifact.manifest_digest, manifest_digest)
                 self.assertEqual(artifact.tree_digest, tree_digest)
@@ -1090,6 +1370,15 @@ class GVisorRuntimeTests(unittest.TestCase):
                     artifact.source_closure_digest,
                     source_closure_digest,
                 )
+                collect.reset_mock()
+                with self.assertRaises(runtime.GVisorRuntimeError):
+                    runtime.collect_gvisor_acquired_artifact(
+                        output,
+                        source,
+                        **arguments,
+                        normalization_profile="other/v1",
+                    )
+                collect.assert_not_called()
 
                 for changed in (
                     {"expected_quarantine_receipt_digest": "sha256:" + "0" * 64},

@@ -331,6 +331,17 @@ attribution scopes and re-derives each verdict from the verified capability diff
 Both checkpoint versions always report `phase2_exit_eligible: false`. V2 removes
 only the attributed-evidence and frozen-lock deficits; capture completeness,
 qualified-backend evidence, and varied live scenarios remain required.
+The Phase 2 matrix preparer now sends the exact 20-case public catalog through
+the ordinary protected GitHub gateway, materializes a separate local suite,
+freezes the source/suite/candidate/gVisor lock, and atomically publishes one
+relative-path operator index. The runner treats that index only as path hints,
+revalidates the caller-held lock and every source CAS, executes the collector
+serially under its host-global lock, and atomically publishes one `results/`
+directory containing 100 outcomes plus the locked checkpoint report. Unknown
+v4 attribution stops collection immediately. The pinned fixtures deliberately
+stay on the existing same-thread classifier; they do not claim descendant
+process attribution, independent authorship, varied environment coverage, or
+efficacy.
 
 ### 5. Decision plane
 

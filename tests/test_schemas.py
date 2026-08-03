@@ -62,6 +62,8 @@ EXPECTED_CONTRACTS = {
     "benchmark-phase2-gvisor-v4-evidence-v1.schema.json": "aragorn/benchmark-phase2-gvisor-v4-evidence/v1",
     "benchmark-phase2-metrics-checkpoint-v1.schema.json": "aragorn/benchmark-phase2-metrics-checkpoint/v1",
     "benchmark-phase2-metrics-checkpoint-v2.schema.json": "aragorn/benchmark-phase2-metrics-checkpoint/v2",
+    "phase2-matrix-catalog-v1.schema.json": "aragorn/phase2-matrix-catalog/v1",
+    "phase2-matrix-operator-index-v1.schema.json": "aragorn/phase2-matrix-operator-index/v1",
     "benchmark-phase0-hidden-calibration-result-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v1",
     "benchmark-phase0-hidden-calibration-result-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v2",
     "benchmark-phase0-hidden-calibration-result-receipt-v3.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v3",

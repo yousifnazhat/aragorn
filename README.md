@@ -117,6 +117,29 @@ verified capability diff. The v2 report still sets `phase2_exit_eligible` to
 `false`: capture completeness, a qualified isolated backend, and varied live
 scenarios remain unproven.
 
+The checked-in Phase 2 matrix catalog pins public fixture commit
+[`59a04979`](https://github.com/yousifnazhat/agent-skill-inert-fixture/commit/59a04979257a4ac9f19f94363ddc5d9bf3ef4afb)
+and exactly 20 cases. The four benign scripts use same-thread reads; the 16
+adversarial scripts add inert `/tmp` writes through shell builtins, so the
+bounded v4 classifier does not silently turn forked child activity into subject
+evidence. This is operator-authored contract plumbing, not independent efficacy
+evidence.
+
+On the qualified Linux/root capture host, one prepare call performs all 20
+protected acquisitions and prints the caller-held coverage-lock digest. One run
+call then performs the complete serial 20-by-5 matrix:
+
+```console
+PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_prepare benchmark/phase2-matrix-catalog-v1.json WORK_ROOT --worker-uid WORKER_UID --worker-gid WORKER_GID
+PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_run WORK_ROOT --expected-coverage-lock-digest sha256:...
+```
+
+Keep the printed digest outside `WORK_ROOT`. Preparation and the final
+`results/` directory publish atomically; an interrupted attempt cannot leave a
+partial final suite or a report without its 100 canonical outcomes. The runner
+also stops on the first verified `unknown` attribution scope instead of burning
+the rest of the matrix.
+
 The fixed OpenClaw restart evidence pair is now rechecked by an exact
 `ADM-02/restart` verifier. Carried scenario claims remain retention-only. The
 verifier rejects promotion and aggregate `PASS`; it grants no installer

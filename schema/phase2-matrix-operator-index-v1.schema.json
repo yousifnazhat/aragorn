@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/phase2-matrix-operator-index-v1.schema.json",
+  "title": "Aragorn Phase 2 local operator path index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "coverage_lock_digest",
+    "suite_path",
+    "coverage_lock_path",
+    "evidence_state_path",
+    "results_path",
+    "cases"
+  ],
+  "properties": {
+    "schema": {"const": "aragorn/phase2-matrix-operator-index/v1"},
+    "authority": {
+      "const": "RELATIVE_PATH_HINTS_ONLY_NOT_EVIDENCE_OR_PHASE2_AUTHORITY"
+    },
+    "coverage_lock_digest": {"$ref": "#/$defs/digest"},
+    "suite_path": {"$ref": "#/$defs/path"},
+    "coverage_lock_path": {"$ref": "#/$defs/path"},
+    "evidence_state_path": {"$ref": "#/$defs/path"},
+    "results_path": {"$ref": "#/$defs/path"},
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_id", "source_state_path"],
+        "properties": {
+          "case_id": {"$ref": "#/$defs/id"},
+          "source_state_path": {"$ref": "#/$defs/path"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    }
+  }
+}

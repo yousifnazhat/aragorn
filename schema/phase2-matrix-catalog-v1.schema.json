@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/phase2-matrix-catalog-v1.schema.json",
+  "title": "Aragorn operator-authored inert Phase 2 matrix catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "assurance", "source", "candidate", "cases"],
+  "properties": {
+    "schema": {"const": "aragorn/phase2-matrix-catalog/v1"},
+    "assurance": {
+      "const": "operator_authored_inert_plumbing_not_independent_efficacy"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "repository", "commit", "case_root"],
+      "properties": {
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,100}$"
+        },
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "case_root": {"$ref": "#/$defs/path"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "config"],
+      "properties": {
+        "name": {"const": "aragorn"},
+        "version": {
+          "type": "string",
+          "pattern": "^(?:\\S|\\S[^\\r\\n]*\\S)$",
+          "maxLength": 256
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "evaluation_split",
+            "runs_per_case",
+            "verdict_profile",
+            "gvisor_receipt_schema",
+            "normalization_profile",
+            "execution_profile",
+            "entrypoint_path"
+          ],
+          "properties": {
+            "evaluation_split": {"const": "held_out"},
+            "runs_per_case": {"const": 5},
+            "verdict_profile": {"const": "undeclared-observed-review/v1"},
+            "gvisor_receipt_schema": {
+              "const": "aragorn/gvisor-acquired-artifact-receipt/v4"
+            },
+            "normalization_profile": {
+              "const": "successful-openat-execve-attributed/v1"
+            },
+            "execution_profile": {"const": "bounded-single-script/v1"},
+            "entrypoint_path": {"const": "run.sh"}
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001f\\u007f])(?!.*\\\\)(?!.*//)(?!(?:\\.|\\.\\.)(?:/|$))(?!.*\\/(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"
+    },
+    "capability": {
+      "enum": [
+        "file-read",
+        "file-write",
+        "memory-write",
+        "network-connect",
+        "process-exec",
+        "tool-call"
+      ]
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "class",
+        "family",
+        "lineage",
+        "declared_capabilities"
+      ],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/id"},
+        "class": {"enum": ["benign", "adversarial"]},
+        "family": {"$ref": "#/$defs/id"},
+        "lineage": {"$ref": "#/$defs/id"},
+        "declared_capabilities": {
+          "type": "array",
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/capability"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"class": {"const": "benign"}},
+            "required": ["class"]
+          },
+          "then": {"properties": {"family": {"const": "benign"}}},
+          "else": {
+            "properties": {"family": {"not": {"const": "benign"}}}
+          }
+        }
+      ]
+    }
+  }
+}

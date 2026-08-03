@@ -1093,6 +1093,33 @@ def main() -> int:
     validators["benchmark-phase2-coverage-lock-v1.schema.json"].validate(
         phase2_coverage_lock
     )
+    validators["phase2-matrix-catalog-v1.schema.json"].validate(
+        json.loads(
+            (ROOT / "benchmark" / "phase2-matrix-catalog-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    )
+    validators["phase2-matrix-operator-index-v1.schema.json"].validate(
+        {
+            "schema": "aragorn/phase2-matrix-operator-index/v1",
+            "authority": (
+                "RELATIVE_PATH_HINTS_ONLY_NOT_EVIDENCE_OR_PHASE2_AUTHORITY"
+            ),
+            "coverage_lock_digest": digest,
+            "suite_path": "suite/phase2-suite.json",
+            "coverage_lock_path": "coverage-lock.json",
+            "evidence_state_path": "evidence",
+            "results_path": "results",
+            "cases": [
+                {
+                    "case_id": case_id,
+                    "source_state_path": f"sources/{case_id}",
+                }
+                for case_id, _case_class, _family in phase2_case_specs
+            ],
+        }
+    )
     validators["benchmark-phase2-gvisor-v4-evidence-v1.schema.json"].validate(
         {
             "schema": "aragorn/benchmark-phase2-gvisor-v4-evidence/v1",

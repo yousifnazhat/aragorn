@@ -1438,6 +1438,38 @@ class GVisorRuntimeTests(unittest.TestCase):
                     changed, runtime_lock, canary_lock, _CONTAINER_ID
                 )
 
+    def test_canary_log_accepts_adjacent_complete_records_only(self) -> None:
+        _raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
+        trace = _canary_trace()
+        lines = trace.splitlines(keepends=True)
+        joined = b"".join(line[:-1] for line in lines) + b"\n"
+        self.assertEqual(
+            runtime._canary_log_records(joined, canary_lock, "boot"),
+            runtime._canary_log_records(trace, canary_lock, "boot"),
+        )
+        for separator in (b" ", b"garbage"):
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime._canary_log_records(
+                    lines[0][:-1] + separator + b"".join(lines[1:]),
+                    canary_lock,
+                    "boot",
+                )
+        invalid_json = (
+            lines[0].replace(b'"msg":', b'"msg":"duplicate","msg":', 1),
+            lines[0].replace(b'"level":"info"', b'"level":NaN', 1),
+        )
+        for raw in invalid_json:
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime._canary_log_records(raw, canary_lock, "boot")
+
+        short_record = copy.deepcopy(canary_lock)
+        short_record["trace"]["max_line_bytes"] = len(lines[0]) - 2
+        too_few_records = copy.deepcopy(canary_lock)
+        too_few_records["trace"]["max_log_lines"] = len(lines) - 1
+        for lock in (short_record, too_few_records):
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime._canary_log_records(joined, lock, "boot")
+
     def test_acquired_artifact_profile_is_bound_and_normalized(self) -> None:
         _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
         _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()

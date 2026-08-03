@@ -12,6 +12,7 @@ import stat
 import sys
 import tempfile
 import time
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from io import BytesIO
@@ -52,10 +53,13 @@ CANARY_LOG_MANIFEST_SCHEMA = "aragorn/gvisor-detonation-canary-log-manifest/v1"
 CANARY_CLEANUP_SCHEMA = "aragorn/gvisor-detonation-canary-cleanup/v1"
 ARTIFACT_SCHEMA = "aragorn/gvisor-acquired-artifact-receipt/v1"
 ARTIFACT_SCHEMA_V2 = "aragorn/gvisor-acquired-artifact-receipt/v2"
+ARTIFACT_SCHEMA_V3 = "aragorn/gvisor-acquired-artifact-receipt/v3"
 ARTIFACT_IMPLEMENTATION_SCHEMA = "aragorn/gvisor-acquired-artifact-implementation/v1"
 ARTIFACT_RUN_REQUEST_SCHEMA = "aragorn/gvisor-acquired-artifact-run-request/v1"
 ARTIFACT_RUN_REQUEST_SCHEMA_V2 = "aragorn/gvisor-acquired-artifact-run-request/v2"
+ARTIFACT_RUN_REQUEST_SCHEMA_V3 = "aragorn/gvisor-acquired-artifact-run-request/v3"
 ARTIFACT_NORMALIZATION_PROFILE = "successful-openat-execve-set/v1"
+ARTIFACT_EXECUTION_PROFILE = "bounded-single-script/v1"
 AUTHORITY = (
     "RUNTIME_PATH_SMOKE_ONLY_NOT_RUNTIME_ATTESTATION_ISOLATION_OR_DETONATION_AUTHORITY"
 )
@@ -69,6 +73,11 @@ ARTIFACT_AUTHORITY = (
     "ONE_INERT_ACQUIRED_ARTIFACT_SAME_RUN_EVIDENCE_ONLY_NOT_CAPTURE_COMPLETENESS_"
     "RUNTIME_ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_"
     "AUTHORITY"
+)
+ARTIFACT_AUTHORITY_V3 = (
+    "ONE_CALLER_PINNED_BOUNDED_SINGLE_SCRIPT_SAME_RUN_EVIDENCE_ONLY_NOT_SCRIPT_"
+    "SAFETY_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_"
+    "ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
 )
 
 _MAX_LOCK_BYTES = 64 * 1024
@@ -155,6 +164,10 @@ _ARTIFACT_RECEIPT_V2_FIELDS = {
     *_ARTIFACT_RECEIPT_FIELDS,
     "normalization_profile",
 }
+_ARTIFACT_RECEIPT_V3_FIELDS = {
+    *_ARTIFACT_RECEIPT_V2_FIELDS,
+    "execution_profile",
+}
 _RUN_ID = re.compile(r"[0-9a-f]{32}\Z")
 _CAPTURED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _BOOT_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
@@ -187,6 +200,14 @@ _ARTIFACT_IMPLEMENTATION_MODULES = (
 )
 _ARTIFACT_ENTRYPOINT = "run.sh"
 _ARTIFACT_TARGET = "/aragorn-input/run.sh"
+_ARTIFACT_WRAPPER_COMMAND = (
+    "/bin/sh",
+    "-c",
+    (
+        "set -eu; /bin/sha256sum /aragorn-input/run.sh >/dev/null; "
+        "/bin/sleep 5; exec /bin/sh /aragorn-input/run.sh"
+    ),
+)
 _ARTIFACT_TREE_DIGEST = (
     "sha256:633b89b98302bb94817ab43154c8a57a5412b8ee8e3e26fb005fdf8aff247344"
 )
@@ -248,8 +269,11 @@ class _AcquiredArtifact:
     source_closure_digest: str
     manifest_digest: str
     tree_digest: str
+    entrypoint_path: str
     entrypoint_digest: str
     entrypoint_size: int
+    execution_profile: str | None
+    declared_capabilities: tuple[str, ...]
     materialized_path: Path
 
 
@@ -626,7 +650,10 @@ def collect_gvisor_acquired_artifact(
     expected_manifest_digest: str,
     expected_tree_digest: str,
     expected_gateway_profile_digest: str,
+    expected_entrypoint_path: str | None = None,
     expected_entrypoint_digest: str,
+    expected_declared_capabilities: Collection[str] | None = None,
+    expected_execution_profile: str | None = None,
     expected_lock_digest: str,
     expected_verifier_implementation_digest: str,
     normalization_profile: str | None = None,
@@ -634,9 +661,16 @@ def collect_gvisor_acquired_artifact(
     runtime_lock_path: str | Path = LOCK,
     docker_executable: str | os.PathLike[str] = "docker",
 ) -> str:
-    """Execute the one pinned inert acquired-artifact profile under gVisor."""
+    """Execute one caller-pinned bounded shell script under gVisor."""
 
-    _artifact_normalization_profile(normalization_profile)
+    selected_normalization = _artifact_capture_normalization_profile(
+        normalization_profile
+    )
+    selected_execution = _artifact_execution_profile(expected_execution_profile)
+    entrypoint_path = _artifact_entrypoint_path(expected_entrypoint_path)
+    declared_capabilities = _artifact_declared_capabilities(
+        expected_declared_capabilities
+    )
     source_root = source_cas.root.resolve()
     output_root = cas.root.resolve()
     if (
@@ -661,11 +695,6 @@ def collect_gvisor_acquired_artifact(
         expected_entrypoint_digest,
         "expected artifact entrypoint",
     )
-    if (
-        tree_digest != _ARTIFACT_TREE_DIGEST
-        or entrypoint_digest != _ARTIFACT_ENTRYPOINT_DIGEST
-    ):
-        raise GVisorRuntimeError("acquired artifact fixed profile changed")
     try:
         from .artifact_closure import load_verified_retained_manifest
         from .github_quarantine_receipt import (
@@ -685,7 +714,16 @@ def collect_gvisor_acquired_artifact(
             or quarantine["tree_digest"] != tree_digest
         ):
             raise GVisorRuntimeError("acquired artifact tree identity changed")
-        entrypoint = _fixed_artifact_entrypoint(manifest)
+        entrypoint = _pinned_artifact_entrypoint(
+            manifest,
+            expected_tree_digest=tree_digest,
+            expected_path=entrypoint_path,
+            expected_digest=entrypoint_digest,
+        )
+        _verify_artifact_script(
+            source_cas.read(entrypoint_digest, max_bytes=_MAX_ARTIFACT_BYTES),
+            expected_size=entrypoint["size"],
+        )
         closure = derive_github_quarantine_closure(
             source_cas,
             receipt_digest,
@@ -704,7 +742,7 @@ def collect_gvisor_acquired_artifact(
         ) as materialized:
             materialized_path = cas.materialize(
                 entrypoint_digest,
-                Path(materialized) / _ARTIFACT_ENTRYPOINT,
+                Path(materialized) / "entrypoint",
                 root=materialized,
             )
             artifact = _AcquiredArtifact(
@@ -713,8 +751,11 @@ def collect_gvisor_acquired_artifact(
                 source_closure_digest=quarantine["source_closure_digest"],
                 manifest_digest=manifest_digest,
                 tree_digest=tree_digest,
+                entrypoint_path=entrypoint_path,
                 entrypoint_digest=entrypoint_digest,
                 entrypoint_size=entrypoint["size"],
+                execution_profile=selected_execution,
+                declared_capabilities=declared_capabilities,
                 materialized_path=materialized_path,
             )
             return _collect_gvisor_detonation(
@@ -727,7 +768,7 @@ def collect_gvisor_acquired_artifact(
                 runtime_lock_path=runtime_lock_path,
                 docker_executable=docker_executable,
                 artifact=artifact,
-                artifact_normalization_profile=normalization_profile,
+                artifact_normalization_profile=selected_normalization,
             )
     except GVisorRuntimeError:
         raise
@@ -857,7 +898,7 @@ def _collect_gvisor_detonation(
         )
         opened.append(daemon)
         profile = (
-            _artifact_profile(canary_lock)
+            _artifact_profile(canary_lock, artifact)
             if artifact is not None
             else canary_lock["canary"]
         )
@@ -1157,12 +1198,17 @@ def _collect_gvisor_detonation(
         }
         receipt = {
             "schema": (
-                ARTIFACT_SCHEMA_V2
-                if artifact is not None and artifact_normalization_profile is not None
+                ARTIFACT_SCHEMA_V3
+                if artifact is not None and artifact.execution_profile is not None
+                else ARTIFACT_SCHEMA_V2
+                if artifact is not None
+                and artifact_normalization_profile is not None
                 else ARTIFACT_SCHEMA if artifact is not None else CANARY_SCHEMA
             ),
             "authority": (
-                ARTIFACT_AUTHORITY if artifact is not None else CANARY_AUTHORITY
+                ARTIFACT_AUTHORITY_V3
+                if artifact is not None and artifact.execution_profile is not None
+                else ARTIFACT_AUTHORITY if artifact is not None else CANARY_AUTHORITY
             ),
             "lock_digest": expected_lock,
             "runtime_lock_digest": runtime_lock_digest,
@@ -1185,6 +1231,8 @@ def _collect_gvisor_detonation(
             )
             if artifact_normalization_profile is not None:
                 receipt["normalization_profile"] = artifact_normalization_profile
+            if artifact.execution_profile is not None:
+                receipt["execution_profile"] = artifact.execution_profile
         receipt_digest = cas.put(
             BytesIO(canonical_json(receipt)), max_bytes=_MAX_RECEIPT_BYTES
         )
@@ -1203,7 +1251,10 @@ def _collect_gvisor_detonation(
                 expected_manifest_digest=artifact.manifest_digest,
                 expected_tree_digest=artifact.tree_digest,
                 expected_gateway_profile_digest=artifact.gateway_profile_digest,
+                expected_entrypoint_path=artifact.entrypoint_path,
                 expected_entrypoint_digest=artifact.entrypoint_digest,
+                expected_declared_capabilities=artifact.declared_capabilities,
+                expected_execution_profile=artifact.execution_profile,
                 expected_lock_digest=expected_lock,
                 expected_verifier_implementation_digest=expected_implementation,
                 expected_normalization_profile=artifact_normalization_profile,
@@ -1587,7 +1638,45 @@ def _artifact_normalization_profile(value: str | None) -> str | None:
     return value
 
 
-def _artifact_profile(canary_lock: dict[str, Any]) -> dict[str, Any]:
+def _artifact_capture_normalization_profile(value: object) -> str:
+    if value != ARTIFACT_NORMALIZATION_PROFILE:
+        raise GVisorRuntimeError(
+            "new gVisor acquired artifact captures require the current "
+            "normalization profile"
+        )
+    return ARTIFACT_NORMALIZATION_PROFILE
+
+
+def _artifact_execution_profile(value: object) -> str:
+    if value != ARTIFACT_EXECUTION_PROFILE:
+        raise GVisorRuntimeError(
+            "gVisor acquired artifact execution profile is unsupported"
+        )
+    return ARTIFACT_EXECUTION_PROFILE
+
+
+def _artifact_entrypoint_path(value: object) -> str:
+    from .artifact_closure import _canonical_relative_path
+
+    if not isinstance(value, str) or _canonical_relative_path(value) != value:
+        raise GVisorRuntimeError(
+            "gVisor acquired artifact entrypoint path is not canonical"
+        )
+    return value
+
+
+def _artifact_declared_capabilities(value: object) -> tuple[str, ...]:
+    from .behavior_capability_diff import BehaviorCapabilityDiffError, _capabilities
+
+    try:
+        return tuple(_capabilities(value, "artifact declared capabilities"))
+    except BehaviorCapabilityDiffError as exc:
+        raise GVisorRuntimeError(str(exc)) from exc
+
+
+def _artifact_profile(
+    canary_lock: dict[str, Any], artifact: _AcquiredArtifact | None = None
+) -> dict[str, Any]:
     base = canary_lock["canary"]
     fields = (
         "environment",
@@ -1603,11 +1692,20 @@ def _artifact_profile(canary_lock: dict[str, Any]) -> dict[str, Any]:
         "nofile_soft",
         "nofile_hard",
         "tmpfs",
-        "declared_capabilities",
     )
+    if artifact is not None and artifact.execution_profile is not None:
+        _artifact_execution_profile(artifact.execution_profile)
+        command = list(_ARTIFACT_WRAPPER_COMMAND)
+        declared_capabilities = list(
+            _artifact_declared_capabilities(artifact.declared_capabilities)
+        )
+    else:
+        command = ["/bin/sh", _ARTIFACT_TARGET]
+        declared_capabilities = base["declared_capabilities"]
     return {
         **{field: base[field] for field in fields},
-        "command": ["/bin/sh", _ARTIFACT_TARGET],
+        "command": command,
+        "declared_capabilities": declared_capabilities,
         "source_events": [
             {
                 "schema": "aragorn/detonation-source-event/v1",
@@ -1624,13 +1722,64 @@ def _artifact_profile(canary_lock: dict[str, Any]) -> dict[str, Any]:
 
 
 def _artifact_entrypoint(artifact: _AcquiredArtifact) -> dict[str, Any]:
+    if (
+        isinstance(artifact.entrypoint_size, bool)
+        or not isinstance(artifact.entrypoint_size, int)
+        or not 1 <= artifact.entrypoint_size <= _MAX_ARTIFACT_BYTES
+    ):
+        raise GVisorRuntimeError("acquired artifact entrypoint size is invalid")
     return {
-        "path": _ARTIFACT_ENTRYPOINT,
-        "digest": artifact.entrypoint_digest,
+        "path": _artifact_entrypoint_path(artifact.entrypoint_path),
+        "digest": _digest(artifact.entrypoint_digest, "artifact entrypoint"),
         "size": artifact.entrypoint_size,
         "executable": True,
         "container_path": _ARTIFACT_TARGET,
     }
+
+
+def _pinned_artifact_entrypoint(
+    manifest: dict[str, Any],
+    *,
+    expected_tree_digest: str,
+    expected_path: object,
+    expected_digest: str,
+) -> dict[str, Any]:
+    if (
+        manifest.get("schema") != "aragorn/github-manifest/v1"
+        or manifest.get("tree_digest") != expected_tree_digest
+    ):
+        raise GVisorRuntimeError("acquired artifact manifest identity changed")
+    path = _artifact_entrypoint_path(expected_path)
+    matches = [item for item in manifest["files"] if item["path"] == path]
+    if len(matches) != 1:
+        raise GVisorRuntimeError("acquired artifact entrypoint is absent or ambiguous")
+    entrypoint = matches[0]
+    if (
+        entrypoint["digest"] != expected_digest
+        or isinstance(entrypoint["size"], bool)
+        or not isinstance(entrypoint["size"], int)
+        or not 1 <= entrypoint["size"] <= _MAX_ARTIFACT_BYTES
+        or entrypoint["executable"] is not True
+    ):
+        raise GVisorRuntimeError("acquired artifact entrypoint profile changed")
+    return entrypoint
+
+
+def _verify_artifact_script(raw: object, *, expected_size: int) -> None:
+    if (
+        not isinstance(raw, bytes)
+        or len(raw) != expected_size
+        or not raw.startswith(b"#!/bin/sh\n")
+        or b"\x00" in raw
+        or b"\r" in raw
+    ):
+        raise GVisorRuntimeError("acquired artifact entrypoint is not a bounded script")
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise GVisorRuntimeError(
+            "acquired artifact entrypoint is not a bounded script"
+        ) from exc
 
 
 def _fixed_artifact_entrypoint(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -1642,17 +1791,13 @@ def _fixed_artifact_entrypoint(manifest: dict[str, Any]) -> dict[str, Any]:
         != _ARTIFACT_GITHUB_SOURCE
     ):
         raise GVisorRuntimeError("acquired artifact source profile changed")
-    matches = [
-        item for item in manifest["files"] if item["path"] == _ARTIFACT_ENTRYPOINT
-    ]
-    if len(matches) != 1:
-        raise GVisorRuntimeError("acquired artifact entrypoint is absent or ambiguous")
-    entrypoint = matches[0]
-    if (
-        entrypoint["digest"] != _ARTIFACT_ENTRYPOINT_DIGEST
-        or entrypoint["size"] != _ARTIFACT_ENTRYPOINT_SIZE
-        or entrypoint["executable"] is not True
-    ):
+    entrypoint = _pinned_artifact_entrypoint(
+        manifest,
+        expected_tree_digest=_ARTIFACT_TREE_DIGEST,
+        expected_path=_ARTIFACT_ENTRYPOINT,
+        expected_digest=_ARTIFACT_ENTRYPOINT_DIGEST,
+    )
+    if entrypoint["size"] != _ARTIFACT_ENTRYPOINT_SIZE:
         raise GVisorRuntimeError("acquired artifact entrypoint profile changed")
     return entrypoint
 
@@ -1682,15 +1827,25 @@ def _artifact_run_request(
     normalization_profile: str | None = None,
 ) -> bytes:
     selected_normalization = _artifact_normalization_profile(normalization_profile)
-    profile = _artifact_profile(canary_lock)
+    if artifact.execution_profile is not None:
+        _artifact_execution_profile(artifact.execution_profile)
+        selected_normalization = _artifact_capture_normalization_profile(
+            normalization_profile
+        )
+    profile = _artifact_profile(canary_lock, artifact)
     request = {
         "schema": (
-            ARTIFACT_RUN_REQUEST_SCHEMA_V2
+            ARTIFACT_RUN_REQUEST_SCHEMA_V3
+            if artifact.execution_profile is not None
+            else ARTIFACT_RUN_REQUEST_SCHEMA_V2
             if selected_normalization is not None
             else ARTIFACT_RUN_REQUEST_SCHEMA
         ),
         "authority": (
-            "ONE_INERT_ACQUIRED_ARTIFACT_REQUEST_ONLY_NOT_GENERAL_EXECUTION_"
+            "CALLER_PINNED_BOUNDED_SINGLE_SCRIPT_REQUEST_ONLY_NOT_SCRIPT_SAFETY_OR_"
+            "GENERAL_EXECUTION_OR_ADMISSION_AUTHORITY"
+            if artifact.execution_profile is not None
+            else "ONE_INERT_ACQUIRED_ARTIFACT_REQUEST_ONLY_NOT_GENERAL_EXECUTION_"
             "OR_ADMISSION_AUTHORITY"
         ),
         "run_id": run_id,
@@ -1716,6 +1871,8 @@ def _artifact_run_request(
     }
     if selected_normalization is not None:
         request["normalization_profile"] = selected_normalization
+    if artifact.execution_profile is not None:
+        request["execution_profile"] = artifact.execution_profile
     return canonical_json(request)
 
 
@@ -1952,6 +2109,7 @@ def _parse_artifact_trace(
     container_id: str,
     *,
     normalization_profile: str | None = None,
+    artifact: _AcquiredArtifact | None = None,
 ) -> tuple[bytes, ...]:
     selected_normalization = _artifact_normalization_profile(normalization_profile)
     pairs = _parse_trace_pairs(
@@ -1959,9 +2117,13 @@ def _parse_artifact_trace(
         runtime_lock,
         canary_lock,
         container_id,
-        command=_artifact_profile(canary_lock)["command"],
+        command=_artifact_profile(canary_lock, artifact)["command"],
     )
-    _require_artifact_trace_anchors(pairs, container_id)
+    _require_artifact_trace_anchors(
+        pairs,
+        container_id,
+        execution_profile=artifact.execution_profile if artifact else None,
+    )
     if selected_normalization is None:
         return tuple(
             canonical_json(event)
@@ -1971,11 +2133,65 @@ def _parse_artifact_trace(
 
 
 def _require_artifact_trace_anchors(
-    pairs: tuple[_TracePair, ...], container_id: str
+    pairs: tuple[_TracePair, ...],
+    container_id: str,
+    *,
+    execution_profile: str | None = None,
 ) -> None:
-    execute: tuple[tuple[int, int], int] | None = None
-    read: tuple[tuple[int, int], int] | None = None
-    for key, process, syscall, arguments, result, entered_at, _exited_at in pairs:
+    if execution_profile is None:
+        _require_legacy_artifact_trace_anchors(pairs, container_id)
+        return
+    if execution_profile != ARTIFACT_EXECUTION_PROFILE:
+        raise GVisorRuntimeError("gVisor acquired artifact execution profile changed")
+
+    execute: tuple[tuple[int, int], int, int] | None = None
+    reads: list[tuple[tuple[int, int], int]] = []
+    for key, process, syscall, arguments, result, entered_at, exited_at in pairs:
+        if syscall == "execve" and _artifact_script_exec_arguments(
+            arguments, container_id
+        ):
+            if (
+                execute is not None
+                or process != "sh"
+                or result != "0 (0x0)"
+            ):
+                raise GVisorRuntimeError(
+                    "gVisor acquired artifact script execution is ambiguous"
+                )
+            execute = (key, entered_at, exited_at)
+        elif (
+            syscall == "openat"
+            and process == "sh"
+            and _ARTIFACT_TARGET in arguments
+        ):
+            if _canary_open_arguments(
+                arguments,
+                _ARTIFACT_TARGET,
+                write=False,
+            ) and _successful_fd(result):
+                reads.append((key, entered_at))
+    if execute is None or not any(
+        execute[2] < entered_at and execute[0] == key for key, entered_at in reads
+    ):
+        raise GVisorRuntimeError("gVisor acquired artifact script did not start")
+
+    hash_execute, hash_read = _require_legacy_artifact_trace_anchors(
+        tuple(pair for pair in pairs if pair[5] < execute[1]),
+        container_id,
+    )
+    if not (
+        hash_execute[2] < hash_read[1]
+        and hash_read[2] < execute[1]
+    ):
+        raise GVisorRuntimeError("gVisor acquired artifact event order changed")
+
+
+def _require_legacy_artifact_trace_anchors(
+    pairs: tuple[_TracePair, ...], container_id: str
+) -> tuple[tuple[tuple[int, int], int, int], tuple[tuple[int, int], int, int]]:
+    execute: tuple[tuple[int, int], int, int] | None = None
+    read: tuple[tuple[int, int], int, int] | None = None
+    for key, process, syscall, arguments, result, entered_at, exited_at in pairs:
         if (
             syscall == "execve"
             and "/bin/sha256sum" in arguments
@@ -1994,7 +2210,7 @@ def _require_artifact_trace_anchors(
                 raise GVisorRuntimeError(
                     "gVisor acquired artifact execution is ambiguous"
                 )
-            execute = (key, entered_at)
+            execute = (key, entered_at, exited_at)
         elif (
             syscall == "openat"
             and process == "sha256sum"
@@ -2010,13 +2226,32 @@ def _require_artifact_trace_anchors(
                 or not _successful_fd(result)
             ):
                 raise GVisorRuntimeError("gVisor acquired artifact read is ambiguous")
-            read = (key, entered_at)
+            read = (key, entered_at, exited_at)
     if (
         execute is None
         or read is None
         or not (execute[1] < read[1] and execute[0] == read[0])
     ):
         raise GVisorRuntimeError("gVisor acquired artifact events are incomplete")
+    return execute, read
+
+
+def _artifact_script_exec_arguments(arguments: str, container_id: str) -> bool:
+    matched = _TRACE_EXECVE_ARGUMENTS.fullmatch(arguments)
+    if matched is None or matched["path"] != "/bin/sh":
+        return False
+    try:
+        argv = json.loads(matched["argv"])
+        environment = json.loads(matched["environment"])
+    except (ValueError, RecursionError):
+        return False
+    return argv == ["/bin/sh", _ARTIFACT_TARGET] and environment == [
+        f"HOSTNAME={container_id[:12]}",
+        "SHLVL=1",
+        "HOME=/home",
+        "PATH=/bin",
+        "PWD=/",
+    ]
 
 
 def _normalize_successful_artifact_events(
@@ -2731,6 +2966,9 @@ def verify_gvisor_acquired_artifact(
     expected_lock_digest: str,
     expected_verifier_implementation_digest: str,
     expected_normalization_profile: str | None = None,
+    expected_execution_profile: str | None = None,
+    expected_entrypoint_path: str | None = None,
+    expected_declared_capabilities: Collection[str] | None = None,
 ) -> dict[str, Any]:
     """Replay one exact acquired-artifact run without promoting custody."""
 
@@ -2747,6 +2985,9 @@ def verify_gvisor_acquired_artifact(
             expected_verifier_implementation_digest
         ),
         expected_normalization_profile=expected_normalization_profile,
+        expected_execution_profile=expected_execution_profile,
+        expected_entrypoint_path=expected_entrypoint_path,
+        expected_declared_capabilities=expected_declared_capabilities,
     ).receipt
 
 
@@ -2762,10 +3003,37 @@ def _verify_gvisor_acquired_artifact(
     expected_lock_digest: str,
     expected_verifier_implementation_digest: str,
     expected_normalization_profile: str | None = None,
+    expected_execution_profile: str | None = None,
+    expected_entrypoint_path: str | None = None,
+    expected_declared_capabilities: Collection[str] | None = None,
 ) -> _VerifiedCanary:
     expected_normalization = _artifact_normalization_profile(
         expected_normalization_profile
     )
+    if expected_execution_profile is None:
+        if (
+            expected_entrypoint_path is not None
+            or expected_declared_capabilities is not None
+        ):
+            raise GVisorRuntimeError(
+                "historical gVisor artifact replay does not accept execution pins"
+            )
+        expected_execution = None
+        expected_path = _ARTIFACT_ENTRYPOINT
+        expected_declared: tuple[str, ...] | None = None
+    else:
+        expected_execution = _artifact_execution_profile(expected_execution_profile)
+        expected_normalization = _artifact_capture_normalization_profile(
+            expected_normalization_profile
+        )
+        expected_path = _artifact_entrypoint_path(expected_entrypoint_path)
+        if expected_declared_capabilities is None:
+            raise GVisorRuntimeError(
+                "gVisor artifact declared capabilities are required"
+            )
+        expected_declared = _artifact_declared_capabilities(
+            expected_declared_capabilities
+        )
     expected_receipt = _digest(receipt_digest, "acquired artifact receipt")
     expected_quarantine = _digest(
         expected_quarantine_receipt_digest,
@@ -2781,7 +3049,7 @@ def _verify_gvisor_acquired_artifact(
         expected_entrypoint_digest,
         "expected artifact entrypoint",
     )
-    if (
+    if expected_execution is None and (
         expected_tree != _ARTIFACT_TREE_DIGEST
         or expected_entrypoint != _ARTIFACT_ENTRYPOINT_DIGEST
     ):
@@ -2798,12 +3066,16 @@ def _verify_gvisor_acquired_artifact(
             canonical=True,
         )
         expected_fields = (
-            _ARTIFACT_RECEIPT_V2_FIELDS
+            _ARTIFACT_RECEIPT_V3_FIELDS
+            if expected_execution is not None
+            else _ARTIFACT_RECEIPT_V2_FIELDS
             if expected_normalization is not None
             else _ARTIFACT_RECEIPT_FIELDS
         )
         expected_schema = (
-            ARTIFACT_SCHEMA_V2
+            ARTIFACT_SCHEMA_V3
+            if expected_execution is not None
+            else ARTIFACT_SCHEMA_V2
             if expected_normalization is not None
             else ARTIFACT_SCHEMA
         )
@@ -2811,7 +3083,12 @@ def _verify_gvisor_acquired_artifact(
             raise GVisorRuntimeError("gVisor acquired artifact receipt fields changed")
         if (
             receipt["schema"] != expected_schema
-            or receipt["authority"] != ARTIFACT_AUTHORITY
+            or receipt["authority"]
+            != (
+                ARTIFACT_AUTHORITY_V3
+                if expected_execution is not None
+                else ARTIFACT_AUTHORITY
+            )
             or receipt["status"] != "RECORDED"
             or receipt["quarantine_receipt_digest"] != expected_quarantine
             or receipt["gateway_profile_digest"] != expected_gateway
@@ -2826,6 +3103,13 @@ def _verify_gvisor_acquired_artifact(
         ):
             raise GVisorRuntimeError(
                 "gVisor acquired artifact normalization profile changed"
+            )
+        if (
+            expected_execution is not None
+            and receipt["execution_profile"] != expected_execution
+        ):
+            raise GVisorRuntimeError(
+                "gVisor acquired artifact execution profile changed"
             )
         if (
             not isinstance(receipt["run_id"], str)
@@ -2871,7 +3155,21 @@ def _verify_gvisor_acquired_artifact(
             or receipt["source_closure_digest"] != quarantine["source_closure_digest"]
         ):
             raise GVisorRuntimeError("gVisor acquired source identity changed")
-        manifest_entrypoint = _fixed_artifact_entrypoint(manifest)
+        manifest_entrypoint = (
+            _fixed_artifact_entrypoint(manifest)
+            if expected_execution is None
+            else _pinned_artifact_entrypoint(
+                manifest,
+                expected_tree_digest=expected_tree,
+                expected_path=expected_path,
+                expected_digest=expected_entrypoint,
+            )
+        )
+        if expected_execution is not None:
+            _verify_artifact_script(
+                cas.read(expected_entrypoint, max_bytes=_MAX_ARTIFACT_BYTES),
+                expected_size=manifest_entrypoint["size"],
+            )
         entrypoint = _object(receipt["entrypoint"], "artifact entrypoint")
         _exact_keys(
             entrypoint,
@@ -2879,7 +3177,7 @@ def _verify_gvisor_acquired_artifact(
             "artifact entrypoint",
         )
         if entrypoint != {
-            "path": _ARTIFACT_ENTRYPOINT,
+            "path": expected_path,
             "digest": expected_entrypoint,
             "size": manifest_entrypoint["size"],
             "executable": True,
@@ -2909,8 +3207,15 @@ def _verify_gvisor_acquired_artifact(
             source_closure_digest=quarantine["source_closure_digest"],
             manifest_digest=expected_manifest,
             tree_digest=expected_tree,
+            entrypoint_path=expected_path,
             entrypoint_digest=expected_entrypoint,
             entrypoint_size=manifest_entrypoint["size"],
+            execution_profile=expected_execution,
+            declared_capabilities=(
+                expected_declared
+                if expected_declared is not None
+                else tuple(canary_lock["canary"]["declared_capabilities"])
+            ),
             materialized_path=Path(source["path"]),
         )
         run_request_digest = _digest(
@@ -2960,7 +3265,7 @@ def _verify_gvisor_acquired_artifact(
             cas,
             source_events,
             expected_identity,
-            canary_lock["canary"]["declared_capabilities"],
+            _artifact_profile(canary_lock, artifact)["declared_capabilities"],
             receipt["capability_diff_receipt_digest"],
         )
         return _VerifiedCanary(
@@ -3265,6 +3570,9 @@ def derive_gvisor_acquired_artifact_closure(
     expected_lock_digest: str,
     expected_verifier_implementation_digest: str,
     expected_normalization_profile: str | None = None,
+    expected_execution_profile: str | None = None,
+    expected_entrypoint_path: str | None = None,
+    expected_declared_capabilities: Collection[str] | None = None,
 ) -> dict[str, int]:
     """Return the exact acquired-source and same-run evidence closure."""
 
@@ -3282,6 +3590,9 @@ def derive_gvisor_acquired_artifact_closure(
             expected_verifier_implementation_digest
         ),
         expected_normalization_profile=expected_normalization_profile,
+        expected_execution_profile=expected_execution_profile,
+        expected_entrypoint_path=expected_entrypoint_path,
+        expected_declared_capabilities=expected_declared_capabilities,
     )
     receipt = verified.receipt
     canary_lock = verified.lock
@@ -3295,7 +3606,11 @@ def derive_gvisor_acquired_artifact_closure(
         receipt["capability_diff_receipt_digest"],
         expected_observations=verified.observation_bindings,
         **{f"expected_{field}": value for field, value in verified.identity.items()},
-        expected_declared_capabilities=canary_lock["canary"]["declared_capabilities"],
+        expected_declared_capabilities=(
+            _artifact_declared_capabilities(expected_declared_capabilities)
+            if expected_declared_capabilities is not None
+            else canary_lock["canary"]["declared_capabilities"]
+        ),
     )
     source_closure = derive_transported_github_quarantine_closure(
         cas,
@@ -3588,6 +3903,7 @@ def _verify_detonation_evidence(
             canary_lock,
             container_id,
             normalization_profile=artifact_normalization_profile,
+            artifact=artifact,
         )
         if artifact is not None
         else _parse_canary_trace(logs["boot"], runtime_lock, canary_lock, container_id)
@@ -3992,7 +4308,7 @@ def _verify_detonation_container(
     if (artifact is None) != (bind_mount is None):
         raise GVisorRuntimeError("acquired artifact mount identity changed")
     profile = (
-        _artifact_profile(canary_lock)
+        _artifact_profile(canary_lock, artifact)
         if artifact is not None
         else canary_lock["canary"]
     )

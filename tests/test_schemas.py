@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -117,6 +118,7 @@ EXPECTED_CONTRACTS = {
     "error-v1.schema.json": "aragorn/error/v1",
     "gvisor-acquired-artifact-receipt-v1.schema.json": "aragorn/gvisor-acquired-artifact-receipt/v1",
     "gvisor-acquired-artifact-receipt-v2.schema.json": "aragorn/gvisor-acquired-artifact-receipt/v2",
+    "gvisor-acquired-artifact-receipt-v3.schema.json": "aragorn/gvisor-acquired-artifact-receipt/v3",
     "gvisor-detonation-canary-receipt-v1.schema.json": "aragorn/gvisor-detonation-canary-receipt/v1",
     "github-expansion-result-v1.schema.json": "aragorn/github-expansion-result/v1",
     "github-expansion-v1.schema.json": "aragorn/github-expansion/v1",
@@ -167,6 +169,30 @@ class SchemaTests(unittest.TestCase):
                     "https://json-schema.org/draft/2020-12/schema",
                 )
                 self.assertEqual(document["properties"]["schema"]["const"], identifier)
+
+    def test_gvisor_v3_entrypoint_path_is_canonical(self) -> None:
+        document = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "gvisor-acquired-artifact-receipt-v3.schema.json"
+            ).read_text()
+        )
+        pattern = document["properties"]["entrypoint"]["properties"]["path"][
+            "pattern"
+        ]
+        self.assertIsNotNone(re.fullmatch(pattern, "scripts/check.sh"))
+        for path in (
+            "../escape.sh",
+            "/absolute.sh",
+            "scripts//check.sh",
+            "scripts/./check.sh",
+            "scripts\\check.sh",
+            " check.sh",
+            "check.sh ",
+            "scripts/\x00check.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertIsNone(re.fullmatch(pattern, path))
 
     def test_v4_release_assets_remain_unresolved_until_analyzed(self) -> None:
         document = json.loads(

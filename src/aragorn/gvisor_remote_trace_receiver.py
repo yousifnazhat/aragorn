@@ -43,6 +43,7 @@ def receive_gvisor_remote_trace(
     max_total_bytes: int = MAX_TOTAL_BYTES,
     max_frames: int = MAX_FRAMES,
     ready_event: threading.Event | None = None,
+    connected_event: threading.Event | None = None,
     handshake_event: threading.Event | None = None,
 ) -> GVisorRemoteTraceResult:
     """Accept one v1 SOCK_SEQPACKET session and retain its raw frames."""
@@ -69,6 +70,8 @@ def receive_gvisor_remote_trace(
             ready_event.set()
         _set_timeout(listener, deadline)
         connection, _address = listener.accept()
+        if connected_event is not None:
+            connected_event.set()
         listener.close()
         with connection:
             sentry_handshake = _receive_packet(

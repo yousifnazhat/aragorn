@@ -100,6 +100,7 @@ class GVisorRemoteTraceReceiverTests(unittest.TestCase):
                     ) as socket_factory,
                 ):
                     ready = threading.Event()
+                    connected = threading.Event()
                     handshake_complete = threading.Event()
                     try:
                         outcome["result"] = receiver.receive_gvisor_remote_trace(
@@ -109,6 +110,7 @@ class GVisorRemoteTraceReceiverTests(unittest.TestCase):
                             max_total_bytes=max_total_bytes,
                             max_frames=max_frames,
                             ready_event=ready,
+                            connected_event=connected,
                             handshake_event=handshake_complete,
                         )
                     except receiver.GVisorRemoteTraceReceiverError as exc:
@@ -121,6 +123,7 @@ class GVisorRemoteTraceReceiverTests(unittest.TestCase):
                 self.assertTrue(listener.closed)
                 self.assertFalse(socket_path.exists())
                 self.assertTrue(ready.is_set())
+                self.assertEqual(connected.is_set(), listener.accept_error is None)
                 self.assertEqual(
                     handshake_complete.is_set(),
                     handshake == receiver.V1_HANDSHAKE,

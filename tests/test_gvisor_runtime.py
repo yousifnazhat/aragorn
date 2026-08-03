@@ -5,8 +5,9 @@ import hashlib
 import json
 import tarfile
 import tempfile
+import threading
 import unittest
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
@@ -165,11 +166,15 @@ def _canary_trace(
     *,
     artifact: bool = False,
     artifact_profile: runtime._AcquiredArtifact | None = None,
+    canary_lock: dict[str, object] | None = None,
+    additional_exec_commands: tuple[tuple[str, ...], ...] = (),
+    exit_status: int = 0,
     pre_entrypoint_syscalls: tuple[str, ...] = (),
     extra_syscalls: tuple[str, ...] = (),
 ) -> bytes:
     _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
-    _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
+    if canary_lock is None:
+        _canary_raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()
     profile = (
         runtime._artifact_profile(canary_lock, artifact_profile)
         if artifact
@@ -246,9 +251,15 @@ def _canary_trace(
             "syscalls: openat,execve"
         ),
         f"kernel.go:1293] EXEC: []string{{{go_command}}}",
+        *(
+            "kernel.go:1293] EXEC: []string{"
+            + ", ".join(json.dumps(value) for value in extra_command)
+            + "}"
+            for extra_command in additional_exec_commands
+        ),
         *syscalls,
         *extra_syscalls,
-        "cli.go:316] Exiting with status: 0",
+        f"cli.go:316] Exiting with status: {exit_status}",
     ]
     return b"".join(
         json.dumps(
@@ -420,6 +431,8 @@ def _artifact_container(
 ) -> dict[str, object]:
     container = _container(runtime_lock, phase)
     profile = runtime._artifact_profile(canary_lock, artifact)
+    canary_runtime = canary_lock["runtime"]
+    assert isinstance(canary_runtime, dict)
     container["Path"] = profile["command"][0]
     container["Args"] = profile["command"][1:]
     config = container["Config"]
@@ -431,7 +444,7 @@ def _artifact_container(
     config["Labels"] = {"aragorn.acquired-artifact.run_id": _RUN_ID}
     host.update(
         {
-            "Runtime": "runsc-systrap-canary",
+            "Runtime": canary_runtime["name"],
             "NetworkMode": profile["network_mode"],
             "ReadonlyRootfs": profile["read_only"],
             "CapDrop": profile["cap_drop"],
@@ -1583,6 +1596,509 @@ class GVisorRuntimeTests(unittest.TestCase):
                 runtime._parse_canary_trace(
                     changed, runtime_lock, canary_lock, _CONTAINER_ID
                 )
+
+    def test_remote_lock_reuses_v5_profile_with_exact_remote_trace_contract(
+        self,
+    ) -> None:
+        _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
+        _remote_raw, remote_lock = runtime.load_gvisor_detonation_canary_lock(
+            runtime.REMOTE_CANARY_LOCK
+        )
+        self.assertEqual(remote_lock["schema"], runtime.CANARY_LOCK_SCHEMA_V2)
+        self.assertEqual(remote_lock["trace"]["max_log_bytes"], 512 * 1024)
+        self.assertEqual(
+            remote_lock["remote_trace"]["monitor_implementation_digest"],
+            "sha256:3b2224766c62927a8d1ea349687a653917f3c1ea91adaaeffed62580bd93181d",
+        )
+        artifact = runtime._AcquiredArtifact(
+            quarantine_receipt_digest="sha256:" + "1" * 64,
+            gateway_profile_digest="sha256:" + "2" * 64,
+            source_closure_digest="sha256:" + "3" * 64,
+            manifest_digest="sha256:" + "4" * 64,
+            tree_digest="sha256:" + "5" * 64,
+            entrypoint_path="run.sh",
+            entrypoint_digest="sha256:" + "6" * 64,
+            entrypoint_size=80,
+            entrypoint_executable=True,
+            execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE_V2,
+            declared_capabilities=(),
+            materialized_path=Path("/run/aragorn-gvisor-artifact/run.sh"),
+            scenario_id="primary",
+        )
+        profile = runtime._artifact_profile(remote_lock, artifact)
+        self.assertEqual(
+            profile["command"], list(runtime._REMOTE_ARTIFACT_ROOT_COMMAND)
+        )
+        request = json.loads(
+            runtime._artifact_run_request(
+                runtime_lock,
+                remote_lock,
+                artifact,
+                run_id=_RUN_ID,
+                container_id=_CONTAINER_ID,
+                implementation_digest="sha256:" + "7" * 64,
+                normalization_profile=(
+                    runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+                ),
+            )
+        )
+        self.assertEqual(request["schema"], runtime.ARTIFACT_RUN_REQUEST_SCHEMA_V5)
+        self.assertEqual(request["command"], list(runtime._REMOTE_ARTIFACT_ROOT_COMMAND))
+
+        trace = _canary_trace(
+            artifact=True,
+            artifact_profile=artifact,
+            canary_lock=remote_lock,
+            additional_exec_commands=(runtime._REMOTE_ARTIFACT_EXEC_COMMAND,),
+            exit_status=15,
+        )
+        attributed = runtime._parse_attributed_artifact_trace(
+            trace,
+            runtime_lock,
+            remote_lock,
+            _CONTAINER_ID,
+            artifact=artifact,
+        )
+        self.assertTrue(attributed.subject_source_events)
+        for changed in (
+            _canary_trace(
+                artifact=True,
+                artifact_profile=artifact,
+                canary_lock=remote_lock,
+                exit_status=15,
+            ),
+            _canary_trace(
+                artifact=True,
+                artifact_profile=artifact,
+                canary_lock=remote_lock,
+                additional_exec_commands=(runtime._REMOTE_ARTIFACT_ROOT_COMMAND,),
+                exit_status=15,
+            ),
+            trace.replace(
+                b"cli.go:316] Exiting with status: 15",
+                b"cli.go:316] Exiting with status: 0",
+            ),
+        ):
+            with self.assertRaises(runtime.GVisorRuntimeError):
+                runtime._parse_attributed_artifact_trace(
+                    changed,
+                    runtime_lock,
+                    remote_lock,
+                    _CONTAINER_ID,
+                    artifact=artifact,
+                )
+
+        bind = {
+            "source": str(artifact.materialized_path),
+            "destination": runtime._ARTIFACT_TARGET,
+        }
+        post = _artifact_container(
+            runtime_lock,
+            remote_lock,
+            "postrun",
+            bind["source"],
+            artifact,
+        )
+        post["State"]["ExitCode"] = 143
+        self.assertEqual(
+            runtime._verify_detonation_container(
+                runtime_lock,
+                remote_lock,
+                post,
+                phase="postrun",
+                run_id=_RUN_ID,
+                artifact=artifact,
+                bind_mount=bind,
+            ),
+            _CONTAINER_ID,
+        )
+
+    def test_remote_window_orders_exec_pause_trace_resume_stop_wait_and_eof(
+        self,
+    ) -> None:
+        _raw, remote_lock = runtime.load_gvisor_detonation_canary_lock(
+            runtime.REMOTE_CANARY_LOCK
+        )
+        calls: list[tuple[str, ...]] = []
+
+        def docker_result(
+            _docker: Path, arguments: tuple[str, ...], **_kwargs: object
+        ) -> SimpleNamespace:
+            calls.append(arguments)
+            stdout = {
+                "exec": b"",
+                "pause": _CONTAINER_ID.encode() + b"\n",
+                "unpause": _CONTAINER_ID.encode() + b"\n",
+                "stop": _CONTAINER_ID.encode() + b"\n",
+                "wait": b"143\n",
+            }[arguments[0]]
+            return SimpleNamespace(stdout=stdout, stderr=b"")
+
+        def run_bounded(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+            calls.append(tuple(arguments))
+            return SimpleNamespace(
+                returncode=0,
+                stdout=b'SESSIONS (1)\n"Default"\n  Sink: "remote", dropped: 0\n',
+                stderr=b"",
+                termination_failed=False,
+                output_exceeded=False,
+                timed_out=False,
+                io_error=None,
+            )
+
+        done = threading.Event()
+        done.set()
+        receiver_result = object()
+        session = runtime._RemoteTraceSession(
+            ready=threading.Event(),
+            connected=threading.Event(),
+            handshake=threading.Event(),
+            done=done,
+            result=receiver_result,
+        )
+        with (
+            mock.patch.object(runtime, "_docker_result", side_effect=docker_result),
+            mock.patch.object(runtime, "_run_bounded", side_effect=run_bounded),
+        ):
+            status, observed_result = runtime._run_remote_artifact_window(
+                Path("/usr/bin/docker"),
+                {"PATH": "/usr/bin:/bin"},
+                runsc=SimpleNamespace(path=Path("/usr/local/bin/runsc")),
+                canary_lock=remote_lock,
+                container_id=_CONTAINER_ID,
+                control_path=Path("/run/aragorn-control"),
+                session=session,
+            )
+        self.assertIs(observed_result, receiver_result)
+        self.assertIn(b'dropped: 0', status)
+        self.assertEqual(
+            calls,
+            [
+                ("exec", _CONTAINER_ID, *runtime._REMOTE_ARTIFACT_EXEC_COMMAND),
+                ("pause", _CONTAINER_ID),
+                (
+                    "/usr/local/bin/runsc",
+                    "--root=/run/docker/runtime-runc/moby",
+                    "trace",
+                    "list",
+                    _CONTAINER_ID,
+                ),
+                ("unpause", _CONTAINER_ID),
+                ("stop", "--timeout", "1", _CONTAINER_ID),
+                ("wait", _CONTAINER_ID),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            cas = CAS(Path(temporary) / "cas")
+            with mock.patch(
+                "aragorn.gvisor_remote_trace_capture."
+                "retain_gvisor_remote_trace_capture",
+                return_value="sha256:" + "9" * 64,
+            ) as retain:
+                digest = runtime._retain_remote_trace_receipt(
+                    cas,
+                    receiver_result,
+                    canary_lock=remote_lock,
+                    run_id=_RUN_ID,
+                    container_id=_CONTAINER_ID,
+                    workload_receipt_digest="sha256:" + "8" * 64,
+                    runtime_lock_digest=remote_lock["runtime_lock_digest"],
+                    final_trace_list_bytes=status,
+                )
+            self.assertEqual(digest, "sha256:" + "9" * 64)
+            self.assertEqual(
+                retain.call_args.kwargs["runtime_lock_digest"],
+                remote_lock["runtime_lock_digest"],
+            )
+            lifecycle = json.loads(retain.call_args.kwargs["lifecycle_bytes"])
+            self.assertEqual(
+                lifecycle["events"],
+                [
+                    "listener-ready",
+                    "docker-container-created",
+                    "docker-start-requested",
+                    "remote-connected",
+                    "handshake-complete",
+                    "workload-quiesced",
+                    "final-session-status-captured",
+                    "connection-eof",
+                ],
+            )
+
+    def test_remote_window_unpauses_before_trace_failure_propagates(self) -> None:
+        _raw, remote_lock = runtime.load_gvisor_detonation_canary_lock(
+            runtime.REMOTE_CANARY_LOCK
+        )
+        calls: list[tuple[str, ...]] = []
+
+        def docker_result(
+            _docker: Path, arguments: tuple[str, ...], **kwargs: object
+        ) -> SimpleNamespace:
+            calls.append(arguments)
+            if arguments[0] == "unpause":
+                self.assertEqual(kwargs["timeout"], runtime._DOCKER_TIMEOUT_SECONDS)
+            stdout = {
+                "exec": b"",
+                "pause": _CONTAINER_ID.encode() + b"\n",
+                "unpause": _CONTAINER_ID.encode() + b"\n",
+            }[arguments[0]]
+            return SimpleNamespace(stdout=stdout, stderr=b"")
+
+        def failed_trace(
+            arguments: list[str], **_kwargs: object
+        ) -> SimpleNamespace:
+            calls.append(tuple(arguments))
+            return SimpleNamespace(
+                returncode=1,
+                stdout=b"",
+                stderr=b"trace list failed\n",
+                termination_failed=False,
+                output_exceeded=False,
+                timed_out=False,
+                io_error=None,
+            )
+
+        session = runtime._RemoteTraceSession(
+            ready=threading.Event(),
+            connected=threading.Event(),
+            handshake=threading.Event(),
+            done=threading.Event(),
+        )
+        with (
+            mock.patch.object(runtime, "_docker_result", side_effect=docker_result),
+            mock.patch.object(runtime, "_run_bounded", side_effect=failed_trace),
+            self.assertRaisesRegex(
+                runtime.GVisorRuntimeError, "runsc trace list failed"
+            ),
+        ):
+            runtime._run_remote_artifact_window(
+                Path("/usr/bin/docker"),
+                {"PATH": "/usr/bin:/bin"},
+                runsc=SimpleNamespace(path=Path("/usr/local/bin/runsc")),
+                canary_lock=remote_lock,
+                container_id=_CONTAINER_ID,
+                control_path=Path("/run/aragorn-control"),
+                session=session,
+            )
+        self.assertEqual(
+            calls,
+            [
+                ("exec", _CONTAINER_ID, *runtime._REMOTE_ARTIFACT_EXEC_COMMAND),
+                ("pause", _CONTAINER_ID),
+                (
+                    "/usr/local/bin/runsc",
+                    "--root=/run/docker/runtime-runc/moby",
+                    "trace",
+                    "list",
+                    _CONTAINER_ID,
+                ),
+                ("unpause", _CONTAINER_ID),
+            ],
+        )
+
+    def test_remote_capture_rejects_lifecycle_progress_before_docker_start(
+        self,
+    ) -> None:
+        remote_raw, remote_lock = runtime.load_gvisor_detonation_canary_lock(
+            runtime.REMOTE_CANARY_LOCK
+        )
+        _runtime_raw, runtime_lock = runtime.load_gvisor_runtime_lock()
+        lock_digest = "sha256:" + hashlib.sha256(remote_raw).hexdigest()
+        implementation_digest = "sha256:" + "7" * 64
+
+        def capability(path: Path, **kwargs: object) -> runtime._FileCapability:
+            digest = kwargs.get("expected_digest") or ("sha256:" + "8" * 64)
+            return runtime._FileCapability(
+                path=Path(path),
+                descriptor=41,
+                digest=str(digest),
+                identity=(1, 1, 1, 1, 1, 1, 1, 1),
+                metadata={"path": str(path), "digest": str(digest)},
+            )
+
+        implementation_capabilities = {
+            module: capability(Path(module))
+            for module in runtime._ARTIFACT_IMPLEMENTATION_MODULES
+        }
+        implementation_files = {
+            module: item.digest
+            for module, item in implementation_capabilities.items()
+        }
+        command_result = SimpleNamespace(
+            returncode=0,
+            stdout=b"runsc version test\n",
+            stderr=b"",
+            termination_failed=False,
+            output_exceeded=False,
+            timed_out=False,
+            io_error=None,
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact_path = root / "run.sh"
+            artifact_path.write_bytes(b"#!/bin/sh\n/bin/true\n")
+            trace_directory = root / "trace"
+            trace_directory.mkdir()
+            control_directory = root / "control"
+            control_directory.mkdir()
+            artifact = runtime._AcquiredArtifact(
+                quarantine_receipt_digest="sha256:" + "1" * 64,
+                gateway_profile_digest="sha256:" + "2" * 64,
+                source_closure_digest="sha256:" + "3" * 64,
+                manifest_digest="sha256:" + "4" * 64,
+                tree_digest="sha256:" + "5" * 64,
+                entrypoint_path="run.sh",
+                entrypoint_digest="sha256:" + "6" * 64,
+                entrypoint_size=20,
+                entrypoint_executable=True,
+                execution_profile=runtime.ARTIFACT_EXECUTION_PROFILE_V2,
+                declared_capabilities=(),
+                materialized_path=artifact_path,
+                scenario_id="primary",
+            )
+            cas = CAS(root / "cas")
+
+            for early_event in ("connected", "handshake", "done"):
+                ready = threading.Event()
+                ready.set()
+                session = runtime._RemoteTraceSession(
+                    ready=ready,
+                    connected=threading.Event(),
+                    handshake=threading.Event(),
+                    done=threading.Event(),
+                )
+                getattr(session, early_event).set()
+                docker_calls: list[tuple[str, ...]] = []
+
+                def docker_result(
+                    _docker: Path,
+                    arguments: tuple[str, ...],
+                    observed_calls: list[tuple[str, ...]] = docker_calls,
+                    **_kwargs: object,
+                ) -> SimpleNamespace:
+                    observed_calls.append(arguments)
+                    if arguments[0] != "create":
+                        self.fail("Docker start ran after an early remote lifecycle event")
+                    return SimpleNamespace(
+                        stdout=_CONTAINER_ID.encode() + b"\n", stderr=b""
+                    )
+
+                with self.subTest(early_event=early_event), ExitStack() as stack:
+                    for patcher in (
+                        mock.patch.object(runtime.sys, "platform", "linux"),
+                        mock.patch.object(runtime.os, "geteuid", return_value=0),
+                        mock.patch.object(runtime.os, "open", return_value=40),
+                        mock.patch.object(runtime.os, "close"),
+                        mock.patch.object(runtime.fcntl, "flock"),
+                        mock.patch.object(
+                            runtime,
+                            "_retain_implementation",
+                            return_value=(
+                                implementation_files,
+                                implementation_capabilities,
+                            ),
+                        ),
+                        mock.patch.object(
+                            runtime, "_open_file_capability", side_effect=capability
+                        ),
+                        mock.patch.object(
+                            runtime, "_read_open_file", return_value=b"{}"
+                        ),
+                        mock.patch.object(
+                            runtime, "_canary_lock", return_value=remote_lock
+                        ),
+                        mock.patch.object(
+                            runtime, "_runtime_lock", return_value=runtime_lock
+                        ),
+                        mock.patch.object(runtime, "_retain_remote_trace_inputs"),
+                        mock.patch.object(
+                            runtime,
+                            "resolve_docker",
+                            return_value=SimpleNamespace(
+                                path=Path("/usr/bin/docker"),
+                                digest="sha256:" + "9" * 64,
+                            ),
+                        ),
+                        mock.patch.object(runtime, "_verify_protected_path"),
+                        mock.patch.object(
+                            runtime,
+                            "_path_metadata",
+                            return_value={"path": "/usr/bin/docker"},
+                        ),
+                        mock.patch.object(
+                            runtime.secrets, "token_hex", return_value=_RUN_ID
+                        ),
+                        mock.patch.object(
+                            runtime.tempfile,
+                            "TemporaryDirectory",
+                            return_value=nullcontext(str(control_directory)),
+                        ),
+                        mock.patch.object(
+                            runtime, "_run_bounded", return_value=command_result
+                        ),
+                        mock.patch.object(
+                            runtime,
+                            "_capture_pre_runner_identity",
+                            return_value=(
+                                {"PATH": "/usr/bin:/bin"},
+                                {"PATH": "/usr/bin:/bin"},
+                                object(),
+                            ),
+                        ),
+                        mock.patch.object(
+                            runtime, "_runner_bundle", return_value=b"{}"
+                        ),
+                        mock.patch.object(
+                            runtime, "_capture_docker_document", return_value=b"{}"
+                        ),
+                        mock.patch.object(
+                            runtime, "_docker_output", return_value=b"[]"
+                        ),
+                        mock.patch.object(
+                            runtime,
+                            "_canary_log_directory",
+                            return_value=trace_directory,
+                        ),
+                        mock.patch.object(
+                            runtime,
+                            "_start_remote_trace_receiver",
+                            return_value=session,
+                        ),
+                        mock.patch.object(
+                            runtime, "_docker_result", side_effect=docker_result
+                        ),
+                        mock.patch.object(
+                            runtime, "_inspect_container", return_value=({}, b"{}")
+                        ),
+                        mock.patch.object(runtime, "_verify_detonation_container"),
+                        mock.patch.object(runtime, "_require_canary_logs_new"),
+                        mock.patch.object(runtime, "_cleanup_container_strict"),
+                        mock.patch.object(runtime, "_abort_remote_trace_session"),
+                        mock.patch.object(runtime, "_cleanup_canary_logs_strict"),
+                    ):
+                        stack.enter_context(patcher)
+                    with self.assertRaisesRegex(
+                        runtime.GVisorRuntimeError,
+                        "remote trace lifecycle advanced before Docker start",
+                    ):
+                        runtime._collect_gvisor_detonation(
+                            cas,
+                            expected_lock_digest=lock_digest,
+                            expected_verifier_implementation_digest=(
+                                implementation_digest
+                            ),
+                            lock_path=runtime.REMOTE_CANARY_LOCK,
+                            runtime_lock_path=runtime.LOCK,
+                            docker_executable="docker",
+                            artifact=artifact,
+                            artifact_normalization_profile=(
+                                runtime.ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
+                            ),
+                            remote_trace=True,
+                        )
+                self.assertEqual(len(docker_calls), 1)
+                self.assertEqual(docker_calls[0][0], "create")
 
     def test_canary_log_accepts_adjacent_complete_records_only(self) -> None:
         _raw, canary_lock = runtime.load_gvisor_detonation_canary_lock()

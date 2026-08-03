@@ -8,9 +8,11 @@ import json
 import os
 import re
 import secrets
+import socket
 import stat
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -42,11 +44,13 @@ from .oci_worker_protocol import WorkerProtocolError, canonical_json
 ROOT = Path(__file__).parents[2]
 LOCK = ROOT / "benchmark" / "gvisor-runtime-v1.lock.json"
 CANARY_LOCK = ROOT / "benchmark" / "gvisor-detonation-canary-v1.lock.json"
+REMOTE_CANARY_LOCK = ROOT / "benchmark" / "gvisor-detonation-canary-v2.lock.json"
 SCHEMA = "aragorn/gvisor-runtime-smoke-receipt/v1"
 LOCK_SCHEMA = "aragorn/gvisor-runtime-lock/v1"
 IMPLEMENTATION_SCHEMA = "aragorn/gvisor-runtime-implementation/v1"
 CANARY_SCHEMA = "aragorn/gvisor-detonation-canary-receipt/v1"
 CANARY_LOCK_SCHEMA = "aragorn/gvisor-detonation-canary-lock/v1"
+CANARY_LOCK_SCHEMA_V2 = "aragorn/gvisor-detonation-canary-lock/v2"
 CANARY_IMPLEMENTATION_SCHEMA = "aragorn/gvisor-detonation-canary-implementation/v1"
 CANARY_RUN_REQUEST_SCHEMA = "aragorn/gvisor-detonation-canary-run-request/v1"
 CANARY_LOG_MANIFEST_SCHEMA = "aragorn/gvisor-detonation-canary-log-manifest/v1"
@@ -242,6 +246,24 @@ _ARTIFACT_WRAPPER_COMMAND = (
         "/bin/sleep 5; exec /bin/sh /aragorn-input/run.sh"
     ),
 )
+_REMOTE_ARTIFACT_ROOT_COMMAND = ("/bin/sleep", "30")
+_REMOTE_ARTIFACT_EXEC_COMMAND = (
+    "/bin/sh",
+    "-c",
+    (
+        "set -eu; /bin/sha256sum /aragorn-input/run.sh >/dev/null; "
+        "exec /bin/sh /aragorn-input/run.sh"
+    ),
+)
+_REMOTE_TRACE_MONITOR_IMPLEMENTATION_SCHEMA = (
+    "aragorn/gvisor-remote-trace-monitor-implementation/v1"
+)
+_REMOTE_TRACE_MONITOR_MODULES = (
+    "gvisor_remote_trace_capture.py",
+    "gvisor_remote_trace_receiver.py",
+)
+_REMOTE_TRACE_TIMEOUT_SECONDS = 60.0
+_REMOTE_TRACE_EVENT_TIMEOUT_SECONDS = 10.0
 _ARTIFACT_TREE_DIGEST = (
     "sha256:633b89b98302bb94817ab43154c8a57a5412b8ee8e3e26fb005fdf8aff247344"
 )
@@ -318,6 +340,17 @@ class _AcquiredArtifact:
 class _AttributedArtifactTrace:
     manifest: bytes
     subject_source_events: tuple[bytes, ...]
+
+
+@dataclass(slots=True)
+class _RemoteTraceSession:
+    ready: threading.Event
+    connected: threading.Event
+    handshake: threading.Event
+    done: threading.Event
+    thread: threading.Thread | None = None
+    result: Any | None = None
+    error: Exception | None = None
 
 
 class GVisorRuntimeError(ValueError):
@@ -578,6 +611,7 @@ def collect_gvisor_runtime_smoke(
             _verify_container(lock, live, phase="live", run_id=run_id)
             evidence["container_processes"] = _capture_processes(
                 lock,
+                runtime=lock["runtime"],
                 container_id=container_id,
                 sandbox_pid=live["State"]["Pid"],
                 runsc=runsc,
@@ -721,7 +755,8 @@ def collect_gvisor_acquired_artifact(
     lock_path: str | Path = CANARY_LOCK,
     runtime_lock_path: str | Path = LOCK,
     docker_executable: str | os.PathLike[str] = "docker",
-) -> str:
+    _remote_trace: bool = False,
+) -> str | tuple[str, str]:
     """Execute one caller-pinned bounded shell script under gVisor."""
 
     selected_normalization = _artifact_capture_normalization_profile(
@@ -732,6 +767,10 @@ def collect_gvisor_acquired_artifact(
         expected_scenario_id,
         selected_execution,
     )
+    if _remote_trace and selected_execution != ARTIFACT_EXECUTION_PROFILE_V2:
+        raise GVisorRuntimeError(
+            "remote-traced artifact capture requires bounded-single-script/v2"
+        )
     if (
         selected_execution == ARTIFACT_EXECUTION_PROFILE_V2
         and selected_normalization != ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE
@@ -849,6 +888,7 @@ def collect_gvisor_acquired_artifact(
                 docker_executable=docker_executable,
                 artifact=artifact,
                 artifact_normalization_profile=selected_normalization,
+                remote_trace=_remote_trace,
             )
     except GVisorRuntimeError:
         raise
@@ -856,6 +896,25 @@ def collect_gvisor_acquired_artifact(
         raise GVisorRuntimeError(
             f"cannot prepare acquired artifact capture: {exc}"
         ) from exc
+
+
+def collect_gvisor_remote_traced_acquired_artifact(
+    cas: CAS,
+    source_cas: CAS,
+    **request: Any,
+) -> tuple[str, str]:
+    """Collect one unchanged v5 workload receipt plus its remote v2 receipt."""
+
+    request.setdefault("lock_path", REMOTE_CANARY_LOCK)
+    result = collect_gvisor_acquired_artifact(
+        cas,
+        source_cas,
+        _remote_trace=True,
+        **request,
+    )
+    if not isinstance(result, tuple) or len(result) != 2:
+        raise GVisorRuntimeError("remote-traced artifact capture returned no pair")
+    return result
 
 
 def _collect_gvisor_detonation(
@@ -868,7 +927,8 @@ def _collect_gvisor_detonation(
     docker_executable: str | os.PathLike[str],
     artifact: _AcquiredArtifact | None,
     artifact_normalization_profile: str | None,
-) -> str:
+    remote_trace: bool = False,
+) -> str | tuple[str, str]:
     """Capture one fixed profile without accepting caller-supplied observations."""
 
     if not sys.platform.startswith("linux") or os.geteuid() != 0:
@@ -884,6 +944,9 @@ def _collect_gvisor_detonation(
     canary_lock: dict[str, Any] | None = None
     docker_environment: dict[str, str] | None = None
     docker_path: Path | None = None
+    remote_session: _RemoteTraceSession | None = None
+    remote_result: Any | None = None
+    remote_trace_list: bytes | None = None
     coordination = -1
     try:
         implementation_schema = (
@@ -941,6 +1004,10 @@ def _collect_gvisor_detonation(
         )
         opened.append(canary_file)
         canary_lock = _canary_lock(_read_open_file(canary_file, _MAX_LOCK_BYTES))
+        if remote_trace != _is_remote_artifact_profile(canary_lock, artifact):
+            raise GVisorRuntimeError(
+                "gVisor remote trace mode and lock profile do not match"
+            )
         runtime_lock_digest = canary_lock["runtime_lock_digest"]
         runtime_file = _open_file_capability(
             Path(runtime_lock_path).expanduser().resolve(strict=True),
@@ -977,6 +1044,8 @@ def _collect_gvisor_detonation(
             label="Docker daemon configuration",
         )
         opened.append(daemon)
+        if remote_trace:
+            _retain_remote_trace_inputs(cas, canary_lock, opened)
         profile = (
             _artifact_profile(canary_lock, artifact)
             if artifact is not None
@@ -1059,6 +1128,13 @@ def _collect_gvisor_detonation(
                     canary_lock, require_headroom=True
                 ).iterdir()
             )
+            if remote_trace:
+                remote_session = _start_remote_trace_receiver(canary_lock)
+                _wait_remote_trace_event(
+                    remote_session,
+                    remote_session.ready,
+                    "listener readiness",
+                )
 
             container_name = (
                 f"aragorn-gvisor-artifact-{run_id}"
@@ -1112,6 +1188,15 @@ def _collect_gvisor_detonation(
                 container_id,
                 prior_canary_logs,
             )
+            if remote_session is not None and (
+                remote_session.connected.is_set()
+                or remote_session.handshake.is_set()
+                or remote_session.done.is_set()
+            ):
+                _raise_remote_trace_error(remote_session, "pre-start lifecycle")
+                raise GVisorRuntimeError(
+                    "gVisor remote trace lifecycle advanced before Docker start"
+                )
             started = _docker_result(
                 docker.path,
                 ("start", container_id),
@@ -1121,6 +1206,17 @@ def _collect_gvisor_detonation(
             if started.stdout.strip() != container_id.encode("ascii"):
                 raise GVisorRuntimeError(
                     "Docker canary start returned a different container ID"
+                )
+            if remote_session is not None:
+                _wait_remote_trace_event(
+                    remote_session,
+                    remote_session.connected,
+                    "connection",
+                )
+                _wait_remote_trace_event(
+                    remote_session,
+                    remote_session.handshake,
+                    "handshake",
                 )
 
             live, evidence["container_live_inspect"] = _wait_for_live_container(
@@ -1137,20 +1233,32 @@ def _collect_gvisor_detonation(
             )
             evidence["container_processes"] = _capture_processes(
                 runtime_lock,
+                runtime=canary_lock["runtime"],
                 container_id=container_id,
                 sandbox_pid=live["State"]["Pid"],
                 runsc=runsc,
             )
-            waited = _docker_result(
-                docker.path,
-                ("wait", container_id),
-                env=docker_environment,
-                label="Docker canary wait",
-                timeout=20.0,
-            )
-            if waited.stdout != b"0\n" or waited.stderr:
-                raise GVisorRuntimeError(
-                    "gVisor detonation canary did not exit cleanly"
+            if remote_session is None:
+                waited = _docker_result(
+                    docker.path,
+                    ("wait", container_id),
+                    env=docker_environment,
+                    label="Docker canary wait",
+                    timeout=20.0,
+                )
+                if waited.stdout != b"0\n" or waited.stderr:
+                    raise GVisorRuntimeError(
+                        "gVisor detonation canary did not exit cleanly"
+                    )
+            else:
+                remote_trace_list, remote_result = _run_remote_artifact_window(
+                    docker.path,
+                    docker_environment,
+                    runsc=runsc,
+                    canary_lock=canary_lock,
+                    container_id=container_id,
+                    control_path=control_path,
+                    session=remote_session,
                 )
             logs = _docker_result(
                 docker.path,
@@ -1367,6 +1475,27 @@ def _collect_gvisor_detonation(
                 expected_verifier_implementation_digest=expected_implementation,
                 expected_normalization_profile=artifact_normalization_profile,
             )
+        if remote_trace:
+            if (
+                artifact is None
+                or remote_result is None
+                or remote_trace_list is None
+                or canary_lock is None
+            ):
+                raise GVisorRuntimeError(
+                    "gVisor remote trace capture result is incomplete"
+                )
+            remote_receipt_digest = _retain_remote_trace_receipt(
+                cas,
+                remote_result,
+                canary_lock=canary_lock,
+                run_id=run_id,
+                container_id=container_id,
+                workload_receipt_digest=receipt_digest,
+                runtime_lock_digest=runtime_lock_digest,
+                final_trace_list_bytes=remote_trace_list,
+            )
+            return receipt_digest, remote_receipt_digest
         return receipt_digest
     except GVisorRuntimeError:
         raise
@@ -1396,6 +1525,8 @@ def _collect_gvisor_detonation(
                 )
         finally:
             try:
+                if remote_session is not None:
+                    _abort_remote_trace_session(remote_session, canary_lock)
                 if trace_container_id is not None and canary_lock is not None:
                     _cleanup_canary_logs_strict(canary_lock, trace_container_id)
             finally:
@@ -1424,6 +1555,297 @@ def _command_environment(control: Path) -> dict[str, str]:
         "PATH": "/usr/bin:/bin",
         "TMPDIR": os.fspath(control),
     }
+
+
+def _retain_remote_trace_inputs(
+    cas: CAS,
+    canary_lock: dict[str, Any],
+    opened: list[_FileCapability],
+) -> None:
+    remote = _object(
+        canary_lock.get("remote_trace"), "gVisor detonation remote trace"
+    )
+    config = _open_file_capability(
+        Path(remote["session_config_path"]),
+        expected_digest=remote["session_config_digest"],
+        maximum=_MAX_LOCK_BYTES,
+        executable=False,
+        label="gVisor remote trace session configuration",
+        retain=cas,
+    )
+    opened.append(config)
+
+    source_root = Path(__file__).resolve(strict=True).parent
+    capabilities: dict[str, _FileCapability] = {}
+    for module in _REMOTE_TRACE_MONITOR_MODULES:
+        capability = _open_file_capability(
+            source_root / module,
+            expected_digest=None,
+            maximum=_MAX_IMPLEMENTATION_SOURCE_BYTES,
+            executable=False,
+            label=f"gVisor remote trace monitor implementation {module}",
+        )
+        opened.append(capability)
+        capabilities[module] = capability
+    manifest = canonical_json(
+        {
+            "schema": _REMOTE_TRACE_MONITOR_IMPLEMENTATION_SCHEMA,
+            "files": {
+                module: capabilities[module].digest
+                for module in _REMOTE_TRACE_MONITOR_MODULES
+            },
+        }
+    )
+    expected_monitor = _digest(
+        remote["monitor_implementation_digest"],
+        "gVisor remote trace monitor implementation",
+    )
+    if _raw_digest(manifest) != expected_monitor:
+        raise GVisorRuntimeError(
+            "gVisor remote trace monitor implementation identity changed"
+        )
+    cas.put_expected(
+        BytesIO(manifest),
+        expected_digest=expected_monitor,
+        max_bytes=_MAX_IMPLEMENTATION_MANIFEST_BYTES,
+    )
+    for capability in capabilities.values():
+        cas.put_expected(
+            BytesIO(_read_open_file(capability, _MAX_IMPLEMENTATION_SOURCE_BYTES)),
+            expected_digest=capability.digest,
+            max_bytes=_MAX_IMPLEMENTATION_SOURCE_BYTES,
+        )
+
+
+def _start_remote_trace_receiver(
+    canary_lock: dict[str, Any],
+) -> _RemoteTraceSession:
+    remote = _object(
+        canary_lock.get("remote_trace"), "gVisor detonation remote trace"
+    )
+    session = _RemoteTraceSession(
+        ready=threading.Event(),
+        connected=threading.Event(),
+        handshake=threading.Event(),
+        done=threading.Event(),
+    )
+
+    def receive() -> None:
+        try:
+            from .gvisor_remote_trace_receiver import receive_gvisor_remote_trace
+
+            session.result = receive_gvisor_remote_trace(
+                remote["socket_path"],
+                timeout_seconds=_REMOTE_TRACE_TIMEOUT_SECONDS,
+                ready_event=session.ready,
+                connected_event=session.connected,
+                handshake_event=session.handshake,
+            )
+        except RuntimeError as exc:  # The main thread re-raises this fail-closed.
+            session.error = exc
+        finally:
+            session.done.set()
+
+    session.thread = threading.Thread(
+        target=receive,
+        name="aragorn-gvisor-remote-trace",
+        daemon=True,
+    )
+    session.thread.start()
+    return session
+
+
+def _wait_remote_trace_event(
+    session: _RemoteTraceSession,
+    event: threading.Event,
+    label: str,
+) -> None:
+    deadline = time.monotonic() + _REMOTE_TRACE_EVENT_TIMEOUT_SECONDS
+    while not event.wait(0.05):
+        if session.done.is_set():
+            _raise_remote_trace_error(session, label)
+        if time.monotonic() >= deadline:
+            raise GVisorRuntimeError(f"gVisor remote trace {label} timed out")
+    if session.error is not None:
+        _raise_remote_trace_error(session, label)
+
+
+def _finish_remote_trace_session(session: _RemoteTraceSession) -> Any:
+    _wait_remote_trace_event(session, session.done, "connection EOF")
+    _raise_remote_trace_error(session, "connection EOF")
+    if session.result is None:
+        raise GVisorRuntimeError("gVisor remote trace receiver returned no result")
+    if session.thread is not None:
+        session.thread.join(timeout=0)
+    return session.result
+
+
+def _raise_remote_trace_error(session: _RemoteTraceSession, label: str) -> None:
+    if session.error is not None:
+        raise GVisorRuntimeError(
+            f"gVisor remote trace {label} failed: {session.error}"
+        ) from session.error
+
+
+def _abort_remote_trace_session(
+    session: _RemoteTraceSession,
+    canary_lock: dict[str, Any] | None,
+) -> None:
+    if session.done.is_set() or canary_lock is None:
+        return
+    try:
+        remote = _object(
+            canary_lock.get("remote_trace"), "gVisor detonation remote trace"
+        )
+        if session.ready.is_set() and not session.connected.is_set():
+            with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as connection:
+                connection.settimeout(0.25)
+                connection.connect(remote["socket_path"])
+        session.done.wait(0.25)
+    except (OSError, GVisorRuntimeError):
+        pass
+
+
+def _run_remote_artifact_window(
+    docker: Path,
+    environment: dict[str, str],
+    *,
+    runsc: _FileCapability,
+    canary_lock: dict[str, Any],
+    container_id: str,
+    control_path: Path,
+    session: _RemoteTraceSession,
+) -> tuple[bytes, Any]:
+    executed = _docker_result(
+        docker,
+        ("exec", container_id, *_REMOTE_ARTIFACT_EXEC_COMMAND),
+        env=environment,
+        label="Docker remote artifact exec",
+        timeout=20.0,
+    )
+    if executed.stdout or executed.stderr:
+        raise GVisorRuntimeError("gVisor remote artifact exec produced output")
+
+    pause_succeeded = False
+    try:
+        paused = _docker_result(
+            docker,
+            ("pause", container_id),
+            env=environment,
+            label="Docker remote artifact pause",
+        )
+        pause_succeeded = True
+        if paused.stdout != container_id.encode("ascii") + b"\n" or paused.stderr:
+            raise GVisorRuntimeError("Docker remote artifact pause identity changed")
+
+        remote = _object(
+            canary_lock.get("remote_trace"), "gVisor detonation remote trace"
+        )
+        trace_list = _run_bounded(
+            [
+                os.fspath(runsc.path),
+                f"--root={remote['runtime_root']}",
+                "trace",
+                "list",
+                container_id,
+            ],
+            timeout=_DOCKER_TIMEOUT_SECONDS,
+            stdout_limit=_MAX_STREAM_BYTES,
+            stderr_limit=_MAX_STREAM_BYTES,
+            shared_limit=2 * _MAX_STREAM_BYTES,
+            env=_command_environment(control_path),
+        )
+        _require_success(trace_list, "runsc trace list")
+    finally:
+        if pause_succeeded:
+            resumed = _docker_result(
+                docker,
+                ("unpause", container_id),
+                env=environment,
+                label="Docker remote artifact resume",
+                timeout=_DOCKER_TIMEOUT_SECONDS,
+            )
+            if (
+                resumed.stdout != container_id.encode("ascii") + b"\n"
+                or resumed.stderr
+            ):
+                raise GVisorRuntimeError(
+                    "Docker remote artifact resume identity changed"
+                )
+
+    stopped = _docker_result(
+        docker,
+        ("stop", "--timeout", "1", container_id),
+        env=environment,
+        label="Docker remote artifact stop",
+        timeout=20.0,
+    )
+    if stopped.stdout != container_id.encode("ascii") + b"\n" or stopped.stderr:
+        raise GVisorRuntimeError("Docker remote artifact stop identity changed")
+
+    waited = _docker_result(
+        docker,
+        ("wait", container_id),
+        env=environment,
+        label="Docker remote artifact wait",
+        timeout=20.0,
+    )
+    if waited.stdout != b"143\n" or waited.stderr:
+        raise GVisorRuntimeError("gVisor remote artifact root exit changed")
+    return trace_list.stdout, _finish_remote_trace_session(session)
+
+
+def _retain_remote_trace_receipt(
+    cas: CAS,
+    result: Any,
+    *,
+    canary_lock: dict[str, Any],
+    run_id: str,
+    container_id: str,
+    workload_receipt_digest: str,
+    runtime_lock_digest: str,
+    final_trace_list_bytes: bytes,
+) -> str:
+    from . import gvisor_remote_trace_capture as capture
+
+    remote = _object(
+        canary_lock.get("remote_trace"), "gVisor detonation remote trace"
+    )
+    lifecycle = canonical_json(
+        {
+            "schema": capture.LIFECYCLE_SCHEMA_V2,
+            "run_id": run_id,
+            "sandbox_id": container_id,
+            "container_id": container_id,
+            "session_config_digest": remote["session_config_digest"],
+            "monitor_implementation_digest": remote[
+                "monitor_implementation_digest"
+            ],
+            "workload_receipt_digest": workload_receipt_digest,
+            "events": list(capture._LIFECYCLE_EVENTS_V2),
+        }
+    )
+    try:
+        return capture.retain_gvisor_remote_trace_capture(
+            cas,
+            result,
+            run_id=run_id,
+            sandbox_id=container_id,
+            container_id=container_id,
+            runtime_lock_digest=runtime_lock_digest,
+            session_config_digest=remote["session_config_digest"],
+            monitor_implementation_digest=remote[
+                "monitor_implementation_digest"
+            ],
+            workload_receipt_digest=workload_receipt_digest,
+            lifecycle_bytes=lifecycle,
+            final_trace_list_bytes=final_trace_list_bytes,
+            receipt_schema=capture.SCHEMA_V2,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise GVisorRuntimeError(
+            f"cannot retain gVisor remote trace receipt: {exc}"
+        ) from exc
 
 
 def _require_success(result: Any, label: str, *, allow_stderr: bool = False) -> None:
@@ -1798,6 +2220,16 @@ def _artifact_declared_capabilities(value: object) -> tuple[str, ...]:
         raise GVisorRuntimeError(str(exc)) from exc
 
 
+def _is_remote_artifact_profile(
+    canary_lock: dict[str, Any], artifact: _AcquiredArtifact | None
+) -> bool:
+    return (
+        artifact is not None
+        and artifact.execution_profile == ARTIFACT_EXECUTION_PROFILE_V2
+        and canary_lock.get("schema") == CANARY_LOCK_SCHEMA_V2
+    )
+
+
 def _artifact_profile(
     canary_lock: dict[str, Any], artifact: _AcquiredArtifact | None = None
 ) -> dict[str, Any]:
@@ -1820,7 +2252,14 @@ def _artifact_profile(
     if artifact is not None and artifact.execution_profile is not None:
         execution_profile = _artifact_execution_profile(artifact.execution_profile)
         scenario_id = _artifact_scenario_id(artifact.scenario_id, execution_profile)
-        command = list(_ARTIFACT_WRAPPER_COMMAND)
+        command = list(
+            _REMOTE_ARTIFACT_ROOT_COMMAND
+            if (
+                canary_lock["schema"] == CANARY_LOCK_SCHEMA_V2
+                and execution_profile == ARTIFACT_EXECUTION_PROFILE_V2
+            )
+            else _ARTIFACT_WRAPPER_COMMAND
+        )
         declared_capabilities = list(
             _artifact_declared_capabilities(artifact.declared_capabilities)
         )
@@ -2140,6 +2579,8 @@ def _parse_trace_pairs(
     container_id: str,
     *,
     command: list[str],
+    exact_exec_commands: tuple[tuple[str, ...], ...] | None = None,
+    exit_status: int = 0,
 ) -> tuple[_TracePair, ...]:
     trace = canary_lock["trace"]
     records = _canary_log_records(raw, canary_lock, "boot")
@@ -2158,6 +2599,7 @@ def _parse_trace_pairs(
         )
     }
     messages: list[str] = []
+    observed_exec_commands: list[tuple[str, ...]] = []
     version = runtime_lock["release"]["version"]
     for index, record in enumerate(records):
         message = record["msg"]
@@ -2209,8 +2651,16 @@ def _parse_trace_pairs(
                 raise GVisorRuntimeError(
                     f"gVisor canary command record is invalid: {exc}"
                 ) from exc
-            if observed_command != command:
-                raise GVisorRuntimeError("gVisor canary command changed")
+            if (
+                not isinstance(observed_command, list)
+                or any(not isinstance(value, str) for value in observed_command)
+            ):
+                raise GVisorRuntimeError("gVisor canary command record is invalid")
+            if exact_exec_commands is None:
+                if observed_command != command:
+                    raise GVisorRuntimeError("gVisor canary command changed")
+            else:
+                observed_exec_commands.append(tuple(observed_command))
             headers["exec"] += 1
 
         if not message.startswith("strace.go:"):
@@ -2254,7 +2704,15 @@ def _parse_trace_pairs(
         raise GVisorRuntimeError("gVisor canary syscall trace is truncated")
     if any(count == 0 for count in headers.values()):
         raise GVisorRuntimeError("gVisor canary trace headers are incomplete")
-    if not messages or messages[-1] != "cli.go:316] Exiting with status: 0":
+    if (
+        exact_exec_commands is not None
+        and tuple(observed_exec_commands) != exact_exec_commands
+    ):
+        raise GVisorRuntimeError("gVisor canary command sequence changed")
+    if (
+        not messages
+        or messages[-1] != f"cli.go:316] Exiting with status: {exit_status}"
+    ):
         raise GVisorRuntimeError("gVisor canary trace did not terminate cleanly")
     return tuple(pairs)
 
@@ -2271,12 +2729,19 @@ def _parse_artifact_trace(
     selected_normalization = _artifact_normalization_profile(normalization_profile)
     if selected_normalization == ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE:
         raise GVisorRuntimeError("attributed artifact trace requires actor parsing")
+    remote_profile = _is_remote_artifact_profile(canary_lock, artifact)
     pairs = _parse_trace_pairs(
         raw,
         runtime_lock,
         canary_lock,
         container_id,
         command=_artifact_profile(canary_lock, artifact)["command"],
+        exact_exec_commands=(
+            (_REMOTE_ARTIFACT_ROOT_COMMAND, _REMOTE_ARTIFACT_EXEC_COMMAND)
+            if remote_profile
+            else None
+        ),
+        exit_status=15 if remote_profile else 0,
     )
     _require_artifact_trace_anchors(
         pairs,
@@ -2303,12 +2768,19 @@ def _parse_attributed_artifact_trace(
     """Classify successful events around one exact script-entry boundary."""
 
     _artifact_execution_profile(artifact.execution_profile)
+    remote_profile = _is_remote_artifact_profile(canary_lock, artifact)
     pairs = _parse_trace_pairs(
         raw,
         runtime_lock,
         canary_lock,
         container_id,
         command=_artifact_profile(canary_lock, artifact)["command"],
+        exact_exec_commands=(
+            (_REMOTE_ARTIFACT_ROOT_COMMAND, _REMOTE_ARTIFACT_EXEC_COMMAND)
+            if remote_profile
+            else None
+        ),
+        exit_status=15 if remote_profile else 0,
     )
     boundary = _require_artifact_trace_anchors(
         pairs,
@@ -3074,7 +3546,12 @@ def _peek_process_argv(pid: int) -> list[str] | None:
 
 
 def _capture_processes(
-    lock: dict[str, Any], *, container_id: str, sandbox_pid: int, runsc: _FileCapability
+    lock: dict[str, Any],
+    *,
+    runtime: dict[str, Any],
+    container_id: str,
+    sandbox_pid: int,
+    runsc: _FileCapability,
 ) -> bytes:
     roles: dict[str, dict[str, Any]] = {}
     for entry in os.scandir("/proc"):
@@ -3136,6 +3613,7 @@ def _capture_processes(
     _verify_processes(
         lock,
         raw,
+        runtime=runtime,
         container_id=container_id,
         sandbox_pid=sandbox_pid,
         installed_runsc=runsc.metadata,
@@ -4091,6 +4569,7 @@ def _verify_evidence(
     _verify_processes(
         lock,
         evidence["container_processes"],
+        runtime=lock["runtime"],
         container_id=container_id,
         sandbox_pid=live["State"]["Pid"],
         installed_runsc=observed_binaries[lock["runtime"]["path"]],
@@ -4275,6 +4754,7 @@ def _verify_detonation_evidence(
     _verify_processes(
         runtime_lock,
         evidence["container_processes"],
+        runtime=canary_lock["runtime"],
         container_id=container_id,
         sandbox_pid=live["State"]["Pid"],
         installed_runsc=observed_binaries[canary_lock["runtime"]["path"]],
@@ -4556,23 +5036,22 @@ def _canary_lock(raw: object) -> dict[str, Any]:
     if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_LOCK_BYTES:
         raise GVisorRuntimeError("gVisor detonation canary lock is empty or oversized")
     lock = _json_object(raw, "gVisor detonation canary lock")
-    _exact_keys(
-        lock,
-        {
-            "schema",
-            "authority",
-            "runtime_lock_digest",
-            "daemon_config_digest",
-            "runtime",
-            "trace",
-            "canary",
-        },
-        "gVisor detonation canary lock",
-    )
-    if (
-        lock["schema"] != CANARY_LOCK_SCHEMA
-        or lock["authority"] != CANARY_LOCK_AUTHORITY
-    ):
+    schema = lock.get("schema")
+    if schema not in (CANARY_LOCK_SCHEMA, CANARY_LOCK_SCHEMA_V2):
+        raise GVisorRuntimeError("gVisor detonation canary lock authority is invalid")
+    fields = {
+        "schema",
+        "authority",
+        "runtime_lock_digest",
+        "daemon_config_digest",
+        "runtime",
+        "trace",
+        "canary",
+    }
+    if schema == CANARY_LOCK_SCHEMA_V2:
+        fields.add("remote_trace")
+    _exact_keys(lock, fields, "gVisor detonation canary lock")
+    if lock["authority"] != CANARY_LOCK_AUTHORITY:
         raise GVisorRuntimeError("gVisor detonation canary lock authority is invalid")
     _digest(lock["runtime_lock_digest"], "gVisor runtime lock")
     _digest(lock["daemon_config_digest"], "Docker daemon configuration")
@@ -4584,20 +5063,30 @@ def _canary_lock(raw: object) -> dict[str, Any]:
         "gVisor detonation canary runtime",
     )
     expected_log = "/var/log/aragorn-p2-docker-canary/%ID%.%CID%.%COMMAND%.jsonl"
+    runtime_name = (
+        "runsc-systrap-canary-remote-v1"
+        if schema == CANARY_LOCK_SCHEMA_V2
+        else "runsc-systrap-canary"
+    )
+    runtime_arguments = [
+        "--platform=systrap",
+        "--directfs=false",
+        "--network=none",
+        "--strace=true",
+        "--strace-syscalls=openat,execve",
+        "--strace-log-size=256",
+        "--debug=true",
+        f"--debug-log={expected_log}",
+        "--debug-log-format=json",
+    ]
+    if schema == CANARY_LOCK_SCHEMA_V2:
+        runtime_arguments.append(
+            "--pod-init-config=/etc/aragorn/gvisor-remote-trace-pod-init-v1.json"
+        )
     if runtime != {
-        "name": "runsc-systrap-canary",
+        "name": runtime_name,
         "path": "/usr/local/bin/runsc",
-        "arguments": [
-            "--platform=systrap",
-            "--directfs=false",
-            "--network=none",
-            "--strace=true",
-            "--strace-syscalls=openat,execve",
-            "--strace-log-size=256",
-            "--debug=true",
-            f"--debug-log={expected_log}",
-            "--debug-log-format=json",
-        ],
+        "arguments": runtime_arguments,
     }:
         raise GVisorRuntimeError("gVisor detonation canary runtime pin changed")
 
@@ -4615,16 +5104,55 @@ def _canary_lock(raw: object) -> dict[str, Any]:
         },
         "gVisor detonation canary trace",
     )
+    trace_commands = (
+        ["boot", "create", "exec", "gofer", "kill", "pause", "resume", "start"]
+        if schema == CANARY_LOCK_SCHEMA_V2
+        else ["boot", "create", "gofer", "start"]
+    )
     if trace != {
         "directory": "/var/log/aragorn-p2-docker-canary",
         "format": "json-lines",
         "syscalls": ["execve", "openat"],
-        "commands": ["boot", "create", "gofer", "start"],
-        "max_log_bytes": 1024 * 1024,
+        "commands": trace_commands,
+        "max_log_bytes": (
+            512 * 1024 if schema == CANARY_LOCK_SCHEMA_V2 else 1024 * 1024
+        ),
         "max_log_lines": 4096,
         "max_line_bytes": 32768,
     }:
         raise GVisorRuntimeError("gVisor detonation canary trace pin changed")
+
+    if schema == CANARY_LOCK_SCHEMA_V2:
+        remote_trace = _object(
+            lock["remote_trace"], "gVisor detonation remote trace"
+        )
+        _exact_keys(
+            remote_trace,
+            {
+                "profile",
+                "runtime_root",
+                "session_config_path",
+                "session_config_digest",
+                "socket_path",
+                "monitor_implementation_digest",
+            },
+            "gVisor detonation remote trace",
+        )
+        if remote_trace != {
+            "profile": "gvisor-remote-default-pod-init-seqpacket/v1",
+            "runtime_root": "/run/docker/runtime-runc/moby",
+            "session_config_path": (
+                "/etc/aragorn/gvisor-remote-trace-pod-init-v1.json"
+            ),
+            "session_config_digest": (
+                "sha256:58fef34654be7153df60d35ed243b0be685005ca8fd3de308de6eda3d6572bb3"
+            ),
+            "socket_path": "/run/aragorn/gvisor-events.sock",
+            "monitor_implementation_digest": (
+                "sha256:3b2224766c62927a8d1ea349687a653917f3c1ea91adaaeffed62580bd93181d"
+            ),
+        }:
+            raise GVisorRuntimeError("gVisor detonation remote trace pin changed")
 
     canary = _object(lock["canary"], "gVisor detonation canary profile")
     _exact_keys(
@@ -4762,6 +5290,9 @@ def _verify_detonation_container(
         labels={label: run_id},
         tmpfs={profile["tmpfs"]["destination"]: profile["tmpfs"]["options"]},
         bind_mount=bind_mount,
+        postrun_exit_code=(
+            143 if _is_remote_artifact_profile(canary_lock, artifact) else 0
+        ),
     )
 
 
@@ -4775,6 +5306,7 @@ def _verify_container_profile(
     labels: dict[str, str],
     tmpfs: dict[str, str] | None,
     bind_mount: dict[str, str] | None = None,
+    postrun_exit_code: int = 0,
 ) -> str:
     container_id = container.get("Id")
     if not isinstance(container_id, str) or _CONTAINER.fullmatch(container_id) is None:
@@ -4922,7 +5454,7 @@ def _verify_container_profile(
             "OOMKilled": False,
             "Dead": False,
             "Pid": 0,
-            "ExitCode": 0,
+            "ExitCode": postrun_exit_code,
             "Error": "",
         }
     else:
@@ -4936,12 +5468,25 @@ def _verify_processes(
     lock: dict[str, Any],
     raw: bytes,
     *,
+    runtime: dict[str, Any],
     container_id: str,
     sandbox_pid: int,
     installed_runsc: dict[str, Any],
 ) -> None:
     pinned_runsc = _file_metadata_document(installed_runsc, "installed runsc")
-    if pinned_runsc["path"] != lock["runtime"]["path"]:
+    runtime_arguments = runtime.get("arguments")
+    if (
+        pinned_runsc["path"] != lock["runtime"]["path"]
+        or runtime.get("path") != pinned_runsc["path"]
+        or not isinstance(runtime_arguments, list)
+        or not runtime_arguments
+        or any(
+            not isinstance(argument, str) or not argument.startswith("--")
+            for argument in runtime_arguments
+        )
+        or len({argument.partition("=")[0] for argument in runtime_arguments})
+        != len(runtime_arguments)
+    ):
         raise GVisorRuntimeError("installed runsc path changed")
     document = _json_object(raw, "gVisor process snapshot", canonical=True)
     _exact_keys(document, {"boot_id", "processes"}, "gVisor process snapshot")
@@ -5009,8 +5554,15 @@ def _verify_processes(
             argv[0] != name
             or subcommand not in argv
             or container_id not in argv
-            or "--platform=systrap" not in argv
-            or "--directfs=false" not in argv
+            or any(
+                [
+                    value
+                    for value in argv
+                    if value.partition("=")[0] == argument.partition("=")[0]
+                ]
+                != [argument]
+                for argument in runtime_arguments
+            )
             or process["uids"][:2] != expected_ids
             or executable["path"] != lock["runtime"]["path"]
             or executable["digest"] != runsc_digest

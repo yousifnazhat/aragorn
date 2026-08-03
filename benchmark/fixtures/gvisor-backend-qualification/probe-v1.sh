@@ -19,7 +19,7 @@ case "$host_pid" in
 esac
 [ "$host_pid" -gt 0 ] || fail 'ARAGORN_HOST_PID must be positive'
 
-input_path=/aragorn-input/control
+input_path=/aragorn-qualification/input
 input_token=Aragorn-input-$run_id
 host_file_path=/aragorn-host-file-$run_id
 host_process_token=Aragorn-host-process-$run_id
@@ -30,6 +30,13 @@ udp_egress_token=Aragorn-udp-egress-$run_id
 scratch=/tmp/aragorn-qualification-$run_id
 
 mkdir "$scratch" || fail 'cannot create scratch directory'
+
+mount --help 2>&1 | grep -Fq -- '-t FSTYPE' || fail 'mount -t is unavailable'
+unshare --help 2>&1 | grep -Fq -- '-m,--mount' || fail 'unshare -m is unavailable'
+mknod --help 2>&1 | grep -Fq -- 'c or u' || fail 'mknod device mode is unavailable'
+nsenter --help 2>&1 | grep -Fq -- '-S UID' || fail 'nsenter -S is unavailable'
+nsenter --help 2>&1 | grep -Fq -- '-G GID' || fail 'nsenter -G is unavailable'
+chmod --help 2>&1 | grep -Fq -- 'MODE' || fail 'chmod mode is unavailable'
 
 uid=$(id -u) || fail 'cannot read uid'
 gid=$(id -g) || fail 'cannot read gid'
@@ -143,10 +150,12 @@ tmpfs_script=$scratch/tmpfs-exec
 printf '#!/bin/sh\nexit 0\n' > "$tmpfs_script" 2> "$scratch/tmpfs-exec.err"
 tmpfs_script_write_rc=$?
 chmod 700 "$tmpfs_script" 2>> "$scratch/tmpfs-exec.err"
+tmpfs_chmod_rc=$?
 "$tmpfs_script" > /dev/null 2>> "$scratch/tmpfs-exec.err"
 tmpfs_exec_rc=$?
 
-mkdir "$scratch/mountpoint" 2> "$scratch/mount.err"
+mkdir "$scratch/mountpoint" 2> "$scratch/mount.err" ||
+    fail 'cannot create mountpoint'
 mount -t tmpfs none "$scratch/mountpoint" > /dev/null 2>> "$scratch/mount.err"
 mount_rc=$?
 [ "$mount_rc" -ne 0 ] || umount "$scratch/mountpoint" 2>> "$scratch/mount.err"
@@ -200,6 +209,7 @@ printf '%s\n' \
     "input_unlink_rc=$input_unlink_rc" \
     "input_post_match=$input_post_match" \
     "tmpfs_script_write_rc=$tmpfs_script_write_rc" \
+    "tmpfs_chmod_rc=$tmpfs_chmod_rc" \
     "tmpfs_exec_rc=$tmpfs_exec_rc" \
     "mount_rc=$mount_rc" \
     "unshare_rc=$unshare_rc" \

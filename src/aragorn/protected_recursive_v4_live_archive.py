@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-import ast
 import copy
 import hashlib
+import importlib
+import importlib.util
 import json
+import sys
 import tarfile
-from dataclasses import replace
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import RLock
 from typing import Any
 from unittest.mock import patch
 
-from . import github_quarantine_receipt, github_recursive_artifact_graph_v6
 from .artifact_closure import canonical_json, load_verified_retained_manifest
 from .cas import CAS
-from .github_gateway import build_gateway_request
-from .github_recursive_gateway import verify_retained_release_pin_set
 from .github_recursive_live_archive import (
     GitHubRecursiveLiveArchiveError,
     _verify_cas_inventory,
@@ -80,10 +82,77 @@ _CAPTURE_LIMITATIONS = [
     "BYTE_IDENTICAL_UPDATE_ONLY",
     "RELEASE_RUNTIME_CONSUMER_UNPROVEN",
 ]
+_CAPTURE_TIME_REPLAY_MODULES = (
+    "__init__",
+    "acquire",
+    "admission_artifact_graph",
+    "admission_decision",
+    "analyze",
+    "analyzer_receipt",
+    "artifact_closure",
+    "benchmark",
+    "benchmark_authenticated_handoff_v2",
+    "benchmark_handoff_v2",
+    "benchmark_protocol_v2",
+    "benchmark_semantic_closure_v2",
+    "benchmark_worker_measurement",
+    "cas",
+    "decision_receipt",
+    "docker_identity",
+    "github_acquire",
+    "github_expand",
+    "github_expansion_proof",
+    "github_gateway",
+    "github_gateway_live_evidence",
+    "github_git_protocol",
+    "github_quarantine_receipt",
+    "github_recursive_artifact_graph",
+    "github_recursive_artifact_graph_v4",
+    "github_recursive_artifact_graph_v5",
+    "github_recursive_artifact_graph_v6",
+    "github_recursive_gateway",
+    "github_recursive_live_archive",
+    "github_release_asset",
+    "github_source_proof",
+    "installed_tree_replay",
+    "label_blind_prepare",
+    "manifest_diff",
+    "materialization",
+    "oci_runtime",
+    "oci_worker_protocol",
+    "phase0_candidate",
+    "policy",
+    "protected_install",
+    "protected_install_context",
+    "protected_install_transition_replay",
+    "protected_recursive_v3_live_archive",
+    "protected_transition_live_archive",
+    "vendor_reports",
+    "zip_inventory",
+)
+# These modules evolved after capture; historical replay imports their retained
+# bytes while every other dependency remains byte-identical in the live package.
+_CAPTURED_REPLAY_OVERRIDES = {
+    "benchmark": "sha256:354486f4558107f95ca8e7c12315dec5c8028657c0e5401a62d70bcbdef19736",
+    "benchmark_handoff_v2": "sha256:eda3a06378a828bfe707b5c1e85483b3c1d89c5e4ac642614e8f1ebaaf8fe70e",
+    "github_gateway": "sha256:21e3a74cb0927d1a160b089797cc169e1d1bfc8c68b7a2b5005904ee7aabe07c",
+    "github_quarantine_receipt": "sha256:170f873cf49d8585f9b37d15c13ea823ac27c1e9d6eb966a2a6996abfc73efc1",
+    "oci_runtime": "sha256:9c9ed5819ceeda4d5734da23d100b7a8058643fbea81ee742fcbba868b8dface",
+}
+# ponytail: global replay lock; pass dependencies explicitly if throughput matters.
+_HISTORICAL_REPLAY_LOCK = RLock()
 
 
 class ProtectedRecursiveV4LiveArchiveError(ValueError):
     """The retained request-v4 live archive is malformed or inconsistent."""
+
+
+@dataclass(frozen=True, slots=True)
+class _HistoricalReplay:
+    gateway: Any
+    recursive_gateway: Any
+    quarantine_receipt: Any
+    recursive_graph_v6: Any
 
 
 def verify_protected_recursive_v4_live_archive(
@@ -108,40 +177,44 @@ def verify_protected_recursive_v4_live_archive(
             )
         with TemporaryDirectory(prefix="aragorn-protected-recursive-v4-") as temporary:
             archive = _load(raw, Path(temporary))
-            capture = _document(archive, "capture.json")
-            _capture_boundary(capture)
-            runtime = _runtime(archive, capture)
-            journals = _journals(archive)
+            with _historical_replay(archive, Path(temporary)) as historical:
+                capture = _document(archive, "capture.json")
+                _capture_boundary(capture, historical)
+                runtime = _runtime(archive, capture)
+                journals = _journals(archive)
 
-            install = _positive_v4(
-                archive,
-                capture,
-                journals["install"]["broker"]["message"],
-                "install",
-                journals["install"]["broker"]["timestamp"],
-            )
-            update = _positive_v4(
-                archive,
-                capture,
-                journals["update"]["broker"]["message"],
-                "update",
-                journals["update"]["broker"]["timestamp"],
-                previous=install,
-            )
-            _final_publication(archive, install, update)
-            release_error = _release_error(
-                archive,
-                capture,
-                journals["release-error"]["broker"]["message"],
-                journals["release-error"]["coordinator"]["message"],
-                journals["release-error"]["broker"]["timestamp"],
-                reference_request=install["service_request_v4"],
-            )
-            for label, cas in archive.cases.items():
-                _verify_cas_inventory(
-                    CAS(cas.root, read_only=True),
-                    archive.blobs[label],
+                install = _positive_v4(
+                    archive,
+                    capture,
+                    journals["install"]["broker"]["message"],
+                    "install",
+                    journals["install"]["broker"]["timestamp"],
+                    historical=historical,
                 )
+                update = _positive_v4(
+                    archive,
+                    capture,
+                    journals["update"]["broker"]["message"],
+                    "update",
+                    journals["update"]["broker"]["timestamp"],
+                    historical=historical,
+                    previous=install,
+                )
+                _final_publication(archive, install, update)
+                release_error = _release_error(
+                    archive,
+                    capture,
+                    journals["release-error"]["broker"]["message"],
+                    journals["release-error"]["coordinator"]["message"],
+                    journals["release-error"]["broker"]["timestamp"],
+                    historical=historical,
+                    reference_request=install["service_request_v4"],
+                )
+                for label, cas in archive.cases.items():
+                    _verify_cas_inventory(
+                        CAS(cas.root, read_only=True),
+                        archive.blobs[label],
+                    )
 
         return {
             "schema": "aragorn/protected-recursive-v4-live-qualification/v1",
@@ -326,6 +399,120 @@ def _load(raw: bytes, temporary: Path) -> _Archive:
     return _Archive(files, directories, symlinks, cases, blobs, counts)
 
 
+@contextmanager
+def _historical_replay(
+    archive: _Archive, temporary: Path
+) -> Iterator[_HistoricalReplay]:
+    with _HISTORICAL_REPLAY_LOCK:
+        yield from _historical_replay_unlocked(archive, temporary)
+
+
+def _historical_replay_unlocked(
+    archive: _Archive, temporary: Path
+) -> Iterator[_HistoricalReplay]:
+    _verify_local_replay_closure(archive)
+    package_root = temporary / "capture-source" / "aragorn"
+    package_root.mkdir(parents=True, mode=0o700)
+    prefix = "runtime/package/src/aragorn/"
+    for module in _CAPTURE_TIME_REPLAY_MODULES:
+        item = archive.files[f"{prefix}{module}.py"]
+        target = package_root / f"{module}.py"
+        target.write_bytes(item.raw)
+        target.chmod(0o400)
+    initializer = package_root / "__init__.py"
+    package_name = f"_aragorn_phase1_v4_{id(archive):x}"
+    spec = importlib.util.spec_from_file_location(
+        package_name,
+        initializer,
+        submodule_search_locations=[str(package_root)],
+    )
+    if spec is None or spec.loader is None:
+        raise ProtectedRecursiveV4LiveArchiveError(
+            "cannot create capture-time replay package"
+        )
+    package = importlib.util.module_from_spec(spec)
+    sys.modules[package_name] = package
+    try:
+        try:
+            spec.loader.exec_module(package)
+            artifact_closure = importlib.import_module(
+                f"{package_name}.artifact_closure"
+            )
+            captured_cas = importlib.import_module(f"{package_name}.cas")
+            recursive_live = importlib.import_module(
+                f"{package_name}.github_recursive_live_archive"
+            )
+            transition_replay = importlib.import_module(
+                f"{package_name}.protected_install_transition_replay"
+            )
+            recursive_v3 = importlib.import_module(
+                f"{package_name}.protected_recursive_v3_live_archive"
+            )
+            replay = _HistoricalReplay(
+                gateway=importlib.import_module(f"{package_name}.github_gateway"),
+                recursive_gateway=importlib.import_module(
+                    f"{package_name}.github_recursive_gateway"
+                ),
+                quarantine_receipt=importlib.import_module(
+                    f"{package_name}.github_quarantine_receipt"
+                ),
+                recursive_graph_v6=importlib.import_module(
+                    f"{package_name}.github_recursive_artifact_graph_v6"
+                ),
+            )
+        except Exception as exc:
+            raise ProtectedRecursiveV4LiveArchiveError(
+                f"cannot load capture-time replay package: {exc}"
+            ) from exc
+        bindings = {
+            "canonical_json": artifact_closure.canonical_json,
+            "load_verified_retained_manifest": (
+                artifact_closure.load_verified_retained_manifest
+            ),
+            "CAS": captured_cas.CAS,
+            "GitHubRecursiveLiveArchiveError": (
+                recursive_live.GitHubRecursiveLiveArchiveError
+            ),
+            "_verify_cas_inventory": recursive_live._verify_cas_inventory,
+            "_verify_decision": recursive_live._verify_decision,
+            "_verify_handoff": recursive_live._verify_handoff,
+            "_verify_receipt": recursive_live._verify_receipt,
+            "_File": transition_replay._File,
+            "_pinned_bytes": transition_replay._pinned_bytes,
+            "_safe_name": transition_replay._safe_name,
+            "_sha256": transition_replay._sha256,
+            **{
+                name: getattr(recursive_v3, name)
+                for name in (
+                    "_REQUEST_DIGEST_FIELDS",
+                    "_REQUEST_FIELDS",
+                    "_REQUEST_TTL_SECONDS",
+                    "_Archive",
+                    "_cas_document",
+                    "_decision_record",
+                    "_digest",
+                    "_document",
+                    "_gateway_tree_digest",
+                    "_hex",
+                    "_journal",
+                    "_json_document",
+                    "_package_tree_digest",
+                    "_positive",
+                    "_positive_integer",
+                    "_positive_result",
+                    "_walk",
+                )
+            },
+        }
+        with patch.multiple(sys.modules[__name__], **bindings):
+            yield replay
+    finally:
+        for name in tuple(sys.modules):
+            if name == package_name or name.startswith(package_name + "."):
+                sys.modules.pop(name, None)
+        importlib.invalidate_caches()
+
+
 def _relative(name: str) -> str:
     if name == _ROOT:
         return "."
@@ -362,7 +549,9 @@ def _cas_identity(name: str) -> tuple[str, str] | None:
     return parts[1], "sha256:" + parts[4] + parts[5]
 
 
-def _capture_boundary(capture: dict[str, Any]) -> None:
+def _capture_boundary(
+    capture: dict[str, Any], historical: _HistoricalReplay
+) -> None:
     if (
         set(capture)
         != {
@@ -430,7 +619,7 @@ def _capture_boundary(capture: dict[str, Any]) -> None:
             or epoch["status"] != f"evidence/{label}-status.json"
             or epoch["outcome"] != ("ERROR" if label == "release-error" else "PASS")
             or epoch["request"]
-            != build_gateway_request(
+            != historical.gateway.build_gateway_request(
                 epoch["request"].get("owner"),
                 epoch["request"].get("repository"),
                 epoch["request"].get("commit"),
@@ -461,7 +650,6 @@ def _runtime(archive: _Archive, capture: dict[str, Any]) -> dict[str, Any]:
     package_files = [
         name for name in archive.files if name.startswith("runtime/package/")
     ]
-    repo = Path(__file__).resolve().parents[2]
     if (
         release
         != {
@@ -504,16 +692,6 @@ def _runtime(archive: _Archive, capture: dict[str, Any]) -> dict[str, Any]:
         raise ProtectedRecursiveV4LiveArchiveError(
             "captured release or implementation measurement changed"
         )
-    for filename in (
-        "github_recursive_artifact_graph.py",
-        "github_recursive_artifact_graph_v6.py",
-        "phase0_candidate.py",
-    ):
-        retained = archive.files[f"runtime/package/src/aragorn/{filename}"].raw
-        if retained != (repo / "src" / "aragorn" / filename).read_bytes():
-            raise ProtectedRecursiveV4LiveArchiveError(
-                f"local replay implementation differs from capture: {filename}"
-            )
     _verify_local_replay_closure(archive)
     for label in ("install", "update"):
         python = archive.cases[label].read(
@@ -618,53 +796,15 @@ def _candidate_tree_digest(archive: _Archive) -> str:
 
 def _verify_local_replay_closure(archive: _Archive) -> None:
     source_root = Path(__file__).parent
-
-    def local_imports(path: Path) -> set[str]:
-        try:
-            tree = ast.parse(path.read_bytes(), filename=str(path))
-        except (OSError, SyntaxError) as exc:
-            raise ProtectedRecursiveV4LiveArchiveError(
-                f"cannot derive local replay import closure: {path.name}: {exc}"
-            ) from exc
-        modules: set[str] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                if node.level == 1 and node.module:
-                    modules.add(node.module.split(".", 1)[0])
-                elif node.level == 1 or node.level == 0 and node.module == "aragorn":
-                    modules.update(alias.name.split(".", 1)[0] for alias in node.names)
-                elif (
-                    node.level == 0
-                    and node.module
-                    and node.module.startswith("aragorn.")
-                ):
-                    modules.add(node.module.split(".", 2)[1])
-            elif isinstance(node, ast.Import):
-                modules.update(
-                    alias.name.split(".", 2)[1]
-                    for alias in node.names
-                    if alias.name.startswith("aragorn.")
-                )
-        return modules
-
-    pending = list(local_imports(Path(__file__)))
-    closure: set[str] = set()
-    while pending:
-        module = pending.pop()
-        path = source_root / f"{module}.py"
-        if module in closure or not path.is_file() or path.is_symlink():
-            continue
-        closure.add(module)
-        pending.extend(local_imports(path) - closure)
-    if not closure:
-        raise ProtectedRecursiveV4LiveArchiveError(
-            "local replay import closure is empty"
-        )
-    for module in closure:
+    for module in _CAPTURE_TIME_REPLAY_MODULES:
         retained = archive.files.get(f"runtime/package/src/aragorn/{module}.py")
-        if (
-            retained is None
-            or retained.raw != (source_root / f"{module}.py").read_bytes()
+        expected_override = _CAPTURED_REPLAY_OVERRIDES.get(module)
+        if retained is None or (
+            expected_override is not None
+            and _sha256(retained.raw) != expected_override
+        ) or (
+            expected_override is None
+            and retained.raw != (source_root / f"{module}.py").read_bytes()
         ):
             raise ProtectedRecursiveV4LiveArchiveError(
                 f"local replay dependency differs from capture: {module}.py"
@@ -738,6 +878,7 @@ def _request_v4(
     label: str,
     journal_timestamp: int,
     *,
+    historical: _HistoricalReplay,
     previous: dict[str, Any] | None = None,
     reference_request: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str, dict[str, Any]]:
@@ -781,7 +922,7 @@ def _request_v4(
             f"{label} request-v4 schema or recursive binding changed"
         )
     source_request = request["source_request"]
-    if source_request != build_gateway_request(
+    if source_request != historical.gateway.build_gateway_request(
         source_request.get("owner"),
         source_request.get("repository"),
         source_request.get("commit"),
@@ -917,7 +1058,7 @@ def _request_v4(
             f"{label} canonical request-v4 does not replay"
         )
     cas = CAS(archive.cases[label].root, read_only=True)
-    pin_set = verify_retained_release_pin_set(
+    pin_set = historical.recursive_gateway.verify_retained_release_pin_set(
         cas,
         recursive["release_pin_set_digest"],
         expected_request=source_request,
@@ -935,6 +1076,7 @@ def _positive_v4(
     label: str,
     journal_timestamp: int,
     *,
+    historical: _HistoricalReplay,
     previous: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     request, request_digest, pin_set = _request_v4(
@@ -942,6 +1084,7 @@ def _positive_v4(
         evidence,
         label,
         journal_timestamp,
+        historical=historical,
         previous=previous,
     )
     if pin_set["release_asset_pins"]:
@@ -1055,6 +1198,7 @@ def _release_error(
     coordinator: dict[str, Any],
     journal_timestamp: int,
     *,
+    historical: _HistoricalReplay,
     reference_request: dict[str, Any],
 ) -> dict[str, Any]:
     if (
@@ -1094,6 +1238,7 @@ def _release_error(
         evidence,
         "release-error",
         journal_timestamp,
+        historical=historical,
         reference_request=reference_request,
     )
     if len(pin_set["release_asset_pins"]) != 1:
@@ -1142,9 +1287,9 @@ def _release_error(
         root_manifest,
         receipt_result,
     )
-    github_quarantine_receipt._receipt_id(receipt["receipt_id"])
+    historical.quarantine_receipt._receipt_id(receipt["receipt_id"])
     if (
-        github_quarantine_receipt._request_for_manifest(
+        historical.quarantine_receipt._request_for_manifest(
             receipt["request"],
             root_manifest,
         )
@@ -1173,12 +1318,12 @@ def _release_error(
         return receipt
 
     with patch.object(
-        github_recursive_artifact_graph_v6.legacy,
+        historical.recursive_graph_v6.legacy,
         "verify_github_quarantine_receipt",
         side_effect=offline_receipt,
     ):
         graph = (
-            github_recursive_artifact_graph_v6.verify_recursive_github_artifact_graph(
+            historical.recursive_graph_v6.verify_recursive_github_artifact_graph(
                 cas,
                 source["artifact_graph_digest"],
                 expected_manifest_digest=source["manifest_digest"],

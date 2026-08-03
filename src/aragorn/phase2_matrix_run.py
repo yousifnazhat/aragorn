@@ -22,8 +22,10 @@ from .benchmark import (
     _MAX_EVIDENCE_BYTES,
     _PHASE2_GVISOR_EVIDENCE_AUTHORITY,
     _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2,
+    _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V3,
     _PHASE2_GVISOR_EVIDENCE_SCHEMA,
     _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2,
+    _PHASE2_GVISOR_EVIDENCE_SCHEMA_V3,
     _PHASE2_RUNS_PER_CASE,
     BenchmarkError,
     _digest,
@@ -41,6 +43,7 @@ from .gvisor_runtime import (
     ARTIFACT_SCHEMA_V5,
     GVisorRuntimeError,
     collect_gvisor_acquired_artifact,
+    collect_gvisor_remote_traced_acquired_artifact,
     verify_gvisor_acquired_artifact,
 )
 from .oci_worker_protocol import WorkerProtocolError, canonical_json
@@ -63,7 +66,7 @@ _REVIEW_REASON = "UNDECLARED_OBSERVED_CAPABILITY"
 _EXPECTED_CASES = 20
 _EXPECTED_OUTCOMES = _EXPECTED_CASES * _PHASE2_RUNS_PER_CASE
 
-Collector = Callable[..., str]
+Collector = Callable[..., str | tuple[str, str]]
 
 
 class Phase2MatrixRunError(ValueError):
@@ -148,7 +151,12 @@ def run_phase2_matrix(
         case_id: CAS(indexed_sources[case_id], read_only=True) for case_id in case_ids
     }
     system = suite["systems"][binding["candidate_key"]]
-    collector = _collector or collect_gvisor_acquired_artifact
+    remote_trace = binding.get("remote_trace")
+    collector = _collector or (
+        collect_gvisor_remote_traced_acquired_artifact
+        if remote_trace is not None
+        else collect_gvisor_acquired_artifact
+    )
     outcomes: list[dict[str, Any]] = []
 
     # ponytail: serial by design; the collector owns one host-global lock.
@@ -168,11 +176,29 @@ def run_phase2_matrix(
             capture_pins["normalization_profile"] = capture_pins.pop(
                 "expected_normalization_profile"
             )
-            receipt_digest = collector(
+            collected = collector(
                 evidence,
                 source_states[case_id],
                 **capture_pins,
             )
+            remote_receipt_digest: str | None = None
+            if remote_trace is not None:
+                if type(collected) is not tuple or len(collected) != 2:
+                    raise Phase2MatrixRunError(
+                        "remote collector must return exactly two receipt digests"
+                    )
+                receipt_digest = _digest(
+                    collected[0], "Phase 2 gVisor workload receipt"
+                )
+                remote_receipt_digest = _digest(
+                    collected[1], "Phase 2 gVisor remote trace receipt"
+                )
+            else:
+                if not isinstance(collected, str):
+                    raise Phase2MatrixRunError(
+                        "gVisor collector must return one receipt digest"
+                    )
+                receipt_digest = collected
             receipt = verify_gvisor_acquired_artifact(
                 evidence,
                 receipt_digest,
@@ -186,14 +212,22 @@ def run_phase2_matrix(
             )
             envelope = {
                 "schema": (
-                    _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2
-                    if scenario_id is not None
-                    else _PHASE2_GVISOR_EVIDENCE_SCHEMA
+                    _PHASE2_GVISOR_EVIDENCE_SCHEMA_V3
+                    if remote_receipt_digest is not None
+                    else (
+                        _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2
+                        if scenario_id is not None
+                        else _PHASE2_GVISOR_EVIDENCE_SCHEMA
+                    )
                 ),
                 "authority": (
-                    _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2
-                    if scenario_id is not None
-                    else _PHASE2_GVISOR_EVIDENCE_AUTHORITY
+                    _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V3
+                    if remote_receipt_digest is not None
+                    else (
+                        _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2
+                        if scenario_id is not None
+                        else _PHASE2_GVISOR_EVIDENCE_AUTHORITY
+                    )
                 ),
                 "coverage_lock_digest": expected_lock,
                 "suite_digest": suite["digest"],
@@ -207,6 +241,8 @@ def run_phase2_matrix(
             }
             if scenario_id is not None:
                 envelope["scenario_id"] = scenario_id
+            if remote_receipt_digest is not None:
+                envelope["remote_trace_receipt_digest"] = remote_receipt_digest
             evidence_digest = evidence.put(
                 BytesIO(canonical_json(envelope)),
                 max_bytes=_MAX_EVIDENCE_BYTES,

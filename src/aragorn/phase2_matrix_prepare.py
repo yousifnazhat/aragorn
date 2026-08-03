@@ -36,8 +36,14 @@ from .phase2_scenario_contract import (
     CATALOG_SCHEMA as SCENARIO_CATALOG_SCHEMA,
     COVERAGE_LOCK_ASSURANCE as SCENARIO_COVERAGE_LOCK_ASSURANCE,
     COVERAGE_LOCK_SCHEMA as SCENARIO_COVERAGE_LOCK_SCHEMA,
+    REMOTE_CATALOG_SCHEMA,
+    REMOTE_COVERAGE_LOCK_ASSURANCE,
+    REMOTE_COVERAGE_LOCK_SCHEMA,
+    REMOTE_TRACE_PROFILE,
+    REMOTE_TRACE_RECEIPT_SCHEMA,
     SCENARIO_ENVIRONMENT_VARIABLE,
     SCENARIO_PROFILE,
+    validate_phase2_remote_catalog,
     validate_phase2_scenario_catalog,
 )
 
@@ -199,19 +205,32 @@ def _prepare_staged_matrix(
                 f"{case_id}: acquired and materialized trees differ"
             )
 
-    canary_raw, _canary = gvisor_runtime.load_gvisor_detonation_canary_lock()
+    remote_bound = document["schema"] == REMOTE_CATALOG_SCHEMA
+    canary_raw, _canary = gvisor_runtime.load_gvisor_detonation_canary_lock(
+        gvisor_runtime.REMOTE_CANARY_LOCK
+        if remote_bound
+        else gvisor_runtime.CANARY_LOCK
+    )
     scenario_matrix = document.get("scenario_matrix")
     scenario_bound = scenario_matrix is not None
     coverage_lock = {
         "schema": (
-            SCENARIO_COVERAGE_LOCK_SCHEMA
-            if scenario_bound
-            else _COVERAGE_LOCK_SCHEMA
+            REMOTE_COVERAGE_LOCK_SCHEMA
+            if remote_bound
+            else (
+                SCENARIO_COVERAGE_LOCK_SCHEMA
+                if scenario_bound
+                else _COVERAGE_LOCK_SCHEMA
+            )
         ),
         "assurance": (
-            SCENARIO_COVERAGE_LOCK_ASSURANCE
-            if scenario_bound
-            else _COVERAGE_LOCK_ASSURANCE
+            REMOTE_COVERAGE_LOCK_ASSURANCE
+            if remote_bound
+            else (
+                SCENARIO_COVERAGE_LOCK_ASSURANCE
+                if scenario_bound
+                else _COVERAGE_LOCK_ASSURANCE
+            )
         ),
         "suite_digest": loaded["digest"],
         "evaluation_split": "held_out",
@@ -265,6 +284,13 @@ def _prepare_staged_matrix(
             for case_id in sorted(acquired)
         ],
     }
+    if remote_bound:
+        coverage_lock["gvisor"].update(
+            {
+                "remote_trace_receipt_schema": REMOTE_TRACE_RECEIPT_SCHEMA,
+                "remote_trace_profile": REMOTE_TRACE_PROFILE,
+            }
+        )
     if scenario_bound:
         coverage_lock["scenario_matrix"] = scenario_matrix
     lock_raw = canonical_json(coverage_lock)
@@ -325,12 +351,19 @@ def _load_catalog(value: object | str | os.PathLike[str]) -> dict[str, Any]:
 
 
 def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
-    scenario_bound = document.get("schema") == SCENARIO_CATALOG_SCHEMA
+    schema = document.get("schema")
+    remote_bound = schema == REMOTE_CATALOG_SCHEMA
+    scenario_bound = schema in {SCENARIO_CATALOG_SCHEMA, REMOTE_CATALOG_SCHEMA}
+    scenario_schedule: tuple[str, ...] | None = None
     expected_fields = {"schema", "assurance", "source", "candidate", "cases"}
     if scenario_bound:
         expected_fields.add("scenario_matrix")
         try:
-            validate_phase2_scenario_catalog(document)
+            scenario_schedule = (
+                validate_phase2_remote_catalog(document)
+                if remote_bound
+                else validate_phase2_scenario_catalog(document)
+            )
         except ValueError as exc:
             raise Phase2MatrixPrepareError(str(exc)) from exc
     _exact_keys(
@@ -338,11 +371,12 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
         expected_fields,
         "catalog",
     )
-    if (
-        document["schema"]
-        != (SCENARIO_CATALOG_SCHEMA if scenario_bound else CATALOG_SCHEMA)
-        or document["assurance"]
-        != (SCENARIO_CATALOG_ASSURANCE if scenario_bound else CATALOG_ASSURANCE)
+    if document["schema"] != (
+        REMOTE_CATALOG_SCHEMA
+        if remote_bound
+        else SCENARIO_CATALOG_SCHEMA if scenario_bound else CATALOG_SCHEMA
+    ) or document["assurance"] != (
+        SCENARIO_CATALOG_ASSURANCE if scenario_bound else CATALOG_ASSURANCE
     ):
         raise Phase2MatrixPrepareError("catalog authority is unsupported")
 
@@ -367,19 +401,6 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
         or len(version) > 256
     ):
         raise Phase2MatrixPrepareError("catalog candidate version is invalid")
-    config = _exact_object(
-        candidate["config"],
-        {
-            "evaluation_split",
-            "runs_per_case",
-            "verdict_profile",
-            "gvisor_receipt_schema",
-            "normalization_profile",
-            "execution_profile",
-            "entrypoint_path",
-        },
-        "catalog.candidate.config",
-    )
     expected_config = {
         "evaluation_split": "held_out",
         "runs_per_case": 5,
@@ -399,6 +420,18 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
         ),
         "entrypoint_path": _ENTRYPOINT,
     }
+    if remote_bound:
+        expected_config.update(
+            {
+                "remote_trace_receipt_schema": REMOTE_TRACE_RECEIPT_SCHEMA,
+                "remote_trace_profile": REMOTE_TRACE_PROFILE,
+            }
+        )
+    config = _exact_object(
+        candidate["config"],
+        set(expected_config),
+        "catalog.candidate.config",
+    )
     if config != expected_config:
         raise Phase2MatrixPrepareError("catalog candidate config is unsupported")
 
@@ -452,7 +485,11 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
             }
         )
     validated = {
-        "schema": SCENARIO_CATALOG_SCHEMA if scenario_bound else CATALOG_SCHEMA,
+        "schema": (
+            REMOTE_CATALOG_SCHEMA
+            if remote_bound
+            else SCENARIO_CATALOG_SCHEMA if scenario_bound else CATALOG_SCHEMA
+        ),
         "assurance": (
             SCENARIO_CATALOG_ASSURANCE if scenario_bound else CATALOG_ASSURANCE
         ),
@@ -470,10 +507,11 @@ def _validate_catalog(document: dict[str, Any]) -> dict[str, Any]:
         "cases": sorted(cases, key=lambda case: case["case_id"]),
     }
     if scenario_bound:
+        assert scenario_schedule is not None
         validated["scenario_matrix"] = {
             "profile": SCENARIO_PROFILE,
             "environment_variable": SCENARIO_ENVIRONMENT_VARIABLE,
-            "run_schedule": list(validate_phase2_scenario_catalog(document)),
+            "run_schedule": list(scenario_schedule),
         }
     return validated
 
@@ -629,13 +667,18 @@ def _suite_document(
     candidate: dict[str, str],
     acquired: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    return {
-        "schema": "aragorn/benchmark-suite/v1",
-        "id": (
+    suite_id = (
+        "phase2-public-matrix-v3"
+        if catalog["schema"] == REMOTE_CATALOG_SCHEMA
+        else (
             "phase2-public-matrix-v2"
             if catalog["schema"] == SCENARIO_CATALOG_SCHEMA
             else _SUITE_ID
-        ),
+        )
+    )
+    return {
+        "schema": "aragorn/benchmark-suite/v1",
+        "id": suite_id,
         "purpose": "evidence_smoke",
         "runs_per_case": 5,
         "systems": [candidate],

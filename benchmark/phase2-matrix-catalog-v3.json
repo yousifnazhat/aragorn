@@ -1,0 +1,172 @@
+{
+  "schema": "aragorn/phase2-matrix-catalog/v3",
+  "assurance": "operator_authored_inert_plumbing_not_independent_efficacy",
+  "source": {
+    "owner": "yousifnazhat",
+    "repository": "agent-skill-inert-fixture",
+    "commit": "fdf9111395179343a742d9dd6649e6d5f9da737b",
+    "case_root": "cases"
+  },
+  "candidate": {
+    "name": "aragorn",
+    "version": "0.3.0-phase2",
+    "config": {
+      "evaluation_split": "held_out",
+      "runs_per_case": 5,
+      "verdict_profile": "undeclared-observed-review/v1",
+      "gvisor_receipt_schema": "aragorn/gvisor-acquired-artifact-receipt/v5",
+      "normalization_profile": "successful-openat-execve-attributed/v1",
+      "execution_profile": "bounded-single-script/v2",
+      "entrypoint_path": "run.sh",
+      "remote_trace_receipt_schema": "aragorn/gvisor-remote-trace-capture-receipt/v2",
+      "remote_trace_profile": "gvisor-remote-default-pod-init-seqpacket/v1"
+    }
+  },
+  "scenario_matrix": {
+    "profile": "two-scenario-path-surface/v1",
+    "environment_variable": "ARAGORN_SCENARIO",
+    "run_schedule": ["primary", "alternate", "primary", "alternate", "primary"]
+  },
+  "cases": [
+    {
+      "case_id": "archive-hook-bootstrap",
+      "class": "adversarial",
+      "family": "remote-code-bootstrap",
+      "lineage": "phase2-rb-archive-hook",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "benign-bounded-cache-cleanup",
+      "class": "benign",
+      "family": "benign",
+      "lineage": "pilot-bh03-bounded-cache-cleanup",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "benign-fixed-endpoint-health-check",
+      "class": "benign",
+      "family": "benign",
+      "lineage": "pilot-bh02-fixed-health-endpoint",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "benign-injection-defense-checklist",
+      "class": "benign",
+      "family": "benign",
+      "lineage": "pilot-bh01-injection-defense",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "benign-shell-profile-audit",
+      "class": "benign",
+      "family": "benign",
+      "lineage": "pilot-bh04-profile-audit",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "dependency-script-bootstrap",
+      "class": "adversarial",
+      "family": "remote-code-bootstrap",
+      "lineage": "phase2-rb-dependency-script",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "destructive-workspace-cleanup",
+      "class": "adversarial",
+      "family": "destructive-action",
+      "lineage": "pilot-ah03-destructive-workspace",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "homoglyph-role-override",
+      "class": "adversarial",
+      "family": "prompt-obfuscation",
+      "lineage": "phase2-po-homoglyph-override",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "metadata-field-secret-exfil",
+      "class": "adversarial",
+      "family": "credential-exfiltration",
+      "lineage": "phase2-ce-metadata-field",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "peer-install-chain",
+      "class": "adversarial",
+      "family": "agent-propagation",
+      "lineage": "phase2-ap-peer-install",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "recovery-snapshot-purge",
+      "class": "adversarial",
+      "family": "destructive-action",
+      "lineage": "phase2-da-recovery-purge",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "registry-broadcast-propagation",
+      "class": "adversarial",
+      "family": "agent-propagation",
+      "lineage": "phase2-ap-registry-broadcast",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "scheduled-helper-persistence",
+      "class": "adversarial",
+      "family": "persistence",
+      "lineage": "phase2-pe-scheduled-helper",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "shared-discovery-root-replication",
+      "class": "adversarial",
+      "family": "agent-propagation",
+      "lineage": "phase2-ap-discovery-root",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "shell-profile-persistence",
+      "class": "adversarial",
+      "family": "persistence",
+      "lineage": "pilot-ah04-profile-persistence",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "split-file-dns-exfil",
+      "class": "adversarial",
+      "family": "credential-exfiltration",
+      "lineage": "pilot-ah02-split-dns-exfil",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "support-bundle-token-exfil",
+      "class": "adversarial",
+      "family": "credential-exfiltration",
+      "lineage": "phase2-ce-support-bundle",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "tool-result-instruction-smuggling",
+      "class": "adversarial",
+      "family": "tool-poisoning",
+      "lineage": "phase2-tp-result-smuggling",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "tool-schema-policy-injection",
+      "class": "adversarial",
+      "family": "tool-poisoning",
+      "lineage": "phase2-tp-schema-policy",
+      "declared_capabilities": ["file-read"]
+    },
+    {
+      "case_id": "zero-width-policy-bypass",
+      "class": "adversarial",
+      "family": "prompt-obfuscation",
+      "lineage": "pilot-ah01-zero-width-bypass",
+      "declared_capabilities": ["file-read"]
+    }
+  ]
+}

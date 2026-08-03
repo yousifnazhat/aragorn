@@ -59,6 +59,7 @@ _SPLITS = frozenset({"development", "held_out", "hidden"})
 _PURPOSES = frozenset({"contract_smoke", "evidence_smoke"})
 _REASON_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,127}\Z")
 _PHASE2_GVISOR_RUN_ID = re.compile(r"[0-9a-f]{32}\Z")
+_PHASE2_GVISOR_CONTAINER_ID = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_INPUT_BYTES = 16 * 1024 * 1024
 _MAX_CASES = 10_000
 _MAX_SYSTEMS = 32
@@ -91,6 +92,11 @@ _PHASE2_COVERAGE_LOCK_SCHEMA_V2 = "aragorn/benchmark-phase2-coverage-lock/v2"
 _PHASE2_COVERAGE_LOCK_ASSURANCE_V2 = (
     "operator_asserted_pre_outcome_scenario_binding_not_independent_or_timestamped"
 )
+_PHASE2_COVERAGE_LOCK_SCHEMA_V3 = "aragorn/benchmark-phase2-coverage-lock/v3"
+_PHASE2_COVERAGE_LOCK_ASSURANCE_V3 = (
+    "operator_asserted_pre_outcome_scenario_remote_trace_binding_not_independent_"
+    "or_timestamped"
+)
 _PHASE2_GVISOR_EVIDENCE_SCHEMA = "aragorn/benchmark-phase2-gvisor-v4-evidence/v1"
 _PHASE2_GVISOR_EVIDENCE_AUTHORITY = (
     "LOCK_BOUND_ATTRIBUTED_GVISOR_V4_CATEGORY_DIFF_ONLY_NOT_PROCESS_ANCESTRY_"
@@ -105,6 +111,17 @@ _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2 = (
     "ANCESTRY_SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_"
     "BACKEND_QUALIFICATION_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
 )
+_PHASE2_GVISOR_EVIDENCE_SCHEMA_V3 = (
+    "aragorn/benchmark-phase2-gvisor-v5-remote-evidence/v3"
+)
+_PHASE2_GVISOR_EVIDENCE_AUTHORITY_V3 = (
+    "LOCK_BOUND_TWO_SCENARIO_ATTRIBUTED_GVISOR_V5_CATEGORY_DIFF_AND_GVISOR_"
+    "REMOTE_TRACE_V2_RAW_WIRE_CLOSURE_ONLY_NOT_PROCESS_ANCESTRY_SCRIPT_SAFETY_"
+    "CAPTURE_COMPLETENESS_RUNTIME_ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_"
+    "ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+)
+_PHASE2_REMOTE_TRACE_RECEIPT_SCHEMA = "aragorn/gvisor-remote-trace-capture-receipt/v2"
+_PHASE2_REMOTE_TRACE_PROFILE = "gvisor-remote-default-pod-init-seqpacket/v1"
 _PHASE2_VERDICT_PROFILE = "undeclared-observed-review/v1"
 _PHASE2_REQUIRED_FAMILIES = frozenset(
     {
@@ -1483,6 +1500,7 @@ def _validate_outcomes(
                         coverage_lock_digest=phase2_binding["coverage_lock_digest"],
                         pins=pins,
                         label=label,
+                        remote_trace=phase2_binding.get("remote_trace"),
                     )
                 )
             else:
@@ -2340,12 +2358,16 @@ def _verify_phase2_gvisor_v4_evidence(
     coverage_lock_digest: str,
     pins: dict[str, Any],
     label: str,
+    remote_trace: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Verify one lock-bound candidate cell through its pinned gVisor replay."""
 
     evidence_label = f"{label}.evidence"
     scenario_id = pins.get("expected_scenario_id")
     scenario_bound = scenario_id is not None
+    remote_bound = remote_trace is not None
+    if remote_bound and not scenario_bound:
+        raise BenchmarkError(f"{evidence_label} remote trace requires a scenario")
     envelope = _read_canonical_document(
         cas,
         outcome["evidence_digest"],
@@ -2367,20 +2389,30 @@ def _verify_phase2_gvisor_v4_evidence(
     }
     if scenario_bound:
         evidence_fields.add("scenario_id")
+    if remote_bound:
+        evidence_fields.add("remote_trace_receipt_digest")
     _exact_keys(
         envelope,
         evidence_fields,
         evidence_label,
     )
     expected_evidence_schema = (
-        _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2
-        if scenario_bound
-        else _PHASE2_GVISOR_EVIDENCE_SCHEMA
+        _PHASE2_GVISOR_EVIDENCE_SCHEMA_V3
+        if remote_bound
+        else (
+            _PHASE2_GVISOR_EVIDENCE_SCHEMA_V2
+            if scenario_bound
+            else _PHASE2_GVISOR_EVIDENCE_SCHEMA
+        )
     )
     expected_evidence_authority = (
-        _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2
-        if scenario_bound
-        else _PHASE2_GVISOR_EVIDENCE_AUTHORITY
+        _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V3
+        if remote_bound
+        else (
+            _PHASE2_GVISOR_EVIDENCE_AUTHORITY_V2
+            if scenario_bound
+            else _PHASE2_GVISOR_EVIDENCE_AUTHORITY
+        )
     )
     if envelope["schema"] != expected_evidence_schema:
         raise BenchmarkError(
@@ -2425,6 +2457,14 @@ def _verify_phase2_gvisor_v4_evidence(
         envelope["gvisor_receipt_digest"],
         f"{evidence_label}.gvisor_receipt_digest",
     )
+    remote_receipt_digest = (
+        _digest(
+            envelope["remote_trace_receipt_digest"],
+            f"{evidence_label}.remote_trace_receipt_digest",
+        )
+        if remote_bound
+        else None
+    )
 
     from .gvisor_runtime import (
         ARTIFACT_ATTRIBUTED_NORMALIZATION_PROFILE,
@@ -2432,8 +2472,11 @@ def _verify_phase2_gvisor_v4_evidence(
         ARTIFACT_ATTRIBUTION_SCHEMA,
         ARTIFACT_EXECUTION_PROFILE,
         ARTIFACT_EXECUTION_PROFILE_V2,
+        ARTIFACT_RUN_REQUEST_SCHEMA_V5,
         ARTIFACT_SCHEMA_V4,
         ARTIFACT_SCHEMA_V5,
+        CANARY_LOCK_SCHEMA_V2,
+        _canary_lock,
         verify_gvisor_acquired_artifact,
     )
 
@@ -2497,6 +2540,86 @@ def _verify_phase2_gvisor_v4_evidence(
         receipt.get("attribution_manifest_digest"),
         f"{evidence_label}.gvisor_receipt.attribution_manifest_digest",
     )
+
+    remote_container_id: str | None = None
+    if remote_bound:
+        assert remote_trace is not None
+        assert remote_receipt_digest is not None
+        if remote_trace != {
+            "receipt_schema": _PHASE2_REMOTE_TRACE_RECEIPT_SCHEMA,
+            "profile": _PHASE2_REMOTE_TRACE_PROFILE,
+        }:
+            raise BenchmarkError(f"{evidence_label} remote trace profile changed")
+        run_request = _read_canonical_document(
+            cas,
+            run_request_digest,
+            f"{evidence_label}.gvisor_run_request",
+            max_bytes=64 * 1024,
+        )
+        if not isinstance(run_request, dict):
+            raise BenchmarkError(
+                f"{evidence_label} workload run request must be an object"
+            )
+        remote_container_id = run_request.get("container_id")
+        if (
+            run_request.get("schema") != ARTIFACT_RUN_REQUEST_SCHEMA_V5
+            or run_request.get("run_id") != receipt_run_id
+            or not isinstance(remote_container_id, str)
+            or _PHASE2_GVISOR_CONTAINER_ID.fullmatch(remote_container_id) is None
+        ):
+            raise BenchmarkError(
+                f"{evidence_label} workload run request identity changed"
+            )
+        run_request_runtime_digest = _digest(
+            run_request.get("runtime_lock_digest"),
+            f"{evidence_label}.gvisor_run_request.runtime_lock_digest",
+        )
+        try:
+            canary_lock = _canary_lock(
+                cas.read(pins["expected_lock_digest"], max_bytes=64 * 1024)
+            )
+        except (CASError, OSError, RuntimeError, ValueError) as exc:
+            raise BenchmarkError(
+                f"{evidence_label} remote canary lock replay failed: {exc}"
+            ) from exc
+        canary_remote = canary_lock.get("remote_trace")
+        if (
+            canary_lock.get("schema") != CANARY_LOCK_SCHEMA_V2
+            or not isinstance(canary_remote, dict)
+            or canary_remote.get("profile") != remote_trace["profile"]
+            or canary_lock.get("runtime_lock_digest") != run_request_runtime_digest
+        ):
+            raise BenchmarkError(f"{evidence_label} remote canary pins changed")
+        from .gvisor_remote_trace_capture import (
+            verify_gvisor_remote_trace_capture,
+        )
+
+        try:
+            remote_receipt = verify_gvisor_remote_trace_capture(
+                cas,
+                remote_receipt_digest,
+                expected_runtime_lock_digest=run_request_runtime_digest,
+                expected_session_config_digest=canary_remote["session_config_digest"],
+                expected_monitor_implementation_digest=canary_remote[
+                    "monitor_implementation_digest"
+                ],
+                expected_workload_receipt_digest=receipt_digest,
+            )
+        except (CASError, OSError, RuntimeError, ValueError) as exc:
+            raise BenchmarkError(
+                f"{evidence_label} remote trace replay failed: {exc}"
+            ) from exc
+        if (
+            not isinstance(remote_receipt, dict)
+            or remote_receipt.get("schema") != remote_trace["receipt_schema"]
+            or remote_receipt.get("profile") != remote_trace["profile"]
+            or remote_receipt.get("run_id") != receipt_run_id
+            or remote_receipt.get("sandbox_id") != remote_container_id
+            or remote_receipt.get("container_id") != remote_container_id
+            or remote_receipt.get("runtime_lock_digest") != run_request_runtime_digest
+            or remote_receipt.get("workload_receipt_digest") != receipt_digest
+        ):
+            raise BenchmarkError(f"{evidence_label} remote trace binding changed")
 
     attribution = _read_canonical_document(
         cas,
@@ -2613,7 +2736,7 @@ def _verify_phase2_gvisor_v4_evidence(
         raise BenchmarkError(
             f"{evidence_label} verdict does not re-derive from the verified diff"
         )
-    return {
+    binding = {
         "case_id": outcome["case_id"],
         "run_id": outcome["run_id"],
         "evidence_digest": outcome["evidence_digest"],
@@ -2625,6 +2748,16 @@ def _verify_phase2_gvisor_v4_evidence(
         "attribution_manifest_digest": attribution_digest,
         "scenario_id": scenario_id,
     }
+    if remote_bound:
+        assert remote_receipt_digest is not None
+        assert remote_container_id is not None
+        binding.update(
+            {
+                "remote_trace_receipt_digest": remote_receipt_digest,
+                "remote_trace_container_id": remote_container_id,
+            }
+        )
+    return binding
 
 
 def _verify_phase2_gvisor_batch_bindings(
@@ -2650,13 +2783,18 @@ def _verify_phase2_gvisor_batch_bindings(
         item["scenario_id"] != schedule[item["run_id"] - 1] for item in bindings
     ):
         raise BenchmarkError("Phase 2 gVisor evidence changed the locked scenario")
-    for field in (
+    unique_fields = [
         "evidence_digest",
         "gvisor_receipt_digest",
         "gvisor_run_id",
         "run_request_digest",
         "capability_diff_receipt_digest",
-    ):
+    ]
+    if phase2_binding.get("remote_trace") is not None:
+        unique_fields.extend(
+            ["remote_trace_receipt_digest", "remote_trace_container_id"]
+        )
+    for field in unique_fields:
         values = [item[field] for item in bindings]
         if len(values) != len(set(values)):
             raise BenchmarkError(f"Phase 2 gVisor evidence repeats {field}")
@@ -5559,7 +5697,12 @@ def _validate_phase2_coverage_lock(
         raise BenchmarkError("Phase 2 coverage lock must be a JSON object")
     if raw != _canonical_json_bytes(document):
         raise BenchmarkError("Phase 2 coverage lock must use canonical JSON bytes")
-    scenario_bound = document.get("schema") == _PHASE2_COVERAGE_LOCK_SCHEMA_V2
+    schema = document.get("schema")
+    remote_bound = schema == _PHASE2_COVERAGE_LOCK_SCHEMA_V3
+    scenario_bound = schema in {
+        _PHASE2_COVERAGE_LOCK_SCHEMA_V2,
+        _PHASE2_COVERAGE_LOCK_SCHEMA_V3,
+    }
     scenario_schedule: tuple[str, ...] | None = None
     expected_fields = {
         "schema",
@@ -5576,11 +5719,16 @@ def _validate_phase2_coverage_lock(
         expected_fields.add("scenario_matrix")
         from .phase2_scenario_contract import (
             Phase2ScenarioContractError,
+            validate_phase2_remote_coverage_lock,
             validate_phase2_scenario_coverage_lock,
         )
 
         try:
-            scenario_schedule = validate_phase2_scenario_coverage_lock(document)
+            scenario_schedule = (
+                validate_phase2_remote_coverage_lock(document)
+                if remote_bound
+                else validate_phase2_scenario_coverage_lock(document)
+            )
         except Phase2ScenarioContractError as exc:
             raise BenchmarkError(str(exc)) from exc
     _exact_keys(
@@ -5591,15 +5739,23 @@ def _validate_phase2_coverage_lock(
     if (
         document["schema"]
         != (
-            _PHASE2_COVERAGE_LOCK_SCHEMA_V2
-            if scenario_bound
-            else _PHASE2_COVERAGE_LOCK_SCHEMA
+            _PHASE2_COVERAGE_LOCK_SCHEMA_V3
+            if remote_bound
+            else (
+                _PHASE2_COVERAGE_LOCK_SCHEMA_V2
+                if scenario_bound
+                else _PHASE2_COVERAGE_LOCK_SCHEMA
+            )
         )
         or document["assurance"]
         != (
-            _PHASE2_COVERAGE_LOCK_ASSURANCE_V2
-            if scenario_bound
-            else _PHASE2_COVERAGE_LOCK_ASSURANCE
+            _PHASE2_COVERAGE_LOCK_ASSURANCE_V3
+            if remote_bound
+            else (
+                _PHASE2_COVERAGE_LOCK_ASSURANCE_V2
+                if scenario_bound
+                else _PHASE2_COVERAGE_LOCK_ASSURANCE
+            )
         )
         or document["evaluation_split"] != "held_out"
         or document["verdict_profile"] != _PHASE2_VERDICT_PROFILE
@@ -5632,20 +5788,20 @@ def _validate_phase2_coverage_lock(
         ARTIFACT_SCHEMA_V4,
         ARTIFACT_SCHEMA_V5,
     )
+
     gvisor = document["gvisor"]
     if not isinstance(gvisor, dict):
         raise BenchmarkError("Phase 2 coverage lock.gvisor must be a JSON object")
-    _exact_keys(
-        gvisor,
-        {
-            "receipt_schema",
-            "normalization_profile",
-            "execution_profile",
-            "lock_digest",
-            "verifier_implementation_digest",
-        },
-        "Phase 2 coverage lock.gvisor",
-    )
+    gvisor_fields = {
+        "receipt_schema",
+        "normalization_profile",
+        "execution_profile",
+        "lock_digest",
+        "verifier_implementation_digest",
+    }
+    if remote_bound:
+        gvisor_fields.update({"remote_trace_receipt_schema", "remote_trace_profile"})
+    _exact_keys(gvisor, gvisor_fields, "Phase 2 coverage lock.gvisor")
     if (
         gvisor["receipt_schema"]
         != (ARTIFACT_SCHEMA_V5 if scenario_bound else ARTIFACT_SCHEMA_V4)
@@ -5655,6 +5811,14 @@ def _validate_phase2_coverage_lock(
             ARTIFACT_EXECUTION_PROFILE_V2
             if scenario_bound
             else ARTIFACT_EXECUTION_PROFILE
+        )
+        or (
+            remote_bound
+            and (
+                gvisor["remote_trace_receipt_schema"]
+                != _PHASE2_REMOTE_TRACE_RECEIPT_SCHEMA
+                or gvisor["remote_trace_profile"] != _PHASE2_REMOTE_TRACE_PROFILE
+            )
         )
     ):
         raise BenchmarkError("Phase 2 coverage lock gVisor profile is unsupported")
@@ -5807,6 +5971,14 @@ def _validate_phase2_coverage_lock(
         "candidate_key": _system_key(candidate),
         "cases": locked_cases,
         "scenario_schedule": scenario_schedule,
+        "remote_trace": (
+            {
+                "receipt_schema": gvisor["remote_trace_receipt_schema"],
+                "profile": gvisor["remote_trace_profile"],
+            }
+            if remote_bound
+            else None
+        ),
     }
 
 

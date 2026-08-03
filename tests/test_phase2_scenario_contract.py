@@ -11,11 +11,18 @@ from aragorn.phase2_scenario_contract import (
     COVERAGE_LOCK_ASSURANCE,
     COVERAGE_LOCK_SCHEMA,
     PUBLIC_FIXTURE_COMMIT,
+    REMOTE_CATALOG_SCHEMA,
+    REMOTE_COVERAGE_LOCK_ASSURANCE,
+    REMOTE_COVERAGE_LOCK_SCHEMA,
+    REMOTE_TRACE_PROFILE,
+    REMOTE_TRACE_RECEIPT_SCHEMA,
     RUN_SCHEDULE,
     SCENARIO_ENVIRONMENT_VARIABLE,
     SCENARIO_PROFILE,
     Phase2ScenarioContractError,
     scenario_for_run,
+    validate_phase2_remote_catalog,
+    validate_phase2_remote_coverage_lock,
     validate_phase2_scenario_catalog,
     validate_phase2_scenario_coverage_lock,
 )
@@ -29,9 +36,7 @@ class Phase2ScenarioContractTests(unittest.TestCase):
         coverage = self._coverage_lock(catalog)
 
         self.assertEqual(validate_phase2_scenario_catalog(catalog), RUN_SCHEDULE)
-        self.assertEqual(
-            validate_phase2_scenario_coverage_lock(coverage), RUN_SCHEDULE
-        )
+        self.assertEqual(validate_phase2_scenario_coverage_lock(coverage), RUN_SCHEDULE)
         self.assertEqual(
             tuple(scenario_for_run(run_id) for run_id in range(1, 6)),
             RUN_SCHEDULE,
@@ -66,16 +71,52 @@ class Phase2ScenarioContractTests(unittest.TestCase):
         variants.append((validate_phase2_scenario_coverage_lock, repeated_case))
 
         for validator, document in variants:
-            with self.subTest(validator=validator.__name__), self.assertRaises(
-                Phase2ScenarioContractError
+            with (
+                self.subTest(validator=validator.__name__),
+                self.assertRaises(Phase2ScenarioContractError),
             ):
                 validator(document)
 
         for run_id in (False, 0, 6, "1"):
-            with self.subTest(run_id=run_id), self.assertRaises(
-                Phase2ScenarioContractError
+            with (
+                self.subTest(run_id=run_id),
+                self.assertRaises(Phase2ScenarioContractError),
             ):
                 scenario_for_run(run_id)
+
+    def test_v3_binds_remote_trace_without_widening_v2(self) -> None:
+        catalog = self._remote_catalog()
+        coverage = self._coverage_lock(catalog, remote=True)
+
+        self.assertEqual(catalog["schema"], REMOTE_CATALOG_SCHEMA)
+        self.assertEqual(validate_phase2_remote_catalog(catalog), RUN_SCHEDULE)
+        self.assertEqual(validate_phase2_remote_coverage_lock(coverage), RUN_SCHEDULE)
+        with self.assertRaises(Phase2ScenarioContractError):
+            validate_phase2_scenario_catalog(catalog)
+        with self.assertRaises(Phase2ScenarioContractError):
+            validate_phase2_scenario_coverage_lock(coverage)
+
+        variants = []
+        wrong_schema = copy.deepcopy(catalog)
+        wrong_schema["candidate"]["config"]["remote_trace_receipt_schema"] = (
+            "aragorn/gvisor-remote-trace-capture-receipt/v1"
+        )
+        variants.append((validate_phase2_remote_catalog, wrong_schema))
+
+        wrong_profile = copy.deepcopy(coverage)
+        wrong_profile["gvisor"]["remote_trace_profile"] = "dynamic/v1"
+        variants.append((validate_phase2_remote_coverage_lock, wrong_profile))
+
+        missing_binding = copy.deepcopy(coverage)
+        del missing_binding["gvisor"]["remote_trace_receipt_schema"]
+        variants.append((validate_phase2_remote_coverage_lock, missing_binding))
+
+        for validator, document in variants:
+            with (
+                self.subTest(validator=validator.__name__),
+                self.assertRaises(Phase2ScenarioContractError),
+            ):
+                validator(document)
 
     def test_v1_catalog_is_rejected_without_mutation(self) -> None:
         v1 = json.loads(
@@ -104,34 +145,50 @@ class Phase2ScenarioContractTests(unittest.TestCase):
         catalog["candidate"]["config"]["gvisor_receipt_schema"] = (
             "aragorn/gvisor-acquired-artifact-receipt/v5"
         )
-        catalog["candidate"]["config"]["execution_profile"] = (
-            "bounded-single-script/v2"
-        )
+        catalog["candidate"]["config"]["execution_profile"] = "bounded-single-script/v2"
         catalog["scenario_matrix"] = self._scenario_matrix()
         return catalog
 
-    def _coverage_lock(self, catalog: dict[str, object]) -> dict[str, object]:
+    @staticmethod
+    def _remote_catalog() -> dict[str, object]:
+        return json.loads(
+            (ROOT / "benchmark" / "phase2-matrix-catalog-v3.json").read_bytes()
+        )
+
+    def _coverage_lock(
+        self, catalog: dict[str, object], *, remote: bool = False
+    ) -> dict[str, object]:
         digest = "sha256:" + "1" * 64
+        gvisor = {
+            "receipt_schema": "aragorn/gvisor-acquired-artifact-receipt/v5",
+            "normalization_profile": "successful-openat-execve-attributed/v1",
+            "execution_profile": "bounded-single-script/v2",
+            "lock_digest": "sha256:" + "4" * 64,
+            "verifier_implementation_digest": "sha256:" + "5" * 64,
+        }
+        if remote:
+            gvisor.update(
+                {
+                    "remote_trace_receipt_schema": REMOTE_TRACE_RECEIPT_SCHEMA,
+                    "remote_trace_profile": REMOTE_TRACE_PROFILE,
+                }
+            )
         return {
-            "schema": COVERAGE_LOCK_SCHEMA,
-            "assurance": COVERAGE_LOCK_ASSURANCE,
+            "schema": (REMOTE_COVERAGE_LOCK_SCHEMA if remote else COVERAGE_LOCK_SCHEMA),
+            "assurance": (
+                REMOTE_COVERAGE_LOCK_ASSURANCE if remote else COVERAGE_LOCK_ASSURANCE
+            ),
             "suite_digest": digest,
             "evaluation_split": "held_out",
             "runs_per_case": 5,
             "candidate_system": {
                 "name": "aragorn",
-                "version": "0.2.0-phase2",
+                "version": catalog["candidate"]["version"],
                 "implementation_digest": "sha256:" + "2" * 64,
                 "config_digest": "sha256:" + "3" * 64,
             },
             "verdict_profile": "undeclared-observed-review/v1",
-            "gvisor": {
-                "receipt_schema": "aragorn/gvisor-acquired-artifact-receipt/v5",
-                "normalization_profile": "successful-openat-execve-attributed/v1",
-                "execution_profile": "bounded-single-script/v2",
-                "lock_digest": "sha256:" + "4" * 64,
-                "verifier_implementation_digest": "sha256:" + "5" * 64,
-            },
+            "gvisor": gvisor,
             "scenario_matrix": self._scenario_matrix(),
             "cases": [
                 {

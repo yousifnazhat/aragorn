@@ -1,9 +1,8 @@
 """Derive controls from the exact BusyBox ``--network=none`` probe.
 
-TCP and UDP positive controls use the sandbox loopback interface. Non-loopback
-denial requires zero non-loopback interfaces, zero IPv4 routes, and failed
-run-bound TCP and UDP sends. The egress-observer artifact must be the same raw
-transcript, so a receipt cannot substitute a separate asserted result.
+TCP and UDP positive controls use the sandbox loopback interface. The two
+non-loopback controls prove only zero visible non-loopback paths and failed
+run-bound sends; they do not claim independent packet observation.
 """
 
 from __future__ import annotations
@@ -15,9 +14,7 @@ from typing import Any
 
 from .oci_worker_protocol import WorkerProtocolError, canonical_json
 
-PROBE_TRANSCRIPT_SCHEMA = (
-    "aragorn/gvisor-backend-qualification-probe-transcript/v1"
-)
+PROBE_TRANSCRIPT_SCHEMA = "aragorn/gvisor-backend-qualification-probe-transcript/v1"
 HOST_SNAPSHOT_SCHEMA = "aragorn/gvisor-backend-qualification-host-snapshot/v1"
 
 _MAX_TRANSCRIPT_BYTES = 16 * 1024
@@ -61,6 +58,7 @@ _TRANSCRIPT_FIELDS = (
     "input_unlink_rc",
     "input_post_match",
     "tmpfs_script_write_rc",
+    "tmpfs_chmod_rc",
     "tmpfs_exec_rc",
     "mount_rc",
     "unshare_rc",
@@ -79,11 +77,7 @@ _BOOLEAN_FIELDS = {
     "input_read_match",
     "input_post_match",
 }
-_RETURN_CODE_FIELDS = {
-    field
-    for field in _TRANSCRIPT_FIELDS
-    if field.endswith("_rc")
-}
+_RETURN_CODE_FIELDS = {field for field in _TRANSCRIPT_FIELDS if field.endswith("_rc")}
 _SNAPSHOT_FIELDS = {
     "schema",
     "run_id",
@@ -104,7 +98,6 @@ def derive_gvisor_backend_controls(
     probe_stderr: bytes,
     host_sentinel_pre: bytes,
     host_sentinel_post: bytes,
-    egress_observer: bytes,
     *,
     expected_run_id: str,
 ) -> list[dict[str, Any]]:
@@ -113,10 +106,6 @@ def derive_gvisor_backend_controls(
     if probe_stderr:
         raise GVisorBackendProbeError("backend qualification probe wrote stderr")
     values = _transcript(probe_stdout, expected_run_id=expected_run_id)
-    if egress_observer != probe_stdout:
-        raise GVisorBackendProbeError(
-            "backend qualification egress observation transcript drifted"
-        )
 
     host_pid = _positive_integer(values["host_pid"], "probe host_pid")
     before = _snapshot(
@@ -134,9 +123,7 @@ def derive_gvisor_backend_controls(
     expected_host_file = _raw_digest(
         f"Aragorn-host-file-{expected_run_id}".encode("ascii")
     )
-    expected_input = _raw_digest(
-        f"Aragorn-input-{expected_run_id}".encode("ascii")
-    )
+    expected_input = _raw_digest(f"Aragorn-input-{expected_run_id}".encode("ascii"))
     expected_process_marker = _raw_digest(
         f"Aragorn-host-process-{expected_run_id}".encode("ascii")
     )
@@ -149,9 +136,7 @@ def derive_gvisor_backend_controls(
             "backend qualification host sentinel pre-snapshot is unbound"
         )
 
-    host_file_unchanged = (
-        after["host_file_digest"] == before["host_file_digest"]
-    )
+    host_file_unchanged = after["host_file_digest"] == before["host_file_digest"]
     input_unchanged = after["input_digest"] == before["input_digest"]
     host_process_alive = (
         after["process_start_ticks"] == before["process_start_ticks"]
@@ -238,18 +223,16 @@ def derive_gvisor_backend_controls(
             "control_id": "tcp-egress-denied",
             "observed": {
                 "attempted": True,
-                "probe_token_received": not (
-                    no_non_loopback_path and values["tcp_egress_send_rc"] != "0"
-                ),
+                "no_non_loopback_path": no_non_loopback_path,
+                "send_failed": values["tcp_egress_send_rc"] != "0",
             },
         },
         {
             "control_id": "udp-egress-denied",
             "observed": {
                 "attempted": True,
-                "probe_token_received": not (
-                    no_non_loopback_path and values["udp_egress_send_rc"] != "0"
-                ),
+                "no_non_loopback_path": no_non_loopback_path,
+                "send_failed": values["udp_egress_send_rc"] != "0",
             },
         },
         {
@@ -351,7 +334,13 @@ def _transcript(raw: bytes, *, expected_run_id: str) -> dict[str, str]:
             "backend qualification probe transcript is unbound"
         )
     for field in _RETURN_CODE_FIELDS:
-        _return_code(values[field], field)
+        result = _return_code(values[field], field)
+        if result in {126, 127} and field != "tmpfs_exec_rc":
+            raise GVisorBackendProbeError(f"probe {field} did not execute")
+    if values["tmpfs_chmod_rc"] != "0" or values["tmpfs_exec_rc"] != "126":
+        raise GVisorBackendProbeError(
+            "probe tmpfs execution precondition or denial changed"
+        )
     for field in _BOOLEAN_FIELDS:
         if values[field] not in {"0", "1"}:
             raise GVisorBackendProbeError(f"probe {field} is not Boolean")
@@ -393,19 +382,19 @@ def _snapshot(
         canonical = canonical_json(value)
     except WorkerProtocolError as exc:
         raise GVisorBackendProbeError(str(exc)) from exc
-    if not isinstance(value, dict) or set(value) != _SNAPSHOT_FIELDS or canonical != raw:
-        raise GVisorBackendProbeError(
-            f"backend qualification {label} fields changed"
-        )
+    if (
+        not isinstance(value, dict)
+        or set(value) != _SNAPSHOT_FIELDS
+        or canonical != raw
+    ):
+        raise GVisorBackendProbeError(f"backend qualification {label} fields changed")
     if (
         value["schema"] != HOST_SNAPSHOT_SCHEMA
         or value["run_id"] != expected_run_id
         or type(value["process_id"]) is not int
         or value["process_id"] != expected_process_id
     ):
-        raise GVisorBackendProbeError(
-            f"backend qualification {label} is unbound"
-        )
+        raise GVisorBackendProbeError(f"backend qualification {label} is unbound")
     for field in ("host_file_digest", "input_digest", "process_marker_digest"):
         if not isinstance(value[field], str) or _DIGEST.fullmatch(value[field]) is None:
             raise GVisorBackendProbeError(
@@ -430,12 +419,7 @@ def _return_code(value: str, label: str) -> int:
 
 
 def _integer(value: str, label: str) -> int:
-    if (
-        not value
-        or len(value) > 10
-        or not value.isascii()
-        or not value.isdecimal()
-    ):
+    if not value or len(value) > 10 or not value.isascii() or not value.isdecimal():
         raise GVisorBackendProbeError(f"probe {label} is not decimal")
     result = int(value)
     if str(result) != value:

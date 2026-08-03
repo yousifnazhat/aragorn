@@ -26,6 +26,7 @@ from aragorn.cas import CAS
 _EMPTY_DIGEST = (
     "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
+ROOT = Path(__file__).parents[1]
 
 
 class Phase2MetricsCheckpointTests(unittest.TestCase):
@@ -448,6 +449,47 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
         )
         self.assertTrue(report["decision"]["metrics_passed"])
 
+    def test_remote_v3_keeps_the_v3_checkpoint_deficits(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            suite, outcomes, root, state, lock_path, lock_digest = self._locked_harness(
+                Path(temporary), remote=True
+            )
+            with patch(
+                "aragorn.benchmark._verify_phase2_gvisor_v4_evidence",
+                side_effect=self._fake_phase2_binding,
+            ) as locked_verifier:
+                report = evaluate(
+                    suite,
+                    outcomes,
+                    root,
+                    evidence_state=state,
+                    phase2_metrics_checkpoint=True,
+                    phase2_coverage_lock=lock_path,
+                    expected_phase2_coverage_lock_digest=lock_digest,
+                )
+
+        self.assertEqual(locked_verifier.call_count, 100)
+        self.assertTrue(
+            all(
+                call.kwargs["remote_trace"]
+                == {
+                    "receipt_schema": (
+                        "aragorn/gvisor-remote-trace-capture-receipt/v2"
+                    ),
+                    "profile": "gvisor-remote-default-pod-init-seqpacket/v1",
+                }
+                for call in locked_verifier.call_args_list
+            )
+        )
+        self.assertEqual(
+            report["schema"], "aragorn/benchmark-phase2-metrics-checkpoint/v3"
+        )
+        self.assertFalse(report["phase2_exit_eligible"])
+        self.assertEqual(
+            report["missing_phase2_exit_requirements"],
+            ["CAPTURE_COMPLETENESS_REQUIRED", "QUALIFIED_ISOLATED_BACKEND_REQUIRED"],
+        )
+
     def test_lock_digest_and_manifest_substitution_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             suite, _outcomes, root, _state, lock_path, lock_digest = (
@@ -584,6 +626,101 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
                     label="outcomes[0]",
                 )
 
+    def test_remote_evidence_cross_binds_workload_run_and_canary_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            (
+                cas,
+                outcome,
+                pins,
+                receipt,
+                remote_receipt,
+                remote_trace,
+                canary_remote,
+                lock_digest,
+            ) = self._one_cell_remote_evidence(Path(temporary))
+            with (
+                patch(
+                    "aragorn.gvisor_runtime.verify_gvisor_acquired_artifact",
+                    return_value=receipt,
+                ),
+                patch(
+                    "aragorn.gvisor_remote_trace_capture."
+                    "verify_gvisor_remote_trace_capture",
+                    return_value=remote_receipt,
+                ) as remote_verifier,
+            ):
+                binding = _verify_phase2_gvisor_v4_evidence(
+                    cas,
+                    outcome,
+                    coverage_lock_digest=lock_digest,
+                    pins=pins,
+                    label="outcomes[0]",
+                    remote_trace=remote_trace,
+                )
+
+            self.assertEqual(
+                binding["remote_trace_receipt_digest"],
+                outcome["_remote_receipt_digest"],
+            )
+            self.assertEqual(
+                binding["remote_trace_container_id"], remote_receipt["container_id"]
+            )
+            remote_verifier.assert_called_once_with(
+                cas,
+                outcome["_remote_receipt_digest"],
+                expected_runtime_lock_digest=remote_receipt["runtime_lock_digest"],
+                expected_session_config_digest=canary_remote["session_config_digest"],
+                expected_monitor_implementation_digest=canary_remote[
+                    "monitor_implementation_digest"
+                ],
+                expected_workload_receipt_digest=outcome["_receipt_digest"],
+            )
+
+    def test_remote_evidence_identity_drift_fails_closed(self) -> None:
+        mutations = {
+            "schema": "aragorn/gvisor-remote-trace-capture-receipt/v1",
+            "profile": "changed/v1",
+            "run_id": "2" * 32,
+            "sandbox_id": "d" * 64,
+            "container_id": "d" * 64,
+            "runtime_lock_digest": _EMPTY_DIGEST,
+            "workload_receipt_digest": _EMPTY_DIGEST,
+        }
+        for field, value in mutations.items():
+            with tempfile.TemporaryDirectory() as temporary, self.subTest(field=field):
+                (
+                    cas,
+                    outcome,
+                    pins,
+                    receipt,
+                    remote_receipt,
+                    remote_trace,
+                    _canary_remote,
+                    lock_digest,
+                ) = self._one_cell_remote_evidence(Path(temporary))
+                changed = copy.deepcopy(remote_receipt)
+                changed[field] = value
+                with (
+                    patch(
+                        "aragorn.gvisor_runtime.verify_gvisor_acquired_artifact",
+                        return_value=receipt,
+                    ),
+                    patch(
+                        "aragorn.gvisor_remote_trace_capture."
+                        "verify_gvisor_remote_trace_capture",
+                        return_value=changed,
+                    ),
+                    self.assertRaisesRegex(BenchmarkError, "remote trace binding"),
+                ):
+                    _verify_phase2_gvisor_v4_evidence(
+                        cas,
+                        outcome,
+                        coverage_lock_digest=lock_digest,
+                        pins=pins,
+                        label="outcomes[0]",
+                        remote_trace=remote_trace,
+                    )
+
     def test_batch_requires_matrix_closure_and_unique_run_evidence(self) -> None:
         phase2_binding = {"cases": {"case-a": {}, "case-b": {}}}
         bindings = [
@@ -621,6 +758,36 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
                     runs_per_case=5,
                 )
 
+        remote_binding = {
+            "cases": phase2_binding["cases"],
+            "remote_trace": {
+                "receipt_schema": "aragorn/gvisor-remote-trace-capture-receipt/v2",
+                "profile": "gvisor-remote-default-pod-init-seqpacket/v1",
+            },
+        }
+        remote_bindings = [
+            self._fake_binding(case_id, run_id, remote=True)
+            for case_id in remote_binding["cases"]
+            for run_id in range(1, 6)
+        ]
+        _verify_phase2_gvisor_batch_bindings(
+            remote_bindings,
+            phase2_binding=remote_binding,
+            runs_per_case=5,
+        )
+        for field in ("remote_trace_receipt_digest", "remote_trace_container_id"):
+            repeated = copy.deepcopy(remote_bindings)
+            repeated[1][field] = repeated[0][field]
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(BenchmarkError, f"repeats {field}"),
+            ):
+                _verify_phase2_gvisor_batch_bindings(
+                    repeated,
+                    phase2_binding=remote_binding,
+                    runs_per_case=5,
+                )
+
     def test_nonexecutable_shell_carrier_is_accepted_but_executable_is_not(
         self,
     ) -> None:
@@ -635,7 +802,7 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
 
     @classmethod
     def _locked_harness(
-        cls, base: Path
+        cls, base: Path, *, remote: bool = False
     ) -> tuple[dict, list[dict], Path, Path, Path, str]:
         root = base / "suite"
         root.mkdir()
@@ -672,7 +839,7 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
         }
         outcomes = Phase2MetricsCheckpointTests._outcomes(suite)
         manifests = cls._suite_manifests(suite, root)
-        lock = cls._coverage_lock(suite, manifests)
+        lock = cls._coverage_lock(suite, manifests, remote=remote)
         lock_path = base / "phase2-coverage-lock.json"
         lock_digest = cls._write_document(lock_path, lock)
         return suite, outcomes, root, state, lock_path, lock_digest
@@ -715,7 +882,9 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
         return manifests
 
     @classmethod
-    def _coverage_lock(cls, suite: dict, manifests: dict[str, dict]) -> dict:
+    def _coverage_lock(
+        cls, suite: dict, manifests: dict[str, dict], *, remote: bool = False
+    ) -> dict:
         gvisor_lock = "sha256:" + "a" * 64
         verifier = "sha256:" + "b" * 64
         cases = []
@@ -744,7 +913,7 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
                     "declared_capabilities": ["file-read", "process-exec"],
                 }
             )
-        return {
+        lock = {
             "schema": "aragorn/benchmark-phase2-coverage-lock/v1",
             "assurance": (
                 "operator_asserted_pre_outcome_binding_not_independent_or_timestamped"
@@ -763,21 +932,62 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
             },
             "cases": cases,
         }
+        if remote:
+            lock.update(
+                {
+                    "schema": "aragorn/benchmark-phase2-coverage-lock/v3",
+                    "assurance": (
+                        "operator_asserted_pre_outcome_scenario_remote_trace_"
+                        "binding_not_independent_or_timestamped"
+                    ),
+                    "scenario_matrix": {
+                        "profile": "two-scenario-path-surface/v1",
+                        "environment_variable": "ARAGORN_SCENARIO",
+                        "run_schedule": [
+                            "primary",
+                            "alternate",
+                            "primary",
+                            "alternate",
+                            "primary",
+                        ],
+                    },
+                }
+            )
+            lock["gvisor"].update(
+                {
+                    "receipt_schema": "aragorn/gvisor-acquired-artifact-receipt/v5",
+                    "execution_profile": "bounded-single-script/v2",
+                    "remote_trace_receipt_schema": (
+                        "aragorn/gvisor-remote-trace-capture-receipt/v2"
+                    ),
+                    "remote_trace_profile": (
+                        "gvisor-remote-default-pod-init-seqpacket/v1"
+                    ),
+                }
+            )
+        return lock
 
     @staticmethod
-    def _fake_phase2_binding(_cas: CAS, outcome: dict, **_kwargs: object) -> dict:
+    def _fake_phase2_binding(_cas: CAS, outcome: dict, **kwargs: object) -> dict:
         return Phase2LockedCheckpointTests._fake_binding(
-            outcome["case_id"], outcome["run_id"], outcome["evidence_digest"]
+            outcome["case_id"],
+            outcome["run_id"],
+            outcome["evidence_digest"],
+            remote=kwargs.get("remote_trace") is not None,
         )
 
     @staticmethod
     def _fake_binding(
-        case_id: str, run_id: int, evidence_digest: str | None = None
+        case_id: str,
+        run_id: int,
+        evidence_digest: str | None = None,
+        *,
+        remote: bool = False,
     ) -> dict:
         def digest(field: str) -> str:
             return _digest_json({"field": field, "case": case_id, "run": run_id})
 
-        return {
+        binding = {
             "case_id": case_id,
             "run_id": run_id,
             "evidence_digest": evidence_digest or digest("evidence"),
@@ -788,6 +998,15 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
             "capability_diff_digest": _EMPTY_DIGEST,
             "attribution_manifest_digest": _EMPTY_DIGEST,
         }
+        if remote:
+            binding.update(
+                {
+                    "remote_trace_receipt_digest": digest("remote-receipt"),
+                    "remote_trace_container_id": digest("container").split(":", 1)[1],
+                    "scenario_id": ("primary" if run_id in {1, 3, 5} else "alternate"),
+                }
+            )
+        return binding
 
     @classmethod
     def _one_cell_evidence(
@@ -939,6 +1158,88 @@ class Phase2LockedCheckpointTests(unittest.TestCase):
         }
         outcome["evidence_digest"] = cls._put_document(cas, envelope)
         return cas, outcome, pins, receipt, lock_digest
+
+    @classmethod
+    def _one_cell_remote_evidence(
+        cls, base: Path
+    ) -> tuple[CAS, dict, dict, dict, dict, dict, dict, str]:
+        cas, outcome, pins, receipt, lock_digest = cls._one_cell_evidence(base)
+        canary_raw = (
+            ROOT / "benchmark" / "gvisor-detonation-canary-v2.lock.json"
+        ).read_bytes()
+        canary_lock = json.loads(canary_raw)
+        canary_digest = cas.put(BytesIO(canary_raw), max_bytes=64 * 1024)
+        pins.update(
+            {
+                "expected_lock_digest": canary_digest,
+                "expected_execution_profile": "bounded-single-script/v2",
+                "expected_scenario_id": "primary",
+            }
+        )
+        container_id = "c" * 64
+        run_request = {
+            "schema": "aragorn/gvisor-acquired-artifact-run-request/v5",
+            "run_id": receipt["run_id"],
+            "container_id": container_id,
+            "runtime_lock_digest": canary_lock["runtime_lock_digest"],
+        }
+        run_request_digest = cls._put_document(cas, run_request)
+        diff_receipt = json.loads(cas.read(receipt["capability_diff_receipt_digest"]))
+        diff_receipt["run_request_digest"] = run_request_digest
+        receipt.update(
+            {
+                "schema": "aragorn/gvisor-acquired-artifact-receipt/v5",
+                "scenario_id": "primary",
+                "execution_profile": "bounded-single-script/v2",
+                "lock_digest": canary_digest,
+                "run_request_digest": run_request_digest,
+                "capability_diff_receipt_digest": cls._put_document(cas, diff_receipt),
+            }
+        )
+        workload_receipt_digest = cls._put_document(cas, receipt)
+        remote_receipt = {
+            "schema": "aragorn/gvisor-remote-trace-capture-receipt/v2",
+            "profile": "gvisor-remote-default-pod-init-seqpacket/v1",
+            "run_id": receipt["run_id"],
+            "sandbox_id": container_id,
+            "container_id": container_id,
+            "runtime_lock_digest": canary_lock["runtime_lock_digest"],
+            "workload_receipt_digest": workload_receipt_digest,
+        }
+        remote_receipt_digest = cls._put_document(cas, remote_receipt)
+        envelope = json.loads(cas.read(outcome["evidence_digest"]))
+        envelope.update(
+            {
+                "schema": "aragorn/benchmark-phase2-gvisor-v5-remote-evidence/v3",
+                "authority": (
+                    "LOCK_BOUND_TWO_SCENARIO_ATTRIBUTED_GVISOR_V5_CATEGORY_DIFF_"
+                    "AND_GVISOR_REMOTE_TRACE_V2_RAW_WIRE_CLOSURE_ONLY_NOT_PROCESS_"
+                    "ANCESTRY_SCRIPT_SAFETY_CAPTURE_COMPLETENESS_RUNTIME_"
+                    "ATTESTATION_ISOLATION_BACKEND_QUALIFICATION_ADMISSION_OR_"
+                    "PHASE2_EXIT_AUTHORITY"
+                ),
+                "scenario_id": "primary",
+                "gvisor_receipt_digest": workload_receipt_digest,
+                "remote_trace_receipt_digest": remote_receipt_digest,
+            }
+        )
+        outcome["evidence_digest"] = cls._put_document(cas, envelope)
+        outcome["_receipt_digest"] = workload_receipt_digest
+        outcome["_remote_receipt_digest"] = remote_receipt_digest
+        remote_trace = {
+            "receipt_schema": "aragorn/gvisor-remote-trace-capture-receipt/v2",
+            "profile": "gvisor-remote-default-pod-init-seqpacket/v1",
+        }
+        return (
+            cas,
+            outcome,
+            pins,
+            receipt,
+            remote_receipt,
+            remote_trace,
+            canary_lock["remote_trace"],
+            lock_digest,
+        )
 
     @staticmethod
     def _attribution_event(

@@ -9,9 +9,11 @@ from io import BytesIO
 from pathlib import Path
 
 from aragorn import gvisor_backend_qualification as qualification
+from aragorn import gvisor_runtime as runtime
 from aragorn.cas import CAS
 from aragorn.gvisor_backend_probe import HOST_SNAPSHOT_SCHEMA
 from aragorn.oci_worker_protocol import canonical_json
+from tests import test_gvisor_runtime as runtime_support
 
 
 class GVisorBackendQualificationTests(unittest.TestCase):
@@ -32,6 +34,8 @@ class GVisorBackendQualificationTests(unittest.TestCase):
                 fixture["cas"], fixture["receipt_digest"], **fixture["pins"]
             )
             self.assertEqual(set(closure), fixture["digests"])
+            self.assertIn(fixture["lock"]["canary_lock_digest"], closure)
+            self.assertIn(fixture["lock"]["daemon_config_digest"], closure)
             self.assertEqual(
                 closure,
                 {
@@ -42,17 +46,20 @@ class GVisorBackendQualificationTests(unittest.TestCase):
 
             root = Path(__file__).parents[1]
             lock_schema = json.loads(
-                (root / "schema/gvisor-backend-qualification-lock-v1.schema.json")
-                .read_text(encoding="utf-8")
+                (
+                    root / "schema/gvisor-backend-qualification-lock-v1.schema.json"
+                ).read_text(encoding="utf-8")
             )
             receipt_schema = json.loads(
-                (root / "schema/gvisor-backend-qualification-receipt-v1.schema.json")
-                .read_text(encoding="utf-8")
+                (
+                    root / "schema/gvisor-backend-qualification-receipt-v1.schema.json"
+                ).read_text(encoding="utf-8")
             )
             self.assertEqual(
                 lock_schema["properties"]["controls"]["const"],
                 qualification._CONTROL_IDS,
             )
+            self.assertEqual(set(lock_schema["required"]), qualification._LOCK_FIELDS)
             self.assertEqual(
                 receipt_schema["properties"]["authority"]["const"],
                 qualification.RECEIPT_AUTHORITY,
@@ -97,14 +104,10 @@ class GVisorBackendQualificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = _fixture(Path(temporary))
 
-            controls = json.loads(
-                fixture["cas"].read(fixture["control_digests"][0])
-            )
+            controls = json.loads(fixture["cas"].read(fixture["control_digests"][0]))
             controls["controls"].pop()
             changed = copy.deepcopy(fixture["receipt"])
-            changed["runs"][0]["control_evidence_digest"] = _put(
-                fixture, controls
-            )
+            changed["runs"][0]["control_evidence_digest"] = _put(fixture, controls)
             digest = _put(fixture, changed)
             with self.assertRaisesRegex(
                 qualification.GVisorBackendQualificationError,
@@ -126,14 +129,10 @@ class GVisorBackendQualificationTests(unittest.TestCase):
                     fixture["cas"], fixture["receipt_digest"], **drifted_pins
                 )
 
-            cleanup = json.loads(
-                fixture["cas"].read(fixture["cleanup_digests"][0])
-            )
+            cleanup = json.loads(fixture["cas"].read(fixture["cleanup_digests"][0]))
             cleanup["container_absent"] = False
             changed = copy.deepcopy(fixture["receipt"])
-            changed["runs"][0]["cleanup_evidence_digest"] = _put(
-                fixture, cleanup
-            )
+            changed["runs"][0]["cleanup_evidence_digest"] = _put(fixture, cleanup)
             digest = _put(fixture, changed)
             with self.assertRaisesRegex(
                 qualification.GVisorBackendQualificationError,
@@ -171,23 +170,16 @@ class GVisorBackendQualificationTests(unittest.TestCase):
     def test_asserted_control_cannot_override_probe_transcript(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = _fixture(Path(temporary))
-            evidence = json.loads(
-                fixture["cas"].read(fixture["control_digests"][0])
-            )
-            transcript = fixture["cas"].read(
-                evidence["artifacts"]["probe_stdout"]
-            )
+            evidence = json.loads(fixture["cas"].read(fixture["control_digests"][0]))
+            transcript = fixture["cas"].read(evidence["artifacts"]["probe_stdout"])
             changed_transcript = transcript.replace(
                 b"tcp_loopback_match=1\n",
                 b"tcp_loopback_match=0\n",
             )
             changed_digest = _put(fixture, changed_transcript)
             evidence["artifacts"]["probe_stdout"] = changed_digest
-            evidence["artifacts"]["egress_observer"] = changed_digest
             changed = copy.deepcopy(fixture["receipt"])
-            changed["runs"][0]["control_evidence_digest"] = _put(
-                fixture, evidence
-            )
+            changed["runs"][0]["control_evidence_digest"] = _put(fixture, evidence)
 
             with self.assertRaisesRegex(
                 qualification.GVisorBackendQualificationError,
@@ -197,11 +189,145 @@ class GVisorBackendQualificationTests(unittest.TestCase):
                     fixture["cas"], _put(fixture, changed), **fixture["pins"]
                 )
 
+    def test_forged_live_container_profile_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(Path(temporary))
+            live = json.loads(
+                fixture["cas"].read(
+                    fixture["artifact_digests"][0]["container_live_inspect"]
+                )
+            )
+            live[0]["Config"]["User"] = "0:0"
+
+            with self.assertRaisesRegex(
+                qualification.GVisorBackendQualificationError,
+                "container configuration changed",
+            ):
+                qualification.verify_gvisor_backend_qualification(
+                    fixture["cas"],
+                    _replace_artifact(fixture, "container_live_inspect", live),
+                    **fixture["pins"],
+                )
+
+    def test_missing_implementation_source_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(Path(temporary))
+            source_digest = fixture["implementation_files"]["analyze.py"]
+            _blob_path(fixture["cas"], source_digest).unlink()
+
+            with self.assertRaisesRegex(
+                qualification.GVisorBackendQualificationError,
+                "cannot verify gVisor backend qualification implementation",
+            ):
+                qualification.verify_gvisor_backend_qualification(
+                    fixture["cas"], fixture["receipt_digest"], **fixture["pins"]
+                )
+
+    def test_process_and_cleanup_artifact_tampering_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(Path(temporary))
+            processes = json.loads(
+                fixture["cas"].read(
+                    fixture["artifact_digests"][0]["container_processes"]
+                )
+            )
+            processes["processes"][1]["pid"] += 1
+            with self.assertRaisesRegex(
+                qualification.GVisorBackendQualificationError,
+                "process relationship changed",
+            ):
+                qualification.verify_gvisor_backend_qualification(
+                    fixture["cas"],
+                    _replace_artifact(fixture, "container_processes", processes),
+                    **fixture["pins"],
+                )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(Path(temporary))
+            cleanup = json.loads(
+                fixture["cas"].read(fixture["artifact_digests"][0]["container_cleanup"])
+            )
+            cleanup["absent"] = False
+            with self.assertRaisesRegex(
+                qualification.GVisorBackendQualificationError,
+                "container cleanup observation changed",
+            ):
+                qualification.verify_gvisor_backend_qualification(
+                    fixture["cas"],
+                    _replace_artifact(fixture, "container_cleanup", cleanup),
+                    **fixture["pins"],
+                )
+
+    def test_canary_runtime_argument_drift_fails_closed(self) -> None:
+        for replacement in ([], ["--network=host"], ["--network=none"] * 2):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as temporary:
+                fixture = _fixture(Path(temporary))
+                processes = json.loads(
+                    fixture["cas"].read(
+                        fixture["artifact_digests"][0]["container_processes"]
+                    )
+                )
+                argv = processes["processes"][1]["argv"]
+                index = argv.index("--network=none")
+                argv[index : index + 1] = replacement
+                with self.assertRaisesRegex(
+                    qualification.GVisorBackendQualificationError,
+                    "runtime process identity changed",
+                ):
+                    qualification.verify_gvisor_backend_qualification(
+                        fixture["cas"],
+                        _replace_artifact(fixture, "container_processes", processes),
+                        **fixture["pins"],
+                    )
+
+    def test_probe_setup_failures_do_not_count_as_denials(self) -> None:
+        for original, replacement, error in (
+            (b"tmpfs_chmod_rc=0\n", b"tmpfs_chmod_rc=1\n", "precondition"),
+            (b"mount_rc=1\n", b"mount_rc=127\n", "did not execute"),
+        ):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as temporary:
+                fixture = _fixture(Path(temporary))
+                evidence = json.loads(
+                    fixture["cas"].read(fixture["control_digests"][0])
+                )
+                transcript = fixture["cas"].read(
+                    evidence["artifacts"]["probe_stdout"]
+                )
+                evidence["artifacts"]["probe_stdout"] = _put(
+                    fixture, transcript.replace(original, replacement)
+                )
+                receipt = copy.deepcopy(fixture["receipt"])
+                receipt["runs"][0]["control_evidence_digest"] = _put(
+                    fixture, evidence
+                )
+                with self.assertRaisesRegex(
+                    qualification.GVisorBackendQualificationError, error
+                ):
+                    qualification.verify_gvisor_backend_qualification(
+                        fixture["cas"], _put(fixture, receipt), **fixture["pins"]
+                    )
+
 
 def _fixture(root: Path) -> dict:
     cas = CAS(root / "cas")
     fixture = {"cas": cas, "digests": set()}
-    runtime_lock_digest = _put(fixture, b"runtime-lock-v1")
+    runtime_raw = runtime.LOCK.read_bytes()
+    runtime_lock = runtime._runtime_lock(runtime_raw)
+    runtime_lock_digest = _put(fixture, runtime_raw)
+    canary_raw = runtime.CANARY_LOCK.read_bytes()
+    canary_lock = runtime._canary_lock(canary_raw)
+    canary_lock_digest = _put(fixture, canary_raw)
+    daemon_config_digest = _put(
+        fixture,
+        {
+            "runtimes": {
+                canary_lock["runtime"]["name"]: {
+                    "path": canary_lock["runtime"]["path"],
+                    "runtimeArgs": canary_lock["runtime"]["arguments"],
+                }
+            }
+        },
+    )
     probe_digest = _put(
         fixture,
         (
@@ -209,13 +335,25 @@ def _fixture(root: Path) -> dict:
             / "benchmark/fixtures/gvisor-backend-qualification/probe-v1.sh"
         ).read_bytes(),
     )
-    implementation_digest = _put(fixture, b"qualification-verifier")
+    implementation_files = {
+        module: _put(fixture, f"pinned qualification {module}\n".encode())
+        for module in qualification.IMPLEMENTATION_MODULES
+    }
+    implementation_digest = _put(
+        fixture,
+        {
+            "schema": qualification.IMPLEMENTATION_SCHEMA,
+            "files": implementation_files,
+        },
+    )
     lock = {
         "schema": qualification.LOCK_SCHEMA,
         "authority": qualification.LOCK_AUTHORITY,
         "profile": qualification.PROFILE,
         "runs": 3,
         "runtime_lock_digest": runtime_lock_digest,
+        "canary_lock_digest": canary_lock_digest,
+        "daemon_config_digest": daemon_config_digest,
         "probe_digest": probe_digest,
         "controls": qualification._CONTROL_IDS,
     }
@@ -223,9 +361,64 @@ def _fixture(root: Path) -> dict:
     lock_path = root / "qualification-lock.json"
     lock_path.write_bytes(canonical_json(lock))
 
+    installed_binaries = [
+        runtime_support._metadata(
+            item["path"],
+            item["digest"],
+            inode=(
+                10 if item["path"] == runtime_lock["runtime"]["path"] else 20 + index
+            ),
+        )
+        for index, item in enumerate(runtime_lock["binaries"])
+    ]
+    shared_artifacts = {
+        field: _put(fixture, raw)
+        for field, raw in {
+            "runtime_version": runtime_lock["runtime"]["version_output"].encode(),
+            "installed_binaries": canonical_json(installed_binaries),
+            "runtime_registration": canonical_json(
+                {
+                    "path": canary_lock["runtime"]["path"],
+                    "runtimeArgs": canary_lock["runtime"]["arguments"],
+                    "status": {},
+                }
+            ),
+            "docker_executable": canonical_json(
+                runtime_support._metadata(
+                    "/usr/bin/docker", "sha256:" + "e" * 64, inode=30
+                )
+            ),
+            "helper_implementations": canonical_json(
+                [
+                    {
+                        "module": module,
+                        "file": runtime_support._metadata(
+                            f"/opt/aragorn/src/aragorn/{module}",
+                            implementation_files[module],
+                            inode=40 + index,
+                        ),
+                    }
+                    for index, module in enumerate(qualification.HELPER_MODULES)
+                ]
+            ),
+            "runner_identity_pre": runtime_support._runner(),
+            "runner_identity_post": runtime_support._runner(),
+            "image_inspect": canonical_json(
+                [
+                    {
+                        "Id": runtime_lock["image"]["digest"],
+                        "RepoDigests": [runtime_lock["image"]["repo_digest"]],
+                        "Os": runtime_lock["image"]["os"],
+                        "Architecture": runtime_lock["image"]["architecture"],
+                    }
+                ]
+            ),
+        }.items()
+    }
     runs = []
     control_digests = []
     cleanup_digests = []
+    artifact_digests = []
     for sequence in range(1, 4):
         run_id = f"{sequence:032x}"
         container_id = f"{sequence:064x}"
@@ -243,30 +436,70 @@ def _fixture(root: Path) -> dict:
         host_pid = 1000 + sequence
         probe_stdout = _probe_transcript(run_id, host_pid)
         probe_stdout_digest = _put(fixture, probe_stdout)
-        host_snapshot_digest = _put(
-            fixture, _host_snapshot(run_id, host_pid)
-        )
-        artifacts = {
-            field: _put(fixture, f"{run_id}:{field}".encode("ascii"))
-            for field in qualification._ARTIFACT_FIELDS
-            if field
-            not in {
-                "egress_observer",
-                "host_sentinel_post",
-                "host_sentinel_pre",
-                "probe_stderr",
-                "probe_stdout",
-            }
-        }
+        host_snapshot_digest = _put(fixture, _host_snapshot(run_id, host_pid))
+        profile = qualification._qualification_profile(canary_lock, run_id, host_pid)
+        source = f"/run/aragorn-gvisor-qualification-{run_id}-fixture"
+        artifacts = dict(shared_artifacts)
         artifacts.update(
             {
-                "egress_observer": probe_stdout_digest,
+                "container_cleanup": _put(
+                    fixture,
+                    {
+                        "schema": runtime.CANARY_CLEANUP_SCHEMA,
+                        "container_id": container_id,
+                        "absent": True,
+                    },
+                ),
+                "container_live_inspect": _put(
+                    fixture,
+                    _qualification_container(
+                        runtime_lock,
+                        canary_lock,
+                        profile,
+                        run_id,
+                        container_id,
+                        source,
+                        "live",
+                    ),
+                ),
+                "container_post_inspect": _put(
+                    fixture,
+                    _qualification_container(
+                        runtime_lock,
+                        canary_lock,
+                        profile,
+                        run_id,
+                        container_id,
+                        source,
+                        "postrun",
+                    ),
+                ),
+                "container_pre_inspect": _put(
+                    fixture,
+                    _qualification_container(
+                        runtime_lock,
+                        canary_lock,
+                        profile,
+                        run_id,
+                        container_id,
+                        source,
+                        "prestart",
+                    ),
+                ),
+                "container_processes": _put(
+                    fixture,
+                    _qualification_processes(
+                        runtime_lock, canary_lock, container_id
+                    ),
+                ),
                 "host_sentinel_post": host_snapshot_digest,
                 "host_sentinel_pre": host_snapshot_digest,
                 "probe_stderr": _put(fixture, b""),
                 "probe_stdout": probe_stdout_digest,
             }
         )
+        if set(artifacts) != qualification._ARTIFACT_FIELDS:
+            raise AssertionError("test artifact inventory drifted")
         controls = [
             {
                 "control_id": control_id,
@@ -302,6 +535,7 @@ def _fixture(root: Path) -> dict:
         )
         control_digests.append(control_digest)
         cleanup_digests.append(cleanup_digest)
+        artifact_digests.append(artifacts)
         runs.append(
             {
                 "run_id": run_id,
@@ -331,6 +565,8 @@ def _fixture(root: Path) -> dict:
             "receipt_digest": receipt_digest,
             "control_digests": control_digests,
             "cleanup_digests": cleanup_digests,
+            "artifact_digests": artifact_digests,
+            "implementation_files": implementation_files,
             "pins": {
                 "expected_lock_digest": lock_digest,
                 "expected_runtime_lock_digest": runtime_lock_digest,
@@ -339,6 +575,96 @@ def _fixture(root: Path) -> dict:
         }
     )
     return fixture
+
+
+def _qualification_container(
+    runtime_lock: dict,
+    canary_lock: dict,
+    profile: dict,
+    run_id: str,
+    container_id: str,
+    source: str,
+    phase: str,
+) -> list[dict]:
+    container = runtime_support._container(runtime_lock, phase)
+    container["Id"] = container_id
+    container["Path"] = profile["command"][0]
+    container["Args"] = profile["command"][1:]
+    container["Config"].update(
+        {
+            "Cmd": profile["command"],
+            "User": profile["user"],
+            "Env": profile["environment"],
+            "Labels": {qualification._RUN_LABEL: run_id},
+        }
+    )
+    container["HostConfig"].update(
+        {
+            "Runtime": canary_lock["runtime"]["name"],
+            "NetworkMode": profile["network_mode"],
+            "ReadonlyRootfs": profile["read_only"],
+            "CapDrop": profile["cap_drop"],
+            "SecurityOpt": profile["security_opt"],
+            "PidsLimit": profile["pids_limit"],
+            "Memory": profile["memory_bytes"],
+            "MemorySwap": profile["memory_swap_bytes"],
+            "NanoCpus": profile["nano_cpus"],
+            "Ulimits": [
+                {
+                    "Name": "nofile",
+                    "Hard": profile["nofile_hard"],
+                    "Soft": profile["nofile_soft"],
+                }
+            ],
+            "Tmpfs": {profile["tmpfs"]["destination"]: profile["tmpfs"]["options"]},
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": source,
+                    "Target": qualification._MOUNT_DESTINATION,
+                    "ReadOnly": True,
+                }
+            ],
+        }
+    )
+    container["Mounts"] = [
+        {
+            "Type": "bind",
+            "Source": source,
+            "Destination": qualification._MOUNT_DESTINATION,
+            "Mode": "ro",
+            "RW": False,
+            "Propagation": "rprivate",
+        }
+    ]
+    return [container]
+
+
+def _qualification_processes(
+    runtime_lock: dict, canary_lock: dict, container_id: str
+) -> dict:
+    processes = json.loads(runtime_support._processes(runtime_lock))
+    for process in processes["processes"]:
+        if process["role"] in {"gofer", "sandbox"}:
+            process["argv"][1:3] = canary_lock["runtime"]["arguments"]
+        process["argv"] = [
+            container_id if value == runtime_support._CONTAINER_ID else value
+            for value in process["argv"]
+        ]
+    return processes
+
+
+def _replace_artifact(fixture: dict, field: str, value: object) -> str:
+    evidence = json.loads(fixture["cas"].read(fixture["control_digests"][0]))
+    evidence["artifacts"][field] = _put(fixture, value)
+    receipt = copy.deepcopy(fixture["receipt"])
+    receipt["runs"][0]["control_evidence_digest"] = _put(fixture, evidence)
+    return _put(fixture, receipt)
+
+
+def _blob_path(cas: CAS, digest: str) -> Path:
+    hexadecimal = digest.removeprefix("sha256:")
+    return cas.root / "blobs" / "sha256" / hexadecimal[:2] / hexadecimal[2:]
 
 
 def _put(fixture: dict, value: object) -> str:
@@ -385,6 +711,7 @@ def _probe_transcript(run_id: str, host_pid: int) -> bytes:
         "input_unlink_rc=1",
         "input_post_match=1",
         "tmpfs_script_write_rc=0",
+        "tmpfs_chmod_rc=0",
         "tmpfs_exec_rc=126",
         "mount_rc=1",
         "unshare_rc=1",

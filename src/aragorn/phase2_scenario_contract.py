@@ -7,13 +7,21 @@ from typing import Any
 
 CATALOG_SCHEMA = "aragorn/phase2-matrix-catalog/v2"
 COVERAGE_LOCK_SCHEMA = "aragorn/benchmark-phase2-coverage-lock/v2"
+REMOTE_CATALOG_SCHEMA = "aragorn/phase2-matrix-catalog/v3"
+REMOTE_COVERAGE_LOCK_SCHEMA = "aragorn/benchmark-phase2-coverage-lock/v3"
 CATALOG_ASSURANCE = "operator_authored_inert_plumbing_not_independent_efficacy"
 COVERAGE_LOCK_ASSURANCE = (
     "operator_asserted_pre_outcome_scenario_binding_not_independent_or_timestamped"
 )
+REMOTE_COVERAGE_LOCK_ASSURANCE = (
+    "operator_asserted_pre_outcome_scenario_remote_trace_binding_not_independent_"
+    "or_timestamped"
+)
 PUBLIC_FIXTURE_COMMIT = "fdf9111395179343a742d9dd6649e6d5f9da737b"
 SCENARIO_PROFILE = "two-scenario-path-surface/v1"
 SCENARIO_ENVIRONMENT_VARIABLE = "ARAGORN_SCENARIO"
+REMOTE_TRACE_RECEIPT_SCHEMA = "aragorn/gvisor-remote-trace-capture-receipt/v2"
+REMOTE_TRACE_PROFILE = "gvisor-remote-default-pod-init-seqpacket/v1"
 RUN_SCHEDULE = ("primary", "alternate", "primary", "alternate", "primary")
 
 _SOURCE = {
@@ -31,6 +39,11 @@ _CANDIDATE_CONFIG = {
     "execution_profile": "bounded-single-script/v2",
     "entrypoint_path": "run.sh",
 }
+_REMOTE_CANDIDATE_CONFIG = {
+    **_CANDIDATE_CONFIG,
+    "remote_trace_receipt_schema": REMOTE_TRACE_RECEIPT_SCHEMA,
+    "remote_trace_profile": REMOTE_TRACE_PROFILE,
+}
 _GVISOR_FIELDS = {
     "receipt_schema",
     "normalization_profile",
@@ -38,12 +51,17 @@ _GVISOR_FIELDS = {
     "lock_digest",
     "verifier_implementation_digest",
 }
+_REMOTE_GVISOR_FIELDS = {
+    *_GVISOR_FIELDS,
+    "remote_trace_receipt_schema",
+    "remote_trace_profile",
+}
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _IDENTIFIER = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
 
 
 class Phase2ScenarioContractError(ValueError):
-    """A varied-scenario document does not match the fixed v2 contract."""
+    """A varied-scenario document does not match its fixed contract."""
 
 
 def scenario_for_run(run_id: object) -> str:
@@ -59,9 +77,36 @@ def scenario_for_run(run_id: object) -> str:
 def validate_phase2_scenario_catalog(document: object) -> tuple[str, ...]:
     """Validate the scenario-specific surface of one v2 matrix catalog."""
 
-    value = _document(
+    return _validate_catalog(
         document,
         expected_schema=CATALOG_SCHEMA,
+        expected_config=_CANDIDATE_CONFIG,
+        label="Phase 2 scenario catalog",
+    )
+
+
+def validate_phase2_remote_catalog(document: object) -> tuple[str, ...]:
+    """Validate the scenario and remote-trace surface of one v3 catalog."""
+
+    return _validate_catalog(
+        document,
+        expected_schema=REMOTE_CATALOG_SCHEMA,
+        expected_config=_REMOTE_CANDIDATE_CONFIG,
+        label="Phase 2 remote scenario catalog",
+    )
+
+
+def _validate_catalog(
+    document: object,
+    *,
+    expected_schema: str,
+    expected_config: dict[str, object],
+    label: str,
+) -> tuple[str, ...]:
+
+    value = _document(
+        document,
+        expected_schema=expected_schema,
         expected_assurance=CATALOG_ASSURANCE,
         expected_fields={
             "schema",
@@ -71,16 +116,14 @@ def validate_phase2_scenario_catalog(document: object) -> tuple[str, ...]:
             "scenario_matrix",
             "cases",
         },
-        label="Phase 2 scenario catalog",
+        label=label,
     )
     if value["source"] != _SOURCE:
-        raise Phase2ScenarioContractError(
-            "Phase 2 scenario catalog source pin changed"
-        )
+        raise Phase2ScenarioContractError(f"{label} source pin changed")
     candidate = _object(
         value["candidate"],
         {"name", "version", "config"},
-        "Phase 2 scenario catalog candidate",
+        f"{label} candidate",
     )
     version = candidate["version"]
     if (
@@ -91,23 +134,57 @@ def validate_phase2_scenario_catalog(document: object) -> tuple[str, ...]:
         or "\r" in version
         or "\n" in version
         or len(version) > 256
-        or candidate["config"] != _CANDIDATE_CONFIG
+        or candidate["config"] != expected_config
     ):
-        raise Phase2ScenarioContractError(
-            "Phase 2 scenario catalog candidate profile changed"
-        )
+        raise Phase2ScenarioContractError(f"{label} candidate profile changed")
     _scenario_matrix(value["scenario_matrix"])
-    _case_ids(value["cases"], "Phase 2 scenario catalog")
+    _case_ids(value["cases"], label)
     return RUN_SCHEDULE
 
 
 def validate_phase2_scenario_coverage_lock(document: object) -> tuple[str, ...]:
     """Validate the scenario-specific surface of one v2 coverage lock."""
 
-    value = _document(
+    return _validate_coverage_lock(
         document,
         expected_schema=COVERAGE_LOCK_SCHEMA,
         expected_assurance=COVERAGE_LOCK_ASSURANCE,
+        expected_gvisor_fields=_GVISOR_FIELDS,
+        expected_gvisor_profile={},
+        label="Phase 2 scenario coverage lock",
+    )
+
+
+def validate_phase2_remote_coverage_lock(document: object) -> tuple[str, ...]:
+    """Validate the scenario and remote-trace surface of one v3 coverage lock."""
+
+    return _validate_coverage_lock(
+        document,
+        expected_schema=REMOTE_COVERAGE_LOCK_SCHEMA,
+        expected_assurance=REMOTE_COVERAGE_LOCK_ASSURANCE,
+        expected_gvisor_fields=_REMOTE_GVISOR_FIELDS,
+        expected_gvisor_profile={
+            "remote_trace_receipt_schema": REMOTE_TRACE_RECEIPT_SCHEMA,
+            "remote_trace_profile": REMOTE_TRACE_PROFILE,
+        },
+        label="Phase 2 remote scenario coverage lock",
+    )
+
+
+def _validate_coverage_lock(
+    document: object,
+    *,
+    expected_schema: str,
+    expected_assurance: str,
+    expected_gvisor_fields: set[str],
+    expected_gvisor_profile: dict[str, str],
+    label: str,
+) -> tuple[str, ...]:
+
+    value = _document(
+        document,
+        expected_schema=expected_schema,
+        expected_assurance=expected_assurance,
         expected_fields={
             "schema",
             "assurance",
@@ -120,7 +197,7 @@ def validate_phase2_scenario_coverage_lock(document: object) -> tuple[str, ...]:
             "scenario_matrix",
             "cases",
         },
-        label="Phase 2 scenario coverage lock",
+        label=label,
     )
     if (
         value["evaluation_split"] != "held_out"
@@ -128,27 +205,24 @@ def validate_phase2_scenario_coverage_lock(document: object) -> tuple[str, ...]:
         or value["verdict_profile"] != "undeclared-observed-review/v1"
         or not _is_digest(value["suite_digest"])
     ):
-        raise Phase2ScenarioContractError(
-            "Phase 2 scenario coverage profile changed"
-        )
-    gvisor = _object(
-        value["gvisor"], _GVISOR_FIELDS, "Phase 2 scenario coverage gVisor"
-    )
+        raise Phase2ScenarioContractError(f"{label} profile changed")
+    gvisor = _object(value["gvisor"], expected_gvisor_fields, f"{label} gVisor")
     if (
         gvisor["receipt_schema"] != "aragorn/gvisor-acquired-artifact-receipt/v5"
-        or gvisor["normalization_profile"]
-        != "successful-openat-execve-attributed/v1"
+        or gvisor["normalization_profile"] != "successful-openat-execve-attributed/v1"
         or gvisor["execution_profile"] != "bounded-single-script/v2"
+        or any(
+            gvisor[field] != expected
+            for field, expected in expected_gvisor_profile.items()
+        )
         or any(
             not _is_digest(gvisor[field])
             for field in ("lock_digest", "verifier_implementation_digest")
         )
     ):
-        raise Phase2ScenarioContractError(
-            "Phase 2 scenario coverage gVisor profile changed"
-        )
+        raise Phase2ScenarioContractError(f"{label} gVisor profile changed")
     _scenario_matrix(value["scenario_matrix"])
-    _case_ids(value["cases"], "Phase 2 scenario coverage lock")
+    _case_ids(value["cases"], label)
     return RUN_SCHEDULE
 
 
@@ -192,9 +266,7 @@ def _case_ids(value: object, label: str) -> tuple[str, ...]:
             )
         case_ids.append(case_id)
     if case_ids != sorted(set(case_ids)):
-        raise Phase2ScenarioContractError(
-            f"{label} case IDs must be unique and sorted"
-        )
+        raise Phase2ScenarioContractError(f"{label} case IDs must be unique and sorted")
     return tuple(case_ids)
 
 

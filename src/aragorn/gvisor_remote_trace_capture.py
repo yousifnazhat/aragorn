@@ -15,14 +15,22 @@ if TYPE_CHECKING:
     from .gvisor_remote_trace_receiver import GVisorRemoteTraceResult
 
 SCHEMA = "aragorn/gvisor-remote-trace-capture-receipt/v1"
+SCHEMA_V2 = "aragorn/gvisor-remote-trace-capture-receipt/v2"
 AUTHORITY = (
     "ONE_CALLER_PINNED_MONITOR_RECORDED_INIT_TIME_GVISOR_REMOTE_SESSION_QUIESCED_"
     "WINDOW_ZERO_REPORTED_DROPS_AND_RAW_WIRE_CLOSURE_ONLY_NOT_MONITOR_RUNTIME_"
     "HOST_OR_WORKLOAD_ATTESTATION_ALL_POINT_COVERAGE_EVENT_SEMANTIC_VALIDITY_"
     "ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
 )
+AUTHORITY_V2 = (
+    "ONE_CALLER_PINNED_MONITOR_RECORDED_GVISOR_REMOTE_SESSION_DOCKER_CREATE_"
+    "START_QUIESCED_WINDOW_ZERO_REPORTED_DROPS_AND_RAW_WIRE_CLOSURE_ONLY_NOT_"
+    "MONITOR_RUNTIME_HOST_OR_WORKLOAD_ATTESTATION_ALL_POINT_COVERAGE_EVENT_"
+    "SEMANTIC_VALIDITY_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+)
 PROFILE = "gvisor-remote-default-pod-init-seqpacket/v1"
 LIFECYCLE_SCHEMA = "aragorn/gvisor-remote-trace-lifecycle/v1"
+LIFECYCLE_SCHEMA_V2 = "aragorn/gvisor-remote-trace-lifecycle/v2"
 FRAME_MANIFEST_SCHEMA = "aragorn/gvisor-remote-trace-frame-manifest/v1"
 SESSION_NAME = "Default"
 SOCKET_ENDPOINT = "/run/aragorn/gvisor-events.sock"
@@ -51,6 +59,16 @@ _FINAL_STATUS = re.compile(
 _LIFECYCLE_EVENTS = [
     "listener-ready",
     "sandbox-start-requested",
+    "remote-connected",
+    "handshake-complete",
+    "workload-quiesced",
+    "final-session-status-captured",
+    "connection-eof",
+]
+_LIFECYCLE_EVENTS_V2 = [
+    "listener-ready",
+    "docker-container-created",
+    "docker-start-requested",
     "remote-connected",
     "handshake-complete",
     "workload-quiesced",
@@ -96,10 +114,14 @@ def retain_gvisor_remote_trace_capture(
     workload_receipt_digest: str,
     lifecycle_bytes: bytes,
     final_trace_list_bytes: bytes,
+    receipt_schema: str = SCHEMA,
 ) -> str:
     """Retain and replay one already-validated receiver result."""
 
     try:
+        receipt_authority, _lifecycle_schema, _lifecycle_events = (
+            _capture_contract(receipt_schema)
+        )
         retained_run_id = _hex(run_id, _RUN_ID, "remote trace run ID")
         retained_sandbox_id = _hex(
             sandbox_id, _CONTAINER_ID, "remote trace sandbox ID"
@@ -192,8 +214,8 @@ def retain_gvisor_remote_trace_capture(
             BytesIO(final_trace_list_bytes), max_bytes=_MAX_STATUS_BYTES
         )
         receipt = {
-            "schema": SCHEMA,
-            "authority": AUTHORITY,
+            "schema": receipt_schema,
+            "authority": receipt_authority,
             "profile": PROFILE,
             "status": "RECORDED",
             "run_id": retained_run_id,
@@ -317,9 +339,11 @@ def _verify(
             "gVisor remote trace receipt",
         )
         _exact(receipt, _RECEIPT_FIELDS, "gVisor remote trace receipt")
+        authority, lifecycle_schema, lifecycle_events = _capture_contract(
+            receipt["schema"]
+        )
         if (
-            receipt["schema"] != SCHEMA
-            or receipt["authority"] != AUTHORITY
+            receipt["authority"] != authority
             or receipt["profile"] != PROFILE
             or receipt["status"] != "RECORDED"
         ):
@@ -381,6 +405,8 @@ def _verify(
             sandbox_id=sandbox_id,
             container_id=container_id,
             pins=pins,
+            expected_schema=lifecycle_schema,
+            expected_events=lifecycle_events,
         )
         handshake = b"\x08\x01"
         for field in ("sentry_handshake_digest", "monitor_handshake_digest"):
@@ -475,22 +501,34 @@ def _verify_lifecycle(
     sandbox_id: str,
     container_id: str,
     pins: dict[str, str],
+    expected_schema: str,
+    expected_events: list[str],
 ) -> None:
     lifecycle = _canonical_object(raw, "gVisor remote trace lifecycle")
     expected = {
-        "schema": LIFECYCLE_SCHEMA,
+        "schema": expected_schema,
         "run_id": run_id,
         "sandbox_id": sandbox_id,
         "container_id": container_id,
         "session_config_digest": pins["session_config_digest"],
         "monitor_implementation_digest": pins["monitor_implementation_digest"],
         "workload_receipt_digest": pins["workload_receipt_digest"],
-        "events": _LIFECYCLE_EVENTS,
+        "events": expected_events,
     }
     if _canonical_bytes(lifecycle) != _canonical_bytes(expected):
         raise GVisorRemoteTraceCaptureError(
             "gVisor remote trace lifecycle is incomplete or unbound"
         )
+
+
+def _capture_contract(schema: object) -> tuple[str, str, list[str]]:
+    if schema == SCHEMA:
+        return AUTHORITY, LIFECYCLE_SCHEMA, _LIFECYCLE_EVENTS
+    if schema == SCHEMA_V2:
+        return AUTHORITY_V2, LIFECYCLE_SCHEMA_V2, _LIFECYCLE_EVENTS_V2
+    raise GVisorRemoteTraceCaptureError(
+        "gVisor remote trace receipt authority is unsupported"
+    )
 
 
 def _verify_final_status(raw: bytes) -> None:

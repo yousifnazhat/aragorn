@@ -6,16 +6,19 @@ import tarfile
 import tempfile
 import unittest
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Self
 from unittest.mock import patch
 
+import aragorn.protected_recursive_v4_live_archive as replay_module
 from aragorn.artifact_closure import canonical_json
 from aragorn.protected_install_transition_replay import _File
 from aragorn.protected_recursive_v4_live_archive import (
     ARCHIVE_DIGEST,
     ProtectedRecursiveV4LiveArchiveError,
     _document,
+    _historical_replay,
     _journal,
     _load,
     _request_v4,
@@ -42,7 +45,17 @@ _RECEIPT = (
 
 class ProtectedRecursiveV4LiveArchiveTests(unittest.TestCase):
     def test_replays_request_v4_live_path(self) -> None:
-        replay = verify_protected_recursive_v4_live_archive(_ARCHIVE)
+        with (
+            patch(
+                "aragorn.protected_recursive_v3_live_archive.build_gateway_request",
+                side_effect=AssertionError("current helper used"),
+            ),
+            patch(
+                "aragorn.github_recursive_live_archive.validate_handoff_manifest",
+                side_effect=AssertionError("current helper used"),
+            ),
+        ):
+            replay = verify_protected_recursive_v4_live_archive(_ARCHIVE)
         receipt_raw = _RECEIPT.read_bytes()
 
         self.assertEqual(replay, json.loads(receipt_raw))
@@ -74,6 +87,26 @@ class ProtectedRecursiveV4LiveArchiveTests(unittest.TestCase):
             ):
                 verify_protected_recursive_v4_live_archive(forged)
 
+    def test_concurrent_replays_restore_module_globals(self) -> None:
+        before = vars(replay_module).copy()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(
+                executor.map(
+                    verify_protected_recursive_v4_live_archive,
+                    (_ARCHIVE, _ARCHIVE),
+                )
+            )
+
+        self.assertEqual([result["status"] for result in results], ["PASS", "PASS"])
+        self.assertEqual(
+            {
+                name
+                for name, value in before.items()
+                if vars(replay_module).get(name) is not value
+            },
+            set(),
+        )
+
     def test_rejects_null_or_mismatched_release_pin_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             archive = _load(_ARCHIVE.read_bytes(), Path(temporary))
@@ -87,48 +120,53 @@ class ProtectedRecursiveV4LiveArchiveTests(unittest.TestCase):
                 _canonical(request),
                 original.mode,
             )
-            with self.assertRaisesRegex(
-                ProtectedRecursiveV4LiveArchiveError,
-                "request-v4 schema or recursive binding changed",
-            ):
-                _request_v4(
-                    archive,
-                    evidence,
-                    "install",
-                    1_785_373_707_946_461,
+            with _historical_replay(archive, Path(temporary)) as historical:
+                self.assertFalse(
+                    (Path(temporary) / "capture-source" / "aragorn" / "cli.py").exists()
                 )
+                with self.assertRaisesRegex(
+                    ProtectedRecursiveV4LiveArchiveError,
+                    "request-v4 schema or recursive binding changed",
+                ):
+                    _request_v4(
+                        archive,
+                        evidence,
+                        "install",
+                        1_785_373_707_946_461,
+                        historical=historical,
+                    )
 
-            archive.files[request_path] = original
-            changed = copy.deepcopy(evidence)
-            changed["source"]["recursive"]["release_pin_set_digest"] = (
-                "sha256:" + "0" * 64
-            )
-            with self.assertRaisesRegex(
-                ProtectedRecursiveV4LiveArchiveError,
-                "canonical request-v4 does not replay",
-            ):
-                _request_v4(
-                    archive,
-                    changed,
-                    "install",
-                    1_785_373_707_946_461,
+                archive.files[request_path] = original
+                changed = copy.deepcopy(evidence)
+                changed["source"]["recursive"]["release_pin_set_digest"] = (
+                    "sha256:" + "0" * 64
                 )
+                with self.assertRaisesRegex(
+                    ProtectedRecursiveV4LiveArchiveError,
+                    "canonical request-v4 does not replay",
+                ):
+                    _request_v4(
+                        archive,
+                        changed,
+                        "install",
+                        1_785_373_707_946_461,
+                        historical=historical,
+                    )
 
             _verify_local_replay_closure(archive)
-            dependency_path = (
-                "runtime/package/src/aragorn/github_recursive_artifact_graph_v4.py"
-            )
-            dependency = archive.files[dependency_path]
-            archive.files[dependency_path] = _File(
-                dependency.raw + b"\n",
-                dependency.mode,
-            )
-            with self.assertRaisesRegex(
-                ProtectedRecursiveV4LiveArchiveError,
-                "local replay dependency differs from capture",
-            ):
-                _verify_local_replay_closure(archive)
-            archive.files[dependency_path] = dependency
+            for module in ("github_recursive_artifact_graph_v4", "github_gateway"):
+                dependency_path = f"runtime/package/src/aragorn/{module}.py"
+                dependency = archive.files[dependency_path]
+                archive.files[dependency_path] = _File(
+                    dependency.raw + b"\n",
+                    dependency.mode,
+                )
+                with self.assertRaisesRegex(
+                    ProtectedRecursiveV4LiveArchiveError,
+                    "local replay dependency differs from capture",
+                ):
+                    _verify_local_replay_closure(archive)
+                archive.files[dependency_path] = dependency
 
             coordinator = _journal(
                 archive,

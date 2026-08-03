@@ -139,6 +139,24 @@ class GVisorRemoteTraceCaptureTests(unittest.TestCase):
                 ).read_bytes()
             )
 
+    def test_v2_lifecycle_distinguishes_create_from_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(
+                Path(temporary), receipt_schema=capture.SCHEMA_V2
+            )
+
+            receipt = capture.verify_gvisor_remote_trace_capture(
+                fixture["cas"], fixture["receipt_digest"], **fixture["pins"]
+            )
+
+            self.assertEqual(receipt["schema"], capture.SCHEMA_V2)
+            self.assertEqual(receipt["authority"], capture.AUTHORITY_V2)
+            lifecycle = json.loads(
+                fixture["cas"].read(receipt["lifecycle_digest"])
+            )
+            self.assertEqual(lifecycle["schema"], capture.LIFECYCLE_SCHEMA_V2)
+            self.assertEqual(lifecycle["events"], capture._LIFECYCLE_EVENTS_V2)
+
     def test_dynamic_or_loss_tolerant_session_config_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = _fixture(Path(temporary), ignore_setup_error=True)
@@ -225,6 +243,7 @@ def _fixture(
     include_container_start: bool = True,
     final_drops: int = 0,
     closed_lifecycle: bool = True,
+    receipt_schema: str = capture.SCHEMA,
 ) -> dict:
     fixture = {"cas": CAS(root / "cas"), "digests": set()}
     runtime_lock_digest = _put(fixture, b"runtime-lock")
@@ -264,13 +283,16 @@ def _fixture(
     run_id = "1" * 32
     sandbox_id = "2" * 64
     container_id = "3" * 64
-    events = list(capture._LIFECYCLE_EVENTS)
+    authority, lifecycle_schema, lifecycle_events = capture._capture_contract(
+        receipt_schema
+    )
+    events = list(lifecycle_events)
     if not closed_lifecycle:
         events.pop()
     lifecycle_digest = _put(
         fixture,
         {
-            "schema": capture.LIFECYCLE_SCHEMA,
+            "schema": lifecycle_schema,
             "run_id": run_id,
             "sandbox_id": sandbox_id,
             "container_id": container_id,
@@ -321,8 +343,8 @@ def _fixture(
         },
     )
     receipt = {
-        "schema": capture.SCHEMA,
-        "authority": capture.AUTHORITY,
+        "schema": receipt_schema,
+        "authority": authority,
         "profile": capture.PROFILE,
         "status": "RECORDED",
         "run_id": run_id,

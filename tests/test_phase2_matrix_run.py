@@ -235,6 +235,98 @@ class Phase2MatrixRunTests(unittest.TestCase):
                 report["schema"], "aragorn/benchmark-phase2-metrics-checkpoint/v3"
             )
 
+    def test_v3_runs_exact_remote_receipt_pairs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root, _old_digest, classes = self._prepared(Path(temporary))
+            lock_digest = self._upgrade_to_remote_v3(root)
+            calls, collector, verifier = self._runtime_stubs(classes)
+            scenarios: list[str] = []
+
+            def remote_collector(
+                cas: CAS, source_cas: CAS, **pins: object
+            ) -> tuple[str, str]:
+                scenarios.append(str(pins["expected_scenario_id"]))
+                workload_digest = collector(cas, source_cas, **pins)
+                remote_digest = cas.put(
+                    _bytes(
+                        {
+                            "schema": "test/remote-trace/v1",
+                            "workload_receipt_digest": workload_digest,
+                        }
+                    ),
+                    max_bytes=16 * 1024,
+                )
+                return workload_digest, remote_digest
+
+            def evaluator(
+                _suite_path: Path, outcome_path: Path, **_options: object
+            ) -> dict:
+                evidence = CAS(root / "evidence", read_only=True)
+                for line in outcome_path.read_bytes().splitlines():
+                    outcome = json.loads(line)
+                    envelope = json.loads(evidence.read(outcome["evidence_digest"]))
+                    self.assertEqual(
+                        envelope["schema"],
+                        "aragorn/benchmark-phase2-gvisor-v5-remote-evidence/v3",
+                    )
+                    self.assertEqual(
+                        envelope["scenario_id"],
+                        "primary" if outcome["run_id"] in {1, 3, 5} else "alternate",
+                    )
+                    remote = json.loads(
+                        evidence.read(envelope["remote_trace_receipt_digest"])
+                    )
+                    self.assertEqual(
+                        remote["workload_receipt_digest"],
+                        envelope["gvisor_receipt_digest"],
+                    )
+                return {
+                    "schema": "aragorn/benchmark-phase2-metrics-checkpoint/v3",
+                    "coverage_lock_digest": lock_digest,
+                    "phase2_exit_eligible": False,
+                }
+
+            with (
+                patch(
+                    "aragorn.phase2_matrix_run.verify_gvisor_acquired_artifact",
+                    side_effect=verifier,
+                ),
+                patch(
+                    "aragorn.phase2_matrix_run.evaluate_files",
+                    side_effect=evaluator,
+                ),
+            ):
+                report = run_phase2_matrix(
+                    root,
+                    expected_coverage_lock_digest=lock_digest,
+                    _collector=remote_collector,
+                )
+
+            self.assertEqual(len(calls), 100)
+            self.assertEqual(scenarios.count("primary"), 60)
+            self.assertEqual(scenarios.count("alternate"), 40)
+            self.assertEqual(
+                report["schema"], "aragorn/benchmark-phase2-metrics-checkpoint/v3"
+            )
+
+    def test_v3_rejects_a_collector_without_an_exact_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root, _old_digest, classes = self._prepared(Path(temporary))
+            lock_digest = self._upgrade_to_remote_v3(root)
+            calls, collector, _verifier = self._runtime_stubs(classes)
+
+            with self.assertRaisesRegex(
+                Phase2MatrixRunError, "exactly two receipt digests"
+            ):
+                run_phase2_matrix(
+                    root,
+                    expected_coverage_lock_digest=lock_digest,
+                    _collector=collector,
+                )
+
+            self.assertEqual(len(calls), 1)
+            self.assertFalse((root / "results").exists())
+
     def test_unknown_attribution_scope_stops_after_first_capture(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root, lock_digest, classes = self._prepared(Path(temporary))
@@ -366,6 +458,49 @@ class Phase2MatrixRunTests(unittest.TestCase):
             return json.loads(cas.read(digest))
 
         return calls, collector, verifier
+
+    @staticmethod
+    def _upgrade_to_remote_v3(root: Path) -> str:
+        lock_path = root / "coverage-lock.json"
+        lock = json.loads(lock_path.read_bytes())
+        lock.update(
+            {
+                "schema": "aragorn/benchmark-phase2-coverage-lock/v3",
+                "assurance": (
+                    "operator_asserted_pre_outcome_scenario_remote_trace_binding_"
+                    "not_independent_or_timestamped"
+                ),
+                "scenario_matrix": {
+                    "profile": "two-scenario-path-surface/v1",
+                    "environment_variable": "ARAGORN_SCENARIO",
+                    "run_schedule": [
+                        "primary",
+                        "alternate",
+                        "primary",
+                        "alternate",
+                        "primary",
+                    ],
+                },
+            }
+        )
+        lock["gvisor"].update(
+            {
+                "receipt_schema": "aragorn/gvisor-acquired-artifact-receipt/v5",
+                "execution_profile": "bounded-single-script/v2",
+                "remote_trace_receipt_schema": (
+                    "aragorn/gvisor-remote-trace-capture-receipt/v2"
+                ),
+                "remote_trace_profile": ("gvisor-remote-default-pod-init-seqpacket/v1"),
+            }
+        )
+        lock_raw = canonical_json(lock)
+        lock_digest = "sha256:" + hashlib.sha256(lock_raw).hexdigest()
+        lock_path.write_bytes(lock_raw)
+        index_path = root / "operator-index.json"
+        index = json.loads(index_path.read_bytes())
+        index["coverage_lock_digest"] = lock_digest
+        index_path.write_bytes(canonical_json(index))
+        return lock_digest
 
     @classmethod
     def _prepared(cls, root: Path) -> tuple[Path, str, dict[str, str]]:

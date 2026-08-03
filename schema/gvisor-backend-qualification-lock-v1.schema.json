@@ -10,6 +10,8 @@
     "profile",
     "runs",
     "runtime_lock_digest",
+    "canary_lock_digest",
+    "daemon_config_digest",
     "probe_digest",
     "controls"
   ],
@@ -23,6 +25,8 @@
     },
     "runs": {"const": 3},
     "runtime_lock_digest": {"$ref": "#/$defs/digest"},
+    "canary_lock_digest": {"$ref": "#/$defs/digest"},
+    "daemon_config_digest": {"$ref": "#/$defs/digest"},
     "probe_digest": {"$ref": "#/$defs/digest"},
     "controls": {
       "const": [

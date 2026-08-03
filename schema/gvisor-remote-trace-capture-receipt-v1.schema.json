@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/gvisor-remote-trace-capture-receipt-v1.schema.json",
+  "title": "Aragorn bounded gVisor remote trace capture receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "profile",
+    "status",
+    "run_id",
+    "sandbox_id",
+    "container_id",
+    "runtime_lock_digest",
+    "session_config_digest",
+    "monitor_implementation_digest",
+    "workload_receipt_digest",
+    "lifecycle_digest",
+    "sentry_handshake_digest",
+    "monitor_handshake_digest",
+    "final_session_status_digest",
+    "frame_manifest_digest",
+    "frame_count",
+    "raw_frame_bytes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/gvisor-remote-trace-capture-receipt/v1"
+    },
+    "authority": {
+      "const": "ONE_CALLER_PINNED_MONITOR_RECORDED_INIT_TIME_GVISOR_REMOTE_SESSION_QUIESCED_WINDOW_ZERO_REPORTED_DROPS_AND_RAW_WIRE_CLOSURE_ONLY_NOT_MONITOR_RUNTIME_HOST_OR_WORKLOAD_ATTESTATION_ALL_POINT_COVERAGE_EVENT_SEMANTIC_VALIDITY_ADMISSION_OR_PHASE2_EXIT_AUTHORITY"
+    },
+    "profile": {
+      "const": "gvisor-remote-default-pod-init-seqpacket/v1"
+    },
+    "status": {"const": "RECORDED"},
+    "run_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "sandbox_id": {"$ref": "#/$defs/containerId"},
+    "container_id": {"$ref": "#/$defs/containerId"},
+    "runtime_lock_digest": {"$ref": "#/$defs/digest"},
+    "session_config_digest": {"$ref": "#/$defs/digest"},
+    "monitor_implementation_digest": {"$ref": "#/$defs/digest"},
+    "workload_receipt_digest": {"$ref": "#/$defs/digest"},
+    "lifecycle_digest": {"$ref": "#/$defs/digest"},
+    "sentry_handshake_digest": {"$ref": "#/$defs/digest"},
+    "monitor_handshake_digest": {"$ref": "#/$defs/digest"},
+    "final_session_status_digest": {"$ref": "#/$defs/digest"},
+    "frame_manifest_digest": {"$ref": "#/$defs/digest"},
+    "frame_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65536
+    },
+    "raw_frame_bytes": {
+      "type": "integer",
+      "minimum": 9,
+      "maximum": 268435456
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "containerId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

@@ -135,6 +135,7 @@ EXPECTED_CONTRACTS = {
     "gvisor-acquired-artifact-receipt-v5.schema.json": "aragorn/gvisor-acquired-artifact-receipt/v5",
     "gvisor-artifact-actor-attribution-manifest-v1.schema.json": "aragorn/gvisor-artifact-actor-attribution-manifest/v1",
     "gvisor-detonation-canary-receipt-v1.schema.json": "aragorn/gvisor-detonation-canary-receipt/v1",
+    "gvisor-remote-trace-capture-receipt-v1.schema.json": "aragorn/gvisor-remote-trace-capture-receipt/v1",
     "github-expansion-result-v1.schema.json": "aragorn/github-expansion-result/v1",
     "github-expansion-v1.schema.json": "aragorn/github-expansion/v1",
     "github-gateway-request-v1.schema.json": "aragorn/github-gateway-request/v1",

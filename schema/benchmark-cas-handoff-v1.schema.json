@@ -75,7 +75,7 @@
       "then": {
         "properties": {
           "blobs": {
-            "maxItems": 64,
+            "maxItems": 69,
             "items": {
               "properties": {
                 "size": {"maximum": 2097152}

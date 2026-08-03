@@ -904,6 +904,17 @@ def main() -> int:
             )
         )
     )
+    validators["gvisor-acquired-artifact-receipt-v3.schema.json"].validate(
+        load(
+            ROOT
+            / "benchmark"
+            / "receipts"
+            / (
+                "phase2-gvisor-acquired-artifact-v3-"
+                "0b6ec3ea4b469e9f0ad26728a8711ecf-2026-08-02.json"
+            )
+        )
+    )
     admission_conformance = {
         "schema": "aragorn/admission-conformance-result/v1",
         "profile": "admission-conformant/v1",
@@ -3558,6 +3569,13 @@ def main() -> int:
             kind="worker_input",
             root_digest=digest,
             blobs={digest: 0},
+        )
+    )
+    validators["benchmark-cas-handoff-v1.schema.json"].validate(
+        build_handoff_manifest(
+            kind="runtime_evidence",
+            root_digest="sha256:" + "0" * 64,
+            blobs={f"sha256:{index:064x}": 0 for index in range(69)},
         )
     )
 

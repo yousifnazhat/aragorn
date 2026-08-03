@@ -106,6 +106,19 @@ class BenchmarkHandoffV2Tests(unittest.TestCase):
                 },
             )
 
+        runtime_blobs = {f"sha256:{index:064x}": 0 for index in range(69)}
+        build_handoff_manifest(
+            kind="runtime_evidence",
+            root_digest="sha256:" + "0" * 64,
+            blobs=runtime_blobs,
+        )
+        with self.assertRaisesRegex(HandoffError, "bounded non-empty array"):
+            build_handoff_manifest(
+                kind="runtime_evidence",
+                root_digest="sha256:" + "0" * 64,
+                blobs=runtime_blobs | {"sha256:" + "f" * 64: 0},
+            )
+
     def test_export_and_import_rehash_exact_bytes_into_another_cas(self) -> None:
         payloads = (b"root request", b"", b"subject bytes")
         digests = [self._put(self.source_cas, payload) for payload in payloads]

@@ -101,6 +101,19 @@ _LIVE_ARTIFACT_V2_ARCHIVE_SHA256 = (
 _LIVE_ARTIFACT_V2_IMPLEMENTATION_DIGEST = (
     "sha256:322010616fe6750a8f37a57a68ea1d6b77883eacd5e7503b14bd4aa69429d1b8"
 )
+_LIVE_ARTIFACT_V3_RUN_ID = "0b6ec3ea4b469e9f0ad26728a8711ecf"
+_LIVE_ARTIFACT_V3_RECEIPT_DIGEST = (
+    "sha256:4356104a711f75c297f5d86706ba3e192abbc514f1963d9ebbcb150375e9f90d"
+)
+_LIVE_ARTIFACT_V3_HANDOFF_DIGEST = (
+    "sha256:95cb6426f5ae702b00096f486b43c561546e7eb0e32a9e7bb536a0937a14a46f"
+)
+_LIVE_ARTIFACT_V3_ARCHIVE_SHA256 = (
+    "8d7f563646bd20faaef25be81b511b130455c1bceaf8a7fbbd9c90d135d3a944"
+)
+_LIVE_ARTIFACT_V3_IMPLEMENTATION_DIGEST = (
+    "sha256:7f93a227e53b893061be6f1c74d503881a7d26b06fc7990946ca419b18831d27"
+)
 _LIVE_ARTIFACT_PINS = {
     "expected_quarantine_receipt_digest": (
         "sha256:295b14aff90d6daddac8e435f54863cbe7133d910aa05243d9579f92b41fc475"
@@ -117,6 +130,31 @@ _LIVE_ARTIFACT_PINS = {
     "expected_verifier_implementation_digest": (
         "sha256:9642904785f64fcf42f8edb5cb3023deb4eb6cbef15819bc6afd58f3b29fe585"
     ),
+}
+_LIVE_ARTIFACT_V3_PINS = {
+    "expected_quarantine_receipt_digest": (
+        "sha256:094c9b4541a02e046df6e15a789026f255df2b803f9482e72c9ce7ed6c63ea1a"
+    ),
+    "expected_manifest_digest": (
+        "sha256:5bf379b9493eafc2841d619622a38677c968350f1bceadaa5acb00b6b6a43ad3"
+    ),
+    "expected_tree_digest": (
+        "sha256:34e32015fc62a024af75ca59e2a273b6884e496dabaaf3eb9fb00883e27c447f"
+    ),
+    "expected_gateway_profile_digest": (
+        "sha256:485557f9dcd31329c9ec769fc89e81d2ca2c969b747f1316c1144058faadf798"
+    ),
+    "expected_entrypoint_digest": (
+        "sha256:d03f305f503fd161eca9916a781aa060708ec12fe64d83660e4a56c5e7643894"
+    ),
+    "expected_lock_digest": _LIVE_CANARY_LOCK_DIGEST,
+    "expected_verifier_implementation_digest": (
+        _LIVE_ARTIFACT_V3_IMPLEMENTATION_DIGEST
+    ),
+    "expected_normalization_profile": runtime.ARTIFACT_NORMALIZATION_PROFILE,
+    "expected_execution_profile": runtime.ARTIFACT_EXECUTION_PROFILE,
+    "expected_entrypoint_path": "scripts/check.sh",
+    "expected_declared_capabilities": ("file-read", "process-exec"),
 }
 
 
@@ -705,8 +743,8 @@ class GVisorRuntimeTests(unittest.TestCase):
                 _LIVE_ARTIFACT_RECEIPT_DIGEST,
                 _LIVE_ARTIFACT_HANDOFF_DIGEST,
                 _LIVE_ARTIFACT_ARCHIVE_SHA256,
-                _LIVE_ARTIFACT_PINS["expected_verifier_implementation_digest"],
-                None,
+                _LIVE_ARTIFACT_PINS,
+                runtime.ARTIFACT_SCHEMA,
             ),
             (
                 (
@@ -717,8 +755,13 @@ class GVisorRuntimeTests(unittest.TestCase):
                 _BOUNDED_LIVE_ARTIFACT_RECEIPT_DIGEST,
                 _BOUNDED_LIVE_ARTIFACT_HANDOFF_DIGEST,
                 _BOUNDED_LIVE_ARTIFACT_ARCHIVE_SHA256,
-                _BOUNDED_LIVE_ARTIFACT_IMPLEMENTATION_DIGEST,
-                None,
+                _LIVE_ARTIFACT_PINS
+                | {
+                    "expected_verifier_implementation_digest": (
+                        _BOUNDED_LIVE_ARTIFACT_IMPLEMENTATION_DIGEST
+                    )
+                },
+                runtime.ARTIFACT_SCHEMA,
             ),
             (
                 (
@@ -729,8 +772,28 @@ class GVisorRuntimeTests(unittest.TestCase):
                 _LIVE_ARTIFACT_V2_RECEIPT_DIGEST,
                 _LIVE_ARTIFACT_V2_HANDOFF_DIGEST,
                 _LIVE_ARTIFACT_V2_ARCHIVE_SHA256,
-                _LIVE_ARTIFACT_V2_IMPLEMENTATION_DIGEST,
-                runtime.ARTIFACT_NORMALIZATION_PROFILE,
+                _LIVE_ARTIFACT_PINS
+                | {
+                    "expected_verifier_implementation_digest": (
+                        _LIVE_ARTIFACT_V2_IMPLEMENTATION_DIGEST
+                    ),
+                    "expected_normalization_profile": (
+                        runtime.ARTIFACT_NORMALIZATION_PROFILE
+                    ),
+                },
+                runtime.ARTIFACT_SCHEMA_V2,
+            ),
+            (
+                (
+                    "phase2-gvisor-acquired-artifact-v3-"
+                    f"{_LIVE_ARTIFACT_V3_RUN_ID}-2026-08-02"
+                ),
+                _LIVE_ARTIFACT_V3_RUN_ID,
+                _LIVE_ARTIFACT_V3_RECEIPT_DIGEST,
+                _LIVE_ARTIFACT_V3_HANDOFF_DIGEST,
+                _LIVE_ARTIFACT_V3_ARCHIVE_SHA256,
+                _LIVE_ARTIFACT_V3_PINS,
+                runtime.ARTIFACT_SCHEMA_V3,
             ),
         )
         for case in cases:
@@ -740,8 +803,8 @@ class GVisorRuntimeTests(unittest.TestCase):
                 receipt_digest,
                 handoff_digest,
                 archive_sha256,
-                implementation,
-                normalization_profile,
+                pins,
+                expected_schema,
             ) = case
             with self.subTest(run_id=run_id):
                 archive = root / "benchmark" / "evidence" / f"{stem}.tar.gz"
@@ -765,19 +828,10 @@ class GVisorRuntimeTests(unittest.TestCase):
                         expected_kind="runtime_evidence",
                         expected_root_digest=receipt_digest,
                     )
-                    pins = _LIVE_ARTIFACT_PINS | {
-                        "expected_verifier_implementation_digest": implementation
-                    }
-                    profile_pin = (
-                        {"expected_normalization_profile": normalization_profile}
-                        if normalization_profile is not None
-                        else {}
-                    )
                     closure = runtime.derive_gvisor_acquired_artifact_closure(
                         cas,
                         receipt_digest,
                         **pins,
-                        **profile_pin,
                     )
                     self.assertEqual(
                         {
@@ -791,35 +845,73 @@ class GVisorRuntimeTests(unittest.TestCase):
                         cas,
                         receipt_digest,
                         **pins,
-                        **profile_pin,
                     )
                     self.assertEqual(receipt["run_id"], run_id)
                     self.assertEqual(receipt["status"], "RECORDED")
-                    if normalization_profile is not None:
-                        self.assertEqual(receipt["schema"], runtime.ARTIFACT_SCHEMA_V2)
+                    self.assertEqual(receipt["schema"], expected_schema)
+                    if expected_schema == runtime.ARTIFACT_SCHEMA_V2:
                         self.assertEqual(
-                            receipt["normalization_profile"], normalization_profile
+                            receipt["normalization_profile"],
+                            pins["expected_normalization_profile"],
                         )
+                        v1_pins = dict(pins)
+                        v1_pins.pop("expected_normalization_profile")
                         for action in (
                             runtime.verify_gvisor_acquired_artifact,
                             runtime.derive_gvisor_acquired_artifact_closure,
                         ):
                             with self.assertRaises(runtime.GVisorRuntimeError):
-                                action(cas, receipt_digest, **pins)
+                                action(cas, receipt_digest, **v1_pins)
                             with self.assertRaises(runtime.GVisorRuntimeError):
                                 action(
                                     cas,
                                     receipt_digest,
-                                    **pins,
-                                    expected_normalization_profile=(
-                                        runtime.ARTIFACT_NORMALIZATION_PROFILE
+                                    **(
+                                        pins
+                                        | {
+                                            "expected_execution_profile": (
+                                                runtime.ARTIFACT_EXECUTION_PROFILE
+                                            ),
+                                            "expected_entrypoint_path": "run.sh",
+                                            "expected_declared_capabilities": (),
+                                        }
                                     ),
-                                    expected_execution_profile=(
-                                        runtime.ARTIFACT_EXECUTION_PROFILE
-                                    ),
-                                    expected_entrypoint_path="run.sh",
-                                    expected_declared_capabilities=[],
                                 )
+                    if expected_schema == runtime.ARTIFACT_SCHEMA_V3:
+                        capability_receipt = json.loads(
+                            cas.read(receipt["capability_diff_receipt_digest"])
+                        )
+                        capability_diff = json.loads(
+                            cas.read(capability_receipt["capability_diff_digest"])
+                        )
+                        self.assertEqual(
+                            capability_diff["matched_capabilities"],
+                            ["file-read", "process-exec"],
+                        )
+                        self.assertEqual(
+                            capability_diff["undeclared_observed_capabilities"],
+                            ["file-write"],
+                        )
+                        execution_pins = {
+                            "expected_execution_profile",
+                            "expected_entrypoint_path",
+                            "expected_declared_capabilities",
+                        }
+                        for removed in (
+                            execution_pins | {"expected_normalization_profile"},
+                            execution_pins,
+                        ):
+                            legacy_pins = {
+                                key: value
+                                for key, value in pins.items()
+                                if key not in removed
+                            }
+                            for action in (
+                                runtime.verify_gvisor_acquired_artifact,
+                                runtime.derive_gvisor_acquired_artifact_closure,
+                            ):
+                                with self.assertRaises(runtime.GVisorRuntimeError):
+                                    action(cas, receipt_digest, **legacy_pins)
                     if run_id == _BOUNDED_LIVE_ARTIFACT_RUN_ID:
                         with self.assertRaises(runtime.GVisorRuntimeError):
                             runtime.verify_gvisor_acquired_artifact(

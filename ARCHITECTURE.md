@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, one exact public-acquisition-to-gVisor artifact result, one bounded-host-trace rerun, and one versioned successful-event-set rerun retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, one exact public-acquisition-to-gVisor artifact result, one bounded-host-trace rerun, one versioned successful-event-set rerun, and one caller-pinned bounded-single-script rerun retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -304,6 +304,14 @@ and two executions; nine failed calls remain available only in raw JSONL.
 This profile observes two syscall classes from one bounded boot log. It does
 not prove bytes were written, preserve process or temporal multiplicity,
 establish causal ancestry, or provide capture completeness.
+The v3 `bounded-single-script/v1` profile replaces the fixed source identity
+with caller-held pins for one canonical public source tree, shell entrypoint,
+entrypoint digest, execution and normalization profiles, and declared
+capabilities. The retained run replays all 69 source, implementation, request,
+raw-trace, observation, diff, and receipt blobs from a fresh CAS. Its matched
+`file-read` and `process-exec` categories coexist with undeclared `file-write`
+to `/dev/null` in the bounded execution path; `RECORDED` is evidence, not a
+clean capability verdict. This profile does not establish script safety.
 `RECORDED` grants no capture completeness, backend qualification, runtime
 attestation, isolation, admission authority, or Phase 2 exit.
 

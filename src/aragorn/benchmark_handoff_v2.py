@@ -45,7 +45,8 @@ _LIMITS = {
         "total_bytes": 216 * 1024 * 1024,
     },
     "runtime_evidence": {
-        "blobs": 64,
+        # The first bounded single-script/v1 closure contains 69 exact blobs.
+        "blobs": 69,
         "blob_bytes": 2 * 1024 * 1024,
         "total_bytes": 32 * 1024 * 1024,
     },

@@ -860,7 +860,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--phase2-metrics-checkpoint",
         action="store_true",
-        help="opt-in locked attributed five-run held-out Phase 2 metrics checkpoint",
+        help=(
+            "opt-in five-run held-out Phase 2 metrics checkpoint; the coverage "
+            "lock pair enables attributed v2"
+        ),
     )
     parser.add_argument(
         "--phase2-coverage-lock",

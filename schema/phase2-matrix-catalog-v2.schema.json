@@ -25,7 +25,7 @@
         "owner": {"const": "yousifnazhat"},
         "repository": {"const": "agent-skill-inert-fixture"},
         "commit": {
-          "const": "94dba7fa420b0a202e92f574da97ddedf9a0e86c"
+          "const": "fdf9111395179343a742d9dd6649e6d5f9da737b"
         },
         "case_root": {"const": "cases"}
       }

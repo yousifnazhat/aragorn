@@ -11,7 +11,7 @@ CATALOG_ASSURANCE = "operator_authored_inert_plumbing_not_independent_efficacy"
 COVERAGE_LOCK_ASSURANCE = (
     "operator_asserted_pre_outcome_scenario_binding_not_independent_or_timestamped"
 )
-PUBLIC_FIXTURE_COMMIT = "94dba7fa420b0a202e92f574da97ddedf9a0e86c"
+PUBLIC_FIXTURE_COMMIT = "fdf9111395179343a742d9dd6649e6d5f9da737b"
 SCENARIO_PROFILE = "two-scenario-path-surface/v1"
 SCENARIO_ENVIRONMENT_VARIABLE = "ARAGORN_SCENARIO"
 RUN_SCHEDULE = ("primary", "alternate", "primary", "alternate", "primary")

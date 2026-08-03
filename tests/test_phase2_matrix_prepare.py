@@ -33,6 +33,7 @@ class Phase2MatrixPrepareTests(unittest.TestCase):
             catalog = self._catalog()
             catalog["cases"].reverse()
             gateway = _FakeGateway(base / "fixtures")
+            gateway_root = base / "gateway-tmpfs"
             work = base / "work"
 
             lock_digest = prepare_phase2_matrix(
@@ -40,6 +41,7 @@ class Phase2MatrixPrepareTests(unittest.TestCase):
                 work,
                 worker_uid=self._worker_uid(),
                 worker_gid=self._worker_gid(),
+                gateway_root=gateway_root,
                 gateway=gateway,
             )
 
@@ -48,6 +50,8 @@ class Phase2MatrixPrepareTests(unittest.TestCase):
                 gateway.skill_paths,
                 [f"cases/{case_id}" for case_id in expected_ids],
             )
+            self.assertEqual(gateway.gateway_roots, [gateway_root] * 20)
+            self.assertFalse((work / "gateway").exists())
             suite_path = work / "suite" / "phase2-suite.json"
             suite_raw = suite_path.read_bytes()
             suite = json.loads(suite_raw)
@@ -239,6 +243,7 @@ class _FakeGateway:
         self.substituted_tree_case = substituted_tree_case
         self.fail_on_call = fail_on_call
         self.skill_paths: list[str] = []
+        self.gateway_roots: list[Path] = []
 
     def __call__(
         self,
@@ -249,7 +254,8 @@ class _FakeGateway:
         worker_uid: int,
         worker_gid: int,
     ) -> GatewayQuarantineReceipt:
-        del gateway_root, worker_uid, worker_gid
+        del worker_uid, worker_gid
+        self.gateway_roots.append(gateway_root)
         skill_path = request["skill_path"]
         self.skill_paths.append(skill_path)
         if len(self.skill_paths) == self.fail_on_call:

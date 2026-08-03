@@ -130,7 +130,7 @@ protected acquisitions and prints the caller-held coverage-lock digest. One run
 call then performs the complete serial 20-by-5 matrix:
 
 ```console
-PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_prepare benchmark/phase2-matrix-catalog-v1.json WORK_ROOT --worker-uid WORKER_UID --worker-gid WORKER_GID
+PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_prepare benchmark/phase2-matrix-catalog-v1.json WORK_ROOT --worker-uid WORKER_UID --worker-gid WORKER_GID --gateway-root GATEWAY_TMPFS
 PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_run WORK_ROOT --expected-coverage-lock-digest sha256:...
 ```
 

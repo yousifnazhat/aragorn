@@ -44,6 +44,7 @@ _COVERAGE_LOCK_ASSURANCE = (
 _VERDICT_PROFILE = "undeclared-observed-review/v1"
 _SUITE_ID = "phase2-public-matrix-v1"
 _ENTRYPOINT = "run.sh"
+_DEFAULT_GATEWAY_ROOT = Path("/var/lib/aragorn-gateway")
 _MAX_CATALOG_BYTES = 1024 * 1024
 _IDENTIFIER = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -61,6 +62,7 @@ def prepare_phase2_matrix(
     *,
     worker_uid: int,
     worker_gid: int,
+    gateway_root: str | os.PathLike[str] = _DEFAULT_GATEWAY_ROOT,
     gateway: Gateway = quarantine_through_gateway,
 ) -> str:
     """Acquire, materialize, and freeze one exact 20-case Phase 2 matrix."""
@@ -77,6 +79,7 @@ def prepare_phase2_matrix(
             staging,
             worker_uid=worker_uid,
             worker_gid=worker_gid,
+            gateway_root=Path(gateway_root).expanduser(),
             gateway=gateway,
         )
         staging_metadata = os.lstat(staging)
@@ -131,9 +134,10 @@ def _prepare_staged_matrix(
     *,
     worker_uid: int,
     worker_gid: int,
+    gateway_root: Path,
     gateway: Gateway,
 ) -> str:
-    root, gateway_root, sources_root, suite_root = _create_work_root(
+    root, sources_root, suite_root = _create_work_root(
         work_root,
         worker_uid=worker_uid,
         worker_gid=worker_gid,
@@ -481,7 +485,7 @@ def _remove_work_tree(path: Path, *, expected_identity: tuple[int, int] | None) 
 
 def _create_work_root(
     value: str | os.PathLike[str], *, worker_uid: int, worker_gid: int
-) -> tuple[Path, Path, Path, Path]:
+) -> tuple[Path, Path, Path]:
     for label, identity in (("worker_uid", worker_uid), ("worker_gid", worker_gid)):
         if (
             isinstance(identity, bool)
@@ -499,12 +503,8 @@ def _create_work_root(
         if root.stat().st_gid != worker_gid:
             os.chown(root, -1, worker_gid)
         os.chmod(root, 0o710)
-        gateway_root = root / "gateway"
         sources_root = root / "sources"
         suite_root = root / "suite"
-        gateway_root.mkdir(mode=0o700)
-        os.chown(gateway_root, worker_uid, worker_gid)
-        os.chmod(gateway_root, 0o700)
         sources_root.mkdir(mode=0o700)
         suite_root.mkdir(mode=0o700)
         (suite_root / "cases").mkdir(mode=0o700)
@@ -514,7 +514,7 @@ def _create_work_root(
         raise Phase2MatrixPrepareError("work root must be fresh") from exc
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         raise Phase2MatrixPrepareError(f"cannot create work root: {exc}") from exc
-    return root, gateway_root, sources_root, suite_root
+    return root, sources_root, suite_root
 
 
 def _materialize_acquired_case(
@@ -710,6 +710,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("work_root", type=Path)
     parser.add_argument("--worker-uid", type=int, required=True)
     parser.add_argument("--worker-gid", type=int, required=True)
+    parser.add_argument("--gateway-root", type=Path, default=_DEFAULT_GATEWAY_ROOT)
     return parser
 
 
@@ -721,6 +722,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.work_root,
             worker_uid=arguments.worker_uid,
             worker_gid=arguments.worker_gid,
+            gateway_root=arguments.gateway_root,
         )
     except (CASError, OSError, RuntimeError, ValueError) as exc:
         print(

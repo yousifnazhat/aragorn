@@ -9,6 +9,7 @@ import unittest
 from contextlib import nullcontext
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from aragorn import gvisor_runtime as runtime
@@ -655,6 +656,44 @@ def _put_fixture_receipt(
 
 
 class GVisorRuntimeTests(unittest.TestCase):
+    def test_lock_reader_ignores_atime_but_rejects_identity_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "lock.json"
+            raw = runtime.LOCK.read_bytes()
+            path.write_bytes(raw)
+            metadata = path.stat()
+            fields = {
+                name: getattr(metadata, name)
+                for name in (
+                    "st_dev",
+                    "st_ino",
+                    "st_mode",
+                    "st_size",
+                    "st_mtime_ns",
+                    "st_ctime_ns",
+                )
+            }
+            before = SimpleNamespace(**fields, st_atime_ns=1)
+            after_atime = SimpleNamespace(**fields, st_atime_ns=2)
+            with mock.patch.object(
+                runtime.os, "fstat", side_effect=(before, after_atime)
+            ):
+                self.assertEqual(runtime._read_lock(path, "test"), raw)
+
+            after_change = SimpleNamespace(
+                **{**fields, "st_mtime_ns": fields["st_mtime_ns"] + 1},
+                st_atime_ns=2,
+            )
+            with (
+                mock.patch.object(
+                    runtime.os, "fstat", side_effect=(before, after_change)
+                ),
+                self.assertRaisesRegex(
+                    runtime.GVisorRuntimeError, "lock changed while read"
+                ),
+            ):
+                runtime._read_lock(path, "test")
+
     def test_checked_in_live_smoke_closure_imports_and_replays(self) -> None:
         root = Path(__file__).parents[1]
         archive = (

@@ -340,7 +340,24 @@ def _read_lock(path: str | Path, label: str) -> bytes:
             ):
                 raise GVisorRuntimeError(f"{label} lock is not a bounded regular file")
             raw = source.read(_MAX_LOCK_BYTES + 1)
-            if len(raw) != metadata.st_size or os.fstat(source.fileno()) != metadata:
+            after = os.fstat(source.fileno())
+            before_identity = (
+                metadata.st_dev,
+                metadata.st_ino,
+                metadata.st_mode,
+                metadata.st_size,
+                metadata.st_mtime_ns,
+                metadata.st_ctime_ns,
+            )
+            after_identity = (
+                after.st_dev,
+                after.st_ino,
+                after.st_mode,
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            )
+            if len(raw) != metadata.st_size or after_identity != before_identity:
                 raise GVisorRuntimeError(f"{label} lock changed while read")
     except (OSError, RuntimeError) as exc:
         raise GVisorRuntimeError(f"cannot read {label} lock: {exc}") from exc

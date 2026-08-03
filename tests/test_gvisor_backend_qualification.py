@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
@@ -9,6 +10,7 @@ from pathlib import Path
 
 from aragorn import gvisor_backend_qualification as qualification
 from aragorn.cas import CAS
+from aragorn.gvisor_backend_probe import HOST_SNAPSHOT_SCHEMA
 from aragorn.oci_worker_protocol import canonical_json
 
 
@@ -166,12 +168,47 @@ class GVisorBackendQualificationTests(unittest.TestCase):
                     **fixture["pins"],
                 )
 
+    def test_asserted_control_cannot_override_probe_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _fixture(Path(temporary))
+            evidence = json.loads(
+                fixture["cas"].read(fixture["control_digests"][0])
+            )
+            transcript = fixture["cas"].read(
+                evidence["artifacts"]["probe_stdout"]
+            )
+            changed_transcript = transcript.replace(
+                b"tcp_loopback_match=1\n",
+                b"tcp_loopback_match=0\n",
+            )
+            changed_digest = _put(fixture, changed_transcript)
+            evidence["artifacts"]["probe_stdout"] = changed_digest
+            evidence["artifacts"]["egress_observer"] = changed_digest
+            changed = copy.deepcopy(fixture["receipt"])
+            changed["runs"][0]["control_evidence_digest"] = _put(
+                fixture, evidence
+            )
+
+            with self.assertRaisesRegex(
+                qualification.GVisorBackendQualificationError,
+                "control failed: tcp-sink-positive-control",
+            ):
+                qualification.verify_gvisor_backend_qualification(
+                    fixture["cas"], _put(fixture, changed), **fixture["pins"]
+                )
+
 
 def _fixture(root: Path) -> dict:
     cas = CAS(root / "cas")
     fixture = {"cas": cas, "digests": set()}
     runtime_lock_digest = _put(fixture, b"runtime-lock-v1")
-    probe_digest = _put(fixture, b"exact-linux-arm64-probe")
+    probe_digest = _put(
+        fixture,
+        (
+            Path(__file__).parents[1]
+            / "benchmark/fixtures/gvisor-backend-qualification/probe-v1.sh"
+        ).read_bytes(),
+    )
     implementation_digest = _put(fixture, b"qualification-verifier")
     lock = {
         "schema": qualification.LOCK_SCHEMA,
@@ -203,10 +240,33 @@ def _fixture(root: Path) -> dict:
                 "run_id": run_id,
             },
         )
+        host_pid = 1000 + sequence
+        probe_stdout = _probe_transcript(run_id, host_pid)
+        probe_stdout_digest = _put(fixture, probe_stdout)
+        host_snapshot_digest = _put(
+            fixture, _host_snapshot(run_id, host_pid)
+        )
         artifacts = {
             field: _put(fixture, f"{run_id}:{field}".encode("ascii"))
             for field in qualification._ARTIFACT_FIELDS
+            if field
+            not in {
+                "egress_observer",
+                "host_sentinel_post",
+                "host_sentinel_pre",
+                "probe_stderr",
+                "probe_stdout",
+            }
         }
+        artifacts.update(
+            {
+                "egress_observer": probe_stdout_digest,
+                "host_sentinel_post": host_snapshot_digest,
+                "host_sentinel_pre": host_snapshot_digest,
+                "probe_stderr": _put(fixture, b""),
+                "probe_stdout": probe_stdout_digest,
+            }
+        )
         controls = [
             {
                 "control_id": control_id,
@@ -286,6 +346,69 @@ def _put(fixture: dict, value: object) -> str:
     digest = fixture["cas"].put(BytesIO(raw), max_bytes=2 * 1024 * 1024)
     fixture["digests"].add(digest)
     return digest
+
+
+def _probe_transcript(run_id: str, host_pid: int) -> bytes:
+    fields = (
+        "schema=aragorn/gvisor-backend-qualification-probe-transcript/v1",
+        f"run_id={run_id}",
+        f"host_pid={host_pid}",
+        "uid=65534",
+        "gid=65534",
+        "supplementary_gids=",
+        "no_new_privileges=1",
+        "cap_inheritable=0000000000000000",
+        "cap_permitted=0000000000000000",
+        "cap_effective=0000000000000000",
+        "cap_bounding=0000000000000000",
+        "cap_ambient=0000000000000000",
+        "tmpfs_write_rc=0",
+        "tmpfs_read_match=1",
+        "tmpfs_removed=1",
+        "tcp_loopback_send_rc=0",
+        "tcp_loopback_listener_rc=0",
+        "tcp_loopback_match=1",
+        "udp_loopback_send_rc=0",
+        "udp_loopback_listener_rc=143",
+        "udp_loopback_match=1",
+        "host_file_visible=0",
+        "host_process_visible=0",
+        "non_loopback_interfaces=0",
+        "ipv4_routes=0",
+        "tcp_egress_send_rc=1",
+        "udp_egress_send_rc=1",
+        "rootfs_write_rc=1",
+        "rootfs_artifact_present=0",
+        "input_read_match=1",
+        "input_write_rc=1",
+        "input_rename_rc=1",
+        "input_unlink_rc=1",
+        "input_post_match=1",
+        "tmpfs_script_write_rc=0",
+        "tmpfs_exec_rc=126",
+        "mount_rc=1",
+        "unshare_rc=1",
+        "mknod_rc=1",
+        "setuid_rc=1",
+        "setgid_rc=1",
+    )
+    return ("\n".join(fields) + "\n").encode("ascii")
+
+
+def _host_snapshot(run_id: str, host_pid: int) -> dict[str, object]:
+    return {
+        "schema": HOST_SNAPSHOT_SCHEMA,
+        "run_id": run_id,
+        "host_file_digest": _raw_digest(f"Aragorn-host-file-{run_id}"),
+        "input_digest": _raw_digest(f"Aragorn-input-{run_id}"),
+        "process_id": host_pid,
+        "process_start_ticks": host_pid + 1000,
+        "process_marker_digest": _raw_digest(f"Aragorn-host-process-{run_id}"),
+    }
+
+
+def _raw_digest(value: str) -> str:
+    return f"sha256:{hashlib.sha256(value.encode('ascii')).hexdigest()}"
 
 
 if __name__ == "__main__":

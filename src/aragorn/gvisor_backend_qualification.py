@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from .cas import CAS, CASError
+from .gvisor_backend_probe import (
+    GVisorBackendProbeError,
+    derive_gvisor_backend_controls,
+)
 from .gvisor_runtime import _read_lock
 from .oci_worker_protocol import WorkerProtocolError, _digest, canonical_json
 
@@ -470,8 +474,40 @@ def _verify_control_evidence(
         raise GVisorBackendQualificationError(
             "backend qualification control evidence is incomplete"
         )
-    for index, ((control_id, expected), raw_control) in enumerate(
-        zip(_CONTROL_EXPECTATIONS, controls, strict=True)
+    artifacts = _object(evidence["artifacts"], "backend qualification artifacts")
+    _exact_fields(artifacts, _ARTIFACT_FIELDS, "backend qualification artifacts")
+    artifact_digests = {
+        field: _digest(value, f"backend qualification artifacts.{field}")
+        for field, value in artifacts.items()
+    }
+    try:
+        derived_controls = derive_gvisor_backend_controls(
+            cas.read(
+                artifact_digests["probe_stdout"],
+                max_bytes=_MAX_EVIDENCE_BLOB_BYTES,
+            ),
+            cas.read(
+                artifact_digests["probe_stderr"],
+                max_bytes=_MAX_EVIDENCE_BLOB_BYTES,
+            ),
+            cas.read(
+                artifact_digests["host_sentinel_pre"],
+                max_bytes=_MAX_EVIDENCE_BLOB_BYTES,
+            ),
+            cas.read(
+                artifact_digests["host_sentinel_post"],
+                max_bytes=_MAX_EVIDENCE_BLOB_BYTES,
+            ),
+            cas.read(
+                artifact_digests["egress_observer"],
+                max_bytes=_MAX_EVIDENCE_BLOB_BYTES,
+            ),
+            expected_run_id=run_id,
+        )
+    except GVisorBackendProbeError as exc:
+        raise GVisorBackendQualificationError(str(exc)) from exc
+    for index, ((control_id, expected), raw_control, derived) in enumerate(
+        zip(_CONTROL_EXPECTATIONS, controls, derived_controls, strict=True)
     ):
         control = _object(
             raw_control, f"backend qualification controls[{index}]"
@@ -481,18 +517,17 @@ def _verify_control_evidence(
             {"control_id", "observed"},
             f"backend qualification controls[{index}]",
         )
-        if control["control_id"] != control_id or _canonical_bytes(
-            control["observed"]
-        ) != _canonical_bytes(expected):
+        if (
+            derived["control_id"] != control_id
+            or _canonical_bytes(derived["observed"]) != _canonical_bytes(expected)
+            or control["control_id"] != control_id
+            or _canonical_bytes(control["observed"])
+            != _canonical_bytes(derived["observed"])
+        ):
             raise GVisorBackendQualificationError(
                 f"backend qualification control failed: {control_id}"
             )
-    artifacts = _object(evidence["artifacts"], "backend qualification artifacts")
-    _exact_fields(artifacts, _ARTIFACT_FIELDS, "backend qualification artifacts")
-    return {
-        field: _digest(value, f"backend qualification artifacts.{field}")
-        for field, value in artifacts.items()
-    }
+    return artifact_digests
 
 
 def _verify_cleanup_evidence(

@@ -642,11 +642,32 @@ proves only that a separate pinned OS principal observed and remeasured the
 exact bounded create candidate received from the runtime before effect. The
 session, run, and tool-call values remain opaque host correlations, and the
 active-skill digest remains a deployment pin rather than causal skill
-attribution. P3.3a is unit/static exercised only: deployed mount and identity
-evidence, retained live evidence, a semantic verifier, direct-write and other
-tool/process/file/network coverage, forced-reset storage qualification, and
-admission conformance remain required before `RUN-01`, `RUN-02`, Phase 3, EDR,
-or release authority can pass.
+attribution. P3.3a was unit/static exercised only.
+
+P3.3b qualifies the same synthetic create profile in a Linux container running
+systemd as PID 1. The production installer provisions fixed principals and
+paths with sysusers/tmpfiles; the installed units consume systemd credentials,
+run without effective capabilities under `NoNewPrivileges`, receive distinct
+mount and network namespaces, and expose group-scoped Unix sockets. The
+retained capture records collector-observed source/installed digest and size
+equality, loaded unit and credential properties, mount tables, process start
+identities, filesystem metadata, and paired successful `strace` observations
+of the actual `SO_PEERCRED` tuples. It exercises runtime DAC
+denial on the backend, broker and sensor rejection of wrong-but-DAC-capable
+principals, one mediated `ALLOW`/`CREATED` effect, unhealthy-mediator
+`BLOCK`/no-effect, and stopped-sensor connection failure/no-effect. A pinned
+semantic verifier replays the policy result and validates the internal
+consistency of the retained control-state and effect transitions. A checked-in
+capture recipe retains normalized image and HostConfig identity and runs the
+container without networking.
+
+That evidence is bounded by the exact arm64 container profile. Its privileged
+outer Docker control plane is not attested, Debian package retrieval is not a
+reproducible supply-chain proof, the client is synthetic rather than the pinned
+OpenClaw runtime, and opaque host correlations remain non-causal. Direct-write
+and other tool/process/file/network coverage, forced-reset storage
+qualification, runtime admission conformance, `RUN-01`, `RUN-02`, Phase 3,
+EDR, and release authority remain incomplete.
 
 ### 8. Evidence and interoperability plane
 

@@ -172,10 +172,27 @@ independently unhealthy status, and only then enters replay claim and durable
 effect mediation. The sensor has no control/protected write
 path and no staging access. This slice is unit/static exercised only. It does
 not turn opaque run/session/tool identifiers into causal evidence, and the
-active-skill digest remains a fixed deployment binding. Installed live
-composition evidence, semantic verification, direct-write and broader event
-coverage, forced-reset qualification, `RUN-01`, `RUN-02`, Phase 3, EDR, and
-release authority remain incomplete.
+active-skill digest remains a fixed deployment binding. At that checkpoint,
+installed live composition evidence and semantic verification remained
+incomplete.
+
+P3.3b adds [retained live Linux systemd composition evidence](./benchmark/evidence/runtime-action-systemd-composition-p3-3b-2026-08-04.json)
+for that same synthetic create route. The production installer, sysusers,
+and tmpfiles provision separate broker, sensor, and runtime identities; the
+probe uses a distinct fourth attacker UID. The installed units and
+`LoadCredential` paths run under systemd as PID 1. The capture records
+collector-observed source/installed digest and
+size equality, loaded unit commands, mount and network namespaces,
+capabilities, socket DAC, and paired successful `SO_PEERCRED` traces. It
+records a successful mediated create plus fail-closed direct-backend,
+wrong-principal, unhealthy-mediator, and stopped-sensor cases; the pinned
+semantic verifier replays the decision and rejects boundary mutations. The
+[capture recipe](./scripts/capture_runtime_action_systemd.sh) retains normalized
+image and HostConfig identity and runs the container without networking. The
+privileged Docker control plane is not attested, the client is synthetic, and
+OpenClaw is not composed. Direct-write and broader event coverage, forced-reset
+qualification, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority remain
+incomplete.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

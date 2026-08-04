@@ -822,27 +822,36 @@ def _process_identity(process_id: int, marker: str) -> int:
     before = stat_path.read_bytes()
     cmdline = cmdline_path.read_bytes()
     after = stat_path.read_bytes()
-    if before != after or cmdline != f"{marker}\0{30}\0".encode("ascii"):
+
+    def start_ticks(raw: bytes) -> int:
+        closing = raw.rfind(b") ")
+        if not raw.startswith(f"{process_id} (".encode("ascii")) or closing < 0:
+            raise GVisorBackendQualificationCollectionError(
+                "qualification host process stat is malformed"
+            )
+        fields = raw[closing + 2 :].split()
+        try:
+            value = int(fields[19])
+        except (IndexError, ValueError) as exc:
+            raise GVisorBackendQualificationCollectionError(
+                "qualification host process start time is invalid"
+            ) from exc
+        if value <= 0:
+            raise GVisorBackendQualificationCollectionError(
+                "qualification host process start time is invalid"
+            )
+        return value
+
+    before_ticks = start_ticks(before)
+    after_ticks = start_ticks(after)
+    if (
+        before_ticks != after_ticks
+        or cmdline != f"{marker}\0{30}\0".encode("ascii")
+    ):
         raise GVisorBackendQualificationCollectionError(
             "qualification host process identity changed"
         )
-    closing = before.rfind(b") ")
-    if closing < 0:
-        raise GVisorBackendQualificationCollectionError(
-            "qualification host process stat is malformed"
-        )
-    fields = before[closing + 2 :].split()
-    try:
-        start_ticks = int(fields[19])
-    except (IndexError, ValueError) as exc:
-        raise GVisorBackendQualificationCollectionError(
-            "qualification host process start time is invalid"
-        ) from exc
-    if start_ticks <= 0:
-        raise GVisorBackendQualificationCollectionError(
-            "qualification host process start time is invalid"
-        )
-    return start_ticks
+    return before_ticks
 
 
 def _write_exclusive(path: Path, raw: bytes, *, mode: int) -> int:

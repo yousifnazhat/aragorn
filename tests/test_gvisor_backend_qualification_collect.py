@@ -163,6 +163,43 @@ class GVisorBackendQualificationCollectorTests(unittest.TestCase):
         ):
             collector._require_collector_host()
 
+    def test_process_identity_allows_dynamic_stat_fields_only(self) -> None:
+        process_id = 4321
+        marker = f"Aragorn-host-process-{'1' * 32}"
+
+        def process_stat(state: str, start_ticks: int, user_ticks: int) -> bytes:
+            fields = [state, *("0" for _ in range(10)), str(user_ticks)]
+            fields.extend("0" for _ in range(7))
+            fields.append(str(start_ticks))
+            return (
+                f"{process_id} (sleep) ".encode("ascii")
+                + " ".join(fields).encode("ascii")
+            )
+
+        before = process_stat("R", 987654, 1)
+        after = process_stat("S", 987654, 2)
+        cmdline = f"{marker}\0{30}\0".encode("ascii")
+        with mock.patch.object(
+            collector.Path,
+            "read_bytes",
+            side_effect=(before, cmdline, after),
+        ):
+            self.assertEqual(collector._process_identity(process_id, marker), 987654)
+
+        replaced = process_stat("S", 987655, 2)
+        with (
+            mock.patch.object(
+                collector.Path,
+                "read_bytes",
+                side_effect=(before, cmdline, replaced),
+            ),
+            self.assertRaisesRegex(
+                collector.GVisorBackendQualificationCollectionError,
+                "process identity changed",
+            ),
+        ):
+            collector._process_identity(process_id, marker)
+
 
 if __name__ == "__main__":
     unittest.main()

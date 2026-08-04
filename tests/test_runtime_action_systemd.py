@@ -147,7 +147,7 @@ class RuntimeActionSystemdTests(unittest.TestCase):
             self.assertTrue(
                 (
                     staged
-                    / "etc/systemd/system/aragorn-runtime-action-broker.service"
+                    / "usr/lib/systemd/system/aragorn-runtime-action-broker.service"
                 ).is_file()
             )
 

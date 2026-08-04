@@ -11,9 +11,9 @@ fi
 install -d -m 0755 \
     "$destdir/usr/lib/aragorn/aragorn" \
     "$destdir/usr/libexec/aragorn" \
+    "$destdir/usr/lib/systemd/system" \
     "$destdir/usr/lib/sysusers.d" \
-    "$destdir/usr/lib/tmpfiles.d" \
-    "$destdir/etc/systemd/system"
+    "$destdir/usr/lib/tmpfiles.d"
 install -m 0644 \
     "$root/src/aragorn/__init__.py" \
     "$root/src/aragorn/oci_worker_protocol.py" \
@@ -32,4 +32,4 @@ install -m 0644 \
     "$destdir/usr/lib/tmpfiles.d/aragorn-runtime-action.conf"
 install -m 0644 \
     "$root/packaging/systemd/aragorn-runtime-action-broker.service" \
-    "$destdir/etc/systemd/system/aragorn-runtime-action-broker.service"
+    "$destdir/usr/lib/systemd/system/aragorn-runtime-action-broker.service"

@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; the bounded Phase 1 acquisition lock is complete for the public-GitHub exact-commit profile; Phase 2 P2.4 now retains selected-observation composition, one fixed same-run gVisor canary, one exact public-acquisition-to-gVisor artifact run, one bounded-host-trace rerun, one versioned successful-event-set rerun, and one caller-pinned bounded-single-script rerun after the retained P2.3 runtime-path smoke**. The machine-derived [Phase 1 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json) derives its numerical gate from the signed `c87b82b9` production ingress and cross-binds request-v4 release-pin custody; the earlier v2 numerical receipt remains historical evidence only. It does not make a runtime admission-conformant, grant installer authority, or authorize public release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not an unqualified fresh-final-candidate exit claim, EDR, supported release, installer-authority claim, general OpenClaw security finding, or claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; the bounded Phase 1 acquisition lock is complete for the public-GitHub exact-commit profile; the bounded exercised-profile Phase 2 exit is complete; Phase 3 runtime-prevention engineering is active**. The machine-derived [Phase 1 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json) derives its numerical gate from the signed `c87b82b9` production ingress and cross-binds request-v4 release-pin custody; the earlier v2 numerical receipt remains historical evidence only. It does not make a runtime admission-conformant, grant installer authority, or authorize public release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not EDR, a supported release, an installer-authority claim, a general OpenClaw security finding, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 Phase 2 P2.1 now has a deterministic category-only declared-versus-observed
 behavior diff contract. It verifies set arithmetic only; it is not detonation
@@ -79,13 +79,14 @@ recorded undeclared `file-write` to `/dev/null` in the bounded execution path.
 capture completeness, runtime attestation, isolation, backend qualification,
 admission authority, or Phase 2 exit.
 
-The implemented but not yet live-retained v4 profile adds an ordered
+The v4 profile adds an ordered
 entrypoint-epoch attribution manifest. Successful pre-entrypoint events remain
 `harness`, the wrapper's launch is `entrypoint`, same-thread events after that
 launch completes become `subject`, and unrelated post-entrypoint events remain
 `unknown`; only `subject` events feed the capability diff. Replay re-derives the
-manifest and checks its CAS digest. This does not establish process ancestry,
-capture completeness, or a Phase 2 exit.
+manifest and checks its CAS digest. The retained v3 matrix exercises this path
+in all 100 cells and fails closed on `unknown`; this still does not establish
+process ancestry or universal capture completeness.
 
 The lockless compatibility command is:
 
@@ -94,11 +95,21 @@ python -m aragorn.benchmark SUITE OUTCOMES --state EVIDENCE_CAS --phase2-metrics
 ```
 
 It applies the four Phase 2 numerical thresholds with exact fractions to a
-caller-declared, unfrozen five-run `held_out` matrix.
-Its report always sets `phase2_exit_eligible` to `false`; attributed detonation
-evidence, capture completeness, a frozen coverage/candidate lock, a qualified
-isolated backend, and a varied-scenario matrix all remain required. A metric
-pass is not a phase exit.
+caller-declared, unfrozen five-run `held_out` matrix. Its report always sets
+`phase2_exit_eligible` to `false` by design: it is metrics-only. A separate
+Phase 2 exit gate must re-evaluate the locked report and compose it with
+exact-profile backend qualification and configured-point remote-capture
+completeness. Only a tracked, validated exit-gate report can establish bounded
+Phase 2 completion. That completion is not EDR or public-release readiness;
+Phase 3 is runtime-prevention engineering.
+
+The tracked [Phase 2 exit report](./benchmark/receipts/phase2-exit-gate-1c47d2fc62332152dfad337a4288e53c-2026-08-03.json)
+replayed the locked 100-cell matrix, exact configured-point protobuf profile,
+and three-run exact-profile gVisor backend qualification. Its
+[portable evidence archive](./benchmark/evidence/phase2-exit-gate-1c47d2fc62332152dfad337a4288e53c-2026-08-03.tar.gz)
+reproduces the same report from retained bytes. The pass is limited to the
+exercised arm64 profile and does not attest gVisor, the host, universal event
+completeness, independent efficacy, Phase 3 response, or public release.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
@@ -117,20 +128,20 @@ verified capability diff. The v2 report still sets `phase2_exit_eligible` to
 `false`: capture completeness, a qualified isolated backend, and varied live
 scenarios remain unproven.
 
-The checked-in Phase 2 matrix catalog pins public fixture commit
-[`59a04979`](https://github.com/yousifnazhat/agent-skill-inert-fixture/commit/59a04979257a4ac9f19f94363ddc5d9bf3ef4afb)
-and exactly 20 cases. The four benign scripts use same-thread reads; the 16
-adversarial scripts add inert `/tmp` writes through shell builtins, so the
-bounded v4 classifier does not silently turn forked child activity into subject
-evidence. This is operator-authored contract plumbing, not independent efficacy
-evidence.
+The checked-in v3 Phase 2 matrix catalog pins public fixture commit
+[`fdf91113`](https://github.com/yousifnazhat/agent-skill-inert-fixture/commit/fdf9111395179343a742d9dd6649e6d5f9da737b)
+and exactly 20 cases across a fixed five-run primary/alternate scenario
+schedule. The four benign scripts use same-thread reads; the 16 adversarial
+scripts add inert `/tmp` writes through shell builtins, so the bounded v4
+classifier does not silently turn forked child activity into subject evidence.
+This is operator-authored contract plumbing, not independent efficacy evidence.
 
 On the qualified Linux/root capture host, one prepare call performs all 20
 protected acquisitions and prints the caller-held coverage-lock digest. One run
 call then performs the complete serial 20-by-5 matrix:
 
 ```console
-PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_prepare benchmark/phase2-matrix-catalog-v1.json WORK_ROOT --worker-uid WORKER_UID --worker-gid WORKER_GID --gateway-root GATEWAY_TMPFS
+PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_prepare benchmark/phase2-matrix-catalog-v3.json WORK_ROOT --worker-uid WORKER_UID --worker-gid WORKER_GID --gateway-root GATEWAY_TMPFS
 PYTHONPATH=src python3.12 -m aragorn.phase2_matrix_run WORK_ROOT --expected-coverage-lock-digest sha256:...
 ```
 

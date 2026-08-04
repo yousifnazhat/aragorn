@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; Phase 2 P2.4 selected-observation composition, one fixed same-run gVisor canary, one exact public-acquisition-to-gVisor artifact result, one bounded-host-trace rerun, one versioned successful-event-set rerun, and one caller-pinned bounded-single-script rerun retained after the P2.3 runtime-path smoke; arbitrary-artifact detonation, capture completeness, general archives, private repositories, public-release runtime binding, runtime conformance, installer eligibility, and public release remain blocked
+Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; bounded exercised-profile Phase 2 exit complete; Phase 3 runtime-prevention engineering active; universal capture completeness, general archives, private repositories, trusted runtime/host attestation, runtime conformance, installer eligibility, EDR status, and public release remain blocked
 
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
@@ -14,7 +14,7 @@ Yes, this can become an **EDR-style framework for agent skills**, but the name h
 
 - **Phases 0–1:** capability admission control. It resolves and pins what will be installed, collects scanner evidence, and allows only reviewed digests.
 - **Phase 2:** admission control plus behavioral detonation. It exercises the artifact in isolation and compares declared behavior with observed behavior.
-- **Phase 3 onward:** agent-capability EDR. It continuously attributes runtime actions to an exact skill digest and can block, terminate, quarantine, isolate, or revoke it.
+- **Phase 3:** runtime-prevention engineering. It adds continuous digest attribution and external block, terminate, quarantine, isolate, and revoke controls; passing its gates earns the agent-capability EDR label.
 
 The defensible public claim is:
 
@@ -319,18 +319,31 @@ manifest around the exact script-entry boundary. It classifies pre-boundary
 events as harness, the wrapper launch as entrypoint, same-thread events after
 the launch completes as subject, and unrelated post-boundary events as unknown;
 only subject events enter the capability diff.
-Portable replay re-derives that manifest and verifies its CAS binding. No live
-v4 receipt is retained yet, and this bounded epoch classifier does not prove
-process ancestry or capture completeness. The lockless metrics checkpoint keeps
+Portable replay re-derives that manifest and verifies its CAS binding. The
+retained v3 matrix exercises it in all 100 cells and fails closed on `unknown`;
+this bounded epoch classifier still does not prove process ancestry or universal
+capture completeness. The lockless metrics checkpoint keeps
 the original caller-declared, unfrozen v1 contract. Its opt-in v2 path requires a
 caller-held digest for a canonical pre-outcome lock over the exact candidate,
 held-out coverage, separate local-suite and acquired-source manifest identities,
 bounded entrypoint and declared-capability pins, and gVisor v4 verifier inputs.
 Only the locked Aragorn cells enter the dedicated v4 verifier; it rejects unknown
 attribution scopes and re-derives each verdict from the verified capability diff.
-Both checkpoint versions always report `phase2_exit_eligible: false`. V2 removes
-only the attributed-evidence and frozen-lock deficits; capture completeness,
-qualified-backend evidence, and varied live scenarios remain required.
+Both checkpoint versions always report `phase2_exit_eligible: false` by design:
+they are metrics-only. A separate Phase 2 exit gate must independently
+re-evaluate the locked report and compose exact-profile backend qualification
+with configured-point remote-capture completeness. Only a tracked, validated
+exit-gate report can establish bounded Phase 2 completion; that does not earn
+the EDR label or public-release readiness. Phase 3 is runtime-prevention
+engineering.
+The retained
+[`phase2-exit-gate` report](./benchmark/receipts/phase2-exit-gate-1c47d2fc62332152dfad337a4288e53c-2026-08-03.json)
+and replayable
+[evidence archive](./benchmark/evidence/phase2-exit-gate-1c47d2fc62332152dfad337a4288e53c-2026-08-03.tar.gz)
+compose those leaves and pass the bounded exercised arm64 profile. They do not
+establish trusted Sentry, runtime, host, or hardware attestation; universal
+event completeness; independent efficacy; Phase 3 response; or release
+authority.
 The Phase 2 matrix preparer now sends the exact 20-case public catalog through
 the ordinary protected GitHub gateway, materializes a separate local suite,
 freezes the source/suite/candidate/gVisor lock, and atomically publishes one

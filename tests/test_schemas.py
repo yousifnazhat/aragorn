@@ -73,6 +73,7 @@ EXPECTED_CONTRACTS = {
     "phase2-matrix-catalog-v2.schema.json": "aragorn/phase2-matrix-catalog/v2",
     "phase2-matrix-catalog-v3.schema.json": "aragorn/phase2-matrix-catalog/v3",
     "phase2-matrix-operator-index-v1.schema.json": "aragorn/phase2-matrix-operator-index/v1",
+    "phase2-exit-gate-report-v1.schema.json": "aragorn/phase2-exit-gate-report/v1",
     "benchmark-phase0-hidden-calibration-result-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v1",
     "benchmark-phase0-hidden-calibration-result-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v2",
     "benchmark-phase0-hidden-calibration-result-receipt-v3.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v3",

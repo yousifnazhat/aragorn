@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/phase2-exit-gate-report-v1.schema.json",
+  "title": "Aragorn bounded Phase 2 exit gate report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "authority", "scope", "gate_implementation_digest", "metrics", "capture", "backend", "decision", "limitations"],
+  "properties": {
+    "schema": {"const": "aragorn/phase2-exit-gate-report/v1"},
+    "authority": {"const": "BOUNDED_EXERCISED_PHASE2_CONFIGURED_POINT_COMPLETENESS_METRICS_AND_EXACT_BACKEND_QUALIFICATION_ONLY_NOT_TRUSTED_SENTRY_RUNTIME_HOST_HYPERVISOR_HARDWARE_ATTESTATION_PHASE3_EDR_ADMISSION_OR_PUBLIC_RELEASE_AUTHORITY"},
+    "scope": {"const": "bounded-exercised-phase2/v1"},
+    "gate_implementation_digest": {"$ref": "#/$defs/digest"},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "report_digest", "coverage_lock_digest", "suite_digest", "outcomes_digest", "candidate", "scenario_schedule"],
+      "properties": {
+        "status": {"const": "PASS"},
+        "report_digest": {"$ref": "#/$defs/digest"},
+        "coverage_lock_digest": {"$ref": "#/$defs/digest"},
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "outcomes_digest": {"$ref": "#/$defs/digest"},
+        "candidate": {"$ref": "#/$defs/system"},
+        "scenario_schedule": {"const": ["primary", "alternate", "primary", "alternate", "primary"]}
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "profile", "canary_lock_digest", "runtime_lock_digest", "runtime_source_commit", "architecture", "session_config_digest", "monitor_implementation_digest", "cells", "complete_cells", "unique_remote_receipts", "frame_count", "raw_frame_bytes", "required_points", "observed_point_counts", "matrix_bindings_digest"],
+      "properties": {
+        "status": {"const": "PASS"},
+        "profile": {"const": "pinned-gvisor-remote-v1-configured-point-protobuf/v1"},
+        "canary_lock_digest": {"$ref": "#/$defs/digest"},
+        "runtime_lock_digest": {"$ref": "#/$defs/digest"},
+        "runtime_source_commit": {"const": "9f3e9a3fba9416ea1f5832d82923d95830479096"},
+        "architecture": {"const": "arm64"},
+        "session_config_digest": {"$ref": "#/$defs/digest"},
+        "monitor_implementation_digest": {"$ref": "#/$defs/digest"},
+        "cells": {"const": 100},
+        "complete_cells": {"const": 100},
+        "unique_remote_receipts": {"const": 100},
+        "frame_count": {"type": "integer", "minimum": 100},
+        "raw_frame_bytes": {"type": "integer", "minimum": 900},
+        "required_points": {"const": ["container/start", "sentry/clone", "sentry/task_exit", "syscall/execve/enter", "syscall/execve/exit", "syscall/openat/enter", "syscall/openat/exit", "syscall/write/enter", "syscall/write/exit"]},
+        "observed_point_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["container/start", "sentry/clone", "sentry/task_exit", "syscall/execve/enter", "syscall/execve/exit", "syscall/openat/enter", "syscall/openat/exit", "syscall/write/enter", "syscall/write/exit"],
+          "properties": {
+            "container/start": {"type": "integer", "minimum": 100},
+            "sentry/clone": {"type": "integer", "minimum": 100},
+            "sentry/task_exit": {"type": "integer", "minimum": 100},
+            "syscall/execve/enter": {"type": "integer", "minimum": 100},
+            "syscall/execve/exit": {"type": "integer", "minimum": 100},
+            "syscall/openat/enter": {"type": "integer", "minimum": 100},
+            "syscall/openat/exit": {"type": "integer", "minimum": 100},
+            "syscall/write/enter": {"type": "integer", "minimum": 100},
+            "syscall/write/exit": {"type": "integer", "minimum": 100}
+          }
+        },
+        "matrix_bindings_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "receipt_digest", "lock_digest", "canary_lock_digest", "runtime_lock_digest", "implementation_digest", "runs", "unique_run_ids", "unique_container_ids"],
+      "properties": {
+        "status": {"const": "PASS"},
+        "receipt_digest": {"$ref": "#/$defs/digest"},
+        "lock_digest": {"$ref": "#/$defs/digest"},
+        "canary_lock_digest": {"$ref": "#/$defs/digest"},
+        "runtime_lock_digest": {"$ref": "#/$defs/digest"},
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "runs": {"const": 3},
+        "unique_run_ids": {"const": 3},
+        "unique_container_ids": {"const": 3}
+      }
+    },
+    "decision": {
+      "const": {
+        "status": "PASS",
+        "phase2_exit_eligible": true,
+        "phase3_engineering_eligible": true,
+        "phase3_edr_claim_eligible": false,
+        "public_release_eligible": false,
+        "reason_codes": []
+      }
+    },
+    "limitations": {
+      "const": ["CONFIGURED_POINTS_ONLY_NOT_UNIVERSAL_EVENT_COMPLETENESS", "SENTRY_AND_DOCKER_EVIDENCE_ARE_NOT_TRUSTED_ATTESTATION", "ZERO_REPORTED_DROPS_DOES_NOT_PROVE_ABSENCE_OF_UNREPORTED_EVENTS", "OPERATOR_AUTHORED_HELD_OUT_MATRIX_IS_NOT_INDEPENDENT_EFFICACY_EVIDENCE", "NO_PHASE3_RUNTIME_PREVENTION_OR_EDR_AUTHORITY", "NO_ADMISSION_INSTALLER_OR_PUBLIC_RELEASE_AUTHORITY"]
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation_digest", "config_digest"],
+      "properties": {
+        "name": {"const": "aragorn"},
+        "version": {"const": "0.3.0-phase2"},
+        "implementation_digest": {"$ref": "#/$defs/digest"},
+        "config_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

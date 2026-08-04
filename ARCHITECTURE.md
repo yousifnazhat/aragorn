@@ -567,10 +567,33 @@ health-epoch rollback. Unknown, stale, mismatched, revoked, unmeasured, or
 unattributed actions block. Invalid trusted policy, attribution, measurement,
 revocation, or health state aborts evaluation and must be handled as no-effect.
 The decision binds every supplied authority input but explicitly disclaims
-effect and RUN conformance authority. Canonical socket framing, peer
-authentication, protected persistence of both monotonic floors, fresh
-broker-owned state loading, replay consumption, and the effect remain outside
-this core and are required in the next live mediator slice.
+effect and RUN conformance authority.
+
+P3.2a composes this core with one private create-only broker primitive. It uses
+a canonical 4-byte-length-prefixed Unix stream with an exact EOF, Linux
+`SO_PEERCRED`, distinct broker/runtime UIDs, a broker-only deadline-bound lock,
+descriptor-relative protected reads and state replacement, independent
+monotonic revocation and health qualification, five-second replay retention,
+and final state/time re-evaluation after the replay claim. The broker derives
+the operation, protected-root inode plus target, and payload digests from raw
+bounded effect arguments. An exact final `ALLOW` hard-links a broker-private
+same-filesystem staged inode into an absent host-only target and never replaces
+an existing entry. Every trusted control writer must use the same lock-sharing
+publication primitive. That primitive publishes counters before their durable
+floors, rejects counter rollback and same-counter equivocation, and requires a
+strictly increasing observation sequence. Runtime policy is provisioned before
+startup and immutable for the broker lifetime. A separate broker-owned
+mode-`0600` instance lock serializes broker lifetimes and permits safe removal
+of an identity-checked stale socket after a crash; upgrades from a pre-lock
+broker require an explicitly serialized stop. Errors after the link are
+indeterminate, not evidence of a block. Process-exit signals still propagate
+after best-effort cleanup and remain inside the deferred durable recovery gap.
+
+This is a unit-exercised broker primitive, not the live P3.2 composition. It has
+no native OpenClaw optional tool, deployed Linux identities or mounts, durable
+`PENDING`/`APPLIED` recovery record, retained live evidence, or semantic
+verifier. Those boundaries, plus admission conformance, remain required before
+`RUN-01`, `RUN-02`, Phase 3, EDR, or release authority can pass.
 
 ### 8. Evidence and interoperability plane
 
@@ -701,10 +724,11 @@ URLs describe provenance; digests define identity.
 
 ### Private runtime action decision core
 
-P3.1 implements these decoded-JSON shapes as a private deterministic core. A
-later external mediator must add canonical byte framing, authenticated peers,
-bounded I/O, replay consumption, fresh broker-owned control-state reads, and
-the effect transaction before this becomes a runtime enforcement contract.
+P3.1 implements these decoded-JSON shapes as a private deterministic core.
+P3.2a adds a bounded broker primitive around them, but its new wire, state, and
+result shapes remain private until the live OpenClaw composition and durable
+in-doubt recovery semantics are fixed and schema-frozen. Unit composition is
+not a runtime enforcement or conformance contract.
 
 ```json
 {

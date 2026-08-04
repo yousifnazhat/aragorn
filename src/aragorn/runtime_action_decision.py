@@ -212,6 +212,62 @@ def evaluate_runtime_action(
     }
 
 
+def qualify_runtime_revocation_generation(
+    policy: object,
+    revocations: object,
+    *,
+    now_unix: int,
+    minimum_revocation_generation: int,
+) -> int | None:
+    """Return a trustworthy monotonic generation, independent of a request."""
+
+    now = _integer(now_unix, "trusted current time")
+    minimum = _positive_integer(
+        minimum_revocation_generation,
+        "minimum revocation generation",
+    )
+    policy_document, _allow = _policy(policy)
+    revocation_document, _revoked = _revocations(revocations)
+    if (
+        revocation_document["source_digest"]
+        != policy_document["revocation_source_digest"]
+        or revocation_document["observed_at_unix"] > now
+        or now >= revocation_document["expires_at_unix"]
+        or revocation_document["generation"] < minimum
+    ):
+        return None
+    return revocation_document["generation"]
+
+
+def qualify_runtime_health_epoch(
+    policy: object,
+    mediator_health: object,
+    *,
+    expected_runtime_digest: str,
+    now_unix: int,
+    minimum_mediator_health_epoch: int,
+) -> int | None:
+    """Return a trustworthy monotonic health epoch, including unhealthy state."""
+
+    now = _integer(now_unix, "trusted current time")
+    minimum = _positive_integer(
+        minimum_mediator_health_epoch,
+        "minimum mediator health epoch",
+    )
+    runtime_digest = _digest(expected_runtime_digest, "expected runtime digest")
+    policy_document, _allow = _policy(policy)
+    health_document = _health(mediator_health)
+    if (
+        health_document["runtime_digest"] != runtime_digest
+        or health_document["sensor_digest"] != policy_document["sensor_digest"]
+        or health_document["observed_at_unix"] > now
+        or now >= health_document["expires_at_unix"]
+        or health_document["epoch"] < minimum
+    ):
+        return None
+    return health_document["epoch"]
+
+
 def _request(value: object) -> dict[str, Any]:
     try:
         document = _exact(

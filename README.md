@@ -126,12 +126,20 @@ runtime-scoped allow rule, revocation snapshot, and fresh policy-bound sensor
 identity all agree. Trusted monotonic floors reject revocation-generation and
 health-epoch rollback. Structurally invalid decoded requests return `BLOCK`,
 while malformed trusted state aborts evaluation so a caller cannot proceed.
-This is still decision-only: it has no socket framing or peer authentication,
-consumes no replay key, loads no protected live state, and performs no effect.
-It grants no `RUN-01`, `RUN-02`, Phase 3, EDR, or release authority. The next
-slice is one native optional OpenClaw tool connected to a separately privileged,
-fail-closed Unix-socket mediator while the runtime retains a read-only protected
-mount.
+P3.2a now composes that core with a create-only broker primitive: canonical
+length-prefixed Unix-stream requests, Linux peer-credential checks, a distinct
+runtime UID, descriptor-relative protected control state, independent durable
+revocation and health floors, bounded replay consumption, a final fresh
+pre-effect evaluation, and atomic no-replace publication into a host-only
+mode-`0400` sink. Trusted control publishers share a private mode-`0600` lock;
+revocation/health counters and sequenced observations cannot roll back or
+equivocate, while policy is immutable for the broker lifetime. A separate
+mode-`0600` instance lock permits identity-checked stale-socket recovery;
+post-link uncertainty is reported as indeterminate rather than blocked. This is
+not yet the live P3.2 OpenClaw composition: the native optional tool, dedicated
+Linux service identities, mount wiring, durable in-doubt transaction recovery,
+retained evidence, and semantic verifier remain. It grants no `RUN-01`,
+`RUN-02`, Phase 3, EDR, or release authority.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

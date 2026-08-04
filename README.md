@@ -111,6 +111,15 @@ reproduces the same report from retained bytes. The pass is limited to the
 exercised arm64 profile and does not attest gVisor, the host, universal event
 completeness, independent efficacy, Phase 3 response, or public release.
 
+The first retained Phase 3 engineering slice now binds one exact fixture-skill
+read to one model-transport and runtime `write` call against an explicitly
+read-only mount. The live probe recorded `EACCES`, the same run/session/tool
+identifiers, and an empty protected directory before and after the attempt in
+[its canonical evidence](./benchmark/evidence/openclaw-v2026.7.1-pre-effect-write-2026-08-03.json).
+This is a bounded P3.0 harness observation only: it establishes neither general
+causal attribution nor an Aragorn policy decision, revocation, sensor health,
+`RUN-01`, `RUN-02`, Phase 3 exit, EDR, or public-release authority.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

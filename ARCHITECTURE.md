@@ -546,6 +546,18 @@ Required responses:
 
 Post-effect audit events can support detection and forensics but cannot honestly be described as prevention. A blocking claim requires a synchronous pre-effect hook or a lower-level enforcement point that stops access before the protected sink.
 
+The first retained P3.0 harness slice exercises that boundary narrowly. A
+deterministic loopback provider causes one exact fixture skill to be read and
+then issues one `write` call in the same run and session. An externally
+read-only mount rejects the call with `EACCES`, and the protected directory is
+unchanged. The canonical evidence binds the skill, configuration, probe,
+runtime entrypoint, provider requests, runtime history, process identity, and
+mount snapshots. Because the provider is evaluator-controlled and the guard is
+a static mount rather than an Aragorn policy broker, the slice grants no
+`RUN-01`, `RUN-02`, Phase 3, EDR, or release authority. The next increment must
+replace the static guard with a digest-bound policy request and independently
+health-checked mediator before any runtime-prevention property can pass.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

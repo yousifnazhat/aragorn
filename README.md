@@ -147,12 +147,22 @@ independently revalidates the public effect and sends one exact framed request
 with no fallback. Static sysusers/tmpfiles contracts provision distinct
 broker/runtime identities and
 durable broker roots. The active-skill digest remains a fixed deployment
-binding, not general causal attribution. These paths are unit/static exercised
-only: a trusted out-of-process observation publisher, installed Linux
-composition and mounts,
-durable in-doubt transaction recovery, retained evidence, and a semantic
-verifier remain. This grants no `RUN-01`, `RUN-02`, Phase 3, EDR, or release
-authority.
+binding, not general causal attribution. P3.2c adds one durable single-effect
+`PENDING`/`APPLIED` journal to the broker state. Startup and every mediation
+reconcile it under the existing global action lock without reauthorizing or
+reexecuting an effect; exact inode, link-count, metadata, payload, protected-root,
+and replay bindings must agree before cleanup or success. Forked `os._exit`
+tests cover each durable process-crash boundary and prove replay preservation,
+nondecreasing floors, no replacement, and at most one effect. This is
+process-crash recovery, not power-loss qualification. These paths remain
+unit/static exercised only: a trusted out-of-process observation publisher,
+installed Linux composition and mounts, retained live evidence, a semantic
+verifier, and forced-reset storage qualification remain. This grants no
+`RUN-01`, `RUN-02`, Phase 3, EDR, or release authority.
+
+The private broker upgrades a valid v1 state under the action lock by preserving
+its replay entries and monotonic floors, selecting schema v2, and initializing
+the journal to `null`; it never infers a prior effect from legacy state.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

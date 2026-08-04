@@ -5,11 +5,13 @@ import fcntl
 import json
 import os
 import socket
+import stat
 import struct
 import tempfile
 import threading
 import time
 import unittest
+from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
@@ -131,11 +133,12 @@ class _Fixture:
             "expires_at_unix": 105,
         }
         self.state = {
-            "schema": "aragorn/runtime-action-broker-state/v1",
+            "schema": "aragorn/runtime-action-broker-state/v2",
             "authority": "BROKER_STATE_ONLY_NOT_RUN_CONFORMANCE_AUTHORITY",
             "minimum_revocation_generation": 1,
             "minimum_mediator_health_epoch": 1,
             "consumed": [],
+            "effect_journal": None,
         }
         self.paths = {
             name: self.control / f"{name}.json"
@@ -183,6 +186,127 @@ class _Fixture:
 
     def load_state(self) -> dict[str, object]:
         return json.loads(self.paths["state"].read_bytes())
+
+
+_CRASH_EXIT = 73
+_CRASH_CHECKPOINTS = {
+    "after_replay_claim",
+    "before_pending",
+    "after_pending",
+    "after_link",
+    "before_applied",
+    "after_applied",
+    "after_stage_unlink",
+    "after_journal_clear",
+}
+
+
+def _crash_during_mediation(fixture: _Fixture, checkpoint: str) -> int:
+    if checkpoint not in _CRASH_CHECKPOINTS:
+        raise AssertionError(f"unknown crash checkpoint: {checkpoint}")
+    child = os.fork()
+    if child == 0:
+        from aragorn import runtime_action_broker as broker
+
+        real_atomic_create = broker._atomic_create
+        real_commit_state = broker._commit_state
+        real_link = broker.os.link
+        real_unlink = broker.os.unlink
+        supports_dir_fd = set(broker.os.supports_dir_fd)
+        supports_follow_symlinks = set(broker.os.supports_follow_symlinks)
+        saw_applied = False
+
+        def crash_atomic_create(*args: object, **kwargs: object) -> bool:
+            if checkpoint == "after_replay_claim":
+                os._exit(_CRASH_EXIT)
+            return real_atomic_create(*args, **kwargs)
+
+        def crash_commit_state(
+            control_fd: int,
+            config: RuntimeActionBrokerConfig,
+            state: dict[str, object],
+        ) -> None:
+            nonlocal saw_applied
+            journal = state.get("effect_journal")
+            status = journal.get("status") if isinstance(journal, dict) else None
+            if checkpoint == "before_pending" and status == "PENDING":
+                os._exit(_CRASH_EXIT)
+            if checkpoint == "before_applied" and status == "APPLIED":
+                os._exit(_CRASH_EXIT)
+            real_commit_state(control_fd, config, state)
+            if checkpoint == "after_pending" and status == "PENDING":
+                os._exit(_CRASH_EXIT)
+            if status == "APPLIED":
+                saw_applied = True
+                if checkpoint == "after_applied":
+                    os._exit(_CRASH_EXIT)
+            elif (
+                checkpoint == "after_journal_clear"
+                and saw_applied
+                and journal is None
+            ):
+                os._exit(_CRASH_EXIT)
+
+        def crash_link(*args: object, **kwargs: object) -> None:
+            real_link(*args, **kwargs)
+            if checkpoint == "after_link":
+                os._exit(_CRASH_EXIT)
+
+        def crash_unlink(path: object, *args: object, **kwargs: object) -> None:
+            real_unlink(path, *args, **kwargs)
+            if (
+                checkpoint == "after_stage_unlink"
+                and isinstance(path, str)
+                and path.startswith(".aragorn-runtime-")
+            ):
+                os._exit(_CRASH_EXIT)
+
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(
+                    patch.object(
+                        broker,
+                        "_atomic_create",
+                        new=crash_atomic_create,
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        broker,
+                        "_commit_state",
+                        new=crash_commit_state,
+                    )
+                )
+                stack.enter_context(
+                    patch.object(broker.os, "link", new=crash_link)
+                )
+                stack.enter_context(
+                    patch.object(broker.os, "unlink", new=crash_unlink)
+                )
+                stack.enter_context(
+                    patch.object(
+                        broker.os,
+                        "supports_dir_fd",
+                        supports_dir_fd | {crash_link, crash_unlink},
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        broker.os,
+                        "supports_follow_symlinks",
+                        supports_follow_symlinks | {crash_link},
+                    )
+                )
+                broker.mediate_runtime_create(
+                    fixture.envelope,
+                    fixture.config,
+                    clock=lambda: 100,
+                )
+        except BaseException:
+            os._exit(97)
+        os._exit(98)
+    _pid, status = os.waitpid(child, 0)
+    return os.waitstatus_to_exitcode(status)
 
 
 class RuntimeActionBrokerTests(unittest.TestCase):
@@ -812,6 +936,363 @@ class RuntimeActionBrokerTests(unittest.TestCase):
                 os.close(staging_fd)
             self.assertEqual(fixture.target.read_bytes(), fixture.payload)
             self.assertEqual(list(fixture.staging.iterdir()), [])
+
+    def test_post_effect_recovery_failure_is_indeterminate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            from aragorn import runtime_action_broker as broker
+
+            unlink_effect = broker._unlink_effect_file_at
+
+            def fail_staged_cleanup(*args: object) -> None:
+                if args[-1] == "runtime staged effect":
+                    raise OSError("injected recovery cleanup failure")
+                unlink_effect(*args)
+
+            with (
+                patch.object(
+                    broker,
+                    "_unlink_effect_file_at",
+                    side_effect=fail_staged_cleanup,
+                ),
+                self.assertRaises(RuntimeActionEffectIndeterminate),
+            ):
+                mediate_runtime_create(
+                    fixture.envelope,
+                    fixture.config,
+                    clock=lambda: 100,
+                )
+
+            self.assertEqual(fixture.target.read_bytes(), fixture.payload)
+            self.assertEqual(fixture.target.stat().st_nlink, 2)
+            self.assertEqual(len(list(fixture.staging.iterdir())), 1)
+            self.assertEqual(
+                fixture.load_state()["effect_journal"]["status"],
+                "APPLIED",
+            )
+
+    def test_success_orders_journal_around_link_and_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            from aragorn import runtime_action_broker as broker
+
+            events: list[str] = []
+            real_commit = broker._commit_state
+            real_effect_file = broker._effect_file_at
+            real_link = broker.os.link
+            real_fsync = broker.os.fsync
+            real_unlink_effect = broker._unlink_effect_file_at
+            supports_dir_fd = set(broker.os.supports_dir_fd)
+            supports_follow_symlinks = set(broker.os.supports_follow_symlinks)
+            protected_identity = (
+                fixture.protected.stat().st_dev,
+                fixture.protected.stat().st_ino,
+            )
+            staging_identity = (
+                fixture.staging.stat().st_dev,
+                fixture.staging.stat().st_ino,
+            )
+            saw_applied = False
+
+            def record_commit(
+                control_fd: int,
+                config: RuntimeActionBrokerConfig,
+                state: dict[str, object],
+            ) -> None:
+                nonlocal saw_applied
+                real_commit(control_fd, config, state)
+                journal = state.get("effect_journal")
+                status = journal.get("status") if isinstance(journal, dict) else None
+                if status == "PENDING":
+                    events.append("pending")
+                elif status == "APPLIED":
+                    saw_applied = True
+                    events.append("applied")
+                elif saw_applied and journal is None:
+                    events.append("clear")
+
+            def record_link(*args: object, **kwargs: object) -> None:
+                real_link(*args, **kwargs)
+                events.append("link")
+
+            def record_fsync(descriptor: int) -> None:
+                metadata = os.fstat(descriptor)
+                real_fsync(descriptor)
+                identity = metadata.st_dev, metadata.st_ino
+                if stat.S_ISDIR(metadata.st_mode) and identity == protected_identity:
+                    events.append("protected-fsync")
+                elif stat.S_ISDIR(metadata.st_mode) and identity == staging_identity:
+                    events.append("staging-fsync")
+
+            def record_unlink_effect(*args: object) -> None:
+                real_unlink_effect(*args)
+                if args[-1] == "runtime staged effect":
+                    events.append("stage-unlink")
+
+            def record_effect_file(*args: object, **kwargs: object) -> object:
+                recovered = real_effect_file(*args, **kwargs)
+                if (
+                    kwargs.get("label") == "runtime protected effect"
+                    and recovered is not None
+                    and recovered.st_nlink == 1
+                ):
+                    events.append("target-verified")
+                return recovered
+
+            with (
+                patch.object(broker, "_commit_state", new=record_commit),
+                patch.object(broker, "_effect_file_at", new=record_effect_file),
+                patch.object(
+                    broker,
+                    "_unlink_effect_file_at",
+                    new=record_unlink_effect,
+                ),
+                patch.object(broker.os, "fsync", new=record_fsync),
+                patch.object(broker.os, "link", new=record_link),
+                patch.object(
+                    broker.os,
+                    "supports_dir_fd",
+                    supports_dir_fd | {record_link},
+                ),
+                patch.object(
+                    broker.os,
+                    "supports_follow_symlinks",
+                    supports_follow_symlinks | {record_link},
+                ),
+            ):
+                result = mediate_runtime_create(
+                    fixture.envelope,
+                    fixture.config,
+                    clock=lambda: 100,
+                )
+
+            self.assertEqual(result["effect_status"], "CREATED")
+            self.assertEqual(
+                events,
+                [
+                    "staging-fsync",
+                    "pending",
+                    "link",
+                    "protected-fsync",
+                    "applied",
+                    "stage-unlink",
+                    "staging-fsync",
+                    "target-verified",
+                    "clear",
+                ],
+            )
+
+    @unittest.skipUnless(hasattr(os, "fork"), "requires process crash injection")
+    def test_process_crash_recovery_is_at_most_once(self) -> None:
+        target_exists = {
+            "after_replay_claim": False,
+            "before_pending": False,
+            "after_pending": False,
+            "after_link": True,
+            "before_applied": True,
+            "after_applied": True,
+            "after_stage_unlink": True,
+            "after_journal_clear": True,
+        }
+        for checkpoint, expected_target in target_exists.items():
+            with self.subTest(checkpoint), tempfile.TemporaryDirectory() as temporary:
+                fixture = _Fixture(Path(temporary).resolve())
+                from aragorn import runtime_action_broker as broker
+
+                self.assertEqual(
+                    _crash_during_mediation(fixture, checkpoint),
+                    _CRASH_EXIT,
+                )
+                target_identity = None
+                if expected_target:
+                    target = fixture.target.stat()
+                    target_identity = target.st_dev, target.st_ino
+                broker._recover_before_listen(fixture.config, 0.5)
+
+                replay = mediate_runtime_create(
+                    fixture.envelope,
+                    fixture.config,
+                    clock=lambda: 100,
+                )
+
+                self.assertEqual(replay["reason_codes"], ["BROKER_REPLAY_BLOCKED"])
+                self.assertEqual(fixture.target.exists(), expected_target)
+                if expected_target:
+                    self.assertEqual(fixture.target.read_bytes(), fixture.payload)
+                    self.assertEqual(stat_mode(fixture.target), 0o400)
+                    target = fixture.target.stat()
+                    self.assertEqual((target.st_dev, target.st_ino), target_identity)
+                    self.assertEqual(target.st_nlink, 1)
+                state = fixture.load_state()
+                self.assertIsNone(state["effect_journal"])
+                self.assertEqual(len(state["consumed"]), 1)
+                self.assertEqual(state["minimum_revocation_generation"], 3)
+                self.assertEqual(state["minimum_mediator_health_epoch"], 4)
+                self.assertEqual(list(fixture.staging.iterdir()), [])
+
+    @unittest.skipUnless(hasattr(os, "fork"), "requires process crash injection")
+    def test_recovery_rejects_contradictory_effects_and_suspicious_orphans(
+        self,
+    ) -> None:
+        for scenario, checkpoint in (
+            ("foreign-target", "after_pending"),
+            ("pending-target-only", "after_link"),
+        ):
+            with self.subTest(scenario), tempfile.TemporaryDirectory() as temporary:
+                fixture = _Fixture(Path(temporary).resolve())
+                self.assertEqual(
+                    _crash_during_mediation(fixture, checkpoint),
+                    _CRASH_EXIT,
+                )
+                if scenario == "foreign-target":
+                    fixture.target.write_bytes(fixture.payload)
+                    fixture.target.chmod(0o400)
+                else:
+                    next(fixture.staging.iterdir()).unlink()
+
+                with self.assertRaises(RuntimeActionBrokerError):
+                    mediate_runtime_create(
+                        fixture.envelope,
+                        fixture.config,
+                        clock=lambda: 100,
+                    )
+
+                self.assertEqual(fixture.target.read_bytes(), fixture.payload)
+                self.assertEqual(
+                    fixture.load_state()["effect_journal"]["status"],
+                    "PENDING",
+                )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            self.assertEqual(
+                _crash_during_mediation(fixture, "after_applied"),
+                _CRASH_EXIT,
+            )
+            state = fixture.load_state()
+            recorded_inode = state["effect_journal"]["staging_inode"]
+            staged = next(fixture.staging.iterdir())
+            fixture.target.unlink()
+            fixture.target.write_bytes(fixture.payload)
+            fixture.target.chmod(0o400)
+            foreign = fixture.target.stat()
+
+            with self.assertRaises(RuntimeActionBrokerError):
+                mediate_runtime_create(
+                    fixture.envelope,
+                    fixture.config,
+                    clock=lambda: 100,
+                )
+
+            self.assertEqual(
+                fixture.load_state()["effect_journal"]["status"],
+                "APPLIED",
+            )
+            self.assertEqual(staged.stat().st_ino, recorded_inode)
+            current = fixture.target.stat()
+            self.assertEqual(
+                (current.st_dev, current.st_ino),
+                (foreign.st_dev, foreign.st_ino),
+            )
+            self.assertEqual(fixture.target.read_bytes(), fixture.payload)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            orphan = fixture.staging / (".aragorn-runtime-" + "a" * 24)
+            orphan.write_bytes(fixture.payload)
+            orphan.chmod(0o400)
+            alias = fixture.protected / "unrelated"
+            os.link(orphan, alias)
+
+            with self.assertRaises(RuntimeActionBrokerError):
+                mediate_runtime_create(
+                    fixture.envelope,
+                    fixture.config,
+                    clock=lambda: 100,
+                )
+
+            self.assertEqual(orphan.stat().st_nlink, 2)
+            self.assertEqual(alias.read_bytes(), fixture.payload)
+            self.assertEqual(fixture.load_state()["consumed"], [])
+
+    @unittest.skipUnless(hasattr(os, "fork"), "requires process crash injection")
+    def test_pending_recovery_preserves_publisher_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            self.assertEqual(
+                _crash_during_mediation(fixture, "after_pending"),
+                _CRASH_EXIT,
+            )
+            publication = {**fixture.revocations, "generation": 5}
+            publish_runtime_control_document(
+                fixture.paths["revocations"],
+                publication,
+                fixture.config,
+                clock=lambda: 100,
+            )
+
+            replay = mediate_runtime_create(
+                fixture.envelope,
+                fixture.config,
+                clock=lambda: 100,
+            )
+
+            self.assertEqual(replay["reason_codes"], ["BROKER_REPLAY_BLOCKED"])
+            state = fixture.load_state()
+            self.assertEqual(state["minimum_revocation_generation"], 5)
+            self.assertEqual(state["minimum_mediator_health_epoch"], 4)
+            self.assertIsNone(state["effect_journal"])
+            self.assertEqual(len(state["consumed"]), 1)
+            self.assertFalse(fixture.target.exists())
+            self.assertEqual(list(fixture.staging.iterdir()), [])
+
+    def test_startup_recovery_precedes_socket_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            from aragorn import runtime_action_broker as broker
+
+            fixture.state["effect_journal"] = {}
+            _write_control(fixture.paths["state"], fixture.state)
+            with (
+                patch.object(broker.socket, "SO_PEERCRED", 17, create=True),
+                patch.object(broker.socket, "socket") as create_socket,
+                self.assertRaises(RuntimeActionBrokerError),
+            ):
+                broker.serve_runtime_action_broker(fixture.config)
+            create_socket.assert_not_called()
+
+    def test_startup_migrates_private_v1_state_without_losing_floors(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            from aragorn import runtime_action_broker as broker
+
+            consumed = {
+                "request_digest": canonical_digest(fixture.request),
+                "observation_digest": canonical_digest(fixture.observation),
+                "expires_at_unix": 105,
+            }
+            legacy = {
+                key: value
+                for key, value in fixture.state.items()
+                if key != "effect_journal"
+            }
+            legacy["schema"] = "aragorn/runtime-action-broker-state/v1"
+            legacy["minimum_revocation_generation"] = 3
+            legacy["minimum_mediator_health_epoch"] = 4
+            legacy["consumed"] = [consumed]
+            _write_control(fixture.paths["state"], legacy)
+
+            broker._recover_before_listen(fixture.config, 0.5)
+
+            migrated = fixture.load_state()
+            self.assertEqual(
+                migrated["schema"],
+                "aragorn/runtime-action-broker-state/v2",
+            )
+            self.assertEqual(migrated["minimum_revocation_generation"], 3)
+            self.assertEqual(migrated["minimum_mediator_health_epoch"], 4)
+            self.assertEqual(migrated["consumed"], [consumed])
+            self.assertIsNone(migrated["effect_journal"])
 
     def test_stream_frame_and_peer_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

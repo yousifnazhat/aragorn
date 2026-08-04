@@ -61,9 +61,29 @@ _STATE_FIELDS = {
     "minimum_revocation_generation",
     "minimum_mediator_health_epoch",
     "consumed",
+    "effect_journal",
 }
+_STATE_V1_FIELDS = _STATE_FIELDS - {"effect_journal"}
 _CONSUMED_FIELDS = {"request_digest", "observation_digest", "expires_at_unix"}
 _ACTION_DIGEST_FIELDS = ("operation_digest", "path_digest", "payload_digest")
+_TRANSACTION_FIELDS = {
+    "schema",
+    "authority",
+    "status",
+    "request_digest",
+    "observation_digest",
+    "operation_digest",
+    "path_digest",
+    "payload_digest",
+    "payload_size",
+    "target_name",
+    "protected_root_device",
+    "protected_root_inode",
+    "staging_name",
+    "staging_device",
+    "staging_inode",
+}
+_STAGING_NAME = re.compile(r"\.aragorn-runtime-[0-9a-f]{24}\Z")
 
 
 class RuntimeActionBrokerError(RuntimeError):
@@ -205,6 +225,7 @@ def serve_runtime_action_broker(
         )
         _acquire_lock(instance_lock_fd, time.monotonic())
         instance_locked = True
+        _recover_before_listen(config, request_timeout_seconds)
         _prepare_socket_path(control_fd, config)
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         listener.bind(os.fspath(config.socket_path))
@@ -317,41 +338,16 @@ def mediate_runtime_create(
     locked = False
     effect_committed = False
     try:
-        control_fd = _open_protected_directory(
-            config.control_root,
-            config.expected_broker_uid,
-            "runtime broker control root",
-        )
-        protected_fd = _open_protected_directory(
-            config.protected_root,
-            config.expected_broker_uid,
-            "runtime broker protected root",
-        )
-        staging_fd = _open_protected_directory(
-            config.staging_root,
-            config.expected_broker_uid,
-            "runtime broker staging root",
-        )
-        if stat.S_IMODE(os.fstat(staging_fd).st_mode) & 0o077:
-            raise RuntimeActionBrokerError(
-                "runtime broker staging root must be owner-only"
-            )
-        roots = {
-            (metadata.st_dev, metadata.st_ino)
-            for metadata in map(
-                os.fstat,
-                (control_fd, protected_fd, staging_fd),
-            )
-        }
-        if len(roots) != 3:
-            raise RuntimeActionBrokerError("runtime broker root identities overlap")
-        if os.fstat(protected_fd).st_dev != os.fstat(staging_fd).st_dev:
-            raise RuntimeActionBrokerError(
-                "runtime broker staging and protected roots differ by filesystem"
-            )
+        control_fd, protected_fd, staging_fd = _open_broker_roots(config)
         lock_fd = _open_lock_file(control_fd, config)
         _acquire_lock(lock_fd, deadline)
         locked = True
+        _recover_effect_journal(
+            control_fd,
+            protected_fd,
+            staging_fd,
+            config,
+        )
 
         action_digests = _action_digests(protected_fd, target_name, payload)
         now = _clock_value(trusted_clock)
@@ -405,9 +401,11 @@ def mediate_runtime_create(
         final_observation_digest = observation_digest
         final_decision = decision
         final_reasons: list[str] = []
+        journal_state: dict[str, Any] | None = None
 
         def authorize_link() -> bool:
-            nonlocal final_observation_digest, final_decision, final_reasons
+            nonlocal final_observation_digest, final_decision
+            nonlocal final_reasons, journal_state
             previous_now = now
             for _attempt in range(2):
                 effect_now = _clock_value(trusted_clock)
@@ -453,7 +451,80 @@ def mediate_runtime_create(
             if time.monotonic() >= deadline:
                 final_reasons = ["BROKER_DEADLINE_EXPIRED"]
                 return False
-            return not final_reasons
+            if final_reasons:
+                return False
+            try:
+                os.stat(
+                    target_name,
+                    dir_fd=protected_fd,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                pass
+            else:
+                raise RuntimeActionBrokerError("runtime create target already exists")
+            journal_state = final_state
+            return True
+
+        def record_pending(
+            staging_name: str,
+            staged: os.stat_result,
+        ) -> None:
+            nonlocal journal_state
+            if (
+                journal_state is None
+                or journal_state["effect_journal"] is not None
+                or _STAGING_NAME.fullmatch(staging_name) is None
+                or staged.st_gid != config.expected_peer_gid
+            ):
+                raise RuntimeActionBrokerError(
+                    "runtime effect journal preparation is invalid"
+                )
+            root = os.fstat(protected_fd)
+            journal_state = {
+                **journal_state,
+                "effect_journal": {
+                    "schema": "aragorn/runtime-effect-journal/v1",
+                    "authority": "BROKER_RECOVERY_ONLY_NOT_EFFECT_OR_RUN_AUTHORITY",
+                    "status": "PENDING",
+                    "request_digest": request_digest,
+                    "observation_digest": observation_digest,
+                    **action_digests,
+                    "payload_size": len(payload),
+                    "target_name": target_name,
+                    "protected_root_device": root.st_dev,
+                    "protected_root_inode": root.st_ino,
+                    "staging_name": staging_name,
+                    "staging_device": staged.st_dev,
+                    "staging_inode": staged.st_ino,
+                },
+            }
+            _commit_state(control_fd, config, journal_state)
+
+        def record_applied(
+            staging_name: str,
+            staged: os.stat_result,
+        ) -> None:
+            nonlocal journal_state
+            if journal_state is None:
+                raise RuntimeActionBrokerError("runtime effect journal is absent")
+            transaction = journal_state["effect_journal"]
+            if (
+                not isinstance(transaction, dict)
+                or transaction.get("status") != "PENDING"
+                or transaction.get("staging_name") != staging_name
+                or (
+                    transaction.get("staging_device"),
+                    transaction.get("staging_inode"),
+                )
+                != (staged.st_dev, staged.st_ino)
+            ):
+                raise RuntimeActionBrokerError("runtime effect journal changed")
+            journal_state = {
+                **journal_state,
+                "effect_journal": {**transaction, "status": "APPLIED"},
+            }
+            _commit_state(control_fd, config, journal_state)
 
         if not _atomic_create(
             staging_fd,
@@ -461,6 +532,8 @@ def mediate_runtime_create(
             target_name,
             payload,
             authorize_link=authorize_link,
+            record_pending=record_pending,
+            record_applied=record_applied,
         ):
             return _result(
                 request_digest=request_digest,
@@ -472,6 +545,30 @@ def mediate_runtime_create(
                 decision=final_decision,
             )
         effect_committed = True
+        if (
+            journal_state is None
+            or not isinstance(journal_state["effect_journal"], dict)
+            or journal_state["effect_journal"].get("status") != "APPLIED"
+        ):
+            raise RuntimeActionEffectIndeterminate(
+                "runtime create committed without an applied journal"
+            )
+        try:
+            _recover_effect_journal(
+                control_fd,
+                protected_fd,
+                staging_fd,
+                config,
+            )
+        except (
+            OSError,
+            RuntimeActionBrokerError,
+            WorkerProtocolError,
+            _ProtectedFileError,
+        ) as exc:
+            raise RuntimeActionEffectIndeterminate(
+                "runtime create committed but could not be finalized"
+            ) from exc
         return _result(
             request_digest=request_digest,
             observation_digest=observation_digest,
@@ -615,14 +712,7 @@ def _publish_control_locked(
         config,
         "runtime action policy",
     )
-    state = _state(
-        _load_control(
-            control_fd,
-            config.state_path,
-            config,
-            "runtime broker state",
-        )
-    )
+    state = _load_state(control_fd, config)
     current = _load_control(control_fd, path, config, "current runtime control")
     field, current_counter = _publication_counter(
         path,
@@ -712,14 +802,7 @@ def _evaluate_snapshot(
         config,
         "runtime action policy",
     )
-    state = _state(
-        _load_control(
-            control_fd,
-            config.state_path,
-            config,
-            "runtime broker state",
-        )
-    )
+    state = _load_state(control_fd, config)
     stream_errors = []
     try:
         revocations = _load_control(
@@ -1020,8 +1103,16 @@ def _observation(document: dict[str, Any], now_unix: int) -> dict[str, Any]:
 
 
 def _state(document: dict[str, Any]) -> dict[str, Any]:
-    value = _exact(document, _STATE_FIELDS, "runtime broker state")
-    if value["schema"] != "aragorn/runtime-action-broker-state/v1":
+    if document.get("schema") == "aragorn/runtime-action-broker-state/v1":
+        legacy = _exact(document, _STATE_V1_FIELDS, "runtime broker state")
+        value = {
+            **legacy,
+            "schema": "aragorn/runtime-action-broker-state/v2",
+            "effect_journal": None,
+        }
+    else:
+        value = _exact(document, _STATE_FIELDS, "runtime broker state")
+    if value["schema"] != "aragorn/runtime-action-broker-state/v2":
         raise RuntimeActionBrokerError("runtime broker state schema is unsupported")
     if value["authority"] != "BROKER_STATE_ONLY_NOT_RUN_CONFORMANCE_AUTHORITY":
         raise RuntimeActionBrokerError("runtime broker state authority is invalid")
@@ -1054,7 +1145,52 @@ def _state(document: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeActionBrokerError(
             "runtime broker replay entries must be sorted and unique"
         )
+    journal = value["effect_journal"]
+    if journal is not None:
+        transaction = _effect_journal(journal)
+        if not any(
+            item["request_digest"] == transaction["request_digest"]
+            and item["observation_digest"] == transaction["observation_digest"]
+            for item in normalized
+        ):
+            raise RuntimeActionBrokerError(
+                "runtime effect journal has no durable replay claim"
+            )
     return value
+
+
+def _effect_journal(value: object) -> dict[str, Any]:
+    transaction = _exact(value, _TRANSACTION_FIELDS, "runtime effect journal")
+    if (
+        transaction["schema"] != "aragorn/runtime-effect-journal/v1"
+        or transaction["authority"]
+        != "BROKER_RECOVERY_ONLY_NOT_EFFECT_OR_RUN_AUTHORITY"
+        or transaction["status"] not in {"PENDING", "APPLIED"}
+    ):
+        raise RuntimeActionBrokerError("runtime effect journal identity is invalid")
+    for field in (
+        "request_digest",
+        "observation_digest",
+        *_ACTION_DIGEST_FIELDS,
+    ):
+        _require_digest(transaction[field], f"journal {field}")
+    for field in (
+        "payload_size",
+        "protected_root_device",
+        "protected_root_inode",
+        "staging_device",
+        "staging_inode",
+    ):
+        _uint(transaction[field], f"journal {field}")
+    if (
+        transaction["payload_size"] > _MAX_PAYLOAD_BYTES
+        or not isinstance(transaction["target_name"], str)
+        or _TARGET_NAME.fullmatch(transaction["target_name"]) is None
+        or not isinstance(transaction["staging_name"], str)
+        or _STAGING_NAME.fullmatch(transaction["staging_name"]) is None
+    ):
+        raise RuntimeActionBrokerError("runtime effect journal path is invalid")
+    return transaction
 
 
 def _load_control(
@@ -1079,12 +1215,28 @@ def _load_control(
         raise RuntimeActionBrokerError(f"cannot load {label}: {exc}") from exc
 
 
+def _load_state(
+    control_fd: int,
+    config: RuntimeActionBrokerConfig,
+) -> dict[str, Any]:
+    stored = _load_control(
+        control_fd,
+        config.state_path,
+        config,
+        "runtime broker state",
+    )
+    state = _state(stored)
+    if state != stored:
+        _commit_state(control_fd, config, state)
+    return state
+
+
 def _commit_state(
     control_fd: int,
     config: RuntimeActionBrokerConfig,
     state: dict[str, Any],
 ) -> None:
-    _state(state)
+    state = _state(state)
     try:
         _atomic_publish_at(
             control_fd,
@@ -1247,6 +1399,16 @@ def _action_digests(
     target_name: str,
     payload: bytes,
 ) -> dict[str, str]:
+    return {
+        **_operation_path_digests(protected_fd, target_name),
+        "payload_digest": "sha256:" + hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _operation_path_digests(
+    protected_fd: int,
+    target_name: str,
+) -> dict[str, str]:
     root = os.fstat(protected_fd)
     return {
         "operation_digest": canonical_digest(
@@ -1263,8 +1425,251 @@ def _action_digests(
                 "target_name": target_name,
             }
         ),
-        "payload_digest": "sha256:" + hashlib.sha256(payload).hexdigest(),
     }
+
+
+def _effect_file_at(
+    parent_fd: int,
+    name: str,
+    *,
+    expected_uid: int,
+    expected_gid: int,
+    expected_size: int,
+    expected_digest: str,
+    allowed_links: frozenset[int],
+    label: str,
+) -> os.stat_result | None:
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_fd,
+        )
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise RuntimeActionBrokerError(f"cannot inspect {label}: {exc}") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != expected_uid
+            or before.st_gid != expected_gid
+            or before.st_nlink not in allowed_links
+            or stat.S_IMODE(before.st_mode) != 0o400
+            or before.st_size != expected_size
+        ):
+            raise RuntimeActionBrokerError(f"{label} metadata is unsafe")
+        raw = bytearray()
+        while len(raw) <= expected_size:
+            chunk = os.read(descriptor, min(8192, expected_size + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    if (
+        _file_identity(before) != _file_identity(after)
+        or len(raw) != expected_size
+        or "sha256:" + hashlib.sha256(raw).hexdigest() != expected_digest
+    ):
+        raise RuntimeActionBrokerError(f"{label} content is unsafe")
+    return after
+
+
+def _unlink_effect_file_at(
+    parent_fd: int,
+    name: str,
+    expected: os.stat_result,
+    label: str,
+) -> None:
+    current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    if _file_identity(current) != _file_identity(expected):
+        raise RuntimeActionBrokerError(f"{label} changed before cleanup")
+    os.unlink(name, dir_fd=parent_fd)
+
+
+def _clean_staging_orphans(
+    staging_fd: int,
+    config: RuntimeActionBrokerConfig,
+    *,
+    force_sync: bool = False,
+) -> None:
+    removed = False
+    for name in os.listdir(staging_fd):
+        try:
+            before = os.stat(name, dir_fd=staging_fd, follow_symlinks=False)
+        except OSError as exc:
+            raise RuntimeActionBrokerError(
+                f"cannot inspect runtime staging orphan: {exc}"
+            ) from exc
+        if (
+            _STAGING_NAME.fullmatch(name) is None
+            or not stat.S_ISREG(before.st_mode)
+            or before.st_uid != config.expected_broker_uid
+            or before.st_gid != config.expected_peer_gid
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) not in {0o400, 0o600}
+            or before.st_size > _MAX_PAYLOAD_BYTES
+        ):
+            raise RuntimeActionBrokerError("runtime staging orphan is unsafe")
+        _unlink_effect_file_at(
+            staging_fd,
+            name,
+            before,
+            "runtime staging orphan",
+        )
+        removed = True
+    if removed or force_sync:
+        os.fsync(staging_fd)
+
+
+def _recover_effect_journal(
+    control_fd: int,
+    protected_fd: int,
+    staging_fd: int,
+    config: RuntimeActionBrokerConfig,
+) -> None:
+    state = _load_state(control_fd, config)
+    journal = state["effect_journal"]
+    if journal is None:
+        _clean_staging_orphans(staging_fd, config)
+        return
+    transaction = _effect_journal(journal)
+    root = os.fstat(protected_fd)
+    expected_action = _operation_path_digests(
+        protected_fd,
+        transaction["target_name"],
+    )
+    if (
+        transaction["protected_root_device"] != root.st_dev
+        or transaction["protected_root_inode"] != root.st_ino
+        or any(
+            transaction[field] != expected_action[field]
+            for field in ("operation_digest", "path_digest")
+        )
+    ):
+        raise RuntimeActionBrokerError("runtime effect journal root binding changed")
+    file_options = {
+        "expected_uid": config.expected_broker_uid,
+        "expected_gid": config.expected_peer_gid,
+        "expected_size": transaction["payload_size"],
+        "expected_digest": transaction["payload_digest"],
+    }
+    staged = _effect_file_at(
+        staging_fd,
+        transaction["staging_name"],
+        allowed_links=frozenset({1, 2}),
+        label="runtime staged effect",
+        **file_options,
+    )
+    target = _effect_file_at(
+        protected_fd,
+        transaction["target_name"],
+        allowed_links=frozenset({1, 2}),
+        label="runtime protected effect",
+        **file_options,
+    )
+
+    if transaction["status"] == "PENDING" and target is None:
+        if (
+            staged is None
+            or staged.st_nlink != 1
+            or (staged.st_dev, staged.st_ino)
+            != (transaction["staging_device"], transaction["staging_inode"])
+        ):
+            raise RuntimeActionBrokerError(
+                "pending runtime effect lost its staged payload"
+            )
+        _commit_state(control_fd, config, {**state, "effect_journal": None})
+        _unlink_effect_file_at(
+            staging_fd,
+            transaction["staging_name"],
+            staged,
+            "runtime staged effect",
+        )
+        _clean_staging_orphans(staging_fd, config, force_sync=True)
+        return
+
+    if target is None:
+        raise RuntimeActionBrokerError("applied runtime effect target is absent")
+    target_identity = target.st_dev, target.st_ino
+    expected_identity = (
+        transaction["staging_device"],
+        transaction["staging_inode"],
+    )
+    if target_identity != expected_identity:
+        raise RuntimeActionBrokerError("runtime effect target identity changed")
+    if transaction["status"] == "PENDING":
+        if (
+            staged is None
+            or staged.st_nlink != 2
+            or target.st_nlink != 2
+            or (staged.st_dev, staged.st_ino) != target_identity
+        ):
+            raise RuntimeActionBrokerError(
+                "pending runtime effect links are inconsistent"
+            )
+        os.fsync(protected_fd)
+        state = {
+            **state,
+            "effect_journal": {**transaction, "status": "APPLIED"},
+        }
+        _commit_state(control_fd, config, state)
+    elif staged is not None and (
+        staged.st_nlink != 2
+        or target.st_nlink != 2
+        or (staged.st_dev, staged.st_ino) != target_identity
+    ):
+        raise RuntimeActionBrokerError("applied runtime effect links are inconsistent")
+
+    if staged is not None:
+        _unlink_effect_file_at(
+            staging_fd,
+            transaction["staging_name"],
+            staged,
+            "runtime staged effect",
+        )
+    _clean_staging_orphans(staging_fd, config, force_sync=True)
+    confirmed = _effect_file_at(
+        protected_fd,
+        transaction["target_name"],
+        allowed_links=frozenset({1}),
+        label="runtime protected effect",
+        **file_options,
+    )
+    if confirmed is None or (confirmed.st_dev, confirmed.st_ino) != expected_identity:
+        raise RuntimeActionBrokerError("runtime effect target could not be confirmed")
+    _commit_state(control_fd, config, {**state, "effect_journal": None})
+
+
+def _recover_before_listen(
+    config: RuntimeActionBrokerConfig,
+    timeout_seconds: float,
+) -> None:
+    control_fd = protected_fd = staging_fd = lock_fd = -1
+    locked = False
+    try:
+        control_fd, protected_fd, staging_fd = _open_broker_roots(config)
+        lock_fd = _open_lock_file(control_fd, config)
+        _acquire_lock(lock_fd, time.monotonic() + timeout_seconds)
+        locked = True
+        _recover_effect_journal(control_fd, protected_fd, staging_fd, config)
+    finally:
+        cleanup_failure = _release_lock_and_close(
+            lock_fd,
+            locked,
+            staging_fd,
+            protected_fd,
+            control_fd,
+        )
+        if cleanup_failure is not None:
+            raise RuntimeActionBrokerError(
+                "runtime broker startup recovery cleanup failed"
+            ) from cleanup_failure
 
 
 def _atomic_create(
@@ -1274,10 +1679,16 @@ def _atomic_create(
     payload: bytes,
     *,
     authorize_link: Callable[[], bool] = lambda: True,
+    record_pending: Callable[[str, os.stat_result], None] | None = None,
+    record_applied: Callable[[str, os.stat_result], None] | None = None,
 ) -> bool:
+    if (record_pending is None) != (record_applied is None):
+        raise RuntimeActionBrokerError("runtime create journal callbacks are invalid")
     temporary_name: str | None = None
     descriptor = -1
     linked = False
+    link_attempted = False
+    preserve_stage = False
     failure: BaseException | None = None
     try:
         temporary_name, descriptor = create_exclusive_file_at(
@@ -1299,10 +1710,15 @@ def _atomic_create(
             or (staged.st_dev, staged.st_ino) != (named.st_dev, named.st_ino)
         ):
             raise RuntimeActionBrokerError("runtime create staging metadata is unsafe")
+        os.fsync(staging_fd)
         authorized = authorize_link()
         if not isinstance(authorized, bool):
             raise RuntimeActionBrokerError("runtime create authorization is invalid")
         if authorized:
+            if record_pending is not None:
+                preserve_stage = True
+                record_pending(temporary_name, staged)
+            link_attempted = True
             os.link(
                 temporary_name,
                 target_name,
@@ -1313,10 +1729,15 @@ def _atomic_create(
             linked = True
             os.fsync(protected_fd)
             target = os.stat(target_name, dir_fd=protected_fd, follow_symlinks=False)
-            if (target.st_dev, target.st_ino) != (staged.st_dev, staged.st_ino):
+            if (
+                (target.st_dev, target.st_ino) != (staged.st_dev, staged.st_ino)
+                or target.st_nlink != 2
+            ):
                 raise RuntimeActionBrokerError(
                     "runtime create target identity is indeterminate"
                 )
+            if record_applied is not None:
+                record_applied(temporary_name, staged)
     except BaseException as exc:  # noqa: BLE001 - clean up before process exit
         failure = exc
     cleanup_failure: BaseException | None = None
@@ -1325,7 +1746,7 @@ def _atomic_create(
             os.close(descriptor)
         except OSError as exc:
             cleanup_failure = exc
-    if temporary_name is not None:
+    if temporary_name is not None and not preserve_stage:
         try:
             os.unlink(temporary_name, dir_fd=staging_fd)
             os.fsync(staging_fd)
@@ -1333,7 +1754,9 @@ def _atomic_create(
             cleanup_failure = cleanup_failure or exc
     if failure is not None and not isinstance(failure, Exception):
         raise failure
-    if linked and (failure is not None or cleanup_failure is not None):
+    if (linked or link_attempted) and (
+        failure is not None or cleanup_failure is not None
+    ):
         raise RuntimeActionEffectIndeterminate(
             "runtime create was linked but completion is indeterminate"
         ) from (failure or cleanup_failure)
@@ -1447,6 +1870,43 @@ def _open_protected_directory(path: Path, expected_uid: int, label: str) -> int:
         os.close(descriptor)
         raise RuntimeActionBrokerError(f"{label} identity changed")
     return descriptor
+
+
+def _open_broker_roots(config: RuntimeActionBrokerConfig) -> tuple[int, int, int]:
+    descriptors: list[int] = []
+    try:
+        for path, label in (
+            (config.control_root, "runtime broker control root"),
+            (config.protected_root, "runtime broker protected root"),
+            (config.staging_root, "runtime broker staging root"),
+        ):
+            descriptors.append(
+                _open_protected_directory(
+                    path,
+                    config.expected_broker_uid,
+                    label,
+                )
+            )
+        control_fd, protected_fd, staging_fd = descriptors
+        if stat.S_IMODE(os.fstat(staging_fd).st_mode) & 0o077:
+            raise RuntimeActionBrokerError(
+                "runtime broker staging root must be owner-only"
+            )
+        roots = {
+            (metadata.st_dev, metadata.st_ino)
+            for metadata in map(os.fstat, descriptors)
+        }
+        if len(roots) != 3:
+            raise RuntimeActionBrokerError("runtime broker root identities overlap")
+        if os.fstat(protected_fd).st_dev != os.fstat(staging_fd).st_dev:
+            raise RuntimeActionBrokerError(
+                "runtime broker staging and protected roots differ by filesystem"
+            )
+        return control_fd, protected_fd, staging_fd
+    except BaseException:
+        for descriptor in descriptors:
+            os.close(descriptor)
+        raise
 
 
 def _require_protected_ancestry(path: Path, expected_uid: int) -> None:

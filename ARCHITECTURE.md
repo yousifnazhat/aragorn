@@ -586,8 +586,8 @@ startup and immutable for the broker lifetime. A separate broker-owned
 mode-`0600` instance lock serializes broker lifetimes and permits safe removal
 of an identity-checked stale socket after a crash; upgrades from a pre-lock
 broker require an explicitly serialized stop. Errors after the link are
-indeterminate, not evidence of a block. Process-exit signals still propagate
-after best-effort cleanup and remain inside the deferred durable recovery gap.
+indeterminate, not evidence of a block. Process-exit signals still propagate;
+P3.2c adds the durable reconciliation described below.
 
 P3.2b adds the private native OpenClaw optional-tool client and Linux service
 packaging without widening the wire contract. The pinned host validates model
@@ -602,12 +602,28 @@ remains `INDETERMINATE`. The service uses distinct fixed sysusers,
 durable broker-owned control/protected/staging roots, Linux peer credentials,
 and an AF_UNIX-only systemd boundary. The active-skill digest remains a fixed
 deployment binding rather than general causal attribution. These additions are
-unit/static exercised, not a live P3.2 composition. They have no trusted
-out-of-process observation
-publisher, deployed mount/identity evidence, durable `PENDING`/`APPLIED`
-recovery record, retained live evidence, or semantic verifier. Those
-boundaries, plus admission conformance, remain required before `RUN-01`,
-`RUN-02`, Phase 3, EDR, or release authority can pass.
+unit/static exercised, not a live P3.2 composition.
+
+P3.2c adds one top-level journal slot to private broker-state schema v2. Under
+the existing action lock the broker durably records replay and floors, fsyncs a
+validated staged inode, re-evaluates authorization, records `PENDING`, performs
+one no-replace link, fsyncs and verifies the protected target, records
+`APPLIED`, removes and fsyncs staging, reopens the exact target, and only then
+clears the journal and responds. Startup recovers before socket creation, and
+each mediation recovers before evaluation or replay pruning. Recovery never
+links, reauthorizes, releases a replay claim, or retries an effect: it either
+cancels an exact unlinked stage, finishes metadata cleanup for an already linked
+exact inode, or fails closed on contradiction. Forked `os._exit` tests exercise
+the durable process-crash boundaries; they are not forced-reset, filesystem,
+or power-loss qualification. A locked private v1-to-v2 migration preserves
+validated replay entries and monotonic floors, initializes the journal to
+`null`, and does not infer legacy effect completion.
+
+The composition still has no trusted out-of-process observation publisher,
+deployed mount/identity evidence, retained live evidence, semantic verifier, or
+forced-reset storage qualification. Those boundaries, plus admission
+conformance, remain required before `RUN-01`, `RUN-02`, Phase 3, EDR, or release
+authority can pass.
 
 ### 8. Evidence and interoperability plane
 

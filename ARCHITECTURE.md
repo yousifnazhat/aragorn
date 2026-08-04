@@ -589,11 +589,25 @@ broker require an explicitly serialized stop. Errors after the link are
 indeterminate, not evidence of a block. Process-exit signals still propagate
 after best-effort cleanup and remain inside the deferred durable recovery gap.
 
-This is a unit-exercised broker primitive, not the live P3.2 composition. It has
-no native OpenClaw optional tool, deployed Linux identities or mounts, durable
-`PENDING`/`APPLIED` recovery record, retained live evidence, or semantic
-verifier. Those boundaries, plus admission conformance, remain required before
-`RUN-01`, `RUN-02`, Phase 3, EDR, or release authority can pass.
+P3.2b adds the private native OpenClaw optional-tool client and Linux service
+packaging without widening the wire contract. The pinned host validates model
+arguments before the tool-owned preparation step injects its run, session,
+session-key digest, and provider-opaque tool-call ID digest. The tool-owned
+finalize step restores that correlation after global pre-tool parameter
+rewriting while preserving the rewritten public effect. The tool rejects
+missing or changed host correlation, revalidates the exact public effect after
+any rewrite, derives the request action digests, and performs one bounded
+Unix-stream exchange with no fallback. Transport uncertainty after submission
+remains `INDETERMINATE`. The service uses distinct fixed sysusers,
+durable broker-owned control/protected/staging roots, Linux peer credentials,
+and an AF_UNIX-only systemd boundary. The active-skill digest remains a fixed
+deployment binding rather than general causal attribution. These additions are
+unit/static exercised, not a live P3.2 composition. They have no trusted
+out-of-process observation
+publisher, deployed mount/identity evidence, durable `PENDING`/`APPLIED`
+recovery record, retained live evidence, or semantic verifier. Those
+boundaries, plus admission conformance, remain required before `RUN-01`,
+`RUN-02`, Phase 3, EDR, or release authority can pass.
 
 ### 8. Evidence and interoperability plane
 

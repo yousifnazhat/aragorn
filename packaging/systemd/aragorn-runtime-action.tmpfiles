@@ -1,0 +1,6 @@
+d /var/lib/aragorn-runtime-action 0755 root root -
+d /var/lib/aragorn-runtime-action/control 0710 aragorn-broker aragorn-runtime -
+d /var/lib/aragorn-runtime-action/protected 0710 aragorn-broker aragorn-runtime -
+d /var/lib/aragorn-runtime-action/staging 0700 aragorn-broker aragorn-broker -
+f /var/lib/aragorn-runtime-action/control/broker.instance.lock 0600 aragorn-broker aragorn-runtime -
+f /var/lib/aragorn-runtime-action/control/broker.lock 0600 aragorn-broker aragorn-runtime -

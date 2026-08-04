@@ -126,7 +126,7 @@ runtime-scoped allow rule, revocation snapshot, and fresh policy-bound sensor
 identity all agree. Trusted monotonic floors reject revocation-generation and
 health-epoch rollback. Structurally invalid decoded requests return `BLOCK`,
 while malformed trusted state aborts evaluation so a caller cannot proceed.
-P3.2a now composes that core with a create-only broker primitive: canonical
+P3.2a composes that core with a create-only broker primitive: canonical
 length-prefixed Unix-stream requests, Linux peer-credential checks, a distinct
 runtime UID, descriptor-relative protected control state, independent durable
 revocation and health floors, bounded replay consumption, a final fresh
@@ -136,10 +136,23 @@ revocation/health counters and sequenced observations cannot roll back or
 equivocate, while policy is immutable for the broker lifetime. A separate
 mode-`0600` instance lock permits identity-checked stale-socket recovery;
 post-link uncertainty is reported as indeterminate rather than blocked. This is
-not yet the live P3.2 OpenClaw composition: the native optional tool, dedicated
-Linux service identities, mount wiring, durable in-doubt transaction recovery,
-retained evidence, and semantic verifier remain. It grants no `RUN-01`,
-`RUN-02`, Phase 3, EDR, or release authority.
+not yet the live P3.2 OpenClaw composition. P3.2b adds one private native
+optional tool and a dedicated Linux broker service definition. The pinned
+OpenClaw tool preparation step supplies host run, session, and tool-call
+identifiers after model arguments pass their schema; opaque session keys are
+represented only by a bounded SHA-256 binding, as are provider-opaque tool-call
+IDs. Its finalize step preserves that correlation across other pre-tool
+parameter rewrites while retaining their public-effect changes. Execution
+independently revalidates the public effect and sends one exact framed request
+with no fallback. Static sysusers/tmpfiles contracts provision distinct
+broker/runtime identities and
+durable broker roots. The active-skill digest remains a fixed deployment
+binding, not general causal attribution. These paths are unit/static exercised
+only: a trusted out-of-process observation publisher, installed Linux
+composition and mounts,
+durable in-doubt transaction recovery, retained evidence, and a semantic
+verifier remain. This grants no `RUN-01`, `RUN-02`, Phase 3, EDR, or release
+authority.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

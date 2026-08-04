@@ -8,6 +8,7 @@ const { TextDecoder } = require("node:util");
 
 const PLUGIN_ID = "aragorn-runtime-action";
 const TOOL_NAME = "aragorn_runtime_create";
+const TOOL_RESULT_TEXT_SCHEMA = "aragorn/runtime-action-tool-result-text/v1";
 const MAX_FRAME_BYTES = 64 * 1024;
 const MAX_PAYLOAD_BYTES = 32 * 1024;
 const REQUEST_TIMEOUT_MS = 750;
@@ -199,7 +200,7 @@ function sensorSocketIdentity(path, config, effectStatus = "NOT_SUBMITTED") {
     safeInteger(metadata.uid, "sensor socket uid", effectStatus),
     safeInteger(metadata.gid, "sensor socket gid", effectStatus),
     Number(metadata.mode),
-    safeInteger(metadata.ctimeNs, "sensor socket change time", effectStatus),
+    metadata.ctimeNs.toString(),
   ];
 }
 
@@ -424,9 +425,18 @@ function requestBroker(socketPath, envelope, signal) {
   });
 }
 
+function retainedToolResultText(message, result) {
+  return canonicalJson({
+    message,
+    result,
+    schema: TOOL_RESULT_TEXT_SCHEMA,
+  });
+}
+
 function toolResult(result) {
+  const message = `Aragorn ${result.verdict}: ${result.effect_status}`;
   return {
-    content: [{ type: "text", text: `Aragorn ${result.verdict}: ${result.effect_status}` }],
+    content: [{ type: "text", text: retainedToolResultText(message, result) }],
     details: result,
     isError: result.verdict !== "ALLOW",
   };
@@ -434,14 +444,16 @@ function toolResult(result) {
 
 function clientErrorResult(error) {
   const effectStatus = error instanceof BrokerClientError ? error.effectStatus : "NOT_SUBMITTED";
+  const message = `Aragorn runtime action failed closed: ${effectStatus}`;
+  const result = {
+    schema: "aragorn/runtime-action-client-error/v1",
+    authority: "CLIENT_ERROR_ONLY_NOT_EFFECT_OR_RUN_CONFORMANCE_AUTHORITY",
+    effect_status: effectStatus,
+    message: error instanceof Error ? error.message : String(error),
+  };
   return {
-    content: [{ type: "text", text: `Aragorn runtime action failed closed: ${effectStatus}` }],
-    details: {
-      schema: "aragorn/runtime-action-client-error/v1",
-      authority: "CLIENT_ERROR_ONLY_NOT_EFFECT_OR_RUN_CONFORMANCE_AUTHORITY",
-      effect_status: effectStatus,
-      message: error instanceof Error ? error.message : String(error),
-    },
+    content: [{ type: "text", text: retainedToolResultText(message, result) }],
+    details: result,
     isError: true,
   };
 }
@@ -578,5 +590,15 @@ module.exports = {
   id: PLUGIN_ID,
   name: "Aragorn Runtime Action",
   register,
-  __testing: Object.freeze({ buildEnvelope, canonicalJson, parseBrokerResponse, requestBroker, sha256 }),
+  __testing: Object.freeze({
+    buildEnvelope,
+    canonicalJson,
+    clientErrorResult,
+    parseBrokerResponse,
+    requestBroker,
+    retainedToolResultText,
+    sensorSocketIdentity,
+    sha256,
+    toolResult,
+  }),
 };

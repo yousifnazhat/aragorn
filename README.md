@@ -194,6 +194,21 @@ OpenClaw is not composed. Direct-write and broader event coverage, forced-reset
 qualification, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority remain
 incomplete.
 
+P3.3c adds [retained bounded OpenClaw/systemd composition evidence](./benchmark/evidence/runtime-action-openclaw-systemd-composition-p3-3c-2026-08-04.json)
+for one exact route: pinned OpenClaw 2026.7.1 optional native create tool
+-> mandatory sensor -> broker -> one create. The same capture records
+`ALLOW`/`CREATED`, unhealthy `BLOCK`/`NOT_PERFORMED`, sensor-unavailable
+`CLIENT_ERROR`/`NOT_SUBMITTED`, and peer, DAC, and direct-write denials.
+Because OpenClaw does not retain plugin `details` in tool history, the plugin
+retains the result as canonical structured text; its `isError` presentation
+flag is not policy, decision, or effect authority. The semantic verifier is
+implemented in
+[`aragorn.runtime_action_openclaw_evidence`](./src/aragorn/runtime_action_openclaw_evidence.py),
+and independently replays the retained artifact and rejects repinned boundary
+mutations. This bounded milestone does not establish causal skill attribution
+or broader action coverage; `RUN-01`, `RUN-02`, Phase 3 exit, EDR, and release
+remain false or incomplete.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

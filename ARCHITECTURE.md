@@ -669,6 +669,22 @@ and other tool/process/file/network coverage, forced-reset storage
 qualification, runtime admission conformance, `RUN-01`, `RUN-02`, Phase 3,
 EDR, and release authority remain incomplete.
 
+P3.3c composes the pinned OpenClaw 2026.7.1 runtime with one optional native
+create tool whose only effect route is OpenClaw -> mandatory sensor -> broker
+-> one create. One retained capture records the mediated `ALLOW`/`CREATED`
+case, unhealthy `BLOCK`/`NOT_PERFORMED`, sensor-unavailable
+`CLIENT_ERROR`/`NOT_SUBMITTED`, and the peer, DAC, and direct-write denials.
+The plugin serializes each broker result as canonical structured text because
+OpenClaw drops plugin `details` from retained tool history. OpenClaw's
+presentation-level `isError` flag is not policy, decision, or effect authority.
+The final semantic verifier module,
+[`aragorn.runtime_action_openclaw_evidence`](./src/aragorn/runtime_action_openclaw_evidence.py),
+independently replays the
+[retained P3.3c artifact](./benchmark/evidence/runtime-action-openclaw-systemd-composition-p3-3c-2026-08-04.json)
+and rejects repinned boundary mutations. This profile establishes neither
+causal skill attribution nor broader action coverage, and `RUN-01`, `RUN-02`,
+Phase 3 exit, EDR, and release remain false or incomplete.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

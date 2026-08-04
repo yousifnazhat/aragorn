@@ -58,15 +58,71 @@ class RuntimeActionOpenClawPluginTests(unittest.TestCase):
         self.assertNotIn("http", source.lower())
 
     @unittest.skipUnless(shutil.which("node"), "Node.js is required")
+    def test_tool_results_retain_canonical_structured_text(self) -> None:
+        script = r"""
+const assert = require("node:assert/strict");
+const plugin = require(process.argv[1]);
+const { canonicalJson, clientErrorResult, toolResult } = plugin.__testing;
+const digest = (character) => `sha256:${character.repeat(64)}`;
+const brokerResult = {
+  authority: "RUNTIME_EFFECT_RESULT_ONLY_NOT_RUN_CONFORMANCE_AUTHORITY",
+  decision: { reason_codes: [], verdict: "ALLOW" },
+  effect_status: "CREATED",
+  observation_digest: digest("6"),
+  reason_codes: [],
+  request_digest: digest("5"),
+  schema: "aragorn/runtime-action-broker-result/v1",
+  target_name: "action.txt",
+  verdict: "ALLOW",
+};
+const allowed = toolResult(brokerResult);
+const allowedText = allowed.content[0].text;
+const allowedEnvelope = JSON.parse(allowedText);
+assert.equal(canonicalJson(allowedEnvelope), allowedText);
+assert.deepEqual(allowedEnvelope, {
+  message: "Aragorn ALLOW: CREATED",
+  result: brokerResult,
+  schema: "aragorn/runtime-action-tool-result-text/v1",
+});
+assert.equal(allowed.isError, false);
+assert.deepEqual(allowed.details, brokerResult);
+
+const failed = clientErrorResult(new Error("sensor socket is unavailable: ENOENT"));
+const failedText = failed.content[0].text;
+const failedEnvelope = JSON.parse(failedText);
+assert.equal(canonicalJson(failedEnvelope), failedText);
+assert.deepEqual(failedEnvelope, {
+  message: "Aragorn runtime action failed closed: NOT_SUBMITTED",
+  result: {
+    authority: "CLIENT_ERROR_ONLY_NOT_EFFECT_OR_RUN_CONFORMANCE_AUTHORITY",
+    effect_status: "NOT_SUBMITTED",
+    message: "sensor socket is unavailable: ENOENT",
+    schema: "aragorn/runtime-action-client-error/v1",
+  },
+  schema: "aragorn/runtime-action-tool-result-text/v1",
+});
+assert.equal(failed.isError, true);
+assert.deepEqual(failed.details, failedEnvelope.result);
+"""
+        completed = subprocess.run(
+            ["node", "-e", script, str(_PLUGIN / "index.js")],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr.decode())
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required")
     def test_canonical_framed_client_rejects_trailing_response(self) -> None:
         script = r"""
 const assert = require("node:assert/strict");
-const { mkdtempSync, rmSync } = require("node:fs");
+const { chmodSync, mkdtempSync, rmSync } = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const plugin = require(process.argv[1]);
-const { buildEnvelope, canonicalJson, requestBroker, sha256 } = plugin.__testing;
+const { buildEnvelope, canonicalJson, requestBroker, sensorSocketIdentity, sha256 } = plugin.__testing;
 const digest = (character) => `sha256:${character.repeat(64)}`;
 const config = {
   activeSkillDigest: digest("2"), expectedBrokerUid: 1, expectedRuntimeGid: 2,
@@ -181,6 +237,16 @@ const server = net.createServer((socket) => {
 
 server.listen(socketPath, async () => {
   try {
+    chmodSync(socketPath, 0o660);
+    const socketIdentity = sensorSocketIdentity(socketPath, {
+      expectedRuntimeGid: process.getgid(),
+      expectedSensorUid: process.getuid(),
+    });
+    assert.match(socketIdentity.at(-1), /^\d+$/);
+    assert.deepEqual(socketIdentity, sensorSocketIdentity(socketPath, {
+      expectedRuntimeGid: process.getgid(),
+      expectedSensorUid: process.getuid(),
+    }));
     const result = await requestBroker(socketPath, envelope);
     assert.equal(result.effect_status, "CREATED");
     trailing = true;

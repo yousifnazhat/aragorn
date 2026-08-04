@@ -1712,6 +1712,33 @@ class GVisorRuntimeTests(unittest.TestCase):
             ),
             _CONTAINER_ID,
         )
+        post["Config"]["Env"].reverse()
+        self.assertEqual(
+            runtime._verify_detonation_container(
+                runtime_lock,
+                remote_lock,
+                post,
+                phase="postrun",
+                run_id=_RUN_ID,
+                artifact=artifact,
+                bind_mount=bind,
+            ),
+            _CONTAINER_ID,
+        )
+        post["Config"]["Env"].append("PATH=/other")
+        with self.assertRaisesRegex(
+            runtime.GVisorRuntimeError,
+            "Docker container configuration changed",
+        ):
+            runtime._verify_detonation_container(
+                runtime_lock,
+                remote_lock,
+                post,
+                phase="postrun",
+                run_id=_RUN_ID,
+                artifact=artifact,
+                bind_mount=bind,
+            )
 
     def test_remote_window_orders_exec_pause_trace_resume_stop_wait_and_eof(
         self,

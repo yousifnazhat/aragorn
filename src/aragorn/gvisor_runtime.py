@@ -30,6 +30,7 @@ from .oci_runtime import (
     _capture_post_runner_identity,
     _capture_pre_runner_identity,
     _cleanup_container,
+    _environment_mapping,
     _inspect_container,
     _require_bounded_tmpfs_mount,
     _require_command,
@@ -5334,11 +5335,28 @@ def _verify_container_profile(
         raise GVisorRuntimeError("Docker container image descriptor changed")
 
     config = _object(container.get("Config"), "container configuration")
+    observed_environment = config.get("Env")
+    expected_environment = profile["environment"]
+    try:
+        if (
+            not isinstance(observed_environment, list)
+            or not isinstance(expected_environment, list)
+            or any(not isinstance(item, str) for item in observed_environment)
+            or any(not isinstance(item, str) for item in expected_environment)
+            or _environment_mapping(
+                observed_environment, "Docker container environment"
+            )
+            != _environment_mapping(
+                expected_environment, "expected Docker container environment"
+            )
+        ):
+            raise GVisorRuntimeError("Docker container configuration changed")
+    except VerificationError as exc:
+        raise GVisorRuntimeError("Docker container configuration changed") from exc
     if (
         config.get("Image") != image["reference"]
         or config.get("Cmd") != profile["command"]
         or config.get("User") != profile["user"]
-        or config.get("Env") != profile["environment"]
         or config.get("Volumes") is not None
         or config.get("Entrypoint") is not None
         or config.get("Labels") != labels

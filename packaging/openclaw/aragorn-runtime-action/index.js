@@ -10,7 +10,7 @@ const PLUGIN_ID = "aragorn-runtime-action";
 const TOOL_NAME = "aragorn_runtime_create";
 const MAX_FRAME_BYTES = 64 * 1024;
 const MAX_PAYLOAD_BYTES = 32 * 1024;
-const REQUEST_TIMEOUT_MS = 500;
+const REQUEST_TIMEOUT_MS = 750;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const TARGET_NAME = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -25,11 +25,12 @@ const CONFIG_FIELDS = new Set([
   "expectedBrokerUid",
   "expectedRuntimeGid",
   "expectedRuntimeUid",
+  "expectedSensorUid",
   "policyDigest",
   "policyVersion",
   "protectedRoot",
   "runtimeDigest",
-  "socketPath",
+  "sensorSocketPath",
 ]);
 
 class BrokerClientError extends Error {
@@ -112,14 +113,21 @@ function normalizedConfig(value) {
     expectedBrokerUid: requireUnsignedInteger(value.expectedBrokerUid, "broker uid"),
     expectedRuntimeGid: requireUnsignedInteger(value.expectedRuntimeGid, "runtime gid"),
     expectedRuntimeUid: requireUnsignedInteger(value.expectedRuntimeUid, "runtime uid"),
+    expectedSensorUid: requireUnsignedInteger(value.expectedSensorUid, "sensor uid"),
     policyDigest: requireDigest(value.policyDigest, "policy digest"),
     policyVersion: requireUnsignedInteger(value.policyVersion, "policy version", { positive: true }),
     protectedRoot: requirePath(value.protectedRoot, "protected root"),
     runtimeDigest: requireDigest(value.runtimeDigest, "runtime digest"),
-    socketPath: requirePath(value.socketPath, "broker socket"),
+    sensorSocketPath: requirePath(value.sensorSocketPath, "sensor socket"),
   };
-  if (config.expectedBrokerUid === config.expectedRuntimeUid) {
-    throw new TypeError("broker and runtime uids must differ");
+  if (
+    new Set([
+      config.expectedBrokerUid,
+      config.expectedRuntimeUid,
+      config.expectedSensorUid,
+    ]).size !== 3
+  ) {
+    throw new TypeError("broker, runtime, and sensor uids must differ");
   }
   return Object.freeze(config);
 }
@@ -169,29 +177,29 @@ function directoryIdentity(path, uid, gid, exactMode, label, effectStatus = "NOT
   };
 }
 
-function socketIdentity(path, config, effectStatus = "NOT_SUBMITTED") {
+function sensorSocketIdentity(path, config, effectStatus = "NOT_SUBMITTED") {
   let metadata;
   try {
     metadata = lstatSync(path, { bigint: true });
   } catch (error) {
-    throw new BrokerClientError(`broker socket is unavailable: ${error.code || error.message}`, effectStatus);
+    throw new BrokerClientError(`sensor socket is unavailable: ${error.code || error.message}`, effectStatus);
   }
   if (
     !metadata.isSocket() ||
-    safeInteger(metadata.uid, "broker socket uid", effectStatus) !== config.expectedBrokerUid ||
-    safeInteger(metadata.gid, "broker socket gid", effectStatus) !== config.expectedRuntimeGid ||
+    safeInteger(metadata.uid, "sensor socket uid", effectStatus) !== config.expectedSensorUid ||
+    safeInteger(metadata.gid, "sensor socket gid", effectStatus) !== config.expectedRuntimeGid ||
     Number(metadata.mode & 0o7777n) !== 0o660 ||
-    safeInteger(metadata.nlink, "broker socket link count", effectStatus) !== 1
+    safeInteger(metadata.nlink, "sensor socket link count", effectStatus) !== 1
   ) {
-    throw new BrokerClientError("broker socket metadata is unsafe", effectStatus);
+    throw new BrokerClientError("sensor socket metadata is unsafe", effectStatus);
   }
   return [
-    safeInteger(metadata.dev, "broker socket device", effectStatus),
-    safeInteger(metadata.ino, "broker socket inode", effectStatus),
-    safeInteger(metadata.uid, "broker socket uid", effectStatus),
-    safeInteger(metadata.gid, "broker socket gid", effectStatus),
+    safeInteger(metadata.dev, "sensor socket device", effectStatus),
+    safeInteger(metadata.ino, "sensor socket inode", effectStatus),
+    safeInteger(metadata.uid, "sensor socket uid", effectStatus),
+    safeInteger(metadata.gid, "sensor socket gid", effectStatus),
     Number(metadata.mode),
-    safeInteger(metadata.ctimeNs, "broker socket change time", effectStatus),
+    safeInteger(metadata.ctimeNs, "sensor socket change time", effectStatus),
   ];
 }
 
@@ -511,8 +519,14 @@ function register(api) {
           ) {
             throw new BrokerClientError("OpenClaw tool call is unattributed", "NOT_SUBMITTED");
           }
-          const controlRoot = dirname(config.socketPath);
-          directoryIdentity(controlRoot, config.expectedBrokerUid, config.expectedRuntimeGid, 0o710, "broker control root");
+          const sensorRuntimeDirectory = dirname(config.sensorSocketPath);
+          directoryIdentity(
+            sensorRuntimeDirectory,
+            config.expectedSensorUid,
+            config.expectedRuntimeGid,
+            0o750,
+            "sensor runtime directory",
+          );
           const rootIdentity = directoryIdentity(
             config.protectedRoot,
             config.expectedBrokerUid,
@@ -520,13 +534,13 @@ function register(api) {
             0o710,
             "protected root",
           );
-          const beforeSocket = socketIdentity(config.socketPath, config);
+          const beforeSocket = sensorSocketIdentity(config.sensorSocketPath, config);
           const targetName = bound.target_name;
           const payload = Buffer.from(bound.content, "utf8");
           const nowUnix = Math.floor(Date.now() / 1000);
           const envelope = buildEnvelope(config, correlation, targetName, payload, rootIdentity, nowUnix);
           requireAbsentTarget(config.protectedRoot, targetName, "NOT_SUBMITTED");
-          const result = await requestBroker(config.socketPath, envelope, signal);
+          const result = await requestBroker(config.sensorSocketPath, envelope, signal);
           const afterRoot = directoryIdentity(
             config.protectedRoot,
             config.expectedBrokerUid,
@@ -538,9 +552,12 @@ function register(api) {
           if (
             rootIdentity.device !== afterRoot.device ||
             rootIdentity.inode !== afterRoot.inode ||
-            !sameIdentity(beforeSocket, socketIdentity(config.socketPath, config, "INDETERMINATE"))
+            !sameIdentity(
+              beforeSocket,
+              sensorSocketIdentity(config.sensorSocketPath, config, "INDETERMINATE"),
+            )
           ) {
-            throw new BrokerClientError("broker socket changed during the request", "INDETERMINATE");
+            throw new BrokerClientError("sensor socket changed during the request", "INDETERMINATE");
           }
           if (result.verdict === "BLOCK") {
             requireAbsentTarget(config.protectedRoot, targetName, "INDETERMINATE");

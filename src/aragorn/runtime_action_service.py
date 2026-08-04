@@ -20,6 +20,7 @@ from .runtime_action_broker import (
 
 _BROKER_USER = "aragorn-broker"
 _RUNTIME_PRINCIPAL = "aragorn-runtime"
+_SENSOR_PRINCIPAL = "aragorn-sensor"
 _BINDING_SCHEMA = "aragorn/runtime-action-runtime-binding/v1"
 _BINDING_FIELDS = {"schema", "runtime_digest"}
 _MAX_CREDENTIAL_BYTES = 4 * 1024
@@ -63,7 +64,9 @@ def _run(credential_path: Path) -> None:
     if sys.platform != "linux":
         raise RuntimeActionServiceError("Linux execution is required")
 
-    broker_uid, runtime_uid, runtime_gid = _service_identities()
+    broker_uid, runtime_uid, runtime_gid, sensor_uid, sensor_gid = (
+        _service_identities()
+    )
     credential_path = _credential_path(credential_path, broker_uid)
     runtime_digest = _read_runtime_binding(credential_path, broker_uid)
     serve_runtime_action_broker(
@@ -80,18 +83,22 @@ def _run(credential_path: Path) -> None:
             observation_path=_CONTROL_ROOT / "observation.json",
             state_path=_CONTROL_ROOT / "state.json",
             expected_broker_uid=broker_uid,
-            expected_peer_uid=runtime_uid,
-            expected_peer_gid=runtime_gid,
+            expected_peer_uid=sensor_uid,
+            expected_peer_gid=sensor_gid,
             expected_runtime_digest=runtime_digest,
+            expected_runtime_uid=runtime_uid,
+            expected_runtime_gid=runtime_gid,
         )
     )
 
 
-def _service_identities() -> tuple[int, int, int]:
+def _service_identities() -> tuple[int, int, int, int, int]:
     try:
         broker = pwd.getpwnam(_BROKER_USER)
         runtime = pwd.getpwnam(_RUNTIME_PRINCIPAL)
+        sensor = pwd.getpwnam(_SENSOR_PRINCIPAL)
         runtime_group = grp.getgrnam(_RUNTIME_PRINCIPAL)
+        sensor_group = grp.getgrnam(_SENSOR_PRINCIPAL)
     except KeyError as exc:
         raise RuntimeActionServiceError("required service identity is absent") from exc
     if os.geteuid() != broker.pw_uid:
@@ -100,15 +107,41 @@ def _service_identities() -> tuple[int, int, int]:
         raise RuntimeActionServiceError("runtime and broker identities overlap")
     if runtime.pw_gid != runtime_group.gr_gid:
         raise RuntimeActionServiceError("runtime user and group identities disagree")
-    return broker.pw_uid, runtime.pw_uid, runtime_group.gr_gid
+    if sensor.pw_gid != sensor_group.gr_gid:
+        raise RuntimeActionServiceError("sensor user and group identities disagree")
+    if len({broker.pw_uid, runtime.pw_uid, sensor.pw_uid}) != 3 or (
+        runtime_group.gr_gid == sensor_group.gr_gid
+    ):
+        raise RuntimeActionServiceError(
+            "runtime, sensor, and broker identities overlap"
+        )
+    groups = set(os.getgroups())
+    if (
+        os.getegid() != runtime_group.gr_gid
+        or sensor_group.gr_gid not in groups
+        or not groups.issubset({runtime_group.gr_gid, sensor_group.gr_gid})
+    ):
+        raise RuntimeActionServiceError("broker process groups are invalid")
+    return (
+        broker.pw_uid,
+        runtime.pw_uid,
+        runtime_group.gr_gid,
+        sensor.pw_uid,
+        sensor_group.gr_gid,
+    )
 
 
-def _credential_path(path: Path, broker_uid: int) -> Path:
+def _credential_path(
+    path: Path,
+    expected_uid: int,
+    *,
+    credential_name: str = "runtime-binding",
+) -> Path:
     directory_value = os.environ.get("CREDENTIALS_DIRECTORY")
     if not directory_value:
         raise RuntimeActionServiceError("systemd credential directory is absent")
     directory = Path(directory_value)
-    expected = directory / "runtime-binding"
+    expected = directory / credential_name
     try:
         metadata = os.lstat(directory)
         resolved = directory.resolve(strict=True)
@@ -121,7 +154,7 @@ def _credential_path(path: Path, broker_uid: int) -> Path:
         or path != expected
         or resolved != directory
         or not stat.S_ISDIR(metadata.st_mode)
-        or metadata.st_uid not in {0, broker_uid}
+        or metadata.st_uid not in {0, expected_uid}
         or stat.S_IMODE(metadata.st_mode) & 0o022
     ):
         raise RuntimeActionServiceError("systemd credential path is invalid")
@@ -129,6 +162,17 @@ def _credential_path(path: Path, broker_uid: int) -> Path:
 
 
 def _read_runtime_binding(path: Path, expected_uid: int) -> str:
+    return _runtime_digest(
+        _read_credential_bytes(path, expected_uid, label="runtime binding")
+    )
+
+
+def _read_credential_bytes(
+    path: Path,
+    expected_uid: int,
+    *,
+    label: str,
+) -> bytes:
     descriptor = os.open(
         path,
         os.O_RDONLY
@@ -151,7 +195,7 @@ def _read_runtime_binding(path: Path, expected_uid: int) -> str:
             or before.st_nlink != 1
             or before.st_size > _MAX_CREDENTIAL_BYTES
         ):
-            raise RuntimeActionServiceError("runtime binding credential is unsafe")
+            raise RuntimeActionServiceError(f"{label} credential is unsafe")
         raw = os.read(descriptor, _MAX_CREDENTIAL_BYTES + 1)
         after = os.fstat(descriptor)
     finally:
@@ -161,8 +205,8 @@ def _read_runtime_binding(path: Path, expected_uid: int) -> str:
         or len(raw) != after.st_size
         or _file_identity(before) != _file_identity(after)
     ):
-        raise RuntimeActionServiceError("runtime binding credential changed while read")
-    return _runtime_digest(raw)
+        raise RuntimeActionServiceError(f"{label} credential changed while read")
+    return raw
 
 
 def _runtime_digest(raw: bytes) -> str:

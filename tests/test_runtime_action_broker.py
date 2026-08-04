@@ -13,6 +13,7 @@ import time
 import unittest
 from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -28,6 +29,7 @@ from aragorn.runtime_action_broker import (
     _open_lock_file,
     _prepare_socket_path,
     mediate_runtime_create,
+    mediate_observed_runtime_create,
     publish_runtime_control_document,
 )
 
@@ -188,6 +190,42 @@ class _Fixture:
         return json.loads(self.paths["state"].read_bytes())
 
 
+def _observed_submission(
+    fixture: _Fixture,
+    config: RuntimeActionBrokerConfig,
+) -> dict[str, object]:
+    measured = {
+        "schema": "aragorn/measured-runtime-action/v1",
+        **{
+            field: fixture.request[field]
+            for field in (
+                "runtime_digest",
+                "session_id",
+                "run_id",
+                "tool_call_id",
+                "active_skill_digest",
+                "operation_digest",
+                "path_digest",
+                "payload_digest",
+            )
+        },
+    }
+    return {
+        "schema": "aragorn/runtime-observed-create-submission/v1",
+        "authority": "OUT_OF_PROCESS_MEASUREMENT_ONLY_NOT_EFFECT_AUTHORITY",
+        "sensor_digest": _SENSOR,
+        "envelope_digest": canonical_digest(fixture.envelope),
+        "request_digest": canonical_digest(fixture.request),
+        "runtime_peer": {
+            "pid": 123,
+            "uid": config.expected_runtime_uid,
+            "gid": config.expected_runtime_gid,
+        },
+        "measured_action": measured,
+        "envelope": fixture.envelope,
+    }
+
+
 _CRASH_EXIT = 73
 _CRASH_CHECKPOINTS = {
     "after_replay_claim",
@@ -335,6 +373,184 @@ class RuntimeActionBrokerTests(unittest.TestCase):
             self.assertEqual(replay["verdict"], "BLOCK")
             self.assertEqual(replay["reason_codes"], ["BROKER_REPLAY_BLOCKED"])
             self.assertEqual(fixture.target.read_bytes(), fixture.payload)
+
+    def test_observation_gateway_publication_and_effect_share_one_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            config = replace(
+                fixture.config,
+                expected_peer_uid=os.geteuid() + 1,
+                expected_peer_gid=os.getegid() + 1,
+                expected_runtime_uid=os.geteuid() + 2,
+                expected_runtime_gid=os.getegid(),
+            )
+            submission = _observed_submission(fixture, config)
+
+            result = mediate_observed_runtime_create(
+                submission,
+                config,
+                clock=lambda: 100,
+            )
+
+            self.assertEqual(result["verdict"], "ALLOW")
+            self.assertEqual(result["effect_status"], "CREATED")
+            observation = json.loads(fixture.paths["observation"].read_bytes())
+            health = json.loads(fixture.paths["health"].read_bytes())
+            self.assertEqual(observation["sequence"], 2)
+            self.assertEqual(observation["measured_action"], submission["measured_action"])
+            self.assertEqual(health["epoch"], 5)
+            self.assertEqual(health["status"], "healthy")
+            self.assertEqual(result["observation_digest"], canonical_digest(observation))
+
+    def test_observation_gateway_rejects_mutation_and_direct_bypass(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            config = replace(
+                fixture.config,
+                expected_peer_uid=os.geteuid() + 1,
+                expected_peer_gid=os.getegid() + 1,
+                expected_runtime_uid=os.geteuid() + 2,
+                expected_runtime_gid=os.getegid(),
+            )
+            submission = _observed_submission(fixture, config)
+            submission["measured_action"] = {
+                **submission["measured_action"],
+                "payload_digest": "sha256:" + "f" * 64,
+            }
+            with self.assertRaisesRegex(
+                RuntimeActionBrokerError,
+                "measurement changed",
+            ):
+                mediate_observed_runtime_create(
+                    submission,
+                    config,
+                    clock=lambda: 100,
+                )
+            self.assertFalse(fixture.target.exists())
+            self.assertEqual(
+                json.loads(fixture.paths["observation"].read_bytes())["sequence"],
+                1,
+            )
+
+            client, server = socket.socketpair()
+            try:
+                raw = canonical_json(fixture.envelope)
+                client.sendall(_FRAME_HEADER.pack(len(raw)) + raw)
+                client.shutdown(socket.SHUT_WR)
+                with (
+                    patch(
+                        "aragorn.runtime_action_broker._peer_credentials",
+                        return_value=(321, config.expected_peer_uid, config.expected_peer_gid),
+                    ),
+                    self.assertRaisesRegex(
+                        RuntimeActionBrokerError,
+                        "observed runtime submission fields",
+                    ),
+                ):
+                    _handle_connection(server, config, timeout_seconds=0.5)
+            finally:
+                client.close()
+                server.close()
+            self.assertFalse(fixture.target.exists())
+
+    def test_observation_gateway_publishes_before_replay_and_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            config = replace(
+                fixture.config,
+                expected_peer_uid=os.geteuid() + 1,
+                expected_peer_gid=os.getegid() + 1,
+                expected_runtime_uid=os.geteuid() + 2,
+                expected_runtime_gid=os.getegid(),
+            )
+            submission = _observed_submission(fixture, config)
+            from aragorn import runtime_action_broker as broker
+
+            events: list[str] = []
+            real_publish = broker._publish_control_locked
+            real_commit = broker._commit_state
+            real_link = broker.os.link
+            supports_dir_fd = set(broker.os.supports_dir_fd)
+            supports_follow_symlinks = set(broker.os.supports_follow_symlinks)
+
+            def publish(*args: object, **kwargs: object) -> None:
+                real_publish(*args, **kwargs)
+                path = args[1]
+                if path == config.health_path:
+                    events.append("health")
+                elif path == config.observation_path:
+                    events.append("observation")
+
+            def commit(
+                control_fd: int,
+                current_config: RuntimeActionBrokerConfig,
+                state: dict[str, object],
+            ) -> None:
+                real_commit(control_fd, current_config, state)
+                journal = state.get("effect_journal")
+                if isinstance(journal, dict) and journal.get("status") == "PENDING":
+                    events.append("pending")
+                elif state.get("consumed") and journal is None and "replay" not in events:
+                    events.append("replay")
+
+            def link(*args: object, **kwargs: object) -> None:
+                real_link(*args, **kwargs)
+                events.append("link")
+
+            with (
+                patch.object(broker, "_publish_control_locked", new=publish),
+                patch.object(broker, "_commit_state", new=commit),
+                patch.object(broker.os, "link", new=link),
+                patch.object(
+                    broker.os,
+                    "supports_dir_fd",
+                    supports_dir_fd | {link},
+                ),
+                patch.object(
+                    broker.os,
+                    "supports_follow_symlinks",
+                    supports_follow_symlinks | {link},
+                ),
+            ):
+                result = mediate_observed_runtime_create(
+                    submission,
+                    config,
+                    clock=lambda: 100,
+                )
+
+            self.assertEqual(result["effect_status"], "CREATED")
+            self.assertLess(events.index("health"), events.index("observation"))
+            self.assertLess(events.index("observation"), events.index("replay"))
+            self.assertLess(events.index("replay"), events.index("pending"))
+            self.assertLess(events.index("pending"), events.index("link"))
+
+    def test_observation_gateway_cannot_promote_unhealthy_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            config = replace(
+                fixture.config,
+                expected_peer_uid=os.geteuid() + 1,
+                expected_peer_gid=os.getegid() + 1,
+                expected_runtime_uid=os.geteuid() + 2,
+                expected_runtime_gid=os.getegid(),
+            )
+            _write_control(
+                fixture.paths["health"],
+                {**fixture.health, "epoch": 6, "status": "unhealthy"},
+            )
+
+            result = mediate_observed_runtime_create(
+                _observed_submission(fixture, config),
+                config,
+                clock=lambda: 100,
+            )
+
+            self.assertEqual(result["verdict"], "BLOCK")
+            self.assertIn("MEDIATOR_UNHEALTHY", result["reason_codes"])
+            self.assertFalse(fixture.target.exists())
+            retained = json.loads(fixture.paths["health"].read_bytes())
+            self.assertEqual(retained["epoch"], 7)
+            self.assertEqual(retained["status"], "unhealthy")
 
     def test_revocation_and_unhealthy_state_block_and_advance_floors(self) -> None:
         cases = (

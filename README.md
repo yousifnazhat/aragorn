@@ -154,15 +154,28 @@ reexecuting an effect; exact inode, link-count, metadata, payload, protected-roo
 and replay bindings must agree before cleanup or success. Forked `os._exit`
 tests cover each durable process-crash boundary and prove replay preservation,
 nondecreasing floors, no replacement, and at most one effect. This is
-process-crash recovery, not power-loss qualification. These paths remain
-unit/static exercised only: a trusted out-of-process observation publisher,
-installed Linux composition and mounts, retained live evidence, a semantic
-verifier, and forced-reset storage qualification remain. This grants no
-`RUN-01`, `RUN-02`, Phase 3, EDR, or release authority.
+process-crash recovery, not power-loss qualification. That checkpoint alone
+grants no `RUN-01`, `RUN-02`, Phase 3, EDR, or release authority.
 
 The private broker upgrades a valid v1 state under the action lock by preserving
 its replay entries and monotonic floors, selecting schema v2, and initializing
 the journal to `null`; it never infers a prior effect from legacy state.
+
+P3.3a now routes the private OpenClaw create tool through a mandatory
+out-of-process `aragorn-sensor` gateway. The gateway authenticates the runtime
+with Linux peer credentials, independently recomputes the operation,
+protected-root path, and payload digests, and forwards one measured wrapper to
+a backend socket that rejects the runtime principal. The broker rechecks the
+wrapper and raw effect under its existing action lock, stamps and publishes the
+next sensor-health epoch and observation sequence without promoting an
+independently unhealthy status, and only then enters replay claim and durable
+effect mediation. The sensor has no control/protected write
+path and no staging access. This slice is unit/static exercised only. It does
+not turn opaque run/session/tool identifiers into causal evidence, and the
+active-skill digest remains a fixed deployment binding. Installed live
+composition evidence, semantic verification, direct-write and broader event
+coverage, forced-reset qualification, `RUN-01`, `RUN-02`, Phase 3, EDR, and
+release authority remain incomplete.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

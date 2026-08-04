@@ -1,5 +1,7 @@
 g aragorn-runtime -
+g aragorn-sensor -
 u aragorn-runtime - "Aragorn contained agent runtime" /nonexistent /usr/sbin/nologin
 u aragorn-broker - "Aragorn runtime action broker" /nonexistent /usr/sbin/nologin
+u aragorn-sensor - "Aragorn runtime observation sensor" /nonexistent /usr/sbin/nologin
 u aragorn-fetch - "Aragorn acquisition gateway" /nonexistent /usr/sbin/nologin
 u aragorn-analyze - "Aragorn protected analyzer" /nonexistent /usr/sbin/nologin

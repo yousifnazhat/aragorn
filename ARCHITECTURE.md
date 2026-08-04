@@ -619,11 +619,34 @@ or power-loss qualification. A locked private v1-to-v2 migration preserves
 validated replay entries and monotonic floors, initializes the journal to
 `null`, and does not infer legacy effect completion.
 
-The composition still has no trusted out-of-process observation publisher,
-deployed mount/identity evidence, retained live evidence, semantic verifier, or
-forced-reset storage qualification. Those boundaries, plus admission
-conformance, remain required before `RUN-01`, `RUN-02`, Phase 3, EDR, or release
-authority can pass.
+P3.3a adds a mandatory out-of-process observation gateway for that one
+create-only route. OpenClaw sends the unchanged canonical effect envelope to a
+frontend owned by the distinct `aragorn-sensor` principal. The gateway
+authenticates the dedicated runtime UID and GID with Linux `SO_PEERCRED`,
+recomputes operation, protected-root path, and payload digests from the raw
+effect, binds the configured runtime, active-skill, and sensor digests, and
+forwards one measured wrapper without retry. The backend socket admits only the
+sensor principal. Under the existing action lock, the broker recovers any
+durable effect journal, recomputes the envelope, request, operation, path, and
+payload digests, validates the deployment pins, stamps the next health epoch,
+observation sequence, and trusted lifetime, preserves any independently
+published unhealthy status, publishes both control documents, and then enters
+the existing replay, final-decision, and
+`PENDING`/`APPLIED` effect path. There is no publish-then-forward gap in which a
+different observation can authorize the request.
+
+The systemd profile gives the sensor read-only access to the protected-root
+identity, no write access to control/protected state, and no access to staging.
+The runtime cannot connect directly to the sensor-group backend socket. This
+proves only that a separate pinned OS principal observed and remeasured the
+exact bounded create candidate received from the runtime before effect. The
+session, run, and tool-call values remain opaque host correlations, and the
+active-skill digest remains a deployment pin rather than causal skill
+attribution. P3.3a is unit/static exercised only: deployed mount and identity
+evidence, retained live evidence, a semantic verifier, direct-write and other
+tool/process/file/network coverage, forced-reset storage qualification, and
+admission conformance remain required before `RUN-01`, `RUN-02`, Phase 3, EDR,
+or release authority can pass.
 
 ### 8. Evidence and interoperability plane
 

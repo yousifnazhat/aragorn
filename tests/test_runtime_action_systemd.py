@@ -10,10 +10,16 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 _SYSTEMD = _ROOT / "packaging" / "systemd"
 _SERVICE = _SYSTEMD / "aragorn-runtime-action-broker.service"
+_PUBLISHER_SERVICE = (
+    _SYSTEMD / "aragorn-runtime-observation-publisher.service"
+)
 _TMPFILES = _SYSTEMD / "aragorn-runtime-action.tmpfiles"
 _SYSUSERS = _SYSTEMD / "aragorn-gateway.sysusers"
 _LAUNCHER = (
     _ROOT / "packaging" / "libexec" / "aragorn-runtime-action-service.py"
+)
+_PUBLISHER_LAUNCHER = (
+    _ROOT / "packaging" / "libexec" / "aragorn-runtime-observation-service.py"
 )
 _INSTALLER = _ROOT / "packaging" / "install-runtime-action-host.sh"
 
@@ -55,6 +61,7 @@ class RuntimeActionSystemdTests(unittest.TestCase):
         self.assertIn("Type=simple", service)
         self.assertIn("User=aragorn-broker", service)
         self.assertIn("Group=aragorn-runtime", service)
+        self.assertIn("SupplementaryGroups=aragorn-sensor", service)
         self.assertIn(
             "LoadCredential=runtime-binding:"
             "/etc/aragorn/runtime-action-runtime.json",
@@ -150,11 +157,134 @@ class RuntimeActionSystemdTests(unittest.TestCase):
                     / "usr/lib/systemd/system/aragorn-runtime-action-broker.service"
                 ).is_file()
             )
+            self.assertTrue(
+                (
+                    staged
+                    / "usr/lib/systemd/system"
+                    / "aragorn-runtime-observation-publisher.service"
+                ).is_file()
+            )
+            for module in (
+                "runtime_action_observation_publisher.py",
+                "runtime_observation_service.py",
+            ):
+                self.assertTrue(
+                    (staged / "usr/lib/aragorn/aragorn" / module).is_file()
+                )
+            publisher_launcher = (
+                staged
+                / "usr/libexec/aragorn/aragorn-runtime-observation-service.py"
+            )
+            self.assertTrue(publisher_launcher.is_file())
+            publisher_result = subprocess.run(
+                [sys.executable, "-I", "-S", "-B", str(publisher_launcher)],
+                cwd="/",
+                env={"PATH": "/usr/bin:/bin"},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(publisher_result.returncode, 64, publisher_result.stderr)
+            self.assertIn(
+                "usage: aragorn-runtime-observation-service",
+                publisher_result.stderr,
+            )
+            self.assertNotIn("ModuleNotFoundError", publisher_result.stderr)
+
+    def test_observation_publisher_has_distinct_identity_and_fixed_paths(
+        self,
+    ) -> None:
+        raw = _PUBLISHER_SERVICE.read_text(encoding="utf-8")
+        unit = _section(raw, "Unit")
+        service = _section(raw, "Service")
+
+        self.assertIn(
+            "After=local-fs.target nss-user-lookup.target "
+            "aragorn-runtime-action-broker.service",
+            unit,
+        )
+        self.assertIn(
+            "Requires=aragorn-runtime-action-broker.service",
+            unit,
+        )
+        self.assertIn(
+            "RequiresMountsFor=/var/lib/aragorn-runtime-action/control "
+            "/var/lib/aragorn-runtime-action/protected",
+            unit,
+        )
+        self.assertIn(
+            "ConditionPathExists=/etc/aragorn/runtime-action-observation.json",
+            unit,
+        )
+        self.assertIn("Type=simple", service)
+        self.assertIn("User=aragorn-sensor", service)
+        self.assertIn("Group=aragorn-sensor", service)
+        self.assertIn("SupplementaryGroups=aragorn-runtime", service)
+        self.assertIn("RuntimeDirectory=aragorn-runtime-observation", service)
+        self.assertIn("RuntimeDirectoryMode=0750", service)
+        self.assertIn(
+            "LoadCredential=observation-binding:"
+            "/etc/aragorn/runtime-action-observation.json",
+            service,
+        )
+        self.assertEqual(
+            [line for line in service if line.startswith("ExecStart=")],
+            [
+                "ExecStart=/usr/bin/python3.12 -I -S -B "
+                "/usr/libexec/aragorn/aragorn-runtime-observation-service.py "
+                "%d/observation-binding"
+            ],
+        )
+        self.assertIn(
+            "ReadOnlyPaths=/var/lib/aragorn-runtime-action/control "
+            "/var/lib/aragorn-runtime-action/protected",
+            service,
+        )
+        self.assertIn(
+            "InaccessiblePaths=/etc/aragorn/runtime-action-observation.json "
+            "/var/lib/aragorn-runtime-action/staging",
+            service,
+        )
+        self.assertFalse(
+            any(line.startswith("ReadWritePaths=") for line in service)
+        )
+        self.assertIn("WantedBy=multi-user.target", _section(raw, "Install"))
+
+        required_hardening = {
+            "NoNewPrivileges=yes",
+            "AmbientCapabilities=",
+            "CapabilityBoundingSet=",
+            "PrivateNetwork=yes",
+            "ProtectSystem=strict",
+            "RestrictAddressFamilies=AF_UNIX",
+            "TasksMax=2",
+            "MemoryMax=256M",
+            "MemorySwapMax=0",
+            "LimitNOFILE=64",
+            "SystemCallFilter=~@mount @reboot @swap @raw-io @clock",
+        }
+        self.assertTrue(required_hardening.issubset(service))
+        joined = "\n".join(service)
+        for incompatible in (
+            "SocketBindDeny=any",
+            "@network-io",
+            "DynamicUser=",
+            "PrivateUsers=",
+            "CAP_CHOWN",
+        ):
+            self.assertNotIn(incompatible, joined)
+        launcher = _PUBLISHER_LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn('parents[2] / "lib" / "aragorn"', launcher)
+        self.assertIn(
+            "from aragorn.runtime_observation_service import main",
+            launcher,
+        )
 
     def test_sysusers_provisions_fixed_broker_and_peer_identities(self) -> None:
         lines = _SYSUSERS.read_text(encoding="utf-8").splitlines()
         expected = {
             "g aragorn-runtime -",
+            "g aragorn-sensor -",
             (
                 'u aragorn-runtime - "Aragorn contained agent runtime" '
                 "/nonexistent /usr/sbin/nologin"
@@ -163,12 +293,18 @@ class RuntimeActionSystemdTests(unittest.TestCase):
                 'u aragorn-broker - "Aragorn runtime action broker" '
                 "/nonexistent /usr/sbin/nologin"
             ),
+            (
+                'u aragorn-sensor - "Aragorn runtime observation sensor" '
+                "/nonexistent /usr/sbin/nologin"
+            ),
         }
         self.assertTrue(expected.issubset(lines))
         for prefix in (
             "g aragorn-runtime ",
+            "g aragorn-sensor ",
             "u aragorn-runtime ",
             "u aragorn-broker ",
+            "u aragorn-sensor ",
         ):
             self.assertEqual(sum(line.startswith(prefix) for line in lines), 1)
 

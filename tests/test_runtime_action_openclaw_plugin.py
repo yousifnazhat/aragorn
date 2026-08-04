@@ -36,6 +36,22 @@ class RuntimeActionOpenClawPluginTests(unittest.TestCase):
             {"aragorn_runtime_create": {"optional": True}},
         )
         self.assertFalse(manifest["configSchema"]["additionalProperties"])
+        self.assertEqual(
+            set(manifest["configSchema"]["required"]),
+            {
+                "activeSkillDigest",
+                "expectedBrokerUid",
+                "expectedRuntimeGid",
+                "expectedRuntimeUid",
+                "expectedSensorUid",
+                "policyDigest",
+                "policyVersion",
+                "protectedRoot",
+                "runtimeDigest",
+                "sensorSocketPath",
+            },
+        )
+        self.assertNotIn("socketPath", manifest["configSchema"]["properties"])
         self.assertEqual(package["openclaw"]["extensions"], ["./index.js"])
         source = (_PLUGIN / "index.js").read_text(encoding="utf-8")
         self.assertIn('{ name: TOOL_NAME, optional: true }', source)
@@ -54,9 +70,13 @@ const { buildEnvelope, canonicalJson, requestBroker, sha256 } = plugin.__testing
 const digest = (character) => `sha256:${character.repeat(64)}`;
 const config = {
   activeSkillDigest: digest("2"), expectedBrokerUid: 1, expectedRuntimeGid: 2,
-  expectedRuntimeUid: 3, policyDigest: digest("4"), policyVersion: 1,
-  protectedRoot: "/protected", runtimeDigest: digest("1"), socketPath: "/unused",
+  expectedRuntimeUid: 3, expectedSensorUid: 4, policyDigest: digest("4"), policyVersion: 1,
+  protectedRoot: "/protected", runtimeDigest: digest("1"), sensorSocketPath: "/unused",
 };
+assert.throws(() => plugin.register({
+  pluginConfig: { ...config, socketPath: "/legacy" },
+  registerTool() {},
+}), /fields/);
 let factory;
 plugin.register({
   pluginConfig: config,

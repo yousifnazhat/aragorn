@@ -1,21 +1,19 @@
 [Unit]
-Description=Aragorn runtime action broker
-After=local-fs.target nss-user-lookup.target
-RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected /var/lib/aragorn-runtime-action/staging
-ConditionPathExists=/etc/aragorn/runtime-action-runtime.json
-ConditionPathExists=/var/lib/aragorn-runtime-action/control/policy.json
-ConditionPathExists=/var/lib/aragorn-runtime-action/control/revocations.json
-ConditionPathExists=/var/lib/aragorn-runtime-action/control/health.json
-ConditionPathExists=/var/lib/aragorn-runtime-action/control/observation.json
-ConditionPathExists=/var/lib/aragorn-runtime-action/control/state.json
+Description=Aragorn runtime observation publisher
+After=local-fs.target nss-user-lookup.target aragorn-runtime-action-broker.service
+Requires=aragorn-runtime-action-broker.service
+RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected
+ConditionPathExists=/etc/aragorn/runtime-action-observation.json
 
 [Service]
 Type=simple
-User=aragorn-broker
-Group=aragorn-runtime
-SupplementaryGroups=aragorn-sensor
-LoadCredential=runtime-binding:/etc/aragorn/runtime-action-runtime.json
-ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service.py %d/runtime-binding
+User=aragorn-sensor
+Group=aragorn-sensor
+SupplementaryGroups=aragorn-runtime
+RuntimeDirectory=aragorn-runtime-observation
+RuntimeDirectoryMode=0750
+LoadCredential=observation-binding:/etc/aragorn/runtime-action-observation.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service.py %d/observation-binding
 WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
@@ -33,7 +31,7 @@ OOMPolicy=stop
 StandardInput=null
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=aragorn-runtime-action-broker
+SyslogIdentifier=aragorn-runtime-observation-publisher
 
 NoNewPrivileges=yes
 AmbientCapabilities=
@@ -54,8 +52,8 @@ ProtectKernelTunables=yes
 ProtectProc=invisible
 ProtectSystem=strict
 ProcSubset=pid
-InaccessiblePaths=/etc/aragorn/runtime-action-runtime.json
-ReadWritePaths=/var/lib/aragorn-runtime-action
+InaccessiblePaths=/etc/aragorn/runtime-action-observation.json /var/lib/aragorn-runtime-action/staging
+ReadOnlyPaths=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected
 RemoveIPC=yes
 RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=yes

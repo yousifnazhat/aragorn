@@ -22,6 +22,8 @@ from typing import Any
 
 from .oci_worker_protocol import WorkerProtocolError, canonical_digest, canonical_json
 from .runtime_action_decision import (
+    _InvalidRequest,
+    _request as _validate_runtime_action_request,
     RuntimeActionStateError,
     evaluate_runtime_action,
     qualify_runtime_health_epoch,
@@ -55,6 +57,17 @@ _OBSERVATION_FIELDS = {
     "active",
     "measured_action",
 }
+_OBSERVED_SUBMISSION_FIELDS = {
+    "schema",
+    "authority",
+    "sensor_digest",
+    "envelope_digest",
+    "request_digest",
+    "runtime_peer",
+    "measured_action",
+    "envelope",
+}
+_RUNTIME_PEER_FIELDS = {"pid", "uid", "gid"}
 _STATE_FIELDS = {
     "schema",
     "authority",
@@ -66,6 +79,15 @@ _STATE_FIELDS = {
 _STATE_V1_FIELDS = _STATE_FIELDS - {"effect_journal"}
 _CONSUMED_FIELDS = {"request_digest", "observation_digest", "expires_at_unix"}
 _ACTION_DIGEST_FIELDS = ("operation_digest", "path_digest", "payload_digest")
+_MEASURED_ACTION_FIELDS = {
+    "schema",
+    "runtime_digest",
+    "session_id",
+    "run_id",
+    "tool_call_id",
+    "active_skill_digest",
+    *_ACTION_DIGEST_FIELDS,
+}
 _TRANSACTION_FIELDS = {
     "schema",
     "authority",
@@ -188,6 +210,8 @@ class RuntimeActionBrokerConfig:
     expected_peer_uid: int
     expected_peer_gid: int
     expected_runtime_digest: str
+    expected_runtime_uid: int | None = None
+    expected_runtime_gid: int | None = None
 
 
 def serve_runtime_action_broker(
@@ -318,6 +342,43 @@ def mediate_runtime_create(
 ) -> dict[str, Any]:
     """Consume one authorized request before atomically creating its target."""
 
+    return _mediate_runtime_create(
+        envelope,
+        config,
+        clock=clock,
+        deadline_monotonic=deadline_monotonic,
+        observed_submission=None,
+    )
+
+
+def mediate_observed_runtime_create(
+    submission: object,
+    config: RuntimeActionBrokerConfig,
+    *,
+    clock: Callable[[], int] | None = None,
+    deadline_monotonic: float | None = None,
+) -> dict[str, Any]:
+    """Mediate one request measured by the authenticated observation gateway."""
+
+    observed = _observed_submission(submission)
+    return _mediate_runtime_create(
+        observed["envelope"],
+        config,
+        clock=clock,
+        deadline_monotonic=deadline_monotonic,
+        observed_submission=observed,
+    )
+
+
+def _mediate_runtime_create(
+    envelope: object,
+    config: RuntimeActionBrokerConfig,
+    *,
+    clock: Callable[[], int] | None,
+    deadline_monotonic: float | None,
+    observed_submission: dict[str, Any] | None,
+) -> dict[str, Any]:
+
     _validate_config(config)
     request, target_name, payload = _request_effect(envelope)
     trusted_clock = (lambda: int(time.time())) if clock is None else clock
@@ -351,6 +412,15 @@ def mediate_runtime_create(
 
         action_digests = _action_digests(protected_fd, target_name, payload)
         now = _clock_value(trusted_clock)
+        if observed_submission is not None:
+            _publish_observed_state_locked(
+                control_fd,
+                config,
+                request,
+                action_digests,
+                observed_submission,
+                now,
+            )
         state, observation_digest, decision, broker_reasons = _evaluate_snapshot(
             control_fd,
             config,
@@ -475,7 +545,7 @@ def mediate_runtime_create(
                 journal_state is None
                 or journal_state["effect_journal"] is not None
                 or _STAGING_NAME.fullmatch(staging_name) is None
-                or staged.st_gid != config.expected_peer_gid
+                or staged.st_gid != _effect_gid(config)
             ):
                 raise RuntimeActionBrokerError(
                     "runtime effect journal preparation is invalid"
@@ -950,12 +1020,19 @@ def _handle_connection(
             f"runtime broker peer {pid} has an unauthorized identity"
         )
     deadline = time.monotonic() + timeout_seconds
-    envelope = _read_frame(connection, deadline)
-    result = mediate_runtime_create(
-        envelope,
-        config,
-        deadline_monotonic=deadline,
-    )
+    submission = _read_frame(connection, deadline)
+    if config.expected_runtime_uid is None:
+        result = mediate_runtime_create(
+            submission,
+            config,
+            deadline_monotonic=deadline,
+        )
+    else:
+        result = mediate_observed_runtime_create(
+            submission,
+            config,
+            deadline_monotonic=deadline,
+        )
     try:
         _send_frame(connection, canonical_json(result), deadline)
     except RuntimeActionBrokerError as exc:
@@ -1076,6 +1153,170 @@ def _request_effect(envelope: object) -> tuple[dict[str, Any], str, bytes]:
     ):
         raise RuntimeActionBrokerError("runtime create payload is not canonical")
     return request, target_name, payload
+
+
+def _observed_submission(value: object) -> dict[str, Any]:
+    submission = _exact(
+        value,
+        _OBSERVED_SUBMISSION_FIELDS,
+        "observed runtime submission",
+    )
+    if (
+        submission["schema"]
+        != "aragorn/runtime-observed-create-submission/v1"
+        or submission["authority"]
+        != "OUT_OF_PROCESS_MEASUREMENT_ONLY_NOT_EFFECT_AUTHORITY"
+    ):
+        raise RuntimeActionBrokerError("observed runtime submission identity is invalid")
+    _require_digest(submission["sensor_digest"], "observed sensor digest")
+    _require_digest(submission["envelope_digest"], "observed envelope digest")
+    _require_digest(submission["request_digest"], "observed request digest")
+    peer = _exact(
+        submission["runtime_peer"],
+        _RUNTIME_PEER_FIELDS,
+        "observed runtime peer",
+    )
+    _positive_uint(peer["pid"], "observed runtime pid")
+    _uint(peer["uid"], "observed runtime uid")
+    _uint(peer["gid"], "observed runtime gid")
+    measured = _exact(
+        submission["measured_action"],
+        _MEASURED_ACTION_FIELDS,
+        "observed measured action",
+    )
+    if measured["schema"] != "aragorn/measured-runtime-action/v1":
+        raise RuntimeActionBrokerError("observed measured action identity is invalid")
+    request, _target_name, _payload = _request_effect(submission["envelope"])
+    try:
+        _validate_runtime_action_request(request)
+    except _InvalidRequest as exc:
+        raise RuntimeActionBrokerError("observed runtime request is invalid") from exc
+    if (
+        submission["envelope_digest"] != canonical_digest(submission["envelope"])
+        or submission["request_digest"] != canonical_digest(request)
+    ):
+        raise RuntimeActionBrokerError("observed runtime submission digest changed")
+    return submission
+
+
+def _publish_observed_state_locked(
+    control_fd: int,
+    config: RuntimeActionBrokerConfig,
+    request: dict[str, Any],
+    action_digests: dict[str, str],
+    submission: dict[str, Any],
+    now_unix: int,
+) -> None:
+    if config.expected_runtime_uid is None or config.expected_runtime_gid is None:
+        raise RuntimeActionBrokerError("observed runtime identity is not configured")
+    peer = submission["runtime_peer"]
+    if (
+        peer["uid"] != config.expected_runtime_uid
+        or peer["gid"] != config.expected_runtime_gid
+        or request["runtime_digest"] != config.expected_runtime_digest
+    ):
+        raise RuntimeActionBrokerError("observed runtime identity is unbound")
+    attribution = {
+        field: request[field]
+        for field in (
+            "runtime_digest",
+            "session_id",
+            "run_id",
+            "tool_call_id",
+            "active_skill_digest",
+        )
+    }
+    measured = {
+        "schema": "aragorn/measured-runtime-action/v1",
+        **attribution,
+        **action_digests,
+    }
+    if submission["measured_action"] != measured or any(
+        request.get(field) != digest for field, digest in action_digests.items()
+    ):
+        raise RuntimeActionBrokerError("observed runtime action measurement changed")
+
+    policy = _load_control(
+        control_fd,
+        config.policy_path,
+        config,
+        "runtime action policy",
+    )
+    sensor_digest = _require_digest(
+        policy.get("sensor_digest"),
+        "runtime action policy sensor",
+    )
+    if submission["sensor_digest"] != sensor_digest:
+        raise RuntimeActionBrokerError("observed runtime sensor is unbound")
+    state = _load_state(control_fd, config)
+    current_health = _load_control(
+        control_fd,
+        config.health_path,
+        config,
+        "current runtime mediator health",
+    )
+    health_field, current_epoch = _publication_counter(
+        config.health_path,
+        current_health,
+        policy,
+        config,
+        minimum=1,
+        now_unix=current_health.get("observed_at_unix"),
+    )
+    if current_epoch is None:
+        raise RuntimeActionBrokerError("current runtime mediator health is unbound")
+    health = {
+        "schema": "aragorn/runtime-mediator-health/v1",
+        "runtime_digest": config.expected_runtime_digest,
+        "sensor_digest": sensor_digest,
+        "epoch": max(current_epoch, state[health_field]) + 1,
+        "status": current_health["status"],
+        "observed_at_unix": now_unix,
+        "expires_at_unix": now_unix + _MAX_OBSERVATION_LIFETIME_SECONDS,
+    }
+    _publish_control_locked(
+        control_fd,
+        config.health_path,
+        health,
+        canonical_json(health),
+        config,
+        now_unix,
+    )
+
+    current_observation = _load_control(
+        control_fd,
+        config.observation_path,
+        config,
+        "current runtime observation",
+    )
+    current_observation = _observation(
+        current_observation,
+        _uint(
+            current_observation.get("observed_at_unix"),
+            "current runtime observation time",
+        ),
+    )
+    observation = {
+        "schema": "aragorn/runtime-action-observation/v1",
+        "authority": "SENSOR_OBSERVATION_ONLY_NOT_EFFECT_AUTHORITY",
+        "sequence": current_observation["sequence"] + 1,
+        "sensor_digest": sensor_digest,
+        "observed_at_unix": now_unix,
+        "expires_at_unix": now_unix + _MAX_OBSERVATION_LIFETIME_SECONDS,
+        "active": {
+            "schema": "aragorn/runtime-active-context/v1",
+            **attribution,
+        },
+        "measured_action": measured,
+    }
+    _publish_control_locked(
+        control_fd,
+        config.observation_path,
+        observation,
+        canonical_json(observation),
+        config,
+        now_unix,
+    )
 
 
 def _observation(document: dict[str, Any], now_unix: int) -> dict[str, Any]:
@@ -1510,7 +1751,7 @@ def _clean_staging_orphans(
             _STAGING_NAME.fullmatch(name) is None
             or not stat.S_ISREG(before.st_mode)
             or before.st_uid != config.expected_broker_uid
-            or before.st_gid != config.expected_peer_gid
+            or before.st_gid != _effect_gid(config)
             or before.st_nlink != 1
             or stat.S_IMODE(before.st_mode) not in {0o400, 0o600}
             or before.st_size > _MAX_PAYLOAD_BYTES
@@ -1555,7 +1796,7 @@ def _recover_effect_journal(
         raise RuntimeActionBrokerError("runtime effect journal root binding changed")
     file_options = {
         "expected_uid": config.expected_broker_uid,
-        "expected_gid": config.expected_peer_gid,
+        "expected_gid": _effect_gid(config),
         "expected_size": transaction["payload_size"],
         "expected_digest": transaction["payload_digest"],
     }
@@ -1790,6 +2031,14 @@ def _result(
     }
 
 
+def _effect_gid(config: RuntimeActionBrokerConfig) -> int:
+    return (
+        config.expected_peer_gid
+        if config.expected_runtime_gid is None
+        else config.expected_runtime_gid
+    )
+
+
 def _validate_config(config: RuntimeActionBrokerConfig) -> None:
     if not isinstance(config, RuntimeActionBrokerConfig):
         raise RuntimeActionBrokerError("runtime broker configuration is invalid")
@@ -1803,6 +2052,21 @@ def _validate_config(config: RuntimeActionBrokerConfig) -> None:
         _uint(value, label)
     if config.expected_peer_uid == config.expected_broker_uid:
         raise RuntimeActionBrokerError("runtime and broker UIDs must be distinct")
+    if (config.expected_runtime_uid is None) != (
+        config.expected_runtime_gid is None
+    ):
+        raise RuntimeActionBrokerError("observed runtime identity is incomplete")
+    if config.expected_runtime_uid is not None:
+        _uint(config.expected_runtime_uid, "runtime uid")
+        _uint(config.expected_runtime_gid, "runtime gid")
+        if (
+            config.expected_runtime_uid
+            in {config.expected_broker_uid, config.expected_peer_uid}
+            or config.expected_runtime_gid == config.expected_peer_gid
+        ):
+            raise RuntimeActionBrokerError(
+                "runtime, sensor, and broker identities must be distinct"
+            )
     _require_digest(config.expected_runtime_digest, "expected runtime digest")
     paths = (
         config.socket_path,

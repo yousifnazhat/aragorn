@@ -40,6 +40,8 @@ class RuntimeActionServiceTests(unittest.TestCase):
             broker_uid = os.geteuid()
             runtime_uid = broker_uid + 1
             runtime_gid = os.getegid() + 1
+            sensor_uid = broker_uid + 2
+            sensor_gid = runtime_gid + 1
             with (
                 patch.object(service.sys, "platform", "linux"),
                 patch.object(
@@ -48,13 +50,19 @@ class RuntimeActionServiceTests(unittest.TestCase):
                     side_effect=(
                         SimpleNamespace(pw_uid=broker_uid),
                         SimpleNamespace(pw_uid=runtime_uid, pw_gid=runtime_gid),
+                        SimpleNamespace(pw_uid=sensor_uid, pw_gid=sensor_gid),
                     ),
                 ) as users,
                 patch.object(
                     service.grp,
                     "getgrnam",
-                    return_value=SimpleNamespace(gr_gid=runtime_gid),
+                    side_effect=(
+                        SimpleNamespace(gr_gid=runtime_gid),
+                        SimpleNamespace(gr_gid=sensor_gid),
+                    ),
                 ) as groups,
+                patch.object(service.os, "getegid", return_value=runtime_gid),
+                patch.object(service.os, "getgroups", return_value=[sensor_gid]),
                 patch.dict(
                     os.environ,
                     {"CREDENTIALS_DIRECTORY": str(path.parent)},
@@ -65,9 +73,16 @@ class RuntimeActionServiceTests(unittest.TestCase):
 
             self.assertEqual(
                 users.call_args_list,
-                [call("aragorn-broker"), call("aragorn-runtime")],
+                [
+                    call("aragorn-broker"),
+                    call("aragorn-runtime"),
+                    call("aragorn-sensor"),
+                ],
             )
-            groups.assert_called_once_with("aragorn-runtime")
+            self.assertEqual(
+                groups.call_args_list,
+                [call("aragorn-runtime"), call("aragorn-sensor")],
+            )
             serve.assert_called_once()
             config = serve.call_args.args[0]
             root = Path("/var/lib/aragorn-runtime-action")
@@ -92,9 +107,11 @@ class RuntimeActionServiceTests(unittest.TestCase):
             )
             self.assertEqual(config.state_path, root / "control" / "state.json")
             self.assertEqual(config.expected_broker_uid, broker_uid)
-            self.assertEqual(config.expected_peer_uid, runtime_uid)
-            self.assertEqual(config.expected_peer_gid, runtime_gid)
+            self.assertEqual(config.expected_peer_uid, sensor_uid)
+            self.assertEqual(config.expected_peer_gid, sensor_gid)
             self.assertEqual(config.expected_runtime_digest, _DIGEST)
+            self.assertEqual(config.expected_runtime_uid, runtime_uid)
+            self.assertEqual(config.expected_runtime_gid, runtime_gid)
 
     def test_main_rejects_usage_platform_and_identity_errors(self) -> None:
         cases = (
@@ -130,12 +147,16 @@ class RuntimeActionServiceTests(unittest.TestCase):
                     side_effect=(
                         SimpleNamespace(pw_uid=broker_uid),
                         SimpleNamespace(pw_uid=broker_uid + 1, pw_gid=1234),
+                        SimpleNamespace(pw_uid=broker_uid + 2, pw_gid=1235),
                     ),
                 ),
                 patch.object(
                     service.grp,
                     "getgrnam",
-                    return_value=SimpleNamespace(gr_gid=1234),
+                    side_effect=(
+                        SimpleNamespace(gr_gid=1234),
+                        SimpleNamespace(gr_gid=1235),
+                    ),
                 ),
                 patch.object(service, "serve_runtime_action_broker") as serve,
                 redirect_stderr(stderr),
@@ -159,12 +180,16 @@ class RuntimeActionServiceTests(unittest.TestCase):
                 side_effect=(
                     SimpleNamespace(pw_uid=os.geteuid()),
                     SimpleNamespace(pw_uid=os.geteuid() + 1, pw_gid=1001),
+                    SimpleNamespace(pw_uid=os.geteuid() + 2, pw_gid=1003),
                 ),
             ),
             patch.object(
                 service.grp,
                 "getgrnam",
-                return_value=SimpleNamespace(gr_gid=1002),
+                side_effect=(
+                    SimpleNamespace(gr_gid=1002),
+                    SimpleNamespace(gr_gid=1003),
+                ),
             ),
             self.assertRaisesRegex(
                 service.RuntimeActionServiceError,
@@ -182,16 +207,51 @@ class RuntimeActionServiceTests(unittest.TestCase):
                 side_effect=(
                     SimpleNamespace(pw_uid=uid),
                     SimpleNamespace(pw_uid=uid, pw_gid=1001),
+                    SimpleNamespace(pw_uid=uid + 1, pw_gid=1002),
                 ),
             ),
             patch.object(
                 service.grp,
                 "getgrnam",
-                return_value=SimpleNamespace(gr_gid=1001),
+                side_effect=(
+                    SimpleNamespace(gr_gid=1001),
+                    SimpleNamespace(gr_gid=1002),
+                ),
             ),
             self.assertRaisesRegex(
                 service.RuntimeActionServiceError,
                 "runtime and broker identities overlap",
+            ),
+        ):
+            service._service_identities()
+
+    def test_broker_requires_only_runtime_and_sensor_groups(self) -> None:
+        uid = os.geteuid()
+        runtime_gid = os.getegid() + 1
+        sensor_gid = runtime_gid + 1
+        with (
+            patch.object(
+                service.pwd,
+                "getpwnam",
+                side_effect=(
+                    SimpleNamespace(pw_uid=uid),
+                    SimpleNamespace(pw_uid=uid + 1, pw_gid=runtime_gid),
+                    SimpleNamespace(pw_uid=uid + 2, pw_gid=sensor_gid),
+                ),
+            ),
+            patch.object(
+                service.grp,
+                "getgrnam",
+                side_effect=(
+                    SimpleNamespace(gr_gid=runtime_gid),
+                    SimpleNamespace(gr_gid=sensor_gid),
+                ),
+            ),
+            patch.object(service.os, "getegid", return_value=runtime_gid),
+            patch.object(service.os, "getgroups", return_value=[sensor_gid + 1]),
+            self.assertRaisesRegex(
+                service.RuntimeActionServiceError,
+                "process groups",
             ),
         ):
             service._service_identities()

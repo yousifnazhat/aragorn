@@ -558,6 +558,20 @@ a static mount rather than an Aragorn policy broker, the slice grants no
 replace the static guard with a digest-bound policy request and independently
 health-checked mediator before any runtime-prevention property can pass.
 
+P3.1 implements only the deterministic half of that increment. One pure
+decision binds the complete request to separately supplied active attribution
+and action measurement, an exact runtime-scoped allow rule, current revoked
+skill set, and a short-lived health statement from the sensor identity pinned
+by policy. Caller-supplied trusted floors reject revocation-generation and
+health-epoch rollback. Unknown, stale, mismatched, revoked, unmeasured, or
+unattributed actions block. Invalid trusted policy, attribution, measurement,
+revocation, or health state aborts evaluation and must be handled as no-effect.
+The decision binds every supplied authority input but explicitly disclaims
+effect and RUN conformance authority. Canonical socket framing, peer
+authentication, protected persistence of both monotonic floors, fresh
+broker-owned state loading, replay consumption, and the effect remain outside
+this core and are required in the next live mediator slice.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.
@@ -685,33 +699,55 @@ URLs describe provenance; digests define identity.
 }
 ```
 
-### Future runtime action and response
+### Private runtime action decision core
 
-The following names are roadmap sketches, not implemented Phase 0 contracts.
-
-```json
-{
-  "schema": "aragorn/runtime-action/v1",
-  "run_id": "01...",
-  "skill_digest": "sha256:...",
-  "operation": {
-    "kind": "tool-call|process-exec|file-read|file-write|network-connect|memory-write",
-    "target": "api.example:443",
-    "arguments_digest": "sha256:..."
-  },
-  "phase": "attempt",
-  "causal_parent": "01..."
-}
-```
+P3.1 implements these decoded-JSON shapes as a private deterministic core. A
+later external mediator must add canonical byte framing, authenticated peers,
+bounded I/O, replay consumption, fresh broker-owned control-state reads, and
+the effect transaction before this becomes a runtime enforcement contract.
 
 ```json
 {
-  "schema": "aragorn/response/v1",
-  "action": "ALLOW|BLOCK|TERMINATE|QUARANTINE|REVOKE|ISOLATE",
+  "schema": "aragorn/runtime-action-request/v1",
+  "authority": "RUNTIME_ACTION_REQUEST_ONLY_NOT_EFFECT_AUTHORITY",
+  "runtime_digest": "sha256:...",
+  "session_id": "...",
+  "run_id": "...",
+  "tool_call_id": "...",
+  "active_skill_digest": "sha256:...",
+  "operation_digest": "sha256:...",
+  "path_digest": "sha256:...",
+  "payload_digest": "sha256:...",
   "policy_digest": "sha256:...",
-  "reason_codes": ["NETWORK_DESTINATION_UNDECLARED"]
+  "policy_version": 1,
+  "issued_at_unix": 0,
+  "expires_at_unix": 1
 }
 ```
+
+```json
+{
+  "schema": "aragorn/runtime-action-decision/v1",
+  "authority": "RUNTIME_POLICY_DECISION_ONLY_NOT_EFFECT_OR_RUN_CONFORMANCE_AUTHORITY",
+  "request_digest": "sha256:...",
+  "active_context_digest": "sha256:...",
+  "measured_action_digest": "sha256:...",
+  "policy_digest": "sha256:...",
+  "policy_version": 1,
+  "evaluated_at_unix": 0,
+  "revocation_snapshot_digest": "sha256:...",
+  "revocation_generation": 1,
+  "minimum_revocation_generation": 1,
+  "mediator_health_digest": "sha256:...",
+  "mediator_health_epoch": 1,
+  "minimum_mediator_health_epoch": 1,
+  "verdict": "ALLOW|BLOCK",
+  "reason_codes": ["ACTION_NOT_ALLOWED"]
+}
+```
+
+`TERMINATE`, `QUARANTINE`, `REVOKE`, and `ISOLATE` remain later live response
+transactions; they are not aliases for this decision document.
 
 ## Analyzer subprocess protocol
 

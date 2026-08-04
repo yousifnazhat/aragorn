@@ -120,6 +120,19 @@ This is a bounded P3.0 harness observation only: it establishes neither general
 causal attribution nor an Aragorn policy decision, revocation, sensor health,
 `RUN-01`, `RUN-02`, Phase 3 exit, EDR, or public-release authority.
 
+The private P3.1 decision core now returns `ALLOW` only when an exact runtime,
+session, run, tool-call, active-skill, measured-action, short-lived request,
+runtime-scoped allow rule, revocation snapshot, and fresh policy-bound sensor
+identity all agree. Trusted monotonic floors reject revocation-generation and
+health-epoch rollback. Structurally invalid decoded requests return `BLOCK`,
+while malformed trusted state aborts evaluation so a caller cannot proceed.
+This is still decision-only: it has no socket framing or peer authentication,
+consumes no replay key, loads no protected live state, and performs no effect.
+It grants no `RUN-01`, `RUN-02`, Phase 3, EDR, or release authority. The next
+slice is one native optional OpenClaw tool connected to a separately privileged,
+fail-closed Unix-socket mediator while the runtime retains a read-only protected
+mount.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

@@ -60,6 +60,9 @@ from aragorn.admission_evidence_workshop import (
     verify_openclaw_update_reload_coverage_v3,
 )
 from aragorn.admission_gate import validate_retained_admission_conformance
+from aragorn.admission_protected_archive import (
+    verify_openclaw_protected_archive_replacement,
+)
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.admission_runtime_profile import (
     load_runtime_profile,
@@ -1704,6 +1707,51 @@ def main() -> int:
     )
     if qualification != retained_qualification:
         raise AssertionError("protected workshop qualification changed")
+
+    archive_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-archive-replacement-v2-2026-08-04.json",
+        protected_profile_path,
+        protected_profile_dir / "protected-archive-replacement-probe.mjs",
+        protected_profile_dir / "protected-route-config-v1.json",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase3-protected-archive-existing"
+        / "SKILL.md",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase3-protected-archive-replacement"
+        / "SKILL.md",
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-archive-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in archive_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        archive_qualification = verify_openclaw_protected_archive_replacement(
+            load(
+                admission_receipts
+                / "phase3-openclaw-protected-archive-replacement-v2-2026-08-04.json"
+            ),
+            evidence_cas=evidence_cas,
+            route_profile=load_runtime_profile(protected_profile_path.read_bytes()),
+            route_inventory=openclaw_route_inventory,
+            runtime_candidates=runtime_candidates,
+        )
+    retained_archive_qualification = load(
+        admission_receipts
+        / (
+            "phase3-openclaw-protected-archive-route-qualification-"
+            "v1-2026-08-04.json"
+        )
+    )
+    validators[
+        "admission-protected-archive-route-qualification-v1.schema.json"
+    ].validate(retained_archive_qualification)
+    if archive_qualification != retained_archive_qualification:
+        raise AssertionError("protected archive qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

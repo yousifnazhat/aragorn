@@ -324,6 +324,18 @@ undiscovered. The earlier writable-profile `FAIL` remains historical truth;
 the new route result does not promote aggregate admission, installer, Phase 3,
 EDR, or release authority.
 
+A second additive
+[protected-archive route qualification](./benchmark/receipts/phase3-openclaw-protected-archive-route-qualification-v1-2026-08-04.json)
+promotes only `ADM-02/update/archive-source-force-replacement` to route-level
+`PASS` for existing-target pre-effect denial in that exact profile. It binds
+the full pinned runtime tree before and after, a successful writable-target
+positive control for the valid inert directory source, the protected attempt's
+`EROFS` staging denial, and the unchanged existing target and discovery state.
+Both upload calls were disabled before ingest, so no archive bytes were
+ingested; this qualification covers the forced directory-source replacement
+denial, not archive parsing. Aggregate admission, installer, `RUN-01`,
+`RUN-02`, Phase 3, EDR, and release authority all remain false.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

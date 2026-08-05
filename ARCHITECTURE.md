@@ -418,6 +418,17 @@ proposal creation, `EROFS` apply denial, and unchanged absent/discovery state.
 It does not reinterpret the earlier writable-profile `FAIL`, promote aggregate
 `ADM-02`, or grant installer, Phase 3, EDR, or release authority.
 
+A second additive exact-profile verifier qualifies only
+`ADM-02/update/archive-source-force-replacement` as route-level `PASS` for
+existing-target pre-effect denial. It binds the full pinned runtime tree before
+and after, a successful writable-target positive control using the same valid
+inert directory source, the protected attempt's `EROFS` staging denial, and
+unchanged existing-target and discovery state. Uploaded archives were disabled
+before ingest, so no archive bytes were ingested and the result does not
+qualify archive parsing. Aggregate `ADM-02`, admission-profile and installer
+eligibility, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority remain
+false.
+
 The retention pre-gate re-verifies every referenced conformance-evidence blob
 from the protected CAS. This proves blob identity and availability, not the
 truth of individual scenario claims. Positive `PASS` remains

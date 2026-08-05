@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/admission-protected-archive-route-qualification-v1.schema.json",
+  "title": "Aragorn exact-profile protected archive route qualification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "bindings",
+    "decision",
+    "limitations",
+    "profile",
+    "route",
+    "runtime",
+    "source_recorded_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/admission-protected-archive-route-qualification/v1"
+    },
+    "assurance": {
+      "const": "SEMANTICALLY_VERIFIED_EXACT_PROFILE_EXISTING_TARGET_DENIAL"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configuration_digest",
+        "existing_target_digest",
+        "profile_digest",
+        "replacement_source_digest",
+        "runtime_tree_digest",
+        "shared_verifier_implementation_digest",
+        "source_evidence_digest",
+        "source_receipt_canonical_digest",
+        "verifier_implementation_digest"
+      ],
+      "properties": {
+        "configuration_digest": {"$ref": "#/$defs/digest"},
+        "existing_target_digest": {"$ref": "#/$defs/digest"},
+        "profile_digest": {"$ref": "#/$defs/digest"},
+        "replacement_source_digest": {"$ref": "#/$defs/digest"},
+        "runtime_tree_digest": {"$ref": "#/$defs/digest"},
+        "shared_verifier_implementation_digest": {"$ref": "#/$defs/digest"},
+        "source_evidence_digest": {"$ref": "#/$defs/digest"},
+        "source_receipt_canonical_digest": {"$ref": "#/$defs/digest"},
+        "verifier_implementation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "decision": {
+      "const": {
+        "admission_profile_eligible": false,
+        "installer_work_eligible": false,
+        "phase3_exit_eligible": false,
+        "status": "ROUTE_PASS"
+      }
+    },
+    "limitations": {
+      "const": [
+        "EXACT_PINNED_PROFILE_AND_SINGLE_CAPTURE_ONLY",
+        "ARCHIVE_UPLOAD_DISABLED_AND_DIRECTORY_FORCE_DENIED",
+        "ARCHIVE_BYTES_NOT_INGESTED_BECAUSE_UPLOADS_ARE_DISABLED",
+        "NATIVE_ROUTE_DENIAL_NOT_BROKER_MEDIATED",
+        "DOCKER_CONTROL_PLANE_NOT_INDEPENDENTLY_ATTESTED",
+        "OTHER_ADMISSION_ROUTES_NOT_QUALIFIED",
+        "NO_AGGREGATE_ADMISSION_OR_INSTALLER_AUTHORITY",
+        "PHASE3_RUN_AND_EDR_AUTHORITY_NOT_ESTABLISHED"
+      ]
+    },
+    "profile": {"const": "openclaw-2026.7.1-protected-consumer"},
+    "route": {
+      "const": {
+        "id": "ADM-02/update/archive-source-force-replacement",
+        "observed_outcome": "DENIED_PRE_EFFECT_EXISTING_TARGET_PRESERVED",
+        "status": "PASS"
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "name", "source_tree", "version"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "name": {"const": "openclaw-contained"},
+        "source_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "version": {"const": "2026.7.1"}
+      }
+    },
+    "source_recorded_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

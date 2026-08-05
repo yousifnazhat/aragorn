@@ -314,6 +314,16 @@ binds one hardened read-only-root profile to five `OBSERVED` actions and seven
 `NOT_TESTED` routes. It records no `PASS` or `FAIL`, grants no installer
 authority, and does not alter the cumulative conformance ledger.
 
+The additive
+[protected-workshop qualification](./benchmark/receipts/phase1-openclaw-protected-workshop-route-v1-2026-08-04.json)
+semantically replays that raw capture and promotes only
+`ADM-02/update/workshop-proposal-apply` to route-level `PASS` for the exact
+protected-consumer profile: the native apply reached the root-owned read-only
+workspace mount, failed with `EROFS`, and left the target absent and
+undiscovered. The earlier writable-profile `FAIL` remains historical truth;
+the new route result does not promote aggregate admission, installer, Phase 3,
+EDR, or release authority.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

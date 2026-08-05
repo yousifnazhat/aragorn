@@ -411,6 +411,13 @@ profile to five `OBSERVED` actions and seven `NOT_TESTED` routes. It records no
 conformance verdict, grants no installer authority, and does not alter the
 cumulative route ledger.
 
+An additive exact-profile verifier now qualifies only the protected native
+workshop apply as route-level `PASS`. It binds the retained source closure,
+all protected discovery mounts, unprivileged gateway identity, successful
+proposal creation, `EROFS` apply denial, and unchanged absent/discovery state.
+It does not reinterpret the earlier writable-profile `FAIL`, promote aggregate
+`ADM-02`, or grant installer, Phase 3, EDR, or release authority.
+
 The retention pre-gate re-verifies every referenced conformance-evidence blob
 from the protected CAS. This proves blob identity and availability, not the
 truth of individual scenario claims. Positive `PASS` remains

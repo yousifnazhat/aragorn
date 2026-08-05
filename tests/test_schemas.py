@@ -20,6 +20,7 @@ EXPECTED_CONTRACTS = {
     "admission-artifact-graph-v5.schema.json": "aragorn/admission-artifact-graph/v5",
     "admission-artifact-graph-v6.schema.json": "aragorn/admission-artifact-graph/v6",
     "admission-conformance-result-v1.schema.json": "aragorn/admission-conformance-result/v1",
+    "admission-protected-route-qualification-v1.schema.json": "aragorn/admission-protected-route-qualification/v1",
     "admission-runtime-candidate-lock-v1.schema.json": "aragorn/admission-runtime-candidate-lock/v1",
     "analyzer-request-v1.schema.json": "aragorn/analyzer-request/v1",
     "analyzer-request-v2.schema.json": "aragorn/analyzer-request/v2",

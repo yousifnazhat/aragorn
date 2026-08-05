@@ -61,6 +61,10 @@ from aragorn.admission_evidence_workshop import (
 )
 from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
+from aragorn.admission_runtime_profile import (
+    load_runtime_profile,
+    verify_openclaw_protected_workshop_route,
+)
 from aragorn.artifact_closure import resolve_source_graph
 from aragorn.behavior_capability_diff import derive_behavior_capability_diff
 from aragorn.benchmark import evaluate_files
@@ -1658,6 +1662,48 @@ def main() -> int:
             / "openclaw-v2026.7.1-broker-symlink-live-switch-2026-07-29.json"
         )
     )
+    protected_profile_dir = (
+        ROOT / "benchmark" / "admission" / "openclaw-v2026.7.1"
+    )
+    protected_profile_path = (
+        protected_profile_dir / "protected-consumer-profile-v1.json"
+    )
+    protected_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-route-actions-v5-2026-07-29.json",
+        protected_profile_path,
+        protected_profile_dir / "protected-route-probe.mjs",
+        protected_profile_dir / "protected-route-config-v1.json",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase1-protected-workshop"
+        / "PROPOSAL.md",
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-workshop-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in protected_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        qualification = verify_openclaw_protected_workshop_route(
+            load(
+                admission_receipts
+                / "phase1-openclaw-protected-route-actions-v5-2026-07-29.json"
+            ),
+            evidence_cas=evidence_cas,
+            route_profile=load_runtime_profile(protected_profile_path.read_bytes()),
+            route_inventory=openclaw_route_inventory,
+            runtime_candidates=runtime_candidates,
+        )
+    retained_qualification = load(
+        admission_receipts
+        / "phase1-openclaw-protected-workshop-route-v1-2026-08-04.json"
+    )
+    validators["admission-protected-route-qualification-v1.schema.json"].validate(
+        retained_qualification
+    )
+    if qualification != retained_qualification:
+        raise AssertionError("protected workshop qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

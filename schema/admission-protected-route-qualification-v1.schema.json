@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/admission-protected-route-qualification-v1.schema.json",
+  "title": "Aragorn exact-profile protected admission route qualification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "bindings",
+    "decision",
+    "limitations",
+    "profile",
+    "route",
+    "runtime",
+    "source_recorded_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/admission-protected-route-qualification/v1"
+    },
+    "assurance": {
+      "const": "SEMANTICALLY_VERIFIED_EXACT_PROFILE_PRE_EFFECT_DENIAL"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configuration_digest",
+        "profile_digest",
+        "proposal_digest",
+        "source_evidence_digest",
+        "source_receipt_canonical_digest",
+        "verifier_implementation_digest"
+      ],
+      "properties": {
+        "configuration_digest": {"$ref": "#/$defs/digest"},
+        "profile_digest": {"$ref": "#/$defs/digest"},
+        "proposal_digest": {"$ref": "#/$defs/digest"},
+        "source_evidence_digest": {"$ref": "#/$defs/digest"},
+        "source_receipt_canonical_digest": {"$ref": "#/$defs/digest"},
+        "verifier_implementation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "decision": {
+      "const": {
+        "admission_profile_eligible": false,
+        "installer_work_eligible": false,
+        "phase3_exit_eligible": false,
+        "status": "ROUTE_PASS"
+      }
+    },
+    "limitations": {
+      "const": [
+        "EXACT_PINNED_PROFILE_AND_CAPTURE_ONLY",
+        "NATIVE_WORKSHOP_ROUTE_DENIED_NOT_BROKER_MEDIATED",
+        "RAW_VM_ENVIRONMENT_NOT_INDEPENDENTLY_ATTESTED",
+        "OTHER_ADMISSION_ROUTES_NOT_QUALIFIED",
+        "NO_AGGREGATE_ADMISSION_OR_INSTALLER_AUTHORITY",
+        "PHASE3_RUN_AND_EDR_AUTHORITY_NOT_ESTABLISHED"
+      ]
+    },
+    "profile": {"const": "openclaw-2026.7.1-protected-consumer"},
+    "route": {
+      "const": {
+        "id": "ADM-02/update/workshop-proposal-apply",
+        "observed_outcome": "DENIED_PRE_EFFECT",
+        "status": "PASS"
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "name", "source_tree", "version"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "name": {"const": "openclaw-contained"},
+        "source_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "version": {"const": "2026.7.1"}
+      }
+    },
+    "source_recorded_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

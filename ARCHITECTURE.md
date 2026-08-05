@@ -703,6 +703,19 @@ and rejects repinned boundary mutations. This profile establishes neither
 causal skill attribution nor broader action coverage, and `RUN-01`, `RUN-02`,
 Phase 3 exit, EDR, and release remain false or incomplete.
 
+P3.3d retains a versioned live-revocation capture for the same OpenClaw create
+route. A single healthy control publication adds the pinned active deployment
+digest between distinct allowed and revoked requests. The revoked request is
+bound to that exact publication digest and generation and returns only
+`ACTIVE_SKILL_REVOKED` / `BLOCK` / `NOT_PERFORMED`; protected-target and
+staging snapshots remain unchanged, and broker/sensor process, socket, and
+`SO_PEERCRED` identities remain stable. The child image runs by captured ID and
+retains the exact P3.3c parent-layer prefix. The semantic verifier is
+[`aragorn.runtime_action_openclaw_revocation_evidence`](./src/aragorn/runtime_action_openclaw_revocation_evidence.py).
+Because publication is evaluator-operated and attribution remains a deployment
+pin rather than causally derived runtime identity, this does not promote
+`RUN-02`, Phase 3, EDR, or release authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

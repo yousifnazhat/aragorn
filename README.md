@@ -209,6 +209,18 @@ mutations. This bounded milestone does not establish causal skill attribution
 or broader action coverage; `RUN-01`, `RUN-02`, Phase 3 exit, EDR, and release
 remain false or incomplete.
 
+P3.3d adds [retained live-revocation evidence](./benchmark/evidence/runtime-action-openclaw-live-revocation-p3-3d-2026-08-05.json)
+for that exact create route. One healthy allowed request establishes an
+actionable baseline; one later publication adds the pinned active skill digest,
+and a distinct native OpenClaw request returns exactly
+`ACTIVE_SKILL_REVOKED` / `BLOCK` / `NOT_PERFORMED`. The capture binds the
+publication digest and generation to the decision and broker floor, retains
+unchanged protected-target and staging snapshots, and records stable service,
+socket, and peer identities. The semantic verifier is
+[`aragorn.runtime_action_openclaw_revocation_evidence`](./src/aragorn/runtime_action_openclaw_revocation_evidence.py).
+Publication is evaluator-operated rather than authenticated production ingress,
+so `RUN-02`, Phase 3 exit, EDR, and release eligibility remain false.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

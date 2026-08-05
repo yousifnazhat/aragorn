@@ -1,0 +1,55 @@
+[Unit]
+Description=Aragorn bounded runtime-profile client fixture
+After=aragorn-runtime-profile-observation-publisher.service
+Requires=aragorn-runtime-profile-observation-publisher.service
+ConditionPathExists=/run/aragorn-runtime-profile-request.json
+
+[Service]
+Type=simple
+User=aragorn-runtime
+Group=aragorn-runtime
+ExecStart=/bin/sh -c 'while [ ! -e /run/aragorn-runtime-profile-go ]; do sleep 0.05; done; exec /usr/bin/python3.12 -I -S -B /src/scripts/runtime_process_profile_systemd_probe.py client /run/aragorn-runtime-profile-request.json'
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+TimeoutStartSec=5s
+TimeoutStopSec=5s
+KillMode=control-group
+TasksMax=2
+MemoryMax=128M
+MemorySwapMax=0
+LimitNOFILE=32
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=yes
+AmbientCapabilities=
+CapabilityBoundingSet=
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/var/lib/aragorn-runtime-action
+ReadOnlyPaths=/run/aragorn-runtime-profile-request.json
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock

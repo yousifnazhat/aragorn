@@ -221,6 +221,24 @@ socket, and peer identities. The semantic verifier is
 Publication is evaluator-operated rather than authenticated production ingress,
 so `RUN-02`, Phase 3 exit, EDR, and release eligibility remain false.
 
+P3.4a adds [retained synthetic Linux process-profile evidence](./benchmark/evidence/runtime-process-profile-systemd-composition-p3-4a-2026-08-05.json)
+for the create route. The sensor authenticates the runtime socket peer, pins its
+PID, and measures an exact single-process cgroup, capability-free identity,
+mount namespace, root-owned executable digest, and one root-owned immutable
+`SKILL.md`. Its transient filesystem-identity capabilities are absent from all
+capability sets before the first request is accepted. The broker durably binds
+that attribution to its result and fails closed on an unresolved pending
+record. The retained receipt is latest-only for this single-action slice, and
+the before/after snapshots are not continuous exec or per-message writer
+attestation. The retained allow case is `ALLOW` / `CREATED`; a wrong-cgroup peer is
+closed before broker state or protected files change. Source-to-installed
+artifact equality, the exact P3.3b base image, loaded units, service commands,
+and collector inputs are retained and checked by
+[`aragorn.runtime_process_profile_systemd_evidence`](./src/aragorn/runtime_process_profile_systemd_evidence.py).
+This is a synthetic root-provisioned one-skill profile, not proof that OpenClaw
+consumed the skill or that the skill caused the action. `RUN-01`, `RUN-02`,
+Phase 3 exit, EDR, and release eligibility remain false.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

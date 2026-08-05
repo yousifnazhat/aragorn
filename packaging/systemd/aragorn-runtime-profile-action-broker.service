@@ -1,0 +1,74 @@
+[Unit]
+Description=Aragorn profile-attributing runtime action broker
+After=local-fs.target nss-user-lookup.target
+Conflicts=aragorn-runtime-action-broker.service
+RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected /var/lib/aragorn-runtime-action/staging
+ConditionPathExists=/etc/aragorn/runtime-action-runtime.json
+ConditionPathExists=/var/lib/aragorn-runtime-action/control/policy.json
+ConditionPathExists=/var/lib/aragorn-runtime-action/control/revocations.json
+ConditionPathExists=/var/lib/aragorn-runtime-action/control/health.json
+ConditionPathExists=/var/lib/aragorn-runtime-action/control/observation.json
+ConditionPathExists=/var/lib/aragorn-runtime-action/control/state.json
+
+[Service]
+Type=simple
+User=aragorn-broker
+Group=aragorn-runtime
+SupplementaryGroups=aragorn-sensor
+LoadCredential=runtime-binding:/etc/aragorn/runtime-action-runtime.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service-v2.py %d/runtime-binding
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+Restart=on-failure
+RestartSec=1s
+TimeoutStartSec=5s
+TimeoutStopSec=5s
+KillMode=control-group
+KillSignal=SIGINT
+TasksMax=2
+MemoryMax=256M
+MemorySwapMax=0
+LimitNOFILE=64
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-runtime-profile-action-broker
+
+NoNewPrivileges=yes
+AmbientCapabilities=
+CapabilityBoundingSet=
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/etc/aragorn/runtime-action-runtime.json
+ReadWritePaths=/var/lib/aragorn-runtime-action
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock
+
+[Install]
+WantedBy=multi-user.target

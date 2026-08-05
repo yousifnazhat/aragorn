@@ -716,6 +716,30 @@ Because publication is evaluator-operated and attribution remains a deployment
 pin rather than causally derived runtime identity, this does not promote
 `RUN-02`, Phase 3, EDR, or release authority.
 
+P3.4a replaces the caller-declared active-skill deployment pin on one synthetic
+create path with a root-provisioned process profile. After authenticating the
+Unix socket peer, the sensor pins its PID and derives the exact single-process
+cgroup, UID/GID and empty capability sets, start time, mount namespace,
+root-owned executable digest, and one immutable root-owned `SKILL.md` through
+the peer filesystem view. The sensor adopts the runtime filesystem UID/GID
+with three transient bootstrap capabilities, irreversibly clears every
+capability set and bounding entry before `accept()`, and retains no broker,
+control, staging, or protected write authority. The broker validates the v2
+attribution before entering the source-frozen v1 mediation path, fsyncs a
+profile-pending record before mediation, fsyncs a result-bound profile receipt
+before removing it, and refuses startup or another request while an unresolved
+pending record exists. The receipt is latest-only for this single-action slice;
+the paired process snapshots are not continuous exec or per-message writer
+attestation.
+
+The retained P3.4a systemd capture pins the exact P3.3b base image, proves
+source-to-installed byte equality, and records one `ALLOW` / `CREATED` receipt
+plus a wrong-cgroup pre-broker rejection with unchanged control and effect
+state. Its semantic verifier rejects boundary and claim mutations. The client
+and skill are synthetic and root-provisioned; no OpenClaw skill consumption or
+semantic causation is established. Broader action/event coverage, `RUN-01`,
+`RUN-02`, Phase 3, EDR, and release authority remain incomplete.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

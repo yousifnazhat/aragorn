@@ -750,6 +750,34 @@ exact root-owned skill is projected into the runtime prompt, but this proves
 prompt projection only, not semantic causation. It grants no `RUN-01`,
 `RUN-02`, Phase 3 exit, EDR, or release evidence.
 
+P3.5a adds a source-additive v3 authority wrapper without modifying the
+retained v1/v2 broker, observation publisher, or P3.4b closure. One canonical
+lease binds the exact v2 request digest, which transitively fixes its session,
+run, tool-call, operation, path, payload, policy, issue time, and expiry. It
+also binds the process-profile, runtime, active-skill, sensor, policy, and
+action digests explicitly. Under the existing shared broker lock, v3 removes
+any stale latest-only profile receipt and fsyncs one exact `CLAIMED` state
+before releasing the lock and invoking `mediate_profiled_runtime_create()`.
+Concurrent or replayed claims block before v2. Completion requires the exact
+new v2 profile receipt, request, attribution, target, result, and digest
+bindings; recovery may promote that receipt to `CONSUMED` and remove only the
+exact matching v2 pending record, but it never retries or reauthorizes the
+effect.
+
+The v3 service consumes separate systemd runtime-binding and capability-lease
+credentials. Its fresh installer stages the v2 implementation dependencies but
+no v1/v2 broker or sensor unit. The explicit activation transition stops,
+disables, and masks any previously installed v1/v2 route before enabling v3;
+the live composition must still prove those effective unit states. A
+`CLAIMED` state with no exact receipt remains fail-stop in this bounded slice,
+including when the underlying v2 failure was known pre-effect. That preserves
+one-shot safety but is manual-recovery-only availability, not the future lease
+manager. The exact request is dynamic in OpenClaw, so a trusted pre-effect
+issuer/redeemer composition and retained live evidence remain P3.5a work. Unit
+and static tests establish neither semantic model causation, broader action
+coverage, aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, nor release
+authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.
@@ -776,6 +804,13 @@ REQUESTED
   -> STARTING_CONFINED
   -> ACTIVE_MONITORED
   -> STOPPED | QUARANTINED | REVOKED
+
+One-shot capability:
+
+PROVISIONED
+  -> ISSUED
+  -> CLAIMED
+  -> CONSUMED
 ```
 
 Rules:
@@ -785,6 +820,9 @@ Rules:
 - `ERROR` and incomplete required closure never become `APPROVED`.
 - A missing sensor heartbeat suspends protected operations and moves high-risk execution toward quarantine.
 - Revocation blocks future starts and terminates or isolates active instances within a published response deadline.
+- A claimed one-shot capability never returns to `ISSUED`; absent exact
+  completion evidence, the route remains fail-stop rather than retrying an
+  effect.
 
 ## Implemented stable data contracts
 

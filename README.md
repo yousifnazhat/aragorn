@@ -248,6 +248,21 @@ exact root-owned skill is projected into the pinned runtime prompt, but this is
 prompt-projection evidence only, not semantic causation. It grants no
 `RUN-01`, `RUN-02`, Phase 3 exit, EDR, or release evidence.
 
+P3.5a now has an additive, unit-qualified one-shot capability core. A canonical
+lease binds the exact request digest—therefore its run, session, tool-call,
+action, policy, and lifetime fields—plus the measured process profile, runtime,
+active-skill, sensor, and action digests. The v3 broker fsyncs `CLAIMED` before
+calling the unchanged v2 broker-owned create route, consumes the lease only
+from the exact new v2 profile receipt, and never restores `ISSUED`. Exact-receipt
+crash recovery never retries the effect. An unresolved claim without that
+receipt remains deliberately fail-stop and requires operator remediation. The
+fresh v3 installer does not stage a legacy broker unit, and its separate
+activation command stops, disables, and masks previously installed v1/v2
+routes before starting v3. This checkpoint is unit/static exercised only: a
+pre-effect issuer still has to bind OpenClaw's dynamically generated exact
+request before live composition. It grants no aggregate `RUN-01`, `RUN-02`,
+Phase 3 exit, EDR, or release evidence.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

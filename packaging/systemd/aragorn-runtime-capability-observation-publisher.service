@@ -1,0 +1,72 @@
+[Unit]
+Description=Aragorn capability-attributing runtime observation publisher
+After=local-fs.target nss-user-lookup.target aragorn-runtime-capability-action-broker.service
+Requires=aragorn-runtime-capability-action-broker.service
+Conflicts=aragorn-runtime-observation-publisher.service aragorn-runtime-profile-observation-publisher.service
+RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected
+ConditionPathExists=/etc/aragorn/runtime-action-observation.json
+
+[Service]
+Type=simple
+User=aragorn-sensor
+Group=aragorn-sensor
+SupplementaryGroups=aragorn-runtime
+RuntimeDirectory=aragorn-runtime-observation
+RuntimeDirectoryMode=0750
+LoadCredential=observation-binding:/etc/aragorn/runtime-action-observation.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v2.py %d/observation-binding
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+Restart=on-failure
+RestartSec=1s
+TimeoutStartSec=5s
+TimeoutStopSec=5s
+KillMode=control-group
+KillSignal=SIGINT
+TasksMax=2
+MemoryMax=256M
+MemorySwapMax=0
+LimitNOFILE=64
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-runtime-capability-observation-publisher
+
+NoNewPrivileges=yes
+AmbientCapabilities=CAP_SETGID CAP_SETUID CAP_SETPCAP
+CapabilityBoundingSet=CAP_SETGID CAP_SETUID CAP_SETPCAP
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=default
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/etc/aragorn/runtime-action-observation.json /var/lib/aragorn-runtime-action/staging
+ReadOnlyPaths=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock ptrace process_vm_readv process_vm_writev kcmp
+
+[Install]
+WantedBy=multi-user.target

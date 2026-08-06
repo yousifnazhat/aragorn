@@ -1,0 +1,61 @@
+[Unit]
+Description=Aragorn bounded profiled OpenClaw gateway fixture
+ConditionPathExists=/etc/aragorn/openclaw-profile/openclaw.json
+ConditionPathExists=/runtime/lib/node_modules/openclaw/openclaw.mjs
+
+[Service]
+Type=simple
+User=aragorn-runtime
+Group=aragorn-runtime
+ExecStart=/usr/local/bin/node /runtime/lib/node_modules/openclaw/openclaw.mjs gateway run --allow-unconfigured --auth token --bind loopback --port 18789 --tailscale off --ws-log full
+WorkingDirectory=/var/lib/aragorn-openclaw-profile/workspace
+Environment=HOME=/var/lib/aragorn-openclaw-profile/home
+Environment=LANG=C LC_ALL=C NO_COLOR=1 NO_PROXY=127.0.0.1,localhost OPENCLAW_CONFIG_PATH=/etc/aragorn/openclaw-profile/openclaw.json OPENCLAW_GATEWAY_TOKEN=aragorn-p34b-gateway-token-v1 OPENCLAW_STATE_DIR=/var/lib/aragorn-openclaw-profile/state PATH=/usr/local/bin:/usr/bin:/bin TZ=UTC
+UMask=0077
+TimeoutStartSec=30s
+TimeoutStopSec=10s
+KillMode=control-group
+KillSignal=SIGTERM
+TasksMax=128
+MemoryMax=1G
+MemorySwapMax=0
+LimitNOFILE=256
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-openclaw-profile
+
+NoNewPrivileges=yes
+AmbientCapabilities=
+CapabilityBoundingSet=
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/staging
+ReadOnlyPaths=/etc/aragorn/openclaw-profile /opt/aragorn/openclaw /opt/aragorn/runtime-profile /runtime
+ReadOnlyPaths=/var/lib/aragorn-runtime-action/protected
+ReadWritePaths=/var/lib/aragorn-openclaw-profile
+RemoveIPC=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+KeyringMode=private
+IPAddressAllow=localhost
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock ptrace process_vm_readv process_vm_writev kcmp

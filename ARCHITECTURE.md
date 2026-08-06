@@ -740,6 +740,16 @@ and skill are synthetic and root-provisioned; no OpenClaw skill consumption or
 semantic causation is established. Broader action/event coverage, `RUN-01`,
 `RUN-02`, Phase 3, EDR, and release authority remain incomplete.
 
+P3.4b composes that process profile with the pinned OpenClaw runtime. Its
+[retained systemd capture](./benchmark/evidence/runtime-process-profile-openclaw-systemd-composition-p3-4b-2026-08-05.json),
+with canonical evidence digest
+`sha256:2cf59377917cea1461179c3a364cdfe07cdc69181eb1538abebea908954dda9c`,
+observes one synthetic protected create through the gateway `MainPID`,
+`SO_PEERCRED`, profile sensor, and broker, ending in `ALLOW` / `CREATED`. The
+exact root-owned skill is projected into the runtime prompt, but this proves
+prompt projection only, not semantic causation. It grants no `RUN-01`,
+`RUN-02`, Phase 3 exit, EDR, or release evidence.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

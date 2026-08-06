@@ -239,6 +239,15 @@ This is a synthetic root-provisioned one-skill profile, not proof that OpenClaw
 consumed the skill or that the skill caused the action. `RUN-01`, `RUN-02`,
 Phase 3 exit, EDR, and release eligibility remain false.
 
+P3.4b adds [retained pinned OpenClaw/systemd process-profile evidence](./benchmark/evidence/runtime-process-profile-openclaw-systemd-composition-p3-4b-2026-08-05.json)
+with canonical evidence digest
+`sha256:2cf59377917cea1461179c3a364cdfe07cdc69181eb1538abebea908954dda9c`.
+It observes one synthetic protected create through the gateway `MainPID`,
+`SO_PEERCRED`, profile sensor, and broker, ending in `ALLOW` / `CREATED`. The
+exact root-owned skill is projected into the pinned runtime prompt, but this is
+prompt-projection evidence only, not semantic causation. It grants no
+`RUN-01`, `RUN-02`, Phase 3 exit, EDR, or release evidence.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

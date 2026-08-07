@@ -309,6 +309,35 @@ is local process evidence, not durable provenance. The semantic verifier is
 This closes only the bounded P3.5b composition slice and does not establish
 aggregate `RUN-02`, Phase 3 exit, EDR, installer, or release authority.
 
+P3.6a adds a live protected-install lineage gate to the one-shot capability
+route. The protected-install primitive now publishes a canonical active
+transaction record under its exclusive root lock after verifying the active
+link and immutable version. The additive v4 sensor and v5 broker independently
+remeasure that record, its root and active-link identities, the exact version,
+and one root-owned `SKILL.md`; they bind the reconstructed tree, context,
+manifest, and skill digests to the grant and hold a shared installer lock
+through capability issuance and effect mediation. The production ingress
+requires PASS evidence to match the exact returned transaction bytes, and the
+activator masks the prior capability units before enabling only the lineage
+route.
+[Retained pinned OpenClaw/systemd lineage evidence](./benchmark/evidence/runtime-active-lineage-openclaw-systemd-composition-p3-6a-2026-08-07.json),
+with canonical evidence digest
+`sha256:5c48201f3273dc4597e0e387f2873d6cf93940a645d6a528344c4aa9e2f7e1bd`,
+observes a stale record fail before broker submission: OpenClaw conservatively
+returns `CLIENT_ERROR` / `INDETERMINATE` because bytes reached the sensor
+frontend, while the empty broker peer trace, unchanged control state,
+`AVAILABLE` grant, and absent target, pending record, and receipt prove no
+broker submission or effect in this fixture. After restoring a coherent record
+and restarting only the pinned gateway for fixture sequencing, the same bound
+grant produces one `ALLOW` / `CREATED` action and becomes `CONSUMED`. The
+semantic verifier is
+[`aragorn.runtime_active_lineage_openclaw_systemd_evidence`](./src/aragorn/runtime_active_lineage_openclaw_systemd_evidence.py).
+The protected tree in this capture is root-assembled rather than produced by
+the full protected-install service. It proves neither semantic causation nor
+multi-file or broader-action coverage, hostile-root resistance, aggregate
+`RUN-01` or `RUN-02`, Phase 3 exit, EDR status, installer authority, or release
+authority.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

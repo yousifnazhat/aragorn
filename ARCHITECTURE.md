@@ -845,6 +845,45 @@ P3.5b is therefore closed only for this one local create slice; aggregate
 `RUN-02`, Phase 3 exit, EDR status, installer authority, and release authority
 remain false.
 
+P3.6a closes the next bounded dependency: the capability route now consumes a
+live, lock-stable protected-install transaction instead of relying only on
+root-provisioned digest claims. The protected installer atomically replaces
+`.aragorn-active-runtime.json` after active-link and version verification while
+holding the existing exclusive root lock. Both protected-install producers
+accept the record during verified legacy-to-record updates but require its
+canonical bytes to equal the returned transaction before reporting PASS.
+
+The additive v4 sensor verifies the record, destination root identity, active
+symlink, exact immutable version, and single `SKILL.md` tree before reading a
+request. It repeats the measurement under a shared root lock and holds that
+lock across capability issuance and the broker round trip. The additive v5
+broker rejects the old unwrapped issuance, independently repeats the same live
+measurement, compares it with the sensor snapshot, and holds its own shared
+lock while the unchanged v4 grant broker claims, mediates, and consumes the
+one-shot action. A cleanup failure after `CREATED` remains effect-indeterminate;
+it is never downcast to a pre-effect failure. Fresh installation stages only
+the v4/v5 lineage units, and activation masks all prior v1 through P3.5
+sensor/broker routes.
+
+The [retained P3.6a OpenClaw/systemd capture](./benchmark/evidence/runtime-active-lineage-openclaw-systemd-composition-p3-6a-2026-08-07.json),
+with canonical evidence digest
+`sha256:5c48201f3273dc4597e0e387f2873d6cf93940a645d6a528344c4aa9e2f7e1bd`,
+uses exact P3.5b parent image
+`sha256:730b451086b74a4de9a0e5a335a7ded8ff5f1071dea8f1302afd56a38d06be9d`.
+For the stale record, client bytes reach the sensor frontend and OpenClaw
+conservatively reports `CLIENT_ERROR` / `INDETERMINATE`, but the sensor rejects
+the lineage before contacting v5; an empty broker peer trace, unchanged broker
+state, `AVAILABLE` grant, and absent effect artifacts prove no broker submission
+in this fixture. After a bounded gateway restart for fixture sequencing, the
+coherent record yields one `ALLOW` / `CREATED` action and a `CONSUMED` grant.
+The semantic verifier is
+[`aragorn.runtime_active_lineage_openclaw_systemd_evidence`](./src/aragorn/runtime_active_lineage_openclaw_systemd_evidence.py)
+and rejects repinned parent, lineage, grant, stale-state, effect, and claim-ceiling
+mutations. The protected tree is root-assembled, not full producer composition;
+semantic causation, multi-file and broader-action coverage, hostile root and
+power-loss qualification, aggregate `RUN-01` / `RUN-02`, Phase 3 exit, EDR,
+installer, and release authority all remain unestablished.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

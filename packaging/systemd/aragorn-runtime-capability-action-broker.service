@@ -1,10 +1,10 @@
 [Unit]
-Description=Aragorn one-shot capability-attributing runtime action broker
+Description=Aragorn root-grant runtime capability redeemer
 After=local-fs.target nss-user-lookup.target
 Conflicts=aragorn-runtime-action-broker.service aragorn-runtime-profile-action-broker.service
 RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected /var/lib/aragorn-runtime-action/staging
 ConditionPathExists=/etc/aragorn/runtime-action-runtime.json
-ConditionPathExists=/etc/aragorn/runtime-capability-lease.json
+ConditionPathExists=/etc/aragorn/runtime-capability-grant.json
 ConditionPathExists=/var/lib/aragorn-runtime-action/control/policy.json
 ConditionPathExists=/var/lib/aragorn-runtime-action/control/revocations.json
 ConditionPathExists=/var/lib/aragorn-runtime-action/control/health.json
@@ -17,8 +17,8 @@ User=aragorn-broker
 Group=aragorn-runtime
 SupplementaryGroups=aragorn-sensor
 LoadCredential=runtime-binding:/etc/aragorn/runtime-action-runtime.json
-LoadCredential=capability-lease:/etc/aragorn/runtime-capability-lease.json
-ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service-v3.py %d/runtime-binding %d/capability-lease
+LoadCredential=capability-grant:/etc/aragorn/runtime-capability-grant.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service-v4.py %d/runtime-binding %d/capability-grant
 WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
@@ -57,7 +57,7 @@ ProtectKernelTunables=yes
 ProtectProc=invisible
 ProtectSystem=strict
 ProcSubset=pid
-InaccessiblePaths=/etc/aragorn/runtime-action-runtime.json /etc/aragorn/runtime-capability-lease.json
+InaccessiblePaths=/etc/aragorn/runtime-action-runtime.json /etc/aragorn/runtime-capability-grant.json
 ReadWritePaths=/var/lib/aragorn-runtime-action
 RemoveIPC=yes
 RestrictAddressFamilies=AF_UNIX

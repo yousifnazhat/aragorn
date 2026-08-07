@@ -14,6 +14,15 @@ install -d -m 0755 \
     "$destdir/usr/lib/systemd/system" \
     "$destdir/usr/lib/sysusers.d" \
     "$destdir/usr/lib/tmpfiles.d"
+for obsolete_shim in \
+    aragorn-runtime-action-service.py \
+    aragorn-runtime-action-service-v2.py \
+    aragorn-runtime-action-service-v3.py \
+    aragorn-runtime-observation-service.py \
+    aragorn-runtime-observation-service-v2.py
+do
+    rm -f -- "$destdir/usr/libexec/aragorn/$obsolete_shim"
+done
 install -m 0644 \
     "$root/src/aragorn/__init__.py" \
     "$root/src/aragorn/oci_worker_protocol.py" \
@@ -28,12 +37,16 @@ install -m 0644 \
     "$root/src/aragorn/runtime_action_service_v2.py" \
     "$root/src/aragorn/runtime_observation_service_v2.py" \
     "$root/src/aragorn/runtime_action_broker_v3.py" \
-    "$root/src/aragorn/runtime_action_service_v3.py" \
+    "$root/src/aragorn/runtime_capability_grant.py" \
+    "$root/src/aragorn/runtime_action_observation_publisher_v3.py" \
+    "$root/src/aragorn/runtime_action_broker_v4.py" \
+    "$root/src/aragorn/runtime_action_service_v4.py" \
+    "$root/src/aragorn/runtime_observation_service_v3.py" \
     "$destdir/usr/lib/aragorn/aragorn/"
 install -m 0755 \
     "$root/packaging/activate-runtime-capability-host.sh" \
-    "$root/packaging/libexec/aragorn-runtime-action-service-v3.py" \
-    "$root/packaging/libexec/aragorn-runtime-observation-service-v2.py" \
+    "$root/packaging/libexec/aragorn-runtime-action-service-v4.py" \
+    "$root/packaging/libexec/aragorn-runtime-observation-service-v3.py" \
     "$destdir/usr/libexec/aragorn/"
 install -m 0644 \
     "$root/packaging/systemd/aragorn-gateway.sysusers" \

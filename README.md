@@ -248,20 +248,31 @@ exact root-owned skill is projected into the pinned runtime prompt, but this is
 prompt-projection evidence only, not semantic causation. It grants no
 `RUN-01`, `RUN-02`, Phase 3 exit, EDR, or release evidence.
 
-P3.5a now has an additive, unit-qualified one-shot capability core. A canonical
-lease binds the exact request digest—therefore its run, session, tool-call,
-action, policy, and lifetime fields—plus the measured process profile, runtime,
-active-skill, sensor, and action digests. The v3 broker fsyncs `CLAIMED` before
-calling the unchanged v2 broker-owned create route, consumes the lease only
-from the exact new v2 profile receipt, and never restores `ISSUED`. Exact-receipt
-crash recovery never retries the effect. An unresolved claim without that
-receipt remains deliberately fail-stop and requires operator remediation. The
-fresh v3 installer does not stage a legacy broker unit, and its separate
-activation command stops, disables, and masks previously installed v1/v2
-routes before starting v3. This checkpoint is unit/static exercised only: a
-pre-effect issuer still has to bind OpenClaw's dynamically generated exact
-request before live composition. It grants no aggregate `RUN-01`, `RUN-02`,
-Phase 3 exit, EDR, or release evidence.
+P3.5a now has an additive, unit-qualified dynamic one-shot capability path. A
+canonical root-provisioned grant binds caller-supplied source-manifest and
+install-context digests plus the process profile, runtime, active skill, sensor,
+policy, and operation, with `max_actions` fixed to one. After authenticating the
+runtime, measuring its process profile before and after the request,
+constructing the exact profiled submission, authenticating the broker, and
+measuring the unchanged profile once more, the v3 sensor issues a short-lived
+random-nonce lease over that complete submission. The lease exists only on the
+sensor-to-broker channel. The v4 broker independently
+validates the identical grant credential, lease, submission, dynamic timing,
+and sensor peer, then keys durable `AVAILABLE` / `CLAIMED` / `CONSUMED` or
+`ABANDONED` state by the stable grant digest before calling the unchanged v2
+effect route. The exact lease is retained inside the claim, a fresh nonce cannot
+reopen the grant, and exact-receipt recovery never retries the effect. A known
+pre-effect broker failure becomes non-reopenable `ABANDONED`; an indeterminate
+attempt without an exact receipt remains `CLAIMED`, fail-stop, and requires
+operator remediation. Replacing a terminal grant first archives its exact state
+and, for `CONSUMED`, its bound profile receipt as immutable evidence; that state
+archive is also a permanent replay tombstone for the grant digest.
+The installer stages only the dynamic capability units; activation masks every
+legacy v1/v2 route. This remains unit/static evidence: retained live
+OpenClaw/systemd composition and effective unit-state proof are still required.
+The root-provisioned provenance digests are bindings, not independently promoted
+installer authority. This grants no aggregate `RUN-01`, `RUN-02`, Phase 3 exit,
+EDR, or release evidence.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

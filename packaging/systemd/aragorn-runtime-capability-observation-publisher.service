@@ -5,6 +5,7 @@ Requires=aragorn-runtime-capability-action-broker.service
 Conflicts=aragorn-runtime-observation-publisher.service aragorn-runtime-profile-observation-publisher.service
 RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected
 ConditionPathExists=/etc/aragorn/runtime-action-observation.json
+ConditionPathExists=/etc/aragorn/runtime-capability-grant.json
 
 [Service]
 Type=simple
@@ -14,7 +15,8 @@ SupplementaryGroups=aragorn-runtime
 RuntimeDirectory=aragorn-runtime-observation
 RuntimeDirectoryMode=0750
 LoadCredential=observation-binding:/etc/aragorn/runtime-action-observation.json
-ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v2.py %d/observation-binding
+LoadCredential=capability-grant:/etc/aragorn/runtime-capability-grant.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v3.py %d/observation-binding %d/capability-grant
 WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
@@ -53,7 +55,7 @@ ProtectKernelTunables=yes
 ProtectProc=default
 ProtectSystem=strict
 ProcSubset=pid
-InaccessiblePaths=/etc/aragorn/runtime-action-observation.json /var/lib/aragorn-runtime-action/staging
+InaccessiblePaths=/etc/aragorn/runtime-action-observation.json /etc/aragorn/runtime-capability-grant.json /var/lib/aragorn-runtime-action/staging
 ReadOnlyPaths=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected
 RemoveIPC=yes
 RestrictAddressFamilies=AF_UNIX

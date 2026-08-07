@@ -750,31 +750,51 @@ exact root-owned skill is projected into the runtime prompt, but this proves
 prompt projection only, not semantic causation. It grants no `RUN-01`,
 `RUN-02`, Phase 3 exit, EDR, or release evidence.
 
-P3.5a adds a source-additive v3 authority wrapper without modifying the
-retained v1/v2 broker, observation publisher, or P3.4b closure. One canonical
-lease binds the exact v2 request digest, which transitively fixes its session,
-run, tool-call, operation, path, payload, policy, issue time, and expiry. It
-also binds the process-profile, runtime, active-skill, sensor, policy, and
-action digests explicitly. Under the existing shared broker lock, v3 removes
-any stale latest-only profile receipt and fsyncs one exact `CLAIMED` state
-before releasing the lock and invoking `mediate_profiled_runtime_create()`.
-Concurrent or replayed claims block before v2. Completion requires the exact
-new v2 profile receipt, request, attribution, target, result, and digest
-bindings; recovery may promote that receipt to `CONSUMED` and remove only the
-exact matching v2 pending record, but it never retries or reauthorizes the
-effect.
+P3.5a first added a source-additive v3 claim-before-v2 core without modifying
+the retained v1/v2 broker, observation publisher, or P3.4b closure. The dynamic
+extension replaces its non-composable precomputed-lease service route with a
+root-provisioned one-shot grant, a v3 sensor issuer, and a v4 broker redeemer.
+The canonical grant fixes root-supplied source-manifest and install-context
+digests, process profile, runtime, active skill, sensor, policy, operation,
+lifetime, and `max_actions: 1`. Those provenance fields remain root-supplied
+bindings; existing acquisition evidence does not self-promote into runtime or
+installer authority.
 
-The v3 service consumes separate systemd runtime-binding and capability-lease
-credentials. Its fresh installer stages the v2 implementation dependencies but
-no v1/v2 broker or sensor unit. The explicit activation transition stops,
-disables, and masks any previously installed v1/v2 route before enabling v3;
-the live composition must still prove those effective unit states. A
-`CLAIMED` state with no exact receipt remains fail-stop in this bounded slice,
-including when the underlying v2 failure was known pre-effect. That preserves
-one-shot safety but is manual-recovery-only availability, not the future lease
-manager. The exact request is dynamic in OpenClaw, so a trusted pre-effect
-issuer/redeemer composition and retained live evidence remain P3.5a work. Unit
-and static tests establish neither semantic model causation, broader action
+The sensor is the first distinct trusted point holding every dynamic binding.
+It authenticates OpenClaw with `SO_PEERCRED`, pins a pidfd, measures the process
+profile before and after reading the exact envelope, builds the v2 profiled
+submission, checks the pidfd again, connects to and authenticates the broker,
+and repeats the full profile measurement immediately before issuance. It then
+creates a random 256-bit nonce and a lease whose lifetime is contained by both
+request and grant. The backend-only issuance wrapper binds the grant, full submission,
+runtime attribution, request, profile, policy, and measured action digests. No
+grant or lease enters the runtime-facing request or response.
+
+The broker loads the identical grant bytes as a separate systemd credential and
+independently validates the sensor peer, grant, lease, complete profiled
+submission, and dynamic clock ordering. Its durable state is keyed by the
+stable grant digest, not the random lease nonce. Under the existing shared
+broker lock it removes any stale latest-only profile receipt and fsyncs an exact
+`CLAIMED` record containing the lease and profile claim before invoking
+`mediate_profiled_runtime_create()`. A fresh nonce, alternate request, replay,
+or concurrent attempt cannot reopen an accepted grant. Completion still
+requires the exact new v2 profile receipt, request, attribution, target, result,
+and digest bindings; recovery may promote that receipt to `CONSUMED` and remove
+only the exact matching v2 pending record, but it never retries or reauthorizes
+the effect. A proven pre-effect broker failure becomes non-reopenable
+`ABANDONED`. A distinct grant may replace only `CONSUMED` or `ABANDONED` state,
+after immutable archival of the terminal state and any exact consumed profile
+receipt. The terminal archive is also a replay tombstone: the same grant digest
+cannot become `AVAILABLE` again even if the mutable active-state file is absent.
+
+The fresh installer stages no v1/v2 broker or sensor unit. Its explicit
+activation transition stops, disables, and masks previously installed v1/v2
+routes before enabling the grant route; live composition must still prove the
+effective unit states. An indeterminate `CLAIMED` state with no exact receipt
+remains fail-stop and manual-recovery-only. The dynamic issuer/redeemer is
+unit/static exercised,
+but one retained pinned-OpenClaw/systemd run is still required before P3.5a can
+close. This establishes neither semantic model causation, broader action
 coverage, aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, nor release
 authority.
 
@@ -805,12 +825,18 @@ REQUESTED
   -> ACTIVE_MONITORED
   -> STOPPED | QUARANTINED | REVOKED
 
-One-shot capability:
+One-shot root grant:
 
 PROVISIONED
-  -> ISSUED
+  -> AVAILABLE
   -> CLAIMED
-  -> CONSUMED
+  -> CONSUMED | ABANDONED
+
+Backend-only lease:
+
+ISSUED from one AVAILABLE grant
+  -> included in CLAIMED
+  -> never independently reopens authority
 ```
 
 Rules:
@@ -820,9 +846,9 @@ Rules:
 - `ERROR` and incomplete required closure never become `APPROVED`.
 - A missing sensor heartbeat suspends protected operations and moves high-risk execution toward quarantine.
 - Revocation blocks future starts and terminates or isolates active instances within a published response deadline.
-- A claimed one-shot capability never returns to `ISSUED`; absent exact
-  completion evidence, the route remains fail-stop rather than retrying an
-  effect.
+- A claimed one-shot grant never returns to `AVAILABLE`; absent exact
+  completion evidence, an indeterminate route remains fail-stop rather than
+  retrying an effect. Only a proven pre-effect failure may become `ABANDONED`.
 
 ## Implemented stable data contracts
 

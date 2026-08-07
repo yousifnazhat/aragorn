@@ -22,6 +22,13 @@ _BROKER_UNIT = (
 _SENSOR_UNIT = (
     _ROOT / "packaging/systemd/aragorn-runtime-capability-observation-publisher.service"
 )
+_OBSOLETE_SHIMS = (
+    "aragorn-runtime-action-service.py",
+    "aragorn-runtime-action-service-v2.py",
+    "aragorn-runtime-action-service-v3.py",
+    "aragorn-runtime-observation-service.py",
+    "aragorn-runtime-observation-service-v2.py",
+)
 
 
 def _credentials(root: Path) -> tuple[Path, Path]:
@@ -100,7 +107,7 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         ):
             self.assertEqual(service.main(["runtime-binding", "capability-lease"]), 0)
 
-    def test_units_expose_only_the_v3_broker_to_the_unchanged_v2_sensor(self) -> None:
+    def test_units_expose_only_the_grant_redeemer_to_the_v3_sensor(self) -> None:
         broker = _BROKER_UNIT.read_text(encoding="utf-8")
         sensor = _SENSOR_UNIT.read_text(encoding="utf-8")
         self.assertIn(
@@ -109,20 +116,27 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
             broker,
         )
         self.assertIn("LoadCredential=runtime-binding:", broker)
-        self.assertIn("LoadCredential=capability-lease:", broker)
-        self.assertIn("aragorn-runtime-action-service-v3.py", broker)
-        self.assertIn("%d/runtime-binding %d/capability-lease", broker)
+        self.assertIn("LoadCredential=capability-grant:", broker)
+        self.assertIn("aragorn-runtime-action-service-v4.py", broker)
+        self.assertIn("%d/runtime-binding %d/capability-grant", broker)
         self.assertIn("NoNewPrivileges=yes", broker)
         self.assertIn("CapabilityBoundingSet=", broker)
         self.assertIn(
             "Requires=aragorn-runtime-capability-action-broker.service",
             sensor,
         )
-        self.assertIn("aragorn-runtime-observation-service-v2.py", sensor)
+        self.assertIn("LoadCredential=capability-grant:", sensor)
+        self.assertIn("aragorn-runtime-observation-service-v3.py", sensor)
+        self.assertIn("%d/observation-binding %d/capability-grant", sensor)
+        self.assertNotIn("capability-lease", broker + sensor)
         self.assertNotIn("aragorn-runtime-action-service-v2.py", broker)
 
     def test_installer_stages_v2_dependencies_without_legacy_broker_units(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
+            obsolete_root = Path(temporary) / "usr/libexec/aragorn"
+            obsolete_root.mkdir(parents=True)
+            for name in _OBSOLETE_SHIMS:
+                (obsolete_root / name).write_text("obsolete\n", encoding="utf-8")
             subprocess.run(
                 ["sh", str(_INSTALLER)],
                 check=True,
@@ -136,11 +150,15 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
                 "runtime_action_broker_v2.py",
                 "runtime_action_service_v2.py",
                 "runtime_action_broker_v3.py",
-                "runtime_action_service_v3.py",
+                "runtime_capability_grant.py",
+                "runtime_action_observation_publisher_v3.py",
+                "runtime_action_broker_v4.py",
+                "runtime_action_service_v4.py",
+                "runtime_observation_service_v3.py",
             ):
                 self.assertTrue((modules / name).is_file())
             launcher = (
-                staged / "usr/libexec/aragorn/aragorn-runtime-action-service-v3.py"
+                staged / "usr/libexec/aragorn/aragorn-runtime-action-service-v4.py"
             )
             result = subprocess.run(
                 [sys.executable, "-I", "-S", "-B", str(launcher)],
@@ -151,10 +169,12 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 64, result.stderr)
-            self.assertIn("usage: aragorn-runtime-action-service-v3", result.stderr)
+            self.assertIn("usage: aragorn-runtime-action-service-v4", result.stderr)
             self.assertTrue(
                 (staged / "usr/libexec/aragorn" / _ACTIVATOR.name).is_file()
             )
+            for name in _OBSOLETE_SHIMS:
+                self.assertFalse((staged / "usr/libexec/aragorn" / name).exists())
             for unit in (_BROKER_UNIT, _SENSOR_UNIT):
                 self.assertTrue(
                     (staged / "usr/lib/systemd/system" / unit.name).is_file()
@@ -177,9 +197,55 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         ):
             self.assertIn(legacy, script)
         self.assertIn('disable --now "$unit"', script)
+        self.assertIn('disable --now "$new_sensor" "$new_broker"', script)
         self.assertIn('mask "$unit"', script)
         self.assertIn('is-active --quiet "$new_broker"', script)
         self.assertIn('is-active --quiet "$new_sensor"', script)
+
+    def test_activation_pins_grant_authority_and_effective_units(self) -> None:
+        script = _ACTIVATOR.read_text(encoding="utf-8")
+        self.assertIn("require_safe_root_directory /\n", script)
+        self.assertIn("require_safe_root_directory /etc", script)
+        self.assertIn("require_safe_root_directory /etc/aragorn", script)
+        self.assertIn('[ -L "$grant_path" ]', script)
+        self.assertIn("stat -c '%u:%g:%a:%h' -- \"$grant_path\"", script)
+        self.assertIn('"$grant_metadata" != "0:0:400:1"', script)
+        for property_name in (
+            "FragmentPath",
+            "DropInPaths",
+            "User",
+            "Group",
+            "SupplementaryGroups",
+            "ExecStart",
+            "LoadCredential",
+        ):
+            self.assertIn(property_name, script)
+        self.assertIn("aragorn-runtime-action-service-v4.py", script)
+        self.assertIn("aragorn-runtime-observation-service-v3.py", script)
+        self.assertIn("verified_argv=${verified_after_argv%% ; *}", script)
+        self.assertIn("/usr/bin/busctl get-property", script)
+        self.assertIn('verified_expected_credentials="a(ss) 2', script)
+        self.assertNotIn(
+            'unit_property "$verified_unit" LoadCredential',
+            script,
+        )
+        self.assertIn(
+            "runtime-binding:/etc/aragorn/runtime-action-runtime.json",
+            script,
+        )
+        self.assertIn(
+            "observation-binding:/etc/aragorn/runtime-action-observation.json",
+            script,
+        )
+        self.assertIn(
+            "capability-grant:/etc/aragorn/runtime-capability-grant.json",
+            script,
+        )
+        verification = script.index('verify_effective_unit \\\n    "$new_broker"')
+        stop = script.index('disable --now "$new_sensor" "$new_broker"')
+        start = script.index('/usr/bin/systemctl enable --now "$new_broker"')
+        self.assertLess(stop, verification)
+        self.assertLess(verification, start)
 
 
 if __name__ == "__main__":

@@ -884,6 +884,29 @@ semantic causation, multi-file and broader-action coverage, hostile root and
 power-loss qualification, aggregate `RUN-01` / `RUN-02`, Phase 3 exit, EDR,
 installer, and release authority all remain unestablished.
 
+P3.6b replaces only that root-assembled producer fixture. One retained Phase 1
+CAS closure is transported into an additive P3.6a child image, replay-verified,
+and given an evaluator-authored live-custody receipt. The exact
+protected-install service definition and launcher then run under systemd using
+an explicit pinned Python 3.12 drop-in and measured current-module adaptation.
+The emitted PASS receipt binds the service transaction to its immutable
+version, claim, active link, and canonical active record. The runtime route
+first rejects an evaluator-injected stale record before broker submission,
+then restores the producer record by exact bytes and inode and observes one
+`ALLOW` / `CREATED` action.
+
+The [retained P3.6b capture](./benchmark/evidence/runtime-producer-lineage-openclaw-systemd-composition-p3-6b-2026-08-07.json)
+has canonical evidence digest
+`sha256:485232aa3565f056fff3a2f1e1b14e81e6dfadc175099e315eef8e9f5cabca20`;
+[`aragorn.runtime_producer_lineage_openclaw_systemd_evidence`](./src/aragorn/runtime_producer_lineage_openclaw_systemd_evidence.py)
+checks the child-image lineage, collector and source-to-install closure,
+transported/live receipt relation, service transaction, and inherited runtime
+fail-closed cases. This does not establish live acquisition or coordinator
+composition, retained Phase 1 release identity, prompt consumption or semantic
+causation, multi-file or broader-action coverage, hostile-root or power-loss
+qualification, `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, installer
+authority, or public release authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

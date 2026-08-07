@@ -338,6 +338,26 @@ multi-file or broader-action coverage, hostile-root resistance, aggregate
 `RUN-01` or `RUN-02`, Phase 3 exit, EDR status, installer authority, or release
 authority.
 
+P3.6b removes only P3.6a's root-assembled-tree limitation for one retained-CAS
+fixture. The exact protected-install unit and launcher run under systemd with a
+pinned Python 3.12 drop-in and measured current-module adaptation. After
+verifying the transported Phase 1 closure, the evaluator issues a receipt for
+the copied CAS's live custody; the service then emits one PASS receipt whose
+transaction exactly matches the immutable version, claim, active link, and
+canonical active record. An evaluator-injected stale record still stops before
+broker submission, and restoring the exact producer record permits one
+`ALLOW` / `CREATED` action.
+[Retained P3.6b producer-to-runtime evidence](./benchmark/evidence/runtime-producer-lineage-openclaw-systemd-composition-p3-6b-2026-08-07.json),
+with canonical evidence digest
+`sha256:485232aa3565f056fff3a2f1e1b14e81e6dfadc175099e315eef8e9f5cabca20`,
+is checked by
+[`aragorn.runtime_producer_lineage_openclaw_systemd_evidence`](./src/aragorn/runtime_producer_lineage_openclaw_systemd_evidence.py).
+This is not live acquisition or coordinator composition, retained Phase 1
+release identity, prompt consumption or semantic causation evidence, or
+multi-file, broader-action, hostile-root, or power-loss qualification.
+`RUN-01`, `RUN-02`, Phase 3 exit, EDR status, installer authority, and public
+release authority remain false.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

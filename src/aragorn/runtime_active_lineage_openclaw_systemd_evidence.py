@@ -170,16 +170,7 @@ def verify_runtime_active_lineage_openclaw_systemd_evidence(
         _verify_parent(document["parent_evidence"])
         harness = _verify_harness(document["harness"])
         _verify_artifacts(document["artifacts"])
-        ids = _verify_identities(document["identities"])
-        profile = _verify_runtime_profile(document, harness)
-        grant = _grant_document(document["grant"], profile)
-        active = _verify_active_install(document["active_install"], grant, profile, ids)
-        states = _verify_grant(document["grant"], grant, profile, active)
-        deployment = _verify_deployment(document["deployment"], ids, harness, active)
-        _verify_cases(
-            document["cases"], grant, profile, active, states, ids, deployment
-        )
-        _verify_timing(document["timing"], document["cases"], grant)
+        _verify_composition(document, harness)
     except AdmissionEvidenceError:
         raise
     except (
@@ -195,6 +186,51 @@ def verify_runtime_active_lineage_openclaw_systemd_evidence(
         raise AdmissionEvidenceError(
             f"invalid runtime active-lineage OpenClaw evidence: {exc}"
         ) from exc
+
+
+def _verify_composition(
+    document: Mapping[str, Any],
+    harness: Mapping[str, Any],
+    *,
+    fixture_authority: str = _FIXTURE_AUTHORITY,
+    target_name: str = _TARGET_NAME,
+    skill_path: str = _SKILL_PATH,
+    skill_digest: str = _SKILL_DIGEST,
+) -> None:
+    """Verify the shared protected-lineage runtime composition."""
+
+    ids = _verify_identities(document["identities"])
+    profile = _verify_runtime_profile(
+        document,
+        harness,
+        skill_path=skill_path,
+        skill_digest=skill_digest,
+    )
+    grant = _grant_document(
+        document["grant"], profile, skill_digest=skill_digest
+    )
+    active = _verify_active_install(
+        document["active_install"],
+        grant,
+        profile,
+        ids,
+        fixture_authority=fixture_authority,
+        target_name=target_name,
+        skill_digest=skill_digest,
+    )
+    states = _verify_grant(document["grant"], grant, profile, active)
+    deployment = _verify_deployment(document["deployment"], ids, harness, active)
+    _verify_cases(
+        document["cases"],
+        grant,
+        profile,
+        active,
+        states,
+        ids,
+        deployment,
+        skill_digest=skill_digest,
+    )
+    _verify_timing(document["timing"], document["cases"], grant)
 
 
 def _verify_parent(value: Mapping[str, Any]) -> None:
@@ -388,7 +424,11 @@ def _verify_identities(value: Mapping[str, Any]) -> dict[str, int]:
 
 
 def _verify_runtime_profile(
-    document: Mapping[str, Any], harness: Mapping[str, Any]
+    document: Mapping[str, Any],
+    harness: Mapping[str, Any],
+    *,
+    skill_path: str = _SKILL_PATH,
+    skill_digest: str = _SKILL_DIGEST,
 ) -> dict[str, Any]:
     _expect(
         document["runtime"]
@@ -423,14 +463,14 @@ def _verify_runtime_profile(
         profile["digest"] == parsed.digest
         and parsed.runtime_digest == _RUNTIME_DIGEST
         and parsed.executable_digest == _NODE_DIGEST
-        and str(parsed.skill_path) == _SKILL_PATH
+        and str(parsed.skill_path) == skill_path
         and parsed.cgroup == expected_cgroup,
         "runtime profile changed",
     )
-    _file(profile["skill"], path=_SKILL_PATH, uid=0, gid=0, mode="0444")
+    _file(profile["skill"], path=skill_path, uid=0, gid=0, mode="0444")
     _file(profile["executable"], path=_NODE, uid=0, gid=0, mode="0755")
     _expect(
-        profile["skill"]["digest"] == _SKILL_DIGEST
+        profile["skill"]["digest"] == skill_digest
         and profile["executable"]["digest"] == _NODE_DIGEST,
         "profile files changed",
     )
@@ -438,7 +478,10 @@ def _verify_runtime_profile(
 
 
 def _grant_document(
-    value: Mapping[str, Any], profile: Mapping[str, Any]
+    value: Mapping[str, Any],
+    profile: Mapping[str, Any],
+    *,
+    skill_digest: str = _SKILL_DIGEST,
 ) -> dict[str, Any]:
     _expect(
         set(value)
@@ -454,7 +497,7 @@ def _grant_document(
         == grant
         and grant["runtime_profile_digest"] == profile["digest"]
         and grant["runtime_digest"] == _RUNTIME_DIGEST
-        and grant["active_skill_digest"] == _SKILL_DIGEST
+        and grant["active_skill_digest"] == skill_digest
         and grant["sensor_digest"] == _SENSOR_DIGEST
         and grant["expires_at_unix"] - grant["issued_at_unix"] == 241,
         "root capability grant changed",
@@ -496,6 +539,10 @@ def _verify_active_install(
     grant: Mapping[str, Any],
     profile: Mapping[str, Any],
     ids: Mapping[str, int],
+    *,
+    fixture_authority: str = _FIXTURE_AUTHORITY,
+    target_name: str = _TARGET_NAME,
+    skill_digest: str = _SKILL_DIGEST,
 ) -> dict[str, Any]:
     fields = {
         "authority",
@@ -510,7 +557,7 @@ def _verify_active_install(
     }
     _expect(
         set(value) == fields
-        and value["authority"] == value["construction"] == _FIXTURE_AUTHORITY,
+        and value["authority"] == value["construction"] == fixture_authority,
         "root-assembled fixture authority changed",
     )
     record = _record(value["record"], stale=False)
@@ -531,7 +578,7 @@ def _verify_active_install(
     expected_tree = {
         "path": "SKILL.md",
         "size": profile["skill"]["bytes"],
-        "digest": _SKILL_DIGEST,
+        "digest": skill_digest,
         "executable": False,
     }
     _expect(
@@ -541,19 +588,19 @@ def _verify_active_install(
         and transaction["manifest_digest"] == grant["source_manifest_digest"]
         and transaction["operation"] == "install"
         and transaction["expected_active"] is None
-        and transaction["destination"]["target_name"] == _TARGET_NAME,
+        and transaction["destination"]["target_name"] == target_name,
         "protected transaction or tree binding changed",
     )
     version_name = (
         f"{transaction['context_id'][7:]}-{transaction['manifest_digest'][7:]}"
     )
-    expected_version = f".aragorn-versions/{_TARGET_NAME}/{version_name}"
+    expected_version = f".aragorn-versions/{target_name}/{version_name}"
     paths = {
         "root": _INSTALL_ROOT,
         "record": f"{_INSTALL_ROOT}/.aragorn-active-runtime.json",
-        "active_link": f"{_INSTALL_ROOT}/{_TARGET_NAME}",
+        "active_link": f"{_INSTALL_ROOT}/{target_name}",
         "versions": f"{_INSTALL_ROOT}/.aragorn-versions",
-        "target_versions": f"{_INSTALL_ROOT}/.aragorn-versions/{_TARGET_NAME}",
+        "target_versions": f"{_INSTALL_ROOT}/.aragorn-versions/{target_name}",
         "version": f"{_INSTALL_ROOT}/{expected_version}",
         "skill": f"{_INSTALL_ROOT}/{expected_version}/SKILL.md",
     }
@@ -617,9 +664,9 @@ def _verify_active_install(
         and lineage["manifest_digest"] == transaction["manifest_digest"]
         and lineage["tree_digest"] == transaction["tree_digest"]
         and lineage["version_path"] == transaction["version_path"]
-        and lineage["target_name"] == _TARGET_NAME
+        and lineage["target_name"] == target_name
         and lineage["runtime_skill_path"] == profile["document"]["skill_path"]
-        and lineage["active_skill_digest"] == _SKILL_DIGEST
+        and lineage["active_skill_digest"] == skill_digest
         and lineage["root_device"] == states["root"]["device"]
         and lineage["root_inode"] == states["root"]["inode"]
         and lineage["active_link_device"] == states["active_link"]["device"]
@@ -816,6 +863,8 @@ def _verify_cases(
     states: Mapping[str, Mapping[str, Any]],
     ids: Mapping[str, int],
     deployment: Mapping[str, int],
+    *,
+    skill_digest: str = _SKILL_DIGEST,
 ) -> None:
     _expect(
         set(value) == {"stale_active_record", "coherent_active_record"},
@@ -949,7 +998,7 @@ def _verify_cases(
         lease["grant_digest"] == canonical_digest(grant)
         and lease["runtime_profile_digest"] == profile["digest"]
         and lease["runtime_digest"] == _RUNTIME_DIGEST
-        and lease["active_skill_digest"] == _SKILL_DIGEST
+        and lease["active_skill_digest"] == skill_digest
         and lease["sensor_digest"] == _SENSOR_DIGEST
         and lease["operation_digest"] == grant["operation_digest"]
         and lease["payload_digest"] == "sha256:" + hashlib.sha256(_PAYLOAD).hexdigest()
@@ -963,7 +1012,7 @@ def _verify_cases(
         and receipt_document["runtime_attribution"]["profile_digest"]
         == profile["digest"]
         and receipt_document["runtime_attribution"]["active_skill_digest"]
-        == _SKILL_DIGEST,
+        == skill_digest,
         "lease or receipt binding changed",
     )
     target = coherent["target"]

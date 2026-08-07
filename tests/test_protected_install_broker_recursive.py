@@ -170,6 +170,77 @@ def _live_args(producer, release_digests: list[str]) -> tuple[argparse.Namespace
 
 
 class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
+    def test_legacy_update_root_is_not_a_published_root(self) -> None:
+        producer = _load_producer()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            protected = root / "protected"
+            protected.mkdir(mode=0o700)
+            (protected / ".aragorn-install-claims").mkdir(mode=0o700)
+            version = (
+                protected
+                / ".aragorn-versions"
+                / producer._TARGET
+                / "predecessor"
+            )
+            version.mkdir(mode=0o755, parents=True)
+            (protected / producer._TARGET).symlink_to(
+                version.relative_to(protected)
+            )
+            transaction = {
+                "version_path": version.relative_to(protected).as_posix(),
+            }
+
+            producer._require_update_protected_root(protected, os.geteuid())
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "protected root namespace contains residue",
+            ):
+                producer._require_published_protected_root(
+                    protected,
+                    os.geteuid(),
+                    transaction,
+                )
+
+            record = protected / producer._ACTIVE_RUNTIME_RECORD
+            record.write_bytes(b"{}")
+            record.chmod(0o444)
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "protected active-runtime record is not exact",
+            ):
+                producer._require_published_protected_root(
+                    protected,
+                    os.geteuid(),
+                    transaction,
+                )
+            record.chmod(0o644)
+            record.write_bytes(
+                canonical_json(
+                    {
+                        "schema": producer._ACTIVE_RUNTIME_SCHEMA,
+                        "authority": producer._ACTIVE_RUNTIME_AUTHORITY,
+                        "transaction": transaction,
+                    }
+                )
+            )
+            record.chmod(0o444)
+            producer._require_published_protected_root(
+                protected,
+                os.geteuid(),
+                transaction,
+            )
+            os.link(record, root / "linked-record")
+            with self.assertRaisesRegex(
+                producer.BrokerConformanceError,
+                "protected active-runtime record is not exact",
+            ):
+                producer._require_published_protected_root(
+                    protected,
+                    os.geteuid(),
+                    transaction,
+                )
+
     def test_service_request_v3_accepts_exact_recursive_state_and_rejects_types(
         self,
     ) -> None:
@@ -516,12 +587,24 @@ class RecursiveProtectedInstallBrokerTests(unittest.TestCase):
             def publish_result(*_args, **_kwargs):
                 version_path = ".aragorn-versions/aragorn-admitted/v1"
                 (protected / version_path).mkdir(parents=True)
-                (protected / ".aragorn-install-claims").mkdir()
+                (protected / ".aragorn-install-claims").mkdir(mode=0o700)
                 (protected / producer._TARGET).symlink_to(version_path)
-                return {
+                transaction = {
                     "version_path": version_path,
                     "tree_digest": graph["tree_digest"],
                 }
+                record = protected / producer._ACTIVE_RUNTIME_RECORD
+                record.write_bytes(
+                    canonical_json(
+                        {
+                            "schema": producer._ACTIVE_RUNTIME_SCHEMA,
+                            "authority": producer._ACTIVE_RUNTIME_AUTHORITY,
+                            "transaction": transaction,
+                        }
+                    )
+                )
+                record.chmod(0o444)
+                return transaction
 
             with (
                 mock.patch.object(

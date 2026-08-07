@@ -17,10 +17,11 @@ _ROOT = Path(__file__).resolve().parents[1]
 _INSTALLER = _ROOT / "packaging/install-runtime-capability-host.sh"
 _ACTIVATOR = _ROOT / "packaging/activate-runtime-capability-host.sh"
 _BROKER_UNIT = (
-    _ROOT / "packaging/systemd/aragorn-runtime-capability-action-broker.service"
+    _ROOT / "packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service"
 )
 _SENSOR_UNIT = (
-    _ROOT / "packaging/systemd/aragorn-runtime-capability-observation-publisher.service"
+    _ROOT
+    / "packaging/systemd/aragorn-runtime-lineage-capability-observation-publisher.service"
 )
 _REVOCATION_UNIT = (
     _ROOT / "packaging/systemd/aragorn-runtime-revocation-publisher.service"
@@ -29,8 +30,10 @@ _OBSOLETE_SHIMS = (
     "aragorn-runtime-action-service.py",
     "aragorn-runtime-action-service-v2.py",
     "aragorn-runtime-action-service-v3.py",
+    "aragorn-runtime-action-service-v4.py",
     "aragorn-runtime-observation-service.py",
     "aragorn-runtime-observation-service-v2.py",
+    "aragorn-runtime-observation-service-v3.py",
 )
 
 
@@ -110,7 +113,7 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         ):
             self.assertEqual(service.main(["runtime-binding", "capability-lease"]), 0)
 
-    def test_units_expose_only_the_grant_redeemer_to_the_v3_sensor(self) -> None:
+    def test_units_expose_only_the_lineage_grant_route(self) -> None:
         broker = _BROKER_UNIT.read_text(encoding="utf-8")
         sensor = _SENSOR_UNIT.read_text(encoding="utf-8")
         self.assertIn(
@@ -120,17 +123,30 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         )
         self.assertIn("LoadCredential=runtime-binding:", broker)
         self.assertIn("LoadCredential=capability-grant:", broker)
-        self.assertIn("aragorn-runtime-action-service-v4.py", broker)
+        self.assertIn("aragorn-runtime-action-service-v5.py", broker)
         self.assertIn("%d/runtime-binding %d/capability-grant", broker)
         self.assertIn("NoNewPrivileges=yes", broker)
         self.assertIn("CapabilityBoundingSet=", broker)
         self.assertIn(
-            "Requires=aragorn-runtime-capability-action-broker.service",
+            "Requires=aragorn-runtime-lineage-capability-action-broker.service",
             sensor,
         )
+        self.assertIn("LoadCredential=observation-binding:", sensor)
         self.assertIn("LoadCredential=capability-grant:", sensor)
-        self.assertIn("aragorn-runtime-observation-service-v3.py", sensor)
-        self.assertIn("%d/observation-binding %d/capability-grant", sensor)
+        self.assertNotIn("LoadCredential=active-skill-lineage:", sensor)
+        self.assertIn("aragorn-runtime-observation-service-v4.py", sensor)
+        self.assertIn(
+            "%d/observation-binding %d/capability-grant",
+            sensor,
+        )
+        self.assertIn(
+            "ConditionPathExists=/var/lib/aragorn-protected/skills/"
+            ".aragorn-active-runtime.json",
+            sensor,
+        )
+        self.assertIn("ReadOnlyPaths=/var/lib/aragorn-runtime-action/control ", sensor)
+        self.assertIn("/var/lib/aragorn-protected/skills", sensor)
+        self.assertIn("TasksMax=2", sensor)
         self.assertNotIn("capability-lease", broker + sensor)
         self.assertNotIn("aragorn-runtime-action-service-v2.py", broker)
 
@@ -176,7 +192,7 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         self.assertNotIn("[Install]", unit)
         self.assertNotIn("WantedBy=", unit)
 
-    def test_installer_stages_v2_dependencies_without_legacy_broker_units(self) -> None:
+    def test_installer_stages_lineage_route_without_legacy_broker_units(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             obsolete_root = Path(temporary) / "usr/libexec/aragorn"
             obsolete_root.mkdir(parents=True)
@@ -195,16 +211,22 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
                 "runtime_action_broker_v2.py",
                 "runtime_action_service_v2.py",
                 "runtime_action_broker_v3.py",
+                "runtime_active_skill_lineage.py",
+                "runtime_lineage_capability_issuer.py",
                 "runtime_capability_grant.py",
                 "runtime_action_observation_publisher_v3.py",
                 "runtime_action_broker_v4.py",
                 "runtime_action_service_v4.py",
                 "runtime_observation_service_v3.py",
+                "runtime_action_observation_publisher_v4.py",
+                "runtime_action_broker_v5.py",
+                "runtime_action_service_v5.py",
+                "runtime_observation_service_v4.py",
                 "runtime_revocation_service.py",
             ):
                 self.assertTrue((modules / name).is_file())
             launcher = (
-                staged / "usr/libexec/aragorn/aragorn-runtime-action-service-v4.py"
+                staged / "usr/libexec/aragorn/aragorn-runtime-action-service-v5.py"
             )
             result = subprocess.run(
                 [sys.executable, "-I", "-S", "-B", str(launcher)],
@@ -215,7 +237,7 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 64, result.stderr)
-            self.assertIn("usage: aragorn-runtime-action-service-v4", result.stderr)
+            self.assertIn("usage: aragorn-runtime-action-service-v5", result.stderr)
             revocation_launcher = (
                 staged / "usr/libexec/aragorn/aragorn-runtime-revocation-service.py"
             )
@@ -243,16 +265,20 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
                 "aragorn-runtime-profile-action-broker.service",
                 "aragorn-runtime-observation-publisher.service",
                 "aragorn-runtime-profile-observation-publisher.service",
+                "aragorn-runtime-capability-action-broker.service",
+                "aragorn-runtime-capability-observation-publisher.service",
             ):
                 self.assertFalse((staged / "usr/lib/systemd/system" / legacy).exists())
 
-    def test_activation_masks_every_legacy_route_before_v3_start(self) -> None:
+    def test_activation_masks_every_legacy_route_before_v5_start(self) -> None:
         script = _ACTIVATOR.read_text(encoding="utf-8")
         for legacy in (
             "aragorn-runtime-action-broker.service",
             "aragorn-runtime-profile-action-broker.service",
             "aragorn-runtime-observation-publisher.service",
             "aragorn-runtime-profile-observation-publisher.service",
+            "aragorn-runtime-capability-action-broker.service",
+            "aragorn-runtime-capability-observation-publisher.service",
         ):
             self.assertIn(legacy, script)
         self.assertIn('disable --now "$unit"', script)
@@ -263,9 +289,13 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
 
     def test_activation_pins_grant_authority_and_effective_units(self) -> None:
         script = _ACTIVATOR.read_text(encoding="utf-8")
-        self.assertIn("require_safe_root_directory /\n", script)
-        self.assertIn("require_safe_root_directory /etc", script)
-        self.assertIn("require_safe_root_directory /etc/aragorn", script)
+        self.assertIn("require_safe_root_directory / root", script)
+        self.assertIn("require_safe_root_directory /etc root", script)
+        self.assertIn("require_safe_root_directory /etc/aragorn root", script)
+        self.assertIn(
+            "require_safe_root_directory /var/lib/aragorn-protected aragorn-runtime",
+            script,
+        )
         self.assertIn('[ -L "$grant_path" ]', script)
         self.assertIn("stat -c '%u:%g:%a:%h' -- \"$grant_path\"", script)
         self.assertIn('"$grant_metadata" != "0:0:400:1"', script)
@@ -292,8 +322,15 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
             "LoadCredential",
         ):
             self.assertIn(property_name, script)
-        self.assertIn("aragorn-runtime-action-service-v4.py", script)
-        self.assertIn("aragorn-runtime-observation-service-v3.py", script)
+        self.assertIn("aragorn-runtime-action-service-v5.py", script)
+        self.assertIn("aragorn-runtime-observation-service-v4.py", script)
+        self.assertIn(
+            "lineage_path=/var/lib/aragorn-protected/skills/"
+            ".aragorn-active-runtime.json",
+            script,
+        )
+        self.assertIn('"$lineage_metadata" != "0:0:444:1"', script)
+        self.assertNotIn("active-skill-lineage:/etc/aragorn", script)
         self.assertIn("verified_argv=${verified_after_argv%% ; *}", script)
         self.assertIn("/usr/bin/busctl get-property", script)
         self.assertIn('verified_expected_credentials="a(ss) 2', script)

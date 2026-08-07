@@ -23,7 +23,12 @@ from .protected_install_context import (
 
 _VERSIONS_DIRECTORY = ".aragorn-versions"
 _CLAIMS_DIRECTORY = ".aragorn-install-claims"
+_ACTIVE_RUNTIME_RECORD = ".aragorn-active-runtime.json"
 _RECORD_AUTHORITY = "BROKER_TRANSACTION_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
+_ACTIVE_RUNTIME_SCHEMA = "aragorn/protected-active-runtime/v1"
+_ACTIVE_RUNTIME_AUTHORITY = (
+    "BROKER_ACTIVE_TRANSACTION_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
+)
 _MAX_DEPTH = 8
 _DIRECTORY_FLAGS = (
     os.O_RDONLY
@@ -397,6 +402,7 @@ def _publish_protected_install_transaction(
             target_versions_fd,
             version_name,
         )
+        _publish_active_runtime_record(broker_root_fd, record)
         os.fsync(broker_root_fd)
         return record
     except Exception as exc:
@@ -407,11 +413,7 @@ def _publish_protected_install_transaction(
                 f"rollback was attempted: {exc}",
                 recovery=record,
             ) from exc
-        if (
-            staging_name is not None
-            and staging_fd >= 0
-            and target_versions_fd >= 0
-        ):
+        if staging_name is not None and staging_fd >= 0 and target_versions_fd >= 0:
             try:
                 _remove_staging_tree(
                     target_versions_fd,
@@ -803,6 +805,75 @@ def _create_activation_link(root_fd: int, version_path: str) -> str:
     raise ProtectedInstallTransactionError(
         "cannot allocate protected install activation link"
     )
+
+
+def _publish_active_runtime_record(
+    root_fd: int,
+    transaction: Mapping[str, Any],
+) -> None:
+    raw = canonical_json(
+        {
+            "schema": _ACTIVE_RUNTIME_SCHEMA,
+            "authority": _ACTIVE_RUNTIME_AUTHORITY,
+            "transaction": transaction,
+        }
+    )
+    temporary_name, descriptor = _create_record_file(
+        root_fd,
+        prefix=".aragorn-active-runtime-",
+    )
+    try:
+        try:
+            _write_all(descriptor, raw)
+            os.fchmod(descriptor, 0o444)
+            os.fsync(descriptor)
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.geteuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o444
+                or metadata.st_size != len(raw)
+            ):
+                raise ProtectedInstallTransactionError(
+                    "protected active-runtime record metadata is unsafe"
+                )
+        finally:
+            os.close(descriptor)
+        os.rename(
+            temporary_name,
+            _ACTIVE_RUNTIME_RECORD,
+            src_dir_fd=root_fd,
+            dst_dir_fd=root_fd,
+        )
+        temporary_name = ""
+        os.fsync(root_fd)
+        retained_fd = os.open(
+            _ACTIVE_RUNTIME_RECORD,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=root_fd,
+        )
+        try:
+            retained = os.read(retained_fd, len(raw) + 1)
+            metadata = os.fstat(retained_fd)
+            if (
+                retained != raw
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.geteuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o444
+            ):
+                raise ProtectedInstallTransactionError(
+                    "protected active-runtime record changed"
+                )
+        finally:
+            os.close(retained_fd)
+    finally:
+        if temporary_name:
+            try:
+                os.unlink(temporary_name, dir_fd=root_fd)
+            except OSError:
+                pass
 
 
 def _rename_activation_link(

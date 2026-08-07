@@ -20,17 +20,18 @@ fail_activation()
 require_safe_root_directory()
 {
     authority_path=$1
+    authority_group=$2
     if [ -L "$authority_path" ] || [ ! -d "$authority_path" ]; then
         fail_activation "runtime capability authority ancestry is unsafe: $authority_path"
     fi
-    if ! authority_metadata=$(stat -c '%u:%g:%a' -- "$authority_path"); then
+    if ! authority_metadata=$(stat -c '%u:%G:%a' -- "$authority_path"); then
         fail_activation "runtime capability authority ancestry cannot be inspected: $authority_path"
     fi
     authority_uid=${authority_metadata%%:*}
     authority_remainder=${authority_metadata#*:}
     authority_gid=${authority_remainder%%:*}
     authority_mode=${authority_remainder##*:}
-    if [ "$authority_uid" != 0 ] || [ "$authority_gid" != 0 ]; then
+    if [ "$authority_uid" != 0 ] || [ "$authority_gid" != "$authority_group" ]; then
         fail_activation "runtime capability authority ancestry is not root-owned: $authority_path"
     fi
     case "$authority_mode" in
@@ -41,9 +42,14 @@ require_safe_root_directory()
 }
 
 grant_path=/etc/aragorn/runtime-capability-grant.json
-require_safe_root_directory /
-require_safe_root_directory /etc
-require_safe_root_directory /etc/aragorn
+lineage_path=/var/lib/aragorn-protected/skills/.aragorn-active-runtime.json
+require_safe_root_directory / root
+require_safe_root_directory /etc root
+require_safe_root_directory /etc/aragorn root
+require_safe_root_directory /var root
+require_safe_root_directory /var/lib root
+require_safe_root_directory /var/lib/aragorn-protected aragorn-runtime
+require_safe_root_directory /var/lib/aragorn-protected/skills aragorn-runtime
 if [ -L "$grant_path" ] || [ ! -f "$grant_path" ]; then
     fail_activation "runtime capability grant is not a regular non-symlink file"
 fi
@@ -52,6 +58,15 @@ if ! grant_metadata=$(stat -c '%u:%g:%a:%h' -- "$grant_path"); then
 fi
 if [ "$grant_metadata" != "0:0:400:1" ]; then
     fail_activation "runtime capability grant must be root:root mode 0400 with one link"
+fi
+if [ -L "$lineage_path" ] || [ ! -f "$lineage_path" ]; then
+    fail_activation "runtime active-skill lineage is not a regular non-symlink file"
+fi
+if ! lineage_metadata=$(stat -c '%u:%g:%a:%h' -- "$lineage_path"); then
+    fail_activation "runtime active-skill lineage cannot be inspected"
+fi
+if [ "$lineage_metadata" != "0:0:444:1" ]; then
+    fail_activation "runtime active-skill lineage must be root:root mode 0444 with one link"
 fi
 
 revocation_publication_path=/etc/aragorn/runtime-action-revocation-publication.json
@@ -75,6 +90,7 @@ for path in \
     /etc/aragorn/runtime-action-runtime.json \
     /etc/aragorn/runtime-action-observation.json \
     "$grant_path" \
+    "$lineage_path" \
     /var/lib/aragorn-runtime-action/control/policy.json \
     /var/lib/aragorn-runtime-action/control/revocations.json \
     /var/lib/aragorn-runtime-action/control/health.json \
@@ -92,9 +108,11 @@ aragorn-runtime-action-broker.service
 aragorn-runtime-profile-action-broker.service
 aragorn-runtime-observation-publisher.service
 aragorn-runtime-profile-observation-publisher.service
+aragorn-runtime-capability-action-broker.service
+aragorn-runtime-capability-observation-publisher.service
 "
-new_broker=aragorn-runtime-capability-action-broker.service
-new_sensor=aragorn-runtime-capability-observation-publisher.service
+new_broker=aragorn-runtime-lineage-capability-action-broker.service
+new_sensor=aragorn-runtime-lineage-capability-observation-publisher.service
 revocation_publisher=aragorn-runtime-revocation-publisher.service
 
 unit_property()
@@ -212,21 +230,21 @@ verify_effective_unit \
     aragorn-broker \
     aragorn-runtime \
     aragorn-sensor \
-    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service-v4.py %d/runtime-binding %d/capability-grant" \
-    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service-v4.py /run/credentials/$new_broker/runtime-binding /run/credentials/$new_broker/capability-grant" \
+    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service-v5.py %d/runtime-binding %d/capability-grant" \
+    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-service-v5.py /run/credentials/$new_broker/runtime-binding /run/credentials/$new_broker/capability-grant" \
     runtime-binding:/etc/aragorn/runtime-action-runtime.json \
     capability-grant:/etc/aragorn/runtime-capability-grant.json \
-    /org/freedesktop/systemd1/unit/aragorn_2druntime_2dcapability_2daction_2dbroker_2eservice
+    /org/freedesktop/systemd1/unit/aragorn_2druntime_2dlineage_2dcapability_2daction_2dbroker_2eservice
 verify_effective_unit \
     "$new_sensor" \
     aragorn-sensor \
     aragorn-sensor \
     aragorn-runtime \
-    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v3.py %d/observation-binding %d/capability-grant" \
-    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v3.py /run/credentials/$new_sensor/observation-binding /run/credentials/$new_sensor/capability-grant" \
+    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v4.py %d/observation-binding %d/capability-grant" \
+    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v4.py /run/credentials/$new_sensor/observation-binding /run/credentials/$new_sensor/capability-grant" \
     observation-binding:/etc/aragorn/runtime-action-observation.json \
     capability-grant:/etc/aragorn/runtime-capability-grant.json \
-    /org/freedesktop/systemd1/unit/aragorn_2druntime_2dcapability_2dobservation_2dpublisher_2eservice
+    /org/freedesktop/systemd1/unit/aragorn_2druntime_2dlineage_2dcapability_2dobservation_2dpublisher_2eservice
 verify_effective_unit \
     "$revocation_publisher" \
     aragorn-broker \

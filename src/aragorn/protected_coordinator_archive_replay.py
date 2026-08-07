@@ -25,6 +25,11 @@ AUTHORITY = "OFF_HOST_COORDINATOR_REPLAY_EVIDENCE_ONLY_NOT_INSTALLER_AUTHORITY"
 ARCHIVE_DIGEST = (
     "sha256:707fb29a9a22dad7ac9e9bd2c7e39a831a1e1d994ce625ef7ee8102f24b04397"
 )
+# The archive retains the captured release identity; this separately pins the
+# post-capture broker that added the active-runtime record contract.
+_EVOLVED_BROKER_DIGEST = (
+    "sha256:29c393807458f1f92266a9657522ebc982c674a8124e18731e2c84561248b20c"
+)
 
 _OLD_ROOT = "918090c29df9d1dfc1f79e0534cb67d961403b4c89567c565ad4de52a042f0a1"
 _NEW_ROOT = "0cac984f8f4e1311fa166d8578b7ba77b4c87c1e96421ad403aeaaa0f9c6ee0f"
@@ -745,7 +750,10 @@ def _coordinator(files: dict[str, bytes], new: dict[str, Any]) -> dict[str, Any]
                 f"archived service code differs from the repository: {relative}"
             )
     broker = (root / release["broker"]["path"]).read_bytes()
-    if _digest(broker) != release["broker"]["digest"]:
+    if _digest(broker) not in {
+        release["broker"]["digest"],
+        _EVOLVED_BROKER_DIGEST,
+    }:
         raise ProtectedCoordinatorArchiveReplayError(
             "release broker digest differs from the repository"
         )

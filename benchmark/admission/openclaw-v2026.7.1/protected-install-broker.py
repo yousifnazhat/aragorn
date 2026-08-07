@@ -51,6 +51,9 @@ from aragorn.phase0_candidate import (
     candidate_implementation_digest,
 )
 from aragorn.protected_install import (
+    _ACTIVE_RUNTIME_AUTHORITY,
+    _ACTIVE_RUNTIME_RECORD,
+    _ACTIVE_RUNTIME_SCHEMA,
     ProtectedInstallTransactionError,
     _materialize_verified_manifest,
     _publish_protected_install_transaction,
@@ -382,11 +385,14 @@ def _require_initial_protected_root(
 
 
 def _require_update_protected_root(path: Path, expected_uid: int) -> None:
-    if sorted(child.name for child in path.iterdir()) != [
+    entries = sorted(child.name for child in path.iterdir())
+    legacy_entries = [
         ".aragorn-install-claims",
         ".aragorn-versions",
         _TARGET,
-    ]:
+    ]
+    published_entries = sorted([_ACTIVE_RUNTIME_RECORD, *legacy_entries])
+    if entries not in (legacy_entries, published_entries):
         raise BrokerConformanceError(
             "protected update root namespace is not exact"
         )
@@ -401,6 +407,8 @@ def _require_update_protected_root(path: Path, expected_uid: int) -> None:
             raise BrokerConformanceError(
                 "protected update control layout is not exact"
             )
+    if _ACTIVE_RUNTIME_RECORD in entries:
+        _require_active_runtime_record(path, expected_uid)
     active = (path / _TARGET).lstat()
     if (
         not stat.S_ISLNK(active.st_mode)
@@ -410,6 +418,74 @@ def _require_update_protected_root(path: Path, expected_uid: int) -> None:
         raise BrokerConformanceError(
             "protected update target must be one broker-owned symlink"
         )
+
+
+def _require_active_runtime_record(
+    path: Path,
+    expected_uid: int,
+    expected_transaction: dict[str, Any] | None = None,
+) -> None:
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    try:
+        descriptor = os.open(path / _ACTIVE_RUNTIME_RECORD, flags)
+    except OSError as exc:
+        raise BrokerConformanceError(
+            "protected active-runtime record is not exact"
+        ) from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != expected_uid
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o444
+        ):
+            raise BrokerConformanceError(
+                "protected active-runtime record is not exact"
+            )
+        if expected_transaction is None:
+            return
+        expected = canonical_json(
+            {
+                "schema": _ACTIVE_RUNTIME_SCHEMA,
+                "authority": _ACTIVE_RUNTIME_AUTHORITY,
+                "transaction": expected_transaction,
+            }
+        )
+        raw = bytearray()
+        while chunk := os.read(descriptor, len(expected) + 1 - len(raw)):
+            raw.extend(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    if (
+        _service_request_metadata(before) != _service_request_metadata(after)
+        or len(raw) != after.st_size
+        or bytes(raw) != expected
+    ):
+        raise BrokerConformanceError(
+            "protected active-runtime record is not exact"
+        )
+
+
+def _require_published_protected_root(
+    path: Path,
+    expected_uid: int,
+    expected_transaction: dict[str, Any],
+) -> None:
+    if sorted(child.name for child in path.iterdir()) != [
+        _ACTIVE_RUNTIME_RECORD,
+        ".aragorn-install-claims",
+        ".aragorn-versions",
+        _TARGET,
+    ]:
+        raise BrokerConformanceError("protected root namespace contains residue")
+    _require_update_protected_root(path, expected_uid)
+    _require_active_runtime_record(path, expected_uid, expected_transaction)
 
 
 def _build_fixture_evidence(
@@ -1332,6 +1408,9 @@ def _run_github_live(
         cas,
         previous_cas,
     )
+    if transition_record["operation"] == "update":
+        # Legacy roots enter only after their predecessor CAS was verified above.
+        _require_update_protected_root(protected_root, args.expected_broker_uid)
     graph_digest = artifact_graph_module.retain_github_admission_artifact_graph_v2(
         cas,
         manifest_digest,
@@ -1580,6 +1659,8 @@ def _run_github_live(
         expected_request,
         transition_record,
     )
+    if transition_record["operation"] == "update":
+        _require_update_protected_root(protected_root, args.expected_broker_uid)
     root_fd = os.open(protected_root, _DIRECTORY_FLAGS)
     try:
         try:
@@ -1627,14 +1708,11 @@ def _run_github_live(
             or transaction["tree_digest"] != graph["tree_digest"]
         ):
             raise BrokerConformanceError("installed GitHub tree digest is not exact")
-        if sorted(path.name for path in protected_root.iterdir()) != [
-            ".aragorn-install-claims",
-            ".aragorn-versions",
-            _TARGET,
-        ]:
-            raise BrokerConformanceError(
-                "protected root namespace contains residue"
-            )
+        _require_published_protected_root(
+            protected_root,
+            args.expected_broker_uid,
+            transaction,
+        )
     except Exception as exc:  # noqa: BLE001 - retain committed recovery identity
         return recovery_result(transaction, exc)
 
@@ -1794,12 +1872,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
                 "CAS and protected roots must be disjoint"
             )
     root_state = _require_root(protected_root, args.expected_broker_uid)
-    if operation == "update":
-        _require_update_protected_root(
-            protected_root,
-            args.expected_broker_uid,
-        )
-    else:
+    if operation != "update":
         _require_initial_protected_root(
             protected_root,
             args.expected_broker_uid,
@@ -1991,12 +2064,11 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
 
     if transactions[0]["version_path"] == transactions[2]["version_path"]:
         raise BrokerConformanceError("rollback did not use a distinct context version")
-    if sorted(path.name for path in protected_root.iterdir()) != [
-        ".aragorn-install-claims",
-        ".aragorn-versions",
-        _TARGET,
-    ]:
-        raise BrokerConformanceError("protected root namespace contains residue")
+    _require_published_protected_root(
+        protected_root,
+        args.expected_broker_uid,
+        transactions[-1],
+    )
     return {
         "schema": _SCHEMA,
         "assurance": _ASSURANCE,

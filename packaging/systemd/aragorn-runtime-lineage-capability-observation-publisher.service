@@ -1,0 +1,75 @@
+[Unit]
+Description=Aragorn lineage-bound capability-attributing runtime observation publisher
+After=local-fs.target nss-user-lookup.target aragorn-runtime-lineage-capability-action-broker.service
+Requires=aragorn-runtime-lineage-capability-action-broker.service
+Conflicts=aragorn-runtime-observation-publisher.service aragorn-runtime-profile-observation-publisher.service aragorn-runtime-capability-observation-publisher.service
+RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected /var/lib/aragorn-protected/skills
+ConditionPathExists=/etc/aragorn/runtime-action-observation.json
+ConditionPathExists=/etc/aragorn/runtime-capability-grant.json
+ConditionPathExists=/var/lib/aragorn-protected/skills/.aragorn-active-runtime.json
+
+[Service]
+Type=simple
+User=aragorn-sensor
+Group=aragorn-sensor
+SupplementaryGroups=aragorn-runtime
+RuntimeDirectory=aragorn-runtime-observation
+RuntimeDirectoryMode=0750
+LoadCredential=observation-binding:/etc/aragorn/runtime-action-observation.json
+LoadCredential=capability-grant:/etc/aragorn/runtime-capability-grant.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-observation-service-v4.py %d/observation-binding %d/capability-grant
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+Restart=on-failure
+RestartSec=1s
+TimeoutStartSec=5s
+TimeoutStopSec=5s
+KillMode=control-group
+KillSignal=SIGINT
+TasksMax=2
+MemoryMax=256M
+MemorySwapMax=0
+LimitNOFILE=64
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-runtime-lineage-capability-observation-publisher
+
+NoNewPrivileges=yes
+AmbientCapabilities=CAP_SETGID CAP_SETUID CAP_SETPCAP
+CapabilityBoundingSet=CAP_SETGID CAP_SETUID CAP_SETPCAP
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=default
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/etc/aragorn/runtime-action-observation.json /etc/aragorn/runtime-capability-grant.json /var/lib/aragorn-runtime-action/staging
+ReadOnlyPaths=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected /var/lib/aragorn-protected/skills
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock ptrace process_vm_readv process_vm_writev kcmp
+
+[Install]
+WantedBy=multi-user.target

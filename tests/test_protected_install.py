@@ -250,9 +250,7 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
                 measured_target_runtime_digest=context.target_runtime_digest,
                 revoked_context_ids=(),
                 expected_active_cas=(
-                    self.cas
-                    if context.expected_active_context_id is not None
-                    else None
+                    self.cas if context.expected_active_context_id is not None else None
                 ),
             )
 
@@ -288,6 +286,20 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
             / f"{installed.context_id.removeprefix('sha256:')}.json"
         )
         self.assertEqual(install_claim.read_bytes(), canonical_json(install_record))
+        active_record = self.protected / ".aragorn-active-runtime.json"
+        self.assertEqual(
+            active_record.read_bytes(),
+            canonical_json(
+                {
+                    "schema": "aragorn/protected-active-runtime/v1",
+                    "authority": (
+                        "BROKER_ACTIVE_TRANSACTION_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
+                    ),
+                    "transaction": install_record,
+                }
+            ),
+        )
+        self.assertEqual(active_record.stat().st_mode & 0o777, 0o444)
 
         updated = self._context(
             context_character="2",
@@ -295,9 +307,21 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
             operation="update",
             expected_active=(installed.context_id, installed.manifest_digest),
         )
-        self._publish(updated)
+        update_record = self._publish(updated)
         self.assertEqual(os.readlink(active), self._version_path(updated))
         self.assertEqual((active / "SKILL.md").read_bytes(), b"B")
+        self.assertEqual(
+            active_record.read_bytes(),
+            canonical_json(
+                {
+                    "schema": "aragorn/protected-active-runtime/v1",
+                    "authority": (
+                        "BROKER_ACTIVE_TRANSACTION_RECORD_ONLY_NOT_INSTALLER_AUTHORITY"
+                    ),
+                    "transaction": update_record,
+                }
+            ),
+        )
 
         rolled_back = self._context(
             context_character="3",
@@ -419,11 +443,9 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
 
         def fresh_claim_state() -> tuple[int, tuple[str, ...]]:
             staged = list(
-                (
-                    self.protected
-                    / ".aragorn-versions"
-                    / "admitted-skill"
-                ).glob(".aragorn-stage-*/SKILL.md")
+                (self.protected / ".aragorn-versions" / "admitted-skill").glob(
+                    ".aragorn-stage-*/SKILL.md"
+                )
             )
             self.assertEqual(len(staged), 1)
             self.assertEqual(staged[0].read_bytes(), b"A")
@@ -464,9 +486,7 @@ class ProtectedInstallTransactionTests(unittest.TestCase):
             verifier.call_args_list[1].kwargs["revoked_context_ids"],
             (revoked.context_id,),
         )
-        target_versions = (
-            self.protected / ".aragorn-versions" / "admitted-skill"
-        )
+        target_versions = self.protected / ".aragorn-versions" / "admitted-skill"
         self.assertEqual(list(target_versions.glob(".aragorn-stage-*")), [])
 
         changed = self._context(

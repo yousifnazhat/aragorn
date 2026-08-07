@@ -18,8 +18,10 @@ for obsolete_shim in \
     aragorn-runtime-action-service.py \
     aragorn-runtime-action-service-v2.py \
     aragorn-runtime-action-service-v3.py \
+    aragorn-runtime-action-service-v4.py \
     aragorn-runtime-observation-service.py \
-    aragorn-runtime-observation-service-v2.py
+    aragorn-runtime-observation-service-v2.py \
+    aragorn-runtime-observation-service-v3.py
 do
     rm -f -- "$destdir/usr/libexec/aragorn/$obsolete_shim"
 done
@@ -37,17 +39,23 @@ install -m 0644 \
     "$root/src/aragorn/runtime_action_service_v2.py" \
     "$root/src/aragorn/runtime_observation_service_v2.py" \
     "$root/src/aragorn/runtime_action_broker_v3.py" \
+    "$root/src/aragorn/runtime_active_skill_lineage.py" \
+    "$root/src/aragorn/runtime_lineage_capability_issuer.py" \
     "$root/src/aragorn/runtime_capability_grant.py" \
     "$root/src/aragorn/runtime_action_observation_publisher_v3.py" \
     "$root/src/aragorn/runtime_action_broker_v4.py" \
     "$root/src/aragorn/runtime_action_service_v4.py" \
     "$root/src/aragorn/runtime_observation_service_v3.py" \
+    "$root/src/aragorn/runtime_action_observation_publisher_v4.py" \
+    "$root/src/aragorn/runtime_action_broker_v5.py" \
+    "$root/src/aragorn/runtime_action_service_v5.py" \
+    "$root/src/aragorn/runtime_observation_service_v4.py" \
     "$root/src/aragorn/runtime_revocation_service.py" \
     "$destdir/usr/lib/aragorn/aragorn/"
 install -m 0755 \
     "$root/packaging/activate-runtime-capability-host.sh" \
-    "$root/packaging/libexec/aragorn-runtime-action-service-v4.py" \
-    "$root/packaging/libexec/aragorn-runtime-observation-service-v3.py" \
+    "$root/packaging/libexec/aragorn-runtime-action-service-v5.py" \
+    "$root/packaging/libexec/aragorn-runtime-observation-service-v4.py" \
     "$root/packaging/libexec/aragorn-runtime-revocation-service.py" \
     "$destdir/usr/libexec/aragorn/"
 install -m 0644 \
@@ -57,7 +65,7 @@ install -m 0644 \
     "$root/packaging/systemd/aragorn-runtime-action.tmpfiles" \
     "$destdir/usr/lib/tmpfiles.d/aragorn-runtime-action.conf"
 install -m 0644 \
-    "$root/packaging/systemd/aragorn-runtime-capability-action-broker.service" \
-    "$root/packaging/systemd/aragorn-runtime-capability-observation-publisher.service" \
+    "$root/packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service" \
+    "$root/packaging/systemd/aragorn-runtime-lineage-capability-observation-publisher.service" \
     "$root/packaging/systemd/aragorn-runtime-revocation-publisher.service" \
     "$destdir/usr/lib/systemd/system/"

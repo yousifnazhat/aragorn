@@ -138,6 +138,7 @@ _CAPTURED_REPLAY_OVERRIDES = {
     "github_gateway": "sha256:21e3a74cb0927d1a160b089797cc169e1d1bfc8c68b7a2b5005904ee7aabe07c",
     "github_quarantine_receipt": "sha256:170f873cf49d8585f9b37d15c13ea823ac27c1e9d6eb966a2a6996abfc73efc1",
     "oci_runtime": "sha256:9c9ed5819ceeda4d5734da23d100b7a8058643fbea81ee742fcbba868b8dface",
+    "protected_install": "sha256:885feeb23d2a29f65e51799ed5ec022c47db7f41c97f9c887af1183552cfa402",
 }
 # ponytail: global replay lock; pass dependencies explicitly if throughput matters.
 _HISTORICAL_REPLAY_LOCK = RLock()

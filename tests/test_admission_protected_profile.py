@@ -39,6 +39,12 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
                 / "phase3-openclaw-protected-archive-route-qualification-v1-2026-08-04.json"
             ).read_bytes()
         )
+        cls.config = json.loads(
+            (
+                receipts
+                / "phase3-openclaw-protected-config-route-qualification-v1-2026-08-07.json"
+            ).read_bytes()
+        )
 
     def compose(
         self,
@@ -52,18 +58,20 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
             self.profile if profile is None else profile,
             self.inventory if inventory is None else inventory,
             self.candidates if candidates is None else candidates,
-            [self.workshop, self.archive] if qualifications is None else qualifications,
+            [self.workshop, self.archive, self.config]
+            if qualifications is None
+            else qualifications,
         )
 
-    def test_composes_two_passes_and_nineteen_not_tested_in_inventory_order(
+    def test_composes_three_passes_and_eighteen_not_tested_in_inventory_order(
         self,
     ) -> None:
-        result = self.compose([self.workshop, self.archive])
-        reversed_result = self.compose([self.archive, self.workshop])
+        result = self.compose([self.workshop, self.archive, self.config])
+        reversed_result = self.compose([self.config, self.archive, self.workshop])
 
         self.assertEqual(result, reversed_result)
         self.assertNotIn("recorded_at", result)
-        self.assertEqual(result["counts"], {"PASS": 2, "NOT_TESTED": 19})
+        self.assertEqual(result["counts"], {"PASS": 3, "NOT_TESTED": 18})
         self.assertEqual(len(result["routes"]), 21)
         self.assertEqual(
             result["route_inventory_canonical_digest"],
@@ -81,6 +89,7 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
             {route["id"] for route in result["routes"] if route["status"] == "PASS"},
             {
                 "ADM-02/update/archive-source-force-replacement",
+                "ADM-02/update/config-entry-activation",
                 "ADM-02/update/workshop-proposal-apply",
             },
         )
@@ -99,25 +108,25 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
         cases = {}
         unknown = deepcopy(self.workshop)
         unknown["route"]["id"] = "ADM-02/reload/workshop-invalidation"
-        cases["unknown"] = [unknown, self.archive]
-        cases["duplicate"] = [self.archive, self.archive]
+        cases["unknown"] = [unknown, self.archive, self.config]
+        cases["duplicate"] = [self.archive, self.archive, self.config]
         forged = deepcopy(self.archive)
         forged["route"]["observed_outcome"] = "DENIED"
-        cases["forged"] = [self.workshop, forged]
+        cases["forged"] = [self.workshop, forged, self.config]
         failed = deepcopy(self.workshop)
         failed["route"]["status"] = "FAIL"
-        cases["FAIL"] = [failed, self.archive]
+        cases["FAIL"] = [failed, self.archive, self.config]
         cross_profile = deepcopy(self.archive)
         cross_profile["profile"] = "other-profile"
-        cases["cross-profile"] = [self.workshop, cross_profile]
+        cases["cross-profile"] = [self.workshop, cross_profile, self.config]
 
         for name, qualifications in cases.items():
             with self.subTest(name=name), self.assertRaises(AdmissionEvidenceError):
                 self.compose(qualifications)
 
-    def test_requires_both_pins_and_reuses_profile_inventory_validation(self) -> None:
+    def test_requires_all_pins_and_reuses_profile_inventory_validation(self) -> None:
         with self.assertRaises(AdmissionEvidenceError):
-            self.compose([self.archive])
+            self.compose([self.archive, self.config])
 
         profile = deepcopy(self.profile)
         profile["decision"] = {"installer_work_eligible": True, "status": "PASS"}

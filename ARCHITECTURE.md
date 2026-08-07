@@ -429,12 +429,21 @@ qualify archive parsing. Aggregate `ADM-02`, admission-profile and installer
 eligibility, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority remain
 false.
 
+A third additive exact-profile verifier qualifies only
+`ADM-02/update/config-entry-activation` as route-level `PASS`. A native
+`skills.update` activation request (`enabled:true`) for the discovered
+protected skill reached the read-only configuration lock path and failed with
+`EROFS`; configuration, active-skill,
+discovery, full runtime tree, and gateway process identity remained unchanged.
+This is one pre-effect configuration-write denial, not aggregate admission or
+installer authority.
+
 The exact protected-consumer route-coverage ledger deterministically composes
-only those two pinned qualifications against the authoritative 21-route
-inventory. Its current result is 2 `PASS` and 19 `NOT_TESTED`; changed,
+only those three pinned qualifications against the authoritative 21-route
+inventory. Its current result is 3 `PASS` and 18 `NOT_TESTED`; changed,
 duplicate, missing, or cross-profile inputs fail closed. The ledger is a
 closure-progress record, not aggregate admission or release authority.
-The next snapshot-consumer probe must tamper with the agent-writable session
+Any snapshot-consumer qualification must tamper with the agent-writable session
 record and prompt blob and prove rejection or exact protected-byte rebuild;
 an unchanged opaque prompt digest is not sufficient for route `PASS`.
 
@@ -492,7 +501,7 @@ output in three fresh CPython processes with distinct hash seeds. Its separate
 receipt marks only `DET-01/PASS`; fixed analyzer inputs are not re-attested,
 `ADM-01` is not composed, and installer authority remains disabled.
 
-The first private bake-off target is OpenClaw because it exposes the clearest operator-owned pre-install policy boundary; Pi is the comparison target because its tool-call hook documents blocking on hook errors; Hermes remains a useful contained workload/detonation candidate but its hook failure behavior is not suitable for fail-closed authority. This ordering is not a runtime selection. A candidate is eliminated as soon as one mandatory scenario fails; a candidate can be chosen only after `DET-01`, `ADM-01`, `ADM-02`, and `ADM-03` all pass against an immutable runtime version. Runtime prevention additionally requires `RUN-01` and `RUN-02` with an external OS-level broker/sensor. The next production decision is to mediate and protect workspace skill writes externally or evaluate another harness.
+The first private bake-off target is OpenClaw because it exposes the clearest operator-owned pre-install policy boundary; Pi is the comparison target because its tool-call hook documents blocking on hook errors; Hermes remains a useful contained workload/detonation candidate but its hook failure behavior is not suitable for fail-closed authority. This ordering is not a runtime selection. A candidate is eliminated as soon as one mandatory scenario fails; a candidate can be chosen only after `DET-01`, `ADM-01`, `ADM-02`, and `ADM-03` all pass against an immutable runtime version. Runtime prevention additionally requires `RUN-01` and `RUN-02` with an external OS-level broker/sensor. External workspace mediation is now implemented; the current gate is exact protected-consumer admission-profile closure.
 
 The first external-mediation primitive now verifies and freezes a retained
 staged tree, rejects occupied activation names, and publishes a fresh sibling

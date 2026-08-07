@@ -29,6 +29,10 @@ _QUALIFICATIONS = {
         "aragorn/admission-protected-archive-route-qualification/v1",
         "ADM-02/update/archive-source-force-replacement",
     ),
+    "sha256:e81299d455895e22a3de643789f6d57f5f47ae645c01d6161eed58f7fffd9744": (
+        "aragorn/admission-protected-config-route-qualification/v1",
+        "ADM-02/update/config-entry-activation",
+    ),
 }
 _DECISION = {
     "status": "PARTIAL_ROUTE_COVERAGE",
@@ -92,7 +96,7 @@ def compose_openclaw_protected_profile_coverage(
         raise AdmissionEvidenceError(f"invalid route qualification: {exc}") from exc
 
     if len(qualified) != len(_QUALIFICATIONS):
-        raise AdmissionEvidenceError("both pinned route qualifications are required")
+        raise AdmissionEvidenceError("all pinned route qualifications are required")
 
     route_ids = [
         f"{route['id']}/{path['id']}"
@@ -107,7 +111,7 @@ def compose_openclaw_protected_profile_coverage(
         }
         for route_id in route_ids
     ]
-    if len(routes) != 21 or len(qualified) != 2:
+    if len(routes) != 21 or len(qualified) != 3:
         raise AdmissionEvidenceError("protected route coverage count changed")
 
     return {
@@ -120,10 +124,10 @@ def compose_openclaw_protected_profile_coverage(
         },
         "route_inventory_canonical_digest": canonical_digest(route_inventory),
         "routes": routes,
-        "counts": {"PASS": 2, "NOT_TESTED": 19},
+        "counts": {"PASS": 3, "NOT_TESTED": 18},
         "decision": dict(_DECISION),
         "limitations": [
-            "ONLY_TWO_EXACT_ROUTE_QUALIFICATIONS_COMPOSED",
+            "ONLY_THREE_EXACT_ROUTE_QUALIFICATIONS_COMPOSED",
             "NO_AGGREGATE_ADMISSION_INSTALLER_OR_PHASE3_AUTHORITY",
         ],
     }

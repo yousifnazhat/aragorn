@@ -454,8 +454,8 @@ ledger from exact source receipts and their transitive evidence. It records
 policy blocked the positive-control installer but was not invoked when workshop
 apply created the workspace skill. This result is limited to the pinned runtime,
 configuration, route, and retained evidence; `reload/workshop-invalidation`
-remains `NOT_TESTED`. The next production decision is to mediate and protect
-workspace skill writes externally or evaluate another harness.
+remains `NOT_TESTED`. External workspace mediation is implemented below; the
+current gate is exact protected-consumer admission-profile closure.
 
 A separate
 [protected-route raw-action receipt](./benchmark/receipts/phase1-openclaw-protected-route-actions-v5-2026-07-29.json)
@@ -485,10 +485,20 @@ ingested; this qualification covers the forced directory-source replacement
 denial, not archive parsing. Aggregate admission, installer, `RUN-01`,
 `RUN-02`, Phase 3, EDR, and release authority all remain false.
 
+A third additive
+[protected-config route qualification](./benchmark/receipts/phase3-openclaw-protected-config-route-qualification-v1-2026-08-07.json)
+promotes only `ADM-02/update/config-entry-activation` to route-level `PASS` for
+that exact profile. A native `skills.update` activation request (`enabled:true`)
+for the discovered protected skill reached the read-only configuration lock
+path and failed with `EROFS`.
+The verifier binds unchanged configuration, active-skill, discovery, runtime
+tree, and gateway process identity before and after. It grants no aggregate
+admission, installer, Phase 3, EDR, or release authority.
+
 The exact protected-consumer
 [route-coverage ledger](./benchmark/receipts/phase3-openclaw-protected-profile-route-coverage-v1-2026-08-07.json)
-now composes those two pinned qualifications in the authoritative 21-route
-inventory order: 2 `PASS`, 19 `NOT_TESTED`. It rejects missing, duplicate,
+now composes those three pinned qualifications in the authoritative 21-route
+inventory order: 3 `PASS`, 18 `NOT_TESTED`. It rejects missing, duplicate,
 modified, or cross-profile qualifications and grants no aggregate admission,
 installer, Phase 3, EDR, or release authority.
 

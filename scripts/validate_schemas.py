@@ -63,6 +63,9 @@ from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.admission_protected_archive import (
     verify_openclaw_protected_archive_replacement,
 )
+from aragorn.admission_protected_config import (
+    verify_openclaw_protected_config_activation,
+)
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
 )
@@ -1755,11 +1758,53 @@ def main() -> int:
     ].validate(retained_archive_qualification)
     if archive_qualification != retained_archive_qualification:
         raise AssertionError("protected archive qualification changed")
+
+    config_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-config-activation-2026-08-07.json",
+        protected_profile_path,
+        protected_profile_dir / "protected-config-activation-probe.mjs",
+        protected_profile_dir / "protected-route-config-v1.json",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase3-protected-archive-existing"
+        / "SKILL.md",
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-config-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in config_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        config_qualification = verify_openclaw_protected_config_activation(
+            load(
+                admission_receipts
+                / "phase3-openclaw-protected-config-activation-v1-2026-08-07.json"
+            ),
+            evidence_cas=evidence_cas,
+            route_profile=load_runtime_profile(protected_profile_path.read_bytes()),
+            route_inventory=openclaw_route_inventory,
+            runtime_candidates=runtime_candidates,
+        )
+    retained_config_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-config-route-qualification-v1-2026-08-07.json"
+    )
+    retained_config_qualification = load(retained_config_qualification_path)
+    if (
+        config_qualification != retained_config_qualification
+        or retained_config_qualification_path.read_bytes()
+        != canonical_json(config_qualification) + b"\n"
+    ):
+        raise AssertionError("protected config qualification changed")
     protected_profile_coverage = compose_openclaw_protected_profile_coverage(
         load_runtime_profile(protected_profile_path.read_bytes()),
         openclaw_route_inventory,
         runtime_candidates,
-        [retained_qualification, retained_archive_qualification],
+        [
+            retained_qualification,
+            retained_archive_qualification,
+            retained_config_qualification,
+        ],
     )
     protected_profile_coverage_path = admission_receipts / (
         "phase3-openclaw-protected-profile-route-coverage-v1-2026-08-07.json"

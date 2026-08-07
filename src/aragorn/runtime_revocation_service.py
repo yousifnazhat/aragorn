@@ -7,7 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from .oci_worker_protocol import canonical_json
+from .oci_worker_protocol import canonical_digest, canonical_json
 from .runtime_action_broker import (
     RuntimeActionBrokerConfig,
     RuntimeActionBrokerError,
@@ -35,7 +35,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 64
     try:
-        _run(Path(arguments[0]), Path(arguments[1]))
+        result = _run(Path(arguments[0]), Path(arguments[1]))
+        print(canonical_json(result).decode("ascii"))
         return 0
     except KeyboardInterrupt:
         return 130
@@ -50,7 +51,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 126
 
 
-def _run(runtime_binding_path: Path, revocations_path: Path) -> None:
+def _run(runtime_binding_path: Path, revocations_path: Path) -> dict[str, object]:
     if sys.platform != "linux":
         raise RuntimeActionServiceError("Linux execution is required")
     broker_uid, runtime_uid, runtime_gid, sensor_uid, sensor_gid = _service_identities()
@@ -85,6 +86,12 @@ def _run(runtime_binding_path: Path, revocations_path: Path) -> None:
         expected_runtime_gid=runtime_gid,
     )
     publish_runtime_control_document(config.revocations_path, document, config)
+    return {
+        "schema": "aragorn/runtime-revocation-publication-result/v1",
+        "authority": "LOCAL_PROCESS_RESULT_ONLY_NOT_DURABLE_PROVENANCE_AUTHORITY",
+        "revocations_digest": canonical_digest(document),
+        "generation": document["generation"],
+    }
 
 
 def _read_revocations(path: Path, expected_uid: int) -> dict[str, object]:

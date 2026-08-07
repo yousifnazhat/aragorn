@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
 from aragorn import runtime_revocation_service as service
-from aragorn.oci_worker_protocol import canonical_json
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.runtime_action_broker import RuntimeActionBrokerError
 from tests.test_runtime_action_broker import _SKILL, _Fixture
 from tests.test_runtime_action_service_v2 import _binding
@@ -68,6 +69,7 @@ class RuntimeRevocationServiceTests(unittest.TestCase):
                     {"CREDENTIALS_DIRECTORY": str(runtime.parent)},
                 ),
                 patch.object(service, "publish_runtime_control_document") as publish,
+                redirect_stdout(stdout := StringIO()),
             ):
                 self.assertEqual(
                     service.main([str(runtime), str(revocations)]),
@@ -100,6 +102,17 @@ class RuntimeRevocationServiceTests(unittest.TestCase):
             (expected.revocations_path, _revocations(), expected),
         )
         self.assertEqual(publish.call_args.kwargs, {})
+        self.assertEqual(
+            json.loads(stdout.getvalue()),
+            {
+                "schema": "aragorn/runtime-revocation-publication-result/v1",
+                "authority": (
+                    "LOCAL_PROCESS_RESULT_ONLY_NOT_DURABLE_PROVENANCE_AUTHORITY"
+                ),
+                "revocations_digest": canonical_digest(_revocations()),
+                "generation": 4,
+            },
+        )
 
     def test_usage_platform_and_identity_are_bounded(self) -> None:
         for arguments in ([], ["binding"], ["a", "b", "c"]):

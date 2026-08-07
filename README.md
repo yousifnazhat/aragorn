@@ -294,9 +294,20 @@ interrupted publication fail nonzero. The shared publisher rejects
 invalid, stale, rollback, and same-generation equivocation attempts without
 changing the retained control or floor state. This is a bounded 4 KiB local
 credential path, not cryptographic authorship or a durable credential-receipt
-protocol. It remains unit/static evidence until a retained same-gateway
-revocation run binds the loaded credential to the blocked action, so it does not
-establish aggregate `RUN-02`, Phase 3 exit, EDR, installer, or release authority.
+protocol.
+[Retained pinned OpenClaw/systemd revocation evidence](./benchmark/evidence/runtime-revocation-openclaw-systemd-composition-p3-5b-2026-08-06.json),
+with canonical evidence digest
+`sha256:3751a1650b0f5caa49fa56ef412047f7965ecd06c659e46ca223715de5868e94`,
+now binds one root source, one successful invocation-scoped publisher journal
+result, and the exact generation `1` to `2` control-floor transition. Only the
+revocation document and floor change before the same OpenClaw gateway PID,
+start time, and cgroup returns `BLOCK` / `NOT_PERFORMED` solely for
+`ACTIVE_SKILL_REVOKED`; the grant becomes `CONSUMED`, its exact no-effect
+profile receipt is retained, and the target remains absent. The journal result
+is local process evidence, not durable provenance. The semantic verifier is
+[`aragorn.runtime_revocation_openclaw_systemd_evidence`](./src/aragorn/runtime_revocation_openclaw_systemd_evidence.py).
+This closes only the bounded P3.5b composition slice and does not establish
+aggregate `RUN-02`, Phase 3 exit, EDR, installer, or release authority.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

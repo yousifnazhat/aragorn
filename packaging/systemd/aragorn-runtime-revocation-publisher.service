@@ -16,7 +16,7 @@ WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
 TimeoutStartSec=5s
-TasksMax=1
+TasksMax=2
 MemoryMax=128M
 MemorySwapMax=0
 LimitNOFILE=32

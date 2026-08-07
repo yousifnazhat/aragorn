@@ -823,10 +823,27 @@ never enables or starts the manual publisher. The unit has no condition-skip
 path: missing credentials and interrupted publication fail nonzero. The reused
 credential reader bounds this ingress to 4 KiB. `LoadCredential` does not retain
 original source metadata, and this path has no signature-based authorship or durable
-credential-digest receipt. Until retained live evidence binds a credential
-snapshot to a same-gateway revoked action, P3.5b is a unit/static checkpoint and
-does not establish aggregate `RUN-02`, Phase 3 exit, EDR status, installer
-authority, or release authority.
+credential-digest receipt.
+
+The [retained P3.5b OpenClaw/systemd capture](./benchmark/evidence/runtime-revocation-openclaw-systemd-composition-p3-5b-2026-08-06.json),
+with canonical evidence digest
+`sha256:3751a1650b0f5caa49fa56ef412047f7965ecd06c659e46ca223715de5868e94`,
+closes the bounded same-gateway dependency. It records a safe root source at
+activation, a freshly timed canonical source before manual publication, the
+effective `LoadCredential` unit, and one invocation-scoped journal result whose
+generation and digest match the published revocation. The only immediate
+control changes are `revocations.json` and the generation floor from `1` to
+`2`; grant, effect, unrelated-control, process, and socket snapshots remain
+stable. The same OpenClaw gateway PID, start time, cgroup, and namespaces then
+produce `BLOCK` / `NOT_PERFORMED` with sole reason `ACTIVE_SKILL_REVOKED`. The
+one-shot grant moves from `AVAILABLE` to `CONSUMED`, its exact no-effect profile
+receipt is retained, and no target or staging entry exists. The process journal
+result is not durable credential provenance, and captured worktree bytes are
+not signed release identity. The semantic verifier is
+[`aragorn.runtime_revocation_openclaw_systemd_evidence`](./src/aragorn/runtime_revocation_openclaw_systemd_evidence.py).
+P3.5b is therefore closed only for this one local create slice; aggregate
+`RUN-02`, Phase 3 exit, EDR status, installer authority, and release authority
+remain false.
 
 ### 8. Evidence and interoperability plane
 

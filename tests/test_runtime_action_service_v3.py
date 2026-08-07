@@ -169,6 +169,7 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         )
         self.assertIn("PrivateNetwork=yes", unit)
         self.assertIn("IPAddressDeny=any", unit)
+        self.assertIn("TasksMax=2", unit)
         self.assertIn("AmbientCapabilities=\n", unit)
         self.assertIn("CapabilityBoundingSet=\n", unit)
         self.assertNotIn("ConditionPathExists=", unit)

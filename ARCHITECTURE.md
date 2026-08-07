@@ -429,6 +429,15 @@ qualify archive parsing. Aggregate `ADM-02`, admission-profile and installer
 eligibility, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority remain
 false.
 
+The exact protected-consumer route-coverage ledger deterministically composes
+only those two pinned qualifications against the authoritative 21-route
+inventory. Its current result is 2 `PASS` and 19 `NOT_TESTED`; changed,
+duplicate, missing, or cross-profile inputs fail closed. The ledger is a
+closure-progress record, not aggregate admission or release authority.
+The next snapshot-consumer probe must tamper with the agent-writable session
+record and prompt blob and prove rejection or exact protected-byte rebuild;
+an unchanged opaque prompt digest is not sufficient for route `PASS`.
+
 The retention pre-gate re-verifies every referenced conformance-evidence blob
 from the protected CAS. This proves blob identity and availability, not the
 truth of individual scenario claims. Positive `PASS` remains

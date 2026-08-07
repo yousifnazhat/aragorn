@@ -63,6 +63,9 @@ from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.admission_protected_archive import (
     verify_openclaw_protected_archive_replacement,
 )
+from aragorn.admission_protected_profile import (
+    compose_openclaw_protected_profile_coverage,
+)
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.admission_runtime_profile import (
     load_runtime_profile,
@@ -1752,6 +1755,22 @@ def main() -> int:
     ].validate(retained_archive_qualification)
     if archive_qualification != retained_archive_qualification:
         raise AssertionError("protected archive qualification changed")
+    protected_profile_coverage = compose_openclaw_protected_profile_coverage(
+        load_runtime_profile(protected_profile_path.read_bytes()),
+        openclaw_route_inventory,
+        runtime_candidates,
+        [retained_qualification, retained_archive_qualification],
+    )
+    protected_profile_coverage_path = admission_receipts / (
+        "phase3-openclaw-protected-profile-route-coverage-v1-2026-08-07.json"
+    )
+    retained_protected_profile_coverage = load(protected_profile_coverage_path)
+    if (
+        protected_profile_coverage != retained_protected_profile_coverage
+        or protected_profile_coverage_path.read_bytes()
+        != canonical_json(protected_profile_coverage) + b"\n"
+    ):
+        raise AssertionError("protected-profile route coverage changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

@@ -485,6 +485,13 @@ ingested; this qualification covers the forced directory-source replacement
 denial, not archive parsing. Aggregate admission, installer, `RUN-01`,
 `RUN-02`, Phase 3, EDR, and release authority all remain false.
 
+The exact protected-consumer
+[route-coverage ledger](./benchmark/receipts/phase3-openclaw-protected-profile-route-coverage-v1-2026-08-07.json)
+now composes those two pinned qualifications in the authoritative 21-route
+inventory order: 2 `PASS`, 19 `NOT_TESTED`. It rejects missing, duplicate,
+modified, or cross-profile qualifications and grants no aggregate admission,
+installer, Phase 3, EDR, or release authority.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

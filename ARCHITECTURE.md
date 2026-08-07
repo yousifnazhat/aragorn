@@ -789,14 +789,24 @@ cannot become `AVAILABLE` again even if the mutable active-state file is absent.
 
 The fresh installer stages no v1/v2 broker or sensor unit. Its explicit
 activation transition stops, disables, and masks previously installed v1/v2
-routes before enabling the grant route; live composition must still prove the
-effective unit states. An indeterminate `CLAIMED` state with no exact receipt
-remains fail-stop and manual-recovery-only. The dynamic issuer/redeemer is
-unit/static exercised,
-but one retained pinned-OpenClaw/systemd run is still required before P3.5a can
-close. This establishes neither semantic model causation, broader action
-coverage, aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, nor release
-authority.
+routes before enabling the grant route. An indeterminate `CLAIMED` state with no
+exact receipt remains fail-stop and manual-recovery-only.
+
+The [retained P3.5a OpenClaw/systemd capture](./benchmark/evidence/runtime-capability-openclaw-systemd-composition-p3-5a-2026-08-06.json),
+with canonical evidence digest
+`sha256:7fee778bbf16dd80c726c5007e290f948c1f3ae8212fe462e1a5c2345a32ab45`,
+closes that bounded live-composition dependency. With the issuer unavailable,
+the native OpenClaw call returns `CLIENT_ERROR` / `NOT_SUBMITTED`, the protected
+and control snapshots remain unchanged, and the grant remains `AVAILABLE`.
+After a bounded gateway restart and dynamic-route activation, that same grant
+becomes `CONSUMED` for one `ALLOW` / `CREATED` action. The retained proof binds
+the lease, exact profile receipt and target, gateway `MainPID`, paired
+`SO_PEERCRED` chain, `LoadCredential` inputs, active v3/v4 units, and masked
+legacy routes; the semantic verifier rejects repinned boundary mutations. The
+restart is fixture sequencing, not continuous same-process evidence. P3.5a is
+therefore closed, but semantic model causation, broader action coverage,
+aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, installer authority, and
+release authority remain unestablished.
 
 ### 8. Evidence and interoperability plane
 

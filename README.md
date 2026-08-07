@@ -268,11 +268,21 @@ operator remediation. Replacing a terminal grant first archives its exact state
 and, for `CONSUMED`, its bound profile receipt as immutable evidence; that state
 archive is also a permanent replay tombstone for the grant digest.
 The installer stages only the dynamic capability units; activation masks every
-legacy v1/v2 route. This remains unit/static evidence: retained live
-OpenClaw/systemd composition and effective unit-state proof are still required.
-The root-provisioned provenance digests are bindings, not independently promoted
-installer authority. This grants no aggregate `RUN-01`, `RUN-02`, Phase 3 exit,
-EDR, or release evidence.
+legacy v1/v2 route.
+[Retained pinned OpenClaw/systemd evidence](./benchmark/evidence/runtime-capability-openclaw-systemd-composition-p3-5a-2026-08-06.json),
+with canonical evidence digest
+`sha256:7fee778bbf16dd80c726c5007e290f948c1f3ae8212fe462e1a5c2345a32ab45`,
+now observes the same root grant remain `AVAILABLE` while an unavailable issuer
+returns `CLIENT_ERROR` / `NOT_SUBMITTED` without an effect, then become
+`CONSUMED` for one `ALLOW` / `CREATED` action after bounded gateway restart and
+dynamic-route activation. The capture binds the exact lease, profile receipt,
+target, gateway `MainPID`, `SO_PEERCRED` chain, systemd credentials, and effective
+unit state; every legacy v1/v2 route is masked. The semantic verifier is
+[`aragorn.runtime_capability_openclaw_systemd_evidence`](./src/aragorn/runtime_capability_openclaw_systemd_evidence.py).
+The gateway restart is fixture sequencing, not continuous same-process
+evidence. Root-provisioned provenance digests remain bindings, not independently
+promoted installer authority. This grants no semantic-causation, aggregate
+`RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, or release evidence.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

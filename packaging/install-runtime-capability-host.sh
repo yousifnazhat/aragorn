@@ -42,11 +42,13 @@ install -m 0644 \
     "$root/src/aragorn/runtime_action_broker_v4.py" \
     "$root/src/aragorn/runtime_action_service_v4.py" \
     "$root/src/aragorn/runtime_observation_service_v3.py" \
+    "$root/src/aragorn/runtime_revocation_service.py" \
     "$destdir/usr/lib/aragorn/aragorn/"
 install -m 0755 \
     "$root/packaging/activate-runtime-capability-host.sh" \
     "$root/packaging/libexec/aragorn-runtime-action-service-v4.py" \
     "$root/packaging/libexec/aragorn-runtime-observation-service-v3.py" \
+    "$root/packaging/libexec/aragorn-runtime-revocation-service.py" \
     "$destdir/usr/libexec/aragorn/"
 install -m 0644 \
     "$root/packaging/systemd/aragorn-gateway.sysusers" \
@@ -57,4 +59,5 @@ install -m 0644 \
 install -m 0644 \
     "$root/packaging/systemd/aragorn-runtime-capability-action-broker.service" \
     "$root/packaging/systemd/aragorn-runtime-capability-observation-publisher.service" \
+    "$root/packaging/systemd/aragorn-runtime-revocation-publisher.service" \
     "$destdir/usr/lib/systemd/system/"

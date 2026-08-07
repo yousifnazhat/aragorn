@@ -284,6 +284,20 @@ evidence. Root-provisioned provenance digests remain bindings, not independently
 promoted installer authority. This grants no semantic-causation, aggregate
 `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, or release evidence.
 
+P3.5b adds a minimal local root-controlled revocation-publication ingress. A
+manual hardened systemd oneshot snapshots an optional root:root, mode `0400`,
+single-link canonical document with `LoadCredential`, runs as the existing
+broker principal, validates the exact runtime binding and credential bytes, and
+calls the existing locked publisher. The activator verifies the effective unit
+and credentials but never enables or starts it; missing credentials and an
+interrupted publication fail nonzero. The shared publisher rejects
+invalid, stale, rollback, and same-generation equivocation attempts without
+changing the retained control or floor state. This is a bounded 4 KiB local
+credential path, not cryptographic authorship or a durable credential-receipt
+protocol. It remains unit/static evidence until a retained same-gateway
+revocation run binds the loaded credential to the blocked action, so it does not
+establish aggregate `RUN-02`, Phase 3 exit, EDR, installer, or release authority.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

@@ -22,6 +22,9 @@ _BROKER_UNIT = (
 _SENSOR_UNIT = (
     _ROOT / "packaging/systemd/aragorn-runtime-capability-observation-publisher.service"
 )
+_REVOCATION_UNIT = (
+    _ROOT / "packaging/systemd/aragorn-runtime-revocation-publisher.service"
+)
 _OBSOLETE_SHIMS = (
     "aragorn-runtime-action-service.py",
     "aragorn-runtime-action-service-v2.py",
@@ -131,6 +134,47 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         self.assertNotIn("capability-lease", broker + sensor)
         self.assertNotIn("aragorn-runtime-action-service-v2.py", broker)
 
+    def test_revocation_publisher_is_hardened_and_manual_only(self) -> None:
+        unit = _REVOCATION_UNIT.read_text(encoding="utf-8")
+        self.assertIn("Type=oneshot", unit)
+        self.assertIn("RemainAfterExit=no", unit)
+        self.assertIn("User=aragorn-broker", unit)
+        self.assertIn("Group=aragorn-runtime", unit)
+        self.assertIn("SupplementaryGroups=aragorn-sensor", unit)
+        self.assertIn(
+            "LoadCredential=runtime-binding:/etc/aragorn/runtime-action-runtime.json",
+            unit,
+        )
+        self.assertIn(
+            "LoadCredential=revocations:"
+            "/etc/aragorn/runtime-action-revocation-publication.json",
+            unit,
+        )
+        self.assertIn(
+            "ExecStart=/usr/bin/python3.12 -I -S -B "
+            "/usr/libexec/aragorn/aragorn-runtime-revocation-service.py "
+            "%d/runtime-binding %d/revocations",
+            unit,
+        )
+        self.assertIn(
+            "ReadWritePaths=/var/lib/aragorn-runtime-action/control",
+            unit,
+        )
+        self.assertIn(
+            "InaccessiblePaths=/etc/aragorn/runtime-action-runtime.json "
+            "/etc/aragorn/runtime-action-revocation-publication.json "
+            "/var/lib/aragorn-runtime-action/protected "
+            "/var/lib/aragorn-runtime-action/staging",
+            unit,
+        )
+        self.assertIn("PrivateNetwork=yes", unit)
+        self.assertIn("IPAddressDeny=any", unit)
+        self.assertIn("AmbientCapabilities=\n", unit)
+        self.assertIn("CapabilityBoundingSet=\n", unit)
+        self.assertNotIn("ConditionPathExists=", unit)
+        self.assertNotIn("[Install]", unit)
+        self.assertNotIn("WantedBy=", unit)
+
     def test_installer_stages_v2_dependencies_without_legacy_broker_units(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             obsolete_root = Path(temporary) / "usr/libexec/aragorn"
@@ -155,6 +199,7 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
                 "runtime_action_broker_v4.py",
                 "runtime_action_service_v4.py",
                 "runtime_observation_service_v3.py",
+                "runtime_revocation_service.py",
             ):
                 self.assertTrue((modules / name).is_file())
             launcher = (
@@ -170,12 +215,25 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 64, result.stderr)
             self.assertIn("usage: aragorn-runtime-action-service-v4", result.stderr)
+            revocation_launcher = (
+                staged / "usr/libexec/aragorn/aragorn-runtime-revocation-service.py"
+            )
+            result = subprocess.run(
+                [sys.executable, "-I", "-S", "-B", str(revocation_launcher)],
+                check=False,
+                cwd="/",
+                env={"PATH": "/usr/bin:/bin"},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 64, result.stderr)
+            self.assertIn("usage: aragorn-runtime-revocation-service", result.stderr)
             self.assertTrue(
                 (staged / "usr/libexec/aragorn" / _ACTIVATOR.name).is_file()
             )
             for name in _OBSOLETE_SHIMS:
                 self.assertFalse((staged / "usr/libexec/aragorn" / name).exists())
-            for unit in (_BROKER_UNIT, _SENSOR_UNIT):
+            for unit in (_BROKER_UNIT, _SENSOR_UNIT, _REVOCATION_UNIT):
                 self.assertTrue(
                     (staged / "usr/lib/systemd/system" / unit.name).is_file()
                 )
@@ -210,6 +268,19 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         self.assertIn('[ -L "$grant_path" ]', script)
         self.assertIn("stat -c '%u:%g:%a:%h' -- \"$grant_path\"", script)
         self.assertIn('"$grant_metadata" != "0:0:400:1"', script)
+        self.assertIn(
+            '[ -e "$revocation_publication_path" ] '
+            '|| [ -L "$revocation_publication_path" ]',
+            script,
+        )
+        self.assertIn(
+            "stat -c '%u:%g:%a:%h' -- \"$revocation_publication_path\"",
+            script,
+        )
+        self.assertIn(
+            '"$revocation_publication_metadata" != "0:0:400:1"',
+            script,
+        )
         for property_name in (
             "FragmentPath",
             "DropInPaths",
@@ -241,10 +312,30 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
             "capability-grant:/etc/aragorn/runtime-capability-grant.json",
             script,
         )
+        self.assertIn(
+            "revocations:/etc/aragorn/runtime-action-revocation-publication.json",
+            script,
+        )
+        self.assertIn(
+            "/usr/libexec/aragorn/aragorn-runtime-revocation-service.py",
+            script,
+        )
+        self.assertNotIn('enable --now "$revocation_publisher"', script)
+        self.assertNotIn('start "$revocation_publisher"', script)
+        revocation_stop = script.index('stop "$revocation_publisher"')
+        revocation_inactive = script.index('is-active --quiet "$revocation_publisher"')
+        first_reload = script.index("/usr/bin/systemctl daemon-reload")
         verification = script.index('verify_effective_unit \\\n    "$new_broker"')
+        revocation_verification = script.index(
+            'verify_effective_unit \\\n    "$revocation_publisher"'
+        )
         stop = script.index('disable --now "$new_sensor" "$new_broker"')
         start = script.index('/usr/bin/systemctl enable --now "$new_broker"')
+        self.assertLess(revocation_stop, revocation_inactive)
+        self.assertLess(revocation_inactive, first_reload)
+        self.assertLess(revocation_inactive, revocation_verification)
         self.assertLess(stop, verification)
+        self.assertLess(revocation_verification, start)
         self.assertLess(verification, start)
 
 

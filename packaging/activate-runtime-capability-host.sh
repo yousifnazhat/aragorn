@@ -54,6 +54,23 @@ if [ "$grant_metadata" != "0:0:400:1" ]; then
     fail_activation "runtime capability grant must be root:root mode 0400 with one link"
 fi
 
+revocation_publication_path=/etc/aragorn/runtime-action-revocation-publication.json
+if [ -e "$revocation_publication_path" ] || [ -L "$revocation_publication_path" ]; then
+    if [ -L "$revocation_publication_path" ] \
+        || [ ! -f "$revocation_publication_path" ]
+    then
+        fail_activation "runtime revocation publication is not a regular non-symlink file"
+    fi
+    if ! revocation_publication_metadata=$(
+        stat -c '%u:%g:%a:%h' -- "$revocation_publication_path"
+    ); then
+        fail_activation "runtime revocation publication cannot be inspected"
+    fi
+    if [ "$revocation_publication_metadata" != "0:0:400:1" ]; then
+        fail_activation "runtime revocation publication must be root:root mode 0400 with one link"
+    fi
+fi
+
 for path in \
     /etc/aragorn/runtime-action-runtime.json \
     /etc/aragorn/runtime-action-observation.json \
@@ -78,6 +95,7 @@ aragorn-runtime-profile-observation-publisher.service
 "
 new_broker=aragorn-runtime-capability-action-broker.service
 new_sensor=aragorn-runtime-capability-observation-publisher.service
+revocation_publisher=aragorn-runtime-revocation-publisher.service
 
 unit_property()
 {
@@ -164,6 +182,10 @@ verify_effective_unit()
     esac
 }
 
+/usr/bin/systemctl stop "$revocation_publisher" || :
+if /usr/bin/systemctl is-active --quiet "$revocation_publisher"; then
+    fail_activation "previous runtime revocation publisher remained active"
+fi
 /usr/bin/systemctl daemon-reload
 /usr/bin/systemctl disable --now "$new_sensor" "$new_broker"
 if /usr/bin/systemctl is-active --quiet "$new_sensor" \
@@ -205,6 +227,16 @@ verify_effective_unit \
     observation-binding:/etc/aragorn/runtime-action-observation.json \
     capability-grant:/etc/aragorn/runtime-capability-grant.json \
     /org/freedesktop/systemd1/unit/aragorn_2druntime_2dcapability_2dobservation_2dpublisher_2eservice
+verify_effective_unit \
+    "$revocation_publisher" \
+    aragorn-broker \
+    aragorn-runtime \
+    aragorn-sensor \
+    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-revocation-service.py %d/runtime-binding %d/revocations" \
+    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-revocation-service.py /run/credentials/$revocation_publisher/runtime-binding /run/credentials/$revocation_publisher/revocations" \
+    runtime-binding:/etc/aragorn/runtime-action-runtime.json \
+    revocations:/etc/aragorn/runtime-action-revocation-publication.json \
+    /org/freedesktop/systemd1/unit/aragorn_2druntime_2drevocation_2dpublisher_2eservice
 /usr/bin/systemctl enable --now "$new_broker"
 /usr/bin/systemctl enable --now "$new_sensor"
 /usr/bin/systemctl is-active --quiet "$new_broker"

@@ -808,6 +808,26 @@ therefore closed, but semantic model causation, broader action coverage,
 aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, installer authority, and
 release authority remain unestablished.
 
+P3.5b adds only the missing packaged local revocation ingress. Its manual
+systemd oneshot loads the runtime binding and a root-controlled revocation
+publication as isolated credentials, drops into the existing broker identity,
+and invokes the existing lock-sharing control publisher. The service accepts
+only exact canonical JSON object bytes; the publisher revalidates the policy
+source binding, current time window, persisted generation floor, rollback, and
+same-generation equality before atomically publishing the document and then
+durably advancing the floor under the same lock. Existing recovery handles a
+failure between those writes without rolling the publication back.
+The activator optionally requires the source file to be root:root mode `0400`
+with one link, pins the effective unit identity, command, and credentials, and
+never enables or starts the manual publisher. The unit has no condition-skip
+path: missing credentials and interrupted publication fail nonzero. The reused
+credential reader bounds this ingress to 4 KiB. `LoadCredential` does not retain
+original source metadata, and this path has no signature-based authorship or durable
+credential-digest receipt. Until retained live evidence binds a credential
+snapshot to a same-gateway revoked action, P3.5b is a unit/static checkpoint and
+does not establish aggregate `RUN-02`, Phase 3 exit, EDR status, installer
+authority, or release authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

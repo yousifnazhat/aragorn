@@ -987,6 +987,48 @@ activator must reject environment-file assignments for `HOME`,
 then verify the effective gateway UID, GID, and complete group set. An empty
 `SupplementaryGroups=` declaration does not remove NSS-derived memberships.
 
+P3.7b composes that trust split only inside one pinned local privileged
+Docker/systemd fixture. The gateway, worker, sensor, and broker run as four
+distinct principals; retained socket metadata, Linux peer credentials, process
+profiles, read-only mounts, forbidden-read probes, and bounded syscall traces
+join the request across the gateway -> worker -> sensor -> broker path. Five
+negative cases prove no effect change for a legacy OpenClaw profile, worker
+binding mismatch, unavailable worker endpoint, unauthorized root peer, and
+stale active record. One coherent worker-specific profile/grant transition
+produces exactly one `COMPLETED` / `ALLOW` / `CREATED` result and consumes the
+one-action grant. The evaluator-controlled loopback provider determines that
+tool call, so the result does not establish autonomous model tool selection or
+production-provider behavior. The P3.6b producer evidence remains the exact parent and the
+source-frozen v4 sensor and v5 broker remain unchanged.
+The trace establishes one route connection without a reconnect attempt, not an
+application send-syscall count.
+The negative outcomes and effect snapshots are retained, but causal
+classification of those cases relies on the pinned capture setup rather than
+retained runtime reason evidence.
+
+The [retained P3.7b observation](./benchmark/evidence/runtime-action-worker-openclaw-systemd-composition-p3-7b-2026-08-09.json)
+has canonical digest
+`sha256:4b668b1eae1875c6e129afd8fd0a56c4dc2e912179644bba22cc3e5a285b969e`.
+Its separate
+[qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-openclaw-systemd-qualification-v1-2026-08-09.json)
+binds the raw and canonical observation, parent, harness, installed artifacts,
+profiles, grants, controls, cases, both host installers, and verifier
+implementation. Its installed-closure digest covers the canonical target
+inventory; source/installed byte identity is verified separately for every
+entry. The capture wrapper fsyncs its temporary canonical file and
+publishes it through a no-replace hard link, so a failed capture cannot replace
+the retained destination with partial bytes. Qualification does not mutate the
+source observation's capture-time `NOT_TESTED` and retained-evidence-false
+fields. This is one exact qualified pair, not a general runtime profile:
+provider/session raw bytes and independent host/container attestation are
+absent, gateway endpoint identity is principal-owned rather than exact
+worker-process authentication, and continuous measurement, semantic skill
+causation, multi-file and broader-action families, hostile root, hostile
+same-UID output-directory mutation, and power loss remain unqualified.
+Aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, and public-release
+authority remain false. The verifier implementation file is digest-bound; its
+Python standard-library and dynamic dependency closure is not pinned.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

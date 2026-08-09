@@ -165,8 +165,12 @@ const completed = {
 };
 const parsed = parseWorkerResult(Buffer.from(canonicalJson(completed), "ascii"), request);
 const allowed = workerToolResult(parsed);
-assert.equal(allowed.isError, false);
-assert.deepEqual(allowed.details, completed);
+assert.deepEqual(Object.keys(allowed).sort(), ["content", "details"]);
+assert.deepEqual(allowed.details, {
+  schema: "aragorn/runtime-action-worker-openclaw-details/v1",
+  status: "completed",
+  source_result: completed,
+});
 assert.equal(canonicalJson(JSON.parse(allowed.content[0].text)), allowed.content[0].text);
 assert.equal(Object.keys(decision).length, 16);
 
@@ -199,10 +203,14 @@ const blocked = {
     verdict: "BLOCK",
   },
 };
-assert.equal(
-  workerToolResult(parseWorkerResult(Buffer.from(canonicalJson(blocked), "ascii"), request)).isError,
-  true,
+const blockedToolResult = workerToolResult(
+  parseWorkerResult(Buffer.from(canonicalJson(blocked), "ascii"), request),
 );
+assert.deepEqual(blockedToolResult.details, {
+  schema: "aragorn/runtime-action-worker-openclaw-details/v1",
+  status: "blocked",
+  source_result: blocked,
+});
 assert.equal(
   parseWorkerResult(Buffer.from(canonicalJson({
     ...blocked,
@@ -237,11 +245,17 @@ assert.equal(
   }), "ascii"), request).status,
   "COMPLETED",
 );
-const notSubmitted = { ...completed, broker_result: null, status: "NOT_SUBMITTED" };
-assert.equal(
-  workerToolResult(parseWorkerResult(Buffer.from(canonicalJson(notSubmitted), "ascii"), request)).isError,
-  true,
-);
+for (const status of ["NOT_SUBMITTED", "INDETERMINATE"]) {
+  const unresolved = { ...completed, broker_result: null, status };
+  const unresolvedToolResult = workerToolResult(
+    parseWorkerResult(Buffer.from(canonicalJson(unresolved), "ascii"), request),
+  );
+  assert.deepEqual(unresolvedToolResult.details, {
+    schema: "aragorn/runtime-action-worker-openclaw-details/v1",
+    status: "error",
+    source_result: unresolved,
+  });
+}
 assert.throws(
   () => parseWorkerResult(Buffer.from(canonicalJson({ ...completed, broker_result: null }), "ascii"), request),
   /broker result/,
@@ -255,10 +269,12 @@ assert.throws(
   /binding/,
 );
 const clientError = clientErrorResult(new Error("unavailable"));
-assert.equal(clientError.isError, true);
-assert.equal(clientError.details.status, "NOT_SUBMITTED");
+assert.deepEqual(Object.keys(clientError).sort(), ["content", "details"]);
+assert.equal(clientError.details.schema, "aragorn/runtime-action-worker-openclaw-details/v1");
+assert.equal(clientError.details.status, "error");
+assert.equal(clientError.details.source_result.status, "NOT_SUBMITTED");
 assert.equal(
-  clientError.details.authority,
+  clientError.details.source_result.authority,
   "GATEWAY_CLIENT_ERROR_ONLY_NOT_EFFECT_OR_RUN_CONFORMANCE_AUTHORITY",
 );
 """

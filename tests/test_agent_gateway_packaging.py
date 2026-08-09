@@ -135,24 +135,31 @@ class AgentGatewayPackagingTests(unittest.TestCase):
                 "ReadOnlyPaths=-/opt/aragorn/runtime-profile",
             ],
         )
-        inaccessible = "\n".join(
-            line for line in service if line.startswith("InaccessiblePaths=")
+        self.assertEqual(
+            [line for line in service if line.startswith("InaccessiblePaths=")],
+            [
+                "InaccessiblePaths=/etc/aragorn/agent-gateway",
+                (
+                    "InaccessiblePaths=/etc/aragorn/runtime-action-worker.json "
+                    "/etc/aragorn/runtime-action-runtime.json "
+                    "/etc/aragorn/runtime-action-observation.json "
+                    "/etc/aragorn/runtime-capability-grant.json"
+                ),
+                (
+                    "InaccessiblePaths=-/etc/aragorn/"
+                    "runtime-action-revocation-publication.json"
+                ),
+                (
+                    "InaccessiblePaths=/var/lib/aragorn-runtime-action "
+                    "/var/lib/aragorn-protected /run/aragorn-runtime-observation"
+                ),
+                (
+                    "InaccessiblePaths=-/etc/aragorn/openclaw-profile "
+                    "-/var/lib/aragorn-openclaw-profile "
+                    "-/opt/aragorn/openclaw/aragorn-runtime-action"
+                ),
+            ],
         )
-        for path in (
-            "/etc/aragorn/agent-gateway",
-            "/etc/aragorn/runtime-action-worker.json",
-            "/etc/aragorn/runtime-action-runtime.json",
-            "/etc/aragorn/runtime-action-observation.json",
-            "/etc/aragorn/runtime-capability-grant.json",
-            "/etc/aragorn/runtime-action-revocation-publication.json",
-            "/var/lib/aragorn-runtime-action",
-            "/var/lib/aragorn-protected",
-            "/run/aragorn-runtime-observation",
-            "-/etc/aragorn/openclaw-profile",
-            "-/var/lib/aragorn-openclaw-profile",
-            "-/opt/aragorn/openclaw/aragorn-runtime-action",
-        ):
-            self.assertIn(path, inaccessible)
         self.assertNotIn(
             "/opt/aragorn/openclaw/aragorn-runtime-action-worker", "\n".join(service)
         )

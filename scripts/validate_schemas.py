@@ -69,13 +69,13 @@ from aragorn.admission_protected_config import (
 from aragorn.admission_protected_cron import (
     verify_openclaw_protected_cron_rescan,
 )
-from aragorn.admission_protected_prompt import (
-    verify_openclaw_protected_prompt_rebuild,
-)
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
     compose_openclaw_protected_profile_coverage_v2,
     compose_openclaw_protected_profile_coverage_v3,
+)
+from aragorn.admission_protected_prompt import (
+    verify_openclaw_protected_prompt_rebuild,
 )
 from aragorn.admission_protected_session_snapshot import (
     verify_openclaw_protected_session_snapshot,
@@ -124,6 +124,9 @@ from aragorn.gvisor_runtime import (
 )
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.runtime_action_worker_openclaw_systemd_evidence import (
+    runtime_action_worker_openclaw_systemd_qualification,
+)
 from aragorn.standards_gate import validate_standards_gate
 
 
@@ -2001,6 +2004,74 @@ def main() -> int:
         != canonical_json(protected_profile_coverage_v3) + b"\n"
     ):
         raise AssertionError("protected-profile v3 route coverage changed")
+
+    runtime_worker_evidence_path = admission_evidence / (
+        "runtime-action-worker-openclaw-systemd-composition-"
+        "p3-7b-2026-08-09.json"
+    )
+    runtime_worker_evidence_raw = runtime_worker_evidence_path.read_bytes()
+    runtime_worker_evidence = json.loads(runtime_worker_evidence_raw)
+    runtime_worker_evidence_digest = (
+        "sha256:4b668b1eae1875c6e129afd8fd0a56c4dc2e912179644bba22cc3e5a285b969e"
+    )
+    if (
+        runtime_worker_evidence_raw
+        != canonical_json(runtime_worker_evidence) + b"\n"
+        or "sha256:" + hashlib.sha256(runtime_worker_evidence_raw).hexdigest()
+        != "sha256:a4a9bbf375537713e72b9b8dda848202eedbf6ea3fd3a5bf8d3001297b5f82e6"
+        or canonical_digest(runtime_worker_evidence)
+        != runtime_worker_evidence_digest
+    ):
+        raise AssertionError("runtime-worker source observation changed")
+    runtime_worker_parent_path = admission_evidence / (
+        "runtime-producer-lineage-openclaw-systemd-composition-"
+        "p3-6b-2026-08-07.json"
+    )
+    runtime_worker_parent_raw = runtime_worker_parent_path.read_bytes()
+    runtime_worker_parent = json.loads(runtime_worker_parent_raw)
+    if (
+        runtime_worker_parent_raw
+        != canonical_json(runtime_worker_parent) + b"\n"
+        or "sha256:" + hashlib.sha256(runtime_worker_parent_raw).hexdigest()
+        != "sha256:53db78bb37550b4dde63bbc14b926a961c7d09af92f11bba74868fa917fd9589"
+        or canonical_digest(runtime_worker_parent)
+        != "sha256:485232aa3565f056fff3a2f1e1b14e81e6dfadc175099e315eef8e9f5cabca20"
+    ):
+        raise AssertionError("runtime-worker parent evidence changed")
+    runtime_worker_verifier_path = (
+        ROOT
+        / "src"
+        / "aragorn"
+        / "runtime_action_worker_openclaw_systemd_evidence.py"
+    )
+    runtime_worker_verifier_digest = (
+        "sha256:"
+        + hashlib.sha256(runtime_worker_verifier_path.read_bytes()).hexdigest()
+    )
+    runtime_worker_qualification = (
+        runtime_action_worker_openclaw_systemd_qualification(
+            runtime_worker_evidence,
+            runtime_worker_parent,
+            expected_digest=runtime_worker_evidence_digest,
+            implementation_digest=runtime_worker_verifier_digest,
+        )
+    )
+    validators[
+        "runtime-action-worker-openclaw-systemd-qualification-v1.schema.json"
+    ].validate(runtime_worker_qualification)
+    runtime_worker_qualification_path = admission_receipts / (
+        "phase3-runtime-action-worker-openclaw-systemd-qualification-"
+        "v1-2026-08-09.json"
+    )
+    retained_runtime_worker_qualification = load(
+        runtime_worker_qualification_path
+    )
+    if (
+        runtime_worker_qualification != retained_runtime_worker_qualification
+        or runtime_worker_qualification_path.read_bytes()
+        != canonical_json(runtime_worker_qualification) + b"\n"
+    ):
+        raise AssertionError("runtime-worker qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

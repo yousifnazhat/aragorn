@@ -508,15 +508,24 @@ function retainedToolResultText(message, result) {
   });
 }
 
+function openClawDetails(status, sourceResult) {
+  return {
+    schema: "aragorn/runtime-action-worker-openclaw-details/v1",
+    status,
+    source_result: sourceResult,
+  };
+}
+
 function workerToolResult(result) {
   const completed = result.status === "COMPLETED";
+  const allowed =
+    completed && result.broker_result.verdict === "ALLOW" && result.broker_result.effect_status === "CREATED";
   const message = completed
     ? `Aragorn ${result.broker_result.verdict}: ${result.broker_result.effect_status}`
     : `Aragorn worker relay: ${result.status}`;
   return {
     content: [{ type: "text", text: retainedToolResultText(message, result) }],
-    details: result,
-    isError: !completed || result.broker_result.verdict !== "ALLOW",
+    details: openClawDetails(allowed ? "completed" : completed ? "blocked" : "error", result),
   };
 }
 
@@ -530,8 +539,7 @@ function clientErrorResult(error) {
   };
   return {
     content: [{ type: "text", text: retainedToolResultText(`Aragorn worker relay failed closed: ${status}`, result) }],
-    details: result,
-    isError: true,
+    details: openClawDetails("error", result),
   };
 }
 

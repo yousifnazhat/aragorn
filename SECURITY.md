@@ -13,7 +13,19 @@ bounded literal source-reference graph, recursively retain supported exact
 same-commit GitHub blobs for comparator input, and run two pinned local
 Linux/arm64 comparator images under a fixed, network-denied OCI profile.
 
-Aragorn does not certify that an artifact is safe. Until a runtime enforcement integration exists, it is admission control rather than endpoint detection and response.
+Aragorn does not certify that an artifact is safe. One pinned OpenClaw 2026.7.1
+local privileged Docker/systemd fixture now qualifies a bounded experimental
+runtime-prevention path through distinct gateway, worker, sensor, and broker
+principals. That exact-pair result is not production runtime enforcement or
+endpoint detection and response. Its evaluator-controlled loopback provider
+determines the tool call, so it does not establish autonomous model tool
+selection or production-provider behavior. Its verifier's Python standard-library and
+dynamic dependency closure is not pinned. Negative-scenario cause labels rely
+on the pinned capture setup rather than retained runtime reason evidence.
+The trace proves one route connection without a reconnect attempt, not an
+application send-syscall count. Outside it, Aragorn remains admission control.
+Aggregate admission, `RUN-01`, `RUN-02`, Phase 3 exit, installer authority, and
+public-release authority remain false.
 
 ## Threat Model, Trust Boundaries, and Assumptions
 

@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/runtime-action-worker-openclaw-systemd-qualification-v1.schema.json",
+  "title": "Aragorn bounded OpenClaw distinct-worker qualification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "bindings",
+    "cases",
+    "decision",
+    "limitations",
+    "source_recorded_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/runtime-action-worker-openclaw-systemd-qualification/v1"
+    },
+    "assurance": {
+      "const": "SEMANTICALLY_REPLAY_VERIFIED_PINNED_DISTINCT_WORKER_TRACE_AND_EFFECT_EVIDENCE"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "harness",
+        "implementation",
+        "parent_evidence",
+        "runtime",
+        "source_observation",
+        "worker"
+      ],
+      "properties": {
+        "harness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["document_digest", "image_id", "parent_image_id"],
+          "properties": {
+            "document_digest": {"$ref": "#/$defs/digest"},
+            "image_id": {"$ref": "#/$defs/digest"},
+            "parent_image_id": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "implementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "base_installer_digest",
+            "capture_recipe_digest",
+            "dockerfile_digest",
+            "driver_digest",
+            "installer_digest",
+            "installed_closure_digest",
+            "parent_probe_digest",
+            "plugin_digest",
+            "probe_digest",
+            "verifier_implementation_digest"
+          ],
+          "properties": {
+            "base_installer_digest": {"$ref": "#/$defs/digest"},
+            "capture_recipe_digest": {"$ref": "#/$defs/digest"},
+            "dockerfile_digest": {"$ref": "#/$defs/digest"},
+            "driver_digest": {"$ref": "#/$defs/digest"},
+            "installer_digest": {"$ref": "#/$defs/digest"},
+            "installed_closure_digest": {"$ref": "#/$defs/digest"},
+            "parent_probe_digest": {"$ref": "#/$defs/digest"},
+            "plugin_digest": {"$ref": "#/$defs/digest"},
+            "probe_digest": {"$ref": "#/$defs/digest"},
+            "verifier_implementation_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "parent_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bytes",
+            "canonical_digest",
+            "path",
+            "raw_digest",
+            "schema"
+          ],
+          "properties": {
+            "bytes": {"const": 530696},
+            "canonical_digest": {"$ref": "#/$defs/digest"},
+            "path": {
+              "const": "benchmark/evidence/runtime-producer-lineage-openclaw-systemd-composition-p3-6b-2026-08-07.json"
+            },
+            "raw_digest": {"$ref": "#/$defs/digest"},
+            "schema": {
+              "const": "aragorn/runtime-producer-lineage-openclaw-systemd-evidence/v1"
+            }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entrypoint_digest", "tree_digest", "version"],
+          "properties": {
+            "entrypoint_digest": {"$ref": "#/$defs/digest"},
+            "tree_digest": {"$ref": "#/$defs/digest"},
+            "version": {"const": "OpenClaw 2026.7.1 (2d2ddc4)"}
+          }
+        },
+        "source_observation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authority",
+            "bytes",
+            "canonical_digest",
+            "path",
+            "raw_digest",
+            "schema"
+          ],
+          "properties": {
+            "authority": {
+              "const": "BOUNDED_DISTINCT_GATEWAY_RUNTIME_WORKER_OBSERVATION_ONLY_NOT_VERIFIED_RETAINED_EVIDENCE_OR_RUN_EDR_RELEASE_AUTHORITY"
+            },
+            "bytes": {"const": 124214},
+            "canonical_digest": {"$ref": "#/$defs/digest"},
+            "path": {
+              "const": "benchmark/evidence/runtime-action-worker-openclaw-systemd-composition-p3-7b-2026-08-09.json"
+            },
+            "raw_digest": {"$ref": "#/$defs/digest"},
+            "schema": {
+              "const": "aragorn/runtime-action-worker-openclaw-systemd-observation/v1"
+            }
+          }
+        },
+        "worker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "active_skill_digest",
+            "grant_digest",
+            "legacy_grant_digest",
+            "legacy_profile_digest",
+            "policy_digest",
+            "profile_digest"
+          ],
+          "properties": {
+            "active_skill_digest": {"$ref": "#/$defs/digest"},
+            "grant_digest": {"$ref": "#/$defs/digest"},
+            "legacy_grant_digest": {"$ref": "#/$defs/digest"},
+            "legacy_profile_digest": {"$ref": "#/$defs/digest"},
+            "policy_digest": {"$ref": "#/$defs/digest"},
+            "profile_digest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      }
+    },
+    "cases": {
+      "const": {
+        "coherent": {
+          "effect_status": "CREATED",
+          "relay_status": "COMPLETED",
+          "status": "PASS",
+          "verdict": "ALLOW"
+        },
+        "legacy_openclaw_profile": {
+          "relay_status": "INDETERMINATE",
+          "status": "PASS"
+        },
+        "stale_active_record": {
+          "relay_status": "INDETERMINATE",
+          "status": "PASS"
+        },
+        "unauthorized_worker_peer": {
+          "relay_status": "PEER_CLOSED",
+          "status": "PASS"
+        },
+        "worker_binding_mismatch": {
+          "relay_status": "INDETERMINATE",
+          "status": "PASS"
+        },
+        "worker_endpoint_unavailable": {
+          "relay_status": "NOT_SUBMITTED",
+          "status": "PASS"
+        }
+      }
+    },
+    "decision": {
+      "const": {
+        "aggregate_gate_eligible": false,
+        "edr_claim_eligible": false,
+        "installer_authority_eligible": false,
+        "phase3_exit_eligible": false,
+        "public_release_eligible": false,
+        "qualified_pair_retained_evidence_eligible": true,
+        "run_01_eligible": false,
+        "run_02_eligible": false,
+        "source_observation_unchanged": true,
+        "source_observation_verified": true,
+        "status": "P3_7B_BOUNDED_PASS"
+      }
+    },
+    "limitations": {
+      "const": [
+        "EXACT_PINNED_OPENCLAW_2026_7_1_SINGLE_CAPTURE_ONLY",
+        "SOURCE_OBSERVATION_CAPTURE_TIME_NOT_TESTED_AND_FALSE_CEILINGS_PRESERVED",
+        "OPENCLAW_PROVIDER_AND_SESSION_RAW_BYTES_NOT_RETAINED_CAPTURE_TIME_DRIVER_ASSERTIONS_ONLY",
+        "EVALUATOR_CONTROLLED_LOOPBACK_PROVIDER_DETERMINES_TOOL_CALL",
+        "NEGATIVE_SCENARIO_CAUSE_CLASSIFICATION_RELIES_ON_PINNED_CAPTURE_SETUP_NOT_RETAINED_RUNTIME_REASON_EVIDENCE",
+        "LOCAL_PRIVILEGED_DOCKER_SYSTEMD_FIXTURE_NOT_INDEPENDENT_HOST_OR_CONTAINER_ATTESTATION",
+        "GATEWAY_ENDPOINT_OWNERSHIP_NOT_EXACT_WORKER_SERVER_PROCESS_AUTHENTICATION",
+        "POINT_IN_TIME_WORKER_PROFILE_NOT_CONTINUOUS_MEASUREMENT",
+        "SKILL_PROMPT_BYTES_NOT_SEMANTIC_SKILL_CAUSATION",
+        "ONE_SINGLE_FILE_CREATE_ACTION_ONLY",
+        "NO_MULTI_FILE_OR_BROADER_ACTION_FAMILY_COVERAGE",
+        "NO_HOSTILE_ROOT_SAME_UID_OUTPUT_DIRECTORY_OR_POWER_LOSS_QUALIFICATION",
+        "PYTHON_STDLIB_AND_DYNAMIC_VERIFIER_DEPENDENCY_CLOSURE_NOT_PINNED",
+        "TRACE_PROVES_SINGLE_ROUTE_CONNECT_WITHOUT_CONNECT_RETRY_NOT_SEND_SYSCALL_COUNT",
+        "NO_AGGREGATE_RUN_01_RUN_02_OR_PHASE_3_EXIT_AUTHORITY",
+        "NO_EDR_INSTALLER_OR_PUBLIC_RELEASE_AUTHORITY"
+      ]
+    },
+    "source_recorded_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -391,6 +391,43 @@ file and reject assignments that override `HOME`, `OPENCLAW_CONFIG_PATH`,
 gateway UID, GID, and complete group set because the static unit cannot erase
 NSS-derived supplementary memberships.
 
+P3.7b retains one bounded live qualification of that split for the exact
+OpenClaw 2026.7.1 tree in a local privileged Docker/systemd fixture. The same
+single-file retained-CAS skill and optional create action exercise five
+fail-closed cases: the legacy OpenClaw profile, a mismatched worker binding, an
+unavailable worker endpoint, an unauthorized root peer, and a stale active
+record. A sixth coherent case binds the worker-specific profile and one-action
+grant to the measured worker, preserves the gateway -> worker -> sensor ->
+broker peer chain, and returns one `COMPLETED` / `ALLOW` / `CREATED` result.
+The evaluator-controlled loopback provider determines that tool call; this
+does not establish autonomous model tool selection or production-provider
+behavior.
+The trace proves one routed connection without a reconnect attempt; it does not
+count application send syscalls.
+The negative outcomes and unchanged effects are retained, but their cause
+labels rely on the pinned capture setup rather than retained runtime reason
+evidence.
+`COMPLETED` still means only that the worker received a strictly validated
+broker result. The
+[retained observation](./benchmark/evidence/runtime-action-worker-openclaw-systemd-composition-p3-7b-2026-08-09.json)
+has canonical digest
+`sha256:4b668b1eae1875c6e129afd8fd0a56c4dc2e912179644bba22cc3e5a285b969e`;
+the separate
+[qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-openclaw-systemd-qualification-v1-2026-08-09.json)
+records semantic replay without rewriting the observation's capture-time
+`NOT_TESTED` fields. Its closure retains both the base capability installer and
+the worker host installer. The verifier binds the canonical installed-target
+inventory and separately proves each retained source/installed byte pair. The
+capture wrapper publishes only a complete,
+fsynced canonical file through a no-replace hard link. The qualification is
+limited to this pinned fixture and exact pair. It establishes no raw
+provider/session replay, independent host or container attestation, continuous
+measurement, semantic skill causation, multi-file or broader-action coverage,
+hostile-root, same-UID output-directory, or power-loss resistance, aggregate
+`RUN-01` or `RUN-02`, Phase 3 exit, EDR status, installer authority, or
+public-release authority. The verifier source is digest-bound, but its Python
+standard-library and dynamic dependency closure is not pinned.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

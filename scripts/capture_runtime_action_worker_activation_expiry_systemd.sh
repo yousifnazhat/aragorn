@@ -51,7 +51,6 @@ child_inspect=
 volume_inspect=
 harness=
 context=
-dockerfile=
 commit_stdout=
 commit_stderr=
 commit_object=
@@ -130,8 +129,7 @@ cleanup()
     fi
     for cleanup_path in \
         "$inspect" "$parent_inspect" "$child_inspect" \
-        "$volume_inspect" "$harness" "$context" \
-        "$dockerfile" \
+        "$volume_inspect" "$harness" \
         "$commit_stdout" "$commit_stderr" "$commit_object" \
         "$iidfile" "$temp_output"
     do
@@ -142,6 +140,17 @@ cleanup()
             cleanup_failed=1
         fi
     done
+    if [ -n "$context" ] && [ -d "$context" ]; then
+        case "$context" in
+            /tmp/aragorn-p3-7c-context.*)
+                rm -rf -- "$context" || cleanup_failed=1
+                ;;
+            *)
+                echo "refusing to remove an unexpected capture context" >&2
+                cleanup_failed=1
+                ;;
+        esac
+    fi
     if [ "$lock_held" -eq 1 ]; then
         if ! rmdir "$capture_lock"; then
             cleanup_failed=1
@@ -181,12 +190,11 @@ parent_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-parent.XXXXXX")
 child_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-child.XXXXXX")
 volume_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-volume.XXXXXX")
 harness=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-harness.XXXXXX")
-context=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-context.XXXXXX")
-dockerfile=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-dockerfile.XXXXXX")
+context=$(mktemp -d /tmp/aragorn-p3-7c-context.XXXXXX)
 commit_stdout=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-commit-out.XXXXXX")
 commit_stderr=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-commit-err.XXXXXX")
 commit_object=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-commit-object.XXXXXX")
-iidfile=$context.iid
+iidfile=$(mktemp "${TMPDIR:-/tmp}/aragorn-p3-7c-image-id.XXXXXX")
 temp_output=$(mktemp "${output}.tmp.XXXXXX")
 
 if ! GIT_NO_REPLACE_OBJECTS=1 git verify-commit --raw "$source_commit" \
@@ -208,16 +216,16 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     src/aragorn/runtime_action_service_v4.py \
     src/aragorn/runtime_action_service_v5.py \
     src/aragorn/runtime_action_worker.py \
-    >"$context"
-GIT_NO_REPLACE_OBJECTS=1 git show \
-    "$source_commit:benchmark/runtime-action-worker-activation-expiry-systemd/Dockerfile" \
-    >"$dockerfile"
-docker build --pull=false --network=none \
-    --iidfile "$iidfile" \
-    --build-arg "P37B_BASE=$parent_id" \
-    -t "$image" \
-    -f "$dockerfile" \
-    - <"$context"
+    | tar -xf - -C "$context"
+(
+    cd "$context"
+    docker build --pull=false --network=none \
+        --iidfile "$iidfile" \
+        --build-arg "P37B_BASE=$parent_id" \
+        -t "$image" \
+        -f benchmark/runtime-action-worker-activation-expiry-systemd/Dockerfile \
+        .
+)
 child_id=$(tr -d '\n' <"$iidfile")
 child_id_hex=${child_id#sha256:}
 case "$child_id" in

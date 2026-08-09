@@ -479,6 +479,10 @@ def _monitored_command(
     deadline = time.monotonic() + timeout
     samples = []
     last = None
+    stdout = None
+    stderr = None
+    completed_at = None
+    completed_ns = None
     while True:
         units = _sample_units(names)
         if units != last:
@@ -487,28 +491,30 @@ def _monitored_command(
             )
             _expect(len(samples) <= 64, "unit monitor transition bound exceeded")
             last = units
-        if process.poll() is not None:
-            final_units = _sample_units(names)
-            if final_units != last:
-                samples.append(
-                    {
-                        "observed_monotonic_ns": time.monotonic_ns(),
-                        "units": final_units,
-                    }
-                )
-                _expect(
-                    len(samples) <= 64,
-                    "unit monitor transition bound exceeded",
-                )
+        if completed_ns is None and process.poll() is not None:
+            stdout, stderr = process.communicate()
+            completed_ns = time.monotonic_ns()
+            completed_at = _iso_now()
+        if completed_ns is not None and all(
+            unit["ActiveState"] == "inactive" and unit["MainPID"] == "0"
+            for unit in units.values()
+        ):
             break
         if time.monotonic() >= deadline:
-            process.kill()
-            process.communicate()
+            if completed_ns is None:
+                process.kill()
+                process.communicate()
             raise openclaw.ProbeError(f"bounded command timed out: {argv}")
         time.sleep(0.005)
-    stdout, stderr = process.communicate()
-    completed_ns = time.monotonic_ns()
-    completed_at = _iso_now()
+    monitor_completed_ns = time.monotonic_ns()
+    monitor_completed_at = _iso_now()
+    _expect(
+        stdout is not None
+        and stderr is not None
+        and completed_at is not None
+        and completed_ns is not None,
+        "bounded command completion was not retained",
+    )
     _expect(
         len(stdout) <= _MAX_COMMAND_BYTES and len(stderr) <= _MAX_COMMAND_BYTES,
         f"bounded command output exceeded: {argv}",
@@ -520,6 +526,8 @@ def _monitored_command(
         "completed_at": completed_at,
         "started_monotonic_ns": started_ns,
         "completed_monotonic_ns": completed_ns,
+        "monitor_completed_at": monitor_completed_at,
+        "monitor_completed_monotonic_ns": monitor_completed_ns,
         "elapsed_ns": completed_ns - started_ns,
         "exit_code": process.returncode if process.returncode >= 0 else None,
         "signal": -process.returncode if process.returncode < 0 else None,
@@ -1023,23 +1031,30 @@ def _non_grant_effects(snapshot: dict[str, Any]) -> dict[str, Any]:
     return retained
 
 
-def _clean_terminal_unit(unit: dict[str, Any]) -> bool:
-    properties = unit["properties"]
-    exited_success = (
-        properties["ExecMainCode"] == "1" and properties["ExecMainStatus"] == "0"
-    )
-    cleared_success = (
-        properties["ExecMainCode"] == "0"
+def _cleared_terminal_properties(properties: dict[str, str]) -> bool:
+    return (
+        properties["ActiveState"] == "inactive"
+        and properties["SubState"] == "dead"
+        and properties["Result"] == "success"
+        and properties["MainPID"] == "0"
+        and properties["ExecMainCode"] == "0"
         and properties["ExecMainStatus"] == "0"
         and properties["ExecMainStartTimestampMonotonic"] == "0"
         and properties["ExecMainExitTimestampMonotonic"] == "0"
         and properties["InvocationID"] == ""
     )
+
+
+def _clean_terminal_unit(unit: dict[str, Any]) -> bool:
+    properties = unit["properties"]
+    exited_success = (
+        properties["ExecMainCode"] == "1" and properties["ExecMainStatus"] == "0"
+    )
     return (
         properties["ActiveState"] == "inactive"
         and properties["SubState"] == "dead"
         and properties["Result"] == "success"
-        and (exited_success or cleared_success)
+        and (exited_success or _cleared_terminal_properties(properties))
         and properties["MainPID"] == "0"
         and unit["cgroup_members"] == []
     )
@@ -1072,7 +1087,6 @@ def _monitored_invocation(
     start = next(iter(starts)) if len(starts) == 1 else None
     exit_timestamp = next(iter(exits)) if len(exits) == 1 else None
     terminal_sample = retained[-1]
-    terminal_properties = terminal_sample["units"][name]
     same_invocation_exit = (
         start is not None
         and exit_timestamp is not None
@@ -1084,34 +1098,38 @@ def _monitored_invocation(
             for sample in retained
         )
     )
-    deactivation_observed = (
-        start is not None
-        and not exits
-        and terminal_properties["ActiveState"] == "deactivating"
-        and terminal_properties["SubState"] == "stop-sigterm"
-        and terminal_properties["Result"] == "success"
-        and terminal_properties["MainPID"] != "0"
-        and terminal_properties["ExecMainCode"] == "0"
-        and terminal_properties["ExecMainStatus"] == "0"
-        and terminal_properties["ExecMainStartTimestampMonotonic"] == str(start)
-        and terminal_properties["ExecMainExitTimestampMonotonic"] == "0"
+    cleared_sample = next(
+        (
+            sample
+            for sample in samples
+            if sample["observed_monotonic_ns"]
+            > terminal_sample["observed_monotonic_ns"]
+            and _cleared_terminal_properties(sample["units"][name])
+        ),
+        None,
     )
+    cleared_success = not exits and cleared_sample is not None
+    terminal_observation = terminal_sample if same_invocation_exit else cleared_sample
     _expect(
         start is not None
         and command["started_monotonic_ns"]
         <= start * 1000
-        <= terminal_sample["observed_monotonic_ns"]
         <= command["completed_monotonic_ns"]
+        and terminal_observation is not None
+        and terminal_observation["observed_monotonic_ns"]
+        <= command["monitor_completed_monotonic_ns"]
         and any(int(sample["units"][name]["MainPID"]) > 0 for sample in retained)
-        and (same_invocation_exit or deactivation_observed),
+        and (same_invocation_exit or cleared_success),
         "unit invocation timing changed: "
         + repr(
             {
                 "command_monotonic_ns": [
                     command["started_monotonic_ns"],
                     command["completed_monotonic_ns"],
+                    command["monitor_completed_monotonic_ns"],
                 ],
-                "deactivation_observed": deactivation_observed,
+                "cleared_sample": cleared_sample,
+                "cleared_success": cleared_success,
                 "exits": sorted(exits),
                 "name": name,
                 "same_invocation_exit": same_invocation_exit,
@@ -1132,7 +1150,7 @@ def _monitored_invocation(
         "terminal_observation": (
             "same_invocation_exit"
             if same_invocation_exit
-            else "deactivation_observed_final_state_cleared"
+            else "same_invocation_started_then_cleared"
         ),
     }
 

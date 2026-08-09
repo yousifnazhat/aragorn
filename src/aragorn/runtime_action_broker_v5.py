@@ -1,4 +1,4 @@
-"""Broker-enforced active-skill lineage around the frozen v4 redeemer."""
+"""Broker-enforced active-skill lineage around the v4 grant redeemer."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from .runtime_action_broker_v2 import _require_no_profile_pending
 from .runtime_action_broker_v4 import (
     RuntimeActionBrokerV4Config,
     _issued_submission,
+    initialize_runtime_capability_grant,
     mediate_granted_profiled_runtime_create,
     recover_runtime_capability_grant,
 )
@@ -57,7 +58,7 @@ _LINEAGE_ISSUANCE_FIELDS = {"schema", "authority", "lineage", "issuance"}
 
 @dataclass(frozen=True, slots=True)
 class RuntimeActionBrokerV5Config:
-    """Frozen v4 grant broker plus its protected-install authority root."""
+    """V4 grant broker plus its protected-install authority root."""
 
     broker: RuntimeActionBrokerV4Config
     protected_install_root: Path = DEFAULT_PROTECTED_INSTALL_ROOT
@@ -132,9 +133,9 @@ def serve_runtime_action_broker_v5(
     *,
     request_timeout_seconds: float = 0.5,
 ) -> None:
-    """Serve only lineage-wrapped sensor capabilities through frozen v4."""
+    """Serve only lineage-wrapped sensor capabilities through v4."""
 
-    _validate_config(config)
+    grant = _validate_config(config)
     broker = config.broker.broker.broker
     if not 0 < request_timeout_seconds <= 0.5:
         raise RuntimeActionBrokerError("broker request timeout is invalid")
@@ -164,10 +165,12 @@ def serve_runtime_action_broker_v5(
         _acquire_lock(instance_lock_fd, time.monotonic())
         instance_locked = True
         _recover_before_listen(broker, request_timeout_seconds)
-        recover_runtime_capability_grant(
+        state = recover_runtime_capability_grant(
             config.broker,
             timeout_seconds=request_timeout_seconds,
         )
+        if state["status"] != "AVAILABLE":
+            return
         _require_no_profile_pending(
             config.broker.broker,
             request_timeout_seconds,
@@ -202,7 +205,20 @@ def serve_runtime_action_broker_v5(
             raise RuntimeActionBrokerError("runtime broker socket metadata is unsafe")
         listener.listen(16)
         while True:
-            connection, _address = listener.accept()
+            state = initialize_runtime_capability_grant(
+                config.broker,
+                deadline_monotonic=time.monotonic() + request_timeout_seconds,
+            )
+            if state["status"] != "AVAILABLE":
+                return
+            remaining = grant["expires_at_unix"] - time.time()
+            if remaining <= 0:
+                continue
+            listener.settimeout(remaining)
+            try:
+                connection, _address = listener.accept()
+            except TimeoutError:
+                continue
             with connection:
                 try:
                     _handle_connection(

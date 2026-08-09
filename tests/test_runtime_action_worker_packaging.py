@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import unittest
 from pathlib import Path
 
@@ -14,9 +15,37 @@ _DRIVER = (
 _DOCKERFILE = _ROOT / "benchmark/runtime-action-worker-openclaw-systemd/Dockerfile"
 _CAPTURE = _ROOT / "scripts/capture_runtime_action_worker_openclaw_systemd.sh"
 _PROBE = _ROOT / "scripts/runtime_action_worker_openclaw_systemd_probe.py"
+_ACTIVATOR = _ROOT / "packaging/activate-runtime-action-worker-host.sh"
 
 
 class RuntimeActionWorkerPackagingTests(unittest.TestCase):
+    def test_worker_activator_local_digest_pins_match_sources(self) -> None:
+        source = _ACTIVATOR.read_text(encoding="utf-8")
+        block = source.split("done <<'EOF'\n", 1)[1].split("\nEOF", 1)[0]
+        pins = {
+            installed: digest
+            for _mode, digest, installed in (
+                line.split(" ", 2) for line in block.splitlines()
+            )
+            if installed not in {"/usr/local/bin/node", "/usr/local/bin/python3.12"}
+        }
+        self.assertEqual(len(pins), 34)
+        for installed, expected in pins.items():
+            name = Path(installed).name
+            if installed == "/usr/libexec/aragorn/activate-runtime-capability-host.sh":
+                candidate = _ROOT / "packaging/activate-runtime-capability-host.sh"
+            elif installed.startswith("/usr/libexec/aragorn/"):
+                candidate = _ROOT / "packaging/libexec" / name
+            elif installed.startswith("/usr/lib/aragorn/aragorn/"):
+                candidate = _ROOT / "src/aragorn" / name
+            else:
+                candidate = (
+                    _ROOT / "packaging/openclaw/aragorn-runtime-action-worker" / name
+                )
+            self.assertEqual(
+                hashlib.sha256(candidate.read_bytes()).hexdigest(), expected
+            )
+
     def test_shim_and_identity_are_additive_and_fixed(self) -> None:
         shim = _SHIM.read_text(encoding="utf-8")
         self.assertIn('import_module("aragorn.runtime_action_worker").main()', shim)
@@ -162,6 +191,97 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         self.assertIn("source_stat.st_nlink != 1", capture)
         self.assertIn("os.fchmod(descriptor, 0o644)", capture)
         self.assertNotIn("os.open(\n    destination,", capture)
+
+    def test_worker_activator_reuses_capability_route_and_fails_stop(self) -> None:
+        activator = _ACTIVATOR.read_text(encoding="utf-8")
+        self.assertIn(
+            "base_activator=/usr/libexec/aragorn/activate-runtime-capability-host.sh",
+            activator,
+        )
+        self.assertEqual(
+            activator.count('"$base_activator"'),
+            2,
+        )
+        for required in (
+            "flock -n 9",
+            "aragorn-runtime-capability-activation.lock",
+            "ARAGORN_RUNTIME_ACTIVATION_LOCK_HELD=1",
+            "armed=1",
+            "trap rollback EXIT",
+            "OPENCLAW_GATEWAY_TOKEN=*)",
+            "gateway environment is not one canonical ASCII assignment",
+            "runtime worker NSS group membership is unsafe",
+            '"$gateway_uid" -eq 0',
+            "installed unit digest changed",
+            "e231978207dd27b71ef43449cf603ac424f6129f64c8a03dd0851ddf32503723",
+            "32dea7dfdf5ccb9914c46ea2aadfc88a491d6eadba5bdb8b4982d473af1a0ebe",
+            '"$gateway_unit" "$worker_unit" "$sensor_unit" "$broker_unit"',
+            "previous runtime worker route remained active",
+            "previous runtime worker endpoint remained present",
+            'disable "$worker_unit" "$sensor_unit" "$broker_unit"',
+            'start "$worker_unit"',
+            'start "$gateway_unit"',
+            'worker-binding:"$worker_binding"',
+            'openclaw-config:"$gateway_config"',
+            "EnvironmentFiles",
+            "PrivateNetwork yes",
+            "PrivateNetwork no",
+            "runtime worker endpoint metadata is unsafe",
+            'verify_process "$worker_unit"',
+            'verify_process "$gateway_unit"',
+            "CapEff:",
+            "NoNewPrivs:",
+            "gateway listener is not owned by its MainPID",
+            "gateway retained boot authority",
+            "--activation-preflight",
+            "config validate --json",
+            "aragorn-runtime-action-worker-preflight.XXXXXX",
+            'chown "0:$gateway_gid" "$preflight_root"',
+            'chmod 0710 "$preflight_root"',
+            'install -o 0 -g "$gateway_gid" -m 0440',
+            'mask "$gateway_unit" "$worker_unit"',
+            "Aragorn runtime worker fail-stop verification failed",
+            "/usr/bin/setpriv",
+            "--clear-groups",
+            "475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c",
+            "c43a81b394e0b96b0950af94b937a79e777d7e0c815a0104f1ab45871f4afa64",
+            "d0f433abba94a4560c26cb99017f56543b432e2fc3aa74e3374ee4e04addeeaf",
+            'wait_socket "$broker_socket"',
+            'wait_socket "$sensor_socket"',
+            (
+                '"/usr/lib/systemd/system/$checked_unit"|'
+                '"/lib/systemd/system/$checked_unit"'
+            ),
+            'RestrictAddressFamilies "AF_INET AF_INET6 AF_UNIX"',
+        ):
+            self.assertIn(required, activator)
+        self.assertEqual(activator.count("\nverify_unit \\"), 2)
+        stop_route = (
+            "/usr/bin/systemctl stop \\\n"
+            '    "$gateway_unit" "$worker_unit" "$sensor_unit" "$broker_unit"'
+        )
+        self.assertLess(
+            activator.index(stop_route),
+            activator.index('require_root_secret "$gateway_config"'),
+        )
+        self.assertLess(
+            activator.index(stop_route),
+            activator.index("--activation-preflight"),
+        )
+        self.assertLess(
+            activator.index("--activation-preflight"),
+            activator.index('ARAGORN_RUNTIME_ACTIVATION_LOCK_HELD=1 "$base_activator"'),
+        )
+        self.assertLess(
+            activator.index('"$base_activator"'),
+            activator.index('start "$worker_unit"'),
+        )
+        self.assertLess(
+            activator.index('start "$worker_unit"'),
+            activator.index('start "$gateway_unit"'),
+        )
+        self.assertNotIn("enable --now", activator)
+        self.assertNotIn("WantedBy=", activator)
 
 
 if __name__ == "__main__":

@@ -105,7 +105,9 @@ def _run(runtime_binding_path: Path, capability_grant_path: Path) -> None:
         broker=grant_broker,
         protected_install_root=DEFAULT_PROTECTED_INSTALL_ROOT,
     )
-    initialize_runtime_capability_grant(grant_broker)
+    state = initialize_runtime_capability_grant(grant_broker)
+    if state["status"] == "EXPIRED":
+        return
     serve_runtime_action_broker_v5(config)
 
 

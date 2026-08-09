@@ -10,6 +10,7 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 _INSTALLER = _ROOT / "packaging/install-runtime-action-worker-host.sh"
 _BASE_INSTALLER = _ROOT / "packaging/install-runtime-capability-host.sh"
+_ACTIVATOR = _ROOT / "packaging/activate-runtime-action-worker-host.sh"
 _PLUGIN = _ROOT / "packaging/openclaw/aragorn-runtime-action-worker"
 
 
@@ -40,6 +41,10 @@ class RuntimeActionWorkerInstallTests(unittest.TestCase):
                 / "usr/libexec/aragorn/aragorn-runtime-action-worker-service.py": (
                     _ROOT
                     / "packaging/libexec/aragorn-runtime-action-worker-service.py",
+                    0o755,
+                ),
+                staged / "usr/libexec/aragorn/activate-runtime-action-worker-host.sh": (
+                    _ACTIVATOR,
                     0o755,
                 ),
                 staged / "usr/lib/systemd/system/aragorn-agent-gateway.service": (
@@ -89,7 +94,10 @@ class RuntimeActionWorkerInstallTests(unittest.TestCase):
                     self.assertNotIn(forbidden, source)
 
         worker_source = _INSTALLER.read_text(encoding="utf-8")
-        self.assertNotIn("activate-runtime", worker_source)
+        self.assertEqual(
+            worker_source.count("activate-runtime-action-worker-host.sh"),
+            1,
+        )
 
         with tempfile.TemporaryDirectory() as temporary:
             staged = Path(temporary)

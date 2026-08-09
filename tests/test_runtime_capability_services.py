@@ -115,7 +115,9 @@ class RuntimeCapabilityServiceTests(unittest.TestCase):
                 patch.object(
                     broker_service,
                     "initialize_runtime_capability_grant",
-                    side_effect=lambda _config: order.append("initialize"),
+                    side_effect=lambda _config: (
+                        order.append("initialize") or {"status": "AVAILABLE"}
+                    ),
                 ) as initialize,
                 patch.object(
                     broker_service,
@@ -178,6 +180,48 @@ class RuntimeCapabilityServiceTests(unittest.TestCase):
             root / "control/broker.sock",
         )
         self.assertEqual(publisher.expected_broker_uid, sensor_identities[4])
+
+    def test_broker_enters_recovery_unless_grant_is_expired(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime, _observation, grant, _grant_bytes = _credentials(Path(temporary))
+            identities = (
+                os.geteuid(),
+                os.geteuid() + 1,
+                os.getegid() + 1,
+                os.geteuid() + 2,
+                os.getegid() + 2,
+            )
+            for status in ("CLAIMED", "CONSUMED", "ABANDONED", "EXPIRED"):
+                with (
+                    self.subTest(status=status),
+                    patch.object(broker_service.sys, "platform", "linux"),
+                    patch.object(
+                        broker_service,
+                        "_service_identities",
+                        return_value=identities,
+                    ),
+                    patch.dict(
+                        os.environ,
+                        {"CREDENTIALS_DIRECTORY": str(runtime.parent)},
+                    ),
+                    patch.object(
+                        broker_service,
+                        "initialize_runtime_capability_grant",
+                        return_value={"status": status},
+                    ),
+                    patch.object(
+                        broker_service,
+                        "serve_runtime_action_broker_v4",
+                    ) as serve,
+                ):
+                    self.assertEqual(
+                        broker_service.main([str(runtime), str(grant)]),
+                        0,
+                    )
+                if status == "EXPIRED":
+                    serve.assert_not_called()
+                else:
+                    serve.assert_called_once()
 
     def test_usage_platform_and_interrupt_are_bounded(self) -> None:
         cases = (

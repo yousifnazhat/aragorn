@@ -102,6 +102,8 @@ _DECISION_FIELDS = {
 _ROOT = Path("/var/lib/aragorn-runtime-action")
 _WORKER_RUNTIME_DIRECTORY = Path("/run/aragorn-runtime-action-worker")
 _SENSOR_RUNTIME_DIRECTORY = Path("/run/aragorn-runtime-observation")
+_WORKER_PLUGIN_PATH = "/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker"
+_ENVIRONMENT_REFERENCE = re.compile(rb"\$\{([A-Z][A-Z0-9_]*)\}")
 
 
 class RuntimeActionWorkerError(RuntimeError):
@@ -235,14 +237,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Resolve service identities and serve one fixed worker endpoint."""
 
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if len(arguments) != 1:
+    activation_preflight = (
+        len(arguments) == 6 and arguments[0] == "--activation-preflight"
+    )
+    if len(arguments) != 1 and not activation_preflight:
         print(
-            "usage: aragorn-runtime-action-worker WORKER_BINDING_CREDENTIAL",
+            "usage: aragorn-runtime-action-worker WORKER_BINDING_CREDENTIAL\n"
+            "       aragorn-runtime-action-worker --activation-preflight "
+            "GATEWAY_CONFIG WORKER_BINDING GATEWAY_UID GATEWAY_GID WORKER_UID",
             file=sys.stderr,
         )
         return 64
     try:
-        _run(Path(arguments[0]))
+        if activation_preflight:
+            _activation_preflight(
+                Path(arguments[1]),
+                Path(arguments[2]),
+                arguments[3],
+                arguments[4],
+                arguments[5],
+            )
+        else:
+            _run(Path(arguments[0]))
         return 0
     except KeyboardInterrupt:
         return 0
@@ -286,6 +302,84 @@ def _run(credential_path: Path) -> None:
             binding=binding,
         )
     )
+
+
+def _activation_preflight(
+    gateway_config_path: Path,
+    worker_binding_path: Path,
+    gateway_uid_text: str,
+    gateway_gid_text: str,
+    worker_uid_text: str,
+) -> None:
+    if sys.platform != "linux" or os.geteuid() != 0:
+        raise RuntimeActionWorkerError("root Linux activation is required")
+    gateway_uid, gateway_gid, worker_uid = (
+        _activation_identity(value)
+        for value in (
+            gateway_uid_text,
+            gateway_gid_text,
+            worker_uid_text,
+        )
+    )
+    _read_worker_binding(worker_binding_path, worker_uid)
+    raw = _read_credential_bytes(
+        gateway_config_path,
+        worker_uid,
+        label="gateway configuration",
+    )
+    try:
+        document = json.loads(raw)
+        plugin_config = {
+            "expectedGatewayGid": gateway_gid,
+            "expectedGatewayUid": gateway_uid,
+            "expectedWorkerUid": worker_uid,
+            "workerSocketPath": str(_WORKER_RUNTIME_DIRECTORY / "worker.sock"),
+        }
+        expected_plugins = {
+            "allow": ["aragorn-runtime-action-worker"],
+            "enabled": True,
+            "entries": {
+                "aragorn-runtime-action-worker": {
+                    "config": plugin_config,
+                    "enabled": True,
+                }
+            },
+            "load": {"paths": [_WORKER_PLUGIN_PATH]},
+        }
+        references = _ENVIRONMENT_REFERENCE.findall(raw)
+        if (
+            not isinstance(document, dict)
+            or canonical_json(document) != raw
+            or document.get("gateway") != {"mode": "local"}
+            or document.get("plugins") != expected_plugins
+            or document.get("tools")
+            != {
+                "alsoAllow": ["aragorn_runtime_create"],
+                "deny": ["session_status"],
+                "profile": "minimal",
+            }
+            or raw.count(b"${") != len(references)
+            or set(references) - {b"OPENCLAW_GATEWAY_TOKEN"}
+        ):
+            raise RuntimeActionWorkerError(
+                "gateway activation configuration is invalid"
+            )
+    except RuntimeActionWorkerError:
+        raise
+    except (RecursionError, TypeError, ValueError, WorkerProtocolError) as exc:
+        raise RuntimeActionWorkerError(
+            "gateway activation configuration is invalid"
+        ) from exc
+
+
+def _activation_identity(value: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeActionWorkerError("activation identity is invalid") from exc
+    if parsed <= 0 or str(parsed) != value:
+        raise RuntimeActionWorkerError("activation identity is invalid")
+    return parsed
 
 
 def _service_identities() -> tuple[int, int, int, int, int, int, int]:

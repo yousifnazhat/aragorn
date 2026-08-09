@@ -129,6 +129,14 @@ _ABANDONMENT_FIELDS = {
     "lease_digest",
     "failure_code",
 }
+_EXPIRATION_FIELDS = {
+    "schema",
+    "authority",
+    "grant_digest",
+    "expires_at_unix",
+    "observed_at_unix",
+}
+_TERMINAL_STATES = {"CONSUMED", "ABANDONED", "EXPIRED"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,12 +175,21 @@ def initialize_runtime_capability_grant(
         try:
             current = _load_any_state(control_fd, config)
         except FileNotFoundError:
-            _require_live_grant(grant, now)
             _require_fresh_grant(control_fd, config, grant_digest)
-            _publish_state(control_fd, config, available)
+            if grant["issued_at_unix"] > now:
+                raise RuntimeActionBrokerError("runtime capability grant is stale")
+            current_state = _refresh_available_grant(
+                control_fd,
+                config,
+                grant,
+                available,
+                now,
+            )
+            if current_state["status"] == "AVAILABLE":
+                _publish_state(control_fd, config, current_state)
             return
         if current["grant_digest"] != grant_digest:
-            if current["status"] not in {"CONSUMED", "ABANDONED"}:
+            if current["status"] not in _TERMINAL_STATES:
                 raise RuntimeActionBrokerError(
                     "runtime capability grant changed while active"
                 )
@@ -182,8 +199,18 @@ def initialize_runtime_capability_grant(
             _publish_state(control_fd, config, available)
             return
         if current["status"] == "AVAILABLE":
-            _require_live_grant(grant, now)
             _require_fresh_grant(control_fd, config, grant_digest)
+            current = _refresh_available_grant(
+                control_fd,
+                config,
+                grant,
+                current,
+                now,
+            )
+        elif current["status"] == "EXPIRED":
+            _require_expiration_matches_grant(current, grant)
+            _require_no_pending_at(control_fd, config)
+            _require_no_profile_receipt_at(control_fd, config)
         current_state = current
 
     _with_profile_lock(config.broker, deadline_monotonic, initialize)
@@ -246,11 +273,25 @@ def recover_runtime_capability_grant(
         nonlocal recovered
         state = _load_state(control_fd, config, grant_digest)
         if state["status"] == "AVAILABLE":
-            _require_live_grant(grant, int(time.time()))
-            _require_no_pending_at(control_fd, config)
+            now = int(time.time())
+            state = _refresh_available_grant(
+                control_fd,
+                config,
+                grant,
+                state,
+                now,
+            )
+            if state["status"] == "AVAILABLE":
+                _require_no_pending_at(control_fd, config)
             recovered = state
             return
         if state["status"] == "ABANDONED":
+            _require_no_pending_at(control_fd, config)
+            _require_no_profile_receipt_at(control_fd, config)
+            recovered = state
+            return
+        if state["status"] == "EXPIRED":
+            _require_expiration_matches_grant(state, grant)
             _require_no_pending_at(control_fd, config)
             _require_no_profile_receipt_at(control_fd, config)
             recovered = state
@@ -292,7 +333,7 @@ def serve_runtime_action_broker_v4(
 ) -> None:
     """Serve sensor-issued capabilities through one root grant."""
 
-    _validate_config(config)
+    grant = _validate_config(config)
     broker = config.broker.broker
     if not 0 < request_timeout_seconds <= 0.5:
         raise RuntimeActionBrokerError("broker request timeout is invalid")
@@ -322,10 +363,12 @@ def serve_runtime_action_broker_v4(
         _acquire_lock(instance_lock_fd, time.monotonic())
         instance_locked = True
         _recover_before_listen(broker, request_timeout_seconds)
-        recover_runtime_capability_grant(
+        state = recover_runtime_capability_grant(
             config,
             timeout_seconds=request_timeout_seconds,
         )
+        if state["status"] != "AVAILABLE":
+            return
         _require_no_profile_pending(config.broker, request_timeout_seconds)
         _prepare_socket_path(control_fd, broker)
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -357,7 +400,20 @@ def serve_runtime_action_broker_v4(
             raise RuntimeActionBrokerError("runtime broker socket metadata is unsafe")
         listener.listen(16)
         while True:
-            connection, _address = listener.accept()
+            state = initialize_runtime_capability_grant(
+                config,
+                deadline_monotonic=time.monotonic() + request_timeout_seconds,
+            )
+            if state["status"] != "AVAILABLE":
+                return
+            remaining = grant["expires_at_unix"] - time.time()
+            if remaining <= 0:
+                continue
+            listener.settimeout(remaining)
+            try:
+                connection, _address = listener.accept()
+            except TimeoutError:
+                continue
             with connection:
                 try:
                     _handle_connection(
@@ -704,6 +760,44 @@ def _result_record(
     }
 
 
+def _expiration_record(grant: dict[str, Any], observed_at_unix: int) -> dict[str, Any]:
+    return {
+        "schema": "aragorn/runtime-capability-grant-expiration/v1",
+        "authority": "BROKER_GRANT_EXPIRATION_ONLY_NOT_RUN_CONFORMANCE_AUTHORITY",
+        "grant_digest": canonical_digest(grant),
+        "expires_at_unix": grant["expires_at_unix"],
+        "observed_at_unix": observed_at_unix,
+    }
+
+
+def _refresh_available_grant(
+    control_fd: int,
+    config: RuntimeActionBrokerV4Config,
+    grant: dict[str, Any],
+    state: dict[str, Any],
+    now_unix: int,
+) -> dict[str, Any]:
+    if now_unix < grant["expires_at_unix"]:
+        _require_live_grant(grant, now_unix)
+        return state
+    _require_no_pending_at(control_fd, config)
+    _require_no_profile_receipt_at(control_fd, config)
+    expired = {
+        **state,
+        "status": "EXPIRED",
+        "result": _expiration_record(grant, now_unix),
+    }
+    _publish_state(control_fd, config, expired)
+    return expired
+
+
+def _require_expiration_matches_grant(
+    state: dict[str, Any], grant: dict[str, Any]
+) -> None:
+    if state["result"]["expires_at_unix"] != grant["expires_at_unix"]:
+        raise RuntimeActionBrokerError("runtime capability grant expiration changed")
+
+
 def _require_live_grant(grant: dict[str, Any], now_unix: int) -> None:
     if grant["issued_at_unix"] > now_unix or now_unix >= grant["expires_at_unix"]:
         raise RuntimeActionBrokerError("runtime capability grant is stale")
@@ -716,13 +810,18 @@ def _state(value: object, expected_grant_digest: str) -> dict[str, Any]:
         or document["authority"]
         != "BROKER_DURABLE_GRANT_STATE_ONLY_NOT_RUN_CONFORMANCE_AUTHORITY"
         or document["grant_digest"] != expected_grant_digest
-        or document["status"] not in {"AVAILABLE", "CLAIMED", "CONSUMED", "ABANDONED"}
+        or document["status"]
+        not in {"AVAILABLE", "CLAIMED", "CONSUMED", "ABANDONED", "EXPIRED"}
     ):
         raise RuntimeActionBrokerError("runtime capability grant state is invalid")
     _require_digest(document["grant_digest"], "runtime capability grant digest")
     if document["status"] == "AVAILABLE":
         if document["claim"] is not None or document["result"] is not None:
             raise RuntimeActionBrokerError("runtime capability grant state is invalid")
+    elif document["status"] == "EXPIRED":
+        if document["claim"] is not None:
+            raise RuntimeActionBrokerError("runtime capability grant state is invalid")
+        _grant_expiration(document["result"], expected_grant_digest)
     else:
         claim = _grant_claim(document["claim"], expected_grant_digest)
         if document["status"] == "CLAIMED" and document["result"] is not None:
@@ -731,6 +830,33 @@ def _state(value: object, expected_grant_digest: str) -> dict[str, Any]:
             _grant_result(document["result"], claim)
         if document["status"] == "ABANDONED":
             _grant_abandonment(document["result"], claim)
+    return document
+
+
+def _grant_expiration(value: object, expected_grant_digest: str) -> dict[str, Any]:
+    document = _exact(
+        value,
+        _EXPIRATION_FIELDS,
+        "runtime capability grant expiration",
+    )
+    if (
+        document["schema"] != "aragorn/runtime-capability-grant-expiration/v1"
+        or document["authority"]
+        != "BROKER_GRANT_EXPIRATION_ONLY_NOT_RUN_CONFORMANCE_AUTHORITY"
+        or document["grant_digest"] != expected_grant_digest
+    ):
+        raise RuntimeActionBrokerError("runtime capability grant expiration is invalid")
+    _require_digest(document["grant_digest"], "runtime capability grant digest")
+    expires_at = _uint(
+        document["expires_at_unix"],
+        "runtime capability grant expiration time",
+    )
+    observed_at = _uint(
+        document["observed_at_unix"],
+        "runtime capability grant expiration observation time",
+    )
+    if observed_at < expires_at:
+        raise RuntimeActionBrokerError("runtime capability grant expiration is invalid")
     return document
 
 
@@ -901,7 +1027,7 @@ def _archive_terminal_state(
 ) -> None:
     grant_digest = state["grant_digest"]
     state = _state(state, grant_digest)
-    if state["status"] not in {"CONSUMED", "ABANDONED"}:
+    if state["status"] not in _TERMINAL_STATES:
         raise RuntimeActionBrokerError("runtime capability grant is not terminal")
     _require_no_pending_at(control_fd, config)
     if state["status"] == "CONSUMED":
@@ -1032,7 +1158,7 @@ def _require_fresh_grant(
         _parse_canonical_document(raw, "runtime capability grant state archive"),
         grant_digest,
     )
-    if archived["status"] not in {"CONSUMED", "ABANDONED"}:
+    if archived["status"] not in _TERMINAL_STATES:
         raise RuntimeActionBrokerError(
             "runtime capability grant state archive is not terminal"
         )

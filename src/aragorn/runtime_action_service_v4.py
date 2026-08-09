@@ -97,7 +97,9 @@ def _run(runtime_binding_path: Path, capability_grant_path: Path) -> None:
         capability_grant=capability_grant,
         grant_state_path=_CONTROL_ROOT / "capability-grant-state.json",
     )
-    initialize_runtime_capability_grant(config)
+    state = initialize_runtime_capability_grant(config)
+    if state["status"] == "EXPIRED":
+        return
     serve_runtime_action_broker_v4(config)
 
 

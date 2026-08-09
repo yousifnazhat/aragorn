@@ -826,7 +826,9 @@ requires the exact new v2 profile receipt, request, attribution, target, result,
 and digest bindings; recovery may promote that receipt to `CONSUMED` and remove
 only the exact matching v2 pending record, but it never retries or reauthorizes
 the effect. A proven pre-effect broker failure becomes non-reopenable
-`ABANDONED`. A distinct grant may replace only `CONSUMED` or `ABANDONED` state,
+`ABANDONED`. An unused `AVAILABLE` grant becomes a durable `EXPIRED` tombstone
+at its deadline. A distinct grant may replace only `CONSUMED`, `ABANDONED`, or
+`EXPIRED` state,
 after immutable archival of the terminal state and any exact consumed profile
 receipt. The terminal archive is also a replay tombstone: the same grant digest
 cannot become `AVAILABLE` again even if the mutable active-state file is absent.
@@ -972,15 +974,16 @@ the worker PID, executable, cgroup, mount namespace, runtime digest, and active
 skill lineage before issuing a capability. Accordingly the sensor's existing
 OpenClaw profile and grant cannot be reused. They must be reissued for the
 worker executable and deployment, then captured and semantically verified on
-Linux. The source-frozen v4 sensor and v5 broker are reused unchanged. The
+Linux. The P3.7b capture reused the then-source-frozen v4 sensor and v5 broker
+unchanged. The
 current worker, reduced plugin, sysusers entry, and hardened service definition
 are unit/static implementation only. A `DESTDIR`-aware installer stages those
 bytes and the existing capability-route dependencies without creating
 identities, writing configuration or credentials, or invoking a service
 manager. The staged gateway unit is static, consumes its root-owned OpenClaw
 configuration through a service-credential projection, and defaults to
-localhost-only networking. It provides no live activation or carried runtime
-evidence. This checkpoint establishes no aggregate `RUN-01` or `RUN-02`, Phase
+localhost-only networking. It provides no retained host-activation or carried
+runtime evidence. This checkpoint establishes no aggregate `RUN-01` or `RUN-02`, Phase
 3 exit, EDR status, installer authority, or release authority. A later
 activator must reject environment-file assignments for `HOME`,
 `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, `PATH`, and `NO_PROXY` at minimum,
@@ -999,7 +1002,20 @@ produces exactly one `COMPLETED` / `ALLOW` / `CREATED` result and consumes the
 one-action grant. The evaluator-controlled loopback provider determines that
 tool call, so the result does not establish autonomous model tool selection or
 production-provider behavior. The P3.6b producer evidence remains the exact parent and the
-source-frozen v4 sensor and v5 broker remain unchanged.
+capture-time v4 sensor and v5 broker remain unchanged within that retained
+pair. Current expiry and activation changes are later bytes and do not inherit
+that qualification.
+The host activation contract uses OpenClaw's `minimal` profile, adds only
+`aragorn_runtime_create`, and denies the profile's sole built-in
+`session_status`. A failed activation masks the gateway and worker and requires
+explicit operator unmasking after the cause is corrected.
+A disposable privileged Docker/systemd smoke against the pinned P3.7b base
+image exercised current expiry and activation bytes: an unused grant became
+`EXPIRED`, the expired activation failed stopped, a fresh grant archived that
+terminal state, and one native OpenClaw action ended `COMPLETED` / `ALLOW` /
+`CREATED` with the grant `CONSUMED`. No smoke output was retained. This does not
+qualify a native host, persistent renewal, boot activation, aggregate runs,
+Phase 3 exit, EDR, installer authority, or release authority.
 The trace establishes one route connection without a reconnect attempt, not an
 application send-syscall count.
 The negative outcomes and effect snapshots are retained, but causal
@@ -1060,8 +1076,8 @@ One-shot root grant:
 
 PROVISIONED
   -> AVAILABLE
-  -> CLAIMED
-  -> CONSUMED | ABANDONED
+     -> CLAIMED -> CONSUMED | ABANDONED
+     -> EXPIRED (only while unused at its deadline)
 
 Backend-only lease:
 
@@ -1080,6 +1096,9 @@ Rules:
 - A claimed one-shot grant never returns to `AVAILABLE`; absent exact
   completion evidence, an indeterminate route remains fail-stop rather than
   retrying an effect. Only a proven pre-effect failure may become `ABANDONED`.
+- An unused `AVAILABLE` grant becomes `EXPIRED` at its deadline. That terminal
+  record permits fresh-grant rotation but is forward-only across this update:
+  older code safely rejects it, and operators must never delete or rewrite it.
 
 ## Implemented stable data contracts
 

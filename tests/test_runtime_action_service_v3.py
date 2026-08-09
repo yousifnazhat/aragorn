@@ -289,6 +289,12 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
 
     def test_activation_pins_grant_authority_and_effective_units(self) -> None:
         script = _ACTIVATOR.read_text(encoding="utf-8")
+        self.assertIn(
+            "activation_lock=/run/lock/aragorn-runtime-capability-activation.lock",
+            script,
+        )
+        self.assertIn("ARAGORN_RUNTIME_ACTIVATION_LOCK_HELD", script)
+        self.assertIn("flock -n 9", script)
         self.assertIn("require_safe_root_directory / root", script)
         self.assertIn("require_safe_root_directory /etc root", script)
         self.assertIn("require_safe_root_directory /etc/aragorn root", script)

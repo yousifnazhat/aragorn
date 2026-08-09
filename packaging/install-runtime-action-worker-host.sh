@@ -13,6 +13,7 @@ install -m 0644 \
     "$root/src/aragorn/runtime_action_worker.py" \
     "$destdir/usr/lib/aragorn/aragorn/"
 install -m 0755 \
+    "$root/packaging/activate-runtime-action-worker-host.sh" \
     "$root/packaging/libexec/aragorn-runtime-action-worker-service.py" \
     "$destdir/usr/libexec/aragorn/"
 install -m 0644 \

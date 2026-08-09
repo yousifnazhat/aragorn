@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import socket
 import stat
@@ -22,6 +23,7 @@ from aragorn.runtime_action_worker import (
     RuntimeActionWorkerBinding,
     RuntimeActionWorkerConfig,
     RuntimeActionWorkerError,
+    _activation_preflight,
     _broker_envelope,
     _broker_result,
     _clock_value,
@@ -74,6 +76,37 @@ def _config(root: Path) -> RuntimeActionWorkerConfig:
         expected_broker_uid=1004,
         binding=_binding(),
     )
+
+
+def _gateway_config() -> dict[str, object]:
+    plugin_config = {
+        "expectedGatewayGid": 2002,
+        "expectedGatewayUid": 1002,
+        "expectedWorkerUid": 1001,
+        "workerSocketPath": "/run/aragorn-runtime-action-worker/worker.sock",
+    }
+    return {
+        "gateway": {"mode": "local"},
+        "models": {"apiKey": "${OPENCLAW_GATEWAY_TOKEN}"},
+        "plugins": {
+            "allow": ["aragorn-runtime-action-worker"],
+            "enabled": True,
+            "entries": {
+                "aragorn-runtime-action-worker": {
+                    "config": plugin_config,
+                    "enabled": True,
+                }
+            },
+            "load": {
+                "paths": ["/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker"]
+            },
+        },
+        "tools": {
+            "alsoAllow": ["aragorn_runtime_create"],
+            "deny": ["session_status"],
+            "profile": "minimal",
+        },
+    }
 
 
 def _decision(envelope: dict[str, object]) -> dict[str, object]:
@@ -131,6 +164,64 @@ def _envelope(root: Path) -> dict[str, object]:
 
 
 class RuntimeActionWorkerTests(unittest.TestCase):
+    def test_activation_preflight_reuses_binding_and_closes_plugin_config(self) -> None:
+        valid = _gateway_config()
+        mutations = (
+            "valid",
+            "extra-plugin",
+            "wrong-path",
+            "extra-pin",
+            "env",
+            "additive-tools",
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                document = json.loads(canonical_json(valid))
+                if mutation == "extra-plugin":
+                    document["plugins"]["entries"]["evil"] = {"enabled": True}
+                elif mutation == "wrong-path":
+                    document["plugins"]["load"]["paths"] = ["/tmp/plugin"]
+                elif mutation == "extra-pin":
+                    document["plugins"]["entries"]["aragorn-runtime-action-worker"][
+                        "config"
+                    ]["sensorSocketPath"] = "/tmp/sensor.sock"
+                elif mutation == "env":
+                    document["models"]["apiKey"] = "${OPENAI_API_KEY}"
+                elif mutation == "additive-tools":
+                    document["tools"] = {"alsoAllow": ["aragorn_runtime_create"]}
+                with (
+                    patch("aragorn.runtime_action_worker.sys.platform", "linux"),
+                    patch("aragorn.runtime_action_worker.os.geteuid", return_value=0),
+                    patch(
+                        "aragorn.runtime_action_worker._read_worker_binding"
+                    ) as binding,
+                    patch(
+                        "aragorn.runtime_action_worker._read_credential_bytes",
+                        return_value=canonical_json(document),
+                    ),
+                ):
+                    if mutation == "valid":
+                        _activation_preflight(
+                            Path("/config"),
+                            Path("/binding"),
+                            "1002",
+                            "2002",
+                            "1001",
+                        )
+                        binding.assert_called_once_with(Path("/binding"), 1001)
+                    else:
+                        with self.assertRaisesRegex(
+                            RuntimeActionWorkerError,
+                            "gateway activation configuration is invalid",
+                        ):
+                            _activation_preflight(
+                                Path("/config"),
+                                Path("/binding"),
+                                "1002",
+                                "2002",
+                                "1001",
+                            )
+
     def test_binding_is_exact_canonical_and_five_field(self) -> None:
         document = {
             "schema": "aragorn/runtime-action-worker-binding/v1",

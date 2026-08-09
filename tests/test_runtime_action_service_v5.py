@@ -36,7 +36,9 @@ class RuntimeActionServiceV5Tests(unittest.TestCase):
                 patch.object(
                     service,
                     "initialize_runtime_capability_grant",
-                    side_effect=lambda _config: order.append("initialize"),
+                    side_effect=lambda _config: (
+                        order.append("initialize") or {"status": "AVAILABLE"}
+                    ),
                 ) as initialize,
                 patch.object(
                     service,
@@ -54,6 +56,42 @@ class RuntimeActionServiceV5Tests(unittest.TestCase):
             config.protected_install_root,
             Path("/var/lib/aragorn-protected/skills"),
         )
+
+    def test_service_enters_recovery_unless_grant_is_expired(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime, _observation, grant, _grant_raw = _credentials(Path(temporary))
+            identities = (
+                os.geteuid(),
+                os.geteuid() + 1,
+                os.getegid() + 1,
+                os.geteuid() + 2,
+                os.getegid() + 2,
+            )
+            for status in ("CLAIMED", "CONSUMED", "ABANDONED", "EXPIRED"):
+                with (
+                    self.subTest(status=status),
+                    patch.object(service.sys, "platform", "linux"),
+                    patch.object(
+                        service,
+                        "_service_identities",
+                        return_value=identities,
+                    ),
+                    patch.dict(
+                        os.environ,
+                        {"CREDENTIALS_DIRECTORY": str(runtime.parent)},
+                    ),
+                    patch.object(
+                        service,
+                        "initialize_runtime_capability_grant",
+                        return_value={"status": status},
+                    ),
+                    patch.object(service, "serve_runtime_action_broker_v5") as serve,
+                ):
+                    self.assertEqual(service.main([str(runtime), str(grant)]), 0)
+                if status == "EXPIRED":
+                    serve.assert_not_called()
+                else:
+                    serve.assert_called_once()
 
     def test_usage_launcher_and_unit_are_lineage_bounded(self) -> None:
         stderr = StringIO()

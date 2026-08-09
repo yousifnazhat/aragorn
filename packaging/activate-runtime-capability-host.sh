@@ -5,7 +5,7 @@ PATH=/usr/bin:/bin
 export PATH
 
 if [ "$(id -u)" -ne 0 ] || [ ! -x /usr/bin/systemctl ] \
-    || [ ! -x /usr/bin/busctl ]
+    || [ ! -x /usr/bin/busctl ] || [ ! -x /usr/bin/flock ]
 then
     echo "Aragorn runtime capability activation requires root and systemd" >&2
     exit 1
@@ -16,6 +16,21 @@ fail_activation()
     echo "$1" >&2
     exit 1
 }
+
+activation_lock=/run/lock/aragorn-runtime-capability-activation.lock
+if [ "${ARAGORN_RUNTIME_ACTIVATION_LOCK_HELD:-0}" = 1 ]; then
+    if [ "$(readlink /proc/$$/fd/9 2>/dev/null || :)" != "$activation_lock" ]; then
+        fail_activation "inherited Aragorn activation lock is invalid"
+    fi
+    if ! /usr/bin/flock -n 9; then
+        fail_activation "inherited Aragorn activation lock is not held"
+    fi
+else
+    exec 9>"$activation_lock"
+    if ! /usr/bin/flock -n 9; then
+        fail_activation "another Aragorn runtime activation is in progress"
+    fi
+fi
 
 require_safe_root_directory()
 {

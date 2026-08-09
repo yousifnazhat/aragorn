@@ -27,6 +27,18 @@ application send-syscall count. Outside it, Aragorn remains admission control.
 Aggregate admission, `RUN-01`, `RUN-02`, Phase 3 exit, installer authority, and
 public-release authority remain false.
 
+Unused one-action grants now terminalize as `EXPIRED` at their deadline. This
+is a forward-only fail-stop state: older binaries reject it, and rollback must
+not delete or rewrite the durable record. These newer lifecycle and activation
+bytes are not qualified by the retained P3.7b receipt.
+Activation failure stops the four-service route and masks its gateway and
+worker; retry requires operator inspection and explicit unmasking.
+A discarded privileged Docker/systemd smoke observed expiry, fail-stop
+rotation, and one coherent action for these bytes. It is not retained
+qualification, native-host production evidence, continuous renewal, boot
+authority, aggregate admission, Phase 3 exit, EDR, installer authority, or
+release authority.
+
 ## Threat Model, Trust Boundaries, and Assumptions
 
 Attacker-controlled inputs include every entry, filename, and file byte below

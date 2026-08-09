@@ -258,8 +258,8 @@ measuring the unchanged profile once more, the v3 sensor issues a short-lived
 random-nonce lease over that complete submission. The lease exists only on the
 sensor-to-broker channel. The v4 broker independently
 validates the identical grant credential, lease, submission, dynamic timing,
-and sensor peer, then keys durable `AVAILABLE` / `CLAIMED` / `CONSUMED` or
-`ABANDONED` state by the stable grant digest before calling the unchanged v2
+and sensor peer, then keys durable `AVAILABLE` / `CLAIMED` / `CONSUMED`,
+`ABANDONED`, or `EXPIRED` state by the stable grant digest before calling the unchanged v2
 effect route. The exact lease is retained inside the claim, a fresh nonce cannot
 reopen the grant, and exact-receipt recovery never retries the effect. A known
 pre-effect broker failure becomes non-reopenable `ABANDONED`; an indeterminate
@@ -427,6 +427,30 @@ hostile-root, same-UID output-directory, or power-loss resistance, aggregate
 `RUN-01` or `RUN-02`, Phase 3 exit, EDR status, installer authority, or
 public-release authority. The verifier source is digest-bound, but its Python
 standard-library and dynamic dependency closure is not pinned.
+
+An unused `AVAILABLE` grant now becomes an authenticated, durable `EXPIRED`
+tombstone at its deadline, including while either broker generation is waiting
+for a request. Only exact terminal state may be archived before a fresh grant
+becomes `AVAILABLE`; `CLAIMED` is never expired or reopened. Once `EXPIRED` has
+been written, rollback to older code is deliberately fail-stop because older
+readers reject that state. Operators must not delete or rewrite it. These
+expiry and host-activation bytes are newer than the retained P3.7b pair and
+inherit none of its qualification authority.
+The host activator accepts only the worker plugin and an exact OpenClaw policy:
+the `minimal` profile, `aragorn_runtime_create` as its sole addition, and denial
+of the profile's sole built-in `session_status`. Any failed transaction stops
+all four services, disables the sensor and broker, and masks the gateway and
+worker. An operator must inspect the failure and explicitly unmask those two
+units before retrying.
+
+A disposable privileged Docker/systemd smoke on the pinned P3.7b base image
+observed one unused grant become `EXPIRED`, fail-stop activation with all four
+services inactive, exact terminal-state archival during fresh-grant rotation,
+and one native OpenClaw `COMPLETED` / `ALLOW` / `CREATED` action ending in
+`CONSUMED`. The container and smoke output were discarded. This is a staging
+observation, not retained qualification, native-host production evidence,
+continuous renewal or boot authority, aggregate admission, Phase 3 exit, EDR,
+installer authority, or release authority.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

@@ -1014,7 +1014,13 @@ def _successful_accepts(trace: dict[str, Any]) -> list[str]:
 
 
 def _non_grant_effects(snapshot: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in snapshot.items() if key != "grant_state"}
+    retained = {key: value for key, value in snapshot.items() if key != "grant_state"}
+    retained["controls"] = {
+        key: value
+        for key, value in retained["controls"].items()
+        if key != "capability-grant-state.json"
+    }
+    return retained
 
 
 def _clean_terminal_unit(unit: dict[str, Any]) -> bool:
@@ -1651,7 +1657,10 @@ def _collect_live(harness: dict[str, Any]) -> dict[str, Any]:
         )
         and not expiry_after_route["sockets"][str(_BROKER_SOCKET)]["present"],
     }
-    _expect(all(expiry_checks.values()), "AVAILABLE to EXPIRED transition changed")
+    _expect(
+        all(expiry_checks.values()),
+        "AVAILABLE to EXPIRED transition changed: " + repr(expiry_checks),
+    )
 
     _set_stage("EXPIRED_ACTIVATION_FAIL_STOP")
     failed_before_state = _stable_state_snapshot(_GRANT_STATE, short_grant_digest)

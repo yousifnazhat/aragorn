@@ -438,14 +438,25 @@ discovery, full runtime tree, and gateway process identity remained unchanged.
 This is one pre-effect configuration-write denial, not aggregate admission or
 installer authority.
 
+A fourth additive exact-profile verifier qualifies only
+`ADM-02/reload/missing-prompt-blob-rebuild` as route-level `PASS`. It preserves
+the agent-writable session record, removes the referenced prompt blob, and
+proves that the next same-session attempt reconstructs the exact 728-byte
+protected prompt before provider execution. The verifier binds that rebuild to
+the second attempt's time window and proves unchanged session-store bytes,
+protected roots, configuration, runtime tree, target, and gateway identity.
+Both attempts subsequently failed because the contained profile intentionally
+had no provider credentials, so this qualification does not claim a successful
+model turn or model-output efficacy.
+
 The exact protected-consumer route-coverage ledger deterministically composes
-only those three pinned qualifications against the authoritative 21-route
-inventory. Its current result is 3 `PASS` and 18 `NOT_TESTED`; changed,
+only those four pinned qualifications against the authoritative 21-route
+inventory. Its current result is 4 `PASS` and 17 `NOT_TESTED`; changed,
 duplicate, missing, or cross-profile inputs fail closed. The ledger is a
 closure-progress record, not aggregate admission or release authority.
-Any snapshot-consumer qualification must tamper with the agent-writable session
-record and prompt blob and prove rejection or exact protected-byte rebuild;
-an unchanged opaque prompt digest is not sufficient for route `PASS`.
+The prompt-rebuild qualification satisfies the snapshot-consumer requirement
+by changing the agent-writable prompt cache while preserving the session record;
+an unchanged opaque prompt digest alone remains insufficient for route `PASS`.
 
 The retention pre-gate re-verifies every referenced conformance-evidence blob
 from the protected CAS. This proves blob identity and availability, not the

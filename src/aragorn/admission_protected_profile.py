@@ -12,7 +12,6 @@ from .admission_runtime_profile import (
 )
 from .oci_worker_protocol import canonical_digest
 
-_SCHEMA = "aragorn/admission-protected-profile-route-coverage/v1"
 _PROFILE = "openclaw-2026.7.1-protected-consumer"
 _PROFILE_DIGEST = (
     "sha256:be2f1cec6f70fbc18be19e04556c2b52331cec61405950512e3fcd48ff26c906"
@@ -20,7 +19,7 @@ _PROFILE_DIGEST = (
 _CONFIG_DIGEST = (
     "sha256:ec2b2022ed27f62840583d31264826c88514a04e7e7cc94d78820b021d6288b6"
 )
-_QUALIFICATIONS = {
+_QUALIFICATIONS_V1 = {
     "sha256:4c293f05c8464cf37fd88f9119dba61af03df302a7255eb9b284b655faa6fef2": (
         "aragorn/admission-protected-route-qualification/v1",
         "ADM-02/update/workshop-proposal-apply",
@@ -32,6 +31,13 @@ _QUALIFICATIONS = {
     "sha256:e81299d455895e22a3de643789f6d57f5f47ae645c01d6161eed58f7fffd9744": (
         "aragorn/admission-protected-config-route-qualification/v1",
         "ADM-02/update/config-entry-activation",
+    ),
+}
+_QUALIFICATIONS_V2 = {
+    **_QUALIFICATIONS_V1,
+    "sha256:481e386a9ca9f1389aa1d21d97b01a86fc89191aac6941ebe486f7d19b58f378": (
+        "aragorn/admission-protected-prompt-rebuild-route-qualification/v1",
+        "ADM-02/reload/missing-prompt-blob-rebuild",
     ),
 }
 _DECISION = {
@@ -51,6 +57,44 @@ def compose_openclaw_protected_profile_coverage(
 ) -> dict[str, Any]:
     """Compose exact pinned route PASSes without aggregate authority."""
 
+    return _compose_openclaw_protected_profile_coverage(
+        route_profile,
+        route_inventory,
+        runtime_candidates,
+        route_qualifications,
+        qualifications=_QUALIFICATIONS_V1,
+        schema="aragorn/admission-protected-profile-route-coverage/v1",
+    )
+
+
+def compose_openclaw_protected_profile_coverage_v2(
+    route_profile: Mapping[str, Any],
+    route_inventory: Mapping[str, Any],
+    runtime_candidates: Mapping[str, Any],
+    route_qualifications: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Compose four exact route PASSes without aggregate authority."""
+
+    return _compose_openclaw_protected_profile_coverage(
+        route_profile,
+        route_inventory,
+        runtime_candidates,
+        route_qualifications,
+        qualifications=_QUALIFICATIONS_V2,
+        schema="aragorn/admission-protected-profile-route-coverage/v2",
+    )
+
+
+def _compose_openclaw_protected_profile_coverage(
+    route_profile: Mapping[str, Any],
+    route_inventory: Mapping[str, Any],
+    runtime_candidates: Mapping[str, Any],
+    route_qualifications: Sequence[Mapping[str, Any]],
+    *,
+    qualifications: Mapping[str, tuple[str, str]],
+    schema: str,
+) -> dict[str, Any]:
+
     try:
         validate_openclaw_protected_consumer_profile(
             route_profile,
@@ -68,14 +112,14 @@ def compose_openclaw_protected_profile_coverage(
             if not isinstance(document, Mapping):
                 raise AdmissionEvidenceError("route qualification must be an object")
             digest = canonical_digest(document)
-            expected = _QUALIFICATIONS.get(digest)
+            expected = qualifications.get(digest)
             if expected is None:
                 raise AdmissionEvidenceError("unknown or forged route qualification")
-            schema, route_id = expected
+            qualification_schema, route_id = expected
             if route_id in qualified:
                 raise AdmissionEvidenceError("duplicate route qualification")
             if (
-                document["schema"] != schema
+                document["schema"] != qualification_schema
                 or document["profile"] != _PROFILE
                 or document["runtime"] != route_profile["runtime"]
                 or document["bindings"]["profile_digest"] != _PROFILE_DIGEST
@@ -95,7 +139,7 @@ def compose_openclaw_protected_profile_coverage(
     except (KeyError, TypeError, ValueError) as exc:
         raise AdmissionEvidenceError(f"invalid route qualification: {exc}") from exc
 
-    if len(qualified) != len(_QUALIFICATIONS):
+    if len(qualified) != len(qualifications):
         raise AdmissionEvidenceError("all pinned route qualifications are required")
 
     route_ids = [
@@ -111,11 +155,15 @@ def compose_openclaw_protected_profile_coverage(
         }
         for route_id in route_ids
     ]
-    if len(routes) != 21 or len(qualified) != 3:
+    pass_count = len(qualifications)
+    if len(routes) != 21 or len(qualified) != pass_count:
         raise AdmissionEvidenceError("protected route coverage count changed")
+    count_word = {3: "THREE", 4: "FOUR"}.get(pass_count)
+    if count_word is None:
+        raise AdmissionEvidenceError("unsupported protected route coverage count")
 
     return {
-        "schema": _SCHEMA,
+        "schema": schema,
         "assurance": "EXACT_PINNED_ROUTE_COMPOSITION_ONLY_NOT_AGGREGATE_AUTHORITY",
         "profile": {
             "name": _PROFILE,
@@ -124,10 +172,10 @@ def compose_openclaw_protected_profile_coverage(
         },
         "route_inventory_canonical_digest": canonical_digest(route_inventory),
         "routes": routes,
-        "counts": {"PASS": 3, "NOT_TESTED": 18},
+        "counts": {"PASS": pass_count, "NOT_TESTED": 21 - pass_count},
         "decision": dict(_DECISION),
         "limitations": [
-            "ONLY_THREE_EXACT_ROUTE_QUALIFICATIONS_COMPOSED",
+            f"ONLY_{count_word}_EXACT_ROUTE_QUALIFICATIONS_COMPOSED",
             "NO_AGGREGATE_ADMISSION_INSTALLER_OR_PHASE3_AUTHORITY",
         ],
     }

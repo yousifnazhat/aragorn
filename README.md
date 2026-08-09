@@ -495,10 +495,24 @@ The verifier binds unchanged configuration, active-skill, discovery, runtime
 tree, and gateway process identity before and after. It grants no aggregate
 admission, installer, Phase 3, EDR, or release authority.
 
+A fourth additive
+[protected prompt-rebuild qualification](./benchmark/receipts/phase3-openclaw-protected-prompt-rebuild-route-qualification-v1-2026-08-09.json)
+promotes only `ADM-02/reload/missing-prompt-blob-rebuild` to route-level `PASS`
+for that exact profile. After a baseline prompt snapshot, the probe preserved
+the agent-writable session record but removed its referenced prompt blob. The
+next same-session attempt reconstructed the exact 728-byte protected prompt
+blob before provider execution. Both agent attempts then failed because the
+contained profile intentionally had no provider credentials; the result does
+not claim a successful model turn. The verifier binds the reconstruction to
+the second attempt's time window and proves unchanged session-store bytes,
+protected roots, configuration, runtime tree, target, and gateway process
+identity. It grants no aggregate admission, installer, Phase 3, EDR, or release
+authority.
+
 The exact protected-consumer
-[route-coverage ledger](./benchmark/receipts/phase3-openclaw-protected-profile-route-coverage-v1-2026-08-07.json)
-now composes those three pinned qualifications in the authoritative 21-route
-inventory order: 3 `PASS`, 18 `NOT_TESTED`. It rejects missing, duplicate,
+[route-coverage ledger](./benchmark/receipts/phase3-openclaw-protected-profile-route-coverage-v2-2026-08-09.json)
+now composes those four pinned qualifications in the authoritative 21-route
+inventory order: 4 `PASS`, 17 `NOT_TESTED`. It rejects missing, duplicate,
 modified, or cross-profile qualifications and grants no aggregate admission,
 installer, Phase 3, EDR, or release authority.
 

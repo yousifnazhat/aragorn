@@ -66,8 +66,12 @@ from aragorn.admission_protected_archive import (
 from aragorn.admission_protected_config import (
     verify_openclaw_protected_config_activation,
 )
+from aragorn.admission_protected_prompt import (
+    verify_openclaw_protected_prompt_rebuild,
+)
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
+    compose_openclaw_protected_profile_coverage_v2,
 )
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.admission_runtime_profile import (
@@ -1816,6 +1820,70 @@ def main() -> int:
         != canonical_json(protected_profile_coverage) + b"\n"
     ):
         raise AssertionError("protected-profile route coverage changed")
+
+    prompt_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-prompt-rebuild-2026-08-09.json",
+        protected_profile_path,
+        protected_profile_dir / "protected-observation-v1.mjs",
+        protected_profile_dir / "protected-prompt-rebuild-probe.mjs",
+        protected_profile_dir / "protected-route-config-v1.json",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase3-protected-archive-existing"
+        / "SKILL.md",
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-prompt-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in prompt_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        prompt_qualification = verify_openclaw_protected_prompt_rebuild(
+            load(
+                admission_receipts
+                / "phase3-openclaw-protected-prompt-rebuild-v1-2026-08-09.json"
+            ),
+            evidence_cas=evidence_cas,
+            route_profile=load_runtime_profile(protected_profile_path.read_bytes()),
+            route_inventory=openclaw_route_inventory,
+            runtime_candidates=runtime_candidates,
+        )
+    retained_prompt_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-prompt-rebuild-route-qualification-"
+        "v1-2026-08-09.json"
+    )
+    retained_prompt_qualification = load(retained_prompt_qualification_path)
+    if (
+        prompt_qualification != retained_prompt_qualification
+        or retained_prompt_qualification_path.read_bytes()
+        != canonical_json(prompt_qualification) + b"\n"
+    ):
+        raise AssertionError("protected prompt qualification changed")
+
+    protected_profile_coverage_v2 = compose_openclaw_protected_profile_coverage_v2(
+        load_runtime_profile(protected_profile_path.read_bytes()),
+        openclaw_route_inventory,
+        runtime_candidates,
+        [
+            retained_qualification,
+            retained_archive_qualification,
+            retained_config_qualification,
+            retained_prompt_qualification,
+        ],
+    )
+    protected_profile_coverage_v2_path = admission_receipts / (
+        "phase3-openclaw-protected-profile-route-coverage-v2-2026-08-09.json"
+    )
+    retained_protected_profile_coverage_v2 = load(
+        protected_profile_coverage_v2_path
+    )
+    if (
+        protected_profile_coverage_v2 != retained_protected_profile_coverage_v2
+        or protected_profile_coverage_v2_path.read_bytes()
+        != canonical_json(protected_profile_coverage_v2) + b"\n"
+    ):
+        raise AssertionError("protected-profile v2 route coverage changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

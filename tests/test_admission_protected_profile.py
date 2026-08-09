@@ -8,6 +8,7 @@ from pathlib import Path
 from aragorn.admission_evidence import AdmissionEvidenceError
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
+    compose_openclaw_protected_profile_coverage_v2,
 )
 from aragorn.admission_runtime_profile import load_runtime_profile
 
@@ -43,6 +44,12 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
             (
                 receipts
                 / "phase3-openclaw-protected-config-route-qualification-v1-2026-08-07.json"
+            ).read_bytes()
+        )
+        cls.prompt = json.loads(
+            (
+                receipts
+                / "phase3-openclaw-protected-prompt-rebuild-route-qualification-v1-2026-08-09.json"
             ).read_bytes()
         )
 
@@ -141,6 +148,47 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
         }.items():
             with self.subTest(name=name), self.assertRaises(AdmissionEvidenceError):
                 self.compose(**kwargs)
+
+    def test_v2_composes_four_passes_and_seventeen_not_tested(self) -> None:
+        qualifications = [self.workshop, self.archive, self.config, self.prompt]
+        result = compose_openclaw_protected_profile_coverage_v2(
+            self.profile,
+            self.inventory,
+            self.candidates,
+            qualifications,
+        )
+        reversed_result = compose_openclaw_protected_profile_coverage_v2(
+            self.profile,
+            self.inventory,
+            self.candidates,
+            list(reversed(qualifications)),
+        )
+
+        self.assertEqual(result, reversed_result)
+        self.assertEqual(result["counts"], {"PASS": 4, "NOT_TESTED": 17})
+        self.assertEqual(
+            {route["id"] for route in result["routes"] if route["status"] == "PASS"},
+            {
+                "ADM-02/update/archive-source-force-replacement",
+                "ADM-02/update/config-entry-activation",
+                "ADM-02/update/workshop-proposal-apply",
+                "ADM-02/reload/missing-prompt-blob-rebuild",
+            },
+        )
+        self.assertEqual(
+            result["limitations"],
+            [
+                "ONLY_FOUR_EXACT_ROUTE_QUALIFICATIONS_COMPOSED",
+                "NO_AGGREGATE_ADMISSION_INSTALLER_OR_PHASE3_AUTHORITY",
+            ],
+        )
+        with self.assertRaises(AdmissionEvidenceError):
+            compose_openclaw_protected_profile_coverage_v2(
+                self.profile,
+                self.inventory,
+                self.candidates,
+                qualifications[:-1],
+            )
 
 
 if __name__ == "__main__":

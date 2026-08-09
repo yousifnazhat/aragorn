@@ -1003,7 +1003,7 @@ def _filtered_journals(
     invocations: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     retained = {}
-    for name in _UNITS:
+    for name in invocations if invocations is not None else _UNITS:
         invocation_id = (invocations or {}).get(
             name,
             route["units"][name]["properties"]["InvocationID"],

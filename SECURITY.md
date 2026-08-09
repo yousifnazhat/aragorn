@@ -29,15 +29,15 @@ public-release authority remain false.
 
 Unused one-action grants now terminalize as `EXPIRED` at their deadline. This
 is a forward-only fail-stop state: older binaries reject it, and rollback must
-not delete or rewrite the durable record. These newer lifecycle and activation
-bytes are not qualified by the retained P3.7b receipt.
-Activation failure stops the four-service route and masks its gateway and
-worker; retry requires operator inspection and explicit unmasking.
-A discarded privileged Docker/systemd smoke observed expiry, fail-stop
-rotation, and one coherent action for these bytes. It is not retained
-qualification, native-host production evidence, continuous renewal, boot
-authority, aggregate admission, Phase 3 exit, EDR, installer authority, or
-release authority.
+not delete or rewrite the durable record. Activation failure stops the
+four-service route and masks its gateway and worker; retry requires operator
+inspection and explicit unmasking. A retained P3.7c observation and separate
+semantic-replay receipt qualify one exact privileged Docker/systemd sequence:
+idle expiry, failed activation fail-stop, terminal archive rotation to one
+fresh grant, and one coherent action ending `CONSUMED`. P3.7b remains an exact
+immutable parent. P3.7c does not establish native-host production, automatic or
+concurrent renewal, reboot/crash/power-loss behavior, aggregate admission,
+Phase 3 exit, EDR, installer authority, or release authority.
 
 ## Threat Model, Trust Boundaries, and Assumptions
 

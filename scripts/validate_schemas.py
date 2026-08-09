@@ -124,6 +124,9 @@ from aragorn.gvisor_runtime import (
 )
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.runtime_action_worker_activation_expiry_systemd_evidence import (
+    runtime_action_worker_activation_expiry_systemd_qualification,
+)
 from aragorn.runtime_action_worker_openclaw_systemd_evidence import (
     runtime_action_worker_openclaw_systemd_qualification,
 )
@@ -2072,6 +2075,62 @@ def main() -> int:
         != canonical_json(runtime_worker_qualification) + b"\n"
     ):
         raise AssertionError("runtime-worker qualification changed")
+
+    activation_expiry_evidence_path = admission_evidence / (
+        "runtime-action-worker-activation-expiry-systemd-composition-"
+        "p3-7c-2026-08-09.json"
+    )
+    activation_expiry_evidence_raw = activation_expiry_evidence_path.read_bytes()
+    activation_expiry_evidence = json.loads(activation_expiry_evidence_raw)
+    activation_expiry_evidence_digest = (
+        "sha256:a0607801571db26cf8d2f2c07ebc6ca7675da8dbc2f385e0e64f5ab5e3187322"
+    )
+    if (
+        activation_expiry_evidence_raw
+        != canonical_json(activation_expiry_evidence) + b"\n"
+        or len(activation_expiry_evidence_raw) != 311385
+        or "sha256:" + hashlib.sha256(activation_expiry_evidence_raw).hexdigest()
+        != "sha256:b9d360c7b5b7eac5e66f79a4a2b09b70094070bc297619f499ac880663d8ad91"
+        or canonical_digest(activation_expiry_evidence)
+        != activation_expiry_evidence_digest
+    ):
+        raise AssertionError("activation-expiry source observation changed")
+    activation_expiry_verifier_path = (
+        ROOT
+        / "src"
+        / "aragorn"
+        / "runtime_action_worker_activation_expiry_systemd_evidence.py"
+    )
+    activation_expiry_verifier_digest = (
+        "sha256:"
+        + hashlib.sha256(activation_expiry_verifier_path.read_bytes()).hexdigest()
+    )
+    activation_expiry_qualification = (
+        runtime_action_worker_activation_expiry_systemd_qualification(
+            activation_expiry_evidence,
+            runtime_worker_evidence,
+            runtime_worker_parent,
+            retained_runtime_worker_qualification,
+            expected_digest=activation_expiry_evidence_digest,
+            implementation_digest=activation_expiry_verifier_digest,
+        )
+    )
+    validators[
+        "runtime-action-worker-activation-expiry-systemd-qualification-v1.schema.json"
+    ].validate(activation_expiry_qualification)
+    activation_expiry_qualification_path = admission_receipts / (
+        "phase3-runtime-action-worker-activation-expiry-systemd-qualification-"
+        "v1-2026-08-09.json"
+    )
+    retained_activation_expiry_qualification = load(
+        activation_expiry_qualification_path
+    )
+    if (
+        activation_expiry_qualification != retained_activation_expiry_qualification
+        or activation_expiry_qualification_path.read_bytes()
+        != canonical_json(activation_expiry_qualification) + b"\n"
+    ):
+        raise AssertionError("activation-expiry qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

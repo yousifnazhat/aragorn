@@ -1009,13 +1009,15 @@ The host activation contract uses OpenClaw's `minimal` profile, adds only
 `aragorn_runtime_create`, and denies the profile's sole built-in
 `session_status`. A failed activation masks the gateway and worker and requires
 explicit operator unmasking after the cause is corrected.
-A disposable privileged Docker/systemd smoke against the pinned P3.7b base
-image exercised current expiry and activation bytes: an unused grant became
-`EXPIRED`, the expired activation failed stopped, a fresh grant archived that
-terminal state, and one native OpenClaw action ended `COMPLETED` / `ALLOW` /
-`CREATED` with the grant `CONSUMED`. No smoke output was retained. This does not
-qualify a native host, persistent renewal, boot activation, aggregate runs,
-Phase 3 exit, EDR, installer authority, or release authority.
+The [retained P3.7c observation](./benchmark/evidence/runtime-action-worker-activation-expiry-systemd-composition-p3-7c-2026-08-09.json)
+and [qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-activation-expiry-systemd-qualification-v1-2026-08-09.json)
+bind current expiry and activation bytes to four replayed phases: idle
+`AVAILABLE` -> `EXPIRED`, expired activation fail-stop, exact terminal archive
+rotation to a distinct fresh `AVAILABLE` grant, and one activated OpenClaw
+`COMPLETED` / `ALLOW` / `CREATED` action ending `CONSUMED`. The P3.7b parent
+remains separately immutable. P3.7c is one privileged local Docker/systemd
+fixture, not native-host, automatic-renewal, concurrent, reboot, crash,
+power-loss, aggregate-run, Phase 3 exit, EDR, installer, or release authority.
 The trace establishes one route connection without a reconnect attempt, not an
 application send-syscall count.
 The negative outcomes and effect snapshots are retained, but causal

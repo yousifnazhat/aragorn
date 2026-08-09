@@ -443,14 +443,19 @@ all four services, disables the sensor and broker, and masks the gateway and
 worker. An operator must inspect the failure and explicitly unmask those two
 units before retrying.
 
-A disposable privileged Docker/systemd smoke on the pinned P3.7b base image
-observed one unused grant become `EXPIRED`, fail-stop activation with all four
-services inactive, exact terminal-state archival during fresh-grant rotation,
-and one native OpenClaw `COMPLETED` / `ALLOW` / `CREATED` action ending in
-`CONSUMED`. The container and smoke output were discarded. This is a staging
-observation, not retained qualification, native-host production evidence,
-continuous renewal or boot authority, aggregate admission, Phase 3 exit, EDR,
-installer authority, or release authority.
+The [retained P3.7c observation](./benchmark/evidence/runtime-action-worker-activation-expiry-systemd-composition-p3-7c-2026-08-09.json),
+canonical digest
+`sha256:a0607801571db26cf8d2f2c07ebc6ca7675da8dbc2f385e0e64f5ab5e3187322`,
+and its separate
+[qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-activation-expiry-systemd-qualification-v1-2026-08-09.json)
+semantically replay one unused grant becoming `EXPIRED`, fail-stop activation,
+exact terminal archive rotation to a distinct fresh `AVAILABLE` grant, four-unit
+activation without boot authority, and one `COMPLETED` / `ALLOW` / `CREATED`
+action ending `CONSUMED`. P3.7c inherits P3.7b only through its exact immutable
+parent binding. It remains one privileged local Docker/systemd fixture, not
+native-host production evidence, automatic or concurrent renewal, reboot,
+crash or power-loss coverage, aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR,
+installer authority, or public-release authority.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

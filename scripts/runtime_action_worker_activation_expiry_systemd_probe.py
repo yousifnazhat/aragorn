@@ -1659,7 +1659,16 @@ def _collect_live(harness: dict[str, Any]) -> dict[str, Any]:
     }
     _expect(
         all(expiry_checks.values()),
-        "AVAILABLE to EXPIRED transition changed: " + repr(expiry_checks),
+        "AVAILABLE to EXPIRED transition changed: "
+        + repr(
+            {
+                "checks": expiry_checks,
+                "broker": expiry_after_route["units"][_BROKER_UNIT]["properties"],
+                "cgroup_members": expiry_after_route["units"][_BROKER_UNIT][
+                    "cgroup_members"
+                ],
+            }
+        ),
     )
 
     _set_stage("EXPIRED_ACTIVATION_FAIL_STOP")

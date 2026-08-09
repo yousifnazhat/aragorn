@@ -16,6 +16,7 @@ install -m 0755 \
     "$root/packaging/libexec/aragorn-runtime-action-worker-service.py" \
     "$destdir/usr/libexec/aragorn/"
 install -m 0644 \
+    "$root/packaging/systemd/aragorn-agent-gateway.service" \
     "$root/packaging/systemd/aragorn-runtime-action-worker.service" \
     "$destdir/usr/lib/systemd/system/"
 install -m 0644 \

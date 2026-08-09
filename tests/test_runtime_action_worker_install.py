@@ -42,6 +42,10 @@ class RuntimeActionWorkerInstallTests(unittest.TestCase):
                     / "packaging/libexec/aragorn-runtime-action-worker-service.py",
                     0o755,
                 ),
+                staged / "usr/lib/systemd/system/aragorn-agent-gateway.service": (
+                    _ROOT / "packaging/systemd/aragorn-agent-gateway.service",
+                    0o644,
+                ),
                 staged
                 / "usr/lib/systemd/system/aragorn-runtime-action-worker.service": (
                     _ROOT / "packaging/systemd/aragorn-runtime-action-worker.service",

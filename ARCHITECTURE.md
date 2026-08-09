@@ -977,9 +977,15 @@ current worker, reduced plugin, sysusers entry, and hardened service definition
 are unit/static implementation only. A `DESTDIR`-aware installer stages those
 bytes and the existing capability-route dependencies without creating
 identities, writing configuration or credentials, or invoking a service
-manager. It provides no live activation or carried runtime evidence. This
-checkpoint establishes no aggregate `RUN-01` or `RUN-02`, Phase 3 exit, EDR
-status, installer authority, or release authority.
+manager. The staged gateway unit is static, consumes its root-owned OpenClaw
+configuration through a service-credential projection, and defaults to
+localhost-only networking. It provides no live activation or carried runtime
+evidence. This checkpoint establishes no aggregate `RUN-01` or `RUN-02`, Phase
+3 exit, EDR status, installer authority, or release authority. A later
+activator must reject environment-file assignments for `HOME`,
+`OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, `PATH`, and `NO_PROXY` at minimum,
+then verify the effective gateway UID, GID, and complete group set. An empty
+`SupplementaryGroups=` declaration does not remove NSS-derived memberships.
 
 ### 8. Evidence and interoperability plane
 

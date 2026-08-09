@@ -380,10 +380,16 @@ worker-specific process profile, capability grant, Linux activation, and live
 exact-profile qualification are still required. This source/static checkpoint
 includes an optional `DESTDIR`-aware host-staging installer that copies the
 existing capability route plus the worker, service, identity declaration, and
-reduced plugin bytes. It writes no configuration or credentials and invokes no
-identity or service manager, so staging does not activate the route. It
-grants no `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, or release
-authority.
+reduced plugin bytes. It also stages a static gateway unit whose root-owned
+configuration is projected as a service credential and whose default network
+policy permits only localhost. The installer writes no configuration or
+credentials and invokes no identity or service manager, so staging does not
+activate the route or grant `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer,
+or release authority. Activation must first validate the root-owned environment
+file and reject assignments that override `HOME`, `OPENCLAW_CONFIG_PATH`,
+`OPENCLAW_STATE_DIR`, `PATH`, or `NO_PROXY`; it must also verify the effective
+gateway UID, GID, and complete group set because the static unit cannot erase
+NSS-derived supplementary memberships.
 
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:

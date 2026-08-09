@@ -1082,7 +1082,17 @@ def _monitored_invocation(
             and sample["units"][name]["ExecMainStatus"] == "0"
             for sample in retained
         ),
-        f"unit invocation timing changed: {name}",
+        "unit invocation timing changed: "
+        + repr(
+            {
+                "command_monotonic_ns": [
+                    command["started_monotonic_ns"],
+                    command["completed_monotonic_ns"],
+                ],
+                "name": name,
+                "samples": retained,
+            }
+        ),
     )
     return {"invocation_id": invocation_id, "samples": retained}
 

@@ -1025,12 +1025,21 @@ def _non_grant_effects(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 def _clean_terminal_unit(unit: dict[str, Any]) -> bool:
     properties = unit["properties"]
+    exited_success = (
+        properties["ExecMainCode"] == "1" and properties["ExecMainStatus"] == "0"
+    )
+    cleared_success = (
+        properties["ExecMainCode"] == "0"
+        and properties["ExecMainStatus"] == "0"
+        and properties["ExecMainStartTimestampMonotonic"] == "0"
+        and properties["ExecMainExitTimestampMonotonic"] == "0"
+        and properties["InvocationID"] == ""
+    )
     return (
         properties["ActiveState"] == "inactive"
         and properties["SubState"] == "dead"
         and properties["Result"] == "success"
-        and properties["ExecMainCode"] == "1"
-        and properties["ExecMainStatus"] == "0"
+        and (exited_success or cleared_success)
         and properties["MainPID"] == "0"
         and unit["cgroup_members"] == []
     )

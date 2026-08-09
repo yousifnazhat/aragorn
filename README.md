@@ -378,6 +378,10 @@ capability grant. The digest-bound v4 sensor and v5 broker sources remain
 unchanged, but their earlier OpenClaw evidence does not transfer: a
 worker-specific process profile, capability grant, Linux activation, and live
 exact-profile qualification are still required. This source/static checkpoint
+includes an optional `DESTDIR`-aware host-staging installer that copies the
+existing capability route plus the worker, service, identity declaration, and
+reduced plugin bytes. It writes no configuration or credentials and invokes no
+identity or service manager, so staging does not activate the route. It
 grants no `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, or release
 authority.
 

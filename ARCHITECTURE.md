@@ -974,9 +974,12 @@ OpenClaw profile and grant cannot be reused. They must be reissued for the
 worker executable and deployment, then captured and semantically verified on
 Linux. The source-frozen v4 sensor and v5 broker are reused unchanged. The
 current worker, reduced plugin, sysusers entry, and hardened service definition
-are unit/static implementation only, with no live activation or carried
-runtime evidence. They establish no aggregate `RUN-01` or `RUN-02`, Phase 3
-exit, EDR status, installer authority, or release authority.
+are unit/static implementation only. A `DESTDIR`-aware installer stages those
+bytes and the existing capability-route dependencies without creating
+identities, writing configuration or credentials, or invoking a service
+manager. It provides no live activation or carried runtime evidence. This
+checkpoint establishes no aggregate `RUN-01` or `RUN-02`, Phase 3 exit, EDR
+status, installer authority, or release authority.
 
 ### 8. Evidence and interoperability plane
 

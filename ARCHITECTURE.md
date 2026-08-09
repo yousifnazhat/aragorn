@@ -951,6 +951,33 @@ causation, multi-file or broader-action coverage, hostile-root or power-loss
 qualification, `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, installer
 authority, or public release authority.
 
+P3.7a introduces the smallest additive trust-plane split after the exact
+protected profile proved that the gateway's writable session state could feed
+an unprotected skills prompt to the pinned consumer chain. The target
+composition assigns OpenClaw and its writable state to a new gateway principal,
+while the optional tool sends an exact canonical request over a worker-owned
+Unix endpoint. The request has no
+effect authority and carries only the target, payload, session, run, and
+tool-call digest. A distinct `aragorn-runtime` worker authenticates the gateway
+with `SO_PEERCRED`, opens only the protected-root identity needed to derive
+action digests, applies a five-field operator binding, authenticates the v4
+sensor, and submits at most once. It marks the attempt `INDETERMINATE` before
+the first call that may partially send to the sensor and never retries.
+
+The gateway plugin verifies the worker-owned runtime directory and socket
+before and after the exchange. This is principal-owned endpoint identity, not
+exact worker-process authentication, because portable Node Unix sockets do not
+expose peer credentials; the existing sensor remains responsible for pinning
+the worker PID, executable, cgroup, mount namespace, runtime digest, and active
+skill lineage before issuing a capability. Accordingly the sensor's existing
+OpenClaw profile and grant cannot be reused. They must be reissued for the
+worker executable and deployment, then captured and semantically verified on
+Linux. The source-frozen v4 sensor and v5 broker are reused unchanged. The
+current worker, reduced plugin, sysusers entry, and hardened service definition
+are unit/static implementation only, with no live activation or carried
+runtime evidence. They establish no aggregate `RUN-01` or `RUN-02`, Phase 3
+exit, EDR status, installer authority, or release authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

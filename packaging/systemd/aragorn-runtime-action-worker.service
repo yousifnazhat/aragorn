@@ -1,0 +1,74 @@
+[Unit]
+Description=Aragorn isolated runtime action worker
+After=local-fs.target nss-user-lookup.target aragorn-runtime-lineage-capability-observation-publisher.service
+Requires=aragorn-runtime-lineage-capability-observation-publisher.service
+RequiresMountsFor=/var/lib/aragorn-runtime-action/protected /var/lib/aragorn-protected/skills
+ConditionPathExists=/etc/aragorn/runtime-action-worker.json
+
+[Service]
+Type=simple
+User=aragorn-runtime
+Group=aragorn-runtime
+SupplementaryGroups=aragorn-agent-gateway
+RuntimeDirectory=aragorn-runtime-action-worker
+RuntimeDirectoryMode=0711
+LoadCredential=worker-binding:/etc/aragorn/runtime-action-worker.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-action-worker-service.py %d/worker-binding
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+Restart=on-failure
+RestartSec=1s
+TimeoutStartSec=5s
+TimeoutStopSec=5s
+KillMode=control-group
+KillSignal=SIGINT
+TasksMax=2
+MemoryMax=128M
+MemorySwapMax=0
+LimitNOFILE=64
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-runtime-action-worker
+
+NoNewPrivileges=yes
+AmbientCapabilities=
+CapabilityBoundingSet=
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/etc/aragorn/runtime-action-worker.json /etc/aragorn/runtime-action-runtime.json /etc/aragorn/runtime-action-observation.json /etc/aragorn/runtime-capability-grant.json /var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/staging /var/lib/aragorn-gateway
+InaccessiblePaths=-/etc/aragorn/agent-gateway -/etc/aragorn/openclaw-profile -/var/lib/aragorn-agent-gateway -/var/lib/aragorn-openclaw-profile
+InaccessiblePaths=-/profile/config -/profile/state -/profile/workspace
+ReadOnlyPaths=/var/lib/aragorn-runtime-action/protected /var/lib/aragorn-protected/skills
+ReadOnlyPaths=-/opt/aragorn/runtime-profile
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock ptrace process_vm_readv process_vm_writev kcmp
+
+[Install]
+WantedBy=multi-user.target

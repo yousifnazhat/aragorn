@@ -358,6 +358,29 @@ multi-file, broader-action, hostile-root, or power-loss qualification.
 `RUN-01`, `RUN-02`, Phase 3 exit, EDR status, installer authority, and public
 release authority remain false.
 
+P3.7a begins the trust-plane repair required by the protected session-snapshot
+failure. An additive OpenClaw plugin now sends only bounded effect bytes and
+opaque run, session, and tool-call correlation to a distinct
+`aragorn-runtime` worker; it no longer gives the gateway runtime, skill,
+policy, protected-root, sensor, or broker pins. The worker authenticates the
+gateway with Linux peer credentials, derives the existing broker request from
+one exact five-field operator binding, authenticates the existing sensor, and
+makes exactly one relay attempt. Its result distinguishes `NOT_SUBMITTED`,
+`INDETERMINATE`, and `COMPLETED`; `COMPLETED` means only that a strictly
+validated broker result returned, not that the effect was allowed or that run
+conformance was established. The reduced plugin authenticates the worker
+UID-owned Unix endpoint by exact parent and socket metadata because Node does
+not expose peer credentials on every supported runtime; the downstream sensor
+must still measure the worker process before any effect. Additive sysusers and
+a hardened systemd unit keep the worker away from gateway state, provider
+credentials, broker control/staging state, observation credentials, and the
+capability grant. The digest-bound v4 sensor and v5 broker sources remain
+unchanged, but their earlier OpenClaw evidence does not transfer: a
+worker-specific process profile, capability grant, Linux activation, and live
+exact-profile qualification are still required. This source/static checkpoint
+grants no `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, or release
+authority.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

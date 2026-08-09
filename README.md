@@ -499,9 +499,9 @@ A fourth additive
 [protected prompt-rebuild qualification](./benchmark/receipts/phase3-openclaw-protected-prompt-rebuild-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/missing-prompt-blob-rebuild` to route-level `PASS`
 for that exact profile. After a baseline prompt snapshot, the probe preserved
-the agent-writable session record but removed its referenced prompt blob. The
-next same-session attempt reconstructed the exact 728-byte protected prompt
-blob before provider execution. Both agent attempts then failed because the
+the session record, writable by the same profile UID, but removed its referenced
+prompt blob. The next same-session attempt reconstructed the exact 728-byte
+protected prompt blob before provider execution. Both agent attempts then failed because the
 contained profile intentionally had no provider credentials; the result does
 not claim a successful model turn. The verifier binds the reconstruction to
 the second attempt's time window and proves unchanged session-store bytes,
@@ -510,11 +510,34 @@ identity. It grants no aggregate admission, installer, Phase 3, EDR, or release
 authority.
 
 The exact protected-consumer
-[route-coverage ledger](./benchmark/receipts/phase3-openclaw-protected-profile-route-coverage-v2-2026-08-09.json)
-now composes those four pinned qualifications in the authoritative 21-route
-inventory order: 4 `PASS`, 17 `NOT_TESTED`. It rejects missing, duplicate,
-modified, or cross-profile qualifications and grants no aggregate admission,
-installer, Phase 3, EDR, or release authority.
+[session-snapshot qualification](./benchmark/receipts/phase3-openclaw-protected-session-snapshot-route-qualification-v1-2026-08-09.json)
+records `ADM-02/reload/session-snapshot-consumer` as route-level `FAIL`.
+After a native baseline turn, a self-consistent prompt reference and blob were
+substituted through state writable by the same profile UID, without changing
+protected skill bytes.
+The exact retained compiled consumer chain loaded that prompt and placed its
+inert marker once in both the skills prompt and configured system prompt.
+This is a deterministic pinned-function replay, not native agent-command or
+provider execution; no provider request or native system-prompt report was
+observed. The result disproves protected-bytes-only consumption for this exact
+profile and grants no broader authority.
+
+The exact protected-consumer
+[cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
+promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced
+isolated cron run created the exact protected 728-byte prompt snapshot before
+the expected model-resolution failure; the verifier binds the random job ID,
+pre-run key absence, one terminal run, persisted snapshot, unchanged protected
+state, and successful job cleanup. It does not claim provider execution.
+
+The current
+[route-coverage ledger](./benchmark/receipts/phase3-openclaw-protected-profile-route-coverage-v3-2026-08-09.json)
+composes all six pinned qualifications in the authoritative 21-route inventory
+order: 5 `PASS`, 1 `FAIL`, and 15 `NOT_TESTED`. The known session-snapshot
+consumer failure makes the exact profile result `FAIL`. Missing, duplicate,
+modified, cross-profile, or PASS/FAIL-substituted qualifications are rejected;
+aggregate admission, installer, Phase 3, EDR, and release authority remain
+false.
 
 ## What works now
 

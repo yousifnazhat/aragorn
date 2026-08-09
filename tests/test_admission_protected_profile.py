@@ -9,8 +9,10 @@ from aragorn.admission_evidence import AdmissionEvidenceError
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
     compose_openclaw_protected_profile_coverage_v2,
+    compose_openclaw_protected_profile_coverage_v3,
 )
 from aragorn.admission_runtime_profile import load_runtime_profile
+from aragorn.oci_worker_protocol import canonical_digest
 
 _ROOT = Path(__file__).resolve().parents[1]
 _ADMISSION = _ROOT / "benchmark/admission/openclaw-v2026.7.1"
@@ -52,6 +54,24 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
                 / "phase3-openclaw-protected-prompt-rebuild-route-qualification-v1-2026-08-09.json"
             ).read_bytes()
         )
+        cls.snapshot = json.loads(
+            (
+                receipts
+                / "phase3-openclaw-protected-session-snapshot-route-qualification-v1-2026-08-09.json"
+            ).read_bytes()
+        )
+        cls.cron = json.loads(
+            (
+                receipts
+                / "phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json"
+            ).read_bytes()
+        )
+        cls.coverage_v3 = json.loads(
+            (
+                receipts
+                / "phase3-openclaw-protected-profile-route-coverage-v3-2026-08-09.json"
+            ).read_bytes()
+        )
 
     def compose(
         self,
@@ -70,6 +90,14 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
             else qualifications,
         )
 
+    def compose_v3(self, qualifications: list[dict]) -> dict:
+        return compose_openclaw_protected_profile_coverage_v3(
+            self.profile,
+            self.inventory,
+            self.candidates,
+            qualifications,
+        )
+
     def test_composes_three_passes_and_eighteen_not_tested_in_inventory_order(
         self,
     ) -> None:
@@ -77,6 +105,10 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
         reversed_result = self.compose([self.config, self.archive, self.workshop])
 
         self.assertEqual(result, reversed_result)
+        self.assertEqual(
+            canonical_digest(result),
+            "sha256:85b06c0032a183bcdf4072927c75deb3ae5bf1fa343aacaaa82cee1981f755ae",
+        )
         self.assertNotIn("recorded_at", result)
         self.assertEqual(result["counts"], {"PASS": 3, "NOT_TESTED": 18})
         self.assertEqual(len(result["routes"]), 21)
@@ -165,6 +197,10 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
         )
 
         self.assertEqual(result, reversed_result)
+        self.assertEqual(
+            canonical_digest(result),
+            "sha256:859bf73e0a78eb8f12d9ff96c9220bbdd35ed7510f25063d4b68838ca694b2bd",
+        )
         self.assertEqual(result["counts"], {"PASS": 4, "NOT_TESTED": 17})
         self.assertEqual(
             {route["id"] for route in result["routes"] if route["status"] == "PASS"},
@@ -189,6 +225,81 @@ class ProtectedProfileCoverageTests(unittest.TestCase):
                 self.candidates,
                 qualifications[:-1],
             )
+
+    def test_v3_composes_five_passes_one_fail_and_fifteen_not_tested(self) -> None:
+        qualifications = [
+            self.workshop,
+            self.archive,
+            self.config,
+            self.prompt,
+            self.snapshot,
+            self.cron,
+        ]
+        result = self.compose_v3(qualifications)
+
+        self.assertEqual(result, self.compose_v3(list(reversed(qualifications))))
+        self.assertEqual(result, self.coverage_v3)
+        self.assertEqual(
+            canonical_digest(result),
+            "sha256:3eaf398f1d2d19bb3dd38fb92c5e09f2d6235fbb042f7315b7ea2caf2f26b5e1",
+        )
+        self.assertEqual(
+            result["counts"], {"PASS": 5, "FAIL": 1, "NOT_TESTED": 15}
+        )
+        routes = {route["id"]: route for route in result["routes"]}
+        self.assertEqual(
+            routes["ADM-02/reload/session-snapshot-consumer"],
+            {
+                "id": "ADM-02/reload/session-snapshot-consumer",
+                "status": "FAIL",
+                "qualification_digest": (
+                    "sha256:203bbbcfc020f0c325001aaeda4b6e9a944d56703ffee600b7561040843096ff"
+                ),
+            },
+        )
+        self.assertEqual(routes["ADM-02/reload/cron-rescan"]["status"], "PASS")
+        self.assertEqual(
+            result["decision"],
+            {
+                "status": "FAIL",
+                "aggregate_admission_eligible": False,
+                "admission_profile_eligible": False,
+                "installer_work_eligible": False,
+                "phase3_exit_eligible": False,
+            },
+        )
+        self.assertEqual(
+            result["limitations"],
+            [
+                "FIVE_EXACT_ROUTE_PASSES_AND_ONE_EXACT_ROUTE_FAILURE_COMPOSED",
+                "KNOWN_EXACT_ROUTE_FAILURE_PREVENTS_AGGREGATE_AUTHORITY",
+                "NO_AGGREGATE_ADMISSION_INSTALLER_OR_PHASE3_AUTHORITY",
+            ],
+        )
+
+    def test_v3_rejects_status_decision_substitution_and_missing_pin(self) -> None:
+        qualifications = [
+            self.workshop,
+            self.archive,
+            self.config,
+            self.prompt,
+            self.snapshot,
+            self.cron,
+        ]
+        cases = []
+        for index, status in ((4, "PASS"), (5, "FAIL")):
+            changed = deepcopy(qualifications)
+            changed[index]["route"]["status"] = status
+            cases.append(changed)
+        for index, status in ((4, "ROUTE_PASS"), (5, "ROUTE_FAIL")):
+            changed = deepcopy(qualifications)
+            changed[index]["decision"]["status"] = status
+            cases.append(changed)
+        cases.append(qualifications[:-1])
+
+        for qualifications in cases:
+            with self.subTest(), self.assertRaises(AdmissionEvidenceError):
+                self.compose_v3(qualifications)
 
 
 if __name__ == "__main__":

@@ -440,23 +440,38 @@ installer authority.
 
 A fourth additive exact-profile verifier qualifies only
 `ADM-02/reload/missing-prompt-blob-rebuild` as route-level `PASS`. It preserves
-the agent-writable session record, removes the referenced prompt blob, and
-proves that the next same-session attempt reconstructs the exact 728-byte
-protected prompt before provider execution. The verifier binds that rebuild to
+the session record, writable by the same profile UID, removes the referenced
+prompt blob, and proves that the next same-session attempt reconstructs the exact
+728-byte protected prompt before provider execution. The verifier binds that rebuild to
 the second attempt's time window and proves unchanged session-store bytes,
 protected roots, configuration, runtime tree, target, and gateway identity.
 Both attempts subsequently failed because the contained profile intentionally
 had no provider credentials, so this qualification does not claim a successful
 model turn or model-output efficacy.
 
-The exact protected-consumer route-coverage ledger deterministically composes
-only those four pinned qualifications against the authoritative 21-route
-inventory. Its current result is 4 `PASS` and 17 `NOT_TESTED`; changed,
-duplicate, missing, or cross-profile inputs fail closed. The ledger is a
-closure-progress record, not aggregate admission or release authority.
-The prompt-rebuild qualification satisfies the snapshot-consumer requirement
-by changing the agent-writable prompt cache while preserving the session record;
-an unchanged opaque prompt digest alone remains insufficient for route `PASS`.
+The exact-profile session-snapshot verifier records
+`ADM-02/reload/session-snapshot-consumer` as `FAIL`. A native turn established
+the protected baseline; a self-consistent prompt reference and blob were then
+substituted through state writable by the same profile UID. The retained
+compiled consumer chain loaded the injected prompt and placed its inert marker once in
+both the skills prompt and configured system prompt. This deterministic replay
+does not claim native agent-command or provider execution, but it disproves the
+profile's protected-bytes-only invariant for the inventoried consumer route.
+The earlier missing-blob reconstruction PASS is a cache-recovery route and does
+not satisfy this distinct consumer route.
+
+The exact-profile cron verifier separately qualifies
+`ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
+before a forced run, one terminal run, persistence of the exact protected
+728-byte isolated snapshot before the expected model-resolution failure, and
+successful job cleanup. Provider execution was not observed.
+
+The current protected-consumer route-coverage ledger deterministically composes
+all six pinned qualifications against the authoritative 21-route inventory.
+Its result is 5 `PASS`, 1 `FAIL`, and 15 `NOT_TESTED`; the known route failure
+makes the profile decision `FAIL`. Changed, duplicate, missing, cross-profile,
+or status-substituted inputs fail closed. The ledger is a closure-progress
+record, not aggregate admission, installer, Phase 3, EDR, or release authority.
 
 The retention pre-gate re-verifies every referenced conformance-evidence blob
 from the protected CAS. This proves blob identity and availability, not the

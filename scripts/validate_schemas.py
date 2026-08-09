@@ -66,12 +66,19 @@ from aragorn.admission_protected_archive import (
 from aragorn.admission_protected_config import (
     verify_openclaw_protected_config_activation,
 )
+from aragorn.admission_protected_cron import (
+    verify_openclaw_protected_cron_rescan,
+)
 from aragorn.admission_protected_prompt import (
     verify_openclaw_protected_prompt_rebuild,
 )
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
     compose_openclaw_protected_profile_coverage_v2,
+    compose_openclaw_protected_profile_coverage_v3,
+)
+from aragorn.admission_protected_session_snapshot import (
+    verify_openclaw_protected_session_snapshot,
 )
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.admission_runtime_profile import (
@@ -1884,6 +1891,116 @@ def main() -> int:
         != canonical_json(protected_profile_coverage_v2) + b"\n"
     ):
         raise AssertionError("protected-profile v2 route coverage changed")
+
+    snapshot_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-session-snapshot-2026-08-09.json",
+        protected_profile_path,
+        protected_profile_dir / "protected-observation-v1.mjs",
+        protected_profile_dir / "protected-session-snapshot-probe.mjs",
+        protected_profile_dir / "protected-route-config-v1.json",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase3-protected-archive-existing"
+        / "SKILL.md",
+        protected_profile_dir
+        / "protected-session-snapshot-compiled-closure-v1.manifest.json",
+        protected_profile_dir
+        / "protected-session-snapshot-compiled-closure-v1.tar.gz",
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-snapshot-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in snapshot_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        snapshot_qualification = verify_openclaw_protected_session_snapshot(
+            load(
+                admission_receipts
+                / "phase3-openclaw-protected-session-snapshot-v1-2026-08-09.json"
+            ),
+            evidence_cas=evidence_cas,
+            route_profile=load_runtime_profile(protected_profile_path.read_bytes()),
+            route_inventory=openclaw_route_inventory,
+            runtime_candidates=runtime_candidates,
+        )
+    retained_snapshot_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-session-snapshot-route-qualification-"
+        "v1-2026-08-09.json"
+    )
+    retained_snapshot_qualification = load(retained_snapshot_qualification_path)
+    if (
+        snapshot_qualification != retained_snapshot_qualification
+        or retained_snapshot_qualification_path.read_bytes()
+        != canonical_json(snapshot_qualification) + b"\n"
+    ):
+        raise AssertionError("protected session-snapshot qualification changed")
+
+    cron_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-cron-rescan-2026-08-09.json",
+        protected_profile_path,
+        protected_profile_dir / "protected-observation-v1.mjs",
+        protected_profile_dir / "protected-cron-rescan-probe.mjs",
+        protected_profile_dir / "protected-route-config-v1.json",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase3-protected-archive-existing"
+        / "SKILL.md",
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-cron-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in cron_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        cron_qualification = verify_openclaw_protected_cron_rescan(
+            load(
+                admission_receipts
+                / "phase3-openclaw-protected-cron-rescan-v1-2026-08-09.json"
+            ),
+            evidence_cas=evidence_cas,
+            route_profile=load_runtime_profile(protected_profile_path.read_bytes()),
+            route_inventory=openclaw_route_inventory,
+            runtime_candidates=runtime_candidates,
+        )
+    retained_cron_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-cron-rescan-route-qualification-"
+        "v1-2026-08-09.json"
+    )
+    retained_cron_qualification = load(retained_cron_qualification_path)
+    if (
+        cron_qualification != retained_cron_qualification
+        or retained_cron_qualification_path.read_bytes()
+        != canonical_json(cron_qualification) + b"\n"
+    ):
+        raise AssertionError("protected cron-rescan qualification changed")
+
+    protected_profile_coverage_v3 = compose_openclaw_protected_profile_coverage_v3(
+        load_runtime_profile(protected_profile_path.read_bytes()),
+        openclaw_route_inventory,
+        runtime_candidates,
+        [
+            retained_qualification,
+            retained_archive_qualification,
+            retained_config_qualification,
+            retained_prompt_qualification,
+            retained_snapshot_qualification,
+            retained_cron_qualification,
+        ],
+    )
+    protected_profile_coverage_v3_path = admission_receipts / (
+        "phase3-openclaw-protected-profile-route-coverage-v3-2026-08-09.json"
+    )
+    retained_protected_profile_coverage_v3 = load(
+        protected_profile_coverage_v3_path
+    )
+    if (
+        protected_profile_coverage_v3 != retained_protected_profile_coverage_v3
+        or protected_profile_coverage_v3_path.read_bytes()
+        != canonical_json(protected_profile_coverage_v3) + b"\n"
+    ):
+        raise AssertionError("protected-profile v3 route coverage changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

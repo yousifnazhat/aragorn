@@ -1069,19 +1069,41 @@ def _monitored_invocation(
         for sample in retained
         if sample["units"][name]["ExecMainExitTimestampMonotonic"] not in {"", "0"}
     }
-    _expect(
-        len(starts) == 1
-        and len(exits) == 1
-        and command["started_monotonic_ns"]
-        <= next(iter(starts)) * 1000
-        <= next(iter(exits)) * 1000
-        <= command["completed_monotonic_ns"]
-        and any(int(sample["units"][name]["MainPID"]) > 0 for sample in retained)
+    start = next(iter(starts)) if len(starts) == 1 else None
+    exit_timestamp = next(iter(exits)) if len(exits) == 1 else None
+    terminal_sample = retained[-1]
+    terminal_properties = terminal_sample["units"][name]
+    same_invocation_exit = (
+        start is not None
+        and exit_timestamp is not None
+        and start <= exit_timestamp
+        and exit_timestamp * 1000 <= terminal_sample["observed_monotonic_ns"]
         and any(
             sample["units"][name]["ExecMainCode"] == "1"
             and sample["units"][name]["ExecMainStatus"] == "0"
             for sample in retained
-        ),
+        )
+    )
+    deactivation_observed = (
+        start is not None
+        and not exits
+        and terminal_properties["ActiveState"] == "deactivating"
+        and terminal_properties["SubState"] == "stop-sigterm"
+        and terminal_properties["Result"] == "success"
+        and terminal_properties["MainPID"] != "0"
+        and terminal_properties["ExecMainCode"] == "0"
+        and terminal_properties["ExecMainStatus"] == "0"
+        and terminal_properties["ExecMainStartTimestampMonotonic"] == str(start)
+        and terminal_properties["ExecMainExitTimestampMonotonic"] == "0"
+    )
+    _expect(
+        start is not None
+        and command["started_monotonic_ns"]
+        <= start * 1000
+        <= terminal_sample["observed_monotonic_ns"]
+        <= command["completed_monotonic_ns"]
+        and any(int(sample["units"][name]["MainPID"]) > 0 for sample in retained)
+        and (same_invocation_exit or deactivation_observed),
         "unit invocation timing changed: "
         + repr(
             {
@@ -1089,12 +1111,30 @@ def _monitored_invocation(
                     command["started_monotonic_ns"],
                     command["completed_monotonic_ns"],
                 ],
+                "deactivation_observed": deactivation_observed,
+                "exits": sorted(exits),
                 "name": name,
-                "samples": retained,
+                "same_invocation_exit": same_invocation_exit,
+                "samples": [
+                    {
+                        "observed_monotonic_ns": sample["observed_monotonic_ns"],
+                        "properties": sample["units"][name],
+                    }
+                    for sample in retained
+                ],
+                "starts": sorted(starts),
             }
         ),
     )
-    return {"invocation_id": invocation_id, "samples": retained}
+    return {
+        "invocation_id": invocation_id,
+        "samples": retained,
+        "terminal_observation": (
+            "same_invocation_exit"
+            if same_invocation_exit
+            else "deactivation_observed_final_state_cleared"
+        ),
+    }
 
 
 def _all_inactive(route: dict[str, Any]) -> bool:

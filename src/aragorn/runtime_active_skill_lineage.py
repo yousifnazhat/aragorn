@@ -271,15 +271,73 @@ def _open_verified_lineage(
             "protected immutable skill version",
         )
         descriptors.insert(0, version_fd)
-        # ponytail: flat, bounded skill trees; increase depth only after a
-        # nested runtime profile is qualified.
-        observed_tree, _ = inventory_open_directory(
+        # ponytail: one nested directory level; raise only after a deeper
+        # runtime profile is qualified.
+        observed_tree, observed_directories = inventory_open_directory(
             version_fd,
-            max_depth=0,
+            max_depth=1,
             max_files=_MAX_SKILL_FILES,
             max_file_size=_MAX_SKILL_BYTES,
             max_total_bytes=_MAX_SKILL_BYTES,
         )
+        bound_directories = tuple(
+            sorted(
+                {
+                    str(entry["path"]).split("/", 1)[0]
+                    for entry in observed_tree["files"]
+                    if "/" in str(entry["path"])
+                }
+            )
+        )
+        if observed_directories != bound_directories or len(bound_directories) > 1:
+            raise RuntimeActionBrokerError(
+                "runtime active-skill directory layout is unbound"
+            )
+        directory_states: list[tuple[str, int, os.stat_result]] = []
+        for directory in observed_directories:
+            if "/" in directory:
+                raise RuntimeActionBrokerError(
+                    "runtime active-skill directory depth is unsafe"
+                )
+            directory_fd = _open_directory_at(
+                version_fd,
+                directory,
+                expected_install_uid,
+                0o555,
+                "runtime active-skill directory",
+            )
+            descriptors.insert(0, directory_fd)
+            directory_states.append((directory, directory_fd, os.fstat(directory_fd)))
+
+        def directory_binding_changed() -> bool:
+            return any(
+                _file_identity(before) != _file_identity(os.fstat(directory_fd))
+                or _file_identity(before)
+                != _file_identity(
+                    os.stat(
+                        directory,
+                        dir_fd=version_fd,
+                        follow_symlinks=False,
+                    )
+                )
+                for directory, directory_fd, before in directory_states
+            )
+
+        confirmed_tree, confirmed_directories = inventory_open_directory(
+            version_fd,
+            max_depth=1,
+            max_files=_MAX_SKILL_FILES,
+            max_file_size=_MAX_SKILL_BYTES,
+            max_total_bytes=_MAX_SKILL_BYTES,
+        )
+        if (
+            observed_tree != confirmed_tree
+            or observed_directories != confirmed_directories
+            or directory_binding_changed()
+        ):
+            raise RuntimeActionBrokerError(
+                "runtime active-skill tree changed while measured"
+            )
         for entry in observed_tree["files"]:
             metadata = os.stat(
                 entry["path"],
@@ -340,6 +398,21 @@ def _open_verified_lineage(
         ) or _file_identity(root_state) != _file_identity(os.fstat(root_fd)):
             raise RuntimeActionBrokerError(
                 "runtime active-skill lineage changed while measured"
+            )
+        final_tree, final_directories = inventory_open_directory(
+            version_fd,
+            max_depth=1,
+            max_files=_MAX_SKILL_FILES,
+            max_file_size=_MAX_SKILL_BYTES,
+            max_total_bytes=_MAX_SKILL_BYTES,
+        )
+        if (
+            observed_tree != final_tree
+            or observed_directories != final_directories
+            or directory_binding_changed()
+        ):
+            raise RuntimeActionBrokerError(
+                "runtime active-skill tree changed after measurement"
             )
         return (
             {

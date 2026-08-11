@@ -8,7 +8,9 @@ import unittest
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
+from aragorn import runtime_active_skill_lineage
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.runtime_action_observation_publisher import (
     RuntimeActionObservationPublisherError,
@@ -176,6 +178,37 @@ def _alternate(fixture: dict[str, object]) -> dict[str, object]:
     return alternate
 
 
+def _add_nested_companion(
+    fixture: dict[str, object],
+) -> tuple[Path, Path, Path, bytes]:
+    skill = fixture["skill"]
+    transaction = fixture["transaction"]
+    root = fixture["root"]
+    skill_raw = fixture["skill_raw"]
+    assert isinstance(skill, Path)
+    assert isinstance(transaction, dict)
+    assert isinstance(root, Path)
+    assert isinstance(skill_raw, bytes)
+    version = skill.parent
+    version.chmod(0o755)
+    nested = version / "references"
+    nested.mkdir(mode=0o755)
+    companion_raw = b"nested companion\n"
+    companion = nested / "code-reviewer.md"
+    companion.write_bytes(companion_raw)
+    companion.chmod(0o444)
+    nested.chmod(0o555)
+    version.chmod(0o555)
+    transaction["tree_digest"] = _files_digest(
+        {
+            "SKILL.md": skill_raw,
+            "references/code-reviewer.md": companion_raw,
+        }
+    )
+    _publish_record(root, transaction)
+    return version, nested, companion, companion_raw
+
+
 class RuntimeActiveSkillLineageTests(unittest.TestCase):
     def test_live_record_active_link_and_immutable_skill_are_bound(self) -> None:
         with _fixture() as fixture:
@@ -245,16 +278,124 @@ class RuntimeActiveSkillLineageTests(unittest.TestCase):
             with self.assertRaises(RuntimeActionObservationPublisherError):
                 _verify(fixture)
 
-    def test_nested_companion_is_rejected_by_flat_tree_ceiling(self) -> None:
+    def test_one_nested_companion_is_tree_bound(self) -> None:
         with _fixture() as fixture:
-            skill = fixture["skill"]
-            assert isinstance(skill, Path)
-            version = skill.parent
+            version, nested, _, _ = _add_nested_companion(fixture)
+
+            self.assertEqual(
+                _verify(fixture)["active_skill_digest"],
+                fixture["grant"]["active_skill_digest"],  # type: ignore[index]
+            )
+
+            nested.chmod(0o755)
+            with self.assertRaises(RuntimeActionObservationPublisherError):
+                _verify(fixture)
+            nested.chmod(0o555)
+
             version.chmod(0o755)
-            nested = version / "nested"
-            nested.mkdir(mode=0o555)
+            nested.chmod(0o755)
+            (nested / "deeper").mkdir(mode=0o555)
+            nested.chmod(0o555)
             version.chmod(0o555)
 
+            with self.assertRaises(RuntimeActionObservationPublisherError):
+                _verify(fixture)
+
+    def test_nested_companion_cannot_change_after_confirmation(self) -> None:
+        with _fixture() as fixture:
+            _, _, companion, _ = _add_nested_companion(fixture)
+
+            original_inventory = runtime_active_skill_lineage.inventory_open_directory
+            calls = 0
+
+            def mutate_after_confirmation(*args: object, **kwargs: object):
+                nonlocal calls
+                result = original_inventory(*args, **kwargs)  # type: ignore[arg-type]
+                calls += 1
+                if calls == 2:
+                    companion.chmod(0o644)
+                    companion.write_bytes(b"forged companion\n")
+                    companion.chmod(0o444)
+                return result
+
+            with (
+                mock.patch.object(
+                    runtime_active_skill_lineage,
+                    "inventory_open_directory",
+                    side_effect=mutate_after_confirmation,
+                ),
+                self.assertRaises(RuntimeActionObservationPublisherError),
+            ):
+                _verify(fixture)
+            self.assertEqual(calls, 3)
+
+    def test_nested_directory_cannot_be_rebound_after_confirmation(self) -> None:
+        with _fixture() as fixture:
+            version, nested, companion, companion_raw = _add_nested_companion(fixture)
+            original_inventory = runtime_active_skill_lineage.inventory_open_directory
+            calls = 0
+
+            def rebind_after_confirmation(*args: object, **kwargs: object):
+                nonlocal calls
+                result = original_inventory(*args, **kwargs)  # type: ignore[arg-type]
+                calls += 1
+                if calls == 2:
+                    version.chmod(0o755)
+                    nested.rename(version.parent / "detached-references")
+                    replacement = version / "references"
+                    replacement.mkdir(mode=0o755)
+                    replacement_companion = replacement / companion.name
+                    replacement_companion.write_bytes(companion_raw)
+                    replacement_companion.chmod(0o444)
+                    version.chmod(0o555)
+                return result
+
+            with (
+                mock.patch.object(
+                    runtime_active_skill_lineage,
+                    "inventory_open_directory",
+                    side_effect=rebind_after_confirmation,
+                ),
+                self.assertRaises(RuntimeActionObservationPublisherError),
+            ):
+                _verify(fixture)
+            self.assertEqual(calls, 2)
+
+    def test_nested_directory_layout_is_bounded(self) -> None:
+        with _fixture() as fixture:
+            version, _, _, companion_raw = _add_nested_companion(fixture)
+            transaction = fixture["transaction"]
+            root = fixture["root"]
+            skill_raw = fixture["skill_raw"]
+            assert isinstance(transaction, dict)
+            assert isinstance(root, Path)
+            assert isinstance(skill_raw, bytes)
+
+            version.chmod(0o755)
+            empty = version / "empty"
+            empty.mkdir(mode=0o555)
+            version.chmod(0o555)
+            with self.assertRaises(RuntimeActionObservationPublisherError):
+                _verify(fixture)
+            version.chmod(0o755)
+            empty.rmdir()
+
+            second = version / "examples"
+            second.mkdir(mode=0o755)
+            second_raw = b"second nested companion\n"
+            second_file = second / "example.md"
+            second_file.write_bytes(second_raw)
+            second_file.chmod(0o444)
+            second.chmod(0o555)
+            version.chmod(0o555)
+            transaction["tree_digest"] = _files_digest(
+                {
+                    "SKILL.md": skill_raw,
+                    "examples/example.md": second_raw,
+                    "references/code-reviewer.md": companion_raw,
+                }
+            )
+            _publish_record(root, transaction)
             with self.assertRaises(RuntimeActionObservationPublisherError):
                 _verify(fixture)
 

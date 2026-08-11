@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from .acquire import inventory_open_directory
 from .oci_worker_protocol import canonical_digest
 from .runtime_action_broker import (
     RuntimeActionBrokerError,
@@ -43,6 +44,7 @@ DEFAULT_PROTECTED_INSTALL_ROOT = Path("/var/lib/aragorn-protected/skills")
 
 _MAX_RECORD_BYTES = 4 * 1024
 _MAX_SKILL_BYTES = 1024 * 1024
+_MAX_SKILL_FILES = 64
 _TARGET = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
 _RECORD_FIELDS = {"schema", "authority", "transaction"}
 _TRANSACTION_FIELDS = {
@@ -269,10 +271,32 @@ def _open_verified_lineage(
             "protected immutable skill version",
         )
         descriptors.insert(0, version_fd)
-        if sorted(os.listdir(version_fd)) != ["SKILL.md"]:
-            raise RuntimeActionBrokerError(
-                "runtime active-skill version is not a single-file skill"
+        # ponytail: flat, bounded skill trees; increase depth only after a
+        # nested runtime profile is qualified.
+        observed_tree, _ = inventory_open_directory(
+            version_fd,
+            max_depth=0,
+            max_files=_MAX_SKILL_FILES,
+            max_file_size=_MAX_SKILL_BYTES,
+            max_total_bytes=_MAX_SKILL_BYTES,
+        )
+        for entry in observed_tree["files"]:
+            metadata = os.stat(
+                entry["path"],
+                dir_fd=version_fd,
+                follow_symlinks=False,
             )
+            expected_mode = 0o555 if entry["executable"] else 0o444
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != expected_install_uid
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != expected_mode
+                or metadata.st_size != entry["size"]
+            ):
+                raise RuntimeActionBrokerError(
+                    "runtime active-skill tree metadata is unsafe"
+                )
 
         skill_before = os.stat("SKILL.md", dir_fd=version_fd, follow_symlinks=False)
         skill_raw = _read_owned_bytes_at(
@@ -289,19 +313,16 @@ def _open_verified_lineage(
                 "runtime protected-install skill changed while measured"
             )
         observed_digest = "sha256:" + hashlib.sha256(skill_raw).hexdigest()
-        observed_tree_digest = canonical_digest(
-            [
-                {
-                    "path": "SKILL.md",
-                    "size": len(skill_raw),
-                    "digest": observed_digest,
-                    "executable": False,
-                }
-            ]
-        )
+        observed_skill = {
+            "path": "SKILL.md",
+            "size": len(skill_raw),
+            "digest": observed_digest,
+            "executable": False,
+        }
         if (
             observed_digest != active_skill_digest
-            or observed_tree_digest != transaction["tree_digest"]
+            or observed_skill not in observed_tree["files"]
+            or observed_tree["tree_digest"] != transaction["tree_digest"]
         ):
             raise RuntimeActionBrokerError(
                 "runtime active-skill installed bytes are unbound"

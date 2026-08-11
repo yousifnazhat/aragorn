@@ -30,14 +30,19 @@ def _digest(character: str) -> str:
 
 
 def _tree_digest(raw: bytes) -> str:
+    return _files_digest({"SKILL.md": raw})
+
+
+def _files_digest(files: dict[str, bytes]) -> str:
     return canonical_digest(
         [
             {
-                "path": "SKILL.md",
-                "size": len(raw),
-                "digest": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                "path": path,
+                "size": len(content),
+                "digest": "sha256:" + hashlib.sha256(content).hexdigest(),
                 "executable": False,
             }
+            for path, content in sorted(files.items())
         ]
     )
 
@@ -202,6 +207,56 @@ class RuntimeActiveSkillLineageTests(unittest.TestCase):
                 verified["active_skill_digest"],
                 fixture["grant"]["active_skill_digest"],  # type: ignore[index]
             )
+
+    def test_flat_companion_is_tree_bound_without_changing_skill_identity(self) -> None:
+        with _fixture() as fixture:
+            skill = fixture["skill"]
+            transaction = fixture["transaction"]
+            root = fixture["root"]
+            skill_raw = fixture["skill_raw"]
+            assert isinstance(skill, Path)
+            assert isinstance(transaction, dict)
+            assert isinstance(root, Path)
+            assert isinstance(skill_raw, bytes)
+            companion_raw = b"bounded companion\n"
+            version = skill.parent
+            version.chmod(0o755)
+            companion = version / "LICENSE.txt"
+            companion.write_bytes(companion_raw)
+            companion.chmod(0o444)
+            version.chmod(0o555)
+            transaction["tree_digest"] = _files_digest(
+                {"LICENSE.txt": companion_raw, "SKILL.md": skill_raw}
+            )
+            _publish_record(root, transaction)
+
+            verified = _verify(fixture)
+
+            self.assertEqual(
+                verified["active_skill_digest"],
+                fixture["grant"]["active_skill_digest"],  # type: ignore[index]
+            )
+            companion.chmod(0o666)
+            with self.assertRaises(RuntimeActionObservationPublisherError):
+                _verify(fixture)
+            companion.chmod(0o644)
+            companion.write_bytes(b"changed companion\n")
+            companion.chmod(0o444)
+            with self.assertRaises(RuntimeActionObservationPublisherError):
+                _verify(fixture)
+
+    def test_nested_companion_is_rejected_by_flat_tree_ceiling(self) -> None:
+        with _fixture() as fixture:
+            skill = fixture["skill"]
+            assert isinstance(skill, Path)
+            version = skill.parent
+            version.chmod(0o755)
+            nested = version / "nested"
+            nested.mkdir(mode=0o555)
+            version.chmod(0o555)
+
+            with self.assertRaises(RuntimeActionObservationPublisherError):
+                _verify(fixture)
 
     def test_mutated_or_missing_live_state_is_rejected(self) -> None:
         def mutate_record(fixture: dict[str, object]) -> None:

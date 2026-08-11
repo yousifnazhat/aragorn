@@ -27,6 +27,8 @@ do
 done
 install -m 0644 \
     "$root/src/aragorn/__init__.py" \
+    "$root/src/aragorn/acquire.py" \
+    "$root/src/aragorn/cas.py" \
     "$root/src/aragorn/oci_worker_protocol.py" \
     "$root/src/aragorn/runtime_action_decision.py" \
     "$root/src/aragorn/runtime_action_broker.py" \

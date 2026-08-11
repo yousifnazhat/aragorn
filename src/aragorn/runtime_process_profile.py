@@ -362,10 +362,6 @@ def _profile_skill_digest(pid: int, path: Path) -> str:
     descriptor = -1
     try:
         descriptor = _open_peer_directory(pid, path.parent)
-        if os.listdir(descriptor) != ["SKILL.md"]:
-            raise RuntimeActionObservationPublisherError(
-                "runtime skill profile is not a single immutable skill"
-            )
         raw = _read_owned_bytes_at(
             descriptor,
             "SKILL.md",

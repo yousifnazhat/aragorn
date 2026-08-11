@@ -208,6 +208,8 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
             staged = Path(temporary)
             modules = staged / "usr/lib/aragorn/aragorn"
             for name in (
+                "acquire.py",
+                "cas.py",
                 "runtime_action_broker_v2.py",
                 "runtime_action_service_v2.py",
                 "runtime_action_broker_v3.py",

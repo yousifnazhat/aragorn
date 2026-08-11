@@ -29,7 +29,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             )
             if installed not in {"/usr/local/bin/node", "/usr/local/bin/python3.12"}
         }
-        self.assertEqual(len(pins), 34)
+        self.assertEqual(len(pins), 36)
         for installed, expected in pins.items():
             name = Path(installed).name
             if installed == "/usr/libexec/aragorn/activate-runtime-capability-host.sh":

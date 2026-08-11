@@ -127,6 +127,9 @@ from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.runtime_acquisition_action_binding import (
     runtime_acquisition_action_binding_qualification,
 )
+from aragorn.runtime_acquisition_action_multifile_systemd_evidence import (
+    runtime_acquisition_action_multifile_systemd_qualification,
+)
 from aragorn.runtime_acquisition_action_systemd_evidence import (
     runtime_acquisition_action_systemd_qualification,
 )
@@ -2243,6 +2246,85 @@ def main() -> int:
     ):
         raise AssertionError(
             "runtime acquisition-action systemd qualification changed"
+        )
+
+    acquisition_action_multifile_systemd_evidence_path = admission_evidence / (
+        "runtime-acquisition-action-multifile-systemd-composition-"
+        "p3-8c-2026-08-11.json"
+    )
+    acquisition_action_multifile_systemd_evidence_raw = (
+        acquisition_action_multifile_systemd_evidence_path.read_bytes()
+    )
+    acquisition_action_multifile_systemd_evidence = json.loads(
+        acquisition_action_multifile_systemd_evidence_raw
+    )
+    acquisition_action_multifile_systemd_evidence_digest = (
+        "sha256:c8fa91e73954b7535ab4393728be41abe1c125b6cc31af6c3b93acf4021b03e0"
+    )
+    if (
+        acquisition_action_multifile_systemd_evidence_raw
+        != canonical_json(acquisition_action_multifile_systemd_evidence) + b"\n"
+        or len(acquisition_action_multifile_systemd_evidence_raw) != 546216
+        or "sha256:"
+        + hashlib.sha256(
+            acquisition_action_multifile_systemd_evidence_raw
+        ).hexdigest()
+        != "sha256:5238310228e0116f77e15feaf7be735b454650cbae715cc6ee3452b1b7dff891"
+        or canonical_digest(acquisition_action_multifile_systemd_evidence)
+        != acquisition_action_multifile_systemd_evidence_digest
+    ):
+        raise AssertionError(
+            "runtime acquisition-action multifile systemd observation changed"
+        )
+    acquisition_action_multifile_systemd_verifier_path = (
+        ROOT
+        / "src"
+        / "aragorn"
+        / "runtime_acquisition_action_multifile_systemd_evidence.py"
+    )
+    acquisition_action_multifile_systemd_verifier_digest = (
+        "sha256:"
+        + hashlib.sha256(
+            acquisition_action_multifile_systemd_verifier_path.read_bytes()
+        ).hexdigest()
+    )
+    acquisition_action_multifile_systemd_qualification = (
+        runtime_acquisition_action_multifile_systemd_qualification(
+            acquisition_action_multifile_systemd_evidence,
+            acquisition_action_systemd_evidence,
+            activation_expiry_evidence,
+            runtime_worker_evidence,
+            runtime_worker_parent,
+            retained_runtime_worker_qualification,
+            retained_activation_expiry_qualification,
+            retained_acquisition_action_systemd_qualification,
+            expected_digest=acquisition_action_multifile_systemd_evidence_digest,
+            implementation_digest=(
+                acquisition_action_multifile_systemd_verifier_digest
+            ),
+        )
+    )
+    validators[
+        "runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json"
+    ].validate(acquisition_action_multifile_systemd_qualification)
+    acquisition_action_multifile_systemd_qualification_path = (
+        admission_receipts
+        / (
+            "phase3-runtime-acquisition-action-multifile-systemd-qualification-"
+            "v1-2026-08-11.json"
+        )
+    )
+    retained_acquisition_action_multifile_systemd_qualification = load(
+        acquisition_action_multifile_systemd_qualification_path
+    )
+    if (
+        acquisition_action_multifile_systemd_qualification
+        != retained_acquisition_action_multifile_systemd_qualification
+        or acquisition_action_multifile_systemd_qualification_path.read_bytes()
+        != canonical_json(acquisition_action_multifile_systemd_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "runtime acquisition-action multifile systemd qualification changed"
         )
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")

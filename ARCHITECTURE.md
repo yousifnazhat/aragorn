@@ -1076,6 +1076,22 @@ disconnected and reverified before runtime. The capture uses adapted Python
 establish the Phase 1 release identity, semantic skill causation, aggregate
 `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or release authority.
 
+P3.8c extends that exact live route with one bounded capture of public GitHub
+commit `f57638a74759376871509ccf080e606f62052f1b` from `obra/superpowers`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-multifile-systemd-composition-p3-8c-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_multifile_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-multifile-systemd-qualification-v1-2026-08-11.json)
+bind the exact flat `SKILL.md` and `code-reviewer.md` tree from the live
+quarantine CAS through one protected transaction and projection into one
+`ALLOW` / `CREATED` action ending `CONSUMED`; network access is disconnected
+and reverified before runtime. It remains one privileged local Docker/systemd
+fixture using adapted Python 3.12, with no nested-skill assets, broader source
+layouts or action families, provider/session raw bytes, full non-skill blob
+replay, or continuous measurement qualified. It does not establish the Phase 1
+release identity, semantic skill causation, aggregate gate or `RUN-01`/`RUN-02`,
+Phase 3 exit, EDR, installer authority, or public-release authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

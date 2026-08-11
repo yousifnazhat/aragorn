@@ -7,10 +7,14 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
+from jsonschema import ValidationError
+from jsonschema.validators import validator_for
+
 from aragorn.admission_routes import (
     AdmissionRouteInventoryError,
     validate_openclaw_2026_7_1_route_inventory,
 )
+from aragorn.oci_worker_protocol import canonical_json
 
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
 EXPECTED_CONTRACTS = {
@@ -174,6 +178,7 @@ EXPECTED_CONTRACTS = {
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
     "runtime-acquisition-action-binding-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-binding-qualification/v1",
+    "runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-multifile-systemd-qualification/v1",
     "runtime-acquisition-action-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-systemd-qualification/v1",
     "runtime-action-worker-activation-expiry-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-activation-expiry-systemd-qualification/v1",
     "runtime-action-worker-openclaw-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-openclaw-systemd-qualification/v1",
@@ -216,6 +221,76 @@ class SchemaTests(unittest.TestCase):
             ]["verifier_implementation_digest"],
             "sha256:" + hashlib.sha256(verifier.read_bytes()).hexdigest(),
         )
+
+    def test_p38c_schema_pins_verifier_and_exact_retained_receipt(self) -> None:
+        root = SCHEMA_DIRECTORY.parent
+        verifier = (
+            root
+            / "src"
+            / "aragorn"
+            / "runtime_acquisition_action_multifile_systemd_evidence.py"
+        )
+        schema = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json"
+            ).read_text()
+        )
+        receipt_path = (
+            root
+            / "benchmark"
+            / "receipts"
+            / (
+                "phase3-runtime-acquisition-action-multifile-systemd-qualification-"
+                "v1-2026-08-11.json"
+            )
+        )
+        receipt = json.loads(receipt_path.read_bytes())
+        bindings = schema["properties"]["bindings"]
+        self.assertFalse(schema["additionalProperties"])
+        self.assertFalse(bindings["additionalProperties"])
+        self.assertEqual(set(schema["required"]), set(receipt))
+        self.assertEqual(set(schema["properties"]), set(receipt))
+        self.assertEqual(set(bindings["required"]), set(receipt["bindings"]))
+        self.assertEqual(
+            receipt_path.read_bytes(), canonical_json(receipt) + b"\n"
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:" + hashlib.sha256(verifier.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:4b4bf4255b9a4290cb3d4c93861086ad4fac5b34b8c59e91afe30ecfd9ecbe4c",
+        )
+        for name, value in receipt["bindings"].items():
+            self.assertEqual(bindings["properties"][name]["const"], value)
+        for name in (
+            "assurance",
+            "cases",
+            "decision",
+            "limitations",
+            "schema",
+            "source_recorded_at",
+        ):
+            self.assertEqual(schema["properties"][name]["const"], receipt[name])
+
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator = validator_class(schema)
+        validator.validate(receipt)
+        changed = deepcopy(receipt)
+        changed["decision"]["public_release_eligible"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+        changed = deepcopy(receipt)
+        changed["unexpected"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
 
     def test_gvisor_v3_entrypoint_path_is_canonical(self) -> None:
         document = json.loads(

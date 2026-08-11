@@ -170,6 +170,7 @@ class GitHubGatewaySystemdTests(unittest.TestCase):
             {"--property=IPAddressAllow=1.1.1.1"},
         )
         self.assertIn("--setenv=ARAGORN_DENIED_PROBE=18443", argv)
+        self.assertNotIn("--expand-environment=no", argv)
         self.assertNotIn(
             "--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6", argv
         )
@@ -185,6 +186,22 @@ class GitHubGatewaySystemdTests(unittest.TestCase):
             "aragorn-gateway-" + "a" * 24 + ".service",
         )
         self.assertEqual(reverify.call_count, 2)
+
+    def test_linux_launch_rejects_systemd_environment_expansion(self) -> None:
+        with self.assertRaisesRegex(
+            GitHubGatewayError,
+            "gateway command contains systemd environment expansion syntax",
+        ):
+            github_gateway._run_systemd_gateway_process(
+                ("/usr/bin/printf", "${HOME}"),
+                timeout=1,
+                environment=self.environment,
+                worker_uid=999,
+                worker_gid=987,
+                allowed_addresses=("1.1.1.1",),
+                writable_root=self.root,
+                stdin_bytes=None,
+            )
 
     def test_systemd_cleanup_runs_before_uid_postflight_after_launch_error(
         self,

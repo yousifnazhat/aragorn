@@ -124,6 +124,9 @@ from aragorn.gvisor_runtime import (
 )
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.runtime_acquisition_action_binding import (
+    runtime_acquisition_action_binding_qualification,
+)
 from aragorn.runtime_action_worker_activation_expiry_systemd_evidence import (
     runtime_action_worker_activation_expiry_systemd_qualification,
 )
@@ -2131,6 +2134,46 @@ def main() -> int:
         != canonical_json(activation_expiry_qualification) + b"\n"
     ):
         raise AssertionError("activation-expiry qualification changed")
+
+    acquisition_action_verifier_path = (
+        ROOT / "src" / "aragorn" / "runtime_acquisition_action_binding.py"
+    )
+    acquisition_action_verifier_digest = (
+        "sha256:"
+        + hashlib.sha256(acquisition_action_verifier_path.read_bytes()).hexdigest()
+    )
+    acquisition_action_qualification = (
+        runtime_acquisition_action_binding_qualification(
+            admission_evidence
+            / "phase1-supported-ingress-live-c87b82b9b7a4-2026-07-29.tar.xz",
+            load(
+                admission_receipts
+                / "phase1-supported-ingress-live-qualification-2026-07-29.json"
+            ),
+            activation_expiry_evidence,
+            runtime_worker_evidence,
+            runtime_worker_parent,
+            retained_runtime_worker_qualification,
+            retained_activation_expiry_qualification,
+            implementation_digest=acquisition_action_verifier_digest,
+        )
+    )
+    validators[
+        "runtime-acquisition-action-binding-qualification-v1.schema.json"
+    ].validate(acquisition_action_qualification)
+    acquisition_action_qualification_path = admission_receipts / (
+        "phase3-runtime-acquisition-action-binding-v1-2026-08-11.json"
+    )
+    retained_acquisition_action_qualification = load(
+        acquisition_action_qualification_path
+    )
+    if (
+        acquisition_action_qualification
+        != retained_acquisition_action_qualification
+        or acquisition_action_qualification_path.read_bytes()
+        != canonical_json(acquisition_action_qualification) + b"\n"
+    ):
+        raise AssertionError("runtime acquisition-action qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

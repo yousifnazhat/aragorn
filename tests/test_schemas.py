@@ -173,6 +173,7 @@ EXPECTED_CONTRACTS = {
     "protected-install-context-v2.schema.json": "aragorn/protected-install-context/v2",
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
+    "runtime-acquisition-action-binding-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-binding-qualification/v1",
     "runtime-action-worker-activation-expiry-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-activation-expiry-systemd-qualification/v1",
     "runtime-action-worker-openclaw-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-openclaw-systemd-qualification/v1",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",

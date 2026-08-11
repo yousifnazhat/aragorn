@@ -39,6 +39,14 @@ immutable parent. P3.7c does not establish native-host production, automatic or
 concurrent renewal, reboot/crash/power-loss behavior, aggregate admission,
 Phase 3 exit, EDR, installer authority, or release authority.
 
+The receipt-only P3.8a composition joins the exact retained 140-byte protected
+skill across the Phase 1, P3.6b, and P3.7c captures to one coherent action. It
+does not retain the Phase 1 install's live quarantine CAS and does not turn
+separate custody epochs or release identities into one continuous transaction.
+Exact content identity is not semantic skill causation, and this composition
+does not establish aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer
+authority, or release authority.
+
 ## Threat Model, Trust Boundaries, and Assumptions
 
 Attacker-controlled inputs include every entry, filename, and file byte below

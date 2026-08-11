@@ -1047,6 +1047,22 @@ Aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, and public-release
 authority remain false. The verifier implementation file is digest-bound; its
 Python standard-library and dynamic dependency closure is not pinned.
 
+P3.8a is a receipt-only composition over existing retained evidence, not a new
+capture. The
+[cross-capture qualification](./benchmark/receipts/phase3-runtime-acquisition-action-binding-v1-2026-08-11.json)
+replays the signed Phase 1 supported-ingress archive, its exact receipt, and the
+P3.7c qualification through the immutable P3.7b and P3.6b parents. It binds the
+exact public-GitHub request, manifest, tree, and 140-byte `SKILL.md` digest
+across the Phase 1 coordinator and protected install record, the P3.6b
+producer/grant, and the P3.7c producer, grant, runtime attribution, lease, and
+one coherent `COMPLETED` / `ALLOW` / `CREATED` action ending `CONSUMED`. The
+Phase 1 install is a retained live-summary case without its live quarantine
+CAS, and P3.6b used evaluator-rebound CAS custody plus an adapted Python 3.12
+release. Therefore this establishes cross-capture exact-content identity only,
+not continuous custody, a shared transaction or release identity, semantic
+skill causation, aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer, or
+release authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

@@ -457,6 +457,21 @@ native-host production evidence, automatic or concurrent renewal, reboot,
 crash or power-loss coverage, aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR,
 installer authority, or public-release authority.
 
+P3.8a adds only a receipt-level cross-capture composition; it adds no new live
+runtime capture. Its
+[qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-binding-v1-2026-08-11.json)
+and
+[`aragorn.runtime_acquisition_action_binding`](./src/aragorn/runtime_acquisition_action_binding.py)
+replay the retained Phase 1 supported-ingress archive and exact P3.7c parent
+chain, then join the same 140-byte protected `SKILL.md`, source request,
+manifest, and tree digests to P3.7c's producer, grant, runtime attribution, and
+one `COMPLETED` / `ALLOW` / `CREATED` action ending `CONSUMED`. The Phase 1
+install case retains a live summary and protected installed bytes, not its live
+quarantine CAS. This proves exact content identity across separate captures,
+not continuous custody, one transaction or release identity, semantic skill
+causation, aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority,
+or public-release authority.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

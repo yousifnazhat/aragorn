@@ -1063,6 +1063,19 @@ not continuous custody, a shared transaction or release identity, semantic
 skill causation, aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer, or
 release authority.
 
+P3.8b adds one bounded live capture of public GitHub commit
+`2235be7c60b551f5de82ade908fd3816455afcda`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-systemd-composition-p3-8b-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-systemd-qualification-v1-2026-08-11.json)
+bind same-container custody from the quarantine CAS through protected install
+into one `ALLOW` / `CREATED` action ending `CONSUMED`; network access is
+disconnected and reverified before runtime. The capture uses adapted Python
+3.12 and fixture-only systemd 252, cgroup, and Docker-DNS adapters. It does not
+establish the Phase 1 release identity, semantic skill causation, aggregate
+`RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or release authority.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

@@ -174,6 +174,7 @@ EXPECTED_CONTRACTS = {
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
     "runtime-acquisition-action-binding-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-binding-qualification/v1",
+    "runtime-acquisition-action-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-systemd-qualification/v1",
     "runtime-action-worker-activation-expiry-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-activation-expiry-systemd-qualification/v1",
     "runtime-action-worker-openclaw-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-openclaw-systemd-qualification/v1",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",
@@ -195,6 +196,26 @@ class SchemaTests(unittest.TestCase):
                     "https://json-schema.org/draft/2020-12/schema",
                 )
                 self.assertEqual(document["properties"]["schema"]["const"], identifier)
+
+    def test_p38b_schema_pins_the_current_verifier(self) -> None:
+        verifier = (
+            SCHEMA_DIRECTORY.parent
+            / "src"
+            / "aragorn"
+            / "runtime_acquisition_action_systemd_evidence.py"
+        )
+        schema = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "runtime-acquisition-action-systemd-qualification-v1.schema.json"
+            ).read_text()
+        )
+        self.assertEqual(
+            schema["properties"]["bindings"]["properties"]["implementation"][
+                "const"
+            ]["verifier_implementation_digest"],
+            "sha256:" + hashlib.sha256(verifier.read_bytes()).hexdigest(),
+        )
 
     def test_gvisor_v3_entrypoint_path_is_canonical(self) -> None:
         document = json.loads(

@@ -47,6 +47,19 @@ Exact content identity is not semantic skill causation, and this composition
 does not establish aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer
 authority, or release authority.
 
+P3.8b adds one bounded live capture of public GitHub commit
+`2235be7c60b551f5de82ade908fd3816455afcda`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-systemd-composition-p3-8b-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-systemd-qualification-v1-2026-08-11.json)
+bind same-container custody from the quarantine CAS through protected install
+into one `ALLOW` / `CREATED` action ending `CONSUMED`; network access is
+disconnected and reverified before runtime. The capture uses adapted Python
+3.12 and fixture-only systemd 252, cgroup, and Docker-DNS adapters. It does not
+establish the Phase 1 release identity, semantic skill causation, aggregate
+`RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or release authority.
+
 ## Threat Model, Trust Boundaries, and Assumptions
 
 Attacker-controlled inputs include every entry, filename, and file byte below

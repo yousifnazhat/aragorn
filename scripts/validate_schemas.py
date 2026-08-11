@@ -127,6 +127,9 @@ from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.runtime_acquisition_action_binding import (
     runtime_acquisition_action_binding_qualification,
 )
+from aragorn.runtime_acquisition_action_systemd_evidence import (
+    runtime_acquisition_action_systemd_qualification,
+)
 from aragorn.runtime_action_worker_activation_expiry_systemd_evidence import (
     runtime_action_worker_activation_expiry_systemd_qualification,
 )
@@ -2174,6 +2177,73 @@ def main() -> int:
         != canonical_json(acquisition_action_qualification) + b"\n"
     ):
         raise AssertionError("runtime acquisition-action qualification changed")
+
+    acquisition_action_systemd_evidence_path = admission_evidence / (
+        "runtime-acquisition-action-systemd-composition-p3-8b-2026-08-11.json"
+    )
+    acquisition_action_systemd_evidence_raw = (
+        acquisition_action_systemd_evidence_path.read_bytes()
+    )
+    acquisition_action_systemd_evidence = json.loads(
+        acquisition_action_systemd_evidence_raw
+    )
+    acquisition_action_systemd_evidence_digest = (
+        "sha256:598800c8f08efc8c8aaebda5ae13f310ef0bf66ff86823f58cbadecae46c87fb"
+    )
+    if (
+        acquisition_action_systemd_evidence_raw
+        != canonical_json(acquisition_action_systemd_evidence) + b"\n"
+        or len(acquisition_action_systemd_evidence_raw) != 447132
+        or "sha256:"
+        + hashlib.sha256(acquisition_action_systemd_evidence_raw).hexdigest()
+        != "sha256:a095687592ff5d5a51f9a36ef52fa9933ce5dede3c9fe54115f1b2be3180c16d"
+        or canonical_digest(acquisition_action_systemd_evidence)
+        != acquisition_action_systemd_evidence_digest
+    ):
+        raise AssertionError("runtime acquisition-action systemd observation changed")
+    acquisition_action_systemd_verifier_path = (
+        ROOT
+        / "src"
+        / "aragorn"
+        / "runtime_acquisition_action_systemd_evidence.py"
+    )
+    acquisition_action_systemd_verifier_digest = (
+        "sha256:"
+        + hashlib.sha256(
+            acquisition_action_systemd_verifier_path.read_bytes()
+        ).hexdigest()
+    )
+    acquisition_action_systemd_qualification = (
+        runtime_acquisition_action_systemd_qualification(
+            acquisition_action_systemd_evidence,
+            activation_expiry_evidence,
+            runtime_worker_evidence,
+            runtime_worker_parent,
+            retained_runtime_worker_qualification,
+            retained_activation_expiry_qualification,
+            expected_digest=acquisition_action_systemd_evidence_digest,
+            implementation_digest=acquisition_action_systemd_verifier_digest,
+        )
+    )
+    validators[
+        "runtime-acquisition-action-systemd-qualification-v1.schema.json"
+    ].validate(acquisition_action_systemd_qualification)
+    acquisition_action_systemd_qualification_path = admission_receipts / (
+        "phase3-runtime-acquisition-action-systemd-qualification-"
+        "v1-2026-08-11.json"
+    )
+    retained_acquisition_action_systemd_qualification = load(
+        acquisition_action_systemd_qualification_path
+    )
+    if (
+        acquisition_action_systemd_qualification
+        != retained_acquisition_action_systemd_qualification
+        or acquisition_action_systemd_qualification_path.read_bytes()
+        != canonical_json(acquisition_action_systemd_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "runtime acquisition-action systemd qualification changed"
+        )
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

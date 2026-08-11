@@ -28,31 +28,31 @@ _ACQUISITION_MARKER = Path("/run/aragorn-p38d-acquisition-complete")
 _DISCONNECTED_MARKER = Path("/run/aragorn-p38d-network-disconnected")
 _SOURCE_REQUEST = {
     "schema": "aragorn/github-gateway-request/v1",
-    "owner": "obra",
-    "repository": "superpowers",
-    "commit": "f57638a74759376871509ccf080e606f62052f1b",
-    "skill_path": "skills/using-superpowers",
+    "owner": "affaan-m",
+    "repository": "ecc",
+    "commit": "9b081280bc52ee6f22a2e0463761b318936dd980",
+    "skill_path": "skills/brand-voice",
 }
 _QUARANTINE_NAMESPACE = (
     p38b._QUARANTINE_ROOT / p38b.canonical_digest(_SOURCE_REQUEST)[7:]
 )
 _EXPECTED_TREE_DIGEST = (
-    "sha256:3c723514d27df768d9e9f933839c0096b9b82da3d1b61fcd66f25ac07906d7d6"
+    "sha256:4e7924cb5ede0268e04dd4089a571c463e2d92ff8500239f6177fb2e393cd0e1"
 )
 _EXPECTED_ENTRIES = [
     {
         "path": "SKILL.md",
-        "size": 4922,
+        "size": 3648,
         "digest": (
-            "sha256:079c4149d9f5c47abdc6e0688cf0cb1bd30bee15ae07b36ca8bcaa7d5e816168"
+            "sha256:57c7f8440b7bd4c91c0d325640b5c6fb7a3dc7fc05595946c7bc705761a987a7"
         ),
         "executable": False,
     },
     {
-        "path": "references/codex-tools.md",
-        "size": 942,
+        "path": "references/voice-profile-schema.md",
+        "size": 1063,
         "digest": (
-            "sha256:d631e7dedadf595f87db027bdbd9c7e8fb9f0623ec1d5f1db044ba738dedbcfc"
+            "sha256:3c5c2b04fd4b68642d2d3279829541bc56d211fdefc3498e86c1486abee8261b"
         ),
         "executable": False,
     },
@@ -65,7 +65,10 @@ _AUTHORITY = (
 )
 _LIMITATIONS = [
     "ADAPTED_PYTHON_3_12_CURRENT_RELEASE_NOT_RETAINED_PHASE1_RELEASE_IDENTITY",
-    "ONE_LIVE_PUBLIC_GITHUB_COMMIT_AND_EXACTLY_TWO_FILE_DEPTH_ONE_SKILL_ONLY",
+    (
+        "ONE_EXACT_THIRD_PARTY_PUBLIC_TWO_FILE_DEPTH_ONE_MARKDOWN_SOURCE_ONLY_"
+        "NOT_GENERAL_NESTED_COVERAGE"
+    ),
     "ONE_NONEMPTY_DIRECT_DIRECTORY_ONLY_DEEPER_RECURSION_NOT_QUALIFIED",
     "ONE_EVALUATOR_CONTROLLED_LOOPBACK_PROVIDER_ACTION_ONLY",
     "ONE_LOCAL_PRIVILEGED_DOCKER_SYSTEMD_FIXTURE_ONLY",
@@ -272,7 +275,8 @@ def _nested_tree_snapshot(root: Path) -> dict[str, Any]:
         f"nested tree directory custody changed: {directory_path}",
     )
     _expect(
-        sorted(path.name for path in directory_path.iterdir()) == ["codex-tools.md"],
+        sorted(path.name for path in directory_path.iterdir())
+        == ["voice-profile-schema.md"],
         f"nested tree directory membership changed: {directory_path}",
     )
     files: dict[str, dict[str, Any]] = {}
@@ -447,7 +451,7 @@ def _prepare_live_producer(runtime_gid: int) -> dict[str, Any]:
         for entry in _EXPECTED_ENTRIES
     }
     _expect(
-        skill_name == "using-superpowers"
+        skill_name == "brand-voice"
         and protected_tree["entries"] == _EXPECTED_ENTRIES
         and tuple(protected_tree["directories"]) == _EXPECTED_DIRECTORIES
         and transaction["tree_digest"] == _EXPECTED_TREE_DIGEST
@@ -515,7 +519,7 @@ def _prepare_live_producer(runtime_gid: int) -> dict[str, Any]:
             ),
             "version": version_path,
             "skill": skill_path,
-            "companion": version_path / "references" / "codex-tools.md",
+            "companion": version_path / "references" / "voice-profile-schema.md",
             "claim": claim_path,
         },
         "service": {
@@ -601,8 +605,8 @@ def _prepare_gateway(
     os.chown(directory, 0, 0)
     os.chmod(directory, 0o555)
     p38c._write_exclusive(
-        directory / "codex-tools.md",
-        p38c._producer["source_files"]["references/codex-tools.md"],
+        directory / "voice-profile-schema.md",
+        p38c._producer["source_files"]["references/voice-profile-schema.md"],
         0o444,
     )
     p38c._projected_before = _nested_tree_snapshot(projected_skill.parent)

@@ -44,7 +44,7 @@ COPY scripts/capture_runtime_acquisition_action_nested_systemd.sh \
 RUN set -eux; \
     package=/opt/aragorn-broker-p36b; \
     identity=/etc/aragorn/protected-broker-release.json; \
-    namespace=/var/lib/aragorn-quarantine/7337e37e9f58be9929650c0bbf09f72d96e68798ec59d9f9fe9c3b8c1d9670fc; \
+    namespace=/var/lib/aragorn-quarantine/32ba298962af0b1845812b2ee4ee053bdf4dff51d610683a3a468efb055e811d; \
     snapshot=/opt/aragorn-p38c-overwritten-artifacts; \
     test "$P38C_BASE" = \
         "sha256:0f028d91f2215e6225bc4f5a30128edc56119cf9e2886b106bf18eb37f50fccb"; \
@@ -81,7 +81,7 @@ RUN set -eux; \
     test "$(sha256sum /src/scripts/capture_runtime_acquisition_action_nested_systemd.sh | cut -d ' ' -f 1)" = \
         6fc9e3069cd8278c55317ba5127a18b2fcff2b657a433d64d01ed611a662a2d1; \
     test "$(sha256sum /src/scripts/runtime_acquisition_action_nested_systemd_probe.py | cut -d ' ' -f 1)" = \
-        659205bd5041b263028822609cce7d70a21da13b29ec0f4c81bb6cf9135160a0; \
+        25a39a2dab2297f631d6019d1f84e01eb2043b0e440c8611e83164ffbfcdeaf4; \
     test ! -e "$namespace"; \
     test ! -e /var/lib/aragorn-protected/coordinator-active.json; \
     test -z "$(find /var/lib/aragorn-protected/skills -mindepth 1 -print -quit)"; \

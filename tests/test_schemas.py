@@ -179,6 +179,7 @@ EXPECTED_CONTRACTS = {
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
     "runtime-acquisition-action-binding-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-binding-qualification/v1",
     "runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-multifile-systemd-qualification/v1",
+    "runtime-acquisition-action-nested-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-nested-systemd-qualification/v1",
     "runtime-acquisition-action-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-systemd-qualification/v1",
     "runtime-action-worker-activation-expiry-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-activation-expiry-systemd-qualification/v1",
     "runtime-action-worker-openclaw-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-openclaw-systemd-qualification/v1",
@@ -285,6 +286,90 @@ class SchemaTests(unittest.TestCase):
         validator.validate(receipt)
         changed = deepcopy(receipt)
         changed["decision"]["public_release_eligible"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+        changed = deepcopy(receipt)
+        changed["unexpected"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+
+    def test_p38d_schema_pins_verifier_and_exact_retained_receipt(self) -> None:
+        root = SCHEMA_DIRECTORY.parent
+        verifier = (
+            root
+            / "src"
+            / "aragorn"
+            / "runtime_acquisition_action_nested_systemd_evidence.py"
+        )
+        schema = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "runtime-acquisition-action-nested-systemd-qualification-v1.schema.json"
+            ).read_text()
+        )
+        receipt_path = (
+            root
+            / "benchmark"
+            / "receipts"
+            / (
+                "phase3-runtime-acquisition-action-nested-systemd-qualification-"
+                "v1-2026-08-11.json"
+            )
+        )
+        receipt_raw = receipt_path.read_bytes()
+        receipt = json.loads(receipt_raw)
+        bindings = schema["properties"]["bindings"]
+        self.assertFalse(schema["additionalProperties"])
+        self.assertFalse(bindings["additionalProperties"])
+        self.assertEqual(set(schema["required"]), set(receipt))
+        self.assertEqual(set(schema["properties"]), set(receipt))
+        self.assertEqual(set(bindings["required"]), set(receipt["bindings"]))
+        self.assertEqual(receipt_raw, canonical_json(receipt) + b"\n")
+        self.assertEqual(len(receipt_raw), 5559)
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(receipt_raw).hexdigest(),
+            "sha256:915c4e637122aa8c8ac5b767350eb1eb842ec1bd53481ae91c91d6d753276dd9",
+        )
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(canonical_json(receipt)).hexdigest(),
+            "sha256:f7661947800089290bc70da4d41af03d1b9187c6422092ed5156b7416bc3fd35",
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:" + hashlib.sha256(verifier.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:a16c83a1f0a262be1c296643c3fbc047ee204ab911d656046b006aa9aa5d7715",
+        )
+        for name, value in receipt["bindings"].items():
+            self.assertEqual(bindings["properties"][name]["const"], value)
+        for name in (
+            "assurance",
+            "cases",
+            "decision",
+            "limitations",
+            "schema",
+            "source_recorded_at",
+        ):
+            self.assertEqual(schema["properties"][name]["const"], receipt[name])
+
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator = validator_class(schema)
+        validator.validate(receipt)
+        changed = deepcopy(receipt)
+        changed["decision"]["public_release_eligible"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+        changed = deepcopy(receipt)
+        changed["bindings"]["depth_one_two_file_tree"]["directories"].append(
+            "deeper"
+        )
         with self.assertRaises(ValidationError):
             validator.validate(changed)
         changed = deepcopy(receipt)

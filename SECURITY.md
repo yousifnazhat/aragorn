@@ -76,6 +76,23 @@ replay, or continuous measurement qualified. It does not establish the Phase 1
 release identity, semantic skill causation, aggregate gate or `RUN-01`/`RUN-02`,
 Phase 3 exit, EDR, installer authority, or public-release authority.
 
+P3.8d adds one exact third-party public two-file depth-one Markdown source:
+commit `9b081280bc52ee6f22a2e0463761b318936dd980` from `affaan-m/ecc`, rooted at
+`skills/brand-voice`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-nested-systemd-composition-p3-8d-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_nested_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-nested-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-nested-systemd-qualification-v1-2026-08-11.json)
+bind `SKILL.md`, the direct `references` directory, and
+`references/voice-profile-schema.md` from the live quarantine CAS through the
+protected and projected trees into the same bounded coherent action. This is
+one nonempty direct directory at depth one, not general nested or deeper
+recursive coverage, and remains one privileged local Docker/systemd fixture
+using adapted Python 3.12. It does not establish remote signer or signature
+trust, the Phase 1 release identity, semantic skill causation, aggregate gate
+or `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or public-release
+authority.
+
 ## Threat Model, Trust Boundaries, and Assumptions
 
 Attacker-controlled inputs include every entry, filename, and file byte below

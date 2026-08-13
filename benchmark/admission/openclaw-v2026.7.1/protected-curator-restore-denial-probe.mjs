@@ -138,6 +138,27 @@ const FIXTURE_ROW = Object.freeze({
   state: "archived",
   state_changed_at_ms: 2,
 });
+const EXPECTED_CURATOR_STATUS = Object.freeze({
+  counts: { active: 0, archived: 1, stale: 0 },
+  lastAttemptAtMs: null,
+  lastError: null,
+  lastSuccessAtMs: null,
+  overlaps: [],
+  skills: [
+    {
+      archivedReason: FIXTURE_ROW.archived_reason,
+      createdAtMs: FIXTURE_ROW.created_at_ms,
+      lastUsedAtMs: null,
+      pinned: false,
+      skillFile: FIXTURE_ROW.skill_file,
+      skillKey: FIXTURE_ROW.skill_key,
+      skillName: FIXTURE_ROW.skill_name,
+      state: FIXTURE_ROW.state,
+      stateChangedAtMs: FIXTURE_ROW.state_changed_at_ms,
+      useCount: 0,
+    },
+  ],
+});
 const OUTPUT_LIMIT = 2 * 1024 * 1024;
 const EXCERPT_LIMIT = 2048;
 
@@ -309,6 +330,32 @@ function skillStatus() {
     response,
     target_matches: skills.filter((skill) => skill?.name === TARGET_NAME),
   };
+}
+
+function exactCuratorStatus(observation) {
+  return (
+    observation.command.exit_code === 0 &&
+    cleanCommand(observation.command) &&
+    observation.response.parsed &&
+    same(observation.response.value, EXPECTED_CURATOR_STATUS)
+  );
+}
+
+function exactSkillStatusDiagnostic(observation) {
+  const skill = observation.target_matches[0];
+  return (
+    observation.command.exit_code === 0 &&
+    cleanCommand(observation.command) &&
+    observation.response.parsed &&
+    observation.target_matches.length === 1 &&
+    skill?.name === TARGET_NAME &&
+    skill?.skillKey === TARGET_NAME &&
+    skill?.baseDir === TARGET &&
+    skill?.filePath === TARGET_FILE &&
+    skill?.source === "openclaw-workspace" &&
+    skill?.eligible === true &&
+    skill?.modelVisible === true
+  );
 }
 
 function databaseObservation(database) {
@@ -498,14 +545,13 @@ async function runObservation() {
     if (!exactDatabaseObservation(databaseBefore)) {
       throw new Error("exact archived lifecycle fixture was not established");
     }
+    const curatorBefore = curatorStatus();
+    if (!exactCuratorStatus(curatorBefore)) {
+      throw new Error("exact archived curator status was not established");
+    }
     const discoveryBefore = skillStatus();
-    if (
-      discoveryBefore.command.exit_code !== 0 ||
-      !cleanCommand(discoveryBefore.command) ||
-      !discoveryBefore.response.parsed ||
-      discoveryBefore.target_matches.length !== 0
-    ) {
-      throw new Error("archived lifecycle fixture remained discoverable");
+    if (!exactSkillStatusDiagnostic(discoveryBefore)) {
+      throw new Error("protected skills.status diagnostic changed");
     }
 
     const gatewayRestore = gatewayCall("skills.curator.restore", {
@@ -550,6 +596,7 @@ async function runObservation() {
       throw new Error("CLI fallback changed archived lifecycle state");
     }
 
+    const curatorAfter = curatorStatus();
     const discoveryAfter = skillStatus();
     const systemAfter = systemInfo();
     const boundaryAfter = boundaryObservation();
@@ -562,10 +609,10 @@ async function runObservation() {
     const openclawAfter = pathObservation(OPENCLAW, { hashFile: true });
     const runtimeAfter = runtimeTree();
     if (
-      discoveryAfter.command.exit_code !== 0 ||
-      !cleanCommand(discoveryAfter.command) ||
-      !discoveryAfter.response.parsed ||
-      discoveryAfter.target_matches.length !== 0 ||
+      !exactCuratorStatus(curatorAfter) ||
+      !same(curatorAfter.response.value, curatorBefore.response.value) ||
+      !exactSkillStatusDiagnostic(discoveryAfter) ||
+      !same(discoveryAfter.response.value, discoveryBefore.response.value) ||
       !exactSystemInfo(systemAfter, gatewayAfter) ||
       !same(boundaryAfter, boundaryBefore) ||
       !same(configTreeAfter, configTreeBefore) ||
@@ -585,10 +632,12 @@ async function runObservation() {
         version,
         systemBefore.command,
         initialize.command,
+        curatorBefore.command,
         discoveryBefore.command,
         gatewayRestore,
         invalidTokenControl,
         cliRestore,
+        curatorAfter.command,
         discoveryAfter.command,
         systemAfter.command,
       ],
@@ -599,6 +648,8 @@ async function runObservation() {
         cli_fallback_restore: { command: cliRestore },
         config_lock_after: configLockAfter,
         config_tree_after: configTreeAfter,
+        curator_status_after: curatorAfter,
+        curator_status_before: curatorBefore,
         database_after_cli: databaseAfterCli,
         database_after_gateway: databaseAfterGateway,
         database_before: databaseBefore,

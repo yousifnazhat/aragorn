@@ -370,8 +370,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "fc5f7499141f3a09e9347355dcac2284d781133b16ea05c0b2ee95fd8e6ce820",
             ),
             "protected-session-snapshot-fixed-probe.mjs": (
-                42_273,
-                "2b125e6ab868948b2132754bf35cfcf1b52c8336d2dff02526864827da24c3a8",
+                42_266,
+                "9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11",
             ),
         }
         self.assertEqual(set(expected), set(FINAL_COMBINED_SOURCE_DIGESTS))
@@ -517,6 +517,10 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             self.assertNotIn(b"discovery", snapshot)
             self.assertNotIn(b'    "skills",\n    "info",', snapshot)
             self.assertNotIn(b"      entries: [],\n", snapshot)
+            self.assertNotIn(b"initialSnapshot.prompt.exact_text.trim()", snapshot)
+            self.assertIn(
+                b"baselineSkillsPrompt === initialSnapshot.prompt.exact_text", snapshot
+            )
             self.assertIn(b"boundaryBefore.ready &&", snapshot)
             self.assertIn(b"exactTarget(targetBefore) &&", snapshot)
             self.assertIn(b'value.entry.run_status === "timeout"', snapshot)

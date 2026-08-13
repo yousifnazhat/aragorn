@@ -839,6 +839,9 @@ FINAL_COMBINED_SNAPSHOT_TERMINAL_REPLACEMENTS = (
 )
 
 FINAL_COMBINED_SNAPSHOT_REPLAY_REPLACEMENTS = ((b"      entries: [],\n", b""),)
+FINAL_COMBINED_SNAPSHOT_PROMPT_REPLACEMENTS = (
+    (b"initialSnapshot.prompt.exact_text.trim()", b"initialSnapshot.prompt.exact_text"),
+)
 
 FINAL_COMBINED_PROMPT_DISCOVERY_REPLACEMENTS = (
     *FINAL_COMBINED_SNAPSHOT_DISCOVERY_REPLACEMENTS[:2],
@@ -1559,6 +1562,7 @@ def transformed_final_combined_probe(name: str) -> bytes:
         raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_DISCOVERY_REPLACEMENTS)
         raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_TERMINAL_REPLACEMENTS)
         raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_REPLAY_REPLACEMENTS)
+        raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_PROMPT_REPLACEMENTS)
         raw = _replace_counted(
             raw,
             ((b"      discoveryBefore.command,\n", b""),),

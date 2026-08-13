@@ -501,6 +501,14 @@ is an explicit ephemeral fixture, prior-profile passes are not composed, and
 all aggregate, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release
 authority remains false.
 
+An additive restore-authority config qualifier composes a separate exact
+capture and records 2 `PASS` and 19 `NOT_TESTED`. It adds only
+`ADM-02/update/config-entry-activation`: native `skills.update` reached the
+read-only configuration lock and failed with `EROFS`, with configuration and
+the protected skill unchanged. This is qualification-layer composition across
+separate captures, not aggregate admission, installer, `RUN-01`, `RUN-02`,
+Phase 3, EDR, or release authority.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

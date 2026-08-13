@@ -728,6 +728,15 @@ remained unchanged. The archived row is an explicit ephemeral fixture, the
 build is private, and no prior-profile, aggregate, installer, `RUN-01`,
 `RUN-02`, Phase 3, EDR, or release authority is composed or claimed.
 
+An additive
+[restore-authority config route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-config-route-coverage-v1-2026-08-13.json)
+records 2 `PASS` and 19 `NOT_TESTED`. A separate exact capture adds only
+`ADM-02/update/config-entry-activation`: native `skills.update` reached the
+read-only configuration lock and failed with `EROFS` while configuration and
+the protected skill remained unchanged. The captures are composed only at the
+qualification layer; no aggregate, installer, `RUN-01`, `RUN-02`, Phase 3,
+EDR, or release authority is claimed.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

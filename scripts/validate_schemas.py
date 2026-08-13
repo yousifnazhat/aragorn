@@ -26,6 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from freeze_hidden_suite import validate_freeze_receipt_bindings
+from materialize_fixed_admission_probes import (
+    transformed_restore_authority_probe,
+)
 from prepare_hidden_suite import (
     _V2_GATE,
     _V3_GATE,
@@ -79,6 +82,9 @@ from aragorn.admission_protected_profile import (
 )
 from aragorn.admission_protected_prompt import (
     verify_openclaw_protected_prompt_rebuild,
+)
+from aragorn.admission_protected_restore_authority_config import (
+    verify_openclaw_protected_restore_authority_config_activation,
 )
 from aragorn.admission_protected_session_snapshot import (
     verify_openclaw_protected_session_snapshot,
@@ -2207,6 +2213,59 @@ def main() -> int:
         != canonical_json(curator_restore_qualification) + b"\n"
     ):
         raise AssertionError("protected curator restore qualification changed")
+
+    restore_config_evidence_path = admission_evidence / (
+        "openclaw-v2026.7.1-protected-restore-authority-config-activation-"
+        "2026-08-13.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-restore-authority-config-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        for path in (
+            restore_profile_path,
+            restore_runtime_lock_path,
+            protected_profile_dir / "protected-restore-authority-config-v1.json",
+            restore_config_evidence_path,
+        ):
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        probe_raw = transformed_restore_authority_probe(
+            "protected-config-activation-probe.mjs"
+        )
+        evidence_cas.put(BytesIO(probe_raw), max_bytes=len(probe_raw))
+        restore_config_coverage = (
+            verify_openclaw_protected_restore_authority_config_activation(
+                load(
+                    admission_receipts
+                    / (
+                        "phase3-openclaw-protected-restore-authority-config-"
+                        "activation-v1-2026-08-13.json"
+                    )
+                ),
+                evidence_cas=evidence_cas,
+                route_profile=load_runtime_profile(
+                    restore_profile_path.read_bytes()
+                ),
+                runtime_lock=load_runtime_profile(
+                    restore_runtime_lock_path.read_bytes()
+                ),
+                route_inventory=openclaw_route_inventory,
+                runtime_candidates=runtime_candidates,
+                curator_qualification=retained_curator_restore,
+            )
+        )
+    retained_restore_config_path = admission_receipts / (
+        "phase3-openclaw-protected-restore-authority-config-route-coverage-"
+        "v1-2026-08-13.json"
+    )
+    retained_restore_config = load(retained_restore_config_path)
+    if (
+        restore_config_coverage != retained_restore_config
+        or retained_restore_config_path.read_bytes()
+        != canonical_json(restore_config_coverage) + b"\n"
+    ):
+        raise AssertionError("protected restore-authority config coverage changed")
 
     cron_sources = (
         admission_evidence

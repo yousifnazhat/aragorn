@@ -1,19 +1,89 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from scripts.materialize_fixed_admission_probes import (
+    FINAL_COMBINED_SELECTIONS,
+    FINAL_COMBINED_SOURCE_DIGESTS,
     SOURCE_DIGESTS,
     materialize,
+    transformed_final_combined_probe,
     transformed_probe,
     transformed_restore_authority_probe,
 )
 
 
 class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
+    def test_default_probe_outputs_remain_byte_exact(self) -> None:
+        expected = {
+            "adm03-probe.mjs": (
+                8_796,
+                "1ac42c2baf9af313c99b5327b6c075fecd10a12e06f7dfb55d15f33b40ebb77e",
+            ),
+            "contained-probe.mjs": (
+                17_498,
+                "27e8429b8af73c4bf005a449c529f251a5ee9c36c680416dbfdd9d311725ac28",
+            ),
+            "config-activation-probe.mjs": (
+                24_173,
+                "1e2ab048d3308fbe9b4f2982e39a5eee661cb0be816da747833e6bca3794f8b8",
+            ),
+            "live-reload-probe.mjs": (
+                31_822,
+                "55c382014a746b69300c03668139848f6b12495aaedd7f0756deb7612c5ac847",
+            ),
+            "model-activation-probe.mjs": (
+                26_057,
+                "dcc974db58add93cfb80ac613fae7a78d6ed60cce465f345af55ab0318f3bbda",
+            ),
+            "plug01-probe.mjs": (
+                60_881,
+                "f317ca4c7d9656c66a7081edd744812caaf70341076b9ea5753cd063a53bb055",
+            ),
+            "probe.mjs": (
+                13_275,
+                "ae3d5431e4de17e46f81c9fae0e03c347d9834c7b20414826b062f8768765416",
+            ),
+            "protected-archive-replacement-probe.mjs": (
+                22_549,
+                "a582d06bb9872cf9d0ff09169283c18451ba9f6e9e29d6c67848a4ba9e612db1",
+            ),
+            "protected-config-activation-probe.mjs": (
+                20_622,
+                "33b9da1d16f62201ee6616434008358df29c384c0e5f1af0f184493a4e7f59d1",
+            ),
+            "protected-cron-rescan-probe.mjs": (
+                26_778,
+                "0620c17829f08a0257c0d6a797c4326405d4bdb00427984c978af5a39aba21d1",
+            ),
+            "protected-observation-v1.mjs": (
+                13_609,
+                "90dd88392ffd88b6e9e29f682223c62a12f0c6a7c6bf9648a23d2be2dc218774",
+            ),
+            "protected-prompt-rebuild-probe.mjs": (
+                15_501,
+                "a85b38660925805e5ff50c3a3a177e076f203e9c3610f62e3e732d5f198e2666",
+            ),
+            "protected-route-probe.mjs": (
+                40_223,
+                "72e4ae79a6ee3370e49a465ef1ecd440f42997e4a2555bf64f461e848f5a0c4c",
+            ),
+            "restart-probe.mjs": (
+                17_855,
+                "6a6b83079c391e7baf87092366a910a4786132e7a0446ef1ba28029859318d1f",
+            ),
+        }
+        self.assertEqual(set(expected), set(SOURCE_DIGESTS))
+        for name, (size, digest) in expected.items():
+            with self.subTest(name=name):
+                raw = transformed_probe(name)
+                self.assertEqual(len(raw), size)
+                self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
+
     def test_materializes_every_pinned_probe_without_parent_literals(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "fixed"
@@ -267,6 +337,170 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                     rejected = Path(temporary) / f"rejected-cron-{label}"
                     with self.assertRaises(ValueError):
                         materialize(rejected, selection, restore_authority=True)
+                    self.assertFalse(rejected.exists())
+
+    def test_materializes_exact_final_combined_bundles(self) -> None:
+        expected = {
+            "protected-archive-replacement-probe.mjs": (
+                25_498,
+                "db6e1181b54529c01e240700e338df5dbb7011fd29f5d22f92bfe710f65d71de",
+            ),
+            "protected-config-activation-probe.mjs": (
+                23_366,
+                "c79d775903636736c2ae5413f381b3a8f9ec17a1a179a7807c4a6e57624662f0",
+            ),
+            "protected-cron-rescan-probe.mjs": (
+                26_952,
+                "bcfbd535604a344abe0e585cdd23e2d5fd4dac9fb58c0b090da1291cbca1ddc4",
+            ),
+            "protected-curator-restore-denial-probe.mjs": (
+                26_564,
+                "92b57624678a58aacc5cc147958a60e2e7f204c74ebf5a724473b9c604c2a680",
+            ),
+            "protected-observation-v1.mjs": (
+                16_324,
+                "11650e5906c8c1bd863abe462c10288f421645c35a69961cb143eb8e7163363b",
+            ),
+            "protected-prompt-rebuild-probe.mjs": (
+                15_599,
+                "5d1bd0aa48f34d5567c048d21849464be82edbb01772bd5a956a0426b59e3fce",
+            ),
+            "protected-route-probe.mjs": (
+                42_916,
+                "63273a2466f126e075a3dc4068841b7e467f5d94989f1bcdd30b965398cd6343",
+            ),
+            "protected-session-snapshot-fixed-probe.mjs": (
+                41_531,
+                "5c8ed84c158d735737233f3f58b187c512f68d819388df1b1f7135476b88493d",
+            ),
+        }
+        self.assertEqual(set(expected), set(FINAL_COMBINED_SOURCE_DIGESTS))
+        with tempfile.TemporaryDirectory() as temporary:
+            for index, selection in enumerate(FINAL_COMBINED_SELECTIONS):
+                output = Path(temporary) / f"final-{index}"
+                names = sorted(selection)
+                materialize(output, names, final_combined=True)
+                self.assertEqual(
+                    sorted(path.name for path in output.iterdir()),
+                    names,
+                )
+                for name in names:
+                    with self.subTest(name=name):
+                        raw = (output / name).read_bytes()
+                        size, digest = expected[name]
+                        self.assertEqual(raw, transformed_final_combined_probe(name))
+                        self.assertEqual(len(raw), size)
+                        self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
+                        self.assertEqual((output / name).stat().st_mode & 0o777, 0o444)
+                        syntax = subprocess.run(
+                            ["node", "--check", str(output / name)],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                        )
+                        self.assertEqual(syntax.returncode, 0, syntax.stderr)
+
+            archive = transformed_final_combined_probe(
+                "protected-archive-replacement-probe.mjs"
+            )
+            helper = transformed_final_combined_probe("protected-observation-v1.mjs")
+            route = transformed_final_combined_probe("protected-route-probe.mjs")
+            cron = transformed_final_combined_probe("protected-cron-rescan-probe.mjs")
+            for raw in (archive, route, cron):
+                self.assertIn(b"7fa98d8", raw)
+                self.assertNotIn(b"805a4b1", raw)
+            self.assertIn(
+                b"5d09f482ad1cb177eae168eaea074f6d2a6ec976d16042a3e1d665cc2371f154",
+                helper,
+            )
+            self.assertIn(
+                b"ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d",
+                helper,
+            )
+            self.assertIn(
+                b'const TARGET = "/opt/aragorn/runtime-profile/template-skill";',
+                archive,
+            )
+            self.assertIn(
+                b'const CONTROL_ROOT = "/tmp/aragorn-final-archive-control";',
+                archive,
+            )
+            self.assertIn(b"const RUNTIME_UID = 992;", route)
+            self.assertIn(b"const RUNTIME_GID = 992;", route)
+            for raw in (archive, helper, route):
+                self.assertIn(b"function writableRoots(rootPaths)", raw)
+                self.assertIn(b"accessSync(path, constants.W_OK)", raw)
+                self.assertIn(b"exactExternalSingleton(configuration)", raw)
+                self.assertNotIn(b"writableRootAliases", raw)
+                self.assertNotIn(b"const LIVE_ROOTS", raw)
+            self.assertIn(b"export const PROTECTED_ROOTS", helper)
+            self.assertIn(
+                b"/run/credentials/aragorn-agent-gateway.service/openclaw-config",
+                helper,
+            )
+            self.assertIn(b"configuration.file?.size === 1811", helper)
+            self.assertIn(b'configuration.file?.mode === "400"', helper)
+            self.assertIn(
+                b'const rawPid = process.env.ARAGORN_GATEWAY_PID ?? "";',
+                helper,
+            )
+            self.assertIn(b"const procRoot = `/proc/${rawPid}`;", helper)
+            self.assertIn(b'mountObservation("/route-input")', helper)
+            self.assertIn(
+                b"gateway.boundary.roots.workspace_skills.ready",
+                route,
+            )
+            self.assertIn(
+                b"gateway.boundary.roots.workspace_skills.writable",
+                route,
+            )
+            self.assertIn(b"WORKSPACE_SKILLS_WRITABLE_BOUNDARY_REQUIRED", route)
+            self.assertIn(b"cron-qc-KsHeU.js", cron)
+            self.assertIn(b"session-snapshot-C3iM3syv.js", cron)
+            self.assertIn(b"workspace-DvqxsRU0.js", cron)
+
+            for name in FINAL_COMBINED_SOURCE_DIGESTS:
+                raw = transformed_final_combined_probe(name)
+                self.assertNotIn(b"3b7218cb", raw)
+                self.assertNotIn(b"/proc/1", raw)
+                self.assertNotIn(b"/profile/config", raw)
+                self.assertNotIn(b"/profile/state", raw)
+                self.assertNotIn(b"/profile/home", raw)
+                self.assertNotIn(b"/profile/workspace", raw)
+                self.assertNotIn(b".pid === 1", raw)
+                self.assertNotRegex(
+                    raw.decode(),
+                    r"roots\.[a-z_]+\.(?:explicit|read_only)",
+                )
+
+            invalid = {
+                "both-modes": (
+                    ["protected-archive-replacement-probe.mjs"],
+                    {"restore_authority": True, "final_combined": True},
+                ),
+                "duplicate": (
+                    [
+                        "protected-observation-v1.mjs",
+                        "protected-prompt-rebuild-probe.mjs",
+                        "protected-prompt-rebuild-probe.mjs",
+                    ],
+                    {"final_combined": True},
+                ),
+                "partial-helper": (
+                    ["protected-observation-v1.mjs"],
+                    {"final_combined": True},
+                ),
+                "final-only-default": (
+                    ["protected-curator-restore-denial-probe.mjs"],
+                    {},
+                ),
+                "unsupported": (["probe.mjs"], {"final_combined": True}),
+            }
+            for label, (names, options) in invalid.items():
+                with self.subTest(label=label):
+                    rejected = Path(temporary) / f"rejected-final-{label}"
+                    with self.assertRaises(ValueError):
+                        materialize(rejected, names, **options)
                     self.assertFalse(rejected.exists())
 
 

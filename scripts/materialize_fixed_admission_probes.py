@@ -421,6 +421,439 @@ RESTORE_AUTHORITY_SELECTIONS = frozenset(
     }
 )
 
+FINAL_COMBINED_SOURCE_DIGESTS = {
+    **{name: SOURCE_DIGESTS[name] for name in RESTORE_AUTHORITY_PROBE_COUNTS},
+    "protected-curator-restore-denial-probe.mjs": (
+        "ecc2649b40cc9e6106181a12a31b12999a596d634f7a1ee9cc658adc70c9192a"
+    ),
+    "protected-session-snapshot-fixed-probe.mjs": (
+        "1efe13c3beb3ac2ff6fc1293aa64875c95424f1576a10b12943f0b875af223e2"
+    ),
+}
+
+FINAL_COMBINED_SELECTIONS = frozenset(
+    {
+        frozenset({"protected-archive-replacement-probe.mjs"}),
+        frozenset({"protected-config-activation-probe.mjs"}),
+        frozenset({"protected-route-probe.mjs"}),
+        frozenset(
+            {
+                "protected-curator-restore-denial-probe.mjs",
+                "protected-observation-v1.mjs",
+            }
+        ),
+        frozenset(
+            {
+                "protected-observation-v1.mjs",
+                "protected-session-snapshot-fixed-probe.mjs",
+            }
+        ),
+        frozenset(
+            {
+                "protected-observation-v1.mjs",
+                "protected-prompt-rebuild-probe.mjs",
+            }
+        ),
+        frozenset(
+            {
+                "protected-cron-rescan-probe.mjs",
+                "protected-observation-v1.mjs",
+            }
+        ),
+    }
+)
+
+FINAL_COMBINED_COMMIT_REPLACEMENTS = (
+    (
+        b"805a4b152b0cee271ee78ad5608c15a4f8d1624b",
+        b"7fa98d8e21b6d5937f25a7f19445ff683bb980bf",
+    ),
+    (b"OpenClaw 2026.7.1 (805a4b1)", b"OpenClaw 2026.7.1 (7fa98d8)"),
+)
+
+FINAL_COMBINED_CONFIG_REPLACEMENTS = (
+    (
+        b"701da2485f2844603c13b40c56876984de5ff9cdc22927f1a5bcd218ba369751",
+        b"ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d",
+    ),
+    (
+        b"417fc06b87a539654433451aff12509ca7dca28003c9f2cedc91bcc611eba16e",
+        b"ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d",
+    ),
+)
+
+FINAL_COMBINED_RUNTIME_REPLACEMENTS = (
+    (b"45_859", b"45_860"),
+    (b"45859", b"45860"),
+    (b"45_840", b"45_841"),
+    (b"45840", b"45841"),
+    (b"369_418_625", b"369_443_243"),
+    (b"369418625", b"369443243"),
+    (
+        b"6448edb21fd2a27dd3cf2b740e0d0dfc3a395e2ccae446853867a95485d54e74",
+        b"5d09f482ad1cb177eae168eaea074f6d2a6ec976d16042a3e1d665cc2371f154",
+    ),
+)
+
+FINAL_COMBINED_TARGET_REPLACEMENTS = (
+    (
+        b'const TARGET_NAME = "requesting-code-review";',
+        b'const TARGET_NAME = "template-skill";',
+    ),
+    (
+        b"const TARGET = `/profile/workspace/skills/${TARGET_NAME}`;",
+        b'const TARGET = "/opt/aragorn/runtime-profile/template-skill";',
+    ),
+    (
+        b"sha256:1a13f195721f8fa75974bd4918a25b30e8406ff6d423cd0e3306c391b8fee07a",
+        b"sha256:eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa",
+    ),
+    (
+        b"sha256:c3e201e18e2fa35a56d4cae3a0ed481072f4ed77db18e6d568b266068cbe96c3",
+        b"sha256:38625b40892cc1f5b3cac1dcc6cd0116f8b7f21900a5baa7eeeded0ed2e87ed1",
+    ),
+    (b"tree.root.gid === 982", b"tree.root.gid === 0"),
+    (b'tree.root.mode === "750"', b'tree.root.mode === "555"'),
+    (b"skill.gid === 982", b"skill.gid === 0"),
+    (b'skill.mode === "440"', b'skill.mode === "444"'),
+    (b'skill?.source === "openclaw-workspace"', b'skill?.source === "openclaw-extra"'),
+)
+
+FINAL_COMBINED_PROMPT_OLD = b"""
+
+The following skills provide specialized instructions for specific tasks.
+Use the read tool to load a skill's file when the task matches its description.
+If a skill's <version> differs from a previous turn, re-read its SKILL.md before using it.
+When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.
+
+<available_skills>
+  <skill>
+    <name>requesting-code-review</name>
+    <description>Inert protected archive replacement target v1.</description>
+    <location>/profile/workspace/skills/requesting-code-review/SKILL.md</location>
+    <version>sha256:1a13f195721f8fa7</version>
+  </skill>
+</available_skills>"""
+
+FINAL_COMBINED_PROMPT_NEW = b"""
+
+The following skills provide specialized instructions for specific tasks.
+Use the read tool to load a skill's file when the task matches its description.
+If a skill's <version> differs from a previous turn, re-read its SKILL.md before using it.
+When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.
+
+<available_skills>
+  <skill>
+    <name>template-skill</name>
+    <description>Replace with description of the skill and when Claude should use it.</description>
+    <location>/opt/aragorn/runtime-profile/template-skill/SKILL.md</location>
+    <version>sha256:eb685d91de039ed8</version>
+  </skill>
+</available_skills>"""
+
+FINAL_COMBINED_CRON_REPLACEMENTS = (
+    (
+        b"ad9cde2c065d5d4d69f465193007a435c0cd0b378d253329238dd36fdc70f849",
+        b"5b4687614137ecc59ff375c47679ba641eca20d73b20cf75e0ae6bee0afbb533",
+    ),
+    (b"cron-DOr4RFbn.js", b"cron-qc-KsHeU.js"),
+    (
+        b"f76a2799c0e012a39fd12c5ce4245c92f0afa74fd30a1cddec506af092733a60",
+        b"b44d93ef82f61910088810c5f26f819ef5f3b23c3d1986223781149805d86ab6",
+    ),
+    (
+        b"661385d87db47117e9e49e41b01fcfe07aacea32326de09f6764c2568bc2620d",
+        b"bdc0ebba0d83ef830af7542f70c8436decc9809195f1fd6e114e11f8e6220768",
+    ),
+    (b"cron-snapshot.runtime-DrQirS_k.js", b"cron-snapshot.runtime-DOWu3ZvS.js"),
+    (
+        b"0b7aa925514a2c44babb98dedfd11de28733fbd853b361716860adca340923d7",
+        b"111dbe5add64d796453660fe8b5f8f8fa830716d87ecc902d2b11a0489e36610",
+    ),
+    (b"isolated-agent-2U26aOeI.js", b"isolated-agent-knotypz1.js"),
+    (
+        b"edd138bac24f7fbc0e08013e1be9e4962f12d530ef5462efa0a1d82d4b475784",
+        b"11800a76db678e445aebb1e3193ba089c7ae8da94d3628ba4252ff5afc09cc4e",
+    ),
+    (b"session-CagbPApz.js", b"session-DhY9vRaC.js"),
+    (b"3_661", b"3_877"),
+    (
+        b"d8a1bd6c3ee26b981e5cfe6e7756a91263fd40c4727e1bdb0e69171b8458cb28",
+        b"5ac3cf77479e9573b5326f81c5ddc7ad4e21017b6f34d3bf2612d67dc8b9f50d",
+    ),
+    (b"session-snapshot-8MgHKMdq.js", b"session-snapshot-C3iM3syv.js"),
+    (b"47_738", b"55_215"),
+    (
+        b"f4e73f5c7a111fe2ed4d953c54f96ff9e9e4ad2ba962cf7f00afd141c8d125c2",
+        b"9a573db609deb917613f3e85437236a5997883daa299a52f2652891b7ec43b1b",
+    ),
+    (b"workspace-CKU1tzCf.js", b"workspace-DvqxsRU0.js"),
+)
+
+FINAL_COMBINED_CURATOR_REPLACEMENTS = (
+    (
+        b"b0cb989a0543181aa737cc5ca37c10bf3f21b010a76cb742aefd1b5b4cef8db8",
+        b"d88d92cfd6829a4d5204709f3ded852d8d1b0c71c94714a8e42dce8302aa7b79",
+    ),
+    (b"skills-cli-B0D3yE3o.js", b"skills-cli-CNPwjJpH.js"),
+    (
+        b"5baa73a9a2ef36d65243ac9068ada55f2bfc5e25041ccf2bae6635aede89bdfa",
+        b"196ac4211309e82af77db50230eb3d83eb5d7a9a100bdbc50ab70018ee21868a",
+    ),
+    (b"skills-BY50TjFr.js", b"skills-wlxjcAuQ.js"),
+    (b"59_911", b"61_198"),
+    (
+        b"a90be5b2226ad12935be90094b01c8544c5641f7cf7df175e6f962ca402d8309",
+        b"42b8547c53a366ee333527117dcc12400398ec6267c84d351cbfee813ea3d95e",
+    ),
+    (b"zod-schema-Cvjp91Cd.js", b"zod-schema-HPCU20Az.js"),
+)
+
+FINAL_COMBINED_SNAPSHOT_REPLACEMENTS = (
+    (
+        b"4b198dafbcca1788bfe22c0abb1f8bf16064be03",
+        b"7fa98d8e21b6d5937f25a7f19445ff683bb980bf",
+    ),
+    (b"OpenClaw 2026.7.1 (4b198da)", b"OpenClaw 2026.7.1 (7fa98d8)"),
+    (b"369_417_908", b"369_443_243"),
+    (
+        b"4e866a250429632f5796d977554acbaabe6f30dbf837457e32022eacdb9152c1",
+        b"5d09f482ad1cb177eae168eaea074f6d2a6ec976d16042a3e1d665cc2371f154",
+    ),
+    (b"agent-command-DowjS4rA.js", b"agent-command-DTQcyNEV.js"),
+    (
+        b"1ad8a7b0b8d9cc7defbaad1c4e9a8b413d462627f1c81e29ec99ea0a31bc03d6",
+        b"940878576c7383f1e1ca99a5257a121bb6ddc8637f599a587e50a229cf185f03",
+    ),
+    (b"attempt-execution-BYfuRexC.js", b"attempt-execution-D1Tem6Ut.js"),
+    (
+        b"0e51074290fe09589add2de7f7bb5e9fe76e0de90f2139111969b287e554a4ef",
+        b"6e71434cf0fcb84eabcafdf8ad24f489d47f2ce25144e79d9681ba35a37aceec",
+    ),
+    (b"218_413", b"220_322"),
+    (b"embedded-agent-Dkb05T-e.js", b"embedded-agent-UzpuyD8i.js"),
+    (
+        b"e240ee9ddb20a783630903606ed82ba068fd2e697d34a64a07241a4abc466d38",
+        b"fa4ffb66d910e52e376addc614d6e02926ac89e5d83eb96624bf77d2b93ce681",
+    ),
+    (b"673_468", b"673_592"),
+    (b"selection-weQvCGzP.js", b"selection-CqQ5E0T1.js"),
+    (
+        b"c5165cec26aed90a576dc6b3b02749d5412a65d3a57d92a3b1855a087f2a2ec8",
+        b"e44ca619f4d12fda4962076adba16474e994ac02dbcfbadcb75c81d23b21edde",
+    ),
+    (b"session-snapshot-Bm-DN9wl.js", b"session-snapshot-CUCETeUr.js"),
+    (
+        b"3405a1d019fcbb854d4f84fa00624c714fb8c82bacfbe984fc5ccc8c24e89dff",
+        b"5c33aa0c9e0b38b264e87962dce0b80470e4f6963e7d5d0b37c9d876213db459",
+    ),
+    (b"3_661", b"3_877"),
+    (b"session-snapshot-CMKRWMg1.js", b"session-snapshot-C3iM3syv.js"),
+    (
+        b"e9046199b43de587dbf1f184b2e4738b4b772491266baff8eeeab90f21a50d7c",
+        b"5ac3cf77479e9573b5326f81c5ddc7ad4e21017b6f34d3bf2612d67dc8b9f50d",
+    ),
+    (b"47_738", b"55_215"),
+    (b"workspace-BKXau6p-.js", b"workspace-DvqxsRU0.js"),
+    (
+        b"ee73b5621ff0fa5d198cb39a54eb6fa332d1f96897e4151538415eef7a72846c",
+        b"9a573db609deb917613f3e85437236a5997883daa299a52f2652891b7ec43b1b",
+    ),
+    (b"system-prompt-config-BeuaroSf.js", b"system-prompt-config-C1imAkur.js"),
+    (
+        b"ae0182fdf7377187493f033111bfdf2c15fd02971eed5517ebdaa4c3334f7f66",
+        b"fba952469e9941a14733b2505964244e6efd24f0a4962e60e1d6e63761a6dc27",
+    ),
+    (b"store-CRMOBYMq.js", b"store-Bn4xSDrE.js"),
+    (
+        b"2a55293b9f9fb75dd62d73365cac05212b60c650650135f967ca0e192e0ec46f",
+        b"b64871b386445e6bb5300bed786e3c4eb3ba7d28f0eb469b3b4dfe786d90ac96",
+    ),
+)
+
+FINAL_COMBINED_PROFILE_REPLACEMENTS = (
+    (
+        b"/profile/config/openclaw.json",
+        b"/run/credentials/aragorn-agent-gateway.service/openclaw-config",
+    ),
+    (
+        b"/profile/config",
+        b"/run/credentials/aragorn-agent-gateway.service",
+    ),
+    (b"/profile/state", b"/var/lib/aragorn-agent-gateway/state"),
+    (b"/profile/home", b"/var/lib/aragorn-agent-gateway/home"),
+    (b"/profile/workspace", b"/var/lib/aragorn-agent-gateway/workspace"),
+)
+
+FINAL_COMBINED_PROFILE_COUNTS = {
+    "protected-archive-replacement-probe.mjs": (1, 1, 4, 2, 3),
+    "protected-config-activation-probe.mjs": (1, 1, 4, 2, 3),
+    "protected-cron-rescan-probe.mjs": (0, 2, 1, 0, 0),
+    "protected-curator-restore-denial-probe.mjs": (0, 3, 1, 0, 0),
+    "protected-observation-v1.mjs": (1, 1, 4, 2, 3),
+    "protected-prompt-rebuild-probe.mjs": (0, 2, 1, 0, 0),
+    "protected-route-probe.mjs": (1, 0, 5, 2, 3),
+    "protected-session-snapshot-fixed-probe.mjs": (0, 2, 1, 0, 4),
+}
+
+FINAL_COMBINED_WRITABLE_BOUNDARY_HELPER = b"""
+function writableRoots(rootPaths) {
+  return Object.fromEntries(
+    Object.entries(rootPaths).map(([name, path]) => {
+      const observation = pathObservation(path);
+      let writable = false;
+      try {
+        accessSync(path, constants.W_OK);
+        writable = true;
+      } catch {
+        // The exact writable-root predicate below remains false.
+      }
+      const ready =
+        observation.exists === true &&
+        observation.type === "directory" &&
+        observation.uid === 992 &&
+        observation.gid === 992 &&
+        (Number.parseInt(observation.mode, 8) & 0o200) !== 0 &&
+        writable;
+      return [name, { observation, ready, writable }];
+    }),
+  );
+}
+
+function exactExternalSingleton(configuration) {
+  let document = null;
+  try {
+    document = JSON.parse(readFileSync(CONFIG, "utf8"));
+  } catch {
+    // The exact singleton predicate below remains false.
+  }
+  const activation = document?.skills?.activation;
+  return (
+    configuration?.ready === true &&
+    configuration.file?.uid === 992 &&
+    configuration.file?.gid === 0 &&
+    configuration.file?.mode === "400" &&
+    configuration.file?.nlink === 1 &&
+    configuration.file?.size === 1811 &&
+    configuration.file?.digest ===
+      "sha256:ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d" &&
+    activation?.authority === "external" &&
+    canonicalJson(activation.sources) ===
+      '[{"filePath":"/opt/aragorn/runtime-profile/template-skill/SKILL.md","name":"template-skill","sha256":"eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa"}]' &&
+    canonicalJson(document?.skills?.load) ===
+      '{"allowSymlinkTargets":[],"extraDirs":["/opt/aragorn/runtime-profile/template-skill"],"watch":false}' &&
+    document?.skills?.workshop?.restoreAuthority === "external" &&
+    canonicalJson(document?.agents?.defaults?.skills) === '["template-skill"]' &&
+    canonicalJson(document?.agents?.list?.[0]?.skills) === '["template-skill"]'
+  );
+}
+"""
+
+FINAL_COMBINED_WRITABLE_BOUNDARY_REPLACEMENTS = (
+    (
+        b"""  const roots = Object.fromEntries(
+    Object.entries(PROTECTED_ROOTS).map(([name, path]) => [
+      name,
+      mountObservation(path),
+    ]),
+  );""",
+        b"  const roots = writableRoots(PROTECTED_ROOTS);",
+    ),
+    (
+        b"Object.values(roots).every((entry) => entry.ready)",
+        (
+            b"exactExternalSingleton(configuration) &&\n"
+            b"      Object.values(roots).every((entry) => entry.ready)"
+        ),
+    ),
+)
+
+FINAL_COMBINED_GATEWAY_PROCESS_REPLACEMENTS = (
+    (
+        b"function gatewayProcessObservation() {\n  try {",
+        b"""function gatewayProcessObservation() {
+  const rawPid = process.env.ARAGORN_GATEWAY_PID ?? "";
+  if (!/^[1-9][0-9]*$/.test(rawPid)) {
+    return {
+      error: errorRecord(
+        new Error("ARAGORN_GATEWAY_PID must be a positive decimal PID"),
+      ),
+      pid: null,
+    };
+  }
+  const pid = Number.parseInt(rawPid, 10);
+  if (!Number.isSafeInteger(pid)) {
+    return {
+      error: errorRecord(new Error("ARAGORN_GATEWAY_PID exceeds safe integer range")),
+      pid: null,
+    };
+  }
+  const procRoot = `/proc/${rawPid}`;
+  try {""",
+    ),
+    (
+        b'readFileSync("/proc/1/cmdline", "utf8")',
+        b'readFileSync(`${procRoot}/cmdline`, "utf8")',
+    ),
+    (
+        b'readFileSync("/proc/1/stat", "utf8")',
+        b'readFileSync(`${procRoot}/stat`, "utf8")',
+    ),
+    (b"      pid: 1,", b"      pid,"),
+)
+
+FINAL_COMBINED_GATEWAY_STATUS_REPLACEMENT = (
+    b'readFileSync("/proc/1/status", "utf8")',
+    b'readFileSync(`${procRoot}/status`, "utf8")',
+)
+
+FINAL_COMBINED_SYSTEM_PID_REPLACEMENTS = {
+    "protected-archive-replacement-probe.mjs": (
+        (
+            b"systemResponse.value?.pid === 1",
+            b"systemResponse.value?.pid === processObservation.pid",
+        ),
+    ),
+    "protected-config-activation-probe.mjs": (
+        (
+            b"systemResponseBefore.value?.pid === 1",
+            b"systemResponseBefore.value?.pid === processBefore.pid",
+        ),
+    ),
+    "protected-cron-rescan-probe.mjs": (
+        (
+            b"item.system_info_before.response.value?.pid === 1",
+            b"item.system_info_before.response.value?.pid ===\n      item.gateway_process_before.pid",
+        ),
+        (
+            b"last.system_info_after.response.value?.pid === 1",
+            b"last.system_info_after.response.value?.pid ===\n      last.gateway_process_after.pid",
+        ),
+    ),
+    "protected-curator-restore-denial-probe.mjs": (
+        (
+            b"observation.response.value?.pid === 1",
+            b"observation.response.value?.pid === gateway.pid",
+        ),
+    ),
+    "protected-observation-v1.mjs": (),
+    "protected-prompt-rebuild-probe.mjs": (
+        (
+            b"systemBefore.response.value?.pid === 1",
+            b"systemBefore.response.value?.pid === gatewayBefore.pid",
+        ),
+    ),
+    "protected-route-probe.mjs": (
+        (b"info.pid === 1", b"info.pid === processObservation.pid"),
+    ),
+    "protected-session-snapshot-fixed-probe.mjs": (
+        (
+            b"systemBefore.response.value?.pid === 1",
+            b"systemBefore.response.value?.pid === gatewayBefore.pid",
+        ),
+    ),
+}
+
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
@@ -490,23 +923,423 @@ def transformed_restore_authority_probe(name: str) -> bytes:
     return raw
 
 
+def _replace_once(raw: bytes, replacements: tuple[tuple[bytes, bytes], ...]) -> bytes:
+    for old, new in replacements:
+        if raw.count(old) != 1:
+            raise ValueError("final-combined probe shape changed")
+        raw = raw.replace(old, new)
+    return raw
+
+
+def _replace_counted(
+    raw: bytes, replacements: tuple[tuple[bytes, bytes], ...], counts: tuple[int, ...]
+) -> bytes:
+    if len(replacements) != len(counts):
+        raise ValueError("final-combined replacement count shape changed")
+    for (old, new), expected in zip(replacements, counts):
+        if raw.count(old) != expected:
+            raise ValueError("final-combined probe shape changed")
+        raw = raw.replace(old, new)
+    return raw
+
+
+def transformed_final_combined_probe(name: str) -> bytes:
+    expected_digest = FINAL_COMBINED_SOURCE_DIGESTS.get(name)
+    if expected_digest is None:
+        raise ValueError(f"unsupported final-combined probe: {name}")
+    if name in RESTORE_AUTHORITY_PROBE_COUNTS:
+        raw = transformed_restore_authority_probe(name)
+    else:
+        raw = (SOURCE_ROOT / name).read_bytes()
+        if _sha256(raw) != expected_digest:
+            raise ValueError(f"frozen probe changed: {name}")
+
+    commit_names = {
+        "protected-archive-replacement-probe.mjs",
+        "protected-config-activation-probe.mjs",
+        "protected-cron-rescan-probe.mjs",
+        "protected-curator-restore-denial-probe.mjs",
+        "protected-prompt-rebuild-probe.mjs",
+        "protected-route-probe.mjs",
+    }
+    config_names = {
+        "protected-archive-replacement-probe.mjs",
+        "protected-config-activation-probe.mjs",
+        "protected-curator-restore-denial-probe.mjs",
+        "protected-observation-v1.mjs",
+    }
+    runtime_underscore_names = {
+        "protected-config-activation-probe.mjs",
+        "protected-curator-restore-denial-probe.mjs",
+        "protected-observation-v1.mjs",
+    }
+    target_names = {
+        "protected-archive-replacement-probe.mjs",
+        "protected-config-activation-probe.mjs",
+        "protected-cron-rescan-probe.mjs",
+        "protected-curator-restore-denial-probe.mjs",
+        "protected-prompt-rebuild-probe.mjs",
+        "protected-session-snapshot-fixed-probe.mjs",
+    }
+
+    if name in commit_names:
+        raw = _replace_once(raw, FINAL_COMBINED_COMMIT_REPLACEMENTS)
+    if name in config_names:
+        raw = _replace_once(raw, FINAL_COMBINED_CONFIG_REPLACEMENTS)
+    elif name == "protected-route-probe.mjs":
+        raw = _replace_once(raw, (FINAL_COMBINED_CONFIG_REPLACEMENTS[1],))
+    if name in runtime_underscore_names:
+        raw = _replace_once(
+            raw,
+            (
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[0],
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[2],
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[4],
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[6],
+            ),
+        )
+    elif name == "protected-archive-replacement-probe.mjs":
+        raw = _replace_once(
+            raw,
+            (
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[1],
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[3],
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[5],
+                FINAL_COMBINED_RUNTIME_REPLACEMENTS[6],
+            ),
+        )
+
+    if name in target_names:
+        raw = _replace_once(
+            raw,
+            (
+                FINAL_COMBINED_TARGET_REPLACEMENTS[0],
+                FINAL_COMBINED_TARGET_REPLACEMENTS[2],
+            ),
+        )
+        if name != "protected-archive-replacement-probe.mjs":
+            raw = _replace_once(raw, (FINAL_COMBINED_TARGET_REPLACEMENTS[3],))
+        if name in {
+            "protected-archive-replacement-probe.mjs",
+            "protected-cron-rescan-probe.mjs",
+            "protected-prompt-rebuild-probe.mjs",
+            "protected-session-snapshot-fixed-probe.mjs",
+        }:
+            raw = _replace_once(raw, (FINAL_COMBINED_TARGET_REPLACEMENTS[1],))
+        elif name != "protected-curator-restore-denial-probe.mjs":
+            raw = _replace_once(
+                raw,
+                (
+                    (
+                        b'const TARGET = join(WORKSPACE, "skills", TARGET_NAME);',
+                        b'const TARGET = "/opt/aragorn/runtime-profile/template-skill";',
+                    ),
+                ),
+            )
+        if name != "protected-archive-replacement-probe.mjs":
+            raw = _replace_once(raw, FINAL_COMBINED_TARGET_REPLACEMENTS[4:8])
+        if name not in {
+            "protected-archive-replacement-probe.mjs",
+            "protected-config-activation-probe.mjs",
+        }:
+            raw = _replace_once(raw, (FINAL_COMBINED_TARGET_REPLACEMENTS[8],))
+
+    if name in {
+        "protected-archive-replacement-probe.mjs",
+        "protected-config-activation-probe.mjs",
+        "protected-curator-restore-denial-probe.mjs",
+        "protected-observation-v1.mjs",
+    }:
+        raw = _replace_once(
+            raw,
+            (
+                (b"effectiveIdentity.uid === 1000", b"effectiveIdentity.uid === 992"),
+                (b"effectiveIdentity.gid === 1000", b"effectiveIdentity.gid === 992"),
+                (
+                    b"effectiveIdentity.groups.includes(982)",
+                    b"effectiveIdentity.groups.includes(992)",
+                ),
+            ),
+        )
+
+    if name == "protected-archive-replacement-probe.mjs":
+        raw = _replace_once(
+            raw,
+            (
+                (
+                    b'root.gid === 982 &&\n    root.mode === "750"',
+                    (
+                        b"root.gid === (expectedDigest === EXPECTED_TARGET_DIGEST ? 0 : 992) &&\n"
+                        b'    root.mode === (expectedDigest === EXPECTED_TARGET_DIGEST ? "555" : "750")'
+                    ),
+                ),
+                (
+                    b'skill.gid === 982 &&\n    skill.mode === "440"',
+                    (
+                        b"skill.gid === (expectedDigest === EXPECTED_TARGET_DIGEST ? 0 : 992) &&\n"
+                        b'    skill.mode === (expectedDigest === EXPECTED_TARGET_DIGEST ? "444" : "440")'
+                    ),
+                ),
+                (
+                    b'discoveredValue?.source === "openclaw-workspace"',
+                    b'discoveredValue?.source === "openclaw-extra"',
+                ),
+                (
+                    b'const CONTROL_ROOT = "/profile/control";',
+                    b'const CONTROL_ROOT = "/tmp/aragorn-final-archive-control";',
+                ),
+            ),
+        )
+    elif name == "protected-config-activation-probe.mjs":
+        raw = _replace_once(
+            raw,
+            (
+                (
+                    b'description: "Inert protected archive replacement target v1."',
+                    b'description: "Replace with description of the skill and when Claude should use it."',
+                ),
+                (b'source: "openclaw-workspace"', b'source: "openclaw-extra"'),
+            ),
+        )
+    elif name == "protected-curator-restore-denial-probe.mjs":
+        raw = _replace_once(
+            raw,
+            (
+                (b"file.uid === 0", b"file.uid === 992"),
+                (b"file.gid === 982", b"file.gid === 0"),
+                (b'file.mode === "440"', b'file.mode === "400"'),
+                (b"file.size === 359", b"file.size === 1811"),
+                (
+                    b"document?.plugins?.enabled === false",
+                    b"document?.plugins?.enabled === true",
+                ),
+                *FINAL_COMBINED_CURATOR_REPLACEMENTS,
+            ),
+        )
+    elif name in {
+        "protected-cron-rescan-probe.mjs",
+        "protected-prompt-rebuild-probe.mjs",
+        "protected-session-snapshot-fixed-probe.mjs",
+    }:
+        raw = _replace_once(
+            raw, ((FINAL_COMBINED_PROMPT_OLD, FINAL_COMBINED_PROMPT_NEW),)
+        )
+
+    if name == "protected-cron-rescan-probe.mjs":
+        raw = _replace_once(
+            raw,
+            (
+                (
+                    b"sha256:bb2e3d95728d097c858779c1d4d8d90e00f6e14d0151ca5af56f475a6fa6301c",
+                    b"sha256:60f42ebfec9cc92e1819496ec6340adf3584da099524d40e2b1ba918e271b501",
+                ),
+                (
+                    b'"Inert protected archive replacement target v1."',
+                    b'"Replace with description of the skill and when Claude should use it."',
+                ),
+                *FINAL_COMBINED_CRON_REPLACEMENTS,
+            ),
+        )
+    elif name == "protected-session-snapshot-fixed-probe.mjs":
+        raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_REPLACEMENTS)
+    elif name == "protected-route-probe.mjs":
+        raw = _replace_once(
+            raw,
+            (
+                (b"const RUNTIME_UID = 1000;", b"const RUNTIME_UID = 992;"),
+                (b"const RUNTIME_GID = 1000;", b"const RUNTIME_GID = 992;"),
+                (
+                    b'Object.freeze(["requesting-code-review"])',
+                    b'Object.freeze(["template-skill"])',
+                ),
+                (
+                    b"EXPECTED_SESSION_PROMPT_BYTES = 728",
+                    b"EXPECTED_SESSION_PROMPT_BYTES = 737",
+                ),
+                (
+                    b"sha256:bb2e3d95728d097c858779c1d4d8d90e00f6e14d0151ca5af56f475a6fa6301c",
+                    b"sha256:60f42ebfec9cc92e1819496ec6340adf3584da099524d40e2b1ba918e271b501",
+                ),
+                (
+                    b"/profile/state/agents/main/sessions/skills-prompts/sha256/bb/bb2e3d95728d097c858779c1d4d8d90e00f6e14d0151ca5af56f475a6fa6301c.txt",
+                    b"/profile/state/agents/main/sessions/skills-prompts/sha256/60/60f42ebfec9cc92e1819496ec6340adf3584da099524d40e2b1ba918e271b501.txt",
+                ),
+            ),
+        )
+
+    boundary_names = {
+        "protected-archive-replacement-probe.mjs",
+        "protected-config-activation-probe.mjs",
+        "protected-curator-restore-denial-probe.mjs",
+        "protected-observation-v1.mjs",
+        "protected-route-probe.mjs",
+    }
+    if name in boundary_names:
+        if name == "protected-curator-restore-denial-probe.mjs":
+            raw = _replace_once(
+                raw,
+                (
+                    (
+                        b'import { readFileSync } from "node:fs";',
+                        b'import { accessSync, constants, readFileSync } from "node:fs";',
+                    ),
+                    (
+                        b"const SELF = fileURLToPath(import.meta.url);",
+                        FINAL_COMBINED_WRITABLE_BOUNDARY_HELPER
+                        + b"\nconst SELF = fileURLToPath(import.meta.url);",
+                    ),
+                ),
+            )
+        elif name != "protected-curator-restore-denial-probe.mjs":
+            raw = _replace_once(
+                raw,
+                ((b"import {\n", b"import {\n  accessSync,\n  constants,\n"),),
+            )
+        if name == "protected-route-probe.mjs":
+            helper = FINAL_COMBINED_WRITABLE_BOUNDARY_HELPER.replace(
+                b"PROTECTED_ROOTS", b"PROTECTED_DISCOVERY_ROOTS"
+            )
+            raw = _replace_once(
+                raw,
+                (
+                    (
+                        b"const PROTECTED_DISCOVERY_ROOTS = Object.freeze({",
+                        helper + b"\nconst PROTECTED_DISCOVERY_ROOTS = Object.freeze({",
+                    ),
+                ),
+            )
+        elif name != "protected-curator-restore-denial-probe.mjs":
+            marker = b"const PROTECTED_ROOTS = Object.freeze({"
+            replacement = (
+                FINAL_COMBINED_WRITABLE_BOUNDARY_HELPER
+                + b"\nconst PROTECTED_ROOTS = Object.freeze({"
+            )
+            if name == "protected-observation-v1.mjs":
+                marker = b"export const PROTECTED_ROOTS = Object.freeze({"
+                replacement = (
+                    FINAL_COMBINED_WRITABLE_BOUNDARY_HELPER
+                    + b"\nexport const PROTECTED_ROOTS = Object.freeze({"
+                )
+            raw = _replace_once(
+                raw,
+                ((marker, replacement),),
+            )
+        boundary_replacements = FINAL_COMBINED_WRITABLE_BOUNDARY_REPLACEMENTS
+        if name == "protected-route-probe.mjs":
+            boundary_replacements = (
+                (
+                    boundary_replacements[0][0].replace(
+                        b"PROTECTED_ROOTS", b"PROTECTED_DISCOVERY_ROOTS"
+                    ),
+                    boundary_replacements[0][1].replace(
+                        b"PROTECTED_ROOTS", b"PROTECTED_DISCOVERY_ROOTS"
+                    ),
+                ),
+                boundary_replacements[1],
+            )
+        raw = _replace_once(raw, boundary_replacements)
+        if name != "protected-route-probe.mjs":
+            raw = _replace_once(
+                raw,
+                ((b'mountObservation("/probe")', b'mountObservation("/route-input")'),),
+            )
+
+    process_names = {
+        "protected-archive-replacement-probe.mjs",
+        "protected-config-activation-probe.mjs",
+        "protected-observation-v1.mjs",
+        "protected-route-probe.mjs",
+    }
+    if name in process_names:
+        raw = _replace_once(raw, FINAL_COMBINED_GATEWAY_PROCESS_REPLACEMENTS)
+        if name in {
+            "protected-config-activation-probe.mjs",
+            "protected-observation-v1.mjs",
+        }:
+            raw = _replace_once(raw, (FINAL_COMBINED_GATEWAY_STATUS_REPLACEMENT,))
+
+    raw = _replace_once(raw, FINAL_COMBINED_SYSTEM_PID_REPLACEMENTS[name])
+
+    if name in {
+        "protected-cron-rescan-probe.mjs",
+        "protected-curator-restore-denial-probe.mjs",
+        "protected-prompt-rebuild-probe.mjs",
+        "protected-session-snapshot-fixed-probe.mjs",
+    }:
+        raw = _replace_once(
+            raw,
+            ((b'=== "openclaw.json"', b'=== "openclaw-config"'),),
+        )
+
+    if name == "protected-route-probe.mjs":
+        raw = _replace_counted(
+            raw,
+            (
+                (
+                    b"gateway.boundary.roots.workspace_skills.explicit",
+                    b"gateway.boundary.roots.workspace_skills.ready",
+                ),
+                (
+                    b"gateway.boundary.roots.workspace_skills.read_only",
+                    b"gateway.boundary.roots.workspace_skills.writable",
+                ),
+                (
+                    b"WORKSPACE_SKILLS_EXPLICIT_RO_MOUNT_REQUIRED",
+                    b"WORKSPACE_SKILLS_WRITABLE_BOUNDARY_REQUIRED",
+                ),
+            ),
+            (4, 4, 2),
+        )
+
+    raw = _replace_counted(
+        raw,
+        FINAL_COMBINED_PROFILE_REPLACEMENTS,
+        FINAL_COMBINED_PROFILE_COUNTS[name],
+    )
+    if any(old in raw for old, _new in FINAL_COMBINED_PROFILE_REPLACEMENTS):
+        raise ValueError("stale final-combined profile path remains")
+
+    return raw
+
+
 def materialize(
-    output: Path, names: list[str], *, restore_authority: bool = False
+    output: Path,
+    names: list[str],
+    *,
+    restore_authority: bool = False,
+    final_combined: bool = False,
 ) -> None:
+    if restore_authority and final_combined:
+        raise ValueError("probe materialization modes are mutually exclusive")
     if restore_authority and (
         len(names) != len(set(names))
         or frozenset(names) not in RESTORE_AUTHORITY_SELECTIONS
     ):
         raise ValueError("unsupported restore-authority probe selection")
+    if final_combined and (
+        len(names) != len(set(names))
+        or frozenset(names) not in FINAL_COMBINED_SELECTIONS
+    ):
+        raise ValueError("unsupported final-combined probe selection")
+    if (
+        not restore_authority
+        and not final_combined
+        and any(name not in SOURCE_DIGESTS for name in names)
+    ):
+        raise ValueError("unsupported probe selection")
     output.mkdir(mode=0o755, parents=True, exist_ok=False)
     for name in names:
         path = output / name
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
         try:
             raw = (
-                transformed_restore_authority_probe(name)
-                if restore_authority
-                else transformed_probe(name)
+                transformed_final_combined_probe(name)
+                if final_combined
+                else (
+                    transformed_restore_authority_probe(name)
+                    if restore_authority
+                    else transformed_probe(name)
+                )
             )
             written = 0
             while written < len(raw):
@@ -518,11 +1351,22 @@ def materialize(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--restore-authority", action="store_true")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--restore-authority", action="store_true")
+    modes.add_argument("--final-combined", action="store_true")
     parser.add_argument("output", type=Path)
-    parser.add_argument("names", nargs="+", choices=sorted(SOURCE_DIGESTS))
+    parser.add_argument(
+        "names",
+        nargs="+",
+        choices=sorted(SOURCE_DIGESTS.keys() | FINAL_COMBINED_SOURCE_DIGESTS.keys()),
+    )
     args = parser.parse_args()
-    materialize(args.output, args.names, restore_authority=args.restore_authority)
+    materialize(
+        args.output,
+        args.names,
+        restore_authority=args.restore_authority,
+        final_combined=args.final_combined,
+    )
     return 0
 
 

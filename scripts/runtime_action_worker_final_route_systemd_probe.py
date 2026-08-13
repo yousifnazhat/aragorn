@@ -315,6 +315,14 @@ def _selected_result(document: dict[str, Any]) -> dict[str, Any]:
     return route
 
 
+def _unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    document: dict[str, Any] = {}
+    for key, value in pairs:
+        _expect(key not in document, f"duplicate route output key: {key}")
+        document[key] = value
+    return document
+
+
 def _run_route(
     tokens: dict[str, str], harness: dict[str, Any], gateway_pid: int
 ) -> dict[str, Any]:
@@ -378,10 +386,14 @@ def _run_route(
     document = json.loads(
         process.stdout,
         parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
+        object_pairs_hook=_unique_pairs,
     )
+    canonical = p37c.canonical_json(document)
     _expect(
         isinstance(document, dict)
-        and process.stdout == p37c.canonical_json(document) + b"\n"
+        and process.stdout.endswith(b"\n")
+        and b"\n" not in process.stdout[:-1]
+        and b"\r" not in process.stdout
         and document.get("schema") == specification["schema"],
         "route probe output changed",
     )
@@ -390,10 +402,9 @@ def _run_route(
         "route": route,
         "document": document,
         "raw": {
-            "bytes": len(process.stdout),
-            "digest": _digest(process.stdout),
-            "canonical_digest": _digest(p37c.canonical_json(document)),
-            "raw_is_canonical_json_lf": True,
+            **p37c._raw_record(process.stdout),
+            "canonical_digest": _digest(canonical),
+            "raw_is_canonical_json_lf": process.stdout == canonical + b"\n",
         },
         "execution": {
             "argv": command,

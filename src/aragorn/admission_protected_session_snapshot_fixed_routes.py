@@ -411,6 +411,7 @@ def _verify_fixed_capture(key: str, evidence: Mapping[str, Any]) -> None:
         or implementation != spec["implementation"]
         or re.fullmatch(r"[0-9a-f]{32}", evidence["run_nonce"]) is None
         or (route_style and evidence.get("selected_route_ids") != [spec["route"]])
+        or (not route_style and "selected_route_ids" in evidence)
         or routes
         != [
             {
@@ -466,6 +467,8 @@ def _verify_fixed_capture(key: str, evidence: Mapping[str, Any]) -> None:
             "hostname": adapted_gateway["hostname"],
         }
     }
+    if key == "archive_replacement":
+        archive._verify_boundary(adapted["protected_boundary"])
     {
         "config_activation": config._verify_action,
         "archive_replacement": archive._verify_action,
@@ -505,14 +508,18 @@ def _verify_actual_runtime_and_probe(
         or version["stderr_digest"] != _EMPTY_DIGEST
         or not runtime_mounts
         or runtime not in runtime_mounts
-        or any(
-            mount["records"][0]["root"] != _FIXED_RUNTIME_SOURCE
-            or mount["read_only"] is not True
-            or mount["ready"] is not True
-            for mount in runtime_mounts
-        )
     ):
         raise AdmissionEvidenceError("fixed runtime observation changed")
+    for mount in runtime_mounts:
+        archive._verify_ro_mount(
+            mount,
+            target="/runtime",
+            source=_FIXED_RUNTIME_SOURCE,
+            uid=0,
+            gid=0,
+            mode="755",
+            entries=["bin", "lib"],
+        )
     if not route_style:
         expected_source, expected_entries = spec["probe"]
         probe_mounts = [
@@ -520,15 +527,18 @@ def _verify_actual_runtime_and_probe(
             for value in _walk(evidence)
             if value.get("path") == "/probe" and isinstance(value.get("records"), list)
         ]
-        if not probe_mounts or any(
-            probe["records"][0]["root"] != expected_source
-            or probe["entry"]["gid"] != 0
-            or probe["entry"]["mode"] != "755"
-            or probe["entry"]["entries"] != expected_entries
-            or probe["read_only"] is not True
-            for probe in probe_mounts
-        ):
+        if not probe_mounts:
             raise AdmissionEvidenceError("fixed probe observation changed")
+        for probe in probe_mounts:
+            archive._verify_ro_mount(
+                probe,
+                target="/probe",
+                source=expected_source,
+                uid=0,
+                gid=0,
+                mode="755",
+                entries=expected_entries,
+            )
         trees = [
             value
             for value in _walk(evidence)
@@ -695,6 +705,23 @@ def _verify_actual_route_boundary(boundary: Mapping[str, Any]) -> None:
         mode="750",
         entries=["openclaw.json"],
     )
+    configuration = boundary["configuration"]
+    config_file = configuration["file"]
+    if (
+        configuration["ready"] is not True
+        or configuration["canonical_digest"] != archive._CONFIG_CANONICAL_DIGEST
+        or config_file["path"] != "/profile/config/openclaw.json"
+        or config_file["exists"] is not True
+        or config_file["type"] != "file"
+        or config_file["uid"] != 0
+        or config_file["gid"] != 982
+        or config_file["mode"] != "440"
+        or config_file["nlink"] != 1
+        or config_file["size"] != 316
+        or config_file["digest"] != archive._CONFIG_DIGEST
+        or config_file["digest_error"] is not None
+    ):
+        raise AdmissionEvidenceError("fixed route configuration changed")
 
 
 def _verify_actual_workshop_proposal(draft: Mapping[str, Any]) -> None:

@@ -150,6 +150,96 @@ class ProtectedSessionSnapshotFixedRoutesTests(unittest.TestCase):
             with self.assertRaises(AdmissionEvidenceError):
                 routes._verify_fixed_capture("core_updater", changed_core)
 
+            for key in (
+                "config_activation",
+                "archive_replacement",
+                "prompt_rebuild",
+                "cron_rescan",
+            ):
+                with self.subTest(unexpected_selected_route_ids=key):
+                    changed = deepcopy(evidence[key])
+                    changed["selected_route_ids"] = []
+                    with self.assertRaises(AdmissionEvidenceError):
+                        routes._verify_fixed_capture(key, changed)
+
+            def legacy_probe(value: dict[str, object]) -> dict[str, object]:
+                if "protected_boundary" in value:
+                    return value["protected_boundary"]["inputs"]["probe"]
+                return value["action"]["prerequisites"]["boundary_before"]["probe"]
+
+            for key in (
+                "config_activation",
+                "archive_replacement",
+                "prompt_rebuild",
+                "cron_rescan",
+            ):
+                with self.subTest(probe_entry_count=key):
+                    changed = deepcopy(evidence[key])
+                    legacy_probe(changed)["entry"]["entry_count"] = 0
+                    with self.assertRaises(AdmissionEvidenceError):
+                        routes._verify_fixed_capture(key, changed)
+
+            archive_probe_mutations = {
+                "uid": lambda probe: probe["entry"].__setitem__("uid", 1000),
+                "path": lambda probe: probe.__setitem__("path", "/attacker/probe"),
+                "source": lambda probe: probe["records"][0].__setitem__(
+                    "source", "/dev/evil"
+                ),
+                "extra_record": lambda probe: probe["records"].append(
+                    deepcopy(probe["records"][0])
+                ),
+            }
+            for label, mutate in archive_probe_mutations.items():
+                with self.subTest(archive_probe=label):
+                    changed = deepcopy(evidence["archive_replacement"])
+                    mutate(legacy_probe(changed))
+                    with self.assertRaises(AdmissionEvidenceError):
+                        routes._verify_fixed_capture("archive_replacement", changed)
+
+            changed_archive = deepcopy(evidence["archive_replacement"])
+            changed_archive["protected_boundary"]["effective_identity"]["uid"] = 0
+            changed_archive["action"]["observations"]["boundary_after"] = deepcopy(
+                changed_archive["protected_boundary"]
+            )
+            with self.assertRaises(AdmissionEvidenceError):
+                routes._verify_fixed_capture("archive_replacement", changed_archive)
+
+            for key in ("workshop_proposal_apply", "core_updater"):
+                with self.subTest(route_runtime_source=key):
+                    changed = deepcopy(evidence[key])
+                    changed["protected_boundary"]["runtime"]["records"][0]["source"] = (
+                        "/dev/evil"
+                    )
+                    with self.assertRaises(AdmissionEvidenceError):
+                        routes._verify_fixed_capture(key, changed)
+
+                with self.subTest(route_config_path=key):
+                    changed = deepcopy(evidence[key])
+                    configuration = changed["protected_boundary"]["configuration"]
+                    configuration["file"]["path"] = "/attacker/openclaw.json"
+                    if key == "core_updater":
+                        changed["actions"][0]["observations"]["configuration_after"] = (
+                            deepcopy(configuration)
+                        )
+                    with self.assertRaises(AdmissionEvidenceError):
+                        routes._verify_fixed_capture(key, changed)
+
+            changed_workshop = deepcopy(evidence["workshop_proposal_apply"])
+            changed_workshop["protected_boundary"]["configuration"]["file"]["size"] = 0
+            with self.assertRaises(AdmissionEvidenceError):
+                routes._verify_fixed_capture(
+                    "workshop_proposal_apply", changed_workshop
+                )
+
+            changed_workshop = deepcopy(evidence["workshop_proposal_apply"])
+            changed_workshop["protected_boundary"]["runtime"]["entry"][
+                "entry_count"
+            ] = 0
+            with self.assertRaises(AdmissionEvidenceError):
+                routes._verify_fixed_capture(
+                    "workshop_proposal_apply", changed_workshop
+                )
+
             for invalid_mtime in ("0", 0):
                 changed_cron = deepcopy(evidence["cron_rescan"])
                 changed_cron["action"]["observations"]["snapshot"]["store"][

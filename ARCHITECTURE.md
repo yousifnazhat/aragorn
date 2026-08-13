@@ -517,6 +517,16 @@ source, target, and runtime state preserved. This is separate-capture
 composition only, and every aggregate, installer, `RUN-01`, `RUN-02`, Phase 3,
 EDR, and release decision remains false.
 
+The following additive restore-authority prompt qualifier records 4 `PASS` and
+17 `NOT_TESTED`, adding only `ADM-02/reload/missing-prompt-blob-rebuild`.
+After the exact 728-byte protected prompt blob was removed and the
+byte-identical session store was mtime-touched, a second native turn rebuilt
+the identical `promptRef`, prompt, and session identity. Both turns stopped at
+the expected model-not-found boundary, so provider execution is not claimed.
+This is separate-capture composition on a private build, and every aggregate,
+installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release decision remains
+false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

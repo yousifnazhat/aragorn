@@ -747,6 +747,17 @@ runtime state remained unchanged. This is separate-capture composition only;
 all aggregate, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release
 authority remains false.
 
+The following additive
+[restore-authority prompt route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-prompt-route-coverage-v1-2026-08-13.json)
+records 4 `PASS` and 17 `NOT_TESTED`, adding only
+`ADM-02/reload/missing-prompt-blob-rebuild`. After the exact 728-byte protected
+prompt blob was removed and the byte-identical session store was mtime-touched,
+a second native turn rebuilt the identical `promptRef`, prompt, and session
+identity. Both turns ended at the expected model-not-found boundary, so no
+provider execution is claimed. This is separate-capture composition on a
+private build; all aggregate, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and
+release authority remains false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

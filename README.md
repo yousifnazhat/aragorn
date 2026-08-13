@@ -758,6 +758,17 @@ provider execution is claimed. This is separate-capture composition on a
 private build; all aggregate, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and
 release authority remains false.
 
+The additive
+[restore-authority fresh-session route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-fresh-session-route-coverage-v1-2026-08-13.json)
+records 5 `PASS` and 16 `NOT_TESTED`, adding only
+`ADM-02/reload/fresh-session-reset`. A separate exact capture binds the accepted
+`/new` reset, session-ID rotation, cleared snapshot, and reconstruction of the
+same protected prompt and skill catalog. The failed model row's non-monotonic
+`ended_at`/`started_at` values are excluded from the route claim, and no reset
+reply completion, model success, or reply delivery is claimed. This remains
+separate-capture composition on a private build, with every broad eligibility
+decision false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

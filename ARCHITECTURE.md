@@ -527,6 +527,15 @@ This is separate-capture composition on a private build, and every aggregate,
 installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release decision remains
 false.
 
+The additive restore-authority fresh-session qualifier records 5 `PASS` and 16
+`NOT_TESTED`, adding only `ADM-02/reload/fresh-session-reset`. A separate exact
+capture binds the accepted `/new` reset, session-ID rotation, cleared snapshot,
+and reconstruction of the same protected prompt and skill catalog. The failed
+model row's non-monotonic `ended_at`/`started_at` values are excluded from this
+claim; reset reply completion, model success, and reply delivery remain
+unclaimed. Composition is separate-capture and private-build only, and every
+broad eligibility decision remains false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

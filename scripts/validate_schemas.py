@@ -83,6 +83,9 @@ from aragorn.admission_protected_session_snapshot import (
 from aragorn.admission_protected_session_snapshot_fixed import (
     verify_openclaw_protected_session_snapshot_fixed,
 )
+from aragorn.admission_protected_session_snapshot_fixed_routes import (
+    verify_openclaw_protected_session_snapshot_fixed_routes,
+)
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.admission_runtime_profile import (
     load_runtime_profile,
@@ -2021,6 +2024,65 @@ def main() -> int:
         raise AssertionError(
             "fixed protected session-snapshot qualification changed"
         )
+
+    fixed_route_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-archive-replacement-fixed-2026-08-13.json",
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-config-activation-fixed-2026-08-13.json",
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-core-updater-fixed-2026-08-13.json",
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-cron-rescan-fixed-2026-08-13.json",
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-prompt-rebuild-fixed-2026-08-13.json",
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-workshop-fixed-2026-08-13.json",
+        fixed_snapshot_profile_path,
+        fixed_snapshot_runtime_lock_path,
+        protected_profile_dir / "update-reload-route-inventory-v1.json",
+        ROOT / "benchmark" / "admission-runtime-candidates-v1.lock.json",
+        retained_fixed_snapshot_qualification_path,
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-snapshot-fixed-routes-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        for path in fixed_route_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        fixed_route_coverage = (
+            verify_openclaw_protected_session_snapshot_fixed_routes(
+                load(
+                    admission_receipts
+                    / (
+                        "phase3-openclaw-protected-session-snapshot-fixed-"
+                        "additional-routes-v1-2026-08-13.json"
+                    )
+                ),
+                evidence_cas=evidence_cas,
+                route_profile=load_runtime_profile(
+                    fixed_snapshot_profile_path.read_bytes()
+                ),
+                runtime_lock=load_runtime_profile(
+                    fixed_snapshot_runtime_lock_path.read_bytes()
+                ),
+                route_inventory=openclaw_route_inventory,
+                runtime_candidates=runtime_candidates,
+                session_qualification=retained_fixed_snapshot_qualification,
+            )
+        )
+    retained_fixed_route_coverage_path = admission_receipts / (
+        "phase3-openclaw-protected-session-snapshot-fixed-route-coverage-"
+        "v1-2026-08-13.json"
+    )
+    retained_fixed_route_coverage = load(retained_fixed_route_coverage_path)
+    if (
+        fixed_route_coverage != retained_fixed_route_coverage
+        or retained_fixed_route_coverage_path.read_bytes()
+        != canonical_json(fixed_route_coverage) + b"\n"
+    ):
+        raise AssertionError("fixed protected route coverage changed")
 
     cron_sources = (
         admission_evidence

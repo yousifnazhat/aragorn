@@ -472,6 +472,12 @@ above. The private build lacks official-release and independent reproducibility
 authority, and aggregate admission, installer, `RUN-01`, `RUN-02`, Phase 3,
 EDR, and release authority remain false.
 
+The additive private fixed-runtime route-coverage verifier records 6 `PASS` and
+15 `NOT_TESTED`. It retains the core-updater route as an observation but does not
+qualify it because no plugin replacement outcome occurred. Aggregate admission,
+installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority all remain
+false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

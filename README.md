@@ -694,6 +694,13 @@ revise the official-runtime failure above. The private build is not an official
 or independently reproducible release, and aggregate admission, installer,
 `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority remain false.
 
+The additive private fixed-runtime
+[route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-session-snapshot-fixed-route-coverage-v1-2026-08-13.json)
+records 6 `PASS` and 15 `NOT_TESTED`. The core-updater route is retained as an
+observation but is not qualified because no plugin replacement outcome occurred.
+Aggregate admission, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release
+authority all remain false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

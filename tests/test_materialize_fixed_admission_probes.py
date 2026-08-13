@@ -28,6 +28,9 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 self.assertNotIn(b"475772bbb9", raw)
                 self.assertEqual(path.stat().st_mode & 0o777, 0o444)
                 self.assertEqual(len(hashlib.sha256(raw).digest()), 32)
+            cron = (output / "protected-cron-rescan-probe.mjs").read_bytes()
+            self.assertIn(b"cron-snapshot.runtime-DzbSus3I.js", cron)
+            self.assertIn(b"session-snapshot-CMKRWMg1.js", cron)
 
 
 if __name__ == "__main__":

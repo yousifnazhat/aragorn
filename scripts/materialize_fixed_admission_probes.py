@@ -56,6 +56,29 @@ EXPECTED_COUNTS = {
     "restart-probe.mjs": (),
 }
 
+CRON_REPLACEMENTS = (
+    (
+        b"15050c3de10192ae1190d0aa596d34c2163897948a360fe0494929e171a01967",
+        b"df116fac9813317fd04eb9d3721c9be094563e3b1ac3af66720c15842d021385",
+    ),
+    (b"cron-snapshot.runtime-xn4WDHsg.js", b"cron-snapshot.runtime-DzbSus3I.js"),
+    (
+        b"fb9c29ca637b42389355d627c5e8a209a8d1ebb51b14432a462d9734f00e3665",
+        b"b2803dc20246abadfe5284abbbda8ae69dee1684794746baa592cd3eacacbdb0",
+    ),
+    (b"isolated-agent-wBFsap3y.js", b"isolated-agent-DNWCmOH_.js"),
+    (
+        b"7330ff0387ffde3117c50752d5c656a522b2f32a5110cb494bdc1af2c106eb11",
+        b"ef244fb7e2b31039e0d14035cba99650e2baf06eb6369bff3f66f42607a72b21",
+    ),
+    (b"3_163", b"3_661"),
+    (b"session-snapshot-mFoFiIO4.js", b"session-snapshot-CMKRWMg1.js"),
+    (
+        b"0d93f74fca9a9f8a062d9e03953eda42419ceab49b296e194fd2ed510eb29eec",
+        b"e9046199b43de587dbf1f184b2e4738b4b772491266baff8eeeab90f21a50d7c",
+    ),
+)
+
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
@@ -77,6 +100,11 @@ def transformed_probe(name: str) -> bytes:
         raw = raw.replace(old, new)
     if any(old in raw for old, _new in REPLACEMENTS):
         raise ValueError(f"stale runtime literal remains in {name}")
+    if name == "protected-cron-rescan-probe.mjs":
+        if any(raw.count(old) != 1 for old, _new in CRON_REPLACEMENTS):
+            raise ValueError("fixed cron replay closure shape changed")
+        for old, new in CRON_REPLACEMENTS:
+            raw = raw.replace(old, new)
     return raw
 
 

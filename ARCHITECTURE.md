@@ -536,6 +536,14 @@ claim; reset reply completion, model success, and reply delivery remain
 unclaimed. Composition is separate-capture and private-build only, and every
 broad eligibility decision remains false.
 
+The additive restore-authority workshop qualifier records 6 `PASS` and 15
+`NOT_TESTED`, adding only `ADM-02/update/workshop-proposal-apply`. A separate
+exact capture binds proposal creation in ephemeral state and the native apply's
+`EROFS` denial before target creation; the protected target remained absent.
+The legacy proposal volume has only its phase label, and no writable-workspace
+positive control was captured. Composition remains separate-capture and
+private-build only, with every broad eligibility decision false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

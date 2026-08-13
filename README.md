@@ -769,6 +769,16 @@ reply completion, model success, or reply delivery is claimed. This remains
 separate-capture composition on a private build, with every broad eligibility
 decision false.
 
+The additive
+[restore-authority workshop route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-workshop-route-coverage-v1-2026-08-13.json)
+records 6 `PASS` and 15 `NOT_TESTED`, adding only
+`ADM-02/update/workshop-proposal-apply`. A separate exact capture binds proposal
+creation in ephemeral state and the native apply's `EROFS` denial before the
+protected target was created; the target remained absent. The legacy proposal
+volume has only its phase label, and this capture has no writable-workspace
+positive control. Composition remains separate-capture and private-build only,
+with every broad eligibility decision false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

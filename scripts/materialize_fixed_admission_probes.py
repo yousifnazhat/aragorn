@@ -355,6 +355,7 @@ RESTORE_AUTHORITY_ARCHIVE_REPLACEMENTS = (
 )
 
 RESTORE_AUTHORITY_CRON_REPLACEMENTS = (
+    (b"result.runAtMs === runEpoch", b"runEpoch <= result.runAtMs"),
     (
         b"0e3346d4397db7675073c7f80599aa312a1819b0f5a6480a8ba194b296c78144",
         b"ad9cde2c065d5d4d69f465193007a435c0cd0b378d253329238dd36fdc70f849",

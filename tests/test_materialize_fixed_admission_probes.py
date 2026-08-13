@@ -224,15 +224,17 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 hashlib.sha256(helper).hexdigest(),
                 "81db497cbde9c07e211a406699896da37c137358d0b7534d8580eab43c47c216",
             )
-            self.assertEqual(len(cron), 26_778)
+            self.assertEqual(len(cron), 26_777)
             self.assertEqual(
                 hashlib.sha256(cron).hexdigest(),
-                "93693030c3f675e9530fb8139f0a05a9ad51a467f5e512755e21782f9f4e2a20",
+                "5ddecb878780ca7dc8c939921329964e678140f0bc67aacab52a7b9e184111e4",
             )
             self.assertEqual((output / helper_name).stat().st_mode & 0o777, 0o444)
             self.assertEqual((output / cron_name).stat().st_mode & 0o777, 0o444)
             self.assertIn(b'from "./protected-observation-v1.mjs"', cron)
             self.assertIn(b"OpenClaw 2026.7.1 (805a4b1)", cron)
+            self.assertIn(b"runEpoch <= result.runAtMs", cron)
+            self.assertNotIn(b"result.runAtMs === runEpoch", cron)
             for expected in (
                 b"cron-DOr4RFbn.js",
                 b"cron-snapshot.runtime-DrQirS_k.js",

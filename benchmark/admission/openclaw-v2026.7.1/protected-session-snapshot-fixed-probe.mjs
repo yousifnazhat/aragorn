@@ -486,19 +486,27 @@ async function compiledRouteReplay(initialSnapshot, baselineStoreRaw) {
     const injectedResolverResult = resolveSnapshot(
       mutatedEntry.skillsSnapshot,
     );
+    // Persisted snapshots omit undefined optional catalog fields, so compare the
+    // exact JSON contract rather than JavaScript object shape.
+    const baselineResolvedSnapshot = JSON.parse(
+      JSON.stringify(baselineResolverResult.snapshot),
+    );
+    const injectedResolvedSnapshot = JSON.parse(
+      JSON.stringify(injectedResolverResult.snapshot),
+    );
     const baselineResolvedSnapshotDigest = sha256(
-      Buffer.from(canonicalJson(baselineResolverResult.snapshot), "ascii"),
+      Buffer.from(canonicalJson(baselineResolvedSnapshot), "ascii"),
     );
     const injectedResolvedSnapshotDigest = sha256(
-      Buffer.from(canonicalJson(injectedResolverResult.snapshot), "ascii"),
+      Buffer.from(canonicalJson(injectedResolvedSnapshot), "ascii"),
     );
     if (
       baselineResolverResult.shouldRefresh !== false ||
       injectedResolverResult.shouldRefresh !== true ||
       baselineResolverResult.snapshotVersion !== persistedSnapshotVersion ||
       injectedResolverResult.snapshotVersion !== persistedSnapshotVersion ||
-      baselineResolverResult.snapshot?.prompt !== baselineLoadedPrompt ||
-      injectedResolverResult.snapshot?.prompt !== baselineLoadedPrompt ||
+      baselineResolvedSnapshot.prompt !== baselineLoadedPrompt ||
+      injectedResolvedSnapshot.prompt !== baselineLoadedPrompt ||
       baselineResolvedSnapshotDigest !== injectedResolvedSnapshotDigest
     ) {
       throw new Error("compiled reusable snapshot did not restore trusted state");
@@ -647,11 +655,11 @@ async function compiledRouteReplay(initialSnapshot, baselineStoreRaw) {
     ready,
     resolver: {
       baseline_prompt_digest: sha256(Buffer.from(baselineSkillsPrompt)),
-      baseline_snapshot: baselineResolverResult.snapshot,
+      baseline_snapshot: baselineResolvedSnapshot,
       baseline_snapshot_digest: baselineResolvedSnapshotDigest,
       persisted_snapshot_version: persistedSnapshotVersion,
       injected_prompt_digest: sha256(Buffer.from(injectedSkillsPrompt)),
-      injected_snapshot: injectedResolverResult.snapshot,
+      injected_snapshot: injectedResolvedSnapshot,
       injected_snapshot_digest: injectedResolvedSnapshotDigest,
       baseline_should_refresh: baselineResolverResult.shouldRefresh,
       baseline_snapshot_version: baselineResolverResult.snapshotVersion,

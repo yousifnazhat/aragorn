@@ -34,6 +34,10 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             workshop = (output / "protected-route-probe.mjs").read_bytes()
             self.assertIn(b'const CONFIG = "/profile/config/openclaw.json";', workshop)
             self.assertIn(b'const WORKSHOP_DRAFT = "/proposal/PROPOSAL.md";', workshop)
+            self.assertIn(b'mountObservation(dirname(CONFIG), "directory")', workshop)
+            self.assertIn(
+                b'mountObservation(dirname(WORKSHOP_DRAFT), "directory")', workshop
+            )
 
 
 if __name__ == "__main__":

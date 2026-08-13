@@ -88,6 +88,14 @@ WORKSHOP_REPLACEMENTS = (
         b'const WORKSHOP_DRAFT = join(WORKSPACE, "PROPOSAL.md");',
         b'const WORKSHOP_DRAFT = "/proposal/PROPOSAL.md";',
     ),
+    (
+        b'mountObservation(CONFIG, "file")',
+        b'mountObservation(dirname(CONFIG), "directory")',
+    ),
+    (
+        b'mountObservation(WORKSHOP_DRAFT, "file")',
+        b'mountObservation(dirname(WORKSHOP_DRAFT), "directory")',
+    ),
 )
 
 

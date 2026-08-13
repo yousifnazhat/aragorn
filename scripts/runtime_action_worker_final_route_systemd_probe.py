@@ -440,6 +440,8 @@ def _run_route(
 
 def _coherent_case(**kwargs: Any) -> dict[str, Any]:
     global _ROUTE_OBSERVATION
+    _set_stage("P3_7C_COHERENT_ACTION")
+    coherent = _ORIGINAL_COHERENT_CASE(**kwargs)
     _set_stage("FINAL_ROUTE")
     harness = _route_harness()
     gateway_pid = kwargs["stack"]["pids"][p37c._GATEWAY_UNIT]
@@ -460,8 +462,7 @@ def _coherent_case(**kwargs: Any) -> dict[str, Any]:
             "workspace": str(combined.p37c.p37b._GATEWAY_WORKSPACE),
         },
     }
-    _set_stage("P3_7C_COHERENT_ACTION")
-    return _ORIGINAL_COHERENT_CASE(**kwargs)
+    return coherent
 
 
 def _collect(route_id: str) -> dict[str, Any]:

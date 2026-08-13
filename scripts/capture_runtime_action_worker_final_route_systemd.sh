@@ -175,7 +175,7 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     scripts/runtime_action_worker_final_route_systemd_probe.py \
     "$composition_path" | tar -xf - -C "$context"
 # shellcheck disable=SC2086
-python3 "$context/scripts/materialize_fixed_admission_probes.py" --final-combined \
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" --final-combined \
     "$context/probe" $bundle
 
 if docker volume inspect "$input_volume" >/dev/null 2>&1; then
@@ -230,7 +230,7 @@ docker inspect "$container_id" >"$inspect"
 docker image inspect "$parent" >"$parent_inspect"
 docker image inspect "$child" >"$child_inspect"
 docker volume inspect "$runtime_volume" >"$volume_inspect"
-python3 - "$context" "$inspect" "$parent_inspect" "$child_inspect" \
+python3.12 - "$context" "$inspect" "$parent_inspect" "$child_inspect" \
     "$volume_inspect" "$route" "$harness" "$final_harness" \
     "$source_commit" "$commit_object" "$commit_stdout" "$commit_stderr" \
     "$input_volume" <<'PY'
@@ -386,14 +386,14 @@ fi
 docker volume rm "$input_volume" >/dev/null
 volume_created=0
 
-python3 - "$temp_output" "$output" "$route" <<'PY'
+python3.12 - "$temp_output" "$output" "$route" <<'PY'
 import json, os, stat, sys
 from pathlib import Path
 source = Path(sys.argv[1])
 destination = Path(sys.argv[2])
 route = sys.argv[3]
 raw = source.read_bytes()
-document = json.loads(raw, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)), parse_float=lambda value: (_ for _ in ()).throw(ValueError(value)))
+document = json.loads(raw, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
 canonical = json.dumps(document, allow_nan=False, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("ascii") + b"\n"
 decision = document.get("decision", {})
 claims = {key for key in decision if key.endswith("_eligible")}

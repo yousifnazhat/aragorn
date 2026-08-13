@@ -544,6 +544,15 @@ The legacy proposal volume has only its phase label, and no writable-workspace
 positive control was captured. Composition remains separate-capture and
 private-build only, with every broad eligibility decision false.
 
+The additive restore-authority session-consumer qualifier records 7 `PASS` and
+14 `NOT_TESTED`, adding only `ADM-02/reload/session-snapshot-consumer`. A
+separate exact native turn began with no session store and populated the exact
+protected prompt snapshot. This is absent-before population only and does not
+establish reuse, tamper repair, invalidation, direct module execution tracing,
+provider or model success, reply delivery, or a fresh full-runtime-tree hash.
+Composition remains separate-capture and private-build only, with every broad
+eligibility decision false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

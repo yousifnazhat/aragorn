@@ -779,6 +779,17 @@ volume has only its phase label, and this capture has no writable-workspace
 positive control. Composition remains separate-capture and private-build only,
 with every broad eligibility decision false.
 
+The additive
+[restore-authority session-consumer route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-session-consumer-route-coverage-v1-2026-08-13.json)
+records 7 `PASS` and 14 `NOT_TESTED`, adding only
+`ADM-02/reload/session-snapshot-consumer`. A separate exact native turn began
+with no session store and populated the exact protected prompt snapshot. This
+is an absent-before population result only: it does not establish reuse,
+tamper repair, invalidation, direct module execution tracing, provider or model
+success, reply delivery, or a fresh full-runtime-tree hash. Composition remains
+separate-capture and private-build only, with every broad eligibility decision
+false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

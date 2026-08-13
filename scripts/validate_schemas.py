@@ -95,6 +95,9 @@ from aragorn.admission_protected_restore_authority_fresh_session import (
 from aragorn.admission_protected_restore_authority_prompt import (
     verify_openclaw_protected_restore_authority_prompt_rebuild,
 )
+from aragorn.admission_protected_restore_authority_session_consumer import (
+    verify_openclaw_protected_restore_authority_session_snapshot_consumer,
+)
 from aragorn.admission_protected_restore_authority_workshop import (
     verify_openclaw_protected_restore_authority_workshop_proposal_apply,
 )
@@ -2515,6 +2518,61 @@ def main() -> int:
         != canonical_json(restore_workshop_coverage) + b"\n"
     ):
         raise AssertionError("protected restore-authority workshop coverage changed")
+
+    restore_session_consumer_evidence_path = admission_evidence / (
+        "openclaw-v2026.7.1-protected-restore-authority-session-snapshot-"
+        "consumer-2026-08-13.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-restore-authority-session-consumer-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        for path in (
+            restore_profile_path,
+            restore_runtime_lock_path,
+            protected_profile_dir / "protected-restore-authority-config-v1.json",
+            protected_profile_dir / "protected-route-probe.mjs",
+            restore_session_consumer_evidence_path,
+            archive_target_path,
+        ):
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        probe_raw = transformed_restore_authority_probe("protected-route-probe.mjs")
+        evidence_cas.put(BytesIO(probe_raw), max_bytes=len(probe_raw))
+        restore_session_consumer_coverage = (
+            verify_openclaw_protected_restore_authority_session_snapshot_consumer(
+                load(
+                    admission_receipts
+                    / (
+                        "phase3-openclaw-protected-restore-authority-session-"
+                        "snapshot-consumer-v1-2026-08-13.json"
+                    )
+                ),
+                evidence_cas=evidence_cas,
+                route_profile=load_runtime_profile(
+                    restore_profile_path.read_bytes()
+                ),
+                runtime_lock=load_runtime_profile(
+                    restore_runtime_lock_path.read_bytes()
+                ),
+                route_inventory=openclaw_route_inventory,
+                runtime_candidates=runtime_candidates,
+                workshop_qualification=retained_restore_workshop,
+            )
+        )
+    retained_restore_session_consumer_path = admission_receipts / (
+        "phase3-openclaw-protected-restore-authority-session-consumer-route-"
+        "coverage-v1-2026-08-13.json"
+    )
+    retained_restore_session_consumer = load(retained_restore_session_consumer_path)
+    if (
+        restore_session_consumer_coverage != retained_restore_session_consumer
+        or retained_restore_session_consumer_path.read_bytes()
+        != canonical_json(restore_session_consumer_coverage) + b"\n"
+    ):
+        raise AssertionError(
+            "protected restore-authority session-consumer coverage changed"
+        )
 
     cron_sources = (
         admission_evidence

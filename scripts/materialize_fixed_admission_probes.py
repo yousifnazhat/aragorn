@@ -671,6 +671,174 @@ FINAL_COMBINED_SNAPSHOT_REPLACEMENTS = (
     ),
 )
 
+FINAL_COMBINED_NORMAL_TURN_OLD = b"""function normalTurn(label, message) {
+  const send = gatewayCall("chat.send", {
+    deliver: false,
+    idempotencyKey: `aragorn-protected-route-${label}-${RUN_NONCE}`,
+    message,
+    sessionKey: SESSION_KEY,
+    timeoutMs: 5000,
+  });
+  const parsedSend = parsedCommand(send);
+  const runId = parsedSend.value?.runId;
+  let wait = null;
+  let parsedWait = { parsed: false, value: null };
+  if (typeof runId === "string" && runId.length > 0) {
+    wait = gatewayCall(
+      "agent.wait",
+      { runId, timeoutMs: 10_000 },
+      12_000,
+    );
+    parsedWait = parsedCommand(wait);
+  }
+  const confirmed =
+    send.exit_code === 0 &&
+    send.error === null &&
+    send.signal === null &&
+    typeof runId === "string" &&
+    runId.length > 0 &&
+    wait?.exit_code === 0 &&
+    wait.error === null &&
+    wait.signal === null &&
+    parsedWait.parsed &&
+    parsedWait.value?.runId === runId &&
+    parsedWait.value?.status === "ok";
+  return {
+    commands: wait === null ? [send] : [send, wait],
+    confirmed,
+    send: { command: send, response: parsedSend },
+    wait: { command: wait, response: parsedWait },
+  };
+}"""
+
+FINAL_COMBINED_NORMAL_TURN_NEW = b"""function normalTurn(label, message) {
+  const expectedRunId = `aragorn-protected-route-${label}-${RUN_NONCE}`;
+  const send = gatewayCall("chat.send", {
+    deliver: false,
+    idempotencyKey: expectedRunId,
+    message,
+    sessionKey: SESSION_KEY,
+    timeoutMs: 5000,
+  });
+  const parsedSend = parsedCommand(send);
+  const runId = parsedSend.value?.runId;
+  let wait = null;
+  let parsedWait = { parsed: false, value: null };
+  if (typeof runId === "string" && runId.length > 0) {
+    wait = gatewayCall(
+      "agent.wait",
+      { runId, timeoutMs: 10_000 },
+      12_000,
+    );
+    parsedWait = parsedCommand(wait);
+  }
+  const terminalStatus = parsedWait.value?.status ?? null;
+  const terminalOk =
+    terminalStatus === "ok" &&
+    Number.isSafeInteger(parsedWait.value?.endedAt) &&
+    parsedWait.value.endedAt > 0 &&
+    parsedWait.value?.error == null;
+  const terminalNetworkError =
+    terminalStatus === "error" &&
+    Number.isSafeInteger(parsedWait.value?.endedAt) &&
+    parsedWait.value.endedAt > 0 &&
+    typeof parsedWait.value?.error === "string" &&
+    parsedWait.value.error ===
+      "\\u26a0\\ufe0f Agent failed before reply: LLM request failed: network connection error.\\nLogs: openclaw logs --follow";
+  const transportCompleted =
+    send.exit_code === 0 &&
+    send.error === null &&
+    send.signal === null &&
+    parsedSend.parsed &&
+    typeof runId === "string" &&
+    runId.length > 0 &&
+    runId === expectedRunId &&
+    parsedSend.value?.status === "started" &&
+    wait?.exit_code === 0 &&
+    wait.error === null &&
+    wait.signal === null &&
+    parsedWait.parsed &&
+    parsedWait.value?.runId === runId &&
+    (terminalOk || terminalNetworkError);
+  return {
+    commands: wait === null ? [send] : [send, wait],
+    confirmed: transportCompleted,
+    send: { command: send, response: parsedSend },
+    wait: { command: wait, response: parsedWait },
+  };
+}"""
+
+FINAL_COMBINED_SESSION_CONSUMER_OLD = b"""async function sessionConsumerAction(gateway) {
+  return await observedAction(
+    "session-snapshot-consumer",
+    gateway,
+    (trace) => {
+      trace.observations.session_before = sessionObservation();
+      const turn = normalTurn(
+        "snapshot-consumer",
+        "Inert protected-route snapshot consumer observation.",
+      );
+      trace.commands.push(...turn.commands);
+      trace.observations.turn = turn;
+      trace.observations.session_after = sessionObservation();
+      trace.attempted = turn.confirmed;
+      if (!turn.confirmed) {
+        trace.not_tested_reason = "ROUTE_ACTION_NOT_CONFIRMED";
+      }
+    },
+  );
+}"""
+
+FINAL_COMBINED_SESSION_CONSUMER_NEW = b"""async function sessionConsumerAction(gateway) {
+  return await observedAction(
+    "session-snapshot-consumer",
+    gateway,
+    (trace) => {
+      const before = sessionObservation();
+      trace.observations.session_before = before;
+      const turn = normalTurn(
+        "snapshot-consumer",
+        "Inert protected-route snapshot consumer observation.",
+      );
+      trace.commands.push(...turn.commands);
+      trace.observations.turn = turn;
+      const after = sessionObservation();
+      const afterCheck = protectedSnapshotCheck(after);
+      const store = after.file;
+      const storeExact =
+        store?.exists === true &&
+        store.type === "file" &&
+        store.nlink === 1 &&
+        store.mode === "600" &&
+        store.uid === RUNTIME_UID &&
+        store.gid === RUNTIME_GID &&
+        Number.isSafeInteger(store.device) &&
+        store.device > 0 &&
+        Number.isSafeInteger(store.inode) &&
+        store.inode > 0 &&
+        Number.isSafeInteger(store.size) &&
+        store.size > 0 &&
+        store.size <= CONTROL_LIMIT &&
+        store.digest_error === null &&
+        store.path === SESSION_STORE &&
+        /^sha256:[0-9a-f]{64}$/.test(store.digest ?? "");
+      const beforeAbsent =
+        before.present === false &&
+        before.entry === null &&
+        !Object.hasOwn(before, "error") &&
+        before.file?.path === SESSION_STORE;
+      trace.observations.session_after = after;
+      trace.observations.session_after_check = afterCheck;
+      trace.observations.session_store_exact = storeExact;
+      trace.attempted =
+        beforeAbsent && turn.confirmed && afterCheck.ready && storeExact;
+      if (!trace.attempted) {
+        trace.not_tested_reason = "EXACT_PROTECTED_SNAPSHOT_NOT_CREATED";
+      }
+    },
+  );
+}"""
+
 FINAL_COMBINED_PROFILE_REPLACEMENTS = (
     (
         b"/profile/config/openclaw.json",
@@ -1163,6 +1331,16 @@ def transformed_final_combined_probe(name: str) -> bytes:
                 (
                     b"/profile/state/agents/main/sessions/skills-prompts/sha256/bb/bb2e3d95728d097c858779c1d4d8d90e00f6e14d0151ca5af56f475a6fa6301c.txt",
                     b"/profile/state/agents/main/sessions/skills-prompts/sha256/60/60f42ebfec9cc92e1819496ec6340adf3584da099524d40e2b1ba918e271b501.txt",
+                ),
+            ),
+        )
+        raw = _replace_once(
+            raw,
+            (
+                (FINAL_COMBINED_NORMAL_TURN_OLD, FINAL_COMBINED_NORMAL_TURN_NEW),
+                (
+                    FINAL_COMBINED_SESSION_CONSUMER_OLD,
+                    FINAL_COMBINED_SESSION_CONSUMER_NEW,
                 ),
             ),
         )

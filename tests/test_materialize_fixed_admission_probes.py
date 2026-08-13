@@ -366,8 +366,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "5d1bd0aa48f34d5567c048d21849464be82edbb01772bd5a956a0426b59e3fce",
             ),
             "protected-route-probe.mjs": (
-                42_916,
-                "63273a2466f126e075a3dc4068841b7e467f5d94989f1bcdd30b965398cd6343",
+                44_825,
+                "fc5f7499141f3a09e9347355dcac2284d781133b16ea05c0b2ee95fd8e6ce820",
             ),
             "protected-session-snapshot-fixed-probe.mjs": (
                 41_531,
@@ -427,6 +427,26 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             )
             self.assertIn(b"const RUNTIME_UID = 992;", route)
             self.assertIn(b"const RUNTIME_GID = 992;", route)
+            self.assertIn(
+                b"const expectedRunId = `aragorn-protected-route-${label}-${RUN_NONCE}`;",
+                route,
+            )
+            self.assertIn(b"runId === expectedRunId", route)
+            self.assertIn(b"parsedSend.parsed", route)
+            self.assertIn(b'parsedSend.value?.status === "started"', route)
+            self.assertIn(b"parsedWait.value?.error == null", route)
+            self.assertIn(
+                b'"\\u26a0\\ufe0f Agent failed before reply: LLM request failed: network connection error.\\nLogs: openclaw logs --follow"',
+                route,
+            )
+            self.assertIn(b'!Object.hasOwn(before, "error")', route)
+            self.assertIn(
+                b"beforeAbsent && turn.confirmed && afterCheck.ready && storeExact",
+                route,
+            )
+            self.assertIn(b"EXACT_PROTECTED_SNAPSHOT_NOT_CREATED", route)
+            self.assertNotIn(b"transport_completion", route)
+            self.assertNotIn(b'parsedWait.value?.status === "ok"', route)
             for raw in (archive, helper, route):
                 self.assertIn(b"function writableRoots(rootPaths)", raw)
                 self.assertIn(b"accessSync(path, constants.W_OK)", raw)

@@ -354,9 +354,47 @@ RESTORE_AUTHORITY_ARCHIVE_REPLACEMENTS = (
     (b"369417908", b"369418625"),
 )
 
+RESTORE_AUTHORITY_CRON_REPLACEMENTS = (
+    (
+        b"0e3346d4397db7675073c7f80599aa312a1819b0f5a6480a8ba194b296c78144",
+        b"ad9cde2c065d5d4d69f465193007a435c0cd0b378d253329238dd36fdc70f849",
+    ),
+    (b"cron-BoFeDMVi.js", b"cron-DOr4RFbn.js"),
+    (
+        b"df116fac9813317fd04eb9d3721c9be094563e3b1ac3af66720c15842d021385",
+        b"f76a2799c0e012a39fd12c5ce4245c92f0afa74fd30a1cddec506af092733a60",
+    ),
+    (
+        b"b2803dc20246abadfe5284abbbda8ae69dee1684794746baa592cd3eacacbdb0",
+        b"661385d87db47117e9e49e41b01fcfe07aacea32326de09f6764c2568bc2620d",
+    ),
+    (b"cron-snapshot.runtime-DzbSus3I.js", b"cron-snapshot.runtime-DrQirS_k.js"),
+    (
+        b"ef244fb7e2b31039e0d14035cba99650e2baf06eb6369bff3f66f42607a72b21",
+        b"0b7aa925514a2c44babb98dedfd11de28733fbd853b361716860adca340923d7",
+    ),
+    (b"isolated-agent-DNWCmOH_.js", b"isolated-agent-2U26aOeI.js"),
+    (
+        b"59a2138c9906cffe26e67ad662d1a35d835c10d8d8742a2cb928fc529df81e3b",
+        b"edd138bac24f7fbc0e08013e1be9e4962f12d530ef5462efa0a1d82d4b475784",
+    ),
+    (b"session-B4NuLEbl.js", b"session-CagbPApz.js"),
+    (
+        b"e9046199b43de587dbf1f184b2e4738b4b772491266baff8eeeab90f21a50d7c",
+        b"d8a1bd6c3ee26b981e5cfe6e7756a91263fd40c4727e1bdb0e69171b8458cb28",
+    ),
+    (b"session-snapshot-CMKRWMg1.js", b"session-snapshot-8MgHKMdq.js"),
+    (
+        b"ee73b5621ff0fa5d198cb39a54eb6fa332d1f96897e4151538415eef7a72846c",
+        b"f4e73f5c7a111fe2ed4d953c54f96ff9e9e4ad2ba962cf7f00afd141c8d125c2",
+    ),
+    (b"workspace-BKXau6p-.js", b"workspace-CKU1tzCf.js"),
+)
+
 RESTORE_AUTHORITY_PROBE_COUNTS = {
     "protected-archive-replacement-probe.mjs": (1, 1, 0, 0, 0, 1, 1, 1),
     "protected-config-activation-probe.mjs": (1,) * 8,
+    "protected-cron-rescan-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0),
     "protected-observation-v1.mjs": (0, 0, 1, 1, 1, 1, 1, 1),
     "protected-prompt-rebuild-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0),
     "protected-route-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 1),
@@ -367,6 +405,12 @@ RESTORE_AUTHORITY_SELECTIONS = frozenset(
         frozenset({"protected-archive-replacement-probe.mjs"}),
         frozenset({"protected-config-activation-probe.mjs"}),
         frozenset({"protected-route-probe.mjs"}),
+        frozenset(
+            {
+                "protected-cron-rescan-probe.mjs",
+                "protected-observation-v1.mjs",
+            }
+        ),
         frozenset(
             {
                 "protected-observation-v1.mjs",
@@ -433,6 +477,15 @@ def transformed_restore_authority_probe(name: str) -> bytes:
             raise ValueError("restore-authority archive probe shape changed")
         for old, new in RESTORE_AUTHORITY_ARCHIVE_REPLACEMENTS:
             raw = raw.replace(old, new)
+    if name == "protected-cron-rescan-probe.mjs":
+        if any(
+            raw.count(old) != 1 for old, _new in RESTORE_AUTHORITY_CRON_REPLACEMENTS
+        ):
+            raise ValueError("restore-authority cron probe shape changed")
+        for old, new in RESTORE_AUTHORITY_CRON_REPLACEMENTS:
+            raw = raw.replace(old, new)
+        if any(old in raw for old, _new in RESTORE_AUTHORITY_CRON_REPLACEMENTS):
+            raise ValueError("stale restore-authority cron literal remains")
     return raw
 
 

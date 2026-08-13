@@ -200,6 +200,73 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 raw,
             )
 
+    def test_materializes_exact_restore_authority_cron_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "restore-authority-cron"
+            helper_name = "protected-observation-v1.mjs"
+            cron_name = "protected-cron-rescan-probe.mjs"
+            materialize(
+                output,
+                [helper_name, cron_name],
+                restore_authority=True,
+            )
+            helper = (output / helper_name).read_bytes()
+            cron = (output / cron_name).read_bytes()
+
+            self.assertEqual(
+                sorted(path.name for path in output.iterdir()),
+                sorted([helper_name, cron_name]),
+            )
+            self.assertEqual(helper, transformed_restore_authority_probe(helper_name))
+            self.assertEqual(cron, transformed_restore_authority_probe(cron_name))
+            self.assertEqual(len(helper), 13_609)
+            self.assertEqual(
+                hashlib.sha256(helper).hexdigest(),
+                "81db497cbde9c07e211a406699896da37c137358d0b7534d8580eab43c47c216",
+            )
+            self.assertEqual(len(cron), 26_778)
+            self.assertEqual(
+                hashlib.sha256(cron).hexdigest(),
+                "93693030c3f675e9530fb8139f0a05a9ad51a467f5e512755e21782f9f4e2a20",
+            )
+            self.assertEqual((output / helper_name).stat().st_mode & 0o777, 0o444)
+            self.assertEqual((output / cron_name).stat().st_mode & 0o777, 0o444)
+            self.assertIn(b'from "./protected-observation-v1.mjs"', cron)
+            self.assertIn(b"OpenClaw 2026.7.1 (805a4b1)", cron)
+            for expected in (
+                b"cron-DOr4RFbn.js",
+                b"cron-snapshot.runtime-DrQirS_k.js",
+                b"isolated-agent-2U26aOeI.js",
+                b"session-CagbPApz.js",
+                b"session-snapshot-8MgHKMdq.js",
+                b"workspace-CKU1tzCf.js",
+            ):
+                self.assertIn(expected, cron)
+            for stale in (
+                b"cron-BoFeDMVi.js",
+                b"cron-snapshot.runtime-DzbSus3I.js",
+                b"isolated-agent-DNWCmOH_.js",
+                b"session-B4NuLEbl.js",
+                b"session-snapshot-CMKRWMg1.js",
+                b"workspace-BKXau6p-.js",
+            ):
+                self.assertNotIn(stale, cron)
+
+            for label, selection in {
+                "partial-cron": [cron_name],
+                "duplicate": [helper_name, cron_name, cron_name],
+                "mixed": [
+                    helper_name,
+                    cron_name,
+                    "protected-config-activation-probe.mjs",
+                ],
+            }.items():
+                with self.subTest(label=label):
+                    rejected = Path(temporary) / f"rejected-cron-{label}"
+                    with self.assertRaises(ValueError):
+                        materialize(rejected, selection, restore_authority=True)
+                    self.assertFalse(rejected.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

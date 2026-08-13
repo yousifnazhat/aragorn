@@ -701,6 +701,15 @@ observation but is not qualified because no plugin replacement outcome occurred.
 Aggregate admission, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release
 authority all remain false.
 
+A subsequent private fixed-runtime
+[fresh-session route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-session-snapshot-fixed-fresh-session-route-coverage-v1-2026-08-13.json)
+records 7 `PASS` and 14 `NOT_TESTED`, adding only
+`ADM-02/reload/fresh-session-reset`. It binds accepted `/new` dispatch,
+session-ID rotation, a cleared snapshot, and reconstruction of the exact
+protected prompt reference. Reset reply dispatch and both model turns failed;
+no full-runtime-tree, aggregate, installer, Phase 3, EDR, or release authority
+is claimed.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

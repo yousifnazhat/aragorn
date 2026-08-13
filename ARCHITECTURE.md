@@ -478,6 +478,13 @@ qualify it because no plugin replacement outcome occurred. Aggregate admission,
 installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority all remain
 false.
 
+The subsequent fresh-session verifier composes that frozen result into 7
+`PASS` and 14 `NOT_TESTED` by qualifying only
+`ADM-02/reload/fresh-session-reset`. It binds `/new` acceptance, session-ID
+rotation, snapshot clearing, and exact protected prompt-reference
+reconstruction. Reset reply dispatch and model turns failed, the full runtime
+tree was not rehashed, and all broader authority remains false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

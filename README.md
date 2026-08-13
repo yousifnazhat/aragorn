@@ -518,6 +518,16 @@ trust, the Phase 1 release identity, semantic skill causation, aggregate gate
 or `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or public-release
 authority.
 
+The final common-runtime
+[fresh-session qualification](./benchmark/receipts/phase3-openclaw-protected-final-fresh-session-reset-route-coverage-v1-2026-08-13.json)
+records 6 `PASS` and 15 `NOT_TESTED`. Five passes are exact static gate-or-deny
+routes whose transitions were not dynamically exercised; only
+`ADM-02/reload/fresh-session-reset` is dynamic. It binds accepted `/new`,
+session-ID rotation, a cleared snapshot, and exact protected prompt and catalog
+rebuild before the terminal network error. All nine broad eligibility decisions
+remain false; this is one private local fixture with no provider, reply, or
+model-success claim.
+
 The locked v2 checkpoint additionally requires a caller-held digest for a
 canonical pre-outcome coverage lock:
 

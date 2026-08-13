@@ -75,6 +75,9 @@ from aragorn.admission_protected_cron import (
 from aragorn.admission_protected_curator_restore import (
     verify_openclaw_protected_curator_restore_denial,
 )
+from aragorn.admission_protected_final_fresh_session_reset import (
+    verify_openclaw_final_fresh_session_reset,
+)
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
     compose_openclaw_protected_profile_coverage_v2,
@@ -3119,6 +3122,53 @@ def main() -> int:
         raise AssertionError(
             "runtime acquisition-action nested systemd qualification changed"
         )
+
+    final_fresh_session_sources = (
+        admission_evidence
+        / (
+            "runtime-action-worker-final-combined-systemd-composition-"
+            "p3-final-2026-08-13.json"
+        ),
+        protected_profile_dir / "protected-final-combined-config-v1.json",
+        protected_profile_dir / "protected-final-combined-profile-v1.json",
+        protected_profile_dir / "protected-final-combined-runtime-v1.lock.json",
+        ROOT / "benchmark/runtime-action-worker-final-combined-systemd/SKILL.md",
+        ROOT / "packaging/openclaw/aragorn-runtime-action-worker/index.js",
+        ROOT / "packaging/openclaw/aragorn-runtime-action-worker/openclaw.plugin.json",
+        ROOT / "packaging/openclaw/aragorn-runtime-action-worker/package.json",
+        admission_evidence
+        / (
+            "runtime-action-worker-final-route-fresh-session-reset-systemd-"
+            "p3-final-2026-08-13.json"
+        ),
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-fresh-session-reset-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        for path in final_fresh_session_sources:
+            raw = path.read_bytes()
+            evidence_cas.put_expected(
+                BytesIO(raw),
+                expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+                max_bytes=len(raw),
+            )
+        final_fresh_session_qualification = verify_openclaw_final_fresh_session_reset(
+            evidence_cas=evidence_cas
+        )
+    final_fresh_session_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-fresh-session-reset-route-coverage-"
+        "v1-2026-08-13.json"
+    )
+    retained_final_fresh_session_qualification = load(
+        final_fresh_session_qualification_path
+    )
+    if (
+        final_fresh_session_qualification != retained_final_fresh_session_qualification
+        or final_fresh_session_qualification_path.read_bytes()
+        != canonical_json(final_fresh_session_qualification) + b"\n"
+    ):
+        raise AssertionError("protected final fresh-session qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

@@ -1233,6 +1233,16 @@ trust, the Phase 1 release identity, semantic skill causation, aggregate gate
 or `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or public-release
 authority.
 
+The final common-runtime
+[fresh-session qualifier](./benchmark/receipts/phase3-openclaw-protected-final-fresh-session-reset-route-coverage-v1-2026-08-13.json)
+records 6 `PASS` and 15 `NOT_TESTED`. Five passes are exact static gate-or-deny
+routes whose transitions were not dynamically exercised; only
+`ADM-02/reload/fresh-session-reset` is dynamic. It binds accepted `/new`,
+session-ID rotation, a cleared snapshot, and exact protected prompt and catalog
+rebuild before the terminal network error. All nine broad eligibility decisions
+remain false; this is one private local fixture with no provider, reply, or
+model-success claim.
+
 ### 8. Evidence and interoperability plane
 
 Use a canonical local JSON contract. Export findings as [SARIF 2.1](https://www.oasis-open.org/standard/sarifv2-1-os/) and runtime telemetry using [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/) where fields align. Use [in-toto attestations with Sigstore](https://docs.sigstore.dev/cosign/verifying/attestation/) only when receipts must cross a trust boundary.

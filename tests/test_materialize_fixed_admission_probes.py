@@ -111,10 +111,63 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             for stale in (b"4b198daf", b"45860", b"45841", b"369417908"):
                 self.assertNotIn(stale, archive)
 
-            rejected = Path(temporary) / "unsupported"
-            with self.assertRaises(ValueError):
-                materialize(rejected, ["probe.mjs"], restore_authority=True)
-            self.assertFalse(rejected.exists())
+            prompt_output = Path(temporary) / "restore-authority-prompt"
+            helper_name = "protected-observation-v1.mjs"
+            prompt_name = "protected-prompt-rebuild-probe.mjs"
+            materialize(
+                prompt_output,
+                [helper_name, prompt_name],
+                restore_authority=True,
+            )
+            helper = (prompt_output / helper_name).read_bytes()
+            prompt = (prompt_output / prompt_name).read_bytes()
+            self.assertEqual(
+                sorted(path.name for path in prompt_output.iterdir()),
+                sorted([helper_name, prompt_name]),
+            )
+            self.assertEqual(helper, transformed_restore_authority_probe(helper_name))
+            self.assertEqual(prompt, transformed_restore_authority_probe(prompt_name))
+            self.assertEqual(len(helper), 13_609)
+            self.assertEqual(
+                hashlib.sha256(helper).hexdigest(),
+                "81db497cbde9c07e211a406699896da37c137358d0b7534d8580eab43c47c216",
+            )
+            self.assertEqual(len(prompt), 15_501)
+            self.assertEqual(
+                hashlib.sha256(prompt).hexdigest(),
+                "cc342cd6ec87164397f842a6c921917bcd25d3ac239d978f722d4fc59c5c5af4",
+            )
+            self.assertIn(b'from "./protected-observation-v1.mjs"', prompt)
+            self.assertIn(b"OpenClaw 2026.7.1 (805a4b1)", prompt)
+            for stale in (
+                b"4b198daf",
+                b"45_860",
+                b"45_841",
+                b"369_417_908",
+                b"4e866a250429632f5796d977554acbaabe6f30dbf837457e32022eacdb9152c1",
+                b"ec2b2022ed27f62840583d31264826c88514a04e7e7cc94d78820b021d6288b6",
+                b"6226f46581416178666681d870d3ff54c5bccebeebb090cb3c996058db1c8a4a",
+            ):
+                self.assertNotIn(stale, helper)
+                self.assertNotIn(stale, prompt)
+
+            rejected_selections = {
+                "partial-helper": [helper_name],
+                "partial-prompt": [prompt_name],
+                "duplicate": [helper_name, prompt_name, prompt_name],
+                "mixed": [
+                    "protected-config-activation-probe.mjs",
+                    helper_name,
+                    prompt_name,
+                ],
+                "unsupported": ["probe.mjs"],
+            }
+            for label, selection in rejected_selections.items():
+                with self.subTest(label=label):
+                    rejected = Path(temporary) / f"rejected-{label}"
+                    with self.assertRaises(ValueError):
+                        materialize(rejected, selection, restore_authority=True)
+                    self.assertFalse(rejected.exists())
 
 
 if __name__ == "__main__":

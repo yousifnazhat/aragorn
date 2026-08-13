@@ -357,7 +357,22 @@ RESTORE_AUTHORITY_ARCHIVE_REPLACEMENTS = (
 RESTORE_AUTHORITY_PROBE_COUNTS = {
     "protected-archive-replacement-probe.mjs": (1, 1, 0, 0, 0, 1, 1, 1),
     "protected-config-activation-probe.mjs": (1,) * 8,
+    "protected-observation-v1.mjs": (0, 0, 1, 1, 1, 1, 1, 1),
+    "protected-prompt-rebuild-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0),
 }
+
+RESTORE_AUTHORITY_SELECTIONS = frozenset(
+    {
+        frozenset({"protected-archive-replacement-probe.mjs"}),
+        frozenset({"protected-config-activation-probe.mjs"}),
+        frozenset(
+            {
+                "protected-observation-v1.mjs",
+                "protected-prompt-rebuild-probe.mjs",
+            }
+        ),
+    }
+)
 
 
 def _sha256(raw: bytes) -> str:
@@ -423,7 +438,8 @@ def materialize(
     output: Path, names: list[str], *, restore_authority: bool = False
 ) -> None:
     if restore_authority and (
-        len(names) != 1 or names[0] not in RESTORE_AUTHORITY_PROBE_COUNTS
+        len(names) != len(set(names))
+        or frozenset(names) not in RESTORE_AUTHORITY_SELECTIONS
     ):
         raise ValueError("unsupported restore-authority probe selection")
     output.mkdir(mode=0o755, parents=True, exist_ok=False)

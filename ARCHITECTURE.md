@@ -509,6 +509,14 @@ the protected skill unchanged. This is qualification-layer composition across
 separate captures, not aggregate admission, installer, `RUN-01`, `RUN-02`,
 Phase 3, EDR, or release authority.
 
+The next additive restore-authority archive qualifier records 3 `PASS` and 18
+`NOT_TESTED`, adding only `ADM-02/update/archive-source-force-replacement`.
+The exact source install reached the protected target and failed with `EROFS`;
+uploaded archive routes were disabled and no archive bytes were ingested, with
+source, target, and runtime state preserved. This is separate-capture
+composition only, and every aggregate, installer, `RUN-01`, `RUN-02`, Phase 3,
+EDR, and release decision remains false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

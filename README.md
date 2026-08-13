@@ -737,6 +737,16 @@ the protected skill remained unchanged. The captures are composed only at the
 qualification layer; no aggregate, installer, `RUN-01`, `RUN-02`, Phase 3,
 EDR, or release authority is claimed.
 
+The next additive
+[restore-authority archive route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-archive-route-coverage-v1-2026-08-13.json)
+records 3 `PASS` and 18 `NOT_TESTED`, adding only
+`ADM-02/update/archive-source-force-replacement`. The exact source install
+reached the protected target and failed with `EROFS`; uploaded archive routes
+were disabled and no archive bytes were ingested, while source, target, and
+runtime state remained unchanged. This is separate-capture composition only;
+all aggregate, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release
+authority remains false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

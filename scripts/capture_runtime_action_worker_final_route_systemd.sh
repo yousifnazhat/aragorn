@@ -222,6 +222,8 @@ fi
 docker start "$container_id" >/dev/null
 i=0
 while ! docker exec "$container_id" test -S /run/systemd/private; do i=$((i + 1)); [ "$i" -lt 100 ] || exit 70; sleep 0.1; done
+i=0
+while ! docker exec "$container_id" test -d /run/aragorn-protected-install; do i=$((i + 1)); [ "$i" -lt 100 ] || exit 70; sleep 0.1; done
 
 docker inspect "$container_id" >"$inspect"
 docker image inspect "$parent" >"$parent_inspect"

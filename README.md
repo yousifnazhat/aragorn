@@ -790,6 +790,16 @@ success, reply delivery, or a fresh full-runtime-tree hash. Composition remains
 separate-capture and private-build only, with every broad eligibility decision
 false.
 
+The additive
+[restore-authority chat route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-chat-route-coverage-v1-2026-08-13.json)
+records 8 `PASS` and 13 `NOT_TESTED`, adding only
+`ADM-02/reload/chat-session-snapshot-consumer`. It reuses the exact shared
+prompt-rebuild capture rather than an independent execution and binds only the
+black-box native same-session chat persistence visible there, without a direct
+session-update or module-execution trace. Both model turns failed, so no
+provider body, model success, or reply delivery is claimed. The result remains
+private-build composition with every broad eligibility decision false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

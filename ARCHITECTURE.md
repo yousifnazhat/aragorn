@@ -553,6 +553,15 @@ provider or model success, reply delivery, or a fresh full-runtime-tree hash.
 Composition remains separate-capture and private-build only, with every broad
 eligibility decision false.
 
+The additive restore-authority chat qualifier records 8 `PASS` and 13
+`NOT_TESTED`, adding only `ADM-02/reload/chat-session-snapshot-consumer`. It
+reuses the exact shared prompt-rebuild capture rather than an independent
+execution and establishes only black-box native same-session chat persistence,
+without a direct session-update or module-execution trace. Both model turns
+failed, so provider-body observation, model success, and reply delivery remain
+unclaimed. This is private-build composition with every broad eligibility
+decision false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

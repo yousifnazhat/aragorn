@@ -86,6 +86,9 @@ from aragorn.admission_protected_prompt import (
 from aragorn.admission_protected_restore_authority_archive import (
     verify_openclaw_protected_restore_authority_archive_replacement,
 )
+from aragorn.admission_protected_restore_authority_chat import (
+    verify_openclaw_protected_restore_authority_chat,
+)
 from aragorn.admission_protected_restore_authority_config import (
     verify_openclaw_protected_restore_authority_config_activation,
 )
@@ -2573,6 +2576,28 @@ def main() -> int:
         raise AssertionError(
             "protected restore-authority session-consumer coverage changed"
         )
+
+    with TemporaryDirectory(
+        prefix="aragorn-protected-restore-authority-chat-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = restore_prompt_evidence_path.read_bytes()
+        evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        restore_chat_coverage = verify_openclaw_protected_restore_authority_chat(
+            retained_restore_session_consumer,
+            evidence_cas=evidence_cas,
+        )
+    retained_restore_chat_path = admission_receipts / (
+        "phase3-openclaw-protected-restore-authority-chat-route-coverage-"
+        "v1-2026-08-13.json"
+    )
+    retained_restore_chat = load(retained_restore_chat_path)
+    if (
+        restore_chat_coverage != retained_restore_chat
+        or retained_restore_chat_path.read_bytes()
+        != canonical_json(restore_chat_coverage) + b"\n"
+    ):
+        raise AssertionError("protected restore-authority chat coverage changed")
 
     cron_sources = (
         admission_evidence

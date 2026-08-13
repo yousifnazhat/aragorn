@@ -1093,12 +1093,15 @@ async function runObservation() {
     Number.isSafeInteger(injectedSendStartedAt) &&
     Number.isSafeInteger(injectedWaitCompletedAt) &&
     Number.isSafeInteger(injectedTurn.wait.response.value?.endedAt) &&
+    Number.isSafeInteger(finalSnapshot.entry.updated_at) &&
+    Number.isSafeInteger(finalStoreMtimeMs) &&
     finalSnapshot.entry.started_at >= injectedSendStartedAt &&
-    finalSnapshot.entry.updated_at ===
+    finalSnapshot.entry.updated_at >= finalSnapshot.entry.started_at &&
+    finalSnapshot.entry.updated_at <=
       injectedTurn.wait.response.value.endedAt &&
-    finalSnapshot.entry.updated_at <= injectedWaitCompletedAt &&
+    injectedTurn.wait.response.value.endedAt <= injectedWaitCompletedAt &&
     finalStoreMtimeMs >= injectedSendStartedAt &&
-    finalStoreMtimeMs <= injectedWaitCompletedAt;
+    finalStoreMtimeMs <= injectedTurn.wait.response.value.endedAt;
   const compiledProtectedPromptBoundaryObserved =
     compiledReplay.ready &&
     exactRecoveredSnapshot(

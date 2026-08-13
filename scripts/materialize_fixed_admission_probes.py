@@ -838,6 +838,78 @@ FINAL_COMBINED_SNAPSHOT_TERMINAL_REPLACEMENTS = (
     ),
 )
 
+FINAL_COMBINED_PROMPT_DISCOVERY_REPLACEMENTS = (
+    *FINAL_COMBINED_SNAPSHOT_DISCOVERY_REPLACEMENTS[:2],
+    (b"  const discoveryBefore = discovery();\n", b""),
+    (b"    exactDiscovery(discoveryBefore) &&\n", b""),
+    (b"    discovery_before: discoveryBefore,\n", b""),
+    (
+        b"      commands: [version, systemBefore.command, discoveryBefore.command],",
+        b"      commands: [version, systemBefore.command],",
+    ),
+    (b"  const discoveryAfter = discovery();\n", b""),
+    (b"      discoveryBefore.command,\n", b""),
+    (b"      discoveryAfter.command,\n", b""),
+    (b"      discovery_after: discoveryAfter,\n", b""),
+)
+
+FINAL_COMBINED_PROMPT_TERMINAL_REPLACEMENTS = (
+    (
+        b"      started_at: entry.startedAt,\n",
+        b"      started_at: entry.startedAt,\n      updated_at: entry.updatedAt,\n",
+    ),
+    FINAL_COMBINED_SNAPSHOT_TERMINAL_REPLACEMENTS[1],
+    FINAL_COMBINED_SNAPSHOT_TERMINAL_REPLACEMENTS[2],
+    (
+        b"""function exactSnapshot(value) {
+  return (
+    value.entry.run_status === "failed" &&
+    Number.isSafeInteger(value.entry.started_at) &&
+    value.entry.ended_at === value.entry.started_at &&
+    value.entry.runtime_ms === 0 &&""",
+        b"""function exactSnapshot(value, turn) {
+  const waitValue = turn?.wait?.response?.value;
+  const sendStartedAt = Date.parse(turn?.send?.command?.started_at ?? "");
+  const waitCompletedAt = Date.parse(
+    turn?.wait?.command?.completed_at ?? "",
+  );
+  const terminalMatchesSession =
+    (waitValue?.status === "ok" &&
+      waitValue?.error == null &&
+      value.entry.run_status === "failed") ||
+    (waitValue?.status === "error" &&
+      waitValue?.error ===
+        "\\u26a0\\ufe0f Agent failed before reply: LLM request failed: network connection error.\\nLogs: openclaw logs --follow" &&
+      value.entry.run_status === "timeout");
+  return (
+    terminalMatchesSession &&
+    Number.isSafeInteger(value.entry.started_at) &&
+    value.entry.started_at >= 0 &&
+    Number.isSafeInteger(value.entry.ended_at) &&
+    value.entry.started_at <= value.entry.ended_at &&
+    Number.isSafeInteger(value.entry.updated_at) &&
+    value.entry.ended_at <= value.entry.updated_at &&
+    Number.isSafeInteger(value.entry.runtime_ms) &&
+    value.entry.runtime_ms ===
+      value.entry.ended_at - value.entry.started_at &&
+    Number.isSafeInteger(waitValue?.endedAt) &&
+    Number.isSafeInteger(sendStartedAt) &&
+    Number.isSafeInteger(waitCompletedAt) &&
+    sendStartedAt <= value.entry.started_at &&
+    value.entry.ended_at <= waitValue.endedAt &&
+    waitValue.endedAt <= waitCompletedAt &&
+    value.entry.updated_at <= waitCompletedAt &&""",
+    ),
+    (
+        b"  if (!exactSnapshot(initialSnapshot)) {",
+        b"  if (!exactSnapshot(initialSnapshot, initialTurn)) {",
+    ),
+    (
+        b"    !exactSnapshot(rebuiltSnapshot) ||",
+        b"    !exactSnapshot(rebuiltSnapshot, rebuildTurn) ||",
+    ),
+)
+
 FINAL_COMBINED_NORMAL_TURN_OLD = b"""function normalTurn(label, message) {
   const send = gatewayCall("chat.send", {
     deliver: false,
@@ -1475,6 +1547,11 @@ def transformed_final_combined_probe(name: str) -> bytes:
                 *FINAL_COMBINED_CRON_REPLACEMENTS,
             ),
         )
+    elif name == "protected-prompt-rebuild-probe.mjs":
+        raw = _replace_once(raw, FINAL_COMBINED_PROMPT_DISCOVERY_REPLACEMENTS)
+        raw = _replace_once(raw, FINAL_COMBINED_PROMPT_TERMINAL_REPLACEMENTS)
+        if b"discovery" in raw or b'    "skills",\n    "info",' in raw:
+            raise ValueError("stale final-combined prompt discovery remains")
     elif name == "protected-session-snapshot-fixed-probe.mjs":
         raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_REPLACEMENTS)
         raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_DISCOVERY_REPLACEMENTS)

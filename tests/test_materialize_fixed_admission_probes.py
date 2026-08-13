@@ -362,8 +362,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "11650e5906c8c1bd863abe462c10288f421645c35a69961cb143eb8e7163363b",
             ),
             "protected-prompt-rebuild-probe.mjs": (
-                15_599,
-                "5d1bd0aa48f34d5567c048d21849464be82edbb01772bd5a956a0426b59e3fce",
+                16_464,
+                "9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7",
             ),
             "protected-route-probe.mjs": (
                 44_825,
@@ -408,6 +408,9 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             cron = transformed_final_combined_probe("protected-cron-rescan-probe.mjs")
             snapshot = transformed_final_combined_probe(
                 "protected-session-snapshot-fixed-probe.mjs"
+            )
+            prompt = transformed_final_combined_probe(
+                "protected-prompt-rebuild-probe.mjs"
             )
             for raw in (archive, route, cron):
                 self.assertIn(b"7fa98d8", raw)
@@ -478,6 +481,39 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 route,
             )
             self.assertIn(b"WORKSPACE_SKILLS_WRITABLE_BOUNDARY_REQUIRED", route)
+            self.assertNotIn(b"discovery", prompt)
+            self.assertNotIn(b'    "skills",\n    "info",', prompt)
+            self.assertIn(
+                b"""commands: [
+      version,
+      systemBefore.command,
+      ...initialTurn.commands,
+      ...rebuildTurn.commands,
+      systemAfter.command,
+    ],""",
+                prompt,
+            )
+            self.assertIn(b"commands: [version, systemBefore.command]", prompt)
+            self.assertIn(b"function exactSnapshot(value, turn)", prompt)
+            self.assertIn(b"updated_at: entry.updatedAt", prompt)
+            self.assertIn(b'value.entry.run_status === "timeout"', prompt)
+            self.assertIn(b'value.entry.run_status === "failed"', prompt)
+            self.assertIn(
+                b"value.entry.runtime_ms ===\n"
+                b"      value.entry.ended_at - value.entry.started_at",
+                prompt,
+            )
+            self.assertIn(b"value.entry.ended_at <= value.entry.updated_at", prompt)
+            self.assertIn(b"sendStartedAt <= value.entry.started_at", prompt)
+            self.assertIn(b"value.entry.ended_at <= waitValue.endedAt", prompt)
+            self.assertIn(b"value.entry.updated_at <= waitCompletedAt", prompt)
+            self.assertIn(b"!sendResponse.parsed", prompt)
+            self.assertIn(b"!waitResponse.parsed", prompt)
+            self.assertIn(b"terminalOk &&", prompt)
+            self.assertIn(b"terminalNetworkError", prompt)
+            self.assertIn(b"network connection error", prompt)
+            self.assertIn(b"exactSnapshot(initialSnapshot, initialTurn)", prompt)
+            self.assertIn(b"exactSnapshot(rebuiltSnapshot, rebuildTurn)", prompt)
             self.assertNotIn(b"discovery", snapshot)
             self.assertNotIn(b'    "skills",\n    "info",', snapshot)
             self.assertIn(b"boundaryBefore.ready &&", snapshot)

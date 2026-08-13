@@ -460,6 +460,18 @@ profile's protected-bytes-only invariant for the inventoried consumer route.
 The earlier missing-blob reconstruction PASS is a cache-recovery route and does
 not satisfy this distinct consumer route.
 
+A separate private patched-runtime verifier qualifies only
+`ADM-02/reload/session-snapshot-consumer` as `PASS` for
+`openclaw-2026.7.1-session-snapshot-fixed`. Its pinned compiled resolver keeps
+the clean baseline unchanged, rejects the attacker-controlled prompt reference
+with `shouldRefresh:true`, and returns the identical trusted protected prompt
+and skill catalog; the joined native-turn timestamps bind persistence of that
+protected snapshot to the injected session turn. The fresh route-only profile
+is 1 `PASS` and 20 `NOT_TESTED`, not a rewrite of the official-runtime failure
+above. The private build lacks official-release and independent reproducibility
+authority, and aggregate admission, installer, `RUN-01`, `RUN-02`, Phase 3,
+EDR, and release authority remain false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

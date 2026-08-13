@@ -80,6 +80,9 @@ from aragorn.admission_protected_prompt import (
 from aragorn.admission_protected_session_snapshot import (
     verify_openclaw_protected_session_snapshot,
 )
+from aragorn.admission_protected_session_snapshot_fixed import (
+    verify_openclaw_protected_session_snapshot_fixed,
+)
 from aragorn.admission_routes import validate_openclaw_2026_7_1_route_inventory
 from aragorn.admission_runtime_profile import (
     load_runtime_profile,
@@ -1953,6 +1956,71 @@ def main() -> int:
         != canonical_json(snapshot_qualification) + b"\n"
     ):
         raise AssertionError("protected session-snapshot qualification changed")
+
+    fixed_snapshot_profile_path = (
+        protected_profile_dir / "protected-session-snapshot-fixed-profile-v1.json"
+    )
+    fixed_snapshot_runtime_lock_path = (
+        protected_profile_dir
+        / "protected-session-snapshot-fixed-runtime-v1.lock.json"
+    )
+    fixed_snapshot_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-session-snapshot-fixed-2026-08-12.json",
+        fixed_snapshot_profile_path,
+        fixed_snapshot_runtime_lock_path,
+        protected_profile_dir / "protected-observation-v1.mjs",
+        protected_profile_dir / "protected-session-snapshot-fixed-probe.mjs",
+        protected_profile_dir / "protected-route-config-v1.json",
+        ROOT
+        / "benchmark"
+        / "fixtures"
+        / "phase3-protected-archive-existing"
+        / "SKILL.md",
+        protected_profile_dir
+        / "protected-session-snapshot-fixed-compiled-closure-v1.manifest.json",
+        protected_profile_dir
+        / "protected-session-snapshot-fixed-compiled-closure-v1.tar.gz",
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-snapshot-fixed-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        for path in fixed_snapshot_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        fixed_snapshot_qualification = (
+            verify_openclaw_protected_session_snapshot_fixed(
+                load(
+                    admission_receipts
+                    / "phase3-openclaw-protected-session-snapshot-fixed-v1-2026-08-12.json"
+                ),
+                evidence_cas=evidence_cas,
+                route_profile=load_runtime_profile(
+                    fixed_snapshot_profile_path.read_bytes()
+                ),
+                runtime_lock=load_runtime_profile(
+                    fixed_snapshot_runtime_lock_path.read_bytes()
+                ),
+                route_inventory=openclaw_route_inventory,
+                runtime_candidates=runtime_candidates,
+            )
+        )
+    retained_fixed_snapshot_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-session-snapshot-fixed-route-qualification-"
+        "v1-2026-08-12.json"
+    )
+    retained_fixed_snapshot_qualification = load(
+        retained_fixed_snapshot_qualification_path
+    )
+    if (
+        fixed_snapshot_qualification != retained_fixed_snapshot_qualification
+        or retained_fixed_snapshot_qualification_path.read_bytes()
+        != canonical_json(fixed_snapshot_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "fixed protected session-snapshot qualification changed"
+        )
 
     cron_sources = (
         admission_evidence

@@ -682,6 +682,18 @@ provider execution; no provider request or native system-prompt report was
 observed. The result disproves protected-bytes-only consumption for this exact
 profile and grants no broader authority.
 
+A separate private patched-runtime
+[session-snapshot qualification](./benchmark/receipts/phase3-openclaw-protected-session-snapshot-fixed-route-qualification-v1-2026-08-12.json)
+promotes only `ADM-02/reload/session-snapshot-consumer` to route-level `PASS`
+for `openclaw-2026.7.1-session-snapshot-fixed`. The pinned resolver returned
+the same trusted protected prompt and skill catalog for the clean baseline
+(`shouldRefresh:false`) and attacker-supplied prompt reference
+(`shouldRefresh:true`); the bounded native turn then persisted that protected
+snapshot. This fresh profile records 1 `PASS` and 20 `NOT_TESTED` and does not
+revise the official-runtime failure above. The private build is not an official
+or independently reproducible release, and aggregate admission, installer,
+`RUN-01`, `RUN-02`, Phase 3, EDR, and release authority remain false.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

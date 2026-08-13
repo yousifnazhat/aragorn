@@ -13,6 +13,8 @@ SOURCE_ROOT = ROOT / "benchmark/admission/openclaw-v2026.7.1"
 SOURCE_DIGESTS = {
     "adm03-probe.mjs": "1ac42c2baf9af313c99b5327b6c075fecd10a12e06f7dfb55d15f33b40ebb77e",
     "contained-probe.mjs": "da45089c199c5f749c94c88d19858fcb1b2c41236d965961782496b57fafe985",
+    "config-activation-probe.mjs": "4cbc285e65d7cd5e7ec2cea1651578cd93ed64a7a5b96f5e180dd498b488a8fe",
+    "live-reload-probe.mjs": "9bda8e8446c9307d2320099d0be8f28179f00bd1507035cae76255f0bc0ad8cc",
     "model-activation-probe.mjs": "15b7eef1895e1f6ac85c9d944f17069cf680844122d355f1ca8828deaf9b2769",
     "probe.mjs": "e27481d19e8490d0bffe5dfe300431e2233ed16f52fc9c0c21cbf425e4e75fd9",
     "protected-archive-replacement-probe.mjs": "90bf211226365ede1cf781fa3faa45217b1ed72fd636cc48824c4b39e5ac7c22",
@@ -45,6 +47,8 @@ REPLACEMENTS = (
 EXPECTED_COUNTS = {
     "adm03-probe.mjs": (),
     "contained-probe.mjs": (0, 1, 0, 0, 0, 0, 0, 0, 0),
+    "config-activation-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0, 0),
+    "live-reload-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0, 0),
     "model-activation-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0, 1),
     "probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0, 0),
     "protected-archive-replacement-probe.mjs": (1, 1, 0, 1, 0, 1, 0, 1, 1),

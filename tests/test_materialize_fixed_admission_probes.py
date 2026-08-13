@@ -38,6 +38,14 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             self.assertIn(
                 b'mountObservation(dirname(WORKSHOP_DRAFT), "directory")', workshop
             )
+            self.assertIn(
+                b"OpenClaw 2026.7.1 (4b198da)",
+                (output / "config-activation-probe.mjs").read_bytes(),
+            )
+            self.assertIn(
+                b"OpenClaw 2026.7.1 (4b198da)",
+                (output / "live-reload-probe.mjs").read_bytes(),
+            )
 
 
 if __name__ == "__main__":

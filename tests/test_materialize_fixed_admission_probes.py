@@ -46,6 +46,10 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 b"OpenClaw 2026.7.1 (4b198da)",
                 (output / "live-reload-probe.mjs").read_bytes(),
             )
+            self.assertIn(
+                b"OpenClaw 2026.7.1 (4b198da)",
+                (output / "plug01-probe.mjs").read_bytes(),
+            )
 
 
 if __name__ == "__main__":

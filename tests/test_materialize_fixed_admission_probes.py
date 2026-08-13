@@ -350,8 +350,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "c79d775903636736c2ae5413f381b3a8f9ec17a1a179a7807c4a6e57624662f0",
             ),
             "protected-cron-rescan-probe.mjs": (
-                26_952,
-                "bcfbd535604a344abe0e585cdd23e2d5fd4dac9fb58c0b090da1291cbca1ddc4",
+                25_998,
+                "2878f6a6aab1a738fd99de4200935233fc5af04cbb5cb43748f6ca9ecf2d3cdb",
             ),
             "protected-curator-restore-denial-probe.mjs": (
                 26_564,
@@ -551,6 +551,11 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             self.assertIn(b"cron-qc-KsHeU.js", cron)
             self.assertIn(b"session-snapshot-C3iM3syv.js", cron)
             self.assertIn(b"workspace-DvqxsRU0.js", cron)
+            self.assertNotIn(b"discovery", cron)
+            self.assertNotIn(b'    "skills",\n    "info",', cron)
+            self.assertEqual(cron.count(b"737"), 4)
+            self.assertNotIn(b"728", cron)
+            self.assertIn(b"aragorn-runtime-action-mock/fixture-model", cron)
 
             for name in FINAL_COMBINED_SOURCE_DIGESTS:
                 raw = transformed_final_combined_probe(name)

@@ -590,6 +590,66 @@ FINAL_COMBINED_CRON_REPLACEMENTS = (
     (b"workspace-CKU1tzCf.js", b"workspace-DvqxsRU0.js"),
 )
 
+FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS = (
+    (
+        b"""function discovery() {
+  const native = command([
+    "skills",
+    "info",
+    TARGET_NAME,
+    "--agent",
+    "main",
+    "--json",
+  ]);
+  return { command: native, response: parsedCommand(native) };
+}
+
+""",
+        b"",
+    ),
+    (
+        b"""function exactDiscovery(value) {
+  const skill = value.response.value;
+  return (
+    value.command.exit_code === 0 &&
+    cleanCommand(value.command) &&
+    value.response.parsed &&
+    skill?.name === TARGET_NAME &&
+    skill?.skillKey === TARGET_NAME &&
+    skill?.baseDir === TARGET &&
+    skill?.filePath === `${TARGET}/SKILL.md` &&
+    skill?.source === "openclaw-extra" &&
+    skill?.description ===
+      "Replace with description of the skill and when Claude should use it." &&
+    skill?.disabled === false &&
+    skill?.eligible === true &&
+    skill?.modelVisible === true
+  );
+}
+
+""",
+        b"",
+    ),
+    (b"    discovery_before: skillDiscovery,\n", b""),
+    (
+        b"    commands: [version, system.command, skillDiscovery.command],",
+        b"    commands: [version, system.command],",
+    ),
+    (b"    exactDiscovery(item.discovery_before) &&\n", b""),
+    (
+        b"    commands: [skillDiscovery.command, system.command],",
+        b"    commands: [system.command],",
+    ),
+    (b"      discovery_after: skillDiscovery,\n", b""),
+    (b"    exactDiscovery(last.discovery_after) &&\n", b""),
+)
+
+FINAL_COMBINED_CRON_PROFILE_REPLACEMENTS = (
+    (b"openai/gpt-5.5", b"aragorn-runtime-action-mock/fixture-model"),
+    (b'"openai"', b'"aragorn-runtime-action-mock"'),
+    (b'"gpt-5.5"', b'"fixture-model"'),
+)
+
 FINAL_COMBINED_CURATOR_REPLACEMENTS = (
     (
         b"b0cb989a0543181aa737cc5ca37c10bf3f21b010a76cb742aefd1b5b4cef8db8",
@@ -1552,6 +1612,20 @@ def transformed_final_combined_probe(name: str) -> bytes:
                 *FINAL_COMBINED_CRON_REPLACEMENTS,
             ),
         )
+        raw = _replace_once(raw, FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS)
+        raw = _replace_counted(
+            raw,
+            ((b"  const skillDiscovery = discovery();\n", b""),),
+            (2,),
+        )
+        raw = _replace_counted(raw, ((b"728", b"737"),), (4,))
+        raw = _replace_counted(
+            raw,
+            FINAL_COMBINED_CRON_PROFILE_REPLACEMENTS,
+            (3, 2, 2),
+        )
+        if b"discovery" in raw or b'    "skills",\n    "info",' in raw:
+            raise ValueError("stale final-combined cron discovery remains")
     elif name == "protected-prompt-rebuild-probe.mjs":
         raw = _replace_once(raw, FINAL_COMBINED_PROMPT_DISCOVERY_REPLACEMENTS)
         raw = _replace_once(raw, FINAL_COMBINED_PROMPT_TERMINAL_REPLACEMENTS)

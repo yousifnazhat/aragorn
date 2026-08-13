@@ -9,6 +9,7 @@ from scripts.materialize_fixed_admission_probes import (
     SOURCE_DIGESTS,
     materialize,
     transformed_probe,
+    transformed_restore_authority_probe,
 )
 
 
@@ -81,6 +82,25 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 b"OpenClaw 2026.7.1 (4b198da)",
                 (output / "plug01-probe.mjs").read_bytes(),
             )
+
+    def test_materializes_restore_authority_config_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "restore-authority"
+            name = "protected-config-activation-probe.mjs"
+            materialize(output, [name], restore_authority=True)
+            raw = (output / name).read_bytes()
+            self.assertEqual(raw, transformed_restore_authority_probe(name))
+            self.assertEqual(len(raw), 20_622)
+            self.assertEqual(
+                hashlib.sha256(raw).hexdigest(),
+                "bf0cea804669e71bc3fa13df449635e8b703385d139c5845a65c9f054f1a2a07",
+            )
+            self.assertIn(b"OpenClaw 2026.7.1 (805a4b1)", raw)
+            self.assertNotIn(b"4b198daf", raw)
+            rejected = Path(temporary) / "unsupported"
+            with self.assertRaises(ValueError):
+                materialize(rejected, ["probe.mjs"], restore_authority=True)
+            self.assertFalse(rejected.exists())
 
 
 if __name__ == "__main__":

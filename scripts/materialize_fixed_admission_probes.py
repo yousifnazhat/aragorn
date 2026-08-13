@@ -325,6 +325,29 @@ function normalTurn(label, message) {""",
     ),
 )
 
+RESTORE_AUTHORITY_CONFIG_REPLACEMENTS = (
+    (
+        b"4b198dafbcca1788bfe22c0abb1f8bf16064be03",
+        b"805a4b152b0cee271ee78ad5608c15a4f8d1624b",
+    ),
+    (b"OpenClaw 2026.7.1 (4b198da)", b"OpenClaw 2026.7.1 (805a4b1)"),
+    (b"45_860", b"45_859"),
+    (b"45_841", b"45_840"),
+    (b"369_417_908", b"369_418_625"),
+    (
+        b"4e866a250429632f5796d977554acbaabe6f30dbf837457e32022eacdb9152c1",
+        b"6448edb21fd2a27dd3cf2b740e0d0dfc3a395e2ccae446853867a95485d54e74",
+    ),
+    (
+        b"ec2b2022ed27f62840583d31264826c88514a04e7e7cc94d78820b021d6288b6",
+        b"701da2485f2844603c13b40c56876984de5ff9cdc22927f1a5bcd218ba369751",
+    ),
+    (
+        b"6226f46581416178666681d870d3ff54c5bccebeebb090cb3c996058db1c8a4a",
+        b"417fc06b87a539654433451aff12509ca7dca28003c9f2cedc91bcc611eba16e",
+    ),
+)
+
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
@@ -363,13 +386,32 @@ def transformed_probe(name: str) -> bytes:
     return raw
 
 
-def materialize(output: Path, names: list[str]) -> None:
+def transformed_restore_authority_probe(name: str) -> bytes:
+    if name != "protected-config-activation-probe.mjs":
+        raise ValueError(f"unsupported restore-authority probe: {name}")
+    raw = transformed_probe(name)
+    if any(raw.count(old) != 1 for old, _new in RESTORE_AUTHORITY_CONFIG_REPLACEMENTS):
+        raise ValueError("restore-authority config probe shape changed")
+    for old, new in RESTORE_AUTHORITY_CONFIG_REPLACEMENTS:
+        raw = raw.replace(old, new)
+    return raw
+
+
+def materialize(
+    output: Path, names: list[str], *, restore_authority: bool = False
+) -> None:
+    if restore_authority and names != ["protected-config-activation-probe.mjs"]:
+        raise ValueError("restore-authority materialization requires the config probe")
     output.mkdir(mode=0o755, parents=True, exist_ok=False)
     for name in names:
         path = output / name
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
         try:
-            raw = transformed_probe(name)
+            raw = (
+                transformed_restore_authority_probe(name)
+                if restore_authority
+                else transformed_probe(name)
+            )
             written = 0
             while written < len(raw):
                 written += os.write(fd, raw[written:])
@@ -380,10 +422,11 @@ def materialize(output: Path, names: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--restore-authority", action="store_true")
     parser.add_argument("output", type=Path)
     parser.add_argument("names", nargs="+", choices=sorted(SOURCE_DIGESTS))
     args = parser.parse_args()
-    materialize(args.output, args.names)
+    materialize(args.output, args.names, restore_authority=args.restore_authority)
     return 0
 
 

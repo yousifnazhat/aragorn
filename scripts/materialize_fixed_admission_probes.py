@@ -359,12 +359,14 @@ RESTORE_AUTHORITY_PROBE_COUNTS = {
     "protected-config-activation-probe.mjs": (1,) * 8,
     "protected-observation-v1.mjs": (0, 0, 1, 1, 1, 1, 1, 1),
     "protected-prompt-rebuild-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 0),
+    "protected-route-probe.mjs": (1, 1, 0, 0, 0, 0, 0, 1),
 }
 
 RESTORE_AUTHORITY_SELECTIONS = frozenset(
     {
         frozenset({"protected-archive-replacement-probe.mjs"}),
         frozenset({"protected-config-activation-probe.mjs"}),
+        frozenset({"protected-route-probe.mjs"}),
         frozenset(
             {
                 "protected-observation-v1.mjs",

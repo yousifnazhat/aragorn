@@ -169,6 +169,37 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                         materialize(rejected, selection, restore_authority=True)
                     self.assertFalse(rejected.exists())
 
+    def test_materializes_restore_authority_fresh_session_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "restore-authority-fresh-session"
+            name = "protected-route-probe.mjs"
+            materialize(output, [name], restore_authority=True)
+            raw = (output / name).read_bytes()
+
+            self.assertEqual([path.name for path in output.iterdir()], [name])
+            self.assertEqual(raw, transformed_restore_authority_probe(name))
+            self.assertEqual(len(raw), 40_223)
+            self.assertEqual(
+                hashlib.sha256(raw).hexdigest(),
+                "094f4879f2ddb3dea3a15c73bfef09ff309a1847ec178e12fa23648da02617c2",
+            )
+            self.assertEqual((output / name).stat().st_mode & 0o777, 0o444)
+            self.assertIn(b"OpenClaw 2026.7.1 (805a4b1)", raw)
+            self.assertIn(
+                b'from "/runtime/lib/node_modules/openclaw/dist/plugin-sdk/gateway-runtime.js"',
+                raw,
+            )
+            self.assertIn(b'"ADM-02/reload/fresh-session-reset"', raw)
+            self.assertIn(
+                b"417fc06b87a539654433451aff12509ca7dca28003c9f2cedc91bcc611eba16e",
+                raw,
+            )
+            self.assertNotIn(b"4b198daf", raw)
+            self.assertNotIn(
+                b"6226f46581416178666681d870d3ff54c5bccebeebb090cb3c996058db1c8a4a",
+                raw,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

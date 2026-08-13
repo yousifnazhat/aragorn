@@ -527,11 +527,26 @@ def _prepare_gateway(
     )
 
 
+def _reset_transient_request_directory() -> None:
+    path = p37c.p37b.prior._REQUEST.parent
+    metadata = path.stat(follow_symlinks=False)
+    _expect(
+        stat.S_ISDIR(metadata.st_mode)
+        and metadata.st_uid == 0
+        and metadata.st_gid == 0
+        and stat.S_IMODE(metadata.st_mode) == 0o700
+        and not any(path.iterdir()),
+        "inherited protected-install request directory is not empty and exact",
+    )
+    path.rmdir()
+
+
 def _collect() -> dict[str, Any]:
     if os.environ.get("OPENCLAW_TEST_FAST") is not None:
         raise openclaw.ProbeError("OPENCLAW_TEST_FAST must be absent")
     _set_stage("FINAL_PROFILE")
     profile_before = _profile_snapshot()
+    _reset_transient_request_directory()
     _set_stage("P3_7C_ACTION")
     with (
         mock.patch.object(p37c, "_harness", _harness),

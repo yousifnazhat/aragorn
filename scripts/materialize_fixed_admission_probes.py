@@ -348,6 +348,17 @@ RESTORE_AUTHORITY_CONFIG_REPLACEMENTS = (
     ),
 )
 
+RESTORE_AUTHORITY_ARCHIVE_REPLACEMENTS = (
+    (b"45860", b"45859"),
+    (b"45841", b"45840"),
+    (b"369417908", b"369418625"),
+)
+
+RESTORE_AUTHORITY_PROBE_COUNTS = {
+    "protected-archive-replacement-probe.mjs": (1, 1, 0, 0, 0, 1, 1, 1),
+    "protected-config-activation-probe.mjs": (1,) * 8,
+}
+
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
@@ -387,21 +398,34 @@ def transformed_probe(name: str) -> bytes:
 
 
 def transformed_restore_authority_probe(name: str) -> bytes:
-    if name != "protected-config-activation-probe.mjs":
+    expected = RESTORE_AUTHORITY_PROBE_COUNTS.get(name)
+    if expected is None:
         raise ValueError(f"unsupported restore-authority probe: {name}")
     raw = transformed_probe(name)
-    if any(raw.count(old) != 1 for old, _new in RESTORE_AUTHORITY_CONFIG_REPLACEMENTS):
-        raise ValueError("restore-authority config probe shape changed")
+    counts = tuple(
+        raw.count(old) for old, _new in RESTORE_AUTHORITY_CONFIG_REPLACEMENTS
+    )
+    if counts != expected:
+        raise ValueError("restore-authority probe shape changed")
     for old, new in RESTORE_AUTHORITY_CONFIG_REPLACEMENTS:
         raw = raw.replace(old, new)
+    if name == "protected-archive-replacement-probe.mjs":
+        if any(
+            raw.count(old) != 1 for old, _new in RESTORE_AUTHORITY_ARCHIVE_REPLACEMENTS
+        ):
+            raise ValueError("restore-authority archive probe shape changed")
+        for old, new in RESTORE_AUTHORITY_ARCHIVE_REPLACEMENTS:
+            raw = raw.replace(old, new)
     return raw
 
 
 def materialize(
     output: Path, names: list[str], *, restore_authority: bool = False
 ) -> None:
-    if restore_authority and names != ["protected-config-activation-probe.mjs"]:
-        raise ValueError("restore-authority materialization requires the config probe")
+    if restore_authority and (
+        len(names) != 1 or names[0] not in RESTORE_AUTHORITY_PROBE_COUNTS
+    ):
+        raise ValueError("unsupported restore-authority probe selection")
     output.mkdir(mode=0o755, parents=True, exist_ok=False)
     for name in names:
         path = output / name

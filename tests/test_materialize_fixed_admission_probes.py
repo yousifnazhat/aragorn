@@ -83,7 +83,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 (output / "plug01-probe.mjs").read_bytes(),
             )
 
-    def test_materializes_restore_authority_config_probe(self) -> None:
+    def test_materializes_restore_authority_probes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "restore-authority"
             name = "protected-config-activation-probe.mjs"
@@ -97,6 +97,20 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             )
             self.assertIn(b"OpenClaw 2026.7.1 (805a4b1)", raw)
             self.assertNotIn(b"4b198daf", raw)
+
+            archive_output = Path(temporary) / "restore-authority-archive"
+            archive_name = "protected-archive-replacement-probe.mjs"
+            materialize(archive_output, [archive_name], restore_authority=True)
+            archive = (archive_output / archive_name).read_bytes()
+            self.assertEqual(archive, transformed_restore_authority_probe(archive_name))
+            self.assertEqual(len(archive), 22_549)
+            self.assertEqual(
+                hashlib.sha256(archive).hexdigest(),
+                "4b152c299a53f9b23254d73101a8785b823011f78bfd34ba0d3cd98aa83d9c7f",
+            )
+            for stale in (b"4b198daf", b"45860", b"45841", b"369417908"):
+                self.assertNotIn(stale, archive)
+
             rejected = Path(temporary) / "unsupported"
             with self.assertRaises(ValueError):
                 materialize(rejected, ["probe.mjs"], restore_authority=True)

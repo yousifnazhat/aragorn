@@ -113,9 +113,10 @@ const EXPECTED_INVALID_TOKEN_DENIAL = Object.freeze({
     type: "gateway_transport_error",
     kind: "closed",
     message:
-      "gateway closed (1006 abnormal closure (no close frame)): no close reason",
-    code: 1006,
-    reason: "no close reason",
+      "gateway closed (1008): unauthorized: gateway token mismatch (set gateway.remote.token to match gateway.auth.token)",
+    code: 1008,
+    reason:
+      "unauthorized: gateway token mismatch (set gateway.remote.token to match gateway.auth.token)",
   },
   gateway: {
     url: "ws://127.0.0.1:18789",
@@ -128,6 +129,8 @@ const EXPECTED_INVALID_TOKEN_STDOUT = `${JSON.stringify(
   null,
   2,
 )}\n`;
+const EXPECTED_INVALID_TOKEN_STDERR =
+  "gateway connect failed: GatewayClientRequestError: unauthorized: gateway token mismatch (set gateway.remote.token to match gateway.auth.token)\n";
 const FIXTURE_ROW = Object.freeze({
   archived_reason: "aragorn exact protected restore-authority fixture",
   created_at_ms: 1,
@@ -443,8 +446,11 @@ function exactInvalidTokenDenial(commandResult, response) {
   return (
     commandResult.exit_code === 1 &&
     cleanCommand(commandResult) &&
-    commandResult.stderr_bytes === 0 &&
-    commandResult.stderr_digest === EMPTY_DIGEST &&
+    commandResult.stderr_bytes ===
+      Buffer.byteLength(EXPECTED_INVALID_TOKEN_STDERR) &&
+    commandResult.stderr_digest ===
+      sha256(Buffer.from(EXPECTED_INVALID_TOKEN_STDERR)) &&
+    commandResult.stderr_excerpt === EXPECTED_INVALID_TOKEN_STDERR &&
     commandResult.stdout_bytes ===
       Buffer.byteLength(EXPECTED_INVALID_TOKEN_STDOUT) &&
     commandResult.stdout_digest ===

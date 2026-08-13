@@ -485,6 +485,14 @@ rotation, snapshot clearing, and exact protected prompt-reference
 reconstruction. Reset reply dispatch and model turns failed, the full runtime
 tree was not rehashed, and all broader authority remains false.
 
+The following native-chat qualifier reuses the exact fixed session capture and
+records 8 `PASS` and 13 `NOT_TESTED`, adding only
+`ADM-02/reload/chat-session-snapshot-consumer`. It binds a same-session second
+chat turn to replacement of the injected prompt reference with the exact
+protected prompt and catalog. The result is shared-capture black-box behavior,
+not direct `session-updates.ts` tracing or successful model/reply delivery, and
+all broader authority remains false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

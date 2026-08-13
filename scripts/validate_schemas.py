@@ -83,6 +83,9 @@ from aragorn.admission_protected_session_snapshot import (
 from aragorn.admission_protected_session_snapshot_fixed import (
     verify_openclaw_protected_session_snapshot_fixed,
 )
+from aragorn.admission_protected_session_snapshot_fixed_chat import (
+    verify_openclaw_protected_session_snapshot_fixed_chat,
+)
 from aragorn.admission_protected_session_snapshot_fixed_fresh_session import (
     verify_openclaw_protected_session_snapshot_fixed_fresh_session,
 )
@@ -2126,6 +2129,31 @@ def main() -> int:
         != canonical_json(fresh_session_coverage) + b"\n"
     ):
         raise AssertionError("fixed fresh-session route coverage changed")
+
+    fixed_session_evidence_path = admission_evidence / (
+        "openclaw-v2026.7.1-protected-session-snapshot-fixed-2026-08-12.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-snapshot-fixed-chat-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = fixed_session_evidence_path.read_bytes()
+        evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        fixed_chat_coverage = verify_openclaw_protected_session_snapshot_fixed_chat(
+            retained_fresh_session_coverage,
+            evidence_cas=evidence_cas,
+        )
+    retained_fixed_chat_coverage_path = admission_receipts / (
+        "phase3-openclaw-protected-session-snapshot-fixed-chat-route-coverage-"
+        "v1-2026-08-13.json"
+    )
+    retained_fixed_chat_coverage = load(retained_fixed_chat_coverage_path)
+    if (
+        fixed_chat_coverage != retained_fixed_chat_coverage
+        or retained_fixed_chat_coverage_path.read_bytes()
+        != canonical_json(fixed_chat_coverage) + b"\n"
+    ):
+        raise AssertionError("fixed chat route coverage changed")
 
     cron_sources = (
         admission_evidence

@@ -710,6 +710,15 @@ protected prompt reference. Reset reply dispatch and both model turns failed;
 no full-runtime-tree, aggregate, installer, Phase 3, EDR, or release authority
 is claimed.
 
+The same private fixed-runtime capture also supports a narrowly scoped
+[native chat route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-session-snapshot-fixed-chat-route-coverage-v1-2026-08-13.json),
+bringing the profile to 8 `PASS` and 13 `NOT_TESTED`. It adds only
+`ADM-02/reload/chat-session-snapshot-consumer`: the second same-session native
+chat turn discarded an injected prompt reference and persisted the exact
+protected prompt and catalog. This reuses a shared capture and is black-box
+behavioral evidence, not a direct `session-updates.ts` trace; model delivery and
+all broader authority remain unclaimed.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

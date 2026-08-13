@@ -370,8 +370,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "fc5f7499141f3a09e9347355dcac2284d781133b16ea05c0b2ee95fd8e6ce820",
             ),
             "protected-session-snapshot-fixed-probe.mjs": (
-                41_531,
-                "5c8ed84c158d735737233f3f58b187c512f68d819388df1b1f7135476b88493d",
+                42_292,
+                "7afa13731af7f937ff02b0b189a58243853573ad70a7ac9c7d9730cb01c4be05",
             ),
         }
         self.assertEqual(set(expected), set(FINAL_COMBINED_SOURCE_DIGESTS))
@@ -406,6 +406,9 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             helper = transformed_final_combined_probe("protected-observation-v1.mjs")
             route = transformed_final_combined_probe("protected-route-probe.mjs")
             cron = transformed_final_combined_probe("protected-cron-rescan-probe.mjs")
+            snapshot = transformed_final_combined_probe(
+                "protected-session-snapshot-fixed-probe.mjs"
+            )
             for raw in (archive, route, cron):
                 self.assertIn(b"7fa98d8", raw)
                 self.assertNotIn(b"805a4b1", raw)
@@ -475,6 +478,35 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 route,
             )
             self.assertIn(b"WORKSPACE_SKILLS_WRITABLE_BOUNDARY_REQUIRED", route)
+            self.assertNotIn(b"discovery", snapshot)
+            self.assertNotIn(b'    "skills",\n    "info",', snapshot)
+            self.assertIn(b"boundaryBefore.ready &&", snapshot)
+            self.assertIn(b"exactTarget(targetBefore) &&", snapshot)
+            self.assertIn(b'value.entry.run_status === "timeout"', snapshot)
+            self.assertIn(b'value.entry.run_status === "failed"', snapshot)
+            self.assertIn(b"function exactInitialSnapshot(value, turn)", snapshot)
+            self.assertIn(
+                b"value.entry.runtime_ms ===\n"
+                b"      value.entry.ended_at - value.entry.started_at",
+                snapshot,
+            )
+            self.assertIn(b"value.entry.ended_at <= value.entry.updated_at", snapshot)
+            self.assertIn(b"sendStartedAt <= value.entry.started_at", snapshot)
+            self.assertIn(b"value.entry.ended_at <= waitValue.endedAt", snapshot)
+            self.assertIn(b"value.entry.updated_at <= waitCompletedAt", snapshot)
+            self.assertIn(b"!sendResponse.parsed", snapshot)
+            self.assertIn(b"!waitResponse.parsed", snapshot)
+            self.assertIn(b"terminalOk &&", snapshot)
+            self.assertIn(b"terminalNetworkError", snapshot)
+            self.assertIn(b"network connection error", snapshot)
+            self.assertIn(
+                b"exactInitialSnapshot(initialSnapshot, initialTurn)", snapshot
+            )
+            self.assertIn(
+                b"exactRecoveredSnapshot(initial, final, attackerRef, turn)",
+                snapshot,
+            )
+            self.assertIn(b"exactInitialSnapshot(final, turn)", snapshot)
             self.assertIn(b"cron-qc-KsHeU.js", cron)
             self.assertIn(b"session-snapshot-C3iM3syv.js", cron)
             self.assertIn(b"workspace-DvqxsRU0.js", cron)

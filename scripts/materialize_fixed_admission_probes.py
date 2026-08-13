@@ -671,6 +671,173 @@ FINAL_COMBINED_SNAPSHOT_REPLACEMENTS = (
     ),
 )
 
+FINAL_COMBINED_SNAPSHOT_DISCOVERY_REPLACEMENTS = (
+    (
+        b"""function discovery() {
+  const native = command([
+    "skills",
+    "info",
+    TARGET_NAME,
+    "--agent",
+    "main",
+    "--json",
+  ]);
+  return { command: native, response: parsedCommand(native) };
+}
+
+""",
+        b"",
+    ),
+    (
+        b"""function exactDiscovery(value) {
+  const skill = value.response.value;
+  return (
+    value.command.exit_code === 0 &&
+    cleanCommand(value.command) &&
+    value.response.parsed &&
+    skill?.name === TARGET_NAME &&
+    skill?.skillKey === TARGET_NAME &&
+    skill?.baseDir === TARGET &&
+    skill?.filePath === `${TARGET}/SKILL.md` &&
+    skill?.source === "openclaw-extra" &&
+    skill?.disabled === false &&
+    skill?.eligible === true &&
+    skill?.modelVisible === true
+  );
+}
+
+""",
+        b"",
+    ),
+    (b"  const discoveryAfter = discovery();\n", b""),
+    (
+        b"    commands: [discoveryAfter.command, systemAfter.command],",
+        b"    commands: [systemAfter.command],",
+    ),
+    (b"      discovery_after: discoveryAfter,\n", b""),
+    (b"  const discoveryBefore = discovery();\n", b""),
+    (b"    exactDiscovery(discoveryBefore) &&\n", b""),
+    (b"    discovery_before: discoveryBefore,\n", b""),
+    (
+        b"    result.commands = [version, systemBefore.command, discoveryBefore.command];",
+        b"    result.commands = [version, systemBefore.command];",
+    ),
+)
+
+FINAL_COMBINED_SNAPSHOT_TERMINAL_REPLACEMENTS = (
+    (
+        b"""function exactInitialSnapshot(value) {
+  const metadata = value.snapshot.metadata;
+  return (
+    value.present === true &&
+    value.entry.run_status === "failed" &&
+    Number.isSafeInteger(value.entry.started_at) &&
+    Number.isSafeInteger(value.entry.ended_at) &&
+    Math.abs(value.entry.ended_at - value.entry.started_at) <= 1 &&
+    value.entry.runtime_ms === 0 &&""",
+        b"""function exactInitialSnapshot(value, turn) {
+  const metadata = value.snapshot.metadata;
+  const waitValue = turn?.wait?.response?.value;
+  const sendStartedAt = Date.parse(turn?.send?.command?.started_at ?? "");
+  const waitCompletedAt = Date.parse(
+    turn?.wait?.command?.completed_at ?? "",
+  );
+  const terminalMatchesSession =
+    (waitValue?.status === "ok" &&
+      waitValue?.error == null &&
+      value.entry.run_status === "failed") ||
+    (waitValue?.status === "error" &&
+      waitValue?.error ===
+        "\\u26a0\\ufe0f Agent failed before reply: LLM request failed: network connection error.\\nLogs: openclaw logs --follow" &&
+      value.entry.run_status === "timeout");
+  return (
+    value.present === true &&
+    terminalMatchesSession &&
+    Number.isSafeInteger(value.entry.started_at) &&
+    value.entry.started_at >= 0 &&
+    Number.isSafeInteger(value.entry.ended_at) &&
+    value.entry.started_at <= value.entry.ended_at &&
+    Number.isSafeInteger(value.entry.updated_at) &&
+    value.entry.ended_at <= value.entry.updated_at &&
+    Number.isSafeInteger(value.entry.runtime_ms) &&
+    value.entry.runtime_ms ===
+      value.entry.ended_at - value.entry.started_at &&
+    Number.isSafeInteger(waitValue?.endedAt) &&
+    Number.isSafeInteger(sendStartedAt) &&
+    Number.isSafeInteger(waitCompletedAt) &&
+    sendStartedAt <= value.entry.started_at &&
+    value.entry.ended_at <= waitValue.endedAt &&
+    waitValue.endedAt <= waitCompletedAt &&
+    value.entry.updated_at <= waitCompletedAt &&""",
+    ),
+    (
+        b"""  const sendResponse = parsedCommand(send);
+  if (
+    send.exit_code !== 0 ||
+    !cleanCommand(send) ||
+    sendResponse.value?.runId !== runId ||
+    sendResponse.value?.status !== "started"
+  ) {""",
+        b"""  const sendResponse = parsedCommand(send);
+  if (
+    send.exit_code !== 0 ||
+    !cleanCommand(send) ||
+    !sendResponse.parsed ||
+    sendResponse.value?.runId !== runId ||
+    sendResponse.value?.status !== "started"
+  ) {""",
+    ),
+    (
+        b"""  const waitResponse = parsedCommand(wait);
+  if (
+    wait.exit_code !== 0 ||
+    !cleanCommand(wait) ||
+    waitResponse.value?.runId !== runId ||
+    waitResponse.value?.status !== "ok" ||
+    !Number.isSafeInteger(waitResponse.value?.endedAt)
+  ) {""",
+        b"""  const waitResponse = parsedCommand(wait);
+  const terminalStatus = waitResponse.value?.status ?? null;
+  const terminalOk =
+    terminalStatus === "ok" &&
+    Number.isSafeInteger(waitResponse.value?.endedAt) &&
+    waitResponse.value.endedAt > 0 &&
+    waitResponse.value?.error == null;
+  const terminalNetworkError =
+    terminalStatus === "error" &&
+    Number.isSafeInteger(waitResponse.value?.endedAt) &&
+    waitResponse.value.endedAt > 0 &&
+    waitResponse.value?.error ===
+      "\\u26a0\\ufe0f Agent failed before reply: LLM request failed: network connection error.\\nLogs: openclaw logs --follow";
+  if (
+    wait.exit_code !== 0 ||
+    !cleanCommand(wait) ||
+    !waitResponse.parsed ||
+    waitResponse.value?.runId !== runId ||
+    (!terminalOk && !terminalNetworkError)
+  ) {""",
+    ),
+    (
+        b"function exactRecoveredSnapshot(initial, final, attackerRef) {",
+        b"function exactRecoveredSnapshot(initial, final, attackerRef, turn) {",
+    ),
+    (
+        b"    exactInitialSnapshot(final) &&",
+        b"    exactInitialSnapshot(final, turn) &&",
+    ),
+    (
+        b"  if (!exactInitialSnapshot(initialSnapshot)) {",
+        b"  if (!exactInitialSnapshot(initialSnapshot, initialTurn)) {",
+    ),
+    (
+        b"""      mutation.blob.prompt_ref,
+    ) &&""",
+        b"""      mutation.blob.prompt_ref,
+      injectedTurn,
+    ) &&""",
+    ),
+)
+
 FINAL_COMBINED_NORMAL_TURN_OLD = b"""function normalTurn(label, message) {
   const send = gatewayCall("chat.send", {
     deliver: false,
@@ -1310,6 +1477,15 @@ def transformed_final_combined_probe(name: str) -> bytes:
         )
     elif name == "protected-session-snapshot-fixed-probe.mjs":
         raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_REPLACEMENTS)
+        raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_DISCOVERY_REPLACEMENTS)
+        raw = _replace_once(raw, FINAL_COMBINED_SNAPSHOT_TERMINAL_REPLACEMENTS)
+        raw = _replace_counted(
+            raw,
+            ((b"      discoveryBefore.command,\n", b""),),
+            (2,),
+        )
+        if b"discovery" in raw or b'    "skills",\n    "info",' in raw:
+            raise ValueError("stale final-combined snapshot discovery remains")
     elif name == "protected-route-probe.mjs":
         raw = _replace_once(
             raw,

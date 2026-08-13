@@ -31,6 +31,9 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             cron = (output / "protected-cron-rescan-probe.mjs").read_bytes()
             self.assertIn(b"cron-snapshot.runtime-DzbSus3I.js", cron)
             self.assertIn(b"session-snapshot-CMKRWMg1.js", cron)
+            workshop = (output / "protected-route-probe.mjs").read_bytes()
+            self.assertIn(b'const CONFIG = "/profile/config/openclaw.json";', workshop)
+            self.assertIn(b'const WORKSHOP_DRAFT = "/proposal/PROPOSAL.md";', workshop)
 
 
 if __name__ == "__main__":

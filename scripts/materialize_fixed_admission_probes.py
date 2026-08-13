@@ -79,6 +79,17 @@ CRON_REPLACEMENTS = (
     ),
 )
 
+WORKSHOP_REPLACEMENTS = (
+    (
+        b'const CONFIG = "/profile/config.json";',
+        b'const CONFIG = "/profile/config/openclaw.json";',
+    ),
+    (
+        b'const WORKSHOP_DRAFT = join(WORKSPACE, "PROPOSAL.md");',
+        b'const WORKSHOP_DRAFT = "/proposal/PROPOSAL.md";',
+    ),
+)
+
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
@@ -104,6 +115,11 @@ def transformed_probe(name: str) -> bytes:
         if any(raw.count(old) != 1 for old, _new in CRON_REPLACEMENTS):
             raise ValueError("fixed cron replay closure shape changed")
         for old, new in CRON_REPLACEMENTS:
+            raw = raw.replace(old, new)
+    if name == "protected-route-probe.mjs":
+        if any(raw.count(old) != 1 for old, _new in WORKSHOP_REPLACEMENTS):
+            raise ValueError("fixed workshop path shape changed")
+        for old, new in WORKSHOP_REPLACEMENTS:
             raw = raw.replace(old, new)
     return raw
 

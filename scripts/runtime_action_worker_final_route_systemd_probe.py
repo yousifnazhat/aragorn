@@ -519,7 +519,7 @@ def _collect(route_id: str) -> dict[str, Any]:
             "NO_RUN_PHASE3_EDR_INSTALLER_OR_RELEASE_AUTHORITY",
         ],
     }
-    tokens = composition["inputs"].get("gateway_environment_bytes_retained")
+    tokens = composition["action"]["inputs"].get("gateway_environment_bytes_retained")
     _expect(tokens is False, "composition retained gateway environment bytes")
     return result
 

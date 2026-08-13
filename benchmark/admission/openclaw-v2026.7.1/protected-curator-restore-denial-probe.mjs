@@ -405,13 +405,11 @@ function seedArchivedFixture() {
   return database;
 }
 
-function exactDatabaseObservation(observation, expectedDataVersion = null) {
+function exactDatabaseObservation(observation) {
   return (
     canonicalJson(observation.row) === canonicalJson(FIXTURE_ROW) &&
     Number.isSafeInteger(observation.data_version) &&
-    observation.data_version > 0 &&
-    (expectedDataVersion === null ||
-      observation.data_version === expectedDataVersion)
+    observation.data_version > 0
   );
 }
 
@@ -563,10 +561,7 @@ async function runObservation() {
     }
     const databaseAfterGateway = databaseObservation(database);
     if (
-      !exactDatabaseObservation(
-        databaseAfterGateway,
-        databaseBefore.data_version,
-      )
+      !exactDatabaseObservation(databaseAfterGateway)
     ) {
       throw new Error("gateway restore changed archived lifecycle state");
     }
@@ -591,7 +586,7 @@ async function runObservation() {
     }
     const databaseAfterCli = databaseObservation(database);
     if (
-      !exactDatabaseObservation(databaseAfterCli, databaseBefore.data_version)
+      !exactDatabaseObservation(databaseAfterCli)
     ) {
       throw new Error("CLI fallback changed archived lifecycle state");
     }
@@ -701,6 +696,7 @@ async function main() {
     limitations: [
       "OBSERVED_IS_NOT_PASS",
       "EXACT_EPHEMERAL_ARCHIVED_LIFECYCLE_FIXTURE_NOT_NATIVE_CURATOR_SWEEP",
+      "SHARED_DATABASE_DATA_VERSION_NOT_STABLE_ONLY_EXACT_SELECTED_LIFECYCLE_ROW_BOUND",
       "SINGLE_ROUTE_SINGLE_CAPTURE",
       "PRIVATE_PATCHED_RUNTIME_NOT_OFFICIAL_OPENCLAW_RELEASE",
       "NO_AGGREGATE_ADMISSION_INSTALLER_PHASE3_EDR_OR_RELEASE_AUTHORITY",

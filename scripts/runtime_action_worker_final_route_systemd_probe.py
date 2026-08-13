@@ -378,7 +378,6 @@ def _run_route(
     document = json.loads(
         process.stdout,
         parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
-        parse_float=lambda value: (_ for _ in ()).throw(ValueError(value)),
     )
     _expect(
         isinstance(document, dict)

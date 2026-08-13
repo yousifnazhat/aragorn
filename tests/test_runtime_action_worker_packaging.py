@@ -243,7 +243,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "Aragorn runtime worker fail-stop verification failed",
             "/usr/bin/setpriv",
             "--clear-groups",
-            "475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c",
+            "5d09f482ad1cb177eae168eaea074f6d2a6ec976d16042a3e1d665cc2371f154",
             "c43a81b394e0b96b0950af94b937a79e777d7e0c815a0104f1ab45871f4afa64",
             "d0f433abba94a4560c26cb99017f56543b432e2fc3aa74e3374ee4e04addeeaf",
             'wait_socket "$broker_socket"',

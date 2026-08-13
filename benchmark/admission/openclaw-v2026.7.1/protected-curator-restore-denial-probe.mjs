@@ -106,7 +106,9 @@ const EXPECTED_GATEWAY_STDOUT = `${JSON.stringify(
   null,
   2,
 )}\n`;
-const EXPECTED_CLI_STDERR = `Error: ${AUTHORITY_ERROR}\n`;
+const EXPECTED_CLI_STDERR =
+  `gateway connect failed: GatewayClientRequestError: unauthorized: gateway token mismatch (set gateway.remote.token to match gateway.auth.token)\n` +
+  `Error: ${AUTHORITY_ERROR}\n`;
 const EXPECTED_INVALID_TOKEN_DENIAL = Object.freeze({
   ok: false,
   error: {
@@ -583,7 +585,7 @@ async function runObservation() {
     }
 
     const cliRestore = commandWithEnvironment(
-      ["skills", "curator", "restore", TARGET_NAME, "--json"],
+      ["skills", "curator", "--json", "restore", TARGET_NAME],
       { OPENCLAW_GATEWAY_TOKEN: INVALID_CHILD_TOKEN },
       15_000,
     );

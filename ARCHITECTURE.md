@@ -562,6 +562,28 @@ failed, so provider-body observation, model success, and reply delivery remain
 unclaimed. This is private-build composition with every broad eligibility
 decision false.
 
+The additive
+[restore-authority cron route coverage qualifier](./benchmark/receipts/phase3-openclaw-protected-restore-authority-cron-route-coverage-v1-2026-08-13.json)
+records 9 `PASS` and 12 `NOT_TESTED`, adding only
+`ADM-02/reload/cron-rescan`. It composes one fresh exact capture on the private
+patched runtime: an isolated job was created, forced once, and removed, with no
+repeatability claim. Because the base session was absent, it establishes no
+snapshot reuse or tamper repair; the exact protected `promptRef` persisted
+before the expected model-not-found result, separate run-ID and `runAtMs` clock
+reads are only causally bounded, and state changes remained ephemeral. This is
+black-box native cron persistence without a direct module trace, provider
+network or request, successful model, reply, or delivery. The inherited chat
+subsequence still reuses the shared prompt-rebuild capture rather than an
+independent run, has no direct session-update trace, and covers one missing-blob
+trigger rather than general chat behavior. The build is private, not an
+official release, and lacks independent source-to-binary reproduction; 12
+routes remain untested and aggregate admission, installer, `RUN-01`, `RUN-02`,
+Phase 3, EDR, and release authority remain false. This is a checkpoint only
+and is non-composable with P3.7c before the final runtime freeze because the
+captures bind different runtime identities. A common final runtime freeze,
+fresh reruns, and an explicit cross-capture qualifier are required before any
+shared Phase 3 claim.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

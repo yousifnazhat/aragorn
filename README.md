@@ -800,6 +800,28 @@ session-update or module-execution trace. Both model turns failed, so no
 provider body, model success, or reply delivery is claimed. The result remains
 private-build composition with every broad eligibility decision false.
 
+The additive
+[restore-authority cron route coverage qualification](./benchmark/receipts/phase3-openclaw-protected-restore-authority-cron-route-coverage-v1-2026-08-13.json)
+records 9 `PASS` and 12 `NOT_TESTED`, adding only
+`ADM-02/reload/cron-rescan`. This separate-capture composition uses one fresh,
+exact private patched-runtime capture: one isolated job was created, forced,
+and removed, without a repeatability claim. The absent base session establishes
+neither snapshot reuse nor tamper repair; the exact `promptRef` persisted before
+the expected model-not-found result, distinct run-ID and `runAtMs` clock reads
+are only causally bounded, and mutations stayed in ephemeral state. It is
+black-box native cron evidence without a direct module trace, provider network
+or request, successful model, reply, or delivery. It also inherits the chat
+ceilings: the shared prompt-rebuild capture is not an independent chat run,
+there is no direct session-update trace, and one missing-blob trigger is not
+general chat coverage. The private build is not an official release and its
+source-to-binary reproduction is not independently attested; 12 routes remain
+untested and every admission-profile, aggregate-admission, installer, `RUN-01`,
+`RUN-02`, Phase 3, EDR, and release decision remains false. This is a
+checkpoint only and is non-composable with P3.7c before the final runtime
+freeze because the captures bind different runtime identities. A common final
+runtime freeze, fresh reruns, and an explicit cross-capture qualifier are
+required before any shared Phase 3 claim.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

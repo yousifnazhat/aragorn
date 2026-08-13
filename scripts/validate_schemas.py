@@ -92,6 +92,9 @@ from aragorn.admission_protected_restore_authority_chat import (
 from aragorn.admission_protected_restore_authority_config import (
     verify_openclaw_protected_restore_authority_config_activation,
 )
+from aragorn.admission_protected_restore_authority_cron import (
+    verify_openclaw_protected_restore_authority_cron_rescan,
+)
 from aragorn.admission_protected_restore_authority_fresh_session import (
     verify_openclaw_protected_restore_authority_fresh_session_reset,
 )
@@ -2598,6 +2601,70 @@ def main() -> int:
         != canonical_json(restore_chat_coverage) + b"\n"
     ):
         raise AssertionError("protected restore-authority chat coverage changed")
+
+    restore_cron_evidence_path = admission_evidence / (
+        "openclaw-v2026.7.1-protected-restore-authority-cron-rescan-"
+        "2026-08-13.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-restore-authority-cron-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        for path in (
+            restore_profile_path,
+            restore_runtime_lock_path,
+            protected_profile_dir / "protected-restore-authority-config-v1.json",
+            protected_profile_dir / "protected-observation-v1.mjs",
+            protected_profile_dir / "protected-cron-rescan-probe.mjs",
+            restore_cron_evidence_path,
+            archive_target_path,
+        ):
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        for name in (
+            "protected-observation-v1.mjs",
+            "protected-cron-rescan-probe.mjs",
+        ):
+            raw = transformed_restore_authority_probe(name)
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+
+        def derive_restore_cron_coverage() -> dict[str, object]:
+            return verify_openclaw_protected_restore_authority_cron_rescan(
+                load(
+                    admission_receipts
+                    / (
+                        "phase3-openclaw-protected-restore-authority-cron-"
+                        "rescan-v1-2026-08-13.json"
+                    )
+                ),
+                evidence_cas=evidence_cas,
+                route_profile=load_runtime_profile(
+                    restore_profile_path.read_bytes()
+                ),
+                runtime_lock=load_runtime_profile(
+                    restore_runtime_lock_path.read_bytes()
+                ),
+                route_inventory=openclaw_route_inventory,
+                runtime_candidates=runtime_candidates,
+                chat_qualification=retained_restore_chat,
+            )
+
+        restore_cron_coverage = derive_restore_cron_coverage()
+        if restore_cron_coverage != derive_restore_cron_coverage():
+            raise AssertionError(
+                "protected restore-authority cron coverage is nondeterministic"
+            )
+    retained_restore_cron_path = admission_receipts / (
+        "phase3-openclaw-protected-restore-authority-cron-route-coverage-"
+        "v1-2026-08-13.json"
+    )
+    retained_restore_cron = load(retained_restore_cron_path)
+    if (
+        restore_cron_coverage != retained_restore_cron
+        or retained_restore_cron_path.read_bytes()
+        != canonical_json(restore_cron_coverage) + b"\n"
+    ):
+        raise AssertionError("protected restore-authority cron coverage changed")
 
     cron_sources = (
         admission_evidence

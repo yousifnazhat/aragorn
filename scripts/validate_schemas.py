@@ -69,6 +69,9 @@ from aragorn.admission_protected_config import (
 from aragorn.admission_protected_cron import (
     verify_openclaw_protected_cron_rescan,
 )
+from aragorn.admission_protected_curator_restore import (
+    verify_openclaw_protected_curator_restore_denial,
+)
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
     compose_openclaw_protected_profile_coverage_v2,
@@ -2154,6 +2157,56 @@ def main() -> int:
         != canonical_json(fixed_chat_coverage) + b"\n"
     ):
         raise AssertionError("fixed chat route coverage changed")
+
+    restore_profile_path = (
+        protected_profile_dir / "protected-restore-authority-profile-v1.json"
+    )
+    restore_runtime_lock_path = (
+        protected_profile_dir / "protected-restore-authority-runtime-v1.lock.json"
+    )
+    restore_sources = (
+        admission_evidence
+        / "openclaw-v2026.7.1-protected-curator-restore-denial-2026-08-13.json",
+        restore_profile_path,
+        restore_runtime_lock_path,
+        protected_profile_dir / "protected-restore-authority-config-v1.json",
+        protected_profile_dir / "protected-curator-restore-denial-probe.mjs",
+        protected_profile_dir / "protected-observation-v1.mjs",
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-curator-restore-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in restore_sources:
+            raw = path.read_bytes()
+            evidence_cas.put(BytesIO(raw), max_bytes=len(raw))
+        curator_restore_qualification = (
+            verify_openclaw_protected_curator_restore_denial(
+                load(
+                    admission_receipts
+                    / (
+                        "phase3-openclaw-protected-session-snapshot-restore-"
+                        "authority-curator-denial-v1-2026-08-13.json"
+                    )
+                ),
+                evidence_cas=evidence_cas,
+                route_profile=load_runtime_profile(restore_profile_path.read_bytes()),
+                runtime_lock=load_runtime_profile(
+                    restore_runtime_lock_path.read_bytes()
+                ),
+                route_inventory=openclaw_route_inventory,
+                runtime_candidates=runtime_candidates,
+            )
+        )
+    retained_curator_restore_path = admission_receipts / (
+        "phase3-openclaw-protected-curator-restore-denial-route-qualification-"
+        "v1-2026-08-13.json"
+    )
+    retained_curator_restore = load(retained_curator_restore_path)
+    if (
+        curator_restore_qualification != retained_curator_restore
+        or retained_curator_restore_path.read_bytes()
+        != canonical_json(curator_restore_qualification) + b"\n"
+    ):
+        raise AssertionError("protected curator restore qualification changed")
 
     cron_sources = (
         admission_evidence

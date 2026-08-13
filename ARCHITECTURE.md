@@ -493,6 +493,14 @@ protected prompt and catalog. The result is shared-capture black-box behavior,
 not direct `session-updates.ts` tracing or successful model/reply delivery, and
 all broader authority remains false.
 
+The separate restore-authority profile starts fresh and currently records 1
+`PASS` and 20 `NOT_TESTED`. Its curator qualifier binds both gateway restore
+and CLI local-fallback denials to the shared external-authority guard, with the
+exact archived lifecycle row and protected skill unchanged. The archived row
+is an explicit ephemeral fixture, prior-profile passes are not composed, and
+all aggregate, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release
+authority remains false.
+
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
 before a forced run, one terminal run, persistence of the exact protected

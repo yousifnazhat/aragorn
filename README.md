@@ -719,6 +719,15 @@ protected prompt and catalog. This reuses a shared capture and is black-box
 behavioral evidence, not a direct `session-updates.ts` trace; model delivery and
 all broader authority remain unclaimed.
 
+A newer private restore-authority runtime
+[curator route qualification](./benchmark/receipts/phase3-openclaw-protected-curator-restore-denial-route-qualification-v1-2026-08-13.json)
+records 1 `PASS` and 20 `NOT_TESTED` on its own fresh profile. Both the native
+gateway restore and the CLI local fallback were denied by the shared external-
+authority guard while the exact archived lifecycle row and protected skill
+remained unchanged. The archived row is an explicit ephemeral fixture, the
+build is private, and no prior-profile, aggregate, installer, `RUN-01`,
+`RUN-02`, Phase 3, EDR, or release authority is composed or claimed.
+
 The exact protected-consumer
 [cron-rescan qualification](./benchmark/receipts/phase3-openclaw-protected-cron-rescan-route-qualification-v1-2026-08-09.json)
 promotes only `ADM-02/reload/cron-rescan` to route-level `PASS`. One forced

@@ -9,7 +9,8 @@ composition_source=c59154968b2cd637d88a5a17d5b1100873df7563
 composition_path=benchmark/evidence/runtime-action-worker-final-combined-systemd-composition-p3-final-2026-08-13.json
 lock=/tmp/aragorn-phase3-final-route-capture.lock
 DOCKER_CONTEXT=colima-aragorn-bakeoff
-export DOCKER_CONTEXT
+COPYFILE_DISABLE=1
+export COPYFILE_DISABLE DOCKER_CONTEXT
 umask 077
 
 if [ "$#" -ne 2 ]; then

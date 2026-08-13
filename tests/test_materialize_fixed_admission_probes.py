@@ -39,6 +39,37 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 b'mountObservation(dirname(WORKSHOP_DRAFT), "directory")', workshop
             )
             self.assertIn(
+                b'from "/runtime/lib/node_modules/openclaw/dist/plugin-sdk/gateway-runtime.js"',
+                workshop,
+            )
+            self.assertIn(b'scopes: ["operator.admin", "operator.write"]', workshop)
+            self.assertIn(
+                b'trace.not_tested_reason = "PROTECTED_SNAPSHOT_NOT_REBUILT"',
+                workshop,
+            )
+            self.assertIn(
+                b"trace.observations.reset_snapshot_cleared = resetSnapshotCleared",
+                workshop,
+            )
+            self.assertIn(
+                b"prompt.file.size === EXPECTED_SESSION_PROMPT_BYTES", workshop
+            )
+            self.assertIn(b"prompt.file.digest_error === null", workshop)
+            self.assertIn(
+                b"prompt.file.path === EXPECTED_SESSION_PROMPT_PATH", workshop
+            )
+            self.assertIn(b"trace.observations.rotation_observed_at", workshop)
+            self.assertIn(b"rebuild.confirmed &&", workshop)
+            self.assertIn(
+                b"trace.observations.rebuilt_snapshot_matches_baseline = baselineMatched",
+                workshop,
+            )
+            self.assertIn(b'OPENCLAW_DISABLE_BUNDLED_PLUGINS: "1"', workshop)
+            self.assertNotIn(
+                b'const reset = normalTurn("fresh-session-reset", "/new");',
+                workshop,
+            )
+            self.assertIn(
                 b"OpenClaw 2026.7.1 (4b198da)",
                 (output / "config-activation-probe.mjs").read_bytes(),
             )

@@ -104,6 +104,227 @@ WORKSHOP_REPLACEMENTS = (
     ),
 )
 
+FRESH_SESSION_REPLACEMENTS = (
+    (
+        b'import { fileURLToPath } from "node:url";',
+        b"""import { fileURLToPath } from "node:url";
+import { callGatewayFromCli } from "/runtime/lib/node_modules/openclaw/dist/plugin-sdk/gateway-runtime.js";""",
+    ),
+    (
+        b"""const EXPECTED_CONFIG_CANONICAL_DIGEST =
+  "sha256:6226f46581416178666681d870d3ff54c5bccebeebb090cb3c996058db1c8a4a";""",
+        b"""const EXPECTED_CONFIG_CANONICAL_DIGEST =
+  "sha256:6226f46581416178666681d870d3ff54c5bccebeebb090cb3c996058db1c8a4a";
+const EXPECTED_SESSION_SKILL_NAMES = Object.freeze(["requesting-code-review"]);
+const EXPECTED_SESSION_PROMPT_BYTES = 728;
+const EXPECTED_SESSION_PROMPT_DIGEST =
+  "sha256:bb2e3d95728d097c858779c1d4d8d90e00f6e14d0151ca5af56f475a6fa6301c";
+const EXPECTED_SESSION_PROMPT_PATH =
+  "/profile/state/agents/main/sessions/skills-prompts/sha256/bb/bb2e3d95728d097c858779c1d4d8d90e00f6e14d0151ca5af56f475a6fa6301c.txt";""",
+    ),
+    (
+        b"""function normalTurn(label, message) {""",
+        b"""function protectedSnapshotCheck(observation) {
+  const entry = observation?.entry;
+  const prompt = entry?.prompt;
+  const catalogExact =
+    Array.isArray(entry?.skill_names) &&
+    entry.skill_names.length === EXPECTED_SESSION_SKILL_NAMES.length &&
+    entry.skill_names.every(
+      (name, index) => name === EXPECTED_SESSION_SKILL_NAMES[index],
+    );
+  const promptExact =
+    prompt?.storage === "promptRef" &&
+    prompt.bytes === EXPECTED_SESSION_PROMPT_BYTES &&
+    prompt.digest === EXPECTED_SESSION_PROMPT_DIGEST &&
+    prompt.expected_digest === EXPECTED_SESSION_PROMPT_DIGEST &&
+    prompt.file?.exists === true &&
+    prompt.file.type === "file" &&
+    prompt.file.nlink === 1 &&
+    prompt.file.mode === "600" &&
+    prompt.file.uid === RUNTIME_UID &&
+    prompt.file.gid === RUNTIME_GID &&
+    prompt.file.size === EXPECTED_SESSION_PROMPT_BYTES &&
+    prompt.file.digest_error === null &&
+    prompt.file.path === EXPECTED_SESSION_PROMPT_PATH &&
+    prompt.file.digest === EXPECTED_SESSION_PROMPT_DIGEST;
+  const sessionIdValid =
+    typeof entry?.session_id === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      entry.session_id,
+    );
+  const snapshotPresent = entry?.snapshot_present === true;
+  const snapshotVersionValid =
+    Number.isSafeInteger(entry?.snapshot_version) && entry.snapshot_version > 0;
+  return {
+    catalog_exact: catalogExact,
+    prompt_exact: promptExact,
+    ready:
+      observation?.present === true &&
+      sessionIdValid &&
+      snapshotPresent &&
+      snapshotVersionValid &&
+      catalogExact &&
+      promptExact,
+    session_id_valid: sessionIdValid,
+    snapshot_present: snapshotPresent,
+    snapshot_version_valid: snapshotVersionValid,
+  };
+}
+
+function normalTurn(label, message) {""",
+    ),
+    (
+        b"""async function freshSessionAction(gateway) {
+  return await observedAction("fresh-session-reset", gateway, (trace) => {
+    let before = sessionObservation();
+    if (!before.present) {
+      const initialize = normalTurn(
+        "fresh-session-initialize",
+        "Inert protected-route session initialization.",
+      );
+      trace.commands.push(...initialize.commands);
+      trace.observations.initialization_turn = initialize;
+      before = sessionObservation();
+    }
+    trace.observations.session_before_reset = before;
+    const reset = normalTurn("fresh-session-reset", "/new");
+    trace.commands.push(...reset.commands);
+    trace.observations.reset_turn = reset;
+    trace.observations.session_after_reset = sessionObservation();
+    trace.attempted = reset.confirmed;
+    if (!reset.confirmed) {
+      trace.not_tested_reason = "ROUTE_ACTION_NOT_CONFIRMED";
+    }
+  });
+}""",
+        b"""async function freshSessionAction(gateway) {
+  return await observedAction("fresh-session-reset", gateway, async (trace) => {
+    const initialize = normalTurn(
+      "fresh-session-initialize",
+      "Inert protected-route session initialization.",
+    );
+    trace.commands.push(...initialize.commands);
+    trace.observations.initialization_turn = initialize;
+    const before = sessionObservation();
+    const beforeCheck = protectedSnapshotCheck(before);
+    trace.observations.session_before_reset = before;
+    trace.observations.session_before_reset_check = beforeCheck;
+    if (!initialize.confirmed || !beforeCheck.ready) {
+      trace.not_tested_reason = "PROTECTED_SNAPSHOT_BASELINE_NOT_ESTABLISHED";
+      return;
+    }
+
+    const resetParams = {
+      deliver: false,
+      idempotencyKey: `aragorn-protected-route-fresh-session-reset-${RUN_NONCE}`,
+      message: "/new",
+      sessionKey: SESSION_KEY,
+      timeoutMs: 5000,
+    };
+    const resetStartedAt = new Date().toISOString();
+    let resetResponse = null;
+    let resetError = null;
+    try {
+      resetResponse = await callGatewayFromCli(
+        "chat.send",
+        {
+          json: true,
+          timeout: "5000",
+          token: process.env.OPENCLAW_GATEWAY_TOKEN ?? "",
+          url: "ws://127.0.0.1:18789",
+        },
+        resetParams,
+        {
+          progress: false,
+          scopes: ["operator.admin", "operator.write"],
+        },
+      );
+    } catch (error) {
+      resetError = errorRecord(error);
+    }
+    const resetAccepted =
+      resetError === null &&
+      resetResponse?.runId === resetParams.idempotencyKey &&
+      resetResponse?.status === "started";
+    trace.observations.reset_turn = {
+      accepted: resetAccepted,
+      completed_at: new Date().toISOString(),
+      error: resetError,
+      method: "chat.send",
+      params: resetParams,
+      response: resetResponse,
+      scopes: ["operator.admin", "operator.write"],
+      started_at: resetStartedAt,
+      transport: "openclaw/plugin-sdk/gateway-runtime.callGatewayFromCli",
+    };
+    if (!resetAccepted) {
+      trace.not_tested_reason = "RESET_REQUEST_NOT_ACCEPTED";
+      return;
+    }
+
+    const previousSessionId = before.entry.session_id;
+    const rotationDeadline = Date.now() + 5000;
+    let rotated = sessionObservation();
+    while (
+      (typeof rotated.entry?.session_id !== "string" ||
+        rotated.entry.session_id === previousSessionId) &&
+      Date.now() < rotationDeadline
+    ) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+      rotated = sessionObservation();
+    }
+    const rotationConfirmed =
+      typeof rotated.entry?.session_id === "string" &&
+      rotated.entry.session_id !== previousSessionId;
+    const resetSnapshotCleared =
+      rotated.present === true &&
+      rotated.entry?.snapshot_present === false &&
+      rotated.entry.snapshot_version === null &&
+      Array.isArray(rotated.entry.skill_names) &&
+      rotated.entry.skill_names.length === 0 &&
+      rotated.entry.prompt?.storage === "absent-or-invalid";
+    trace.observations.session_after_rotation = rotated;
+    trace.observations.session_id_rotated = rotationConfirmed;
+    trace.observations.rotation_observed_at = new Date().toISOString();
+    trace.observations.reset_snapshot_cleared = resetSnapshotCleared;
+    if (!rotationConfirmed || !resetSnapshotCleared) {
+      trace.not_tested_reason = rotationConfirmed
+        ? "RESET_SNAPSHOT_NOT_CLEARED"
+        : "SESSION_ID_NOT_ROTATED";
+      return;
+    }
+
+    const rebuild = normalTurn(
+      "fresh-session-rebuild",
+      "Inert protected-route post-reset snapshot rebuild.",
+    );
+    trace.commands.push(...rebuild.commands);
+    trace.observations.rebuild_turn = rebuild;
+    const after = sessionObservation();
+    const afterCheck = protectedSnapshotCheck(after);
+    trace.observations.session_after_reset = after;
+    trace.observations.session_after_reset_check = afterCheck;
+    const baselineMatched =
+      after.entry?.snapshot_version === before.entry.snapshot_version &&
+      after.entry?.prompt?.digest === before.entry.prompt.digest &&
+      canonicalJson(after.entry?.skill_names) ===
+        canonicalJson(before.entry.skill_names);
+    trace.observations.rebuilt_snapshot_matches_baseline = baselineMatched;
+    trace.attempted =
+      rebuild.confirmed &&
+      afterCheck.ready &&
+      after.entry.session_id === rotated.entry.session_id &&
+      after.entry.session_id !== previousSessionId &&
+      baselineMatched;
+    if (!trace.attempted) {
+      trace.not_tested_reason = "PROTECTED_SNAPSHOT_NOT_REBUILT";
+    }
+  });
+}""",
+    ),
+)
+
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
@@ -134,6 +355,10 @@ def transformed_probe(name: str) -> bytes:
         if any(raw.count(old) != 1 for old, _new in WORKSHOP_REPLACEMENTS):
             raise ValueError("fixed workshop path shape changed")
         for old, new in WORKSHOP_REPLACEMENTS:
+            raw = raw.replace(old, new)
+        if any(raw.count(old) != 1 for old, _new in FRESH_SESSION_REPLACEMENTS):
+            raise ValueError("fixed fresh-session route shape changed")
+        for old, new in FRESH_SESSION_REPLACEMENTS:
             raw = raw.replace(old, new)
     return raw
 

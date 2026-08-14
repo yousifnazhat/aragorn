@@ -354,8 +354,9 @@ def _activation_preflight(
             or document.get("plugins") != expected_plugins
             or document.get("tools")
             != {
-                "alsoAllow": ["aragorn_runtime_create"],
+                "alsoAllow": ["aragorn_runtime_create", "read"],
                 "deny": ["session_status"],
+                "fs": {"workspaceOnly": True},
                 "profile": "minimal",
             }
             or raw.count(b"${") != len(references)

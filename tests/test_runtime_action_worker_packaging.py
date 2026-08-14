@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import unittest
 from pathlib import Path
 
@@ -16,9 +17,88 @@ _DOCKERFILE = _ROOT / "benchmark/runtime-action-worker-openclaw-systemd/Dockerfi
 _CAPTURE = _ROOT / "scripts/capture_runtime_action_worker_openclaw_systemd.sh"
 _PROBE = _ROOT / "scripts/runtime_action_worker_openclaw_systemd_probe.py"
 _ACTIVATOR = _ROOT / "packaging/activate-runtime-action-worker-host.sh"
+_FINAL_V2 = _ROOT / "benchmark/admission/openclaw-v2026.7.1"
 
 
 class RuntimeActionWorkerPackagingTests(unittest.TestCase):
+    def test_final_v2_profile_is_canonical_and_unqualified(self) -> None:
+        expected = {
+            "protected-final-combined-config-v2.json": (
+                1847,
+                "2772bca6629607247e2a5c056282b4748ab5bb6d024fd742c9755fb915281ddb",
+            ),
+            "protected-final-combined-profile-v2.json": (
+                4951,
+                "615928c74bb467ed1422aa19c0ca3266fec21e6a9b195ff32e7e2fae86f966fc",
+            ),
+            "protected-final-combined-runtime-v2.lock.json": (
+                6742,
+                "c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5",
+            ),
+        }
+        documents = {}
+        for name, (size, digest) in expected.items():
+            raw = (_FINAL_V2 / name).read_bytes()
+            document = json.loads(raw)
+            canonical = json.dumps(
+                document, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode()
+            self.assertEqual(raw, canonical + b"\n")
+            self.assertEqual(
+                (len(raw), hashlib.sha256(raw).hexdigest()), (size, digest)
+            )
+            documents[name] = document
+
+        config, profile, lock = documents.values()
+        self.assertEqual(
+            config["tools"],
+            {
+                "alsoAllow": ["aragorn_runtime_create", "read"],
+                "deny": ["session_status"],
+                "fs": {"workspaceOnly": True},
+                "profile": "minimal",
+            },
+        )
+        self.assertEqual(len(profile["routes"]), 21)
+        self.assertTrue(
+            all(route["outcome"] == "NOT_TESTED" for route in profile["routes"])
+        )
+        self.assertTrue(
+            all(
+                value is False
+                for key, value in profile["decision"].items()
+                if key.endswith("_eligible")
+            )
+        )
+        self.assertTrue(
+            all(
+                value is False
+                for key, value in lock["decision"].items()
+                if key.endswith("_eligible")
+            )
+        )
+        activation = lock["deployment_bindings"]["activation_contract"]
+        self.assertEqual(
+            activation["activator"]["digest"],
+            "sha256:" + hashlib.sha256(_ACTIVATOR.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            activation["preflight"]["digest"],
+            "sha256:"
+            + hashlib.sha256(
+                (_ROOT / "src/aragorn/runtime_action_worker.py").read_bytes()
+            ).hexdigest(),
+        )
+        self.assertEqual(
+            activation["tool_policy"],
+            {
+                "also_allow": ["aragorn_runtime_create", "read"],
+                "deny": ["session_status"],
+                "filesystem_workspace_only": True,
+                "profile": "minimal",
+            },
+        )
+
     def test_worker_activator_local_digest_pins_match_sources(self) -> None:
         source = _ACTIVATOR.read_text(encoding="utf-8")
         block = source.split("done <<'EOF'\n", 1)[1].split("\nEOF", 1)[0]
@@ -210,6 +290,8 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "trap rollback EXIT",
             "OPENCLAW_GATEWAY_TOKEN=*)",
             "gateway environment is not one canonical ASCII assignment",
+            "gateway activation configuration digest changed",
+            "93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645",
             "runtime worker NSS group membership is unsafe",
             '"$gateway_uid" -eq 0',
             "installed unit digest changed",
@@ -266,6 +348,12 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         )
         self.assertLess(
             activator.index(stop_route),
+            activator.index("--activation-preflight"),
+        )
+        self.assertLess(
+            activator.index(
+                "93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645"
+            ),
             activator.index("--activation-preflight"),
         )
         self.assertLess(

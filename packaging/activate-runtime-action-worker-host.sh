@@ -263,7 +263,7 @@ done <<'EOF'
 644 a3e829d2e60f26dd91cbb14967ddf2a747414ce8f125b4f207dbce7a5e1e86c7 /usr/lib/aragorn/aragorn/runtime_action_service_v5.py
 644 fff0ae55827237d9a05c93cfbae17b974e2817d258dcdf1c2cb66630eda619da /usr/lib/aragorn/aragorn/runtime_observation_service_v4.py
 644 20cac61e1e497dec177e16a564e0735e6b5d593b6965fba5a57fa9d715a4c6ca /usr/lib/aragorn/aragorn/runtime_revocation_service.py
-644 16e77024f715d1b7f2c600df16e5878e23f584753444fef998cf9b4742603d60 /usr/lib/aragorn/aragorn/runtime_action_worker.py
+644 a0aa80b0870c18ecb380ca6f7a65663e4046e92f55938b84c9e15284ba221873 /usr/lib/aragorn/aragorn/runtime_action_worker.py
 644 71dfcdc6d2f1d51472230e9cda240c25d0b316fee39434e6761bb2e7b411467b /usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/index.js
 644 d90c95c23da3de4a32b8088a69d927bf10a45ed4e116e3ccece491ee3c766036 /usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/openclaw.plugin.json
 644 0097f2e532b1a5d99e3cfc4990d4bbf83a01c10ee11d567b139bd9144a859ad2 /usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/package.json
@@ -273,6 +273,12 @@ require_root_secret "$gateway_config" 4096
 require_root_secret "$gateway_environment" 8192
 require_root_secret "$worker_binding" 4096
 require_exact_directory /etc/aragorn/agent-gateway 0 0 700
+
+if [ "$(sha256sum -- "$gateway_config" | cut -d ' ' -f 1)" != \
+    93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645 ]
+then
+    fail_activation "gateway activation configuration digest changed"
+fi
 
 if [ "$(wc -l < "$gateway_environment")" -ne 1 ]; then
     fail_activation "gateway environment must contain one canonical assignment"

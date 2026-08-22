@@ -33,6 +33,10 @@ _CHILD_RECEIPTS = {
         "phase3-openclaw-protected-final-combined-v2-cron-rescan-catalog-fixed-"
         "route-coverage-v1-2026-08-22.json"
     ),
+    "catalog_fixed_prompt_rebuild": (
+        "phase3-openclaw-protected-final-combined-v2-prompt-rebuild-catalog-"
+        "fixed-route-coverage-v1-2026-08-22.json"
+    ),
     "archive_post_write_activation_prevention": (
         "phase3-openclaw-protected-final-combined-v2-archive-source-force-"
         "replacement-route-coverage-v1-2026-08-22.json"
@@ -75,10 +79,10 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             for child in subject._CHILDREN
         )
 
-    def test_exact_four_route_receipt_with_all_broad_eligibility_false(self) -> None:
+    def test_exact_five_route_receipt_with_all_broad_eligibility_false(self) -> None:
         result = self.compose()
 
-        self.assertEqual(result["profile"]["counts"], {"PASS": 4, "NOT_TESTED": 17})
+        self.assertEqual(result["profile"]["counts"], {"PASS": 5, "NOT_TESTED": 16})
         self.assertEqual(len(result["profile"]["routes"]), 21)
         self.assertEqual(
             {

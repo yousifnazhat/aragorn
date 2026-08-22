@@ -3527,6 +3527,7 @@ def main() -> int:
             final_v2_archive_evidence_path,
             final_v2_catalog_fresh_evidence_path,
             final_v2_catalog_cron_evidence_path,
+            final_v2_catalog_prompt_evidence_path,
             final_v2_config_evidence_path,
         ):
             raw = path.read_bytes()

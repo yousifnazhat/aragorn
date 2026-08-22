@@ -1,4 +1,4 @@
-"""Compose four exact current-contract V2 route qualifications."""
+"""Compose five exact current-contract V2 route qualifications."""
 
 from __future__ import annotations
 
@@ -14,6 +14,9 @@ from . import (
 from . import admission_protected_final_combined_v2_config_activation as config
 from . import (
     admission_protected_final_combined_v2_cron_rescan_catalog_fixed as cron,
+)
+from . import (
+    admission_protected_final_combined_v2_prompt_rebuild_catalog_fixed as prompt,
 )
 from .admission_evidence import AdmissionEvidenceError
 from .cas import CAS
@@ -107,6 +110,7 @@ _EXPECTED_PASS_ROUTES = frozenset(
         config._ROUTE,
         fresh._ROUTE,
         cron._ROUTE,
+        prompt._ROUTE,
         archive._ROUTE,
     }
 )
@@ -164,6 +168,23 @@ _CHILDREN = (
         "image": cron._IMAGE,
     },
     {
+        "name": "catalog_fixed_prompt_rebuild",
+        "module": prompt,
+        "verifier": "verify_openclaw_final_combined_v2_prompt_rebuild_catalog_fixed",
+        "verifier_path": (
+            "src/aragorn/admission_protected_final_combined_v2_prompt_rebuild_"
+            "catalog_fixed.py"
+        ),
+        "verifier_digest": (
+            "sha256:df9623c4ff226b070f7cfed903a79d86a4eef0ad757114e61847709485b3ac2e"
+        ),
+        "result_digest": (
+            "sha256:54f0132b56b31a1e3f3f07e58b9e0794fc32c2cbd44c35e718e1e7c8c5919869"
+        ),
+        "route": prompt._ROUTE,
+        "image": prompt._IMAGE,
+    },
+    {
         "name": "archive_post_write_activation_prevention",
         "module": archive,
         "verifier": "verify_openclaw_final_combined_v2_archive_replacement",
@@ -203,6 +224,14 @@ _EXPECTED_CHILD_SEQUENCE = (
         ),
     ),
     (
+        "catalog_fixed_prompt_rebuild",
+        prompt._ROUTE,
+        (
+            "src/aragorn/admission_protected_final_combined_v2_prompt_rebuild_"
+            "catalog_fixed.py"
+        ),
+    ),
+    (
         "archive_post_write_activation_prevention",
         archive._ROUTE,
         "src/aragorn/admission_protected_final_combined_v2_archive_replacement.py",
@@ -213,7 +242,7 @@ _EXPECTED_CHILD_SEQUENCE = (
 def compose_openclaw_final_combined_v2_route_coverage(
     *, evidence_cas: CAS
 ) -> dict[str, Any]:
-    """Reverify and compose four separate exact child captures without authority."""
+    """Reverify and compose five separate exact child captures without authority."""
 
     children: list[dict[str, Any]] = []
     names: set[str] = set()
@@ -276,8 +305,8 @@ def compose_openclaw_final_combined_v2_route_coverage(
     except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
         raise AdmissionEvidenceError(f"invalid V2 child qualification: {exc}") from exc
 
-    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 4:
-        raise AdmissionEvidenceError("exact four V2 child routes are required")
+    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 5:
+        raise AdmissionEvidenceError("exact five V2 child routes are required")
     if shared is None or runtime is None:
         raise AdmissionEvidenceError("V2 child contract bindings are missing")
     implementation_digest = _digest(Path(__file__).resolve().read_bytes())
@@ -296,7 +325,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
     return {
         "schema": ("aragorn/admission-protected-final-combined-v2-route-coverage/v1"),
         "assurance": (
-            "FOUR_EXACT_INDEPENDENTLY_REVERIFIED_SEPARATE_CAPTURE_ROUTE_PASSES_ONLY"
+            "FIVE_EXACT_INDEPENDENTLY_REVERIFIED_SEPARATE_CAPTURE_ROUTE_PASSES_ONLY"
         ),
         "bindings": {
             **{key: dict(shared[key]) for key in _SHARED_BINDINGS},
@@ -306,7 +335,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
         },
         "capture_model": {
             "aggregate_execution_observed": False,
-            "kind": "FOUR_SEPARATE_EXACT_CHILD_CAPTURES",
+            "kind": "FIVE_SEPARATE_EXACT_CHILD_CAPTURES",
             "same_image_required": False,
         },
         "decision": {
@@ -314,8 +343,8 @@ def compose_openclaw_final_combined_v2_route_coverage(
             **{key: False for key in _ELIGIBILITY_KEYS},
         },
         "limitations": [
-            "FOUR_EXACT_SEPARATE_CAPTURE_ROUTE_PASSES_COMPOSED",
-            "SEVENTEEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
+            "FIVE_EXACT_SEPARATE_CAPTURE_ROUTE_PASSES_COMPOSED",
+            "SIXTEEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
             "SEPARATE_CAPTURES_DO_NOT_ESTABLISH_AGGREGATE_ADMISSION",
             "ARCHIVE_DIRECTORY_INSTALL_LEFT_EXCLUDED_WORKSPACE_SKILL_RESIDUE",
             "ARCHIVE_POST_WRITE_CATALOG_REJECTION_MAY_DENY_SKILL_DISCOVERY_AVAILABILITY",
@@ -324,7 +353,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "NO_AGGREGATE_ADMISSION_EDR_PHASE3_RELEASE_OR_INSTALLER_AUTHORITY",
         ],
         "profile": {
-            "counts": {"PASS": 4, "NOT_TESTED": 17},
+            "counts": {"PASS": 5, "NOT_TESTED": 16},
             "name": _PROFILE,
             "route_inventory_canonical_digest": canonical_digest(list(_ROUTES)),
             "routes": routes,

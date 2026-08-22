@@ -84,6 +84,9 @@ from aragorn.admission_protected_final_combined_v2_fresh_session_reset import (
 from aragorn.admission_protected_final_combined_v2_prompt_rebuild import (
     verify_openclaw_final_combined_v2_prompt_rebuild,
 )
+from aragorn.admission_protected_final_combined_v2_session_snapshot_consumer import (
+    verify_openclaw_final_combined_v2_session_snapshot_consumer,
+)
 from aragorn.admission_protected_final_fresh_session_reset import (
     verify_openclaw_final_fresh_session_reset,
 )
@@ -3283,6 +3286,58 @@ def main() -> int:
         != canonical_json(final_v2_cron_qualification) + b"\n"
     ):
         raise AssertionError("protected final V2 cron qualification changed")
+
+    final_v2_session_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-session-snapshot-consumer-"
+        "systemd-p3-final-2026-08-22.json"
+    )
+    final_v2_session_manifest_path = ROOT / (
+        "benchmark/admission/openclaw-v2026.7.1/protected-final-combined-v2-"
+        "session-snapshot-compiled-closure-v1.manifest.json"
+    )
+    final_v2_session_archive_path = ROOT / (
+        "benchmark/admission/openclaw-v2026.7.1/protected-final-combined-v2-"
+        "session-snapshot-compiled-closure-v1.tar.gz"
+    )
+    final_v2_session_acquisition_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-session-snapshot-closure-"
+        "acquisition-v1-2026-08-22.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-session-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in (
+            final_v2_fresh_session_evidence_path,
+            final_v2_prompt_evidence_path,
+            final_v2_cron_evidence_path,
+            final_v2_session_evidence_path,
+            final_v2_session_manifest_path,
+            final_v2_session_archive_path,
+            final_v2_session_acquisition_path,
+        ):
+            raw = path.read_bytes()
+            evidence_cas.put_expected(
+                BytesIO(raw),
+                expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+                max_bytes=len(raw),
+            )
+        final_v2_session_qualification = (
+            verify_openclaw_final_combined_v2_session_snapshot_consumer(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_session_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-session-snapshot-consumer-"
+        "route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_session_qualification = load(
+        final_v2_session_qualification_path
+    )
+    if (
+        final_v2_session_qualification != retained_final_v2_session_qualification
+        or final_v2_session_qualification_path.read_bytes()
+        != canonical_json(final_v2_session_qualification) + b"\n"
+    ):
+        raise AssertionError("protected final V2 session qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

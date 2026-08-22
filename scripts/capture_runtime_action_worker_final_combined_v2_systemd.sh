@@ -365,7 +365,9 @@ if [ "$route" = ADM-02/update/archive-source-force-replacement ]; then
             chgrp 992 /sources
             chmod 0750 /sources
             mkdir -m 0750 /sources/replacement
-            install -m 0440 /dev/stdin /sources/replacement/SKILL.md
+            umask 077
+            cat > /sources/replacement/SKILL.md
+            chmod 0440 /sources/replacement/SKILL.md
             test "$(find /sources -mindepth 1 -printf "%P:%y\n" | sort)" = "$(printf "%s\n" replacement:d replacement/SKILL.md:f | sort)"
             test "$(stat -c "%u:%g:%a" /sources)" = 0:992:750
             test "$(stat -c "%u:%g:%a" /sources/replacement)" = 0:992:750

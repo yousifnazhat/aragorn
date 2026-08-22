@@ -80,6 +80,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         for control in (
             "--network=none --cap-drop=ALL",
             "--security-opt no-new-privileges:true --read-only --user 0:992",
+            "cat > /sources/replacement/SKILL.md",
             '-v "$archive_source_volume:/sources:ro"',
         ):
             self.assertIn(control, source)

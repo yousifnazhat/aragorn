@@ -73,6 +73,16 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         self.assertNotIn("route_image=", source)
         self.assertNotIn("Dockerfile.route-v2", source)
         self.assertIn('-v "$route_input_volume:/route-input:ro"', source)
+        self.assertIn(
+            "benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md",
+            source,
+        )
+        for control in (
+            "--network=none --cap-drop=ALL",
+            "--security-opt no-new-privileges:true --read-only --user 0:992",
+            '-v "$archive_source_volume:/sources:ro"',
+        ):
+            self.assertIn(control, source)
         self.assertIn('"route_input_volume_identity": route_volume_identity', source)
         self.assertNotIn("parse_float=", source)
         self.assertIn("parse_constant=", source)

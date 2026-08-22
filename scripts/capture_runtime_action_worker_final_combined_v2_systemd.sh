@@ -62,10 +62,12 @@ fi
 container=aragorn-phase3-final-combined-v2-$$
 owner_token=$source_commit:$$
 route_input_volume=aragorn-phase3-final-combined-v2-route-input-$$
+archive_source_volume=aragorn-phase3-final-combined-v2-archive-source-$$
 cidfile=$capture_lock/container.id
 lock_held=0
 create_attempted=0
 route_input_volume_created=0
+archive_source_volume_created=0
 container_id=
 child_id=
 context=
@@ -74,6 +76,7 @@ parent_inspect=
 child_inspect=
 volume_inspect=
 route_volume_inspect=
+archive_source_volume_inspect=
 harness=
 commit_object=
 commit_stdout=
@@ -147,9 +150,22 @@ cleanup()
             route_input_volume_created=0
         fi
     fi
+    if [ "$archive_source_volume_created" -eq 1 ]; then
+        current_owner=$(docker volume inspect \
+            --format '{{index .Labels "dev.aragorn.capture-owner"}}' \
+            "$archive_source_volume" 2>/dev/null || :)
+        if [ "$current_owner" != "$owner_token" ]; then
+            echo "refusing to remove an unowned final combined v2 archive source volume" >&2
+            cleanup_failed=1
+        elif ! docker volume rm "$archive_source_volume" >/dev/null; then
+            cleanup_failed=1
+        else
+            archive_source_volume_created=0
+        fi
+    fi
     for path in \
         "$inspect" "$parent_inspect" "$child_inspect" "$volume_inspect" \
-        "$route_volume_inspect" \
+        "$route_volume_inspect" "$archive_source_volume_inspect" \
         "$harness" "$commit_object" "$commit_stdout" "$commit_stderr" \
         "$iidfile" "$temp_output"
     do
@@ -208,6 +224,7 @@ parent_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-parent.XXXXXX")
 child_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-child.XXXXXX")
 volume_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-volume.XXXXXX")
 route_volume_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-route-volume.XXXXXX")
+archive_source_volume_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-archive-source-volume.XXXXXX")
 harness=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-harness.XXXXXX")
 commit_object=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-commit.XXXXXX")
 commit_stdout=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-verify-out.XXXXXX")
@@ -235,6 +252,7 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \
+    benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md \
     benchmark/runtime-action-worker-final-combined-v2-systemd \
     packaging/activate-runtime-action-worker-host.sh \
     src/aragorn/runtime_action_worker.py \
@@ -308,18 +326,76 @@ then
     exit 69
 fi
 
+if [ "$route" = ADM-02/update/archive-source-force-replacement ]; then
+    archive_source_fixture=$context/benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md
+    if [ "$(wc -c <"$archive_source_fixture")" -ne 144 ] \
+        || [ "$(shasum -a 256 "$archive_source_fixture" | cut -d ' ' -f 1)" \
+            != d30e0a2e568941e37c5f9427b920917a9edf694beadb41f8a5469e820c0dfdf1 ]
+    then
+        echo "final combined v2 archive source fixture changed" >&2
+        exit 69
+    fi
+    if docker volume inspect "$archive_source_volume" >/dev/null 2>&1; then
+        echo "refusing to reuse an existing final combined v2 archive source volume" >&2
+        exit 73
+    fi
+    created_volume=$(docker volume create \
+        --label dev.aragorn.role=final-combined-v2-archive-source \
+        --label "dev.aragorn.route=$route" \
+        --label "dev.aragorn.source-commit=$source_commit" \
+        --label "dev.aragorn.capture-owner=$owner_token" \
+        "$archive_source_volume")
+    archive_source_volume_created=1
+    if [ "$created_volume" != "$archive_source_volume" ] \
+        || [ "$(docker volume inspect --format '{{.Driver}}' "$archive_source_volume")" != local ] \
+        || [ "$(docker volume inspect --format '{{index .Labels "dev.aragorn.role"}}' "$archive_source_volume")" != final-combined-v2-archive-source ] \
+        || [ "$(docker volume inspect --format '{{index .Labels "dev.aragorn.route"}}' "$archive_source_volume")" != "$route" ] \
+        || [ "$(docker volume inspect --format '{{index .Labels "dev.aragorn.source-commit"}}' "$archive_source_volume")" != "$source_commit" ] \
+        || [ "$(docker volume inspect --format '{{index .Labels "dev.aragorn.capture-owner"}}' "$archive_source_volume")" != "$owner_token" ]
+    then
+        echo "final combined v2 archive source volume identity changed" >&2
+        exit 69
+    fi
+    docker run --rm --pull=never --network=none --cap-drop=ALL \
+        --security-opt no-new-privileges:true --read-only --user 0:992 \
+        --label "dev.aragorn.capture-owner=$owner_token" \
+        -v "$archive_source_volume:/sources:rw" \
+        --entrypoint /bin/sh "$child_id" -eu -c '
+            test -z "$(find /sources -mindepth 1 -print -quit)"
+            chgrp 992 /sources
+            chmod 0750 /sources
+            mkdir -m 0750 /sources/replacement
+            install -m 0440 /dev/stdin /sources/replacement/SKILL.md
+            test "$(find /sources -mindepth 1 -printf "%P:%y\n" | sort)" = "$(printf "%s\n" replacement:d replacement/SKILL.md:f | sort)"
+            test "$(stat -c "%u:%g:%a" /sources)" = 0:992:750
+            test "$(stat -c "%u:%g:%a" /sources/replacement)" = 0:992:750
+            test "$(stat -c "%u:%g:%a:%h:%s" /sources/replacement/SKILL.md)" = 0:992:440:1:144
+            test "$(sha256sum /sources/replacement/SKILL.md | cut -d " " -f 1)" = d30e0a2e568941e37c5f9427b920917a9edf694beadb41f8a5469e820c0dfdf1
+        ' <"$archive_source_fixture"
+fi
+
+create_final_container()
+{
+    docker create --name "$container" --cidfile "$cidfile" --pull=never \
+        --privileged --cgroupns=host --network=none \
+        --security-opt label=disable \
+        --label dev.aragorn.profile=phase3-final-combined-v2 \
+        --label "dev.aragorn.capture-owner=$owner_token" \
+        --tmpfs /run:rw,nosuid,nodev,noexec,mode=755 \
+        --tmpfs /run/lock:rw,nosuid,nodev,noexec,mode=755 \
+        -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+        -v "$runtime_volume:/runtime:ro" \
+        -v "$route_input_volume:/route-input:ro" \
+        "$@" "$child_id"
+}
+
 create_attempted=1
-container_id=$(docker create --name "$container" --cidfile "$cidfile" --pull=never \
-    --privileged --cgroupns=host --network=none \
-    --security-opt label=disable \
-    --label dev.aragorn.profile=phase3-final-combined-v2 \
-    --label "dev.aragorn.capture-owner=$owner_token" \
-    --tmpfs /run:rw,nosuid,nodev,noexec,mode=755 \
-    --tmpfs /run/lock:rw,nosuid,nodev,noexec,mode=755 \
-    -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-    -v "$runtime_volume:/runtime:ro" \
-    -v "$route_input_volume:/route-input:ro" \
-    "$child_id")
+if [ "$archive_source_volume_created" -eq 1 ]; then
+    container_id=$(create_final_container \
+        -v "$archive_source_volume:/sources:ro")
+else
+    container_id=$(create_final_container)
+fi
 docker start "$container_id" >/dev/null
 
 i=0
@@ -341,10 +417,16 @@ docker image inspect "$parent_id" >"$parent_inspect"
 docker image inspect "$child_id" >"$child_inspect"
 docker volume inspect "$runtime_volume" >"$volume_inspect"
 docker volume inspect "$route_input_volume" >"$route_volume_inspect"
+if [ "$archive_source_volume_created" -eq 1 ]; then
+    docker volume inspect "$archive_source_volume" \
+        >"$archive_source_volume_inspect"
+fi
 python3.12 - \
     "$inspect" "$parent_inspect" "$child_inspect" "$volume_inspect" \
-    "$route_volume_inspect" "$harness" "$source_commit" "$commit_object" \
-    "$commit_stdout" "$commit_stderr" <<'PY'
+    "$route_volume_inspect" "$archive_source_volume_inspect" \
+    "$context/benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md" \
+    "$harness" "$source_commit" "$commit_object" "$commit_stdout" \
+    "$commit_stderr" <<'PY'
 import base64
 import hashlib
 import json
@@ -370,16 +452,21 @@ def raw_record(path: str) -> dict:
 
 
 source, parent, child, volume, route_volume = map(one, sys.argv[1:6])
+archive_volume = one(sys.argv[6]) if Path(sys.argv[6]).stat().st_size else None
+archive_fixture = raw_record(sys.argv[7])
+archive_fixture["path"] = (
+    "benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md"
+)
 parent_id = "sha256:3ccea364258c367342e585113d784b7ce00642c63918e0a6f0a6594019d3121c"
 runtime_volume = "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1"
-commit = sys.argv[7]
-commit_object = raw_record(sys.argv[8])
+commit = sys.argv[9]
+commit_object = raw_record(sys.argv[10])
 commit_raw = base64.b64decode(commit_object["base64"], validate=True)
 commit_identity = hashlib.sha1(
     f"commit {len(commit_raw)}\0".encode("ascii") + commit_raw
 ).hexdigest()
-verification_stdout = raw_record(sys.argv[9])
-verification_stderr = raw_record(sys.argv[10])
+verification_stdout = raw_record(sys.argv[11])
+verification_stderr = raw_record(sys.argv[12])
 if (
     parent["Id"] != parent_id
     or re.fullmatch(r"[0-9a-f]{40}", commit) is None
@@ -501,6 +588,68 @@ if (
 ):
     raise SystemExit("final combined v2 route input volume identity changed")
 
+archive_mounts = [
+    item for item in source["Mounts"] if item["Destination"] == "/sources"
+]
+archive_source_mount = None
+archive_source_volume_identity = None
+if archive_volume is None:
+    if archive_mounts:
+        raise SystemExit("unexpected final combined v2 archive source mount")
+elif len(archive_mounts) != 1:
+    raise SystemExit("expected exactly one /sources mount")
+else:
+    archive_mount = archive_mounts[0]
+    archive_source_mount = {
+        "destination": archive_mount["Destination"],
+        "driver": archive_mount["Driver"],
+        "mode": archive_mount["Mode"],
+        "rw": archive_mount["RW"],
+        "source": archive_mount["Name"],
+        "type": archive_mount["Type"],
+    }
+    archive_source_volume_identity = {
+        "driver": archive_volume["Driver"],
+        "labels": archive_volume.get("Labels"),
+        "name": archive_volume["Name"],
+        "options": archive_volume.get("Options"),
+        "scope": archive_volume["Scope"],
+    }
+    expected_archive_volume = {
+        "driver": "local",
+        "labels": {
+            "dev.aragorn.capture-owner": capture_owner,
+            "dev.aragorn.role": "final-combined-v2-archive-source",
+            "dev.aragorn.route": "ADM-02/update/archive-source-force-replacement",
+            "dev.aragorn.source-commit": commit,
+        },
+        "name": archive_volume["Name"],
+        "options": None,
+        "scope": "local",
+    }
+    expected_archive_mount = {
+        "destination": "/sources",
+        "driver": "local",
+        "mode": "ro",
+        "rw": False,
+        "source": archive_volume["Name"],
+        "type": "volume",
+    }
+    match = re.fullmatch(
+        r"aragorn-phase3-final-combined-v2-archive-source-([1-9][0-9]*)",
+        archive_volume["Name"],
+    )
+    if (
+        match is None
+        or capture_owner != f"{commit}:{match.group(1)}"
+        or archive_source_volume_identity != expected_archive_volume
+        or archive_source_mount != expected_archive_mount
+        or archive_fixture["bytes"] != 144
+        or archive_fixture["digest"]
+        != "sha256:d30e0a2e568941e37c5f9427b920917a9edf694beadb41f8a5469e820c0dfdf1"
+    ):
+        raise SystemExit("final combined v2 archive source identity changed")
+
 host = source["HostConfig"]
 host_config = {
     "binds": sorted(host["Binds"]),
@@ -514,14 +663,15 @@ host_config = {
     "tmpfs": host["Tmpfs"],
     "userns_mode": host["UsernsMode"],
 }
+expected_binds = [
+    "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+    f"{runtime_volume}:/runtime:ro",
+    f"{route_volume['Name']}:/route-input:ro",
+]
+if archive_source_mount is not None:
+    expected_binds.append(f"{archive_volume['Name']}:/sources:ro")
 expected_host = {
-    "binds": sorted(
-        [
-            "/sys/fs/cgroup:/sys/fs/cgroup:rw",
-            f"{runtime_volume}:/runtime:ro",
-            f"{route_volume['Name']}:/route-input:ro",
-        ]
-    ),
+    "binds": sorted(expected_binds),
     "cgroupns_mode": "host",
     "ipc_mode": "private",
     "network_mode": "none",
@@ -572,8 +722,22 @@ document = {
     "route_input_mount": route_input_mount,
     "host_config": host_config,
 }
-Path(sys.argv[6]).write_text(
-    json.dumps(document, allow_nan=False, ensure_ascii=True, sort_keys=True, separators=(",", ":")),
+if archive_source_mount is not None:
+    document.update(
+        {
+            "archive_source_fixture": archive_fixture,
+            "archive_source_mount": archive_source_mount,
+            "archive_source_volume_identity": archive_source_volume_identity,
+        }
+    )
+Path(sys.argv[8]).write_text(
+    json.dumps(
+        document,
+        allow_nan=False,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ),
     encoding="ascii",
 )
 PY

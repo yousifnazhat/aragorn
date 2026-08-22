@@ -30,8 +30,7 @@ _ROUTES = {
     },
 }
 _ROUTE_ROOTS = {
-    route_id: Path("/route-input") / route_id.rsplit("/", 1)[1]
-    for route_id in _ROUTES
+    route_id: Path("/route-input") / route_id.rsplit("/", 1)[1] for route_id in _ROUTES
 }
 _EXPECTED_PROBES = {
     "protected-archive-replacement-probe.mjs": {
@@ -203,6 +202,18 @@ def _collect(route_id: str) -> dict[str, Any]:
     ):
         composition = combined._collect()
     _expect(_ROUTE_OBSERVATION is not None, "selected route did not execute")
+    harness_document = combined._harness()["document"]
+    archive_fields = {
+        "archive_source_fixture",
+        "archive_source_mount",
+        "archive_source_volume_identity",
+    }
+    _expect(
+        archive_fields <= set(harness_document)
+        if route_id == "ADM-02/update/archive-source-force-replacement"
+        else archive_fields.isdisjoint(harness_document),
+        "archive source custody does not match the selected route",
+    )
     status = _ROUTE_OBSERVATION["route"]["status"]
     _expect(
         composition["decision"]["route_pass_count"] == 0

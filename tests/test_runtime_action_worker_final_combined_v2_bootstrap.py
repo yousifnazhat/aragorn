@@ -84,6 +84,66 @@ class RuntimeActionWorkerFinalCombinedV2BootstrapTests(unittest.TestCase):
         with self.assertRaises(probe.openclaw.ProbeError):
             probe._route_input_volume_name(changed, source_commit)
 
+    def test_archive_source_harness_binds_fixture_and_read_only_volume(self) -> None:
+        source_commit = "a" * 40
+        name = "aragorn-phase3-final-combined-v2-archive-source-123"
+        fixture = probe.p37c._raw_record(
+            (
+                _ROOT
+                / "benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md"
+            ).read_bytes()
+        )
+        fixture["path"] = (
+            "benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md"
+        )
+        document = {
+            "archive_source_fixture": fixture,
+            "archive_source_mount": {
+                "destination": "/sources",
+                "driver": "local",
+                "mode": "ro",
+                "rw": False,
+                "source": name,
+                "type": "volume",
+            },
+            "archive_source_volume_identity": {
+                "driver": "local",
+                "labels": {
+                    "dev.aragorn.capture-owner": f"{source_commit}:123",
+                    "dev.aragorn.role": "final-combined-v2-archive-source",
+                    "dev.aragorn.route": (
+                        "ADM-02/update/archive-source-force-replacement"
+                    ),
+                    "dev.aragorn.source-commit": source_commit,
+                },
+                "name": name,
+                "options": None,
+                "scope": "local",
+            },
+        }
+        self.assertEqual(
+            probe._archive_source_volume_name(document, source_commit), name
+        )
+        for changed in (
+            {"archive_source_fixture": fixture},
+            {
+                **document,
+                "archive_source_mount": {
+                    **document["archive_source_mount"],
+                    "rw": True,
+                },
+            },
+            {
+                **document,
+                "archive_source_fixture": {**fixture, "bytes": 143},
+            },
+        ):
+            with (
+                self.subTest(changed=changed),
+                self.assertRaises(probe.openclaw.ProbeError),
+            ):
+                probe._archive_source_volume_name(changed, source_commit)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -152,52 +152,110 @@ def _canonical_source(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     }
 
 
-def _route_input_volume_name(
-    document: dict[str, Any], source_commit: str
+def _ephemeral_input_volume_name(
+    document: dict[str, Any],
+    source_commit: str,
+    *,
+    stem: str,
+    destination: str,
+    name_pattern: str,
+    role: str,
+    extra_labels: dict[str, str] | None = None,
 ) -> str | None:
-    fields = {"route_input_mount", "route_input_volume_identity"}
+    fields = {f"{stem}_mount", f"{stem}_volume_identity"}
     present = fields & set(document)
-    _expect(present in (set(), fields), "partial route input harness changed")
+    _expect(present in (set(), fields), f"partial {stem} harness changed")
     if not present:
         return None
-    identity = document["route_input_volume_identity"]
-    mount = document["route_input_mount"]
+    identity = document[f"{stem}_volume_identity"]
+    mount = document[f"{stem}_mount"]
     _expect(
         isinstance(identity, dict)
         and set(identity) == {"driver", "labels", "name", "options", "scope"}
         and isinstance(identity.get("name"), str),
-        "route input volume shape changed",
+        f"{stem} volume shape changed",
     )
     name = identity["name"]
-    matched = re.fullmatch(
-        r"aragorn-phase3-final-combined-v2-route-input-([1-9][0-9]*)", name
-    )
+    matched = re.fullmatch(name_pattern, name)
     owner = f"{source_commit}:{matched.group(1)}" if matched else None
+    labels = {
+        "dev.aragorn.capture-owner": owner,
+        "dev.aragorn.role": role,
+        "dev.aragorn.source-commit": source_commit,
+        **(extra_labels or {}),
+    }
     _expect(
-        identity
+        matched is not None
+        and identity
         == {
             "driver": "local",
-            "labels": {
-                "dev.aragorn.capture-owner": owner,
-                "dev.aragorn.role": "final-combined-v2-route-input",
-                "dev.aragorn.source-commit": source_commit,
-            },
+            "labels": labels,
             "name": name,
             "options": None,
             "scope": "local",
         }
         and mount
         == {
-            "destination": "/route-input",
+            "destination": destination,
             "driver": "local",
             "mode": "ro",
             "rw": False,
             "source": name,
             "type": "volume",
         },
-        "route input volume identity changed",
+        f"{stem} volume identity changed",
     )
     return name
+
+
+def _route_input_volume_name(
+    document: dict[str, Any], source_commit: str
+) -> str | None:
+    return _ephemeral_input_volume_name(
+        document,
+        source_commit,
+        stem="route_input",
+        destination="/route-input",
+        name_pattern=(r"aragorn-phase3-final-combined-v2-route-input-([1-9][0-9]*)"),
+        role="final-combined-v2-route-input",
+    )
+
+
+def _archive_source_volume_name(
+    document: dict[str, Any], source_commit: str
+) -> str | None:
+    fields = {
+        "archive_source_fixture",
+        "archive_source_mount",
+        "archive_source_volume_identity",
+    }
+    present = fields & set(document)
+    _expect(present in (set(), fields), "partial archive source harness changed")
+    if not present:
+        return None
+    fixture = document["archive_source_fixture"]
+    _expect(
+        isinstance(fixture, dict)
+        and set(fixture) == {"base64", "bytes", "digest", "path"}
+        and fixture["path"]
+        == "benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md"
+        and p37c._raw_bytes(fixture)
+        and fixture["bytes"] == 144
+        and fixture["digest"]
+        == "sha256:d30e0a2e568941e37c5f9427b920917a9edf694beadb41f8a5469e820c0dfdf1",
+        "archive source fixture changed",
+    )
+    return _ephemeral_input_volume_name(
+        document,
+        source_commit,
+        stem="archive_source",
+        destination="/sources",
+        name_pattern=(r"aragorn-phase3-final-combined-v2-archive-source-([1-9][0-9]*)"),
+        role="final-combined-v2-archive-source",
+        extra_labels={
+            "dev.aragorn.route": "ADM-02/update/archive-source-force-replacement"
+        },
+    )
 
 
 def _harness() -> dict[str, Any]:
@@ -221,9 +279,15 @@ def _harness() -> dict[str, Any]:
         "openclaw_runtime_mount",
         "host_config",
     }
+    route_fields = {"route_input_mount", "route_input_volume_identity"}
+    archive_fields = {
+        "archive_source_fixture",
+        "archive_source_mount",
+        "archive_source_volume_identity",
+    }
     _expect(
         set(document)
-        in (fields, fields | {"route_input_mount", "route_input_volume_identity"}),
+        in (fields, fields | route_fields, fields | route_fields | archive_fields),
         "outer final combined v2 harness shape changed",
     )
     lineage = document.get("image_lineage", {})
@@ -233,6 +297,7 @@ def _harness() -> dict[str, Any]:
     child_layers = child.get("layers")
     source_commit = document.get("source_commit", "")
     route_input_volume = _route_input_volume_name(document, source_commit)
+    archive_source_volume = _archive_source_volume_name(document, source_commit)
     verification = document.get("source_commit_verification", {})
     commit_raw = p37c._raw_bytes(verification.get("commit_object", {}))
     verification_stdout = p37c._raw_bytes(verification.get("stdout", {}))
@@ -258,6 +323,8 @@ def _harness() -> dict[str, Any]:
     ]
     if route_input_volume is not None:
         expected_binds.append(f"{route_input_volume}:/route-input:ro")
+    if archive_source_volume is not None:
+        expected_binds.append(f"{archive_source_volume}:/sources:ro")
     expected_host = {
         "binds": sorted(expected_binds),
         "cgroupns_mode": "host",

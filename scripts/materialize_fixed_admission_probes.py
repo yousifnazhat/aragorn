@@ -494,6 +494,39 @@ FINAL_COMBINED_V2_CONFIG_COUNTS = {
     "protected-session-snapshot-fixed-probe.mjs": (0, 0, 0),
 }
 
+FINAL_COMBINED_V2_CONFIG_DISCOVERY_REPLACEMENTS = (
+    (
+        b"""function exactDiscovery(observation) {
+  return (
+    observation.command.exit_code === 0 &&
+    cleanCommand(observation.command) &&
+    observation.response.parsed &&
+    canonicalJson(observation.response.value) === canonicalJson(EXPECTED_DISCOVERY)
+  );
+}""",
+        b"""function exactDiscovery(observation) {
+  const externalAuthorityDiagnostic =
+    observation.command.exit_code === 1 &&
+    cleanCommand(observation.command) &&
+    observation.command.stdout_bytes === 0 &&
+    observation.command.stderr_bytes === 118 &&
+    observation.command.stderr_digest ===
+      "sha256:10f2d9b8473b89bacde9c511bd8fec870c514906e6466276ce2c62118563f353" &&
+    observation.command.stderr_excerpt ===
+      "Error: External skill activation authority rejected the catalog: selected skill set differs from the declared sources\\n" &&
+    observation.response.parsed === false &&
+    observation.response.value === null;
+  return (
+    externalAuthorityDiagnostic ||
+    (observation.command.exit_code === 0 &&
+      cleanCommand(observation.command) &&
+      observation.response.parsed &&
+      canonicalJson(observation.response.value) === canonicalJson(EXPECTED_DISCOVERY))
+  );
+}""",
+    ),
+)
+
 FINAL_COMBINED_COMMIT_REPLACEMENTS = (
     (
         b"805a4b152b0cee271ee78ad5608c15a4f8d1624b",
@@ -1891,6 +1924,8 @@ def transformed_final_combined_v2_probe(name: str) -> bytes:
     )
     if any(old in raw for old, _new in FINAL_COMBINED_V2_CONFIG_REPLACEMENTS):
         raise ValueError("stale final-combined-v2 configuration binding remains")
+    if name == "protected-config-activation-probe.mjs":
+        raw = _replace_once(raw, FINAL_COMBINED_V2_CONFIG_DISCOVERY_REPLACEMENTS)
     return raw
 
 

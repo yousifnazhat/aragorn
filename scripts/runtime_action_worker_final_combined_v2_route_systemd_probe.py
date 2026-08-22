@@ -30,9 +30,9 @@ _ROUTE_ROOTS = {
 }
 _EXPECTED_PROBES = {
     "protected-config-activation-probe.mjs": {
-        "bytes": 23_366,
+        "bytes": 24_010,
         "digest": (
-            "sha256:edc55ed6e97388375a5f9d93e4e3dee2404383aeb5fe85bcf5add0d804f3f297"
+            "sha256:67b5293379997566faa0aaee192212f479b77f6708c02017bdd235ff12790b98"
         ),
     },
     "protected-cron-rescan-probe.mjs": {

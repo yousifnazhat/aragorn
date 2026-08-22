@@ -613,8 +613,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "f036271b3cc319c6cf6153791133cc78caafc48817ca8c0b89fdd0d353462a76",
             ),
             "protected-config-activation-probe.mjs": (
-                23_366,
-                "edc55ed6e97388375a5f9d93e4e3dee2404383aeb5fe85bcf5add0d804f3f297",
+                24_010,
+                "67b5293379997566faa0aaee192212f479b77f6708c02017bdd235ff12790b98",
             ),
             "protected-cron-rescan-probe.mjs": (
                 35_318,
@@ -672,6 +672,16 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
         )
         self.assertEqual(FINAL_COMBINED_V2_SELECTIONS, FINAL_COMBINED_SELECTIONS)
         self.assertEqual(set(expected), set(FINAL_COMBINED_V2_SOURCE_DIGESTS))
+        config_probe = transformed_final_combined_v2_probe(
+            "protected-config-activation-probe.mjs"
+        )
+        self.assertIn(b"const externalAuthorityDiagnostic =", config_probe)
+        self.assertNotIn(
+            b"const externalAuthorityDiagnostic =",
+            transformed_final_combined_probe(
+                "protected-config-activation-probe.mjs"
+            ),
+        )
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

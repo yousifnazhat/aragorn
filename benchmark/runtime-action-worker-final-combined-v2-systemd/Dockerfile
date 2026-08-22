@@ -47,6 +47,8 @@ RUN set -eux; \
         c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5; \
     test "$(find /route-input -mindepth 1 -maxdepth 2 -printf '%P:%y\n' | sort)" = \
         "$(printf '%s\n' \
+            'config-entry-activation:d' \
+            'config-entry-activation/protected-config-activation-probe.mjs:f' \
             'cron-rescan:d' \
             'cron-rescan/protected-cron-rescan-probe.mjs:f' \
             'cron-rescan/protected-observation-v1.mjs:f' \
@@ -59,6 +61,8 @@ RUN set -eux; \
             'session-snapshot-consumer/protected-observation-v1.mjs:f' \
             'session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs:f' \
             | sort)"; \
+    test "$(sha256sum /route-input/config-entry-activation/protected-config-activation-probe.mjs | cut -d ' ' -f 1)" = \
+        edc55ed6e97388375a5f9d93e4e3dee2404383aeb5fe85bcf5add0d804f3f297; \
     test "$(sha256sum /route-input/cron-rescan/protected-cron-rescan-probe.mjs | cut -d ' ' -f 1)" = \
         94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0; \
     test "$(sha256sum /route-input/cron-rescan/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \

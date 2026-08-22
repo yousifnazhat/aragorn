@@ -16,11 +16,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import runtime_action_worker_final_combined_v2_systemd_probe as combined
 import runtime_action_worker_final_route_systemd_probe as v1_route
 
+_ROUTES = {
+    **v1_route._ROUTES,
+    "ADM-02/update/config-entry-activation": {
+        "files": ("protected-config-activation-probe.mjs",),
+        "probe": "protected-config-activation-probe.mjs",
+        "schema": "aragorn/openclaw-protected-config-activation-observation/v1",
+    },
+}
 _ROUTE_ROOTS = {
     route_id: Path("/route-input") / route_id.rsplit("/", 1)[1]
-    for route_id in v1_route._ROUTES
+    for route_id in _ROUTES
 }
 _EXPECTED_PROBES = {
+    "protected-config-activation-probe.mjs": {
+        "bytes": 23_366,
+        "digest": (
+            "sha256:edc55ed6e97388375a5f9d93e4e3dee2404383aeb5fe85bcf5add0d804f3f297"
+        ),
+    },
     "protected-cron-rescan-probe.mjs": {
         "bytes": 35_318,
         "digest": "sha256:94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0",
@@ -69,7 +83,7 @@ def _iso_now() -> str:
 
 
 def _probe_bundle(route_id: str) -> list[dict[str, Any]]:
-    specification = v1_route._ROUTES[route_id]
+    specification = _ROUTES[route_id]
     root = _ROUTE_ROOTS[route_id]
     _expect(
         tuple(sorted(path.name for path in root.iterdir()))
@@ -125,6 +139,7 @@ def _run_route(
 ) -> dict[str, Any]:
     harness = {"document": {"probe_bundle": _probe_bundle(route_id)}}
     with (
+        mock.patch.object(v1_route, "_ROUTES", _ROUTES),
         mock.patch.object(v1_route, "_PROBE_ROOT", _ROUTE_ROOTS[route_id]),
         mock.patch.object(v1_route, "_SELECTED_ROUTE", route_id),
     ):
@@ -240,7 +255,7 @@ def _failure(exc: Exception) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
-    if len(arguments) != 1 or arguments[0] not in v1_route._ROUTES:
+    if len(arguments) != 1 or arguments[0] not in _ROUTES:
         print(
             "usage: runtime_action_worker_final_combined_v2_route_systemd_probe.py ROUTE_ID",
             file=sys.stderr,

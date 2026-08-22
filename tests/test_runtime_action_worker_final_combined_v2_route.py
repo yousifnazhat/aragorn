@@ -62,6 +62,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             source,
         )
         for flag in (
+            "--config-entry-activation",
             "--cron-rescan",
             "--fresh-session-reset",
             "--missing-prompt-blob-rebuild",
@@ -74,6 +75,9 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         self.assertIn('"route_input_volume_identity": route_volume_identity', source)
         self.assertNotIn("parse_float=", source)
         self.assertIn("parse_constant=", source)
+        self.assertNotIn(
+            "ADM-02/update/config-entry-activation", route.v1_route._ROUTES
+        )
 
         dockerfile = (
             ROOT
@@ -83,7 +87,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("COPY route-input/ /route-input/", dockerfile)
         expected_probes = {}
-        for specification in route.v1_route._ROUTES.values():
+        for specification in route._ROUTES.values():
             for name in specification["files"]:
                 materialized = transformed_final_combined_v2_probe(name)
                 expected_probes[name] = {
@@ -93,11 +97,11 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
                 self.assertIn(expected_probes[name]["digest"][7:], dockerfile)
         self.assertEqual(route._EXPECTED_PROBES, expected_probes)
 
-        for route_id in route.v1_route._ROUTES:
+        for route_id in route._ROUTES:
             with self.subTest(route_id=route_id):
                 probe_bundle = [
                     {"bytes": 1, "digest": "sha256:" + "0" * 64, "name": name}
-                    for name in route.v1_route._ROUTES[route_id]["files"]
+                    for name in route._ROUTES[route_id]["files"]
                 ]
                 observed = {"route": {"id": route_id, "status": "OBSERVED"}}
                 with (

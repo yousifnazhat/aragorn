@@ -15,6 +15,8 @@ if [ "$#" -eq 1 ]; then
 elif [ "$#" -eq 2 ]; then
     mode=route
     case "$1" in
+        --config-entry-activation)
+            route=ADM-02/update/config-entry-activation ;;
         --cron-rescan) route=ADM-02/reload/cron-rescan ;;
         --fresh-session-reset) route=ADM-02/reload/fresh-session-reset ;;
         --missing-prompt-blob-rebuild)
@@ -27,7 +29,7 @@ elif [ "$#" -eq 2 ]; then
     esac
     output=$2
 else
-    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
+    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--config-entry-activation|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
     exit 64
 fi
 case "$output" in
@@ -220,6 +222,7 @@ then
 fi
 GIT_NO_REPLACE_OBJECTS=1 git cat-file commit "$source_commit" >"$commit_object"
 GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
+    benchmark/admission/openclaw-v2026.7.1/protected-config-activation-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-v2-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-observation-v1.mjs \
@@ -238,6 +241,9 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
     scripts/runtime_action_worker_final_route_systemd_probe.py \
     | tar -xf - -C "$context"
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/config-entry-activation" \
+    protected-config-activation-probe.mjs
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/cron-rescan" \
     protected-observation-v1.mjs protected-cron-rescan-probe.mjs

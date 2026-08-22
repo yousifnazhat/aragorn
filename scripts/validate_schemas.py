@@ -78,6 +78,9 @@ from aragorn.admission_protected_curator_restore import (
 from aragorn.admission_protected_final_fresh_session_reset import (
     verify_openclaw_final_fresh_session_reset,
 )
+from aragorn.admission_protected_final_combined_v2_fresh_session_reset import (
+    verify_openclaw_final_combined_v2_fresh_session_reset,
+)
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
     compose_openclaw_protected_profile_coverage_v2,
@@ -3169,6 +3172,40 @@ def main() -> int:
         != canonical_json(final_fresh_session_qualification) + b"\n"
     ):
         raise AssertionError("protected final fresh-session qualification changed")
+
+    final_v2_fresh_session_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-fresh-session-reset-systemd-"
+        "p3-final-2026-08-22.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v2-fresh-session-reset-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_fresh_session_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_fresh_session_qualification = (
+            verify_openclaw_final_combined_v2_fresh_session_reset(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_fresh_session_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-fresh-session-reset-route-"
+        "coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_fresh_session_qualification = load(
+        final_v2_fresh_session_qualification_path
+    )
+    if (
+        final_v2_fresh_session_qualification
+        != retained_final_v2_fresh_session_qualification
+        or final_v2_fresh_session_qualification_path.read_bytes()
+        != canonical_json(final_v2_fresh_session_qualification) + b"\n"
+    ):
+        raise AssertionError("protected final V2 fresh-session qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

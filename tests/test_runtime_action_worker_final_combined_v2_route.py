@@ -42,6 +42,8 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             self.assertIn(flag, source)
         self.assertNotIn("route_image=", source)
         self.assertNotIn("Dockerfile.route-v2", source)
+        self.assertIn('-v "$route_input_volume:/route-input:ro"', source)
+        self.assertIn('"route_input_volume_identity": route_volume_identity', source)
         self.assertNotIn("parse_float=", source)
         self.assertIn("parse_constant=", source)
 

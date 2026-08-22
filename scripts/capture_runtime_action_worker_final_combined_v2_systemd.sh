@@ -57,9 +57,11 @@ fi
 
 container=aragorn-phase3-final-combined-v2-$$
 owner_token=$source_commit:$$
+route_input_volume=aragorn-phase3-final-combined-v2-route-input-$$
 cidfile=$capture_lock/container.id
 lock_held=0
 create_attempted=0
+route_input_volume_created=0
 container_id=
 child_id=
 context=
@@ -67,6 +69,7 @@ inspect=
 parent_inspect=
 child_inspect=
 volume_inspect=
+route_volume_inspect=
 harness=
 commit_object=
 commit_stdout=
@@ -127,8 +130,22 @@ cleanup()
     if ! remove_created_container; then
         cleanup_failed=1
     fi
+    if [ "$route_input_volume_created" -eq 1 ]; then
+        current_owner=$(docker volume inspect \
+            --format '{{index .Labels "dev.aragorn.capture-owner"}}' \
+            "$route_input_volume" 2>/dev/null || :)
+        if [ "$current_owner" != "$owner_token" ]; then
+            echo "refusing to remove an unowned final combined v2 route volume" >&2
+            cleanup_failed=1
+        elif ! docker volume rm "$route_input_volume" >/dev/null; then
+            cleanup_failed=1
+        else
+            route_input_volume_created=0
+        fi
+    fi
     for path in \
         "$inspect" "$parent_inspect" "$child_inspect" "$volume_inspect" \
+        "$route_volume_inspect" \
         "$harness" "$commit_object" "$commit_stdout" "$commit_stderr" \
         "$iidfile" "$temp_output"
     do
@@ -186,6 +203,7 @@ inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-inspect.XXXXXX")
 parent_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-parent.XXXXXX")
 child_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-child.XXXXXX")
 volume_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-volume.XXXXXX")
+route_volume_inspect=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-route-volume.XXXXXX")
 harness=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-harness.XXXXXX")
 commit_object=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-commit.XXXXXX")
 commit_stdout=$(mktemp "${TMPDIR:-/tmp}/aragorn-phase3-final-verify-out.XXXXXX")
@@ -257,6 +275,26 @@ then
     exit 69
 fi
 
+if docker volume inspect "$route_input_volume" >/dev/null 2>&1; then
+    echo "refusing to reuse an existing final combined v2 route volume" >&2
+    exit 73
+fi
+created_volume=$(docker volume create \
+    --label dev.aragorn.role=final-combined-v2-route-input \
+    --label "dev.aragorn.source-commit=$source_commit" \
+    --label "dev.aragorn.capture-owner=$owner_token" \
+    "$route_input_volume")
+route_input_volume_created=1
+if [ "$created_volume" != "$route_input_volume" ] \
+    || [ "$(docker volume inspect --format '{{.Driver}}' "$route_input_volume")" != local ] \
+    || [ "$(docker volume inspect --format '{{index .Labels "dev.aragorn.role"}}' "$route_input_volume")" != final-combined-v2-route-input ] \
+    || [ "$(docker volume inspect --format '{{index .Labels "dev.aragorn.source-commit"}}' "$route_input_volume")" != "$source_commit" ] \
+    || [ "$(docker volume inspect --format '{{index .Labels "dev.aragorn.capture-owner"}}' "$route_input_volume")" != "$owner_token" ]
+then
+    echo "final combined v2 route volume identity changed" >&2
+    exit 69
+fi
+
 create_attempted=1
 container_id=$(docker create --name "$container" --cidfile "$cidfile" --pull=never \
     --privileged --cgroupns=host --network=none \
@@ -267,6 +305,7 @@ container_id=$(docker create --name "$container" --cidfile "$cidfile" --pull=nev
     --tmpfs /run/lock:rw,nosuid,nodev,noexec,mode=755 \
     -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     -v "$runtime_volume:/runtime:ro" \
+    -v "$route_input_volume:/route-input:ro" \
     "$child_id")
 docker start "$container_id" >/dev/null
 
@@ -288,10 +327,11 @@ docker inspect "$container_id" >"$inspect"
 docker image inspect "$parent_id" >"$parent_inspect"
 docker image inspect "$child_id" >"$child_inspect"
 docker volume inspect "$runtime_volume" >"$volume_inspect"
+docker volume inspect "$route_input_volume" >"$route_volume_inspect"
 python3.12 - \
     "$inspect" "$parent_inspect" "$child_inspect" "$volume_inspect" \
-    "$harness" "$source_commit" "$commit_object" "$commit_stdout" \
-    "$commit_stderr" <<'PY'
+    "$route_volume_inspect" "$harness" "$source_commit" "$commit_object" \
+    "$commit_stdout" "$commit_stderr" <<'PY'
 import base64
 import hashlib
 import json
@@ -316,17 +356,17 @@ def raw_record(path: str) -> dict:
     }
 
 
-source, parent, child, volume = map(one, sys.argv[1:5])
+source, parent, child, volume, route_volume = map(one, sys.argv[1:6])
 parent_id = "sha256:3ccea364258c367342e585113d784b7ce00642c63918e0a6f0a6594019d3121c"
 runtime_volume = "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1"
-commit = sys.argv[6]
-commit_object = raw_record(sys.argv[7])
+commit = sys.argv[7]
+commit_object = raw_record(sys.argv[8])
 commit_raw = base64.b64decode(commit_object["base64"], validate=True)
 commit_identity = hashlib.sha1(
     f"commit {len(commit_raw)}\0".encode("ascii") + commit_raw
 ).hexdigest()
-verification_stdout = raw_record(sys.argv[8])
-verification_stderr = raw_record(sys.argv[9])
+verification_stdout = raw_record(sys.argv[9])
+verification_stderr = raw_record(sys.argv[10])
 if (
     parent["Id"] != parent_id
     or re.fullmatch(r"[0-9a-f]{40}", commit) is None
@@ -394,6 +434,60 @@ expected_volume = {
 if runtime_mount != expected_mount or volume_identity != expected_volume:
     raise SystemExit("final OpenClaw runtime volume identity changed")
 
+route_mounts = [
+    item for item in source["Mounts"] if item["Destination"] == "/route-input"
+]
+if len(route_mounts) != 1:
+    raise SystemExit("expected exactly one /route-input mount")
+route_mount = route_mounts[0]
+route_input_mount = {
+    "destination": route_mount["Destination"],
+    "driver": route_mount["Driver"],
+    "mode": route_mount["Mode"],
+    "rw": route_mount["RW"],
+    "source": route_mount["Name"],
+    "type": route_mount["Type"],
+}
+capture_owner = source["Config"]["Labels"].get("dev.aragorn.capture-owner")
+route_volume_identity = {
+    "driver": route_volume["Driver"],
+    "labels": route_volume.get("Labels"),
+    "name": route_volume["Name"],
+    "options": route_volume.get("Options"),
+    "scope": route_volume["Scope"],
+}
+expected_route_volume = {
+    "driver": "local",
+    "labels": {
+        "dev.aragorn.capture-owner": capture_owner,
+        "dev.aragorn.role": "final-combined-v2-route-input",
+        "dev.aragorn.source-commit": commit,
+    },
+    "name": route_volume["Name"],
+    "options": None,
+    "scope": "local",
+}
+expected_route_mount = {
+    "destination": "/route-input",
+    "driver": "local",
+    "mode": "ro",
+    "rw": False,
+    "source": route_volume["Name"],
+    "type": "volume",
+}
+if (
+    re.fullmatch(
+        r"aragorn-phase3-final-combined-v2-route-input-[1-9][0-9]*",
+        route_volume["Name"],
+    )
+    is None
+    or re.fullmatch(re.escape(commit) + r":[1-9][0-9]*", capture_owner or "")
+    is None
+    or route_volume_identity != expected_route_volume
+    or route_input_mount != expected_route_mount
+):
+    raise SystemExit("final combined v2 route input volume identity changed")
+
 host = source["HostConfig"]
 host_config = {
     "binds": sorted(host["Binds"]),
@@ -412,6 +506,7 @@ expected_host = {
         [
             "/sys/fs/cgroup:/sys/fs/cgroup:rw",
             f"{runtime_volume}:/runtime:ro",
+            f"{route_volume['Name']}:/route-input:ro",
         ]
     ),
     "cgroupns_mode": "host",
@@ -460,9 +555,11 @@ document = {
     "openclaw_runtime_volume": mount["Name"],
     "openclaw_runtime_volume_identity": volume_identity,
     "openclaw_runtime_mount": runtime_mount,
+    "route_input_volume_identity": route_volume_identity,
+    "route_input_mount": route_input_mount,
     "host_config": host_config,
 }
-Path(sys.argv[5]).write_text(
+Path(sys.argv[6]).write_text(
     json.dumps(document, allow_nan=False, ensure_ascii=True, sort_keys=True, separators=(",", ":")),
     encoding="ascii",
 )

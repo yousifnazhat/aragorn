@@ -1,0 +1,65 @@
+ARG V1_FINAL_BASE
+
+FROM ${V1_FINAL_BASE}
+
+ARG V1_FINAL_BASE
+
+COPY packaging/activate-runtime-action-worker-host.sh \
+    /src/packaging/activate-runtime-action-worker-host.sh
+COPY src/aragorn/runtime_action_worker.py \
+    /src/src/aragorn/runtime_action_worker.py
+COPY benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
+    benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
+    benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \
+    /src/benchmark/admission/openclaw-v2026.7.1/
+COPY benchmark/runtime-action-worker-final-combined-v2-systemd/ \
+    /src/benchmark/runtime-action-worker-final-combined-v2-systemd/
+COPY scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
+    scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
+    /src/scripts/
+
+# V2 is one additive source/install refresh over the exact retained V1 child.
+# The singleton skill and OpenClaw runtime remain inherited and immutable.
+RUN set -eux; \
+    test "$V1_FINAL_BASE" = \
+        "sha256:3ccea364258c367342e585113d784b7ce00642c63918e0a6f0a6594019d3121c"; \
+    test "$(sha256sum /usr/lib/aragorn/aragorn/runtime_action_worker.py | cut -d ' ' -f 1)" = \
+        16e77024f715d1b7f2c600df16e5878e23f584753444fef998cf9b4742603d60; \
+    test "$(sha256sum /usr/libexec/aragorn/activate-runtime-action-worker-host.sh | cut -d ' ' -f 1)" = \
+        589d8174e2d175e1680b4a3b5b29acc6db33660ffe0cd682b7f07fa6f9de7a64; \
+    test "$(sha256sum /opt/aragorn/runtime-profile/template-skill/SKILL.md | cut -d ' ' -f 1)" = \
+        eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa; \
+    test "$(stat -c '%u:%g:%a:%h:%s' /opt/aragorn/runtime-profile/template-skill/SKILL.md)" = \
+        0:0:444:1:140; \
+    test "$(sha256sum /src/src/aragorn/runtime_action_worker.py | cut -d ' ' -f 1)" = \
+        a0aa80b0870c18ecb380ca6f7a65663e4046e92f55938b84c9e15284ba221873; \
+    test "$(sha256sum /src/packaging/activate-runtime-action-worker-host.sh | cut -d ' ' -f 1)" = \
+        e89b5c456d276e6c14b403a976db4a1fa9f7e4fa7ce4a35e6d1431a7a1b9de18; \
+    test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json | cut -d ' ' -f 1)" = \
+        2772bca6629607247e2a5c056282b4748ab5bb6d024fd742c9755fb915281ddb; \
+    test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json | cut -d ' ' -f 1)" = \
+        615928c74bb467ed1422aa19c0ca3266fec21e6a9b195ff32e7e2fae86f966fc; \
+    test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json | cut -d ' ' -f 1)" = \
+        c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5; \
+    install -m 0644 /src/src/aragorn/runtime_action_worker.py \
+        /usr/lib/aragorn/aragorn/runtime_action_worker.py; \
+    install -m 0755 /src/packaging/activate-runtime-action-worker-host.sh \
+        /usr/libexec/aragorn/activate-runtime-action-worker-host.sh; \
+    cmp /src/src/aragorn/runtime_action_worker.py \
+        /usr/lib/aragorn/aragorn/runtime_action_worker.py; \
+    cmp /src/packaging/activate-runtime-action-worker-host.sh \
+        /usr/libexec/aragorn/activate-runtime-action-worker-host.sh; \
+    test "$(stat -c '%u:%g:%a:%h' /usr/lib/aragorn/aragorn/runtime_action_worker.py)" = \
+        0:0:644:1; \
+    test "$(stat -c '%u:%g:%a:%h' /usr/libexec/aragorn/activate-runtime-action-worker-host.sh)" = \
+        0:0:755:1; \
+    chmod 0555 \
+        /src/packaging/activate-runtime-action-worker-host.sh \
+        /src/scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
+        /src/scripts/runtime_action_worker_final_combined_v2_systemd_probe.py; \
+    chmod 0444 \
+        /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
+        /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
+        /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \
+        /src/benchmark/runtime-action-worker-final-combined-v2-systemd/Dockerfile \
+        /src/src/aragorn/runtime_action_worker.py

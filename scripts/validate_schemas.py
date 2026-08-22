@@ -75,14 +75,17 @@ from aragorn.admission_protected_cron import (
 from aragorn.admission_protected_curator_restore import (
     verify_openclaw_protected_curator_restore_denial,
 )
-from aragorn.admission_protected_final_fresh_session_reset import (
-    verify_openclaw_final_fresh_session_reset,
+from aragorn.admission_protected_final_combined_v2_cron_rescan import (
+    verify_openclaw_final_combined_v2_cron_rescan,
 )
 from aragorn.admission_protected_final_combined_v2_fresh_session_reset import (
     verify_openclaw_final_combined_v2_fresh_session_reset,
 )
 from aragorn.admission_protected_final_combined_v2_prompt_rebuild import (
     verify_openclaw_final_combined_v2_prompt_rebuild,
+)
+from aragorn.admission_protected_final_fresh_session_reset import (
+    verify_openclaw_final_fresh_session_reset,
 )
 from aragorn.admission_protected_profile import (
     compose_openclaw_protected_profile_coverage,
@@ -3244,6 +3247,42 @@ def main() -> int:
         != canonical_json(final_v2_prompt_qualification) + b"\n"
     ):
         raise AssertionError("protected final V2 prompt qualification changed")
+
+    final_v2_cron_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-cron-rescan-systemd-p3-"
+        "final-store-bound-2026-08-22.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-cron-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in (
+            final_v2_fresh_session_evidence_path,
+            final_v2_prompt_evidence_path,
+            final_v2_cron_evidence_path,
+        ):
+            raw = path.read_bytes()
+            evidence_cas.put_expected(
+                BytesIO(raw),
+                expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+                max_bytes=len(raw),
+            )
+        final_v2_cron_qualification = (
+            verify_openclaw_final_combined_v2_cron_rescan(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_cron_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-cron-rescan-route-coverage-"
+        "v1-2026-08-22.json"
+    )
+    retained_final_v2_cron_qualification = load(
+        final_v2_cron_qualification_path
+    )
+    if (
+        final_v2_cron_qualification != retained_final_v2_cron_qualification
+        or final_v2_cron_qualification_path.read_bytes()
+        != canonical_json(final_v2_cron_qualification) + b"\n"
+    ):
+        raise AssertionError("protected final V2 cron qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

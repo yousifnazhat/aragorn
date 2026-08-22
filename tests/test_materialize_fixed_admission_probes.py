@@ -617,8 +617,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "edc55ed6e97388375a5f9d93e4e3dee2404383aeb5fe85bcf5add0d804f3f297",
             ),
             "protected-cron-rescan-probe.mjs": (
-                25_894,
-                "2200529fbe50c81666359b8a5d3f11ff52c088ab32a45dcc982bd5193bede16f",
+                35_318,
+                "94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0",
             ),
             "protected-curator-restore-denial-probe.mjs": (
                 26_564,
@@ -655,7 +655,20 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             "protected-route-probe.mjs",
         }
         self.assertEqual(
-            FINAL_COMBINED_V2_SOURCE_DIGESTS, FINAL_COMBINED_SOURCE_DIGESTS
+            {
+                name: digest
+                for name, digest in FINAL_COMBINED_V2_SOURCE_DIGESTS.items()
+                if name != "protected-cron-rescan-probe.mjs"
+            },
+            {
+                name: digest
+                for name, digest in FINAL_COMBINED_SOURCE_DIGESTS.items()
+                if name != "protected-cron-rescan-probe.mjs"
+            },
+        )
+        self.assertEqual(
+            FINAL_COMBINED_V2_SOURCE_DIGESTS["protected-cron-rescan-probe.mjs"],
+            "3733b27d34e692271b0ac7c93956017d55b318fef1dcabc27e3478531c0e47b3",
         )
         self.assertEqual(FINAL_COMBINED_V2_SELECTIONS, FINAL_COMBINED_SELECTIONS)
         self.assertEqual(set(expected), set(FINAL_COMBINED_V2_SOURCE_DIGESTS))
@@ -741,6 +754,30 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         materialize(rejected, names, **options)
                     self.assertFalse(rejected.exists())
+
+    def test_final_combined_v2_cron_retains_bounded_store_and_inventory_closure(
+        self,
+    ) -> None:
+        cron = transformed_final_combined_v2_probe("protected-cron-rescan-probe.mjs")
+        for literal in (
+            b"const MAX_SESSION_STORE_BYTES = 512 * 1024;",
+            b"const MAX_SQLITE_FILE_BYTES = 4 * 1024 * 1024;",
+            b'const list = nativeCall("cron.list", CRON_LIST_PARAMS, commands);',
+            b"cron_inventory_before: cronInventoryBefore,",
+            b"cron_inventory_after_add: cronInventoryAfterAdd,",
+            b"cron_inventory_after_remove: cronInventoryAfterRemove,",
+            b"entry_document: entry,",
+            b"store_document: store,",
+            b'base64: raw.toString("base64"),',
+            b'base64: storeRaw.toString("base64"),',
+            b"canonicalJson(snapshot.store_document[sessionKey]) === canonicalEntry",
+            b"snapshot.store.digest === sha256(retainedStoreRaw)",
+            b"canonicalJson(snapshot.entry_document.skillsSnapshot?.promptRef) ===",
+            b"canonicalJson([COHERENT_SESSION_KEY, sessionKey].sort())",
+            b'"openclaw.sqlite"',
+        ):
+            with self.subTest(literal=literal):
+                self.assertEqual(cron.count(literal), 1)
 
 
 if __name__ == "__main__":

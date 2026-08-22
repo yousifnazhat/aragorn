@@ -22,8 +22,8 @@ _ROUTE_ROOTS = {
 }
 _EXPECTED_PROBES = {
     "protected-cron-rescan-probe.mjs": {
-        "bytes": 25_894,
-        "digest": "sha256:2200529fbe50c81666359b8a5d3f11ff52c088ab32a45dcc982bd5193bede16f",
+        "bytes": 35_318,
+        "digest": "sha256:94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0",
     },
     "protected-observation-v1.mjs": {
         "bytes": 16_324,

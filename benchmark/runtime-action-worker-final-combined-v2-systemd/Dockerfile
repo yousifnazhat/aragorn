@@ -60,7 +60,7 @@ RUN set -eux; \
             'session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs:f' \
             | sort)"; \
     test "$(sha256sum /route-input/cron-rescan/protected-cron-rescan-probe.mjs | cut -d ' ' -f 1)" = \
-        2200529fbe50c81666359b8a5d3f11ff52c088ab32a45dcc982bd5193bede16f; \
+        94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0; \
     test "$(sha256sum /route-input/cron-rescan/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
         13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321; \
     test "$(sha256sum /route-input/fresh-session-reset/protected-route-probe.mjs | cut -d ' ' -f 1)" = \

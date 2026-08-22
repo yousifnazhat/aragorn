@@ -463,7 +463,12 @@ FINAL_COMBINED_SELECTIONS = frozenset(
     }
 )
 
-FINAL_COMBINED_V2_SOURCE_DIGESTS = dict(FINAL_COMBINED_SOURCE_DIGESTS)
+FINAL_COMBINED_V2_SOURCE_DIGESTS = {
+    **FINAL_COMBINED_SOURCE_DIGESTS,
+    "protected-cron-rescan-probe.mjs": (
+        "3733b27d34e692271b0ac7c93956017d55b318fef1dcabc27e3478531c0e47b3"
+    ),
+}
 FINAL_COMBINED_V2_SELECTIONS = FINAL_COMBINED_SELECTIONS
 
 FINAL_COMBINED_V2_CONFIG_REPLACEMENTS = (
@@ -668,6 +673,15 @@ FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS = (
     ),
     (b"      discovery_after: skillDiscovery,\n", b""),
     (b"    exactDiscovery(last.discovery_after) &&\n", b""),
+)
+
+FINAL_COMBINED_V2_CRON_DISCOVERY_REPLACEMENTS = (
+    *FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS[:3],
+    (
+        b"  const commands = [version, system.command, skillDiscovery.command];",
+        b"  const commands = [version, system.command];",
+    ),
+    *FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS[4:],
 )
 
 FINAL_COMBINED_CURATOR_REPLACEMENTS = (
@@ -1351,11 +1365,14 @@ def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def transformed_probe(name: str) -> bytes:
+def transformed_probe(
+    name: str, *, source_raw: bytes | None = None, source_digest: str | None = None
+) -> bytes:
     if name not in SOURCE_DIGESTS:
         raise ValueError(f"unsupported probe: {name}")
-    raw = (SOURCE_ROOT / name).read_bytes()
-    if _sha256(raw) != SOURCE_DIGESTS[name]:
+    raw = (SOURCE_ROOT / name).read_bytes() if source_raw is None else source_raw
+    expected_digest = SOURCE_DIGESTS[name] if source_digest is None else source_digest
+    if _sha256(raw) != expected_digest:
         raise ValueError(f"frozen probe changed: {name}")
     expected = EXPECTED_COUNTS[name]
     counts = tuple(raw.count(old) for old, _new in REPLACEMENTS)
@@ -1384,11 +1401,13 @@ def transformed_probe(name: str) -> bytes:
     return raw
 
 
-def transformed_restore_authority_probe(name: str) -> bytes:
+def transformed_restore_authority_probe(
+    name: str, *, source_raw: bytes | None = None, source_digest: str | None = None
+) -> bytes:
     expected = RESTORE_AUTHORITY_PROBE_COUNTS.get(name)
     if expected is None:
         raise ValueError(f"unsupported restore-authority probe: {name}")
-    raw = transformed_probe(name)
+    raw = transformed_probe(name, source_raw=source_raw, source_digest=source_digest)
     counts = tuple(
         raw.count(old) for old, _new in RESTORE_AUTHORITY_CONFIG_REPLACEMENTS
     )
@@ -1435,14 +1454,22 @@ def _replace_counted(
     return raw
 
 
-def transformed_final_combined_probe(name: str) -> bytes:
-    expected_digest = FINAL_COMBINED_SOURCE_DIGESTS.get(name)
+def transformed_final_combined_probe(
+    name: str, *, source_raw: bytes | None = None, source_digest: str | None = None
+) -> bytes:
+    expected_digest = (
+        FINAL_COMBINED_SOURCE_DIGESTS.get(name)
+        if source_digest is None
+        else source_digest
+    )
     if expected_digest is None:
         raise ValueError(f"unsupported final-combined probe: {name}")
     if name in RESTORE_AUTHORITY_PROBE_COUNTS:
-        raw = transformed_restore_authority_probe(name)
+        raw = transformed_restore_authority_probe(
+            name, source_raw=source_raw, source_digest=source_digest
+        )
     else:
-        raw = (SOURCE_ROOT / name).read_bytes()
+        raw = (SOURCE_ROOT / name).read_bytes() if source_raw is None else source_raw
         if _sha256(raw) != expected_digest:
             raise ValueError(f"frozen probe changed: {name}")
 
@@ -1630,16 +1657,25 @@ def transformed_final_combined_probe(name: str) -> bytes:
                     b'"Replace with description of the skill and when Claude should use it."',
                 ),
                 (
-                    b'      message: "Inert protected cron rescan observation.",\n'
-                    b"      timeoutSeconds: 5,",
-                    b'      message: "Inert protected cron rescan observation.",\n'
-                    b'      model: "openai/gpt-5.5",\n'
-                    b"      timeoutSeconds: 5,",
+                    (
+                        b'      message: "Inert protected cron rescan observation.",\n'
+                        b"      timeoutSeconds: 5,"
+                    ),
+                    (
+                        b'      message: "Inert protected cron rescan observation.",\n'
+                        b'      model: "openai/gpt-5.5",\n'
+                        b"      timeoutSeconds: 5,"
+                    ),
                 ),
                 *FINAL_COMBINED_CRON_REPLACEMENTS,
             ),
         )
-        raw = _replace_once(raw, FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS)
+        raw = _replace_once(
+            raw,
+            FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS
+            if source_digest is None
+            else FINAL_COMBINED_V2_CRON_DISCOVERY_REPLACEMENTS,
+        )
         raw = _replace_counted(
             raw,
             ((b"  const skillDiscovery = discovery();\n", b""),),
@@ -1837,9 +1873,17 @@ def transformed_final_combined_probe(name: str) -> bytes:
 
 
 def transformed_final_combined_v2_probe(name: str) -> bytes:
-    if name not in FINAL_COMBINED_V2_SOURCE_DIGESTS:
+    expected_digest = FINAL_COMBINED_V2_SOURCE_DIGESTS.get(name)
+    if expected_digest is None:
         raise ValueError(f"unsupported final-combined-v2 probe: {name}")
-    raw = transformed_final_combined_probe(name)
+    source_raw = None
+    source_digest = None
+    if name == "protected-cron-rescan-probe.mjs":
+        source_raw = (SOURCE_ROOT / "protected-cron-rescan-v2-probe.mjs").read_bytes()
+        source_digest = expected_digest
+    raw = transformed_final_combined_probe(
+        name, source_raw=source_raw, source_digest=source_digest
+    )
     raw = _replace_counted(
         raw,
         FINAL_COMBINED_V2_CONFIG_REPLACEMENTS,

@@ -221,6 +221,7 @@ fi
 GIT_NO_REPLACE_OBJECTS=1 git cat-file commit "$source_commit" >"$commit_object"
 GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-probe.mjs \
+    benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-v2-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-observation-v1.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-prompt-rebuild-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-route-probe.mjs \

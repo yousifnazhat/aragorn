@@ -474,13 +474,13 @@ FINAL_COMBINED_V2_SELECTIONS = FINAL_COMBINED_SELECTIONS
 FINAL_COMBINED_V2_CONFIG_REPLACEMENTS = (
     (
         b"ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d",
-        b"93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645",
+        b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e",
     ),
     (
         b"configuration.file?.size === 1811",
-        b"configuration.file?.size === 1846",
+        b"configuration.file?.size === 1880",
     ),
-    (b"file.size === 1811", b"file.size === 1846"),
+    (b"file.size === 1811", b"file.size === 1880"),
 )
 
 FINAL_COMBINED_V2_CONFIG_COUNTS = {
@@ -493,39 +493,6 @@ FINAL_COMBINED_V2_CONFIG_COUNTS = {
     "protected-route-probe.mjs": (2, 1, 0),
     "protected-session-snapshot-fixed-probe.mjs": (0, 0, 0),
 }
-
-FINAL_COMBINED_V2_CONFIG_DISCOVERY_REPLACEMENTS = (
-    (
-        b"""function exactDiscovery(observation) {
-  return (
-    observation.command.exit_code === 0 &&
-    cleanCommand(observation.command) &&
-    observation.response.parsed &&
-    canonicalJson(observation.response.value) === canonicalJson(EXPECTED_DISCOVERY)
-  );
-}""",
-        b"""function exactDiscovery(observation) {
-  const externalAuthorityDiagnostic =
-    observation.command.exit_code === 1 &&
-    cleanCommand(observation.command) &&
-    observation.command.stdout_bytes === 0 &&
-    observation.command.stderr_bytes === 118 &&
-    observation.command.stderr_digest ===
-      "sha256:10f2d9b8473b89bacde9c511bd8fec870c514906e6466276ce2c62118563f353" &&
-    observation.command.stderr_excerpt ===
-      "Error: External skill activation authority rejected the catalog: selected skill set differs from the declared sources\\n" &&
-    observation.response.parsed === false &&
-    observation.response.value === null;
-  return (
-    externalAuthorityDiagnostic ||
-    (observation.command.exit_code === 0 &&
-      cleanCommand(observation.command) &&
-      observation.response.parsed &&
-      canonicalJson(observation.response.value) === canonicalJson(EXPECTED_DISCOVERY))
-  );
-}""",
-    ),
-)
 
 FINAL_COMBINED_COMMIT_REPLACEMENTS = (
     (
@@ -1924,8 +1891,6 @@ def transformed_final_combined_v2_probe(name: str) -> bytes:
     )
     if any(old in raw for old, _new in FINAL_COMBINED_V2_CONFIG_REPLACEMENTS):
         raise ValueError("stale final-combined-v2 configuration binding remains")
-    if name == "protected-config-activation-probe.mjs":
-        raw = _replace_once(raw, FINAL_COMBINED_V2_CONFIG_DISCOVERY_REPLACEMENTS)
     return raw
 
 

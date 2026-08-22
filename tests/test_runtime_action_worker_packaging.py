@@ -24,8 +24,8 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
     def test_final_v2_profile_is_canonical_and_unqualified(self) -> None:
         expected = {
             "protected-final-combined-config-v2.json": (
-                1847,
-                "2772bca6629607247e2a5c056282b4748ab5bb6d024fd742c9755fb915281ddb",
+                1881,
+                "d145feb4e935e6f86c7e2bfdeefcaec5fa4ebf8f044ffa472bd7589b03bf4fe8",
             ),
             "protected-final-combined-profile-v2.json": (
                 4951,
@@ -33,7 +33,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             ),
             "protected-final-combined-runtime-v2.lock.json": (
                 6742,
-                "c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5",
+                "4832dc99c016bd8c0f6d97133dbb7d3681d4ad18c1c225c94f10a51d6df839c1",
             ),
         }
         documents = {}
@@ -50,6 +50,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             documents[name] = document
 
         config, profile, lock = documents.values()
+        self.assertEqual(config["skills"]["allowBundled"], ["template-skill"])
         self.assertEqual(
             config["tools"],
             {
@@ -291,7 +292,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "OPENCLAW_GATEWAY_TOKEN=*)",
             "gateway environment is not one canonical ASCII assignment",
             "gateway activation configuration digest changed",
-            "93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645",
+            "b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e",
             "runtime worker NSS group membership is unsafe",
             '"$gateway_uid" -eq 0',
             "installed unit digest changed",
@@ -352,7 +353,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         )
         self.assertLess(
             activator.index(
-                "93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645"
+                "b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
             ),
             activator.index("--activation-preflight"),
         )

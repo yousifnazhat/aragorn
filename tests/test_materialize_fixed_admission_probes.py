@@ -610,11 +610,11 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
         expected = {
             "protected-archive-replacement-probe.mjs": (
                 25_498,
-                "f036271b3cc319c6cf6153791133cc78caafc48817ca8c0b89fdd0d353462a76",
+                "4ead71ad73da16579fb85bc1287cb760a8b8b90838de9a9ea0ad2091fca87479",
             ),
             "protected-config-activation-probe.mjs": (
-                24_010,
-                "67b5293379997566faa0aaee192212f479b77f6708c02017bdd235ff12790b98",
+                23_366,
+                "69a2c203e566128a2968b35b85b130cd50107b3ba9367512a50e56e73e65ca93",
             ),
             "protected-cron-rescan-probe.mjs": (
                 35_318,
@@ -622,11 +622,11 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             ),
             "protected-curator-restore-denial-probe.mjs": (
                 26_564,
-                "234895668d91e7bd837012b79e0d514f8096da70b381281894655e35749a55a0",
+                "27233e6340619e1113a8c2b931fc6ef9957db3b6f57d90dfd820d5af919b450e",
             ),
             "protected-observation-v1.mjs": (
                 16_324,
-                "13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321",
+                "91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22",
             ),
             "protected-prompt-rebuild-probe.mjs": (
                 16_464,
@@ -634,7 +634,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             ),
             "protected-route-probe.mjs": (
                 44_825,
-                "ac23d68064c1a904649c6c1064f8c7729768fe516eef1e6d7c2bdc6b4e12d299",
+                "65fda9d7406b9813017002cd7b6cde449475685b4410e45bca5b7aeed00ae7c1",
             ),
             "protected-session-snapshot-fixed-probe.mjs": (
                 42_266,
@@ -645,7 +645,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             b"ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d"
         )
         v2_config_digest = (
-            b"93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645"
+            b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
         )
         config_bound = {
             "protected-archive-replacement-probe.mjs",
@@ -675,12 +675,9 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
         config_probe = transformed_final_combined_v2_probe(
             "protected-config-activation-probe.mjs"
         )
-        self.assertIn(b"const externalAuthorityDiagnostic =", config_probe)
         self.assertNotIn(
             b"const externalAuthorityDiagnostic =",
-            transformed_final_combined_probe(
-                "protected-config-activation-probe.mjs"
-            ),
+            config_probe,
         )
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -703,7 +700,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                         self.assertNotIn(b"1811", raw)
                         if name in config_bound:
                             self.assertIn(v2_config_digest, raw)
-                            self.assertIn(b"configuration.file?.size === 1846", raw)
+                            self.assertIn(b"configuration.file?.size === 1880", raw)
                         syntax = subprocess.run(
                             ["node", "--check", str(path)],
                             check=False,

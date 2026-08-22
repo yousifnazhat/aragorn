@@ -275,7 +275,7 @@ require_root_secret "$worker_binding" 4096
 require_exact_directory /etc/aragorn/agent-gateway 0 0 700
 
 if [ "$(sha256sum -- "$gateway_config" | cut -d ' ' -f 1)" != \
-    93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645 ]
+    b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e ]
 then
     fail_activation "gateway activation configuration digest changed"
 fi

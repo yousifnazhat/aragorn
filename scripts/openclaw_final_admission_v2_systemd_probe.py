@@ -49,9 +49,9 @@ _AUTHORITY = (
 _BOUND_EVIDENCE_SCHEMA = "aragorn/openclaw-final-admission-v2-bound-evidence/v1"
 _EXPECTED_CONFIG = {
     "canonical_digest": (
-        "sha256:93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645"
+        "sha256:b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
     ),
-    "digest": "sha256:2772bca6629607247e2a5c056282b4748ab5bb6d024fd742c9755fb915281ddb",
+    "digest": "sha256:d145feb4e935e6f86c7e2bfdeefcaec5fa4ebf8f044ffa472bd7589b03bf4fe8",
 }
 _EXPECTED_PROFILE = {
     "canonical_digest": (
@@ -61,9 +61,9 @@ _EXPECTED_PROFILE = {
 }
 _EXPECTED_LOCK = {
     "canonical_digest": (
-        "sha256:ceb60c00c806858caaa155b1778e09c5df28117109dfc021076f934f134f3f3d"
+        "sha256:95f6088dfe227e27e136c7a1fb79688e0afa0ea3ac543137d7089d0a79f2eff9"
     ),
-    "digest": "sha256:c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5",
+    "digest": "sha256:4832dc99c016bd8c0f6d97133dbb7d3681d4ad18c1c225c94f10a51d6df839c1",
 }
 _EXPECTED_RUNTIME = {
     "entrypoint_digest": (
@@ -81,7 +81,7 @@ _EXPECTED_OBSERVATION_HELPER_DIGEST = (
     "sha256:44ee65e2014e44681d2efe2b2fa76abbede7c6eaf7719aecb104e4be441d635b"
 )
 _EXPECTED_ACTIVATOR_DIGEST = (
-    "sha256:e89b5c456d276e6c14b403a976db4a1fa9f7e4fa7ce4a35e6d1431a7a1b9de18"
+    "sha256:52dbdae05a0a394b7314d87337b1a536ba3cf9a0b999d95432341daa068ca5cf"
 )
 _EXPECTED_PREFLIGHT_DIGEST = (
     "sha256:a0aa80b0870c18ecb380ca6f7a65663e4046e92f55938b84c9e15284ba221873"

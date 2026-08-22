@@ -30,9 +30,9 @@ _ROUTE_ROOTS = {
 }
 _EXPECTED_PROBES = {
     "protected-config-activation-probe.mjs": {
-        "bytes": 24_010,
+        "bytes": 23_366,
         "digest": (
-            "sha256:67b5293379997566faa0aaee192212f479b77f6708c02017bdd235ff12790b98"
+            "sha256:69a2c203e566128a2968b35b85b130cd50107b3ba9367512a50e56e73e65ca93"
         ),
     },
     "protected-cron-rescan-probe.mjs": {
@@ -41,7 +41,7 @@ _EXPECTED_PROBES = {
     },
     "protected-observation-v1.mjs": {
         "bytes": 16_324,
-        "digest": "sha256:13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321",
+        "digest": "sha256:91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22",
     },
     "protected-prompt-rebuild-probe.mjs": {
         "bytes": 16_464,
@@ -49,7 +49,7 @@ _EXPECTED_PROBES = {
     },
     "protected-route-probe.mjs": {
         "bytes": 44_825,
-        "digest": "sha256:ac23d68064c1a904649c6c1064f8c7729768fe516eef1e6d7c2bdc6b4e12d299",
+        "digest": "sha256:65fda9d7406b9813017002cd7b6cde449475685b4410e45bca5b7aeed00ae7c1",
     },
     "protected-session-snapshot-fixed-probe.mjs": {
         "bytes": 42_266,

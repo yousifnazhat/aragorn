@@ -97,9 +97,9 @@ const BOUND_EVIDENCE_SCHEMA =
 const EXPECTED = Object.freeze({
   configuration: {
     canonical_digest:
-      "sha256:93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645",
+      "sha256:b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e",
     digest:
-      "sha256:2772bca6629607247e2a5c056282b4748ab5bb6d024fd742c9755fb915281ddb",
+      "sha256:d145feb4e935e6f86c7e2bfdeefcaec5fa4ebf8f044ffa472bd7589b03bf4fe8",
   },
   observation_helper_digest:
     "sha256:44ee65e2014e44681d2efe2b2fa76abbede7c6eaf7719aecb104e4be441d635b",
@@ -118,9 +118,9 @@ const EXPECTED = Object.freeze({
   },
   runtime_lock: {
     canonical_digest:
-      "sha256:ceb60c00c806858caaa155b1778e09c5df28117109dfc021076f934f134f3f3d",
+      "sha256:95f6088dfe227e27e136c7a1fb79688e0afa0ea3ac543137d7089d0a79f2eff9",
     digest:
-      "sha256:c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5",
+      "sha256:4832dc99c016bd8c0f6d97133dbb7d3681d4ad18c1c225c94f10a51d6df839c1",
   },
   skill: {
     bytes: 140,
@@ -322,6 +322,8 @@ function sourceBindings(env) {
     lock.deployment_bindings?.configuration?.canonical_digest !==
       configuration.identity.canonical_digest ||
     lock.deployment_bindings?.skill_source?.digest !== skill.digest ||
+    configuration.document.skills?.allowBundled?.length !== 1 ||
+    configuration.document.skills.allowBundled[0] !== "template-skill" ||
     configuration.document.skills?.activation?.sources?.length !== 1 ||
     configuration.document.skills.activation.sources[0]?.sha256 !==
       skill.digest.slice("sha256:".length)

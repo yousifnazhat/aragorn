@@ -96,6 +96,9 @@ from aragorn.admission_protected_final_combined_v2_fresh_session_reset import (
 from aragorn.admission_protected_final_combined_v2_prompt_rebuild import (
     verify_openclaw_final_combined_v2_prompt_rebuild,
 )
+from aragorn.admission_protected_final_combined_v2_prompt_rebuild_catalog_fixed import (
+    verify_openclaw_final_combined_v2_prompt_rebuild_catalog_fixed,
+)
 from aragorn.admission_protected_final_combined_v2_route_coverage import (
     compose_openclaw_final_combined_v2_route_coverage,
 )
@@ -3451,6 +3454,40 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V2 catalog-fixed cron qualification changed"
+        )
+
+    final_v2_catalog_prompt_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-missing-prompt-blob-"
+        "rebuild-systemd-p3-final-catalog-fixed-2026-08-22.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-catalog-prompt-") as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_catalog_prompt_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_catalog_prompt_qualification = (
+            verify_openclaw_final_combined_v2_prompt_rebuild_catalog_fixed(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_catalog_prompt_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-prompt-rebuild-catalog-"
+        "fixed-route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_catalog_prompt_qualification = load(
+        final_v2_catalog_prompt_qualification_path
+    )
+    if (
+        final_v2_catalog_prompt_qualification
+        != retained_final_v2_catalog_prompt_qualification
+        or final_v2_catalog_prompt_qualification_path.read_bytes()
+        != canonical_json(final_v2_catalog_prompt_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 catalog-fixed prompt qualification changed"
         )
 
     final_v2_config_evidence_path = admission_evidence / (

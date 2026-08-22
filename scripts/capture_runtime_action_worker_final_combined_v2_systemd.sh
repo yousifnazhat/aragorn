@@ -356,7 +356,7 @@ if [ "$route" = ADM-02/update/archive-source-force-replacement ]; then
         echo "final combined v2 archive source volume identity changed" >&2
         exit 69
     fi
-    docker run --rm --pull=never --network=none --cap-drop=ALL \
+    docker run --rm -i --pull=never --network=none --cap-drop=ALL \
         --security-opt no-new-privileges:true --read-only --user 0:992 \
         --label "dev.aragorn.capture-owner=$owner_token" \
         -v "$archive_source_volume:/sources:rw" \

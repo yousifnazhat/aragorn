@@ -78,6 +78,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             source,
         )
         for control in (
+            "docker run --rm -i --pull=never",
             "--network=none --cap-drop=ALL",
             "--security-opt no-new-privileges:true --read-only --user 0:992",
             "cat > /sources/replacement/SKILL.md",

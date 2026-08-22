@@ -75,11 +75,20 @@ from aragorn.admission_protected_cron import (
 from aragorn.admission_protected_curator_restore import (
     verify_openclaw_protected_curator_restore_denial,
 )
+from aragorn.admission_protected_final_combined_v2_archive_replacement import (
+    verify_openclaw_final_combined_v2_archive_replacement,
+)
+from aragorn.admission_protected_final_combined_v2_catalog_fixed_fresh_session_reset import (
+    verify_openclaw_final_combined_v2_catalog_fixed_fresh_session_reset,
+)
 from aragorn.admission_protected_final_combined_v2_config_activation import (
     verify_openclaw_final_combined_v2_config_activation,
 )
 from aragorn.admission_protected_final_combined_v2_cron_rescan import (
     verify_openclaw_final_combined_v2_cron_rescan,
+)
+from aragorn.admission_protected_final_combined_v2_cron_rescan_catalog_fixed import (
+    verify_openclaw_final_combined_v2_cron_rescan_catalog_fixed,
 )
 from aragorn.admission_protected_final_combined_v2_fresh_session_reset import (
     verify_openclaw_final_combined_v2_fresh_session_reset,
@@ -3341,6 +3350,105 @@ def main() -> int:
         != canonical_json(final_v2_session_qualification) + b"\n"
     ):
         raise AssertionError("protected final V2 session qualification changed")
+
+    final_v2_archive_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-archive-source-force-"
+        "replacement-systemd-p3-final-source-fixed-2026-08-22.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-archive-") as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_archive_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_archive_qualification = (
+            verify_openclaw_final_combined_v2_archive_replacement(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_archive_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-archive-source-force-"
+        "replacement-route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_archive_qualification = load(
+        final_v2_archive_qualification_path
+    )
+    if (
+        final_v2_archive_qualification != retained_final_v2_archive_qualification
+        or final_v2_archive_qualification_path.read_bytes()
+        != canonical_json(final_v2_archive_qualification) + b"\n"
+    ):
+        raise AssertionError("protected final V2 archive qualification changed")
+
+    final_v2_catalog_fresh_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-fresh-session-reset-"
+        "systemd-p3-final-catalog-fixed-2026-08-22.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-catalog-fresh-") as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_catalog_fresh_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_catalog_fresh_qualification = (
+            verify_openclaw_final_combined_v2_catalog_fixed_fresh_session_reset(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_catalog_fresh_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-catalog-fixed-fresh-"
+        "session-reset-route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_catalog_fresh_qualification = load(
+        final_v2_catalog_fresh_qualification_path
+    )
+    if (
+        final_v2_catalog_fresh_qualification
+        != retained_final_v2_catalog_fresh_qualification
+        or final_v2_catalog_fresh_qualification_path.read_bytes()
+        != canonical_json(final_v2_catalog_fresh_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 catalog-fixed fresh-session qualification changed"
+        )
+
+    final_v2_catalog_cron_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-cron-rescan-systemd-"
+        "p3-final-catalog-fixed-2026-08-22.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-catalog-cron-") as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_catalog_cron_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_catalog_cron_qualification = (
+            verify_openclaw_final_combined_v2_cron_rescan_catalog_fixed(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_catalog_cron_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-cron-rescan-catalog-"
+        "fixed-route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_catalog_cron_qualification = load(
+        final_v2_catalog_cron_qualification_path
+    )
+    if (
+        final_v2_catalog_cron_qualification
+        != retained_final_v2_catalog_cron_qualification
+        or final_v2_catalog_cron_qualification_path.read_bytes()
+        != canonical_json(final_v2_catalog_cron_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 catalog-fixed cron qualification changed"
+        )
 
     final_v2_config_evidence_path = admission_evidence / (
         "runtime-action-worker-final-combined-v2-route-config-entry-activation-"

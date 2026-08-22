@@ -75,6 +75,9 @@ from aragorn.admission_protected_cron import (
 from aragorn.admission_protected_curator_restore import (
     verify_openclaw_protected_curator_restore_denial,
 )
+from aragorn.admission_protected_final_combined_v2_config_activation import (
+    verify_openclaw_final_combined_v2_config_activation,
+)
 from aragorn.admission_protected_final_combined_v2_cron_rescan import (
     verify_openclaw_final_combined_v2_cron_rescan,
 )
@@ -3338,6 +3341,37 @@ def main() -> int:
         != canonical_json(final_v2_session_qualification) + b"\n"
     ):
         raise AssertionError("protected final V2 session qualification changed")
+
+    final_v2_config_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-config-entry-activation-"
+        "systemd-p3-final-catalog-fixed-2026-08-22.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-config-") as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_config_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_config_qualification = (
+            verify_openclaw_final_combined_v2_config_activation(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_config_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-config-entry-activation-"
+        "route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_config_qualification = load(
+        final_v2_config_qualification_path
+    )
+    if (
+        final_v2_config_qualification != retained_final_v2_config_qualification
+        or final_v2_config_qualification_path.read_bytes()
+        != canonical_json(final_v2_config_qualification) + b"\n"
+    ):
+        raise AssertionError("protected final V2 config qualification changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

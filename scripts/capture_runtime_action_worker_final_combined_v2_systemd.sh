@@ -9,13 +9,25 @@ capture_lock=/tmp/aragorn-phase3-final-combined-v2-capture.lock
 umask 077
 
 mode=bootstrap
+route=ADM-02/reload/fresh-session-reset
 if [ "$#" -eq 1 ]; then
     output=$1
-elif [ "$#" -eq 2 ] && [ "$1" = --fresh-session-reset ]; then
+elif [ "$#" -eq 2 ]; then
     mode=route
+    case "$1" in
+        --cron-rescan) route=ADM-02/reload/cron-rescan ;;
+        --fresh-session-reset) route=ADM-02/reload/fresh-session-reset ;;
+        --missing-prompt-blob-rebuild)
+            route=ADM-02/reload/missing-prompt-blob-rebuild ;;
+        --session-snapshot-consumer)
+            route=ADM-02/reload/session-snapshot-consumer ;;
+        *)
+            echo "unsupported final combined v2 route: $1" >&2
+            exit 64 ;;
+    esac
     output=$2
 else
-    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--fresh-session-reset] ABSENT_OUTPUT_PATH" >&2
+    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
     exit 64
 fi
 case "$output" in
@@ -190,7 +202,11 @@ then
 fi
 GIT_NO_REPLACE_OBJECTS=1 git cat-file commit "$source_commit" >"$commit_object"
 GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
+    benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-probe.mjs \
+    benchmark/admission/openclaw-v2026.7.1/protected-observation-v1.mjs \
+    benchmark/admission/openclaw-v2026.7.1/protected-prompt-rebuild-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-route-probe.mjs \
+    benchmark/admission/openclaw-v2026.7.1/protected-session-snapshot-fixed-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \
@@ -204,8 +220,17 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     scripts/runtime_action_worker_final_route_systemd_probe.py \
     | tar -xf - -C "$context"
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
-    --final-combined-v2 "$context/route-probe" \
+    --final-combined-v2 "$context/route-input/cron-rescan" \
+    protected-observation-v1.mjs protected-cron-rescan-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/fresh-session-reset" \
     protected-route-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/missing-prompt-blob-rebuild" \
+    protected-observation-v1.mjs protected-prompt-rebuild-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/session-snapshot-consumer" \
+    protected-observation-v1.mjs protected-session-snapshot-fixed-probe.mjs
 (
     cd "$context"
     docker build --pull=false --network=none \
@@ -453,9 +478,15 @@ if [ "$mode" = route ]; then
     evidence_path=/evidence/runtime-action-worker-final-combined-v2-route-systemd.json
 fi
 probe_status=0
-docker exec "$container_id" /usr/local/bin/python3.12 -I -S -B \
-    "$probe_path" \
-    || probe_status=$?
+if [ "$mode" = route ]; then
+    docker exec "$container_id" /usr/local/bin/python3.12 -I -S -B \
+        "$probe_path" "$route" \
+        || probe_status=$?
+else
+    docker exec "$container_id" /usr/local/bin/python3.12 -I -S -B \
+        "$probe_path" \
+        || probe_status=$?
+fi
 if [ "$probe_status" -ne 0 ]; then
     docker exec "$container_id" cat "$evidence_path" >&2 || :
     exit "$probe_status"
@@ -466,7 +497,7 @@ if ! remove_created_container; then
     exit 74
 fi
 
-python3.12 - "$temp_output" "$output" "$mode" <<'PY'
+python3.12 - "$temp_output" "$output" "$mode" "$route" <<'PY'
 import json
 import os
 import stat
@@ -476,6 +507,7 @@ from pathlib import Path
 source = Path(sys.argv[1])
 destination = Path(sys.argv[2])
 mode = sys.argv[3]
+route = sys.argv[4]
 if source.parent != destination.parent or source.name == destination.name:
     raise SystemExit("temporary and final observation paths are not co-located")
 
@@ -570,7 +602,7 @@ try:
                 "BOUND_FINAL_COMBINED_V2_RAW_ROUTE_OBSERVATION_ONLY_"
                 "NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
             )
-            or document.get("route_id") != "ADM-02/reload/fresh-session-reset"
+            or document.get("route_id") != route
             or expected_status is None
             or decision.get("status") != expected_status
         )

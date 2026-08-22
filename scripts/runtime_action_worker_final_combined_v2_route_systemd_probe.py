@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Observe one fresh-session route in the exact final combined V2 stack."""
+"""Observe one protected route in the exact final combined V2 stack."""
 
 from __future__ import annotations
 
@@ -16,12 +16,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import runtime_action_worker_final_combined_v2_systemd_probe as combined
 import runtime_action_worker_final_route_systemd_probe as v1_route
 
-_ROUTE = "ADM-02/reload/fresh-session-reset"
-_PROBE_ROOT = Path("/route-input/probe")
-_PROBE = _PROBE_ROOT / "protected-route-probe.mjs"
-_EXPECTED_PROBE = {
-    "bytes": 44_825,
-    "digest": "sha256:ac23d68064c1a904649c6c1064f8c7729768fe516eef1e6d7c2bdc6b4e12d299",
+_ROUTE_ROOTS = {
+    route_id: Path("/route-input") / route_id.rsplit("/", 1)[1]
+    for route_id in v1_route._ROUTES
+}
+_EXPECTED_PROBES = {
+    "protected-cron-rescan-probe.mjs": {
+        "bytes": 25_998,
+        "digest": "sha256:2878f6a6aab1a738fd99de4200935233fc5af04cbb5cb43748f6ca9ecf2d3cdb",
+    },
+    "protected-observation-v1.mjs": {
+        "bytes": 16_324,
+        "digest": "sha256:13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321",
+    },
+    "protected-prompt-rebuild-probe.mjs": {
+        "bytes": 16_464,
+        "digest": "sha256:9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7",
+    },
+    "protected-route-probe.mjs": {
+        "bytes": 44_825,
+        "digest": "sha256:ac23d68064c1a904649c6c1064f8c7729768fe516eef1e6d7c2bdc6b4e12d299",
+    },
+    "protected-session-snapshot-fixed-probe.mjs": {
+        "bytes": 42_266,
+        "digest": "sha256:9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11",
+    },
 }
 _OUTPUT = Path("/evidence/runtime-action-worker-final-combined-v2-route-systemd.json")
 _SCHEMA = "aragorn/runtime-action-worker-final-combined-v2-route-systemd-observation/v1"
@@ -32,6 +51,7 @@ _AUTHORITY = (
 _ORIGINAL_PREPARE_GATEWAY = combined._prepare_gateway
 _ORIGINAL_COHERENT_CASE = combined.p37c._coherent_case
 _ROUTE_OBSERVATION: dict[str, Any] | None = None
+_SELECTED_ROUTE = "ADM-02/reload/fresh-session-reset"
 _STAGE = "BOOTSTRAP"
 
 
@@ -48,25 +68,33 @@ def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _probe_record() -> dict[str, Any]:
-    record = combined.p37c._file(_PROBE)
-    metadata = record["stat"]
+def _probe_bundle(route_id: str) -> list[dict[str, Any]]:
+    specification = v1_route._ROUTES[route_id]
+    root = _ROUTE_ROOTS[route_id]
     _expect(
-        metadata["uid"] == 0
-        and metadata["gid"] == 0
-        and metadata["mode"] == "0444"
-        and metadata["nlink"] == 1,
-        "materialized route probe metadata changed",
+        tuple(sorted(path.name for path in root.iterdir()))
+        == tuple(sorted(specification["files"])),
+        "materialized V2 route bundle inventory changed",
     )
-    _expect(
-        {key: record[key] for key in _EXPECTED_PROBE} == _EXPECTED_PROBE,
-        "materialized V2 route probe identity changed",
-    )
-    return {
-        "name": _PROBE.name,
-        "bytes": record["bytes"],
-        "digest": record["digest"],
-    }
+    bundle = []
+    for name in specification["files"]:
+        record = combined.p37c._file(root / name)
+        metadata = record["stat"]
+        _expect(
+            metadata["uid"] == 0
+            and metadata["gid"] == 0
+            and metadata["mode"] == "0444"
+            and metadata["nlink"] == 1,
+            f"materialized route probe metadata changed: {name}",
+        )
+        _expect(
+            {key: record[key] for key in ("bytes", "digest")} == _EXPECTED_PROBES[name],
+            f"materialized V2 route probe identity changed: {name}",
+        )
+        bundle.append(
+            {"name": name, "bytes": record["bytes"], "digest": record["digest"]}
+        )
+    return bundle
 
 
 def _prepare_gateway(
@@ -92,11 +120,13 @@ def _prepare_gateway(
     return prepared
 
 
-def _run_route(tokens: dict[str, str], gateway_pid: int) -> dict[str, Any]:
-    harness = {"document": {"probe_bundle": [_probe_record()]}}
+def _run_route(
+    route_id: str, tokens: dict[str, str], gateway_pid: int
+) -> dict[str, Any]:
+    harness = {"document": {"probe_bundle": _probe_bundle(route_id)}}
     with (
-        mock.patch.object(v1_route, "_PROBE_ROOT", _PROBE_ROOT),
-        mock.patch.object(v1_route, "_SELECTED_ROUTE", _ROUTE),
+        mock.patch.object(v1_route, "_PROBE_ROOT", _ROUTE_ROOTS[route_id]),
+        mock.patch.object(v1_route, "_SELECTED_ROUTE", route_id),
     ):
         return v1_route._run_route(tokens, harness, gateway_pid)
 
@@ -105,10 +135,10 @@ def _coherent_case(**kwargs: Any) -> dict[str, Any]:
     global _ROUTE_OBSERVATION
     _set_stage("P3_7C_COHERENT_ACTION")
     coherent = _ORIGINAL_COHERENT_CASE(**kwargs)
-    _set_stage("ADM_02_FRESH_SESSION_RESET")
+    _set_stage("ADM_02_" + _SELECTED_ROUTE.rsplit("/", 1)[1].upper().replace("-", "_"))
     gateway_pid = kwargs["stack"]["pids"][combined.p37c._GATEWAY_UNIT]
     _ROUTE_OBSERVATION = {
-        **_run_route(kwargs["tokens"], gateway_pid),
+        **_run_route(_SELECTED_ROUTE, kwargs["tokens"], gateway_pid),
         "gateway_pid_binding": {
             "environment_name": "ARAGORN_GATEWAY_PID",
             "mount_namespace": f"/proc/{gateway_pid}/ns/mnt",
@@ -136,8 +166,9 @@ def _decision(status: str) -> dict[str, Any]:
     }
 
 
-def _collect() -> dict[str, Any]:
-    global _ROUTE_OBSERVATION
+def _collect(route_id: str) -> dict[str, Any]:
+    global _ROUTE_OBSERVATION, _SELECTED_ROUTE
+    _SELECTED_ROUTE = route_id
     _ROUTE_OBSERVATION = None
     if os.environ.get("OPENCLAW_TEST_FAST") is not None:
         raise combined.openclaw.ProbeError("OPENCLAW_TEST_FAST must be absent")
@@ -147,7 +178,7 @@ def _collect() -> dict[str, Any]:
         mock.patch.object(combined.p37c, "_coherent_case", _coherent_case),
     ):
         composition = combined._collect()
-    _expect(_ROUTE_OBSERVATION is not None, "fresh-session route did not execute")
+    _expect(_ROUTE_OBSERVATION is not None, "selected route did not execute")
     status = _ROUTE_OBSERVATION["route"]["status"]
     _expect(
         composition["decision"]["route_pass_count"] == 0
@@ -163,7 +194,7 @@ def _collect() -> dict[str, Any]:
         "schema": _SCHEMA,
         "authority": _AUTHORITY,
         "recorded_at": _iso_now(),
-        "route_id": _ROUTE,
+        "route_id": route_id,
         "route_observation": _ROUTE_OBSERVATION,
         "composition": composition,
         "source_artifacts": {
@@ -171,7 +202,7 @@ def _collect() -> dict[str, Any]:
             "materializer": combined.p37c._file(
                 Path("/src/scripts/materialize_fixed_admission_probes.py")
             ),
-            "probe": _probe_record(),
+            "probe_bundle": _probe_bundle(route_id),
             "v1_route_injector": combined.p37c._file(
                 Path("/src/scripts/runtime_action_worker_final_route_systemd_probe.py")
             ),
@@ -195,7 +226,7 @@ def _failure(exc: Exception) -> dict[str, Any]:
         "schema": _SCHEMA,
         "authority": _AUTHORITY,
         "recorded_at": _iso_now(),
-        "route_id": _ROUTE,
+        "route_id": _SELECTED_ROUTE,
         "decision": _decision("NOT_TESTED"),
         "failure": {
             "code": "LIVE_CAPTURE_FAILED_CLOSED",
@@ -209,14 +240,16 @@ def _failure(exc: Exception) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
-    if arguments:
+    if len(arguments) != 1 or arguments[0] not in v1_route._ROUTES:
         print(
-            "usage: runtime_action_worker_final_combined_v2_route_systemd_probe.py",
+            "usage: runtime_action_worker_final_combined_v2_route_systemd_probe.py ROUTE_ID",
             file=sys.stderr,
         )
         return 64
+    global _SELECTED_ROUTE
+    _SELECTED_ROUTE = arguments[0]
     try:
-        result = _collect()
+        result = _collect(_SELECTED_ROUTE)
         status = 0
     except Exception as exc:  # noqa: BLE001 - failed captures self-describe
         result = _failure(exc)

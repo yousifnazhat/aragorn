@@ -14,7 +14,7 @@ COPY benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.j
     /src/benchmark/admission/openclaw-v2026.7.1/
 COPY benchmark/runtime-action-worker-final-combined-v2-systemd/ \
     /src/benchmark/runtime-action-worker-final-combined-v2-systemd/
-COPY route-probe/ /route-input/probe/
+COPY route-input/ /route-input/
 COPY scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
     scripts/materialize_fixed_admission_probes.py \
     scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py \
@@ -45,8 +45,34 @@ RUN set -eux; \
         615928c74bb467ed1422aa19c0ca3266fec21e6a9b195ff32e7e2fae86f966fc; \
     test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json | cut -d ' ' -f 1)" = \
         c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5; \
-    test "$(sha256sum /route-input/probe/protected-route-probe.mjs | cut -d ' ' -f 1)" = \
+    test "$(find /route-input -mindepth 1 -maxdepth 2 -printf '%P:%y\n' | sort)" = \
+        "$(printf '%s\n' \
+            'cron-rescan:d' \
+            'cron-rescan/protected-cron-rescan-probe.mjs:f' \
+            'cron-rescan/protected-observation-v1.mjs:f' \
+            'fresh-session-reset:d' \
+            'fresh-session-reset/protected-route-probe.mjs:f' \
+            'missing-prompt-blob-rebuild:d' \
+            'missing-prompt-blob-rebuild/protected-observation-v1.mjs:f' \
+            'missing-prompt-blob-rebuild/protected-prompt-rebuild-probe.mjs:f' \
+            'session-snapshot-consumer:d' \
+            'session-snapshot-consumer/protected-observation-v1.mjs:f' \
+            'session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs:f' \
+            | sort)"; \
+    test "$(sha256sum /route-input/cron-rescan/protected-cron-rescan-probe.mjs | cut -d ' ' -f 1)" = \
+        2878f6a6aab1a738fd99de4200935233fc5af04cbb5cb43748f6ca9ecf2d3cdb; \
+    test "$(sha256sum /route-input/cron-rescan/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
+        13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321; \
+    test "$(sha256sum /route-input/fresh-session-reset/protected-route-probe.mjs | cut -d ' ' -f 1)" = \
         ac23d68064c1a904649c6c1064f8c7729768fe516eef1e6d7c2bdc6b4e12d299; \
+    test "$(sha256sum /route-input/missing-prompt-blob-rebuild/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
+        13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321; \
+    test "$(sha256sum /route-input/missing-prompt-blob-rebuild/protected-prompt-rebuild-probe.mjs | cut -d ' ' -f 1)" = \
+        9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7; \
+    test "$(sha256sum /route-input/session-snapshot-consumer/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
+        13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321; \
+    test "$(sha256sum /route-input/session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs | cut -d ' ' -f 1)" = \
+        9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11; \
     install -m 0644 /src/src/aragorn/runtime_action_worker.py \
         /usr/lib/aragorn/aragorn/runtime_action_worker.py; \
     install -m 0755 /src/packaging/activate-runtime-action-worker-host.sh \
@@ -61,7 +87,7 @@ RUN set -eux; \
         0:0:755:1; \
     chmod 0555 \
         /route-input \
-        /route-input/probe \
+        /route-input/* \
         /src/packaging/activate-runtime-action-worker-host.sh \
         /src/scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
         /src/scripts/materialize_fixed_admission_probes.py \
@@ -69,7 +95,7 @@ RUN set -eux; \
         /src/scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
         /src/scripts/runtime_action_worker_final_route_systemd_probe.py; \
     chmod 0444 \
-        /route-input/probe/protected-route-probe.mjs \
+        /route-input/*/* \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \

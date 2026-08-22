@@ -62,9 +62,9 @@ class FinalAdmissionV2SuiteTests(unittest.TestCase):
             "aragorn/openclaw-final-admission-v2-suite-error/v1",
         )
         self.assertEqual(document["decision"]["status"], "FAIL_CLOSED")
-        self.assertFalse(
-            any(
-                value
+        self.assertTrue(
+            all(
+                value is False
                 for key, value in document["decision"].items()
                 if key.endswith("_eligible")
             )
@@ -114,7 +114,7 @@ if (!match) throw new Error("rejectEligibility source contract not found");
 function fail(message) { throw new Error(message); }
 eval(match[0].replace(/\n\nfunction evidenceArtifacts$/, ""));
 rejectEligibility({ candidate_eligible: false });
-for (const value of [true, 1, "yes", null]) {
+for (const value of [true, 0, 1, "", "yes", null]) {
   let rejected = false;
   try { rejectEligibility({ candidate_eligible: value }); } catch { rejected = true; }
   if (!rejected) throw new Error(`eligibility bypass accepted: ${String(value)}`);

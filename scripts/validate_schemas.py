@@ -96,6 +96,9 @@ from aragorn.admission_protected_final_combined_v2_fresh_session_reset import (
 from aragorn.admission_protected_final_combined_v2_prompt_rebuild import (
     verify_openclaw_final_combined_v2_prompt_rebuild,
 )
+from aragorn.admission_protected_final_combined_v2_route_coverage import (
+    compose_openclaw_final_combined_v2_route_coverage,
+)
 from aragorn.admission_protected_final_combined_v2_session_snapshot_consumer import (
     verify_openclaw_final_combined_v2_session_snapshot_consumer,
 )
@@ -3480,6 +3483,35 @@ def main() -> int:
         != canonical_json(final_v2_config_qualification) + b"\n"
     ):
         raise AssertionError("protected final V2 config qualification changed")
+
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-coverage-") as temporary:
+        evidence_cas = CAS(temporary)
+        for path in (
+            final_v2_archive_evidence_path,
+            final_v2_catalog_fresh_evidence_path,
+            final_v2_catalog_cron_evidence_path,
+            final_v2_config_evidence_path,
+        ):
+            raw = path.read_bytes()
+            evidence_cas.put_expected(
+                BytesIO(raw),
+                expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+                max_bytes=len(raw),
+            )
+        final_v2_route_coverage = compose_openclaw_final_combined_v2_route_coverage(
+            evidence_cas=evidence_cas
+        )
+    final_v2_route_coverage_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-route-coverage-v1-"
+        "2026-08-22.json"
+    )
+    retained_final_v2_route_coverage = load(final_v2_route_coverage_path)
+    if (
+        final_v2_route_coverage != retained_final_v2_route_coverage
+        or final_v2_route_coverage_path.read_bytes()
+        != canonical_json(final_v2_route_coverage) + b"\n"
+    ):
+        raise AssertionError("protected final V2 route coverage changed")
 
     baseline_lock = load(ROOT / "benchmark" / "baselines.lock.json")
     validators["baseline-lock-v1.schema.json"].validate(baseline_lock)

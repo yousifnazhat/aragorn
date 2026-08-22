@@ -463,6 +463,32 @@ FINAL_COMBINED_SELECTIONS = frozenset(
     }
 )
 
+FINAL_COMBINED_V2_SOURCE_DIGESTS = dict(FINAL_COMBINED_SOURCE_DIGESTS)
+FINAL_COMBINED_V2_SELECTIONS = FINAL_COMBINED_SELECTIONS
+
+FINAL_COMBINED_V2_CONFIG_REPLACEMENTS = (
+    (
+        b"ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d",
+        b"93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645",
+    ),
+    (
+        b"configuration.file?.size === 1811",
+        b"configuration.file?.size === 1846",
+    ),
+    (b"file.size === 1811", b"file.size === 1846"),
+)
+
+FINAL_COMBINED_V2_CONFIG_COUNTS = {
+    "protected-archive-replacement-probe.mjs": (3, 1, 0),
+    "protected-config-activation-probe.mjs": (3, 1, 0),
+    "protected-cron-rescan-probe.mjs": (0, 0, 0),
+    "protected-curator-restore-denial-probe.mjs": (3, 1, 1),
+    "protected-observation-v1.mjs": (3, 1, 0),
+    "protected-prompt-rebuild-probe.mjs": (0, 0, 0),
+    "protected-route-probe.mjs": (2, 1, 0),
+    "protected-session-snapshot-fixed-probe.mjs": (0, 0, 0),
+}
+
 FINAL_COMBINED_COMMIT_REPLACEMENTS = (
     (
         b"805a4b152b0cee271ee78ad5608c15a4f8d1624b",
@@ -1814,14 +1840,29 @@ def transformed_final_combined_probe(name: str) -> bytes:
     return raw
 
 
+def transformed_final_combined_v2_probe(name: str) -> bytes:
+    if name not in FINAL_COMBINED_V2_SOURCE_DIGESTS:
+        raise ValueError(f"unsupported final-combined-v2 probe: {name}")
+    raw = transformed_final_combined_probe(name)
+    raw = _replace_counted(
+        raw,
+        FINAL_COMBINED_V2_CONFIG_REPLACEMENTS,
+        FINAL_COMBINED_V2_CONFIG_COUNTS[name],
+    )
+    if any(old in raw for old, _new in FINAL_COMBINED_V2_CONFIG_REPLACEMENTS):
+        raise ValueError("stale final-combined-v2 configuration binding remains")
+    return raw
+
+
 def materialize(
     output: Path,
     names: list[str],
     *,
     restore_authority: bool = False,
     final_combined: bool = False,
+    final_combined_v2: bool = False,
 ) -> None:
-    if restore_authority and final_combined:
+    if sum((restore_authority, final_combined, final_combined_v2)) > 1:
         raise ValueError("probe materialization modes are mutually exclusive")
     if restore_authority and (
         len(names) != len(set(names))
@@ -1833,9 +1874,15 @@ def materialize(
         or frozenset(names) not in FINAL_COMBINED_SELECTIONS
     ):
         raise ValueError("unsupported final-combined probe selection")
+    if final_combined_v2 and (
+        len(names) != len(set(names))
+        or frozenset(names) not in FINAL_COMBINED_V2_SELECTIONS
+    ):
+        raise ValueError("unsupported final-combined-v2 probe selection")
     if (
         not restore_authority
         and not final_combined
+        and not final_combined_v2
         and any(name not in SOURCE_DIGESTS for name in names)
     ):
         raise ValueError("unsupported probe selection")
@@ -1845,12 +1892,16 @@ def materialize(
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
         try:
             raw = (
-                transformed_final_combined_probe(name)
-                if final_combined
+                transformed_final_combined_v2_probe(name)
+                if final_combined_v2
                 else (
-                    transformed_restore_authority_probe(name)
-                    if restore_authority
-                    else transformed_probe(name)
+                    transformed_final_combined_probe(name)
+                    if final_combined
+                    else (
+                        transformed_restore_authority_probe(name)
+                        if restore_authority
+                        else transformed_probe(name)
+                    )
                 )
             )
             written = 0
@@ -1866,11 +1917,16 @@ def main() -> int:
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--restore-authority", action="store_true")
     modes.add_argument("--final-combined", action="store_true")
+    modes.add_argument("--final-combined-v2", action="store_true")
     parser.add_argument("output", type=Path)
     parser.add_argument(
         "names",
         nargs="+",
-        choices=sorted(SOURCE_DIGESTS.keys() | FINAL_COMBINED_SOURCE_DIGESTS.keys()),
+        choices=sorted(
+            SOURCE_DIGESTS.keys()
+            | FINAL_COMBINED_SOURCE_DIGESTS.keys()
+            | FINAL_COMBINED_V2_SOURCE_DIGESTS.keys()
+        ),
     )
     args = parser.parse_args()
     materialize(
@@ -1878,6 +1934,7 @@ def main() -> int:
         args.names,
         restore_authority=args.restore_authority,
         final_combined=args.final_combined,
+        final_combined_v2=args.final_combined_v2,
     )
     return 0
 

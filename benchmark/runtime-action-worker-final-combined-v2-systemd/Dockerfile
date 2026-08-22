@@ -14,8 +14,12 @@ COPY benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.j
     /src/benchmark/admission/openclaw-v2026.7.1/
 COPY benchmark/runtime-action-worker-final-combined-v2-systemd/ \
     /src/benchmark/runtime-action-worker-final-combined-v2-systemd/
+COPY route-probe/ /route-input/probe/
 COPY scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
+    scripts/materialize_fixed_admission_probes.py \
+    scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py \
     scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
+    scripts/runtime_action_worker_final_route_systemd_probe.py \
     /src/scripts/
 
 # V2 is one additive source/install refresh over the exact retained V1 child.
@@ -41,6 +45,8 @@ RUN set -eux; \
         615928c74bb467ed1422aa19c0ca3266fec21e6a9b195ff32e7e2fae86f966fc; \
     test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json | cut -d ' ' -f 1)" = \
         c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5; \
+    test "$(sha256sum /route-input/probe/protected-route-probe.mjs | cut -d ' ' -f 1)" = \
+        ac23d68064c1a904649c6c1064f8c7729768fe516eef1e6d7c2bdc6b4e12d299; \
     install -m 0644 /src/src/aragorn/runtime_action_worker.py \
         /usr/lib/aragorn/aragorn/runtime_action_worker.py; \
     install -m 0755 /src/packaging/activate-runtime-action-worker-host.sh \
@@ -54,10 +60,16 @@ RUN set -eux; \
     test "$(stat -c '%u:%g:%a:%h' /usr/libexec/aragorn/activate-runtime-action-worker-host.sh)" = \
         0:0:755:1; \
     chmod 0555 \
+        /route-input \
+        /route-input/probe \
         /src/packaging/activate-runtime-action-worker-host.sh \
         /src/scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
-        /src/scripts/runtime_action_worker_final_combined_v2_systemd_probe.py; \
+        /src/scripts/materialize_fixed_admission_probes.py \
+        /src/scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py \
+        /src/scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
+        /src/scripts/runtime_action_worker_final_route_systemd_probe.py; \
     chmod 0444 \
+        /route-input/probe/protected-route-probe.mjs \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \

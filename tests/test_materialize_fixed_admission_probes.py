@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,9 +10,12 @@ from pathlib import Path
 from scripts.materialize_fixed_admission_probes import (
     FINAL_COMBINED_SELECTIONS,
     FINAL_COMBINED_SOURCE_DIGESTS,
+    FINAL_COMBINED_V2_SELECTIONS,
+    FINAL_COMBINED_V2_SOURCE_DIGESTS,
     SOURCE_DIGESTS,
     materialize,
     transformed_final_combined_probe,
+    transformed_final_combined_v2_probe,
     transformed_probe,
     transformed_restore_authority_probe,
 )
@@ -597,6 +601,142 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             for label, (names, options) in invalid.items():
                 with self.subTest(label=label):
                     rejected = Path(temporary) / f"rejected-final-{label}"
+                    with self.assertRaises(ValueError):
+                        materialize(rejected, names, **options)
+                    self.assertFalse(rejected.exists())
+
+    def test_materializes_only_exact_final_combined_v2_bundles(self) -> None:
+        expected = {
+            "protected-archive-replacement-probe.mjs": (
+                25_498,
+                "f036271b3cc319c6cf6153791133cc78caafc48817ca8c0b89fdd0d353462a76",
+            ),
+            "protected-config-activation-probe.mjs": (
+                23_366,
+                "edc55ed6e97388375a5f9d93e4e3dee2404383aeb5fe85bcf5add0d804f3f297",
+            ),
+            "protected-cron-rescan-probe.mjs": (
+                25_998,
+                "2878f6a6aab1a738fd99de4200935233fc5af04cbb5cb43748f6ca9ecf2d3cdb",
+            ),
+            "protected-curator-restore-denial-probe.mjs": (
+                26_564,
+                "234895668d91e7bd837012b79e0d514f8096da70b381281894655e35749a55a0",
+            ),
+            "protected-observation-v1.mjs": (
+                16_324,
+                "13baaac69f323603f2029eb1dc675f7438d51e0b9440befe775758a38c09a321",
+            ),
+            "protected-prompt-rebuild-probe.mjs": (
+                16_464,
+                "9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7",
+            ),
+            "protected-route-probe.mjs": (
+                44_825,
+                "ac23d68064c1a904649c6c1064f8c7729768fe516eef1e6d7c2bdc6b4e12d299",
+            ),
+            "protected-session-snapshot-fixed-probe.mjs": (
+                42_266,
+                "9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11",
+            ),
+        }
+        v1_config_digest = (
+            b"ae9d44f2c347a8b10a689d55c435ed0106a2a7aec40e0c6ceaefd0ea99d2564d"
+        )
+        v2_config_digest = (
+            b"93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645"
+        )
+        config_bound = {
+            "protected-archive-replacement-probe.mjs",
+            "protected-config-activation-probe.mjs",
+            "protected-curator-restore-denial-probe.mjs",
+            "protected-observation-v1.mjs",
+            "protected-route-probe.mjs",
+        }
+        self.assertEqual(
+            FINAL_COMBINED_V2_SOURCE_DIGESTS, FINAL_COMBINED_SOURCE_DIGESTS
+        )
+        self.assertEqual(FINAL_COMBINED_V2_SELECTIONS, FINAL_COMBINED_SELECTIONS)
+        self.assertEqual(set(expected), set(FINAL_COMBINED_V2_SOURCE_DIGESTS))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for index, selection in enumerate(FINAL_COMBINED_V2_SELECTIONS):
+                output = root / f"final-v2-{index}"
+                names = sorted(selection)
+                materialize(output, names, final_combined_v2=True)
+                self.assertEqual(sorted(path.name for path in output.iterdir()), names)
+                for name in names:
+                    with self.subTest(name=name):
+                        path = output / name
+                        raw = path.read_bytes()
+                        size, digest = expected[name]
+                        self.assertEqual(raw, transformed_final_combined_v2_probe(name))
+                        self.assertEqual(len(raw), size)
+                        self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
+                        self.assertEqual(path.stat().st_mode & 0o777, 0o444)
+                        self.assertNotIn(v1_config_digest, raw)
+                        self.assertNotIn(b"1811", raw)
+                        if name in config_bound:
+                            self.assertIn(v2_config_digest, raw)
+                            self.assertIn(b"configuration.file?.size === 1846", raw)
+                        syntax = subprocess.run(
+                            ["node", "--check", str(path)],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                        )
+                        self.assertEqual(syntax.returncode, 0, syntax.stderr)
+
+            cli_output = root / "final-v2-cli"
+            cli = subprocess.run(
+                [
+                    sys.executable,
+                    str(
+                        Path(__file__).resolve().parents[1]
+                        / "scripts"
+                        / "materialize_fixed_admission_probes.py"
+                    ),
+                    "--final-combined-v2",
+                    str(cli_output),
+                    "protected-route-probe.mjs",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(cli.returncode, 0, cli.stderr)
+            self.assertEqual(
+                (cli_output / "protected-route-probe.mjs").read_bytes(),
+                transformed_final_combined_v2_probe("protected-route-probe.mjs"),
+            )
+
+            invalid = {
+                "both-final-modes": (
+                    ["protected-route-probe.mjs"],
+                    {"final_combined": True, "final_combined_v2": True},
+                ),
+                "restore-and-v2": (
+                    ["protected-route-probe.mjs"],
+                    {"restore_authority": True, "final_combined_v2": True},
+                ),
+                "duplicate": (
+                    [
+                        "protected-observation-v1.mjs",
+                        "protected-prompt-rebuild-probe.mjs",
+                        "protected-prompt-rebuild-probe.mjs",
+                    ],
+                    {"final_combined_v2": True},
+                ),
+                "partial-helper": (
+                    ["protected-observation-v1.mjs"],
+                    {"final_combined_v2": True},
+                ),
+                "unsupported": (["probe.mjs"], {"final_combined_v2": True}),
+            }
+            for label, (names, options) in invalid.items():
+                with self.subTest(label=label):
+                    rejected = root / f"rejected-final-v2-{label}"
                     with self.assertRaises(ValueError):
                         materialize(rejected, names, **options)
                     self.assertFalse(rejected.exists())

@@ -8,11 +8,16 @@ runtime_volume=aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1
 capture_lock=/tmp/aragorn-phase3-final-combined-v2-capture.lock
 umask 077
 
-if [ "$#" -ne 1 ]; then
-    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh ABSENT_OUTPUT_PATH" >&2
+mode=bootstrap
+if [ "$#" -eq 1 ]; then
+    output=$1
+elif [ "$#" -eq 2 ] && [ "$1" = --fresh-session-reset ]; then
+    mode=route
+    output=$2
+else
+    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--fresh-session-reset] ABSENT_OUTPUT_PATH" >&2
     exit 64
 fi
-output=$1
 case "$output" in
     /*) ;;
     *) output=$PWD/$output ;;
@@ -185,6 +190,7 @@ then
 fi
 GIT_NO_REPLACE_OBJECTS=1 git cat-file commit "$source_commit" >"$commit_object"
 GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
+    benchmark/admission/openclaw-v2026.7.1/protected-route-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \
@@ -192,8 +198,14 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     packaging/activate-runtime-action-worker-host.sh \
     src/aragorn/runtime_action_worker.py \
     scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
+    scripts/materialize_fixed_admission_probes.py \
+    scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py \
     scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
+    scripts/runtime_action_worker_final_route_systemd_probe.py \
     | tar -xf - -C "$context"
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-probe" \
+    protected-route-probe.mjs
 (
     cd "$context"
     docker build --pull=false --network=none \
@@ -434,24 +446,27 @@ PY
 docker exec -i "$container_id" /bin/sh -c \
     'umask 077; cat > /run/aragorn-harness.json' <"$harness"
 docker exec "$container_id" install -d -m 0700 /evidence
+probe_path=/src/scripts/runtime_action_worker_final_combined_v2_systemd_probe.py
+evidence_path=/evidence/runtime-action-worker-final-combined-v2-systemd.json
+if [ "$mode" = route ]; then
+    probe_path=/src/scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py
+    evidence_path=/evidence/runtime-action-worker-final-combined-v2-route-systemd.json
+fi
 probe_status=0
 docker exec "$container_id" /usr/local/bin/python3.12 -I -S -B \
-    /src/scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
+    "$probe_path" \
     || probe_status=$?
 if [ "$probe_status" -ne 0 ]; then
-    docker exec "$container_id" \
-        cat /evidence/runtime-action-worker-final-combined-v2-systemd.json >&2 || :
+    docker exec "$container_id" cat "$evidence_path" >&2 || :
     exit "$probe_status"
 fi
-docker cp \
-    "$container_id:/evidence/runtime-action-worker-final-combined-v2-systemd.json" \
-    "$temp_output"
+docker cp "$container_id:$evidence_path" "$temp_output"
 if ! remove_created_container; then
     echo "cannot remove and verify the privileged final combined v2 container" >&2
     exit 74
 fi
 
-python3.12 - "$temp_output" "$output" <<'PY'
+python3.12 - "$temp_output" "$output" "$mode" <<'PY'
 import json
 import os
 import stat
@@ -460,6 +475,7 @@ from pathlib import Path
 
 source = Path(sys.argv[1])
 destination = Path(sys.argv[2])
+mode = sys.argv[3]
 if source.parent != destination.parent or source.name == destination.name:
     raise SystemExit("temporary and final observation paths are not co-located")
 
@@ -494,7 +510,6 @@ try:
     document = json.loads(
         raw,
         parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
-        parse_float=lambda value: (_ for _ in ()).throw(ValueError(value)),
     )
     canonical = json.dumps(
         document,
@@ -516,25 +531,52 @@ try:
         "run_02_eligible",
         "run_eligible",
     }
-    if (
+    invalid = (
         raw != canonical
-        or document.get("schema")
-        != "aragorn/runtime-action-worker-final-combined-v2-systemd-observation/v1"
-        or document.get("authority")
-        != (
-            "BOUNDED_FINAL_COMBINED_V2_P3_7C_ACTION_OBSERVATION_ONLY_"
-            "PROFILE_ROUTES_REMAIN_NOT_TESTED_NOT_RUN_PHASE3_EDR_"
-            "INSTALLER_RELEASE_AUTHORITY"
-        )
-        or decision.get("status")
-        != "FINAL_COMBINED_V2_ACTION_OBSERVED_PROFILE_NOT_TESTED"
-        or decision.get("p3_7c_activation_action_observed") is not True
         or decision.get("route_pass_count") != 0
         or decision.get("route_fail_count") != 0
         or decision.get("route_not_tested_count") != 21
         or false_claims != expected_false_claims
         or any(decision[key] is not False for key in false_claims)
-    ):
+    )
+    if mode == "bootstrap":
+        invalid = invalid or (
+            document.get("schema")
+            != "aragorn/runtime-action-worker-final-combined-v2-systemd-observation/v1"
+            or document.get("authority")
+            != (
+                "BOUNDED_FINAL_COMBINED_V2_P3_7C_ACTION_OBSERVATION_ONLY_"
+                "PROFILE_ROUTES_REMAIN_NOT_TESTED_NOT_RUN_PHASE3_EDR_"
+                "INSTALLER_RELEASE_AUTHORITY"
+            )
+            or decision.get("status")
+            != "FINAL_COMBINED_V2_ACTION_OBSERVED_PROFILE_NOT_TESTED"
+            or decision.get("p3_7c_activation_action_observed") is not True
+        )
+    elif mode == "route":
+        route_status = decision.get("route_observation_status")
+        expected_status = {
+            "NOT_TESTED": "FINAL_COMBINED_V2_ROUTE_NOT_TESTED_PROFILE_NOT_TESTED",
+            "OBSERVED": "FINAL_COMBINED_V2_ROUTE_OBSERVED_PROFILE_NOT_TESTED",
+        }.get(route_status)
+        invalid = invalid or (
+            document.get("schema")
+            != (
+                "aragorn/runtime-action-worker-final-combined-v2-route-"
+                "systemd-observation/v1"
+            )
+            or document.get("authority")
+            != (
+                "BOUND_FINAL_COMBINED_V2_RAW_ROUTE_OBSERVATION_ONLY_"
+                "NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+            )
+            or document.get("route_id") != "ADM-02/reload/fresh-session-reset"
+            or expected_status is None
+            or decision.get("status") != expected_status
+        )
+    else:
+        invalid = True
+    if invalid:
         raise SystemExit("final probe output is not exact observation-only material")
 
     os.fchmod(descriptor, 0o644)

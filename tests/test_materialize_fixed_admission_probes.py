@@ -354,8 +354,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "c79d775903636736c2ae5413f381b3a8f9ec17a1a179a7807c4a6e57624662f0",
             ),
             "protected-cron-rescan-probe.mjs": (
-                25_998,
-                "2878f6a6aab1a738fd99de4200935233fc5af04cbb5cb43748f6ca9ecf2d3cdb",
+                25_894,
+                "2200529fbe50c81666359b8a5d3f11ff52c088ab32a45dcc982bd5193bede16f",
             ),
             "protected-curator-restore-denial-probe.mjs": (
                 26_564,
@@ -559,7 +559,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             self.assertNotIn(b'    "skills",\n    "info",', cron)
             self.assertEqual(cron.count(b"737"), 4)
             self.assertNotIn(b"728", cron)
-            self.assertIn(b"aragorn-runtime-action-mock/fixture-model", cron)
+            self.assertIn(b'      model: "openai/gpt-5.5",', cron)
+            self.assertNotIn(b"aragorn-runtime-action-mock/fixture-model", cron)
 
             for name in FINAL_COMBINED_SOURCE_DIGESTS:
                 raw = transformed_final_combined_probe(name)
@@ -616,8 +617,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "edc55ed6e97388375a5f9d93e4e3dee2404383aeb5fe85bcf5add0d804f3f297",
             ),
             "protected-cron-rescan-probe.mjs": (
-                25_998,
-                "2878f6a6aab1a738fd99de4200935233fc5af04cbb5cb43748f6ca9ecf2d3cdb",
+                25_894,
+                "2200529fbe50c81666359b8a5d3f11ff52c088ab32a45dcc982bd5193bede16f",
             ),
             "protected-curator-restore-denial-probe.mjs": (
                 26_564,

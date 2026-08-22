@@ -670,12 +670,6 @@ FINAL_COMBINED_CRON_DISCOVERY_REPLACEMENTS = (
     (b"    exactDiscovery(last.discovery_after) &&\n", b""),
 )
 
-FINAL_COMBINED_CRON_PROFILE_REPLACEMENTS = (
-    (b"openai/gpt-5.5", b"aragorn-runtime-action-mock/fixture-model"),
-    (b'"openai"', b'"aragorn-runtime-action-mock"'),
-    (b'"gpt-5.5"', b'"fixture-model"'),
-)
-
 FINAL_COMBINED_CURATOR_REPLACEMENTS = (
     (
         b"b0cb989a0543181aa737cc5ca37c10bf3f21b010a76cb742aefd1b5b4cef8db8",
@@ -1635,6 +1629,13 @@ def transformed_final_combined_probe(name: str) -> bytes:
                     b'"Inert protected archive replacement target v1."',
                     b'"Replace with description of the skill and when Claude should use it."',
                 ),
+                (
+                    b'      message: "Inert protected cron rescan observation.",\n'
+                    b"      timeoutSeconds: 5,",
+                    b'      message: "Inert protected cron rescan observation.",\n'
+                    b'      model: "openai/gpt-5.5",\n'
+                    b"      timeoutSeconds: 5,",
+                ),
                 *FINAL_COMBINED_CRON_REPLACEMENTS,
             ),
         )
@@ -1645,11 +1646,6 @@ def transformed_final_combined_probe(name: str) -> bytes:
             (2,),
         )
         raw = _replace_counted(raw, ((b"728", b"737"),), (4,))
-        raw = _replace_counted(
-            raw,
-            FINAL_COMBINED_CRON_PROFILE_REPLACEMENTS,
-            (3, 2, 2),
-        )
         if b"discovery" in raw or b'    "skills",\n    "info",' in raw:
             raise ValueError("stale final-combined cron discovery remains")
     elif name == "protected-prompt-rebuild-probe.mjs":

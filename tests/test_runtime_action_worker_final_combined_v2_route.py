@@ -13,11 +13,39 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(SCRIPTS))
 
+import capture_openclaw_final_combined_v2_session_snapshot_closure as closure
 import runtime_action_worker_final_combined_v2_route_systemd_probe as route
 from materialize_fixed_admission_probes import transformed_final_combined_v2_probe
 
 
 class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
+    def test_closure_git_checks_disable_replace_refs(self) -> None:
+        signature = (
+            b'Good "git" signature for yousif.snazhat@gmail.com with ED25519 key '
+            + closure._SIGNING_KEY.encode()
+        )
+        with mock.patch.object(
+            closure.subprocess,
+            "run",
+            return_value=mock.Mock(returncode=0, stdout=b"", stderr=signature),
+        ) as run:
+            self.assertEqual(closure._git(["status", "--porcelain"]), b"")
+            closure._verify_signature("a" * 40)
+        self.assertEqual(run.call_count, 2)
+        for call in run.call_args_list:
+            self.assertEqual(call.kwargs["env"]["GIT_NO_REPLACE_OBJECTS"], "1")
+
+    def test_session_snapshot_compiled_closure_is_deterministic(self) -> None:
+        manifest, archive, files = closure._verify_bundle()
+        self.assertEqual(manifest["runtime_tree"], closure._RUNTIME_TREE)
+        self.assertEqual(tuple(files), closure._PATHS)
+        self.assertEqual(len(files), 14)
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(archive).hexdigest(),
+            closure._ARCHIVE_IDENTITY["digest"],
+        )
+        self.assertEqual(closure.main(["--self-check"]), 0)
+
     def test_single_route_reuses_injector_without_promoting_claims(self) -> None:
         capture = SCRIPTS / "capture_runtime_action_worker_final_combined_v2_systemd.sh"
         collector = (

@@ -13,6 +13,28 @@ import openclaw_final_admission_v2_systemd_probe as probe
 
 
 class FinalAdmissionV2SystemdProbeTests(unittest.TestCase):
+    def test_capture_materializes_the_v2_base_route_input(self) -> None:
+        capture = (
+            ROOT / "scripts" / "capture_openclaw_final_admission_v2_systemd.sh"
+        ).read_text(encoding="utf-8")
+        for support in (
+            "scripts/materialize_fixed_admission_probes.py",
+            "scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py",
+            "scripts/runtime_action_worker_final_route_systemd_probe.py",
+        ):
+            self.assertIn(support, capture)
+        for route in (
+            "config-entry-activation",
+            "cron-rescan",
+            "fresh-session-reset",
+            "missing-prompt-blob-rebuild",
+            "session-snapshot-consumer",
+        ):
+            self.assertIn(
+                f'--final-combined-v2 "$context/route-input/{route}"', capture
+            )
+        self.assertLess(capture.index("--final-combined-v2"), capture.index("docker build"))
+
     def test_empty_scaffold_stays_bound_and_not_tested(self) -> None:
         required = (
             "ARAGORN_CONFIG_PATH",

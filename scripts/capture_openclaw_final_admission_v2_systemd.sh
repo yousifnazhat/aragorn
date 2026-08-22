@@ -196,9 +196,27 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     src/aragorn/runtime_action_worker.py \
     scripts/capture_openclaw_final_admission_v2_systemd.sh \
     scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
+    scripts/materialize_fixed_admission_probes.py \
     scripts/openclaw_final_admission_v2_systemd_probe.py \
+    scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py \
     scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
+    scripts/runtime_action_worker_final_route_systemd_probe.py \
     | tar -xf - -C "$context"
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/config-entry-activation" \
+    protected-config-activation-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/cron-rescan" \
+    protected-observation-v1.mjs protected-cron-rescan-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/fresh-session-reset" \
+    protected-route-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/missing-prompt-blob-rebuild" \
+    protected-observation-v1.mjs protected-prompt-rebuild-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/session-snapshot-consumer" \
+    protected-observation-v1.mjs protected-session-snapshot-fixed-probe.mjs
 
 (
     cd "$context"

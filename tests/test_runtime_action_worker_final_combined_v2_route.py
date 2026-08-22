@@ -62,6 +62,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             source,
         )
         for flag in (
+            "--archive-source-force-replacement",
             "--config-entry-activation",
             "--cron-rescan",
             "--fresh-session-reset",

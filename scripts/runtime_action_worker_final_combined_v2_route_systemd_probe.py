@@ -18,6 +18,11 @@ import runtime_action_worker_final_route_systemd_probe as v1_route
 
 _ROUTES = {
     **v1_route._ROUTES,
+    "ADM-02/update/archive-source-force-replacement": {
+        "files": ("protected-archive-replacement-probe.mjs",),
+        "probe": "protected-archive-replacement-probe.mjs",
+        "schema": "aragorn/openclaw-protected-archive-replacement-observation/v1",
+    },
     "ADM-02/update/config-entry-activation": {
         "files": ("protected-config-activation-probe.mjs",),
         "probe": "protected-config-activation-probe.mjs",
@@ -29,6 +34,10 @@ _ROUTE_ROOTS = {
     for route_id in _ROUTES
 }
 _EXPECTED_PROBES = {
+    "protected-archive-replacement-probe.mjs": {
+        "bytes": 25_498,
+        "digest": "sha256:4ead71ad73da16579fb85bc1287cb760a8b8b90838de9a9ea0ad2091fca87479",
+    },
     "protected-config-activation-probe.mjs": {
         "bytes": 23_366,
         "digest": (

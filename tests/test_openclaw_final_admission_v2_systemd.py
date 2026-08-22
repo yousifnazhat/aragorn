@@ -24,6 +24,7 @@ class FinalAdmissionV2SystemdProbeTests(unittest.TestCase):
         ):
             self.assertIn(support, capture)
         for route in (
+            "archive-source-force-replacement",
             "config-entry-activation",
             "cron-rescan",
             "fresh-session-reset",

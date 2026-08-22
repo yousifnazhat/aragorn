@@ -52,6 +52,38 @@ class RuntimeActionWorkerFinalCombinedV2BootstrapTests(unittest.TestCase):
                 self.assertIs(decision["p3_7c_activation_action_observed"], observed)
                 self.assertIn("PROFILE_NOT_TESTED", decision["status"])
 
+    def test_route_input_harness_requires_one_exact_read_only_volume(self) -> None:
+        source_commit = "a" * 40
+        name = "aragorn-phase3-final-combined-v2-route-input-123"
+        document = {
+            "route_input_mount": {
+                "destination": "/route-input",
+                "driver": "local",
+                "mode": "ro",
+                "rw": False,
+                "source": name,
+                "type": "volume",
+            },
+            "route_input_volume_identity": {
+                "driver": "local",
+                "labels": {
+                    "dev.aragorn.capture-owner": f"{source_commit}:123",
+                    "dev.aragorn.role": "final-combined-v2-route-input",
+                    "dev.aragorn.source-commit": source_commit,
+                },
+                "name": name,
+                "options": None,
+                "scope": "local",
+            },
+        }
+        self.assertEqual(probe._route_input_volume_name(document, source_commit), name)
+        changed = {
+            **document,
+            "route_input_mount": {**document["route_input_mount"], "rw": True},
+        }
+        with self.assertRaises(probe.openclaw.ProbeError):
+            probe._route_input_volume_name(changed, source_commit)
+
 
 if __name__ == "__main__":
     unittest.main()

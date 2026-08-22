@@ -152,29 +152,78 @@ def _canonical_source(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     }
 
 
+def _route_input_volume_name(
+    document: dict[str, Any], source_commit: str
+) -> str | None:
+    fields = {"route_input_mount", "route_input_volume_identity"}
+    present = fields & set(document)
+    _expect(present in (set(), fields), "partial route input harness changed")
+    if not present:
+        return None
+    identity = document["route_input_volume_identity"]
+    mount = document["route_input_mount"]
+    _expect(
+        isinstance(identity, dict)
+        and set(identity) == {"driver", "labels", "name", "options", "scope"}
+        and isinstance(identity.get("name"), str),
+        "route input volume shape changed",
+    )
+    name = identity["name"]
+    matched = re.fullmatch(
+        r"aragorn-phase3-final-combined-v2-route-input-([1-9][0-9]*)", name
+    )
+    owner = f"{source_commit}:{matched.group(1)}" if matched else None
+    _expect(
+        identity
+        == {
+            "driver": "local",
+            "labels": {
+                "dev.aragorn.capture-owner": owner,
+                "dev.aragorn.role": "final-combined-v2-route-input",
+                "dev.aragorn.source-commit": source_commit,
+            },
+            "name": name,
+            "options": None,
+            "scope": "local",
+        }
+        and mount
+        == {
+            "destination": "/route-input",
+            "driver": "local",
+            "mode": "ro",
+            "rw": False,
+            "source": name,
+            "type": "volume",
+        },
+        "route input volume identity changed",
+    )
+    return name
+
+
 def _harness() -> dict[str, Any]:
     retained = p37c._stable_document_snapshot(_HARNESS)
     document = retained["document"]
+    fields = {
+        "schema",
+        "capture_disposition",
+        "source_commit",
+        "source_commit_verification",
+        "container_id",
+        "image_id",
+        "image_reference",
+        "run_image_reference",
+        "parent_image_id",
+        "image_lineage",
+        "platform",
+        "profile_label",
+        "openclaw_runtime_volume",
+        "openclaw_runtime_volume_identity",
+        "openclaw_runtime_mount",
+        "host_config",
+    }
     _expect(
         set(document)
-        == {
-            "schema",
-            "capture_disposition",
-            "source_commit",
-            "source_commit_verification",
-            "container_id",
-            "image_id",
-            "image_reference",
-            "run_image_reference",
-            "parent_image_id",
-            "image_lineage",
-            "platform",
-            "profile_label",
-            "openclaw_runtime_volume",
-            "openclaw_runtime_volume_identity",
-            "openclaw_runtime_mount",
-            "host_config",
-        },
+        in (fields, fields | {"route_input_mount", "route_input_volume_identity"}),
         "outer final combined v2 harness shape changed",
     )
     lineage = document.get("image_lineage", {})
@@ -183,6 +232,7 @@ def _harness() -> dict[str, Any]:
     parent_layers = parent.get("layers")
     child_layers = child.get("layers")
     source_commit = document.get("source_commit", "")
+    route_input_volume = _route_input_volume_name(document, source_commit)
     verification = document.get("source_commit_verification", {})
     commit_raw = p37c._raw_bytes(verification.get("commit_object", {}))
     verification_stdout = p37c._raw_bytes(verification.get("stdout", {}))
@@ -202,13 +252,14 @@ def _harness() -> dict[str, Any]:
         "options": None,
         "scope": "local",
     }
+    expected_binds = [
+        "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+        f"{_RUNTIME_VOLUME}:/runtime:ro",
+    ]
+    if route_input_volume is not None:
+        expected_binds.append(f"{route_input_volume}:/route-input:ro")
     expected_host = {
-        "binds": sorted(
-            [
-                "/sys/fs/cgroup:/sys/fs/cgroup:rw",
-                f"{_RUNTIME_VOLUME}:/runtime:ro",
-            ]
-        ),
+        "binds": sorted(expected_binds),
         "cgroupns_mode": "host",
         "ipc_mode": "private",
         "network_mode": "none",

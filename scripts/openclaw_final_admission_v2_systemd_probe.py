@@ -1,0 +1,931 @@
+#!/usr/bin/env python3
+"""Capture one bound, conservative V2 admission aggregation."""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import os
+import re
+import secrets
+import shutil
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, "/usr/lib/aragorn")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import runtime_action_worker_final_combined_v2_systemd_probe as bootstrap
+
+p37c = bootstrap.p37c
+
+_HARNESS = Path("/run/aragorn-final-admission-v2-harness.json")
+_OUTPUT = Path("/evidence/openclaw-final-admission-v2-systemd.json")
+_ADMISSION = Path("/src/benchmark/admission/openclaw-v2026.7.1")
+_SUITE = _ADMISSION / "final-admission-v2-suite.mjs"
+_OBSERVATION_HELPER = _ADMISSION / "protected-observation-v1.mjs"
+_CONFIG = _ADMISSION / "protected-final-combined-config-v2.json"
+_PROFILE = _ADMISSION / "protected-final-combined-profile-v2.json"
+_LOCK = _ADMISSION / "protected-final-combined-runtime-v2.lock.json"
+_SKILL = Path("/opt/aragorn/runtime-profile/template-skill/SKILL.md")
+_PLUGIN = Path("/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker")
+_ACTIVATOR = Path("/usr/libexec/aragorn/activate-runtime-action-worker-host.sh")
+_PREFLIGHT = Path("/usr/lib/aragorn/aragorn/runtime_action_worker.py")
+_SOURCE_RUNTIME = Path("/runtime")
+_WORK_ROOT = Path("/var/lib/aragorn-final-admission-v2")
+_NODE = Path("/usr/local/bin/node")
+_ENV = Path("/usr/bin/env")
+_CP = Path("/usr/bin/cp")
+_SCHEMA = "aragorn/openclaw-final-admission-v2-systemd-capture/v1"
+_AUTHORITY = (
+    "BOUND_V2_ADMISSION_RAW_OBSERVATION_AGGREGATION_ONLY_"
+    "SEMANTIC_CONFORMANCE_NOT_VERIFIED_NO_INSTALLER_RUN_PHASE3_EDR_RELEASE_AUTHORITY"
+)
+_BOUND_EVIDENCE_SCHEMA = "aragorn/openclaw-final-admission-v2-bound-evidence/v1"
+_EXPECTED_CONFIG = {
+    "canonical_digest": (
+        "sha256:93bbb9107c8ed72ef5cd919888306119016ce4c5843e7d61ebb1580b9ae67645"
+    ),
+    "digest": "sha256:2772bca6629607247e2a5c056282b4748ab5bb6d024fd742c9755fb915281ddb",
+}
+_EXPECTED_PROFILE = {
+    "canonical_digest": (
+        "sha256:a20ab2dd6572ada5fac086bc818495a6e6079f55f6fcbae397687c7b19eac59e"
+    ),
+    "digest": "sha256:615928c74bb467ed1422aa19c0ca3266fec21e6a9b195ff32e7e2fae86f966fc",
+}
+_EXPECTED_LOCK = {
+    "canonical_digest": (
+        "sha256:ceb60c00c806858caaa155b1778e09c5df28117109dfc021076f934f134f3f3d"
+    ),
+    "digest": "sha256:c5773a0b8829d1dbdd9fa89d7dc93e995ee54ea723208daa59b0951d50e76fd5",
+}
+_EXPECTED_RUNTIME = {
+    "entrypoint_digest": (
+        "sha256:f643b005d6db233a0b45204e8d8e943256874ccc6897b8a6e0cf42a9b376a188"
+    ),
+    "source_commit": "7fa98d8e21b6d5937f25a7f19445ff683bb980bf",
+    "tree_digest": (
+        "sha256:5d09f482ad1cb177eae168eaea074f6d2a6ec976d16042a3e1d665cc2371f154"
+    ),
+}
+_EXPECTED_SKILL_DIGEST = (
+    "sha256:eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa"
+)
+_EXPECTED_OBSERVATION_HELPER_DIGEST = (
+    "sha256:44ee65e2014e44681d2efe2b2fa76abbede7c6eaf7719aecb104e4be441d635b"
+)
+_EXPECTED_ACTIVATOR_DIGEST = (
+    "sha256:e89b5c456d276e6c14b403a976db4a1fa9f7e4fa7ce4a35e6d1431a7a1b9de18"
+)
+_EXPECTED_PREFLIGHT_DIGEST = (
+    "sha256:a0aa80b0870c18ecb380ca6f7a65663e4046e92f55938b84c9e15284ba221873"
+)
+_EXPECTED_RUNTIME_TREE = {
+    "algorithm": "aragorn/runtime-tree/v1",
+    "entry_count": 45_860,
+    "file_count": 45_841,
+    "symlink_count": 19,
+    "total_bytes": 369_443_243,
+    "tree_digest": _EXPECTED_RUNTIME["tree_digest"],
+}
+_REQUIRED_ENV = (
+    "ARAGORN_CONFIG_PATH",
+    "ARAGORN_PROBE_ROOT",
+    "ARAGORN_PROFILE_PATH",
+    "ARAGORN_RUNTIME_LOCK_PATH",
+    "ARAGORN_RUNTIME_ROOT",
+    "ARAGORN_RUN_NONCE",
+    "ARAGORN_SKILL_PATH",
+)
+_ROUTE_IDS = (
+    "ADM-02/update/archive-source-force-replacement",
+    "ADM-02/update/clawhub-tracked-replacement",
+    "ADM-02/update/config-entry-activation",
+    "ADM-02/update/core-updater-plugin-replacement",
+    "ADM-02/update/curator-restore-activation",
+    "ADM-02/update/plugin-enable-activation",
+    "ADM-02/update/plugin-force-reinstall",
+    "ADM-02/update/plugin-package-skill-replacement",
+    "ADM-02/update/workshop-proposal-apply",
+    "ADM-02/reload/chat-session-snapshot-consumer",
+    "ADM-02/reload/config-invalidation",
+    "ADM-02/reload/cron-rescan",
+    "ADM-02/reload/filesystem-watch-invalidation",
+    "ADM-02/reload/fresh-session-reset",
+    "ADM-02/reload/manual-plugin-invalidation",
+    "ADM-02/reload/missing-prompt-blob-rebuild",
+    "ADM-02/reload/plugin-skill-dir-activation",
+    "ADM-02/reload/remote-eligibility-invalidation",
+    "ADM-02/reload/sandbox-per-run-rescan",
+    "ADM-02/reload/session-snapshot-consumer",
+    "ADM-02/reload/workshop-invalidation",
+)
+_PROPERTY_IDS = ("DET-01", "ADM-01/exact-admitted-bytes")
+_CATEGORY_IDS = (
+    "ADM-02/install",
+    "ADM-02/update",
+    "ADM-02/direct-write",
+    "ADM-02/rename",
+    "ADM-02/symlink",
+    "ADM-02/auto-discovery",
+    "ADM-02/reload",
+    "ADM-02/restart",
+)
+_ADM03_IDS = ("ADM-03/policy-failure", "ADM-03/policy-tampering")
+_MAIN_PROBES = (
+    "broker-symlink-probe.mjs",
+    "config-activation-probe.mjs",
+    "contained-probe.mjs",
+    "live-reload-probe.mjs",
+    "model-activation-probe.mjs",
+    "plug01-probe.mjs",
+    "pre-effect-write-probe.mjs",
+    "probe.mjs",
+    "protected-archive-replacement-probe.mjs",
+    "protected-config-activation-probe.mjs",
+    "protected-cron-rescan-probe.mjs",
+    "protected-curator-restore-denial-probe.mjs",
+    "protected-prompt-rebuild-probe.mjs",
+    "protected-route-probe.mjs",
+    "protected-session-snapshot-fixed-probe.mjs",
+    "protected-session-snapshot-probe.mjs",
+    "restart-probe.mjs",
+    "update-probe.mjs",
+    "workshop-bypass-probe.mjs",
+)
+_ADM03_PROBES = ("adm03-probe.mjs",)
+_ELIGIBILITY_KEYS = {
+    "admission_profile_eligible",
+    "aggregate_admission_eligible",
+    "edr_eligible",
+    "installer_work_eligible",
+    "phase3_exit_eligible",
+    "release_eligible",
+    "run_01_eligible",
+    "run_02_eligible",
+    "run_eligible",
+}
+_LIMITATIONS = [
+    "EMPTY_BOUND_INPUT_SCAFFOLD_ONLY",
+    "ALL_PROPERTIES_CATEGORIES_ROUTES_AND_ADM_03_SCENARIOS_REMAIN_NOT_TESTED",
+    "OBSERVED_STATUS_WOULD_NOT_EQUAL_PASS",
+    "SEMANTIC_CONFORMANCE_VERIFIER_NOT_COMPOSED",
+    "PRIVATE_PATCHED_BUILD_NOT_OFFICIAL_OPENCLAW_RELEASE",
+    "PUBLIC_NETWORK_DENIED",
+    "NO_ADMISSION_INSTALLER_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY",
+]
+_STAGE = "BOOTSTRAP"
+
+
+class CaptureError(ValueError):
+    """The admission capture did not stay within its exact bound contract."""
+
+
+def _set_stage(value: str) -> None:
+    global _STAGE
+    _STAGE = value
+
+
+def _expect(condition: bool, message: str) -> None:
+    if not condition:
+        raise CaptureError(message)
+
+
+def _digest(raw: bytes) -> str:
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def _canonical(document: Any) -> bytes:
+    return json.dumps(
+        document,
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in output:
+            raise CaptureError(f"duplicate JSON key rejected: {key}")
+        output[key] = value
+    return output
+
+
+def _json(raw: bytes, label: str, *, canonical_lf: bool = True) -> dict[str, Any]:
+    try:
+        document = json.loads(
+            raw,
+            object_pairs_hook=_unique_object,
+            parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
+            parse_float=lambda value: (_ for _ in ()).throw(ValueError(value)),
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CaptureError(f"{label} is not strict JSON: {exc}") from exc
+    _expect(isinstance(document, dict), f"{label} must be an object")
+    expected = _canonical(document) + (b"\n" if canonical_lf else b"")
+    _expect(raw == expected, f"{label} is not canonical JSON")
+    return document
+
+
+def _exact_keys(document: Any, keys: set[str], label: str) -> dict[str, Any]:
+    _expect(isinstance(document, dict), f"{label} must be an object")
+    _expect(set(document) == keys, f"{label} keys changed")
+    return document
+
+
+def _raw_record(record: Any, label: str) -> bytes:
+    value = _exact_keys(record, {"base64", "bytes", "digest"}, label)
+    try:
+        raw = base64.b64decode(value["base64"], validate=True)
+    except (TypeError, ValueError) as exc:
+        raise CaptureError(f"{label} base64 is invalid") from exc
+    _expect(
+        value["bytes"] == len(raw) and value["digest"] == _digest(raw),
+        f"{label} identity changed",
+    )
+    return raw
+
+
+def _file(path: Path) -> dict[str, Any]:
+    return p37c._file(path)
+
+
+def _harness() -> dict[str, Any]:
+    retained = p37c._stable_document_snapshot(_HARNESS)
+    document = _exact_keys(
+        retained["document"],
+        {
+            "schema",
+            "capture_disposition",
+            "source",
+            "container",
+            "image_lineage",
+            "runtime_volume",
+        },
+        "outer harness",
+    )
+    source = _exact_keys(
+        document["source"], {"commit", "tree", "verification"}, "source"
+    )
+    verification = _exact_keys(
+        source["verification"],
+        {"command", "exit_code", "commit_object", "stdout", "stderr"},
+        "source verification",
+    )
+    commit_raw = _raw_record(verification["commit_object"], "commit object")
+    stdout = _raw_record(verification["stdout"], "verification stdout")
+    stderr = _raw_record(verification["stderr"], "verification stderr")
+    commit_identity = hashlib.sha1(
+        f"commit {len(commit_raw)}\0".encode("ascii") + commit_raw
+    ).hexdigest()
+    container = _exact_keys(
+        document["container"],
+        {
+            "id",
+            "image_id",
+            "image_reference",
+            "platform",
+            "profile_label",
+            "host_profile",
+        },
+        "container",
+    )
+    lineage = _exact_keys(
+        document["image_lineage"],
+        {"v1", "v2", "admission", "v2_added_layers", "admission_added_layers"},
+        "image lineage",
+    )
+    v1 = _exact_keys(lineage["v1"], {"id", "layers"}, "V1 image")
+    v2 = _exact_keys(lineage["v2"], {"id", "layers"}, "V2 image")
+    admission = _exact_keys(lineage["admission"], {"id", "layers"}, "admission image")
+    volume = _exact_keys(
+        document["runtime_volume"], {"identity", "mount"}, "runtime volume"
+    )
+    _expect(
+        document["schema"] == "aragorn/openclaw-final-admission-v2-systemd-harness/v1"
+        and document["capture_disposition"]
+        == "EXPLICIT_OUTPUT_ONLY_NOT_RETAINED_EVIDENCE"
+        and re.fullmatch(r"[0-9a-f]{40}", source["commit"]) is not None
+        and re.fullmatch(r"[0-9a-f]{40}", source["tree"]) is not None
+        and commit_identity == source["commit"]
+        and commit_raw.startswith(f"tree {source['tree']}\n".encode("ascii"))
+        and b"\ngpgsig " in commit_raw
+        and verification["command"]
+        == ["git", "verify-commit", "--raw", source["commit"]]
+        and verification["exit_code"] == 0
+        and not stdout
+        and bool(stderr)
+        and re.fullmatch(r"[0-9a-f]{64}", container["id"]) is not None
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", container["image_id"]) is not None
+        and container["image_id"] == admission["id"]
+        and container["image_reference"]
+        == "aragorn-openclaw-final-admission-v2-systemd"
+        and container["platform"] == "linux"
+        and container["profile_label"] == "openclaw-final-admission-v2"
+        and v1["id"]
+        == "sha256:3ccea364258c367342e585113d784b7ce00642c63918e0a6f0a6594019d3121c"
+        and v2["layers"][: len(v1["layers"])] == v1["layers"]
+        and admission["layers"][: len(v2["layers"])] == v2["layers"]
+        and lineage["v2_added_layers"] == v2["layers"][len(v1["layers"]) :]
+        and lineage["admission_added_layers"]
+        == admission["layers"][len(v2["layers"]) :]
+        and bool(lineage["v2_added_layers"])
+        and bool(lineage["admission_added_layers"])
+        and volume["identity"]["name"]
+        == "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1"
+        and volume["mount"]
+        == {
+            "destination": "/runtime",
+            "driver": "local",
+            "mode": "ro",
+            "rw": False,
+            "source": "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1",
+            "type": "volume",
+        },
+        "outer harness binding changed",
+    )
+    return retained
+
+
+def _source_bindings() -> tuple[dict[str, Any], dict[str, Any]]:
+    config, config_file = bootstrap._canonical_source(_CONFIG)
+    profile = bootstrap._profile_snapshot()
+    lock, lock_file = bootstrap._canonical_source(_LOCK)
+    skill = bootstrap._skill_snapshot()
+    suite = _file(_SUITE)
+    observation_helper = _file(_OBSERVATION_HELPER)
+    activator = _file(_ACTIVATOR)
+    preflight = _file(_PREFLIGHT)
+    plugin_lock = lock["deployment_bindings"]["aragorn_plugin"]
+    plugin_files = []
+    for record in plugin_lock["files"]:
+        path = Path(record["path"])
+        observed = _file(path)
+        _expect(path.parent == _PLUGIN, "plugin path escaped the exact plugin root")
+        _expect(observed["digest"] == record["digest"], f"plugin changed: {path.name}")
+        plugin_files.append({"digest": record["digest"], "path": record["path"]})
+    expected = {
+        "configuration": _EXPECTED_CONFIG,
+        "plugin": {
+            "files": plugin_files,
+            "id": plugin_lock["id"],
+            "source_commit": plugin_lock["source"]["commit"],
+            "source_tree": plugin_lock["source"]["tree"],
+        },
+        "profile": _EXPECTED_PROFILE,
+        "runtime": _EXPECTED_RUNTIME,
+        "runtime_lock": _EXPECTED_LOCK,
+        "skill": {"digest": _EXPECTED_SKILL_DIGEST},
+        "suite": {
+            "digest": suite["digest"],
+            "observation_helper_digest": observation_helper["digest"],
+        },
+    }
+    _expect(
+        config_file["source"]["digest"] == _EXPECTED_CONFIG["digest"]
+        and config_file["canonical_digest"] == _EXPECTED_CONFIG["canonical_digest"]
+        and profile["file"]["source"]["digest"] == _EXPECTED_PROFILE["digest"]
+        and profile["file"]["canonical_digest"] == _EXPECTED_PROFILE["canonical_digest"]
+        and lock_file["source"]["digest"] == _EXPECTED_LOCK["digest"]
+        and lock_file["canonical_digest"] == _EXPECTED_LOCK["canonical_digest"]
+        and skill["file"]["digest"] == _EXPECTED_SKILL_DIGEST
+        and skill["file"]["bytes"] == 140
+        and observation_helper["digest"] == _EXPECTED_OBSERVATION_HELPER_DIGEST
+        and activator["digest"] == _EXPECTED_ACTIVATOR_DIGEST
+        and preflight["digest"] == _EXPECTED_PREFLIGHT_DIGEST
+        and tuple(route["id"] for route in profile["document"]["routes"]) == _ROUTE_IDS
+        and all(
+            route["outcome"] == "NOT_TESTED" for route in profile["document"]["routes"]
+        )
+        and lock["installed_runtime"]["runtime_tree"] == _EXPECTED_RUNTIME_TREE
+        and lock["installed_runtime"]["openclaw_digest"]
+        == _EXPECTED_RUNTIME["entrypoint_digest"]
+        and lock["source"]["commit"] == _EXPECTED_RUNTIME["source_commit"]
+        and config["skills"]["activation"]["sources"][0]["sha256"]
+        == _EXPECTED_SKILL_DIGEST.removeprefix("sha256:"),
+        "V2 source bindings changed",
+    )
+    artifacts = {
+        "activator": activator,
+        "capture": _file(
+            Path("/src/scripts/capture_openclaw_final_admission_v2_systemd.sh")
+        ),
+        "configuration": config_file,
+        "preflight": preflight,
+        "probe": _file(Path(__file__).resolve()),
+        "profile": profile["file"],
+        "runtime_lock": lock_file,
+        "skill": skill,
+        "suite": suite,
+        "observation_helper": observation_helper,
+    }
+    return expected, artifacts
+
+
+def _decision(
+    document: Any, status: str, label: str, counts: dict[str, int] | None = None
+) -> None:
+    expected_keys = {*_ELIGIBILITY_KEYS, "status"}
+    if counts is not None:
+        expected_keys.add("outcome_counts")
+    value = _exact_keys(document, expected_keys, f"{label} decision")
+    _expect(value["status"] == status, f"{label} status changed")
+    _expect(
+        all(value[key] is False for key in _ELIGIBILITY_KEYS),
+        f"{label} promoted eligibility",
+    )
+    if counts is not None:
+        _expect(value["outcome_counts"] == counts, f"{label} counts changed")
+
+
+def _probe_inventory(value: Any, names: tuple[str, ...], label: str) -> None:
+    _expect(isinstance(value, list) and len(value) == len(names), f"{label} changed")
+    for index, (record, name) in enumerate(zip(value, names, strict=True)):
+        item = _exact_keys(record, {"digest", "name"}, f"{label}[{index}]")
+        _expect(item["name"] == name, f"{label}[{index}] name changed")
+        _expect(
+            item["digest"] == _file(_ADMISSION / name)["digest"],
+            f"{label}[{index}] digest changed",
+        )
+
+
+def _manifest(document: dict[str, Any], nonce: str, bindings: dict[str, Any]) -> None:
+    _exact_keys(
+        document,
+        {
+            "assurance",
+            "bindings",
+            "contract",
+            "decision",
+            "limitations",
+            "mode",
+            "run_nonce",
+            "schema",
+        },
+        "manifest",
+    )
+    contract = _exact_keys(
+        document["contract"],
+        {"adm03", "bound_evidence_schema", "environment", "main", "row_statuses"},
+        "manifest contract",
+    )
+    main = _exact_keys(
+        contract["main"],
+        {
+            "allowed_probe_modules",
+            "category_ids",
+            "filename",
+            "property_ids",
+            "route_ids",
+            "schema",
+        },
+        "manifest main contract",
+    )
+    adm03 = _exact_keys(
+        contract["adm03"],
+        {"allowed_probe_modules", "filename", "scenario_ids", "schema"},
+        "manifest ADM-03 contract",
+    )
+    _probe_inventory(
+        main["allowed_probe_modules"], _MAIN_PROBES, "main probe inventory"
+    )
+    _probe_inventory(
+        adm03["allowed_probe_modules"], _ADM03_PROBES, "ADM-03 probe inventory"
+    )
+    _expect(
+        document["schema"] == "aragorn/openclaw-final-admission-v2-manifest/v1"
+        and document["assurance"]
+        == "BOUND_INPUT_CONTRACT_ONLY_NOT_CONFORMANCE_AUTHORITY"
+        and document["mode"] == "manifest"
+        and document["run_nonce"] == nonce
+        and document["bindings"] == bindings
+        and contract["bound_evidence_schema"] == _BOUND_EVIDENCE_SCHEMA
+        and contract["environment"] == list(_REQUIRED_ENV)
+        and contract["row_statuses"] == ["FAIL", "NOT_TESTED", "OBSERVED"]
+        and main["filename"] == "main-input.json"
+        and main["schema"] == "aragorn/openclaw-final-admission-v2-main-input/v1"
+        and main["property_ids"] == list(_PROPERTY_IDS)
+        and main["category_ids"] == list(_CATEGORY_IDS)
+        and main["route_ids"] == list(_ROUTE_IDS)
+        and adm03["filename"] == "adm03-input.json"
+        and adm03["schema"] == "aragorn/openclaw-final-admission-v2-adm03-input/v1"
+        and adm03["scenario_ids"] == list(_ADM03_IDS),
+        "manifest contract changed",
+    )
+    _decision(document["decision"], "NOT_TESTED", "manifest")
+
+
+def _row(identifier: str) -> dict[str, Any]:
+    return {
+        "evidence_refs": [],
+        "id": identifier,
+        "reason_codes": ["SEMANTIC_EVIDENCE_NOT_PRODUCED"],
+        "status": "NOT_TESTED",
+    }
+
+
+def _rows(identifiers: tuple[str, ...]) -> list[dict[str, Any]]:
+    return [_row(identifier) for identifier in identifiers]
+
+
+def _write_input(path: Path, document: dict[str, Any]) -> dict[str, Any]:
+    raw = _canonical(document) + b"\n"
+    descriptor = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400
+    )
+    try:
+        written = os.write(descriptor, raw)
+        _expect(written == len(raw), "input write was short")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    metadata = path.stat(follow_symlinks=False)
+    _expect(
+        stat.S_ISREG(metadata.st_mode)
+        and stat.S_IMODE(metadata.st_mode) == 0o400
+        and metadata.st_nlink == 1
+        and path.read_bytes() == raw,
+        "input file identity changed",
+    )
+    return {"bytes": len(raw), "digest": _digest(raw), "path": path.name}
+
+
+def _main_input(nonce: str, bindings: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "artifacts": [],
+        "bindings": bindings,
+        "formal_categories": _rows(_CATEGORY_IDS),
+        "mode": "main",
+        "properties": _rows(_PROPERTY_IDS),
+        "routes": _rows(_ROUTE_IDS),
+        "run_nonce": nonce,
+        "schema": "aragorn/openclaw-final-admission-v2-main-input/v1",
+    }
+
+
+def _adm03_input(nonce: str, bindings: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "artifacts": [],
+        "bindings": bindings,
+        "mode": "adm03",
+        "run_nonce": nonce,
+        "scenarios": _rows(_ADM03_IDS),
+        "schema": "aragorn/openclaw-final-admission-v2-adm03-input/v1",
+    }
+
+
+def _copy_runtime(label: str, nonce: str) -> tuple[Path, Path, dict[str, Any]]:
+    stack = _WORK_ROOT / f"{label}-{nonce}"
+    runtime = stack / "runtime"
+    probes = stack / "probes"
+    _expect(
+        not stack.exists() and not stack.is_symlink(), f"{label} stack already exists"
+    )
+    runtime.mkdir(parents=True, mode=0o700)
+    probes.mkdir(mode=0o700)
+    command = [str(_CP), "-a", "--reflink=auto", f"{_SOURCE_RUNTIME}/.", str(runtime)]
+    result = subprocess.run(
+        command,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=300,
+    )
+    _expect(
+        result.returncode == 0 and not result.stdout and not result.stderr,
+        f"{label} runtime copy failed",
+    )
+    entrypoint = runtime / "lib/node_modules/openclaw/openclaw.mjs"
+    _expect(
+        entrypoint.is_file()
+        and not entrypoint.is_symlink()
+        and _file(entrypoint)["digest"] == _EXPECTED_RUNTIME["entrypoint_digest"],
+        f"{label} mutable runtime entrypoint changed",
+    )
+    return (
+        stack,
+        probes,
+        {
+            "command": command,
+            "source": str(_SOURCE_RUNTIME),
+            "destination": str(runtime),
+            "entrypoint_digest": _EXPECTED_RUNTIME["entrypoint_digest"],
+        },
+    )
+
+
+def _suite_environment(nonce: str, runtime: Path, probes: Path) -> dict[str, str]:
+    return {
+        "ARAGORN_CONFIG_PATH": str(_CONFIG),
+        "ARAGORN_PROBE_ROOT": str(probes),
+        "ARAGORN_PROFILE_PATH": str(_PROFILE),
+        "ARAGORN_RUNTIME_LOCK_PATH": str(_LOCK),
+        "ARAGORN_RUNTIME_ROOT": str(runtime),
+        "ARAGORN_RUN_NONCE": nonce,
+        "ARAGORN_SKILL_PATH": str(_SKILL),
+    }
+
+
+def _run_suite(mode: str, nonce: str, runtime: Path, probes: Path) -> dict[str, Any]:
+    environment = _suite_environment(nonce, runtime, probes)
+    _expect(tuple(environment) == _REQUIRED_ENV, "suite environment order changed")
+    command = [
+        str(_ENV),
+        "-i",
+        *(f"{key}={value}" for key, value in environment.items()),
+        str(_NODE),
+        str(_SUITE),
+        mode,
+    ]
+    result = subprocess.run(
+        command,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=300,
+    )
+    _expect(len(result.stdout) <= 8 * 1024 * 1024, f"{mode} stdout exceeded 8 MiB")
+    _expect(len(result.stderr) <= 64 * 1024, f"{mode} stderr exceeded 64 KiB")
+    _expect(
+        result.returncode == 0 and result.stderr == b"", f"{mode} suite failed closed"
+    )
+    return _json(result.stdout, f"{mode} suite output")
+
+
+def _validate_rows(value: Any, expected: list[dict[str, Any]], label: str) -> None:
+    _expect(value == expected, f"{label} rows changed or gained unbound evidence")
+
+
+def _runtime_verification(value: Any, runtime: Path, label: str) -> None:
+    document = _exact_keys(value, {"root", "tree"}, f"{label} runtime verification")
+    _expect(
+        document == {"root": str(runtime), "tree": _EXPECTED_RUNTIME_TREE},
+        f"{label} runtime verification changed",
+    )
+
+
+def _main_output(
+    document: dict[str, Any],
+    source: dict[str, Any],
+    nonce: str,
+    bindings: dict[str, Any],
+    runtime: Path,
+) -> None:
+    _exact_keys(
+        document,
+        {
+            "assurance",
+            "bindings",
+            "decision",
+            "evidence",
+            "formal_categories",
+            "input",
+            "limitations",
+            "mode",
+            "properties",
+            "routes",
+            "run_nonce",
+            "runtime_verification",
+            "schema",
+        },
+        "main observation",
+    )
+    _expect(
+        document["schema"] == "aragorn/openclaw-final-admission-v2-main-observation/v1"
+        and document["assurance"]
+        == "BOUND_RAW_OBSERVATIONS_ONLY_NOT_CONFORMANCE_AUTHORITY"
+        and document["mode"] == "main"
+        and document["run_nonce"] == nonce
+        and document["bindings"] == bindings
+        and document["evidence"] == []
+        and document["input"]
+        == {
+            "digest": source["digest"],
+            "path": "main-input.json",
+            "schema": source["schema"],
+        },
+        "main observation binding changed",
+    )
+    _validate_rows(document["properties"], source["properties"], "main properties")
+    _validate_rows(
+        document["formal_categories"],
+        source["formal_categories"],
+        "main formal categories",
+    )
+    _validate_rows(document["routes"], source["routes"], "main routes")
+    _runtime_verification(document["runtime_verification"], runtime, "main")
+    _decision(
+        document["decision"],
+        "NOT_TESTED",
+        "main",
+        {"FAIL": 0, "NOT_TESTED": 31, "OBSERVED": 0},
+    )
+
+
+def _adm03_output(
+    document: dict[str, Any],
+    source: dict[str, Any],
+    nonce: str,
+    bindings: dict[str, Any],
+    runtime: Path,
+) -> None:
+    _exact_keys(
+        document,
+        {
+            "assurance",
+            "bindings",
+            "decision",
+            "evidence",
+            "input",
+            "limitations",
+            "mode",
+            "run_nonce",
+            "runtime_verification",
+            "scenarios",
+            "schema",
+        },
+        "ADM-03 observation",
+    )
+    _expect(
+        document["schema"] == "aragorn/openclaw-final-admission-v2-adm03-observation/v1"
+        and document["assurance"]
+        == "ISOLATED_BOUND_RAW_OBSERVATIONS_ONLY_NOT_CONFORMANCE_AUTHORITY"
+        and document["mode"] == "adm03"
+        and document["run_nonce"] == nonce
+        and document["bindings"] == bindings
+        and document["evidence"] == []
+        and document["input"]
+        == {
+            "digest": source["digest"],
+            "path": "adm03-input.json",
+            "schema": source["schema"],
+        },
+        "ADM-03 observation binding changed",
+    )
+    _validate_rows(document["scenarios"], source["scenarios"], "ADM-03 scenarios")
+    _runtime_verification(document["runtime_verification"], runtime, "ADM-03")
+    _decision(
+        document["decision"],
+        "NOT_TESTED",
+        "ADM-03",
+        {"FAIL": 0, "NOT_TESTED": 2, "OBSERVED": 0},
+    )
+
+
+def _remove_stack(path: Path) -> None:
+    _expect(path.parent == _WORK_ROOT, "refusing to remove an unexpected stack")
+    shutil.rmtree(path)
+    _expect(
+        not path.exists() and not path.is_symlink(),
+        "mutable stack remained after removal",
+    )
+
+
+def _decision_document(status: str) -> dict[str, Any]:
+    return {
+        "status": status,
+        "semantic_pass_verified": False,
+        "property_not_tested_count": 2,
+        "formal_category_not_tested_count": 8,
+        "route_observed_count": 0,
+        "route_fail_count": 0,
+        "route_not_tested_count": 21,
+        "adm03_not_tested_count": 2,
+        **{key: False for key in sorted(_ELIGIBILITY_KEYS)},
+    }
+
+
+def _collect() -> dict[str, Any]:
+    _set_stage("HARNESS")
+    harness = _harness()
+    _set_stage("SOURCE_BINDINGS")
+    bindings, artifacts = _source_bindings()
+    nonce = secrets.token_hex(32)
+    _expect(
+        re.fullmatch(r"[0-9a-f]{64}", nonce) is not None, "run nonce generation failed"
+    )
+    _expect(
+        not _WORK_ROOT.exists() and not _WORK_ROOT.is_symlink(),
+        "work root is not fresh",
+    )
+
+    main_stack: Path | None = None
+    adm03_stack: Path | None = None
+    main_removed_before_adm03 = False
+    try:
+        _set_stage("MAIN_STACK")
+        main_stack, main_probes, main_copy = _copy_runtime("main", nonce)
+        main_runtime = main_stack / "runtime"
+        _set_stage("MANIFEST")
+        manifest = _run_suite("manifest", nonce, main_runtime, main_probes)
+        _manifest(manifest, nonce, bindings)
+        main_input = _main_input(nonce, bindings)
+        main_input_file = _write_input(main_probes / "main-input.json", main_input)
+        main_input["digest"] = main_input_file["digest"]
+        _set_stage("MAIN_AGGREGATION")
+        main = _run_suite("main", nonce, main_runtime, main_probes)
+        _main_output(main, main_input, nonce, bindings, main_runtime)
+        _remove_stack(main_stack)
+        main_stack = None
+        main_removed_before_adm03 = True
+
+        _set_stage("ADM03_STACK")
+        adm03_stack, adm03_probes, adm03_copy = _copy_runtime("adm03", nonce)
+        adm03_runtime = adm03_stack / "runtime"
+        adm03_input = _adm03_input(nonce, bindings)
+        adm03_input_file = _write_input(adm03_probes / "adm03-input.json", adm03_input)
+        adm03_input["digest"] = adm03_input_file["digest"]
+        _set_stage("ADM03_AGGREGATION")
+        adm03 = _run_suite("adm03", nonce, adm03_runtime, adm03_probes)
+        _adm03_output(adm03, adm03_input, nonce, bindings, adm03_runtime)
+        _remove_stack(adm03_stack)
+        adm03_stack = None
+        _expect(
+            main_removed_before_adm03, "ADM-03 was not isolated from the main stack"
+        )
+        _expect(
+            not any(_WORK_ROOT.iterdir()), "work root is not empty after stack removal"
+        )
+        _WORK_ROOT.rmdir()
+    finally:
+        for stack in (main_stack, adm03_stack):
+            if stack is not None and stack.exists():
+                _remove_stack(stack)
+        if _WORK_ROOT.exists() and not any(_WORK_ROOT.iterdir()):
+            _WORK_ROOT.rmdir()
+
+    _set_stage("ASSEMBLY")
+    return {
+        "schema": _SCHEMA,
+        "authority": _AUTHORITY,
+        "recorded_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "run_nonce": nonce,
+        "harness": harness,
+        "source_artifacts": artifacts,
+        "bindings": bindings,
+        "manifest": manifest,
+        "main": main,
+        "adm03": adm03,
+        "execution": {
+            "sequence": [
+                "manifest",
+                "main",
+                "destroy-main-stack",
+                "create-isolated-adm03-stack",
+                "adm03",
+                "destroy-adm03-stack",
+            ],
+            "main_runtime_copy": main_copy,
+            "adm03_runtime_copy": adm03_copy,
+            "main_removed_before_adm03": main_removed_before_adm03,
+            "mutable_stacks_removed": True,
+            "network": "none",
+            "suite_process_environment": "env-i-seven-exact-ARAGORN-variables",
+        },
+        "decision": _decision_document("NOT_TESTED"),
+        "limitations": _LIMITATIONS,
+    }
+
+
+def _failure(exc: Exception) -> dict[str, Any]:
+    return {
+        "schema": _SCHEMA,
+        "authority": _AUTHORITY,
+        "recorded_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "decision": _decision_document("FAIL_CLOSED"),
+        "limitations": _LIMITATIONS,
+        "failure": {
+            "code": "LIVE_CAPTURE_FAILED_CLOSED",
+            "stage": _STAGE,
+            "type": type(exc).__name__,
+            "message": str(exc),
+        },
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments:
+        print("usage: openclaw_final_admission_v2_systemd_probe.py", file=sys.stderr)
+        return 64
+    try:
+        result = _collect()
+        status = 0
+    except Exception as exc:  # noqa: BLE001 - failed captures self-describe
+        result = _failure(exc)
+        status = 2
+    p37c._publish(_OUTPUT, result)
+    return status
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

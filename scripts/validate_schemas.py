@@ -105,6 +105,9 @@ from aragorn.admission_protected_final_combined_v2_route_coverage import (
 from aragorn.admission_protected_final_combined_v2_session_snapshot_consumer import (
     verify_openclaw_final_combined_v2_session_snapshot_consumer,
 )
+from aragorn.admission_protected_final_combined_v2_session_snapshot_consumer_catalog_fixed import (
+    verify_openclaw_final_combined_v2_session_snapshot_consumer_catalog_fixed,
+)
 from aragorn.admission_protected_final_fresh_session_reset import (
     verify_openclaw_final_fresh_session_reset,
 )
@@ -3490,6 +3493,42 @@ def main() -> int:
             "protected final V2 catalog-fixed prompt qualification changed"
         )
 
+    final_v2_catalog_session_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-session-snapshot-consumer-"
+        "systemd-p3-final-catalog-fixed-2026-08-22.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v2-catalog-session-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_catalog_session_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_catalog_session_qualification = (
+            verify_openclaw_final_combined_v2_session_snapshot_consumer_catalog_fixed(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_catalog_session_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-session-snapshot-consumer-"
+        "catalog-fixed-route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_catalog_session_qualification = load(
+        final_v2_catalog_session_qualification_path
+    )
+    if (
+        final_v2_catalog_session_qualification
+        != retained_final_v2_catalog_session_qualification
+        or final_v2_catalog_session_qualification_path.read_bytes()
+        != canonical_json(final_v2_catalog_session_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 catalog-fixed session qualification changed"
+        )
+
     final_v2_config_evidence_path = admission_evidence / (
         "runtime-action-worker-final-combined-v2-route-config-entry-activation-"
         "systemd-p3-final-catalog-fixed-2026-08-22.json"
@@ -3528,6 +3567,7 @@ def main() -> int:
             final_v2_catalog_fresh_evidence_path,
             final_v2_catalog_cron_evidence_path,
             final_v2_catalog_prompt_evidence_path,
+            final_v2_catalog_session_evidence_path,
             final_v2_config_evidence_path,
         ):
             raw = path.read_bytes()

@@ -81,6 +81,9 @@ from aragorn.admission_protected_final_combined_v2_archive_replacement import (
 from aragorn.admission_protected_final_combined_v2_catalog_fixed_fresh_session_reset import (
     verify_openclaw_final_combined_v2_catalog_fixed_fresh_session_reset,
 )
+from aragorn.admission_protected_final_combined_v2_chat_session_snapshot_consumer_catalog_fixed import (
+    verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_catalog_fixed,
+)
 from aragorn.admission_protected_final_combined_v2_config_activation import (
     verify_openclaw_final_combined_v2_config_activation,
 )
@@ -3527,6 +3530,38 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V2 catalog-fixed session qualification changed"
+        )
+
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v2-catalog-chat-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_catalog_session_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_catalog_chat_qualification = (
+            verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_catalog_fixed(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_catalog_chat_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-chat-session-snapshot-consumer-"
+        "catalog-fixed-route-coverage-v1-2026-08-22.json"
+    )
+    retained_final_v2_catalog_chat_qualification = load(
+        final_v2_catalog_chat_qualification_path
+    )
+    if (
+        final_v2_catalog_chat_qualification
+        != retained_final_v2_catalog_chat_qualification
+        or final_v2_catalog_chat_qualification_path.read_bytes()
+        != canonical_json(final_v2_catalog_chat_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 catalog-fixed chat qualification changed"
         )
 
     final_v2_config_evidence_path = admission_evidence / (

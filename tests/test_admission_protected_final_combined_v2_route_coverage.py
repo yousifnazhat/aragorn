@@ -37,6 +37,10 @@ _CHILD_RECEIPTS = {
         "phase3-openclaw-protected-final-combined-v2-prompt-rebuild-catalog-"
         "fixed-route-coverage-v1-2026-08-22.json"
     ),
+    "catalog_fixed_session_snapshot_consumer": (
+        "phase3-openclaw-protected-final-combined-v2-session-snapshot-consumer-"
+        "catalog-fixed-route-coverage-v1-2026-08-22.json"
+    ),
     "archive_post_write_activation_prevention": (
         "phase3-openclaw-protected-final-combined-v2-archive-source-force-"
         "replacement-route-coverage-v1-2026-08-22.json"
@@ -79,10 +83,10 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             for child in subject._CHILDREN
         )
 
-    def test_exact_five_route_receipt_with_all_broad_eligibility_false(self) -> None:
+    def test_exact_six_route_receipt_with_all_broad_eligibility_false(self) -> None:
         result = self.compose()
 
-        self.assertEqual(result["profile"]["counts"], {"PASS": 5, "NOT_TESTED": 16})
+        self.assertEqual(result["profile"]["counts"], {"PASS": 6, "NOT_TESTED": 15})
         self.assertEqual(len(result["profile"]["routes"]), 21)
         self.assertEqual(
             {
@@ -111,6 +115,16 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             "ARCHIVE_POST_WRITE_CATALOG_REJECTION_MAY_DENY_SKILL_DISCOVERY_AVAILABILITY",
             result["limitations"],
         )
+        for limitation in (
+            "SESSION_SNAPSHOT_COMPILED_CLOSURE_ACQUISITION_PRE_ROUTE_ONLY",
+            "NO_POST_ROUTE_SESSION_CLOSURE_PROVENANCE_OR_CONTINUOUS_IMMUTABILITY_CLAIM",
+            "SESSION_SNAPSHOT_DETERMINISTIC_COMPILED_REPLAY_NOT_NATIVE_AGENT_EXECUTION",
+            "SESSION_SNAPSHOT_NATIVE_PROVIDER_REQUEST_BODY_AND_SYSTEM_PROMPT_REPORT_NOT_OBSERVED",
+            "SESSION_SNAPSHOT_FOURTEEN_SELECTED_MODULES_NOT_FULL_TRANSITIVE_IMPORT_CLOSURE",
+            "SESSION_SNAPSHOT_COMPILED_CLOSURE_REUSED_FROM_PRIOR_DIFFERENT_IMAGE_CAPTURE",
+            "SESSION_SNAPSHOT_ORIGINAL_PROVIDER_REQUEST_AND_SESSION_STORE_RAW_BYTES_NOT_RETAINED",
+        ):
+            self.assertIn(limitation, result["limitations"])
         self.assertEqual(_RECEIPT.read_bytes(), canonical_json(result) + b"\n")
         self.assertEqual(json.loads(_RECEIPT.read_bytes()), result)
 

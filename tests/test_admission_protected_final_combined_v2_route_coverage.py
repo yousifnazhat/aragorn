@@ -41,6 +41,10 @@ _CHILD_RECEIPTS = {
         "phase3-openclaw-protected-final-combined-v2-session-snapshot-consumer-"
         "catalog-fixed-route-coverage-v1-2026-08-22.json"
     ),
+    "catalog_fixed_chat_session_snapshot_consumer": (
+        "phase3-openclaw-protected-final-combined-v2-chat-session-snapshot-consumer-"
+        "catalog-fixed-route-coverage-v1-2026-08-22.json"
+    ),
     "archive_post_write_activation_prevention": (
         "phase3-openclaw-protected-final-combined-v2-archive-source-force-"
         "replacement-route-coverage-v1-2026-08-22.json"
@@ -61,32 +65,45 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         store = CAS(temporary.name)
+        retained: set[str] = set()
         for child in subject._CHILDREN:
-            raw = (_ROOT / child["module"]._EVIDENCE["path"]).read_bytes()
+            module = child["module"]
+            evidence = (
+                module._EVIDENCE
+                if hasattr(module, "_EVIDENCE")
+                else module.parent._EVIDENCE
+            )
+            raw = (_ROOT / evidence["path"]).read_bytes()
+            if evidence["digest"] in retained:
+                continue
             store.put_expected(
                 BytesIO(raw),
-                expected_digest=child["module"]._EVIDENCE["digest"],
+                expected_digest=evidence["digest"],
                 max_bytes=len(raw),
             )
+            retained.add(evidence["digest"])
         return subject.compose_openclaw_final_combined_v2_route_coverage(
             evidence_cas=store
         )
 
     def repin_result(self, name: str, result: dict[str, object]) -> tuple[dict, ...]:
+        return self.repin_results({name: result})
+
+    def repin_results(self, results: dict[str, dict[str, object]]) -> tuple[dict, ...]:
         return tuple(
             {
                 **child,
-                "result_digest": canonical_digest(result),
+                "result_digest": canonical_digest(results[child["name"]]),
             }
-            if child["name"] == name
+            if child["name"] in results
             else child
             for child in subject._CHILDREN
         )
 
-    def test_exact_six_route_receipt_with_all_broad_eligibility_false(self) -> None:
+    def test_exact_seven_qualifications_from_six_captures(self) -> None:
         result = self.compose()
 
-        self.assertEqual(result["profile"]["counts"], {"PASS": 6, "NOT_TESTED": 15})
+        self.assertEqual(result["profile"]["counts"], {"PASS": 7, "NOT_TESTED": 14})
         self.assertEqual(len(result["profile"]["routes"]), 21)
         self.assertEqual(
             {
@@ -100,6 +117,29 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             all(result["decision"][key] is False for key in subject._ELIGIBILITY_KEYS)
         )
         self.assertFalse(result["capture_model"]["aggregate_execution_observed"])
+        self.assertEqual(result["capture_model"]["qualification_count"], 7)
+        self.assertEqual(result["capture_model"]["distinct_capture_count"], 6)
+        captures = {
+            child["route"]: child["capture"]["digest"]
+            for child in result["bindings"]["child_qualifications"]
+        }
+        self.assertEqual(len(set(captures.values())), 6)
+        self.assertEqual(
+            captures,
+            {child["route"]: child["capture_digest"] for child in subject._CHILDREN},
+        )
+        self.assertEqual(
+            captures[subject.session._ROUTE], captures[subject.chat._ROUTE]
+        )
+        self.assertEqual(
+            result["capture_model"]["shared_capture_groups"],
+            [
+                {
+                    "capture_digest": subject.session._EVIDENCE["digest"],
+                    "routes": [subject.session._ROUTE, subject.chat._ROUTE],
+                }
+            ],
+        )
         self.assertEqual(
             result["bindings"]["verifier_source_path"], subject._VERIFIER_PATH
         )
@@ -116,6 +156,11 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             result["limitations"],
         )
         for limitation in (
+            "CHAT_ROUTE_REUSES_SHARED_SESSION_CAPTURE_NOT_INDEPENDENT_EXECUTION",
+            "RAW_CAPTURE_ROUTE_ID_REMAINS_SESSION_SNAPSHOT_CONSUMER",
+            "BLACK_BOX_NATIVE_CHAT_PERSISTENCE_WITHOUT_DIRECT_SESSION_UPDATE_TRACE",
+            "ONE_TAMPER_RECOVERY_TRIGGER_NOT_GENERAL_CHAT_ROUTE_COVERAGE",
+            "MODEL_TURNS_FAILED_NO_PROVIDER_BODY_SUCCESSFUL_REPLY_OR_DELIVERY_CLAIM",
             "SESSION_SNAPSHOT_COMPILED_CLOSURE_ACQUISITION_PRE_ROUTE_ONLY",
             "NO_POST_ROUTE_SESSION_CLOSURE_PROVENANCE_OR_CONTINUOUS_IMMUTABILITY_CLAIM",
             "SESSION_SNAPSHOT_DETERMINISTIC_COMPILED_REPLAY_NOT_NATIVE_AGENT_EXECUTION",
@@ -167,6 +212,175 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
                 return_value=bool_count,
             ),
             self.assertRaises(AdmissionEvidenceError),
+        ):
+            self.compose()
+
+        name = "catalog_fixed_chat_session_snapshot_consumer"
+        mismatch = deepcopy(self.child_results[name])
+        mismatch["bindings"]["session_snapshot_observation"]["canonical_digest"] = (
+            "sha256:" + "0" * 64
+        )
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_result(name, mismatch)),
+            patch.object(
+                subject.chat,
+                "verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_"
+                "catalog_fixed",
+                return_value=mismatch,
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "shared capture binding"),
+        ):
+            self.compose()
+
+        name = "catalog_fixed_fresh_session_reset"
+        alias = deepcopy(self.child_results[name])
+        alias["bindings"]["fresh_session_reset_observation"]["digest"] = (
+            self.child_results["config_entry_activation"]["bindings"][
+                "config_activation_observation"
+            ]["digest"]
+        )
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_result(name, alias)),
+            patch.object(
+                subject.fresh,
+                "verify_openclaw_final_combined_v2_catalog_fixed_fresh_session_reset",
+                return_value=alias,
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "capture digest"),
+        ):
+            self.compose()
+
+        name = "catalog_fixed_chat_session_snapshot_consumer"
+        contradiction = deepcopy(self.child_results[name])
+        contradiction["bindings"]["parent_qualification_canonical_digest"] = (
+            "sha256:" + "0" * 64
+        )
+        contradiction["bindings"]["parent_verifier"]["digest"] = "sha256:" + "1" * 64
+        contradiction["bindings"]["shared_capture"] = {
+            "capture_relationship": "INDEPENDENT_CAPTURE",
+            "source_route": subject.config._ROUTE,
+        }
+        contradiction["route_semantics"]["shared_capture_independent"] = True
+        contradiction["route_semantics"]["source_capture_route"] = subject.config._ROUTE
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_result(name, contradiction)),
+            patch.object(
+                subject.chat,
+                "verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_"
+                "catalog_fixed",
+                return_value=contradiction,
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "parent relationship"),
+        ):
+            self.compose()
+
+        config_name = "config_entry_activation"
+        fresh_name = "catalog_fixed_fresh_session_reset"
+        swapped = {
+            config_name: deepcopy(self.child_results[config_name]),
+            fresh_name: deepcopy(self.child_results[fresh_name]),
+        }
+        config_capture = deepcopy(
+            swapped[config_name]["bindings"]["config_activation_observation"]
+        )
+        fresh_capture = deepcopy(
+            swapped[fresh_name]["bindings"]["fresh_session_reset_observation"]
+        )
+        swapped[config_name]["bindings"]["config_activation_observation"] = (
+            fresh_capture
+        )
+        swapped[fresh_name]["bindings"]["fresh_session_reset_observation"] = (
+            config_capture
+        )
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_results(swapped)),
+            patch.object(
+                subject.config,
+                "verify_openclaw_final_combined_v2_config_activation",
+                return_value=swapped[config_name],
+            ),
+            patch.object(
+                subject.fresh,
+                "verify_openclaw_final_combined_v2_catalog_fixed_fresh_session_reset",
+                return_value=swapped[fresh_name],
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "capture digest"),
+        ):
+            self.compose()
+
+        session_name = "catalog_fixed_session_snapshot_consumer"
+        chat_name = "catalog_fixed_chat_session_snapshot_consumer"
+        unsigned_parent = deepcopy(self.child_results[session_name])
+        unsigned_parent["limitations"].append("UNSIGNED_PARENT_RESULT_MUTATION")
+        repinned_chat = deepcopy(self.child_results[chat_name])
+        repinned_chat["bindings"]["parent_qualification_canonical_digest"] = (
+            canonical_digest(unsigned_parent)
+        )
+        unsigned_repin = {
+            session_name: unsigned_parent,
+            chat_name: repinned_chat,
+        }
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_results(unsigned_repin)),
+            patch.object(
+                subject.session,
+                "verify_openclaw_final_combined_v2_session_snapshot_consumer_"
+                "catalog_fixed",
+                return_value=unsigned_parent,
+            ),
+            patch.object(
+                subject.chat,
+                "verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_"
+                "catalog_fixed",
+                return_value=repinned_chat,
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "parent relationship"),
+        ):
+            self.compose()
+
+        rebound = {
+            config_name: deepcopy(self.child_results[config_name]),
+            session_name: deepcopy(self.child_results[session_name]),
+            chat_name: deepcopy(self.child_results[chat_name]),
+        }
+        config_capture = deepcopy(
+            rebound[config_name]["bindings"]["config_activation_observation"]
+        )
+        session_capture = deepcopy(
+            rebound[session_name]["bindings"]["session_snapshot_observation"]
+        )
+        rebound[config_name]["bindings"]["config_activation_observation"] = (
+            session_capture
+        )
+        rebound[session_name]["bindings"]["session_snapshot_observation"] = (
+            config_capture
+        )
+        rebound[chat_name]["bindings"]["session_snapshot_observation"] = deepcopy(
+            config_capture
+        )
+        rebound[chat_name]["bindings"]["parent_qualification_canonical_digest"] = (
+            canonical_digest(rebound[session_name])
+        )
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_results(rebound)),
+            patch.object(
+                subject.config,
+                "verify_openclaw_final_combined_v2_config_activation",
+                return_value=rebound[config_name],
+            ),
+            patch.object(
+                subject.session,
+                "verify_openclaw_final_combined_v2_session_snapshot_consumer_"
+                "catalog_fixed",
+                return_value=rebound[session_name],
+            ),
+            patch.object(
+                subject.chat,
+                "verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_"
+                "catalog_fixed",
+                return_value=rebound[chat_name],
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "capture digest"),
         ):
             self.compose()
 
@@ -248,9 +462,19 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             {**child, "name": "renamed_child"} if index == 1 else child
             for index, child in enumerate(subject._CHILDREN)
         )
+        retargeted_capture = tuple(
+            {**child, "capture_binding": "configuration"} if index == 0 else child
+            for index, child in enumerate(subject._CHILDREN)
+        )
+        repinned_capture = tuple(
+            {**child, "capture_digest": "sha256:" + "0" * 64} if index == 0 else child
+            for index, child in enumerate(subject._CHILDREN)
+        )
         for children in (
             tuple(reversed(subject._CHILDREN)),
             renamed,
+            retargeted_capture,
+            repinned_capture,
             subject._CHILDREN + (subject._CHILDREN[0],),
         ):
             with (

@@ -1,4 +1,4 @@
-"""Compose six exact current-contract V2 route qualifications."""
+"""Compose seven current-contract V2 qualifications from six captures."""
 
 from __future__ import annotations
 
@@ -10,6 +10,9 @@ from typing import Any
 from . import admission_protected_final_combined_v2_archive_replacement as archive
 from . import (
     admission_protected_final_combined_v2_catalog_fixed_fresh_session_reset as fresh,
+)
+from . import (
+    admission_protected_final_combined_v2_chat_session_snapshot_consumer_catalog_fixed as chat,
 )
 from . import admission_protected_final_combined_v2_config_activation as config
 from . import (
@@ -115,6 +118,7 @@ _EXPECTED_PASS_ROUTES = frozenset(
         cron._ROUTE,
         prompt._ROUTE,
         session._ROUTE,
+        chat._ROUTE,
         archive._ROUTE,
     }
 )
@@ -131,6 +135,10 @@ _CHILDREN = (
         ),
         "result_digest": (
             "sha256:488e8fb5dd5e1664f690af4f5740ab05f8ffcccb70ea1f988f75d5a899a11351"
+        ),
+        "capture_binding": "config_activation_observation",
+        "capture_digest": (
+            "sha256:34772c46c42541c4e76c1f9888b2ad35c8aa26d3b63746d8853ad1826a51373f"
         ),
         "route": config._ROUTE,
         "image": config._IMAGE,
@@ -151,6 +159,10 @@ _CHILDREN = (
         "result_digest": (
             "sha256:006e169cb8f45ba5d364b9402b3a44b58e45df19390859939d6884ead89708c5"
         ),
+        "capture_binding": "fresh_session_reset_observation",
+        "capture_digest": (
+            "sha256:f804ea2ce5162e5b9317d544a0363d0b247844d6cfb07e4804cd0dc230986982"
+        ),
         "route": fresh._ROUTE,
         "image": fresh._IMAGE,
     },
@@ -168,6 +180,10 @@ _CHILDREN = (
         "result_digest": (
             "sha256:1f00f61957d12325b329dea4ca9cdb8f3f8aa3012380f430b1b358300868799b"
         ),
+        "capture_binding": "cron_rescan_observation",
+        "capture_digest": (
+            "sha256:7914578bfadc88a33e0f2ea0ee97350de7be8881e852326a07294b74c5f3e003"
+        ),
         "route": cron._ROUTE,
         "image": cron._IMAGE,
     },
@@ -184,6 +200,10 @@ _CHILDREN = (
         ),
         "result_digest": (
             "sha256:54f0132b56b31a1e3f3f07e58b9e0794fc32c2cbd44c35e718e1e7c8c5919869"
+        ),
+        "capture_binding": "prompt_rebuild_observation",
+        "capture_digest": (
+            "sha256:5ba5f02971788a9320f0de8a5ca4bbbdface6f216bafd3510fa42615d670cbb3"
         ),
         "route": prompt._ROUTE,
         "image": prompt._IMAGE,
@@ -204,8 +224,36 @@ _CHILDREN = (
         "result_digest": (
             "sha256:a8b82efd6195ece5f00d2770c6778378305017318017d4d2419fd524f77d3315"
         ),
+        "capture_binding": "session_snapshot_observation",
+        "capture_digest": (
+            "sha256:f4745ede0f7b4ed044df709ec8fa560dfa5ac98ce5139d766e01fa9f50f22c0f"
+        ),
         "route": session._ROUTE,
         "image": session._IMAGE,
+    },
+    {
+        "name": "catalog_fixed_chat_session_snapshot_consumer",
+        "module": chat,
+        "verifier": (
+            "verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_"
+            "catalog_fixed"
+        ),
+        "verifier_path": (
+            "src/aragorn/admission_protected_final_combined_v2_chat_session_"
+            "snapshot_consumer_catalog_fixed.py"
+        ),
+        "verifier_digest": (
+            "sha256:f14ab10c8f005cc678a97a082666f66f886e4f3543a06426e53923f5f947a4d5"
+        ),
+        "result_digest": (
+            "sha256:db740fce3d399a2ea77305ecef279369c02c4774ecb0a0892115dcb380e3bb35"
+        ),
+        "capture_binding": "session_snapshot_observation",
+        "capture_digest": (
+            "sha256:f4745ede0f7b4ed044df709ec8fa560dfa5ac98ce5139d766e01fa9f50f22c0f"
+        ),
+        "route": chat._ROUTE,
+        "image": chat.parent._IMAGE,
     },
     {
         "name": "archive_post_write_activation_prevention",
@@ -220,6 +268,10 @@ _CHILDREN = (
         "result_digest": (
             "sha256:b1ca41a414eb51c47620e4eee26f739f99e7ff19e924c3a0798af55fa8f42d58"
         ),
+        "capture_binding": "archive_replacement_observation",
+        "capture_digest": (
+            "sha256:3f6c258002ee8bd02ca764151145dbf11e58ecf80558f4635a773b6504d37e5b"
+        ),
         "route": archive._ROUTE,
         "image": archive._IMAGE,
     },
@@ -229,6 +281,8 @@ _EXPECTED_CHILD_SEQUENCE = (
         "config_entry_activation",
         config._ROUTE,
         "src/aragorn/admission_protected_final_combined_v2_config_activation.py",
+        "config_activation_observation",
+        "sha256:34772c46c42541c4e76c1f9888b2ad35c8aa26d3b63746d8853ad1826a51373f",
     ),
     (
         "catalog_fixed_fresh_session_reset",
@@ -237,6 +291,8 @@ _EXPECTED_CHILD_SEQUENCE = (
             "src/aragorn/admission_protected_final_combined_v2_catalog_fixed_"
             "fresh_session_reset.py"
         ),
+        "fresh_session_reset_observation",
+        "sha256:f804ea2ce5162e5b9317d544a0363d0b247844d6cfb07e4804cd0dc230986982",
     ),
     (
         "catalog_fixed_cron_rescan",
@@ -245,6 +301,8 @@ _EXPECTED_CHILD_SEQUENCE = (
             "src/aragorn/admission_protected_final_combined_v2_cron_rescan_"
             "catalog_fixed.py"
         ),
+        "cron_rescan_observation",
+        "sha256:7914578bfadc88a33e0f2ea0ee97350de7be8881e852326a07294b74c5f3e003",
     ),
     (
         "catalog_fixed_prompt_rebuild",
@@ -253,6 +311,8 @@ _EXPECTED_CHILD_SEQUENCE = (
             "src/aragorn/admission_protected_final_combined_v2_prompt_rebuild_"
             "catalog_fixed.py"
         ),
+        "prompt_rebuild_observation",
+        "sha256:5ba5f02971788a9320f0de8a5ca4bbbdface6f216bafd3510fa42615d670cbb3",
     ),
     (
         "catalog_fixed_session_snapshot_consumer",
@@ -261,11 +321,25 @@ _EXPECTED_CHILD_SEQUENCE = (
             "src/aragorn/admission_protected_final_combined_v2_session_snapshot_"
             "consumer_catalog_fixed.py"
         ),
+        "session_snapshot_observation",
+        "sha256:f4745ede0f7b4ed044df709ec8fa560dfa5ac98ce5139d766e01fa9f50f22c0f",
+    ),
+    (
+        "catalog_fixed_chat_session_snapshot_consumer",
+        chat._ROUTE,
+        (
+            "src/aragorn/admission_protected_final_combined_v2_chat_session_"
+            "snapshot_consumer_catalog_fixed.py"
+        ),
+        "session_snapshot_observation",
+        "sha256:f4745ede0f7b4ed044df709ec8fa560dfa5ac98ce5139d766e01fa9f50f22c0f",
     ),
     (
         "archive_post_write_activation_prevention",
         archive._ROUTE,
         "src/aragorn/admission_protected_final_combined_v2_archive_replacement.py",
+        "archive_replacement_observation",
+        "sha256:3f6c258002ee8bd02ca764151145dbf11e58ecf80558f4635a773b6504d37e5b",
     ),
 )
 
@@ -273,17 +347,26 @@ _EXPECTED_CHILD_SEQUENCE = (
 def compose_openclaw_final_combined_v2_route_coverage(
     *, evidence_cas: CAS
 ) -> dict[str, Any]:
-    """Reverify and compose six separate exact child captures without authority."""
+    """Compose seven exact qualifications from six captures without authority."""
 
     children: list[dict[str, Any]] = []
     names: set[str] = set()
     pass_routes: set[str] = set()
+    results_by_name: dict[str, Mapping[str, Any]] = {}
+    captures_by_name: dict[str, Mapping[str, Any]] = {}
+    routes_by_capture: dict[str, list[str]] = {}
     shared: dict[str, Any] | None = None
     runtime: dict[str, Any] | None = None
 
     try:
         child_sequence = tuple(
-            (child["name"], child["route"], child["verifier_path"])
+            (
+                child["name"],
+                child["route"],
+                child["verifier_path"],
+                child["capture_binding"],
+                child["capture_digest"],
+            )
             for child in _CHILDREN
         )
         if child_sequence != _EXPECTED_CHILD_SEQUENCE:
@@ -308,6 +391,24 @@ def compose_openclaw_final_combined_v2_route_coverage(
             if canonical_digest(result) != child["result_digest"]:
                 raise AdmissionEvidenceError(f"{name} canonical result drifted")
             _verify_child(result, child)
+            results_by_name[name] = result
+            capture = result["bindings"][child["capture_binding"]]
+            if not isinstance(capture, Mapping):
+                raise AdmissionEvidenceError(f"{name} capture binding is invalid")
+            capture_digest = capture.get("digest")
+            if (
+                type(capture_digest) is not str
+                or len(capture_digest) != 71
+                or not capture_digest.startswith("sha256:")
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in capture_digest[7:]
+                )
+                or capture_digest != child["capture_digest"]
+            ):
+                raise AdmissionEvidenceError(f"{name} capture digest is invalid")
+            captures_by_name[name] = capture
+            routes_by_capture.setdefault(capture_digest, []).append(route)
 
             child_shared = {key: result["bindings"][key] for key in _SHARED_BINDINGS}
             if shared is None:
@@ -320,6 +421,10 @@ def compose_openclaw_final_combined_v2_route_coverage(
 
             children.append(
                 {
+                    "capture": {
+                        "binding": child["capture_binding"],
+                        "digest": capture_digest,
+                    },
                     "image": result["bindings"]["image"],
                     "name": name,
                     "result_canonical_digest": child["result_digest"],
@@ -331,13 +436,63 @@ def compose_openclaw_final_combined_v2_route_coverage(
                     },
                 }
             )
+
+        children_by_name = {child["name"]: child for child in children}
+        session_capture = captures_by_name["catalog_fixed_session_snapshot_consumer"]
+        chat_capture = captures_by_name["catalog_fixed_chat_session_snapshot_consumer"]
+        if chat_capture != session_capture:
+            raise AdmissionEvidenceError(
+                "V2 chat/session shared capture binding changed"
+            )
+
+        session_child = children_by_name["catalog_fixed_session_snapshot_consumer"]
+        chat_result = results_by_name["catalog_fixed_chat_session_snapshot_consumer"]
+        if (
+            session_child["result_canonical_digest"] != chat._PARENT_RESULT_DIGEST
+            or chat_result["bindings"]["parent_qualification_canonical_digest"]
+            != chat._PARENT_RESULT_DIGEST
+            or session_child["verifier"]
+            != {
+                "digest": chat._PARENT_MODULE["digest"],
+                "path": chat._PARENT_MODULE["path"],
+            }
+            or chat_result["bindings"]["parent_verifier"]
+            != {
+                **chat._PARENT_SOURCE,
+                "digest": chat._PARENT_MODULE["digest"],
+                "path": chat._PARENT_MODULE["path"],
+            }
+            or chat_result["bindings"]["shared_capture"]
+            != {
+                "capture_relationship": (
+                    "SHARED_WITH_SESSION_SNAPSHOT_CONSUMER_NOT_INDEPENDENT_CAPTURE"
+                ),
+                "source_route": session._ROUTE,
+            }
+            or chat_result["route_semantics"]["shared_capture_independent"] is not False
+            or chat_result["route_semantics"]["source_capture_route"] != session._ROUTE
+        ):
+            raise AdmissionEvidenceError("V2 chat/session parent relationship changed")
+
+        shared_capture_groups = [
+            {"capture_digest": digest, "routes": routes}
+            for digest, routes in routes_by_capture.items()
+            if len(routes) > 1
+        ]
+        if len(routes_by_capture) != 6 or shared_capture_groups != [
+            {
+                "capture_digest": session_capture["digest"],
+                "routes": [session._ROUTE, chat._ROUTE],
+            }
+        ]:
+            raise AdmissionEvidenceError("exact V2 six-capture model changed")
     except AdmissionEvidenceError:
         raise
     except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
         raise AdmissionEvidenceError(f"invalid V2 child qualification: {exc}") from exc
 
-    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 6:
-        raise AdmissionEvidenceError("exact six V2 child routes are required")
+    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 7:
+        raise AdmissionEvidenceError("exact seven V2 route qualifications are required")
     if shared is None or runtime is None:
         raise AdmissionEvidenceError("V2 child contract bindings are missing")
     implementation_digest = _digest(Path(__file__).resolve().read_bytes())
@@ -356,7 +511,8 @@ def compose_openclaw_final_combined_v2_route_coverage(
     return {
         "schema": ("aragorn/admission-protected-final-combined-v2-route-coverage/v1"),
         "assurance": (
-            "SIX_EXACT_INDEPENDENTLY_REVERIFIED_SEPARATE_CAPTURE_ROUTE_PASSES_ONLY"
+            "SEVEN_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_SIX_CAPTURES_"
+            "ONE_SHARED_CHAT_SUBSEQUENCE_ONLY"
         ),
         "bindings": {
             **{key: dict(shared[key]) for key in _SHARED_BINDINGS},
@@ -366,17 +522,28 @@ def compose_openclaw_final_combined_v2_route_coverage(
         },
         "capture_model": {
             "aggregate_execution_observed": False,
-            "kind": "SIX_SEPARATE_EXACT_CHILD_CAPTURES",
+            "distinct_capture_count": len(routes_by_capture),
+            "kind": (
+                "SEVEN_EXACT_ROUTE_QUALIFICATIONS_FROM_SIX_CAPTURES_"
+                "ONE_SHARED_CHAT_SUBSEQUENCE"
+            ),
+            "qualification_count": 7,
             "same_image_required": False,
+            "shared_capture_groups": shared_capture_groups,
         },
         "decision": {
             "status": "PARTIAL_SEPARATE_CAPTURE_V2_ROUTE_COVERAGE",
             **{key: False for key in _ELIGIBILITY_KEYS},
         },
         "limitations": [
-            "SIX_EXACT_SEPARATE_CAPTURE_ROUTE_PASSES_COMPOSED",
-            "FIFTEEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
+            "SEVEN_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_SIX_CAPTURES",
+            "FOURTEEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
             "SEPARATE_CAPTURES_DO_NOT_ESTABLISH_AGGREGATE_ADMISSION",
+            "CHAT_ROUTE_REUSES_SHARED_SESSION_CAPTURE_NOT_INDEPENDENT_EXECUTION",
+            "RAW_CAPTURE_ROUTE_ID_REMAINS_SESSION_SNAPSHOT_CONSUMER",
+            "BLACK_BOX_NATIVE_CHAT_PERSISTENCE_WITHOUT_DIRECT_SESSION_UPDATE_TRACE",
+            "ONE_TAMPER_RECOVERY_TRIGGER_NOT_GENERAL_CHAT_ROUTE_COVERAGE",
+            "MODEL_TURNS_FAILED_NO_PROVIDER_BODY_SUCCESSFUL_REPLY_OR_DELIVERY_CLAIM",
             "SESSION_SNAPSHOT_COMPILED_CLOSURE_ACQUISITION_PRE_ROUTE_ONLY",
             "NO_POST_ROUTE_SESSION_CLOSURE_PROVENANCE_OR_CONTINUOUS_IMMUTABILITY_CLAIM",
             "SESSION_SNAPSHOT_DETERMINISTIC_COMPILED_REPLAY_NOT_NATIVE_AGENT_EXECUTION",
@@ -393,7 +560,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "NO_AGGREGATE_ADMISSION_EDR_PHASE3_RELEASE_OR_INSTALLER_AUTHORITY",
         ],
         "profile": {
-            "counts": {"PASS": 6, "NOT_TESTED": 15},
+            "counts": {"PASS": 7, "NOT_TESTED": 14},
             "name": _PROFILE,
             "route_inventory_canonical_digest": canonical_digest(list(_ROUTES)),
             "routes": routes,

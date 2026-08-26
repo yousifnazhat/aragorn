@@ -1,4 +1,4 @@
-"""Compose seven current-contract V2 qualifications from six captures."""
+"""Compose eight current-contract V2 qualifications from seven captures."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from . import (
     admission_protected_final_combined_v2_chat_session_snapshot_consumer_catalog_fixed as chat,
 )
 from . import admission_protected_final_combined_v2_config_activation as config
+from . import admission_protected_final_combined_v2_curator_restore as curator
 from . import (
     admission_protected_final_combined_v2_cron_rescan_catalog_fixed as cron,
 )
@@ -120,6 +121,7 @@ _EXPECTED_PASS_ROUTES = frozenset(
         session._ROUTE,
         chat._ROUTE,
         archive._ROUTE,
+        curator._ROUTE,
     }
 )
 _CHILDREN = (
@@ -275,6 +277,26 @@ _CHILDREN = (
         "route": archive._ROUTE,
         "image": archive._IMAGE,
     },
+    {
+        "name": "curator_restore_activation",
+        "module": curator,
+        "verifier": "verify_openclaw_final_combined_v2_curator_restore",
+        "verifier_path": (
+            "src/aragorn/admission_protected_final_combined_v2_curator_restore.py"
+        ),
+        "verifier_digest": (
+            "sha256:f03ae87ea84a8dc7af9596e79db7cc573b8ac1027949bf6e914674251008eaa6"
+        ),
+        "result_digest": (
+            "sha256:981205655521c9b9fccb760917bdb77cd93fc1f767509ce3648dfe27aae80047"
+        ),
+        "capture_binding": "curator_restore_observation",
+        "capture_digest": (
+            "sha256:4dd8819dbb5dd579480d6f514366b20f1e6f81bd78d608d975c7541f3323b942"
+        ),
+        "route": curator._ROUTE,
+        "image": curator._IMAGE,
+    },
 )
 _EXPECTED_CHILD_SEQUENCE = (
     (
@@ -341,13 +363,20 @@ _EXPECTED_CHILD_SEQUENCE = (
         "archive_replacement_observation",
         "sha256:3f6c258002ee8bd02ca764151145dbf11e58ecf80558f4635a773b6504d37e5b",
     ),
+    (
+        "curator_restore_activation",
+        curator._ROUTE,
+        "src/aragorn/admission_protected_final_combined_v2_curator_restore.py",
+        "curator_restore_observation",
+        "sha256:4dd8819dbb5dd579480d6f514366b20f1e6f81bd78d608d975c7541f3323b942",
+    ),
 )
 
 
 def compose_openclaw_final_combined_v2_route_coverage(
     *, evidence_cas: CAS
 ) -> dict[str, Any]:
-    """Compose seven exact qualifications from six captures without authority."""
+    """Compose eight exact qualifications from seven captures without authority."""
 
     children: list[dict[str, Any]] = []
     names: set[str] = set()
@@ -479,20 +508,20 @@ def compose_openclaw_final_combined_v2_route_coverage(
             for digest, routes in routes_by_capture.items()
             if len(routes) > 1
         ]
-        if len(routes_by_capture) != 6 or shared_capture_groups != [
+        if len(routes_by_capture) != 7 or shared_capture_groups != [
             {
                 "capture_digest": session_capture["digest"],
                 "routes": [session._ROUTE, chat._ROUTE],
             }
         ]:
-            raise AdmissionEvidenceError("exact V2 six-capture model changed")
+            raise AdmissionEvidenceError("exact V2 seven-capture model changed")
     except AdmissionEvidenceError:
         raise
     except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
         raise AdmissionEvidenceError(f"invalid V2 child qualification: {exc}") from exc
 
-    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 7:
-        raise AdmissionEvidenceError("exact seven V2 route qualifications are required")
+    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 8:
+        raise AdmissionEvidenceError("exact eight V2 route qualifications are required")
     if shared is None or runtime is None:
         raise AdmissionEvidenceError("V2 child contract bindings are missing")
     implementation_digest = _digest(Path(__file__).resolve().read_bytes())
@@ -511,7 +540,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
     return {
         "schema": ("aragorn/admission-protected-final-combined-v2-route-coverage/v1"),
         "assurance": (
-            "SEVEN_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_SIX_CAPTURES_"
+            "EIGHT_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_SEVEN_CAPTURES_"
             "ONE_SHARED_CHAT_SUBSEQUENCE_ONLY"
         ),
         "bindings": {
@@ -524,10 +553,10 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "aggregate_execution_observed": False,
             "distinct_capture_count": len(routes_by_capture),
             "kind": (
-                "SEVEN_EXACT_ROUTE_QUALIFICATIONS_FROM_SIX_CAPTURES_"
+                "EIGHT_EXACT_ROUTE_QUALIFICATIONS_FROM_SEVEN_CAPTURES_"
                 "ONE_SHARED_CHAT_SUBSEQUENCE"
             ),
-            "qualification_count": 7,
+            "qualification_count": 8,
             "same_image_required": False,
             "shared_capture_groups": shared_capture_groups,
         },
@@ -536,8 +565,8 @@ def compose_openclaw_final_combined_v2_route_coverage(
             **{key: False for key in _ELIGIBILITY_KEYS},
         },
         "limitations": [
-            "SEVEN_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_SIX_CAPTURES",
-            "FOURTEEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
+            "EIGHT_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_SEVEN_CAPTURES",
+            "THIRTEEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
             "SEPARATE_CAPTURES_DO_NOT_ESTABLISH_AGGREGATE_ADMISSION",
             "CHAT_ROUTE_REUSES_SHARED_SESSION_CAPTURE_NOT_INDEPENDENT_EXECUTION",
             "RAW_CAPTURE_ROUTE_ID_REMAINS_SESSION_SNAPSHOT_CONSUMER",
@@ -556,11 +585,14 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "ARCHIVE_DIRECTORY_INSTALL_LEFT_EXCLUDED_WORKSPACE_SKILL_RESIDUE",
             "ARCHIVE_POST_WRITE_CATALOG_REJECTION_MAY_DENY_SKILL_DISCOVERY_AVAILABILITY",
             "NO_PRE_EFFECT_OR_NO_MUTATION_CLAIM_FOR_ARCHIVE_ROUTE",
+            "EXACT_EPHEMERAL_ARCHIVED_LIFECYCLE_FIXTURE_NOT_NATIVE_CURATOR_SWEEP",
+            "EXACT_SELECTED_LIFECYCLE_ROW_ONLY_NOT_FULL_DATABASE_STATE",
+            "SKILLS_STATUS_ARCHIVED_DIAGNOSTIC_NOT_ACTIVE_CONSUMER_PROOF",
             "SEPARATE_EXACT_CHILD_IMAGE_IDS_RETAINED_NOT_UNIFIED",
             "NO_AGGREGATE_ADMISSION_EDR_PHASE3_RELEASE_OR_INSTALLER_AUTHORITY",
         ],
         "profile": {
-            "counts": {"PASS": 7, "NOT_TESTED": 14},
+            "counts": {"PASS": 8, "NOT_TESTED": 13},
             "name": _PROFILE,
             "route_inventory_canonical_digest": canonical_digest(list(_ROUTES)),
             "routes": routes,

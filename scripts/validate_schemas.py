@@ -87,6 +87,9 @@ from aragorn.admission_protected_final_combined_v2_chat_session_snapshot_consume
 from aragorn.admission_protected_final_combined_v2_config_activation import (
     verify_openclaw_final_combined_v2_config_activation,
 )
+from aragorn.admission_protected_final_combined_v2_curator_restore import (
+    verify_openclaw_final_combined_v2_curator_restore,
+)
 from aragorn.admission_protected_final_combined_v2_cron_rescan import (
     verify_openclaw_final_combined_v2_cron_rescan,
 )
@@ -3595,6 +3598,37 @@ def main() -> int:
     ):
         raise AssertionError("protected final V2 config qualification changed")
 
+    final_v2_curator_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-curator-restore-activation-"
+        "systemd-p3-final-catalog-fixed-2026-08-26.json"
+    )
+    with TemporaryDirectory(prefix="aragorn-protected-final-v2-curator-") as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_curator_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_curator_qualification = (
+            verify_openclaw_final_combined_v2_curator_restore(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_curator_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-curator-restore-route-"
+        "coverage-v1-2026-08-26.json"
+    )
+    retained_final_v2_curator_qualification = load(
+        final_v2_curator_qualification_path
+    )
+    if (
+        final_v2_curator_qualification != retained_final_v2_curator_qualification
+        or final_v2_curator_qualification_path.read_bytes()
+        != canonical_json(final_v2_curator_qualification) + b"\n"
+    ):
+        raise AssertionError("protected final V2 curator qualification changed")
+
     with TemporaryDirectory(prefix="aragorn-protected-final-v2-coverage-") as temporary:
         evidence_cas = CAS(temporary)
         for path in (
@@ -3604,6 +3638,7 @@ def main() -> int:
             final_v2_catalog_prompt_evidence_path,
             final_v2_catalog_session_evidence_path,
             final_v2_config_evidence_path,
+            final_v2_curator_evidence_path,
         ):
             raw = path.read_bytes()
             evidence_cas.put_expected(

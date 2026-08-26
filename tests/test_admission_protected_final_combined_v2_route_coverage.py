@@ -49,6 +49,10 @@ _CHILD_RECEIPTS = {
         "phase3-openclaw-protected-final-combined-v2-archive-source-force-"
         "replacement-route-coverage-v1-2026-08-22.json"
     ),
+    "curator_restore_activation": (
+        "phase3-openclaw-protected-final-combined-v2-curator-restore-route-"
+        "coverage-v1-2026-08-26.json"
+    ),
 }
 
 
@@ -100,10 +104,10 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             for child in subject._CHILDREN
         )
 
-    def test_exact_seven_qualifications_from_six_captures(self) -> None:
+    def test_exact_eight_qualifications_from_seven_captures(self) -> None:
         result = self.compose()
 
-        self.assertEqual(result["profile"]["counts"], {"PASS": 7, "NOT_TESTED": 14})
+        self.assertEqual(result["profile"]["counts"], {"PASS": 8, "NOT_TESTED": 13})
         self.assertEqual(len(result["profile"]["routes"]), 21)
         self.assertEqual(
             {
@@ -117,13 +121,13 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             all(result["decision"][key] is False for key in subject._ELIGIBILITY_KEYS)
         )
         self.assertFalse(result["capture_model"]["aggregate_execution_observed"])
-        self.assertEqual(result["capture_model"]["qualification_count"], 7)
-        self.assertEqual(result["capture_model"]["distinct_capture_count"], 6)
+        self.assertEqual(result["capture_model"]["qualification_count"], 8)
+        self.assertEqual(result["capture_model"]["distinct_capture_count"], 7)
         captures = {
             child["route"]: child["capture"]["digest"]
             for child in result["bindings"]["child_qualifications"]
         }
-        self.assertEqual(len(set(captures.values())), 6)
+        self.assertEqual(len(set(captures.values())), 7)
         self.assertEqual(
             captures,
             {child["route"]: child["capture_digest"] for child in subject._CHILDREN},
@@ -155,6 +159,12 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             "ARCHIVE_POST_WRITE_CATALOG_REJECTION_MAY_DENY_SKILL_DISCOVERY_AVAILABILITY",
             result["limitations"],
         )
+        for limitation in (
+            "EXACT_EPHEMERAL_ARCHIVED_LIFECYCLE_FIXTURE_NOT_NATIVE_CURATOR_SWEEP",
+            "EXACT_SELECTED_LIFECYCLE_ROW_ONLY_NOT_FULL_DATABASE_STATE",
+            "SKILLS_STATUS_ARCHIVED_DIAGNOSTIC_NOT_ACTIVE_CONSUMER_PROOF",
+        ):
+            self.assertIn(limitation, result["limitations"])
         for limitation in (
             "CHAT_ROUTE_REUSES_SHARED_SESSION_CAPTURE_NOT_INDEPENDENT_EXECUTION",
             "RAW_CAPTURE_ROUTE_ID_REMAINS_SESSION_SNAPSHOT_CONSUMER",

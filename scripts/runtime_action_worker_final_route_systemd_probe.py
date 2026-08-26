@@ -282,13 +282,16 @@ def _probe_bundle(harness: dict[str, Any]) -> list[dict[str, Any]]:
             and item["stat"]["nlink"] == 1,
             f"probe metadata changed: {name}",
         )
-        actual.append(
-            {
-                "name": name,
-                "bytes": item["bytes"],
-                "digest": item["digest"],
-            }
-        )
+        record = {
+            "name": name,
+            "bytes": item["bytes"],
+            "digest": item["digest"],
+        }
+        if specification.get("fixtures"):
+            record["role"] = (
+                "fixture" if name in specification["fixtures"] else "probe"
+            )
+        actual.append(record)
     _expect(actual == expected, "probe bundle bytes changed after materialization")
     return actual
 

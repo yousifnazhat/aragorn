@@ -18,6 +18,7 @@ class FinalAdmissionV2SystemdProbeTests(unittest.TestCase):
             ROOT / "scripts" / "capture_openclaw_final_admission_v2_systemd.sh"
         ).read_text(encoding="utf-8")
         for support in (
+            "benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md",
             "scripts/materialize_fixed_admission_probes.py",
             "scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py",
             "scripts/runtime_action_worker_final_route_systemd_probe.py",
@@ -28,6 +29,7 @@ class FinalAdmissionV2SystemdProbeTests(unittest.TestCase):
             "config-entry-activation",
             "cron-rescan",
             "curator-restore-activation",
+            "workshop-proposal-apply",
             "fresh-session-reset",
             "missing-prompt-blob-rebuild",
             "session-snapshot-consumer",

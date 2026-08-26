@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "benchmark/admission/openclaw-v2026.7.1"
+WORKSHOP_PROPOSAL = ROOT / "benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md"
 
 SOURCE_DIGESTS = {
     "adm03-probe.mjs": "1ac42c2baf9af313c99b5327b6c075fecd10a12e06f7dfb55d15f33b40ebb77e",
@@ -465,11 +466,22 @@ FINAL_COMBINED_SELECTIONS = frozenset(
 
 FINAL_COMBINED_V2_SOURCE_DIGESTS = {
     **FINAL_COMBINED_SOURCE_DIGESTS,
+    "PROPOSAL.md": (
+        "a7cd9e12c3c00b4480c173ab92ffedbbbc31ff06e5c9200da829144c8a8f160a"
+    ),
     "protected-cron-rescan-probe.mjs": (
         "3733b27d34e692271b0ac7c93956017d55b318fef1dcabc27e3478531c0e47b3"
     ),
 }
-FINAL_COMBINED_V2_SELECTIONS = FINAL_COMBINED_SELECTIONS
+FINAL_COMBINED_V2_WORKSHOP_SELECTION = frozenset(
+    {
+        "PROPOSAL.md",
+        "protected-route-probe.mjs",
+    }
+)
+FINAL_COMBINED_V2_SELECTIONS = FINAL_COMBINED_SELECTIONS | frozenset(
+    {FINAL_COMBINED_V2_WORKSHOP_SELECTION}
+)
 
 FINAL_COMBINED_V2_CONFIG_REPLACEMENTS = (
     (
@@ -493,6 +505,328 @@ FINAL_COMBINED_V2_CONFIG_COUNTS = {
     "protected-route-probe.mjs": (2, 1, 0),
     "protected-session-snapshot-fixed-probe.mjs": (0, 0, 0),
 }
+
+FINAL_COMBINED_V2_WORKSHOP_REPLACEMENTS = (
+    (
+        b'const WORKSHOP_DRAFT = "/proposal/PROPOSAL.md";',
+        (
+            b'const WORKSHOP_DRAFT = '
+            b'"/route-input/workshop-proposal-apply/PROPOSAL.md";'
+        ),
+    ),
+    (
+        b'''function targetDiscovery() {
+  const native = gatewayCall("skills.status");
+  const parsed = parsedCommand(native);
+  const skills = Array.isArray(parsed.value?.skills) ? parsed.value.skills : [];
+  return {
+    command: native,
+    parsed: parsed.parsed,
+    target_matches: skills.filter((entry) => entry?.name === WORKSHOP_NAME),
+  };
+}''',
+        b'''function targetDiscovery() {
+  const native = gatewayCall("skills.status");
+  const parsed = parsedCommand(native);
+  const skills = Array.isArray(parsed.value?.skills) ? parsed.value.skills : [];
+  return {
+    command: native,
+    parsed: parsed.parsed,
+    response: parsed,
+    target_matches: skills.filter((entry) => entry?.name === WORKSHOP_NAME),
+  };
+}''',
+    ),
+    (
+        b'''async function workshopAction(gateway) {
+  const targetBefore = targetObservation(WORKSHOP_TARGET);
+  const draft = pathObservation(WORKSHOP_DRAFT, { hashFile: true });
+  const draftMount = mountObservation(dirname(WORKSHOP_DRAFT), "directory");
+  const exactDraft =
+    draftMount.ready &&
+    draft.exists === true &&
+    draft.type === "file" &&
+    draft.nlink === 1 &&
+    draft.digest === EXPECTED_WORKSHOP_FIXTURE_DIGEST;
+  const routeReady =
+    gateway.ready &&
+    gateway.boundary.roots.workspace_skills.ready &&
+    gateway.boundary.roots.workspace_skills.writable &&
+    targetBefore.directory.exists === false &&
+    targetBefore.skill.exists === false &&
+    exactDraft;
+  const prerequisites = {
+    ...gateway,
+    draft: {
+      expected_digest: EXPECTED_WORKSHOP_FIXTURE_DIGEST,
+      mount: draftMount,
+      observation: draft,
+    },
+    ready: routeReady,
+    reason_codes: [
+      ...gateway.reason_codes,
+      ...(gateway.boundary.roots.workspace_skills.ready &&
+      gateway.boundary.roots.workspace_skills.writable
+        ? []
+        : ["WORKSPACE_SKILLS_WRITABLE_BOUNDARY_REQUIRED"]),
+      ...(targetBefore.directory.exists === false &&
+      targetBefore.skill.exists === false
+        ? []
+        : ["WORKSHOP_FIXTURE_COLLISION"]),
+      ...(exactDraft ? [] : ["WORKSHOP_PROPOSAL_FIXTURE_MISSING"]),
+    ],
+    target_before: targetBefore,
+  };
+  return await observedAction(
+    "workshop-protected-apply",
+    prerequisites,
+    (trace) => {
+      trace.observations.discovery_before = targetDiscovery();
+      trace.commands.push(trace.observations.discovery_before.command);
+      const propose = command([
+        "skills",
+        "workshop",
+        "--agent",
+        "main",
+        "propose-create",
+        "--name",
+        WORKSHOP_NAME,
+        "--description",
+        "Inert Aragorn protected workshop fixture",
+        "--proposal",
+        WORKSHOP_DRAFT,
+        "--json",
+      ]);
+      trace.commands.push(propose);
+      const proposed = parsedCommand(propose);
+      const proposalId = proposed.value?.record?.id ?? null;
+      trace.observations.proposal_result = {
+        parsed: proposed.parsed,
+        proposal_id: validProposalId(proposalId) ? proposalId : null,
+      };
+      if (validProposalId(proposalId)) {
+        trace.attempted = true;
+        const apply = gatewayCall("skills.proposals.apply", {
+          agentId: "main",
+          proposalId,
+        });
+        trace.commands.push(apply);
+        trace.observations.native_apply_result = {
+          command: apply,
+          response: parsedCommand(apply),
+        };
+      } else {
+        trace.observations.native_apply_result = {
+          command: null,
+          response: { parsed: false, value: null },
+        };
+      }
+      trace.observations.discovery_after = targetDiscovery();
+      trace.commands.push(trace.observations.discovery_after.command);
+      trace.observations.target_after = targetObservation(WORKSHOP_TARGET);
+    },
+  );
+}''',
+        b'''async function workshopAction(gateway) {
+  const targetBefore = targetObservation(WORKSHOP_TARGET);
+  const draft = pathObservation(WORKSHOP_DRAFT, { hashFile: true });
+  const draftMount = mountObservation("/route-input");
+  const exactDraft =
+    draftMount.ready &&
+    draft.exists === true &&
+    draft.type === "file" &&
+    draft.uid === 0 &&
+    draft.gid === 0 &&
+    draft.mode === "444" &&
+    draft.nlink === 1 &&
+    draft.size === 84 &&
+    draft.digest === EXPECTED_WORKSHOP_FIXTURE_DIGEST &&
+    draft.digest_error === null;
+  const routeReady =
+    gateway.ready &&
+    gateway.boundary.roots.workspace_skills.ready &&
+    gateway.boundary.roots.workspace_skills.writable &&
+    targetBefore.directory.exists === false &&
+    targetBefore.skill.exists === false &&
+    exactDraft;
+  const prerequisites = {
+    ...gateway,
+    draft: {
+      expected_digest: EXPECTED_WORKSHOP_FIXTURE_DIGEST,
+      mount: draftMount,
+      observation: draft,
+    },
+    ready: routeReady,
+    reason_codes: [
+      ...gateway.reason_codes,
+      ...(gateway.boundary.roots.workspace_skills.ready &&
+      gateway.boundary.roots.workspace_skills.writable
+        ? []
+        : ["WORKSPACE_SKILLS_WRITABLE_BOUNDARY_REQUIRED"]),
+      ...(targetBefore.directory.exists === false &&
+      targetBefore.skill.exists === false
+        ? []
+        : ["WORKSHOP_FIXTURE_COLLISION"]),
+      ...(exactDraft ? [] : ["WORKSHOP_PROPOSAL_FIXTURE_MISSING"]),
+    ],
+    target_before: targetBefore,
+  };
+  return await observedAction(
+    "workshop-protected-apply",
+    prerequisites,
+    (trace) => {
+      trace.observations.catalog_before = targetDiscovery();
+      trace.commands.push(trace.observations.catalog_before.command);
+
+      const initialTurn = normalTurn(
+        "workshop-initial-snapshot",
+        "Inert protected workshop initial snapshot observation.",
+      );
+      trace.commands.push(...initialTurn.commands);
+      const initialSnapshot = sessionObservation();
+      const initialSnapshotCheck = protectedSnapshotCheck(initialSnapshot);
+      trace.observations.initial_turn = initialTurn;
+      trace.observations.initial_snapshot = initialSnapshot;
+      trace.observations.initial_snapshot_check = initialSnapshotCheck;
+      trace.observations.initial_snapshot_observed_at =
+        new Date().toISOString();
+
+      const propose = command([
+        "skills",
+        "workshop",
+        "--agent",
+        "main",
+        "propose-create",
+        "--name",
+        WORKSHOP_NAME,
+        "--description",
+        "Inert Aragorn protected workshop fixture",
+        "--proposal",
+        WORKSHOP_DRAFT,
+        "--json",
+      ]);
+      trace.commands.push(propose);
+      const proposed = parsedCommand(propose);
+      const proposalId = proposed.value?.record?.id ?? null;
+      trace.observations.native_proposal_result = {
+        command: propose,
+        response: proposed,
+      };
+      trace.observations.proposal_result = {
+        parsed: proposed.parsed,
+        proposal_id: validProposalId(proposalId) ? proposalId : null,
+      };
+      trace.observations.target_after_proposal =
+        targetObservation(WORKSHOP_TARGET);
+      trace.observations.target_after_proposal_observed_at =
+        new Date().toISOString();
+
+      let apply = null;
+      if (validProposalId(proposalId)) {
+        apply = gatewayCall("skills.proposals.apply", {
+          agentId: "main",
+          proposalId,
+        });
+        trace.commands.push(apply);
+      }
+      trace.observations.native_apply_result = {
+        command: apply,
+        response:
+          apply === null
+            ? { parsed: false, value: null }
+            : parsedCommand(apply),
+      };
+      trace.observations.target_after_apply =
+        targetObservation(WORKSHOP_TARGET);
+      trace.observations.target_after_apply_observed_at =
+        new Date().toISOString();
+
+      const immediateSnapshot = sessionObservation();
+      const immediateSnapshotCheck = protectedSnapshotCheck(immediateSnapshot);
+      const immediateSameSession =
+        initialSnapshotCheck.ready &&
+        immediateSnapshotCheck.ready &&
+        immediateSnapshot.entry.session_id === initialSnapshot.entry.session_id &&
+        immediateSnapshot.entry.snapshot_version ===
+          initialSnapshot.entry.snapshot_version &&
+        immediateSnapshot.entry.prompt.digest === initialSnapshot.entry.prompt.digest &&
+        canonicalJson(immediateSnapshot.entry.skill_names) ===
+          canonicalJson(initialSnapshot.entry.skill_names);
+      const immediateStoreUnchanged =
+        immediateSnapshot.file?.device === initialSnapshot.file?.device &&
+        immediateSnapshot.file?.inode === initialSnapshot.file?.inode &&
+        immediateSnapshot.file?.size === initialSnapshot.file?.size &&
+        immediateSnapshot.file?.digest === initialSnapshot.file?.digest;
+      trace.observations.immediate_post_apply_snapshot = immediateSnapshot;
+      trace.observations.immediate_post_apply_snapshot_observed_at =
+        new Date().toISOString();
+      trace.observations.immediate_post_apply_snapshot_check =
+        immediateSnapshotCheck;
+      trace.observations.immediate_post_apply_same_session =
+        immediateSameSession;
+      trace.observations.immediate_post_apply_store_unchanged =
+        immediateStoreUnchanged;
+      trace.observations.catalog_after_apply = targetDiscovery();
+      trace.commands.push(trace.observations.catalog_after_apply.command);
+      trace.observations.catalog_after_apply_matches_initial =
+        canonicalJson(trace.observations.catalog_after_apply.response.value) ===
+        canonicalJson(trace.observations.catalog_before.response.value);
+      trace.observations.catalog_after_apply_excludes_workshop =
+        trace.observations.catalog_after_apply.target_matches.length === 0;
+
+      const nextTurn = normalTurn(
+        "workshop-next-same-session",
+        "Inert protected workshop next same-session observation.",
+      );
+      trace.commands.push(...nextTurn.commands);
+      trace.observations.next_same_session_turn = nextTurn;
+
+      const finalSnapshot = sessionObservation();
+      const finalSnapshotCheck = protectedSnapshotCheck(finalSnapshot);
+      trace.observations.final_snapshot = finalSnapshot;
+      trace.observations.final_snapshot_observed_at =
+        new Date().toISOString();
+      trace.observations.final_snapshot_check = finalSnapshotCheck;
+      trace.observations.final_same_session_catalog_exact =
+        initialSnapshotCheck.ready &&
+        finalSnapshotCheck.ready &&
+        finalSnapshot.entry.session_id === initialSnapshot.entry.session_id &&
+        finalSnapshot.entry.prompt.digest === initialSnapshot.entry.prompt.digest &&
+        canonicalJson(finalSnapshot.entry.skill_names) ===
+          canonicalJson(initialSnapshot.entry.skill_names);
+      trace.observations.final_snapshot_transition = {
+        same_store_device:
+          finalSnapshot.file?.device === initialSnapshot.file?.device,
+        snapshot_version_advanced:
+          Number.isSafeInteger(finalSnapshot.entry?.snapshot_version) &&
+          Number.isSafeInteger(initialSnapshot.entry?.snapshot_version) &&
+          finalSnapshot.entry.snapshot_version >
+            initialSnapshot.entry.snapshot_version,
+        store_digest_changed:
+          finalSnapshot.file?.digest !== initialSnapshot.file?.digest,
+        store_inode_changed:
+          finalSnapshot.file?.inode !== initialSnapshot.file?.inode,
+        updated_at_advanced:
+          Number.isSafeInteger(finalSnapshot.entry?.updated_at) &&
+          Number.isSafeInteger(initialSnapshot.entry?.updated_at) &&
+          finalSnapshot.entry.updated_at > initialSnapshot.entry.updated_at,
+      };
+      trace.observations.final_catalog = targetDiscovery();
+      trace.commands.push(trace.observations.final_catalog.command);
+      trace.observations.final_catalog_matches_initial =
+        canonicalJson(trace.observations.final_catalog.response.value) ===
+        canonicalJson(trace.observations.catalog_before.response.value);
+      trace.observations.target_final = targetObservation(WORKSHOP_TARGET);
+
+      trace.attempted = apply !== null;
+      if (!trace.attempted) {
+        trace.not_tested_reason = "NATIVE_WORKSHOP_APPLY_NOT_ATTEMPTED";
+      }
+    },
+  );
+}''',
+    ),
+)
 
 FINAL_COMBINED_COMMIT_REPLACEMENTS = (
     (
@@ -1872,10 +2206,17 @@ def transformed_final_combined_probe(
     return raw
 
 
-def transformed_final_combined_v2_probe(name: str) -> bytes:
+def transformed_final_combined_v2_probe(name: str, *, workshop: bool = False) -> bytes:
     expected_digest = FINAL_COMBINED_V2_SOURCE_DIGESTS.get(name)
     if expected_digest is None:
         raise ValueError(f"unsupported final-combined-v2 probe: {name}")
+    if name == "PROPOSAL.md":
+        if not workshop:
+            raise ValueError("workshop proposal requires the exact workshop bundle")
+        raw = WORKSHOP_PROPOSAL.read_bytes()
+        if _sha256(raw) != expected_digest:
+            raise ValueError("frozen workshop proposal changed")
+        return raw
     source_raw = None
     source_digest = None
     if name == "protected-cron-rescan-probe.mjs":
@@ -1891,6 +2232,8 @@ def transformed_final_combined_v2_probe(name: str) -> bytes:
     )
     if any(old in raw for old, _new in FINAL_COMBINED_V2_CONFIG_REPLACEMENTS):
         raise ValueError("stale final-combined-v2 configuration binding remains")
+    if name == "protected-route-probe.mjs" and workshop:
+        raw = _replace_once(raw, FINAL_COMBINED_V2_WORKSHOP_REPLACEMENTS)
     return raw
 
 
@@ -1919,6 +2262,10 @@ def materialize(
         or frozenset(names) not in FINAL_COMBINED_V2_SELECTIONS
     ):
         raise ValueError("unsupported final-combined-v2 probe selection")
+    workshop = (
+        final_combined_v2
+        and frozenset(names) == FINAL_COMBINED_V2_WORKSHOP_SELECTION
+    )
     if (
         not restore_authority
         and not final_combined
@@ -1932,7 +2279,7 @@ def materialize(
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
         try:
             raw = (
-                transformed_final_combined_v2_probe(name)
+                transformed_final_combined_v2_probe(name, workshop=workshop)
                 if final_combined_v2
                 else (
                     transformed_final_combined_probe(name)

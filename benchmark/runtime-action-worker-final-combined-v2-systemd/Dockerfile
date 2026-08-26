@@ -65,6 +65,9 @@ RUN set -eux; \
             'session-snapshot-consumer:d' \
             'session-snapshot-consumer/protected-observation-v1.mjs:f' \
             'session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs:f' \
+            'workshop-proposal-apply:d' \
+            'workshop-proposal-apply/PROPOSAL.md:f' \
+            'workshop-proposal-apply/protected-route-probe.mjs:f' \
             | sort)"; \
     test "$(sha256sum /route-input/archive-source-force-replacement/protected-archive-replacement-probe.mjs | cut -d ' ' -f 1)" = \
         4ead71ad73da16579fb85bc1287cb760a8b8b90838de9a9ea0ad2091fca87479; \
@@ -88,6 +91,10 @@ RUN set -eux; \
         91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22; \
     test "$(sha256sum /route-input/session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs | cut -d ' ' -f 1)" = \
         9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11; \
+    test "$(sha256sum /route-input/workshop-proposal-apply/PROPOSAL.md | cut -d ' ' -f 1)" = \
+        a7cd9e12c3c00b4480c173ab92ffedbbbc31ff06e5c9200da829144c8a8f160a; \
+    test "$(sha256sum /route-input/workshop-proposal-apply/protected-route-probe.mjs | cut -d ' ' -f 1)" = \
+        07676570b96d8c0c54f40bd44f4132a2cdb06cb36002dd6f6c406f49afc3a705; \
     install -m 0644 /src/src/aragorn/runtime_action_worker.py \
         /usr/lib/aragorn/aragorn/runtime_action_worker.py; \
     install -m 0755 /src/packaging/activate-runtime-action-worker-host.sh \

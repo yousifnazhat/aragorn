@@ -21,6 +21,8 @@ elif [ "$#" -eq 2 ]; then
             route=ADM-02/update/config-entry-activation ;;
         --curator-restore-activation)
             route=ADM-02/update/curator-restore-activation ;;
+        --workshop-proposal-apply)
+            route=ADM-02/update/workshop-proposal-apply ;;
         --cron-rescan) route=ADM-02/reload/cron-rescan ;;
         --fresh-session-reset) route=ADM-02/reload/fresh-session-reset ;;
         --missing-prompt-blob-rebuild)
@@ -33,7 +35,7 @@ elif [ "$#" -eq 2 ]; then
     esac
     output=$2
 else
-    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--curator-restore-activation|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
+    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--curator-restore-activation|--workshop-proposal-apply|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
     exit 64
 fi
 case "$output" in
@@ -256,6 +258,7 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \
     benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md \
+    benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md \
     benchmark/runtime-action-worker-final-combined-v2-systemd \
     packaging/activate-runtime-action-worker-host.sh \
     src/aragorn/runtime_action_worker.py \
@@ -286,6 +289,10 @@ python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/session-snapshot-consumer" \
     protected-observation-v1.mjs protected-session-snapshot-fixed-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/workshop-proposal-apply" \
+    PROPOSAL.md protected-route-probe.mjs
+
 (
     cd "$context"
     docker build --pull=false --network=none \

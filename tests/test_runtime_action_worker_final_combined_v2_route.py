@@ -4,6 +4,7 @@ import hashlib
 import stat
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,7 +16,10 @@ sys.path.insert(0, str(SCRIPTS))
 
 import capture_openclaw_final_combined_v2_session_snapshot_closure as closure
 import runtime_action_worker_final_combined_v2_route_systemd_probe as route
-from materialize_fixed_admission_probes import transformed_final_combined_v2_probe
+from materialize_fixed_admission_probes import (
+    materialize,
+    transformed_final_combined_v2_probe,
+)
 
 
 class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
@@ -65,6 +69,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             "--archive-source-force-replacement",
             "--config-entry-activation",
             "--curator-restore-activation",
+            "--workshop-proposal-apply",
             "--cron-rescan",
             "--fresh-session-reset",
             "--missing-prompt-blob-rebuild",
@@ -76,6 +81,10 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         self.assertIn('-v "$route_input_volume:/route-input:ro"', source)
         self.assertIn(
             "benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md",
+            source,
+        )
+        self.assertIn(
+            "benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md",
             source,
         )
         for control in (
@@ -100,16 +109,31 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             / "Dockerfile"
         ).read_text(encoding="utf-8")
         self.assertIn("COPY route-input/ /route-input/", dockerfile)
-        expected_probes = {}
-        for specification in route._ROUTES.values():
+        for route_id, specification in route._ROUTES.items():
+            workshop = route_id == "ADM-02/update/workshop-proposal-apply"
             for name in specification["files"]:
-                materialized = transformed_final_combined_v2_probe(name)
-                expected_probes[name] = {
+                materialized = transformed_final_combined_v2_probe(
+                    name, workshop=workshop
+                )
+                expected = {
                     "bytes": len(materialized),
                     "digest": "sha256:" + hashlib.sha256(materialized).hexdigest(),
                 }
-                self.assertIn(expected_probes[name]["digest"][7:], dockerfile)
-        self.assertEqual(route._EXPECTED_PROBES, expected_probes)
+                actual = (
+                    route._EXPECTED_WORKSHOP_PROBE
+                    if workshop and name == "protected-route-probe.mjs"
+                    else route._EXPECTED_PROBES[name]
+                )
+                self.assertEqual(actual, expected)
+                self.assertIn(expected["digest"][7:], dockerfile)
+        self.assertEqual(
+            route._ROUTES["ADM-02/update/workshop-proposal-apply"]["fixtures"],
+            ("PROPOSAL.md",),
+        )
+        self.assertEqual(
+            route._ROUTES["ADM-02/update/workshop-proposal-apply"]["probe"],
+            "protected-route-probe.mjs",
+        )
 
         for route_id in route._ROUTES:
             with self.subTest(route_id=route_id):
@@ -135,6 +159,49 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
                     {"document": {"probe_bundle": probe_bundle}},
                     123,
                 )
+
+        workshop_id = "ADM-02/update/workshop-proposal-apply"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "workshop"
+            materialize(
+                root,
+                ["PROPOSAL.md", "protected-route-probe.mjs"],
+                final_combined_v2=True,
+            )
+
+            def exact_file(path: Path) -> dict[str, object]:
+                raw = path.read_bytes()
+                return {
+                    "bytes": len(raw),
+                    "digest": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                    "stat": {
+                        "uid": 0,
+                        "gid": 0,
+                        "mode": "0444",
+                        "nlink": 1,
+                    },
+                }
+
+            roots = {**route._ROUTE_ROOTS, workshop_id: root}
+            with (
+                mock.patch.object(route, "_ROUTE_ROOTS", roots),
+                mock.patch.object(route.combined.p37c, "_file", side_effect=exact_file),
+            ):
+                bundle = route._probe_bundle(workshop_id)
+                self.assertEqual(
+                    [item["role"] for item in bundle], ["fixture", "probe"]
+                )
+                with (
+                    mock.patch.object(route.v1_route, "_ROUTES", route._ROUTES),
+                    mock.patch.object(route.v1_route, "_PROBE_ROOT", root),
+                    mock.patch.object(route.v1_route, "_SELECTED_ROUTE", workshop_id),
+                ):
+                    self.assertEqual(
+                        route.v1_route._probe_bundle(
+                            {"document": {"probe_bundle": bundle}}
+                        ),
+                        bundle,
+                    )
 
         with mock.patch("sys.stderr"):
             self.assertEqual(route.main([]), 64)

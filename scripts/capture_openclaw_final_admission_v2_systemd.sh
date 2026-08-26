@@ -191,6 +191,7 @@ fi
 GIT_NO_REPLACE_OBJECTS=1 git cat-file commit "$source_commit" >"$commit_object"
 GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/admission/openclaw-v2026.7.1 \
+    benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md \
     benchmark/runtime-action-worker-final-combined-v2-systemd \
     packaging/activate-runtime-action-worker-host.sh \
     src/aragorn/runtime_action_worker.py \
@@ -223,6 +224,9 @@ python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/session-snapshot-consumer" \
     protected-observation-v1.mjs protected-session-snapshot-fixed-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/workshop-proposal-apply" \
+    PROPOSAL.md protected-route-probe.mjs
 
 (
     cd "$context"

@@ -36,11 +36,21 @@ _ROUTES = {
         "probe": "protected-curator-restore-denial-probe.mjs",
         "schema": "aragorn/openclaw-protected-curator-restore-denial-observation/v1",
     },
+    "ADM-02/update/workshop-proposal-apply": {
+        "files": ("PROPOSAL.md", "protected-route-probe.mjs"),
+        "fixtures": ("PROPOSAL.md",),
+        "probe": "protected-route-probe.mjs",
+        "schema": "aragorn/openclaw-protected-route-action-observations/v1",
+    },
 }
 _ROUTE_ROOTS = {
     route_id: Path("/route-input") / route_id.rsplit("/", 1)[1] for route_id in _ROUTES
 }
 _EXPECTED_PROBES = {
+    "PROPOSAL.md": {
+        "bytes": 84,
+        "digest": "sha256:a7cd9e12c3c00b4480c173ab92ffedbbbc31ff06e5c9200da829144c8a8f160a",
+    },
     "protected-archive-replacement-probe.mjs": {
         "bytes": 25_498,
         "digest": "sha256:4ead71ad73da16579fb85bc1287cb760a8b8b90838de9a9ea0ad2091fca87479",
@@ -75,6 +85,10 @@ _EXPECTED_PROBES = {
         "bytes": 42_266,
         "digest": "sha256:9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11",
     },
+}
+_EXPECTED_WORKSHOP_PROBE = {
+    "bytes": 50_175,
+    "digest": "sha256:07676570b96d8c0c54f40bd44f4132a2cdb06cb36002dd6f6c406f49afc3a705",
 }
 _OUTPUT = Path("/evidence/runtime-action-worker-final-combined-v2-route-systemd.json")
 _SCHEMA = "aragorn/runtime-action-worker-final-combined-v2-route-systemd-observation/v1"
@@ -121,13 +135,22 @@ def _probe_bundle(route_id: str) -> list[dict[str, Any]]:
             and metadata["nlink"] == 1,
             f"materialized route probe metadata changed: {name}",
         )
+        expected = (
+            _EXPECTED_WORKSHOP_PROBE
+            if route_id == "ADM-02/update/workshop-proposal-apply"
+            and name == "protected-route-probe.mjs"
+            else _EXPECTED_PROBES[name]
+        )
         _expect(
-            {key: record[key] for key in ("bytes", "digest")} == _EXPECTED_PROBES[name],
+            {key: record[key] for key in ("bytes", "digest")} == expected,
             f"materialized V2 route probe identity changed: {name}",
         )
-        bundle.append(
-            {"name": name, "bytes": record["bytes"], "digest": record["digest"]}
-        )
+        item = {"name": name, "bytes": record["bytes"], "digest": record["digest"]}
+        if specification.get("fixtures"):
+            item["role"] = (
+                "fixture" if name in specification["fixtures"] else "probe"
+            )
+        bundle.append(item)
     return bundle
 
 

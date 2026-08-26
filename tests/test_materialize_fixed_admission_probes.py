@@ -615,6 +615,10 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
 
     def test_materializes_only_exact_final_combined_v2_bundles(self) -> None:
         expected = {
+            "PROPOSAL.md": (
+                84,
+                "a7cd9e12c3c00b4480c173ab92ffedbbbc31ff06e5c9200da829144c8a8f160a",
+            ),
             "protected-archive-replacement-probe.mjs": (
                 25_498,
                 "4ead71ad73da16579fb85bc1287cb760a8b8b90838de9a9ea0ad2091fca87479",
@@ -665,7 +669,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             {
                 name: digest
                 for name, digest in FINAL_COMBINED_V2_SOURCE_DIGESTS.items()
-                if name != "protected-cron-rescan-probe.mjs"
+                if name
+                not in {"PROPOSAL.md", "protected-cron-rescan-probe.mjs"}
             },
             {
                 name: digest
@@ -677,7 +682,14 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             FINAL_COMBINED_V2_SOURCE_DIGESTS["protected-cron-rescan-probe.mjs"],
             "3733b27d34e692271b0ac7c93956017d55b318fef1dcabc27e3478531c0e47b3",
         )
-        self.assertEqual(FINAL_COMBINED_V2_SELECTIONS, FINAL_COMBINED_SELECTIONS)
+        workshop_selection = frozenset(
+            {"PROPOSAL.md", "protected-route-probe.mjs"}
+        )
+        self.assertEqual(
+            FINAL_COMBINED_V2_SELECTIONS - {workshop_selection},
+            FINAL_COMBINED_SELECTIONS,
+        )
+        self.assertIn(workshop_selection, FINAL_COMBINED_V2_SELECTIONS)
         self.assertEqual(set(expected), set(FINAL_COMBINED_V2_SOURCE_DIGESTS))
         config_probe = transformed_final_combined_v2_probe(
             "protected-config-activation-probe.mjs"
@@ -698,8 +710,21 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                     with self.subTest(name=name):
                         path = output / name
                         raw = path.read_bytes()
-                        size, digest = expected[name]
-                        self.assertEqual(raw, transformed_final_combined_v2_probe(name))
+                        workshop = selection == workshop_selection
+                        size, digest = (
+                            (
+                                50_175,
+                                "07676570b96d8c0c54f40bd44f4132a2cdb06cb36002dd6f6c406f49afc3a705",
+                            )
+                            if workshop and name == "protected-route-probe.mjs"
+                            else expected[name]
+                        )
+                        self.assertEqual(
+                            raw,
+                            transformed_final_combined_v2_probe(
+                                name, workshop=workshop
+                            ),
+                        )
                         self.assertEqual(len(raw), size)
                         self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
                         self.assertEqual(path.stat().st_mode & 0o777, 0o444)
@@ -708,13 +733,14 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                         if name in config_bound:
                             self.assertIn(v2_config_digest, raw)
                             self.assertIn(b"configuration.file?.size === 1880", raw)
-                        syntax = subprocess.run(
-                            ["node", "--check", str(path)],
-                            check=False,
-                            capture_output=True,
-                            text=True,
-                        )
-                        self.assertEqual(syntax.returncode, 0, syntax.stderr)
+                        if path.suffix == ".mjs":
+                            syntax = subprocess.run(
+                                ["node", "--check", str(path)],
+                                check=False,
+                                capture_output=True,
+                                text=True,
+                            )
+                            self.assertEqual(syntax.returncode, 0, syntax.stderr)
 
             cli_output = root / "final-v2-cli"
             cli = subprocess.run(
@@ -738,6 +764,43 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 (cli_output / "protected-route-probe.mjs").read_bytes(),
                 transformed_final_combined_v2_probe("protected-route-probe.mjs"),
             )
+            self.assertEqual(
+                hashlib.sha256(
+                    (cli_output / "protected-route-probe.mjs").read_bytes()
+                ).hexdigest(),
+                "65fda9d7406b9813017002cd7b6cde449475685b4410e45bca5b7aeed00ae7c1",
+            )
+            workshop_output = root / "final-v2-workshop"
+            materialize(
+                workshop_output,
+                sorted(workshop_selection),
+                final_combined_v2=True,
+            )
+            self.assertEqual(
+                (workshop_output / "PROPOSAL.md").read_bytes(),
+                (
+                    Path(__file__).resolve().parents[1]
+                    / "benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md"
+                ).read_bytes(),
+            )
+            workshop_probe = (
+                workshop_output / "protected-route-probe.mjs"
+            ).read_bytes()
+            for literal in (
+                b'const WORKSHOP_DRAFT = "/route-input/workshop-proposal-apply/PROPOSAL.md";',
+                b"response: parsed,",
+                b"trace.observations.target_after_proposal",
+                b"trace.observations.native_proposal_result",
+                b"trace.observations.native_apply_result",
+                b"trace.observations.immediate_post_apply_snapshot",
+                b"trace.observations.catalog_after_apply",
+                b"trace.observations.next_same_session_turn",
+                b"trace.observations.final_snapshot_transition",
+                b"snapshot_version_advanced:",
+                b"trace.observations.final_catalog",
+            ):
+                with self.subTest(literal=literal):
+                    self.assertIn(literal, workshop_probe)
 
             invalid = {
                 "both-final-modes": (

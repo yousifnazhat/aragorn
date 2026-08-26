@@ -53,6 +53,14 @@ _CHILD_RECEIPTS = {
         "phase3-openclaw-protected-final-combined-v2-curator-restore-route-"
         "coverage-v1-2026-08-26.json"
     ),
+    "workshop_proposal_apply": (
+        "phase3-openclaw-protected-final-combined-v2-workshop-proposal-apply-"
+        "route-coverage-v1-2026-08-26.json"
+    ),
+    "workshop_invalidation": (
+        "phase3-openclaw-protected-final-combined-v2-workshop-invalidation-"
+        "route-coverage-v1-2026-08-26.json"
+    ),
 }
 
 
@@ -104,10 +112,10 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             for child in subject._CHILDREN
         )
 
-    def test_exact_eight_qualifications_from_seven_captures(self) -> None:
+    def test_exact_ten_qualifications_from_eight_captures(self) -> None:
         result = self.compose()
 
-        self.assertEqual(result["profile"]["counts"], {"PASS": 8, "NOT_TESTED": 13})
+        self.assertEqual(result["profile"]["counts"], {"PASS": 10, "NOT_TESTED": 11})
         self.assertEqual(len(result["profile"]["routes"]), 21)
         self.assertEqual(
             {
@@ -121,13 +129,13 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             all(result["decision"][key] is False for key in subject._ELIGIBILITY_KEYS)
         )
         self.assertFalse(result["capture_model"]["aggregate_execution_observed"])
-        self.assertEqual(result["capture_model"]["qualification_count"], 8)
-        self.assertEqual(result["capture_model"]["distinct_capture_count"], 7)
+        self.assertEqual(result["capture_model"]["qualification_count"], 10)
+        self.assertEqual(result["capture_model"]["distinct_capture_count"], 8)
         captures = {
             child["route"]: child["capture"]["digest"]
             for child in result["bindings"]["child_qualifications"]
         }
-        self.assertEqual(len(set(captures.values())), 7)
+        self.assertEqual(len(set(captures.values())), 8)
         self.assertEqual(
             captures,
             {child["route"]: child["capture_digest"] for child in subject._CHILDREN},
@@ -136,12 +144,23 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             captures[subject.session._ROUTE], captures[subject.chat._ROUTE]
         )
         self.assertEqual(
+            captures[subject.workshop._ROUTE],
+            captures[subject.workshop_reload._ROUTE],
+        )
+        self.assertEqual(
             result["capture_model"]["shared_capture_groups"],
             [
                 {
                     "capture_digest": subject.session._EVIDENCE["digest"],
                     "routes": [subject.session._ROUTE, subject.chat._ROUTE],
-                }
+                },
+                {
+                    "capture_digest": subject.workshop._EVIDENCE["digest"],
+                    "routes": [
+                        subject.workshop._ROUTE,
+                        subject.workshop_reload._ROUTE,
+                    ],
+                },
             ],
         )
         self.assertEqual(
@@ -163,6 +182,17 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             "EXACT_EPHEMERAL_ARCHIVED_LIFECYCLE_FIXTURE_NOT_NATIVE_CURATOR_SWEEP",
             "EXACT_SELECTED_LIFECYCLE_ROW_ONLY_NOT_FULL_DATABASE_STATE",
             "SKILLS_STATUS_ARCHIVED_DIAGNOSTIC_NOT_ACTIVE_CONSUMER_PROOF",
+        ):
+            self.assertIn(limitation, result["limitations"])
+        for limitation in (
+            "WORKSHOP_RESIDUE_PERSISTS_THROUGH_FINAL_OBSERVATION",
+            "WORKSHOP_POST_APPLY_AND_FINAL_SKILLS_STATUS_DENIED_BY_EXTERNAL_AUTHORITY",
+            "NO_POST_APPLY_WORKSHOP_CATALOG_AVAILABILITY_CLAIM",
+            "WORKSHOP_INVALIDATION_REUSES_SHARED_PROPOSAL_APPLY_CAPTURE_NOT_INDEPENDENT_EXECUTION",
+            "RAW_WORKSHOP_CAPTURE_ROUTE_ID_REMAINS_WORKSHOP_PROPOSAL_APPLY",
+            "WORKSHOP_NEXT_SAME_SESSION_TURN_FAILED_NO_PROVIDER_SUCCESS_REPLY_OR_DELIVERY_CLAIM",
+            "WORKSHOP_APPLIED_TARGET_BYTES_NOT_RETAINED_METADATA_DIGEST_ONLY",
+            "WORKSHOP_RESIDUE_NOT_CLEANED_UP_NO_CLEANUP_ROLLBACK_OR_QUARANTINE_CLAIM",
         ):
             self.assertIn(limitation, result["limitations"])
         for limitation in (
@@ -284,6 +314,50 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
         ):
             self.compose()
 
+        name = "workshop_invalidation"
+        mismatch = deepcopy(self.child_results[name])
+        mismatch["bindings"]["workshop_proposal_apply_observation"][
+            "canonical_digest"
+        ] = "sha256:" + "0" * 64
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_result(name, mismatch)),
+            patch.object(
+                subject.workshop_reload,
+                "verify_openclaw_final_combined_v2_workshop_invalidation",
+                return_value=mismatch,
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "shared capture binding"),
+        ):
+            self.compose()
+
+        contradiction = deepcopy(self.child_results[name])
+        contradiction["bindings"]["parent_qualification_canonical_digest"] = (
+            "sha256:" + "0" * 64
+        )
+        contradiction["bindings"]["parent_verifier"]["digest"] = (
+            "sha256:" + "1" * 64
+        )
+        contradiction["bindings"]["shared_capture"] = {
+            "capture_relationship": "INDEPENDENT_CAPTURE",
+            "source_route": subject.config._ROUTE,
+        }
+        contradiction["route_semantics"]["shared_capture_independent"] = True
+        contradiction["route_semantics"]["source_capture_route"] = (
+            subject.config._ROUTE
+        )
+        with (
+            patch.object(
+                subject, "_CHILDREN", self.repin_result(name, contradiction)
+            ),
+            patch.object(
+                subject.workshop_reload,
+                "verify_openclaw_final_combined_v2_workshop_invalidation",
+                return_value=contradiction,
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "parent relationship"),
+        ):
+            self.compose()
+
         config_name = "config_entry_activation"
         fresh_name = "catalog_fixed_fresh_session_reset"
         swapped = {
@@ -343,6 +417,34 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
                 "verify_openclaw_final_combined_v2_chat_session_snapshot_consumer_"
                 "catalog_fixed",
                 return_value=repinned_chat,
+            ),
+            self.assertRaisesRegex(AdmissionEvidenceError, "parent relationship"),
+        ):
+            self.compose()
+
+        workshop_name = "workshop_proposal_apply"
+        workshop_reload_name = "workshop_invalidation"
+        unsigned_parent = deepcopy(self.child_results[workshop_name])
+        unsigned_parent["limitations"].append("UNSIGNED_WORKSHOP_PARENT_MUTATION")
+        repinned_reload = deepcopy(self.child_results[workshop_reload_name])
+        repinned_reload["bindings"]["parent_qualification_canonical_digest"] = (
+            canonical_digest(unsigned_parent)
+        )
+        unsigned_repin = {
+            workshop_name: unsigned_parent,
+            workshop_reload_name: repinned_reload,
+        }
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_results(unsigned_repin)),
+            patch.object(
+                subject.workshop,
+                "verify_openclaw_final_combined_v2_workshop_proposal_apply",
+                return_value=unsigned_parent,
+            ),
+            patch.object(
+                subject.workshop_reload,
+                "verify_openclaw_final_combined_v2_workshop_invalidation",
+                return_value=repinned_reload,
             ),
             self.assertRaisesRegex(AdmissionEvidenceError, "parent relationship"),
         ):

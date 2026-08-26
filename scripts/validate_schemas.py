@@ -114,6 +114,12 @@ from aragorn.admission_protected_final_combined_v2_session_snapshot_consumer imp
 from aragorn.admission_protected_final_combined_v2_session_snapshot_consumer_catalog_fixed import (
     verify_openclaw_final_combined_v2_session_snapshot_consumer_catalog_fixed,
 )
+from aragorn.admission_protected_final_combined_v2_workshop_invalidation import (
+    verify_openclaw_final_combined_v2_workshop_invalidation,
+)
+from aragorn.admission_protected_final_combined_v2_workshop_proposal_apply import (
+    verify_openclaw_final_combined_v2_workshop_proposal_apply,
+)
 from aragorn.admission_protected_final_fresh_session_reset import (
     verify_openclaw_final_fresh_session_reset,
 )
@@ -3629,6 +3635,74 @@ def main() -> int:
     ):
         raise AssertionError("protected final V2 curator qualification changed")
 
+    final_v2_workshop_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-workshop-proposal-apply-"
+        "systemd-p3-final-catalog-fixed-2026-08-26.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v2-workshop-proposal-apply-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_workshop_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_workshop_proposal_apply_qualification = (
+            verify_openclaw_final_combined_v2_workshop_proposal_apply(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_workshop_proposal_apply_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-workshop-proposal-apply-"
+        "route-coverage-v1-2026-08-26.json"
+    )
+    retained_final_v2_workshop_proposal_apply_qualification = load(
+        final_v2_workshop_proposal_apply_qualification_path
+    )
+    if (
+        final_v2_workshop_proposal_apply_qualification
+        != retained_final_v2_workshop_proposal_apply_qualification
+        or final_v2_workshop_proposal_apply_qualification_path.read_bytes()
+        != canonical_json(final_v2_workshop_proposal_apply_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 workshop proposal-apply qualification changed"
+        )
+
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v2-workshop-invalidation-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_workshop_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_workshop_invalidation_qualification = (
+            verify_openclaw_final_combined_v2_workshop_invalidation(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_workshop_invalidation_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-workshop-invalidation-route-"
+        "coverage-v1-2026-08-26.json"
+    )
+    retained_final_v2_workshop_invalidation_qualification = load(
+        final_v2_workshop_invalidation_qualification_path
+    )
+    if (
+        final_v2_workshop_invalidation_qualification
+        != retained_final_v2_workshop_invalidation_qualification
+        or final_v2_workshop_invalidation_qualification_path.read_bytes()
+        != canonical_json(final_v2_workshop_invalidation_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 workshop invalidation qualification changed"
+        )
+
     with TemporaryDirectory(prefix="aragorn-protected-final-v2-coverage-") as temporary:
         evidence_cas = CAS(temporary)
         for path in (
@@ -3639,6 +3713,7 @@ def main() -> int:
             final_v2_catalog_session_evidence_path,
             final_v2_config_evidence_path,
             final_v2_curator_evidence_path,
+            final_v2_workshop_evidence_path,
         ):
             raw = path.read_bytes()
             evidence_cas.put_expected(

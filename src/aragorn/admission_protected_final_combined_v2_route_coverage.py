@@ -1,4 +1,4 @@
-"""Compose eight current-contract V2 qualifications from seven captures."""
+"""Compose ten current-contract V2 qualifications from eight captures."""
 
 from __future__ import annotations
 
@@ -24,6 +24,12 @@ from . import (
 )
 from . import (
     admission_protected_final_combined_v2_session_snapshot_consumer_catalog_fixed as session,
+)
+from . import (
+    admission_protected_final_combined_v2_workshop_invalidation as workshop_reload,
+)
+from . import (
+    admission_protected_final_combined_v2_workshop_proposal_apply as workshop,
 )
 from .admission_evidence import AdmissionEvidenceError
 from .cas import CAS
@@ -122,6 +128,8 @@ _EXPECTED_PASS_ROUTES = frozenset(
         chat._ROUTE,
         archive._ROUTE,
         curator._ROUTE,
+        workshop._ROUTE,
+        workshop_reload._ROUTE,
     }
 )
 _CHILDREN = (
@@ -297,6 +305,48 @@ _CHILDREN = (
         "route": curator._ROUTE,
         "image": curator._IMAGE,
     },
+    {
+        "name": "workshop_proposal_apply",
+        "module": workshop,
+        "verifier": "verify_openclaw_final_combined_v2_workshop_proposal_apply",
+        "verifier_path": (
+            "src/aragorn/admission_protected_final_combined_v2_workshop_"
+            "proposal_apply.py"
+        ),
+        "verifier_digest": (
+            "sha256:9eba3ac12956db45c280bc8b1ac8c123be81210c26c9270e180877ac2b9d43f8"
+        ),
+        "result_digest": (
+            "sha256:d4d3ee7230ec1d303b1e8417340d8d48c45f448d1384ba7ba85c0675bc3c45f6"
+        ),
+        "capture_binding": "workshop_proposal_apply_observation",
+        "capture_digest": (
+            "sha256:55a6d55988aa79a963a49eb885bb63758daa3b575ff1d16c2d901cafe281b379"
+        ),
+        "route": workshop._ROUTE,
+        "image": workshop._IMAGE,
+    },
+    {
+        "name": "workshop_invalidation",
+        "module": workshop_reload,
+        "verifier": "verify_openclaw_final_combined_v2_workshop_invalidation",
+        "verifier_path": (
+            "src/aragorn/admission_protected_final_combined_v2_workshop_"
+            "invalidation.py"
+        ),
+        "verifier_digest": (
+            "sha256:a10e2d9d0da6061c9b28f6a633014f9fbfbf93866f30133418effa2ee54c5339"
+        ),
+        "result_digest": (
+            "sha256:3a426658bff900ceac259229c6941d59c2094086049fc62ad9f6610d2c43b9d3"
+        ),
+        "capture_binding": "workshop_proposal_apply_observation",
+        "capture_digest": (
+            "sha256:55a6d55988aa79a963a49eb885bb63758daa3b575ff1d16c2d901cafe281b379"
+        ),
+        "route": workshop_reload._ROUTE,
+        "image": workshop._IMAGE,
+    },
 )
 _EXPECTED_CHILD_SEQUENCE = (
     (
@@ -370,13 +420,33 @@ _EXPECTED_CHILD_SEQUENCE = (
         "curator_restore_observation",
         "sha256:4dd8819dbb5dd579480d6f514366b20f1e6f81bd78d608d975c7541f3323b942",
     ),
+    (
+        "workshop_proposal_apply",
+        workshop._ROUTE,
+        (
+            "src/aragorn/admission_protected_final_combined_v2_workshop_"
+            "proposal_apply.py"
+        ),
+        "workshop_proposal_apply_observation",
+        "sha256:55a6d55988aa79a963a49eb885bb63758daa3b575ff1d16c2d901cafe281b379",
+    ),
+    (
+        "workshop_invalidation",
+        workshop_reload._ROUTE,
+        (
+            "src/aragorn/admission_protected_final_combined_v2_workshop_"
+            "invalidation.py"
+        ),
+        "workshop_proposal_apply_observation",
+        "sha256:55a6d55988aa79a963a49eb885bb63758daa3b575ff1d16c2d901cafe281b379",
+    ),
 )
 
 
 def compose_openclaw_final_combined_v2_route_coverage(
     *, evidence_cas: CAS
 ) -> dict[str, Any]:
-    """Compose eight exact qualifications from seven captures without authority."""
+    """Compose ten exact qualifications from eight captures without authority."""
 
     children: list[dict[str, Any]] = []
     names: set[str] = set()
@@ -503,25 +573,76 @@ def compose_openclaw_final_combined_v2_route_coverage(
         ):
             raise AdmissionEvidenceError("V2 chat/session parent relationship changed")
 
+        workshop_capture = captures_by_name["workshop_proposal_apply"]
+        workshop_reload_capture = captures_by_name["workshop_invalidation"]
+        if workshop_reload_capture != workshop_capture:
+            raise AdmissionEvidenceError(
+                "V2 workshop update/reload shared capture binding changed"
+            )
+
+        workshop_child = children_by_name["workshop_proposal_apply"]
+        workshop_reload_result = results_by_name["workshop_invalidation"]
+        if (
+            workshop_child["result_canonical_digest"]
+            != workshop_reload._PARENT_RESULT_DIGEST
+            or workshop_reload_result["bindings"][
+                "parent_qualification_canonical_digest"
+            ]
+            != workshop_reload._PARENT_RESULT_DIGEST
+            or workshop_child["verifier"]
+            != {
+                "digest": workshop_reload._PARENT_MODULE["digest"],
+                "path": workshop_reload._PARENT_MODULE["path"],
+            }
+            or workshop_reload_result["bindings"]["parent_verifier"]
+            != {
+                **workshop_reload._PARENT_SOURCE,
+                "digest": workshop_reload._PARENT_MODULE["digest"],
+                "path": workshop_reload._PARENT_MODULE["path"],
+            }
+            or workshop_reload_result["bindings"]["parent_receipt"]
+            != workshop_reload._PARENT_RECEIPT
+            or workshop_reload_result["bindings"]["shared_capture"]
+            != {
+                "capture_relationship": (
+                    "SHARED_WITH_WORKSHOP_PROPOSAL_APPLY_NOT_INDEPENDENT_CAPTURE"
+                ),
+                "source_route": workshop._ROUTE,
+            }
+            or workshop_reload_result["route_semantics"][
+                "shared_capture_independent"
+            ]
+            is not False
+            or workshop_reload_result["route_semantics"]["source_capture_route"]
+            != workshop._ROUTE
+        ):
+            raise AdmissionEvidenceError(
+                "V2 workshop update/reload parent relationship changed"
+            )
+
         shared_capture_groups = [
             {"capture_digest": digest, "routes": routes}
             for digest, routes in routes_by_capture.items()
             if len(routes) > 1
         ]
-        if len(routes_by_capture) != 7 or shared_capture_groups != [
+        if len(routes_by_capture) != 8 or shared_capture_groups != [
             {
                 "capture_digest": session_capture["digest"],
                 "routes": [session._ROUTE, chat._ROUTE],
-            }
+            },
+            {
+                "capture_digest": workshop_capture["digest"],
+                "routes": [workshop._ROUTE, workshop_reload._ROUTE],
+            },
         ]:
-            raise AdmissionEvidenceError("exact V2 seven-capture model changed")
+            raise AdmissionEvidenceError("exact V2 eight-capture model changed")
     except AdmissionEvidenceError:
         raise
     except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
         raise AdmissionEvidenceError(f"invalid V2 child qualification: {exc}") from exc
 
-    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 8:
-        raise AdmissionEvidenceError("exact eight V2 route qualifications are required")
+    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 10:
+        raise AdmissionEvidenceError("exact ten V2 route qualifications are required")
     if shared is None or runtime is None:
         raise AdmissionEvidenceError("V2 child contract bindings are missing")
     implementation_digest = _digest(Path(__file__).resolve().read_bytes())
@@ -540,8 +661,8 @@ def compose_openclaw_final_combined_v2_route_coverage(
     return {
         "schema": ("aragorn/admission-protected-final-combined-v2-route-coverage/v1"),
         "assurance": (
-            "EIGHT_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_SEVEN_CAPTURES_"
-            "ONE_SHARED_CHAT_SUBSEQUENCE_ONLY"
+            "TEN_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_EIGHT_CAPTURES_"
+            "TWO_EXACT_SHARED_SUBSEQUENCES_ONLY"
         ),
         "bindings": {
             **{key: dict(shared[key]) for key in _SHARED_BINDINGS},
@@ -553,10 +674,10 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "aggregate_execution_observed": False,
             "distinct_capture_count": len(routes_by_capture),
             "kind": (
-                "EIGHT_EXACT_ROUTE_QUALIFICATIONS_FROM_SEVEN_CAPTURES_"
-                "ONE_SHARED_CHAT_SUBSEQUENCE"
+                "TEN_EXACT_ROUTE_QUALIFICATIONS_FROM_EIGHT_CAPTURES_"
+                "TWO_EXACT_SHARED_SUBSEQUENCES"
             ),
-            "qualification_count": 8,
+            "qualification_count": 10,
             "same_image_required": False,
             "shared_capture_groups": shared_capture_groups,
         },
@@ -565,8 +686,8 @@ def compose_openclaw_final_combined_v2_route_coverage(
             **{key: False for key in _ELIGIBILITY_KEYS},
         },
         "limitations": [
-            "EIGHT_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_SEVEN_CAPTURES",
-            "THIRTEEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
+            "TEN_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_EIGHT_CAPTURES",
+            "ELEVEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
             "SEPARATE_CAPTURES_DO_NOT_ESTABLISH_AGGREGATE_ADMISSION",
             "CHAT_ROUTE_REUSES_SHARED_SESSION_CAPTURE_NOT_INDEPENDENT_EXECUTION",
             "RAW_CAPTURE_ROUTE_ID_REMAINS_SESSION_SNAPSHOT_CONSUMER",
@@ -588,11 +709,21 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "EXACT_EPHEMERAL_ARCHIVED_LIFECYCLE_FIXTURE_NOT_NATIVE_CURATOR_SWEEP",
             "EXACT_SELECTED_LIFECYCLE_ROW_ONLY_NOT_FULL_DATABASE_STATE",
             "SKILLS_STATUS_ARCHIVED_DIAGNOSTIC_NOT_ACTIVE_CONSUMER_PROOF",
+            "WORKSHOP_RESIDUE_PERSISTS_THROUGH_FINAL_OBSERVATION",
+            "WORKSHOP_POST_APPLY_AND_FINAL_SKILLS_STATUS_DENIED_BY_EXTERNAL_AUTHORITY",
+            "NO_POST_APPLY_WORKSHOP_CATALOG_AVAILABILITY_CLAIM",
+            "WORKSHOP_INVALIDATION_REUSES_SHARED_PROPOSAL_APPLY_CAPTURE_NOT_INDEPENDENT_EXECUTION",
+            "RAW_WORKSHOP_CAPTURE_ROUTE_ID_REMAINS_WORKSHOP_PROPOSAL_APPLY",
+            "WORKSHOP_NEXT_SAME_SESSION_TURN_FAILED_NO_PROVIDER_SUCCESS_REPLY_OR_DELIVERY_CLAIM",
+            "WORKSHOP_APPLIED_TARGET_BYTES_NOT_RETAINED_METADATA_DIGEST_ONLY",
+            "WORKSHOP_RESIDUE_NOT_CLEANED_UP_NO_CLEANUP_ROLLBACK_OR_QUARANTINE_CLAIM",
+            "WORKSHOP_SCAN_CLEAN_IS_SELF_REPORTED_DIAGNOSTIC_ONLY",
+            "WORKSHOP_INVALIDATION_BLACK_BOX_NEXT_TURN_NO_DIRECT_FUNCTION_TRACE",
             "SEPARATE_EXACT_CHILD_IMAGE_IDS_RETAINED_NOT_UNIFIED",
             "NO_AGGREGATE_ADMISSION_EDR_PHASE3_RELEASE_OR_INSTALLER_AUTHORITY",
         ],
         "profile": {
-            "counts": {"PASS": 8, "NOT_TESTED": 13},
+            "counts": {"PASS": 10, "NOT_TESTED": 11},
             "name": _PROFILE,
             "route_inventory_canonical_digest": canonical_digest(list(_ROUTES)),
             "routes": routes,

@@ -19,6 +19,8 @@ elif [ "$#" -eq 2 ]; then
             route=ADM-02/update/archive-source-force-replacement ;;
         --config-entry-activation)
             route=ADM-02/update/config-entry-activation ;;
+        --curator-restore-activation)
+            route=ADM-02/update/curator-restore-activation ;;
         --cron-rescan) route=ADM-02/reload/cron-rescan ;;
         --fresh-session-reset) route=ADM-02/reload/fresh-session-reset ;;
         --missing-prompt-blob-rebuild)
@@ -31,7 +33,7 @@ elif [ "$#" -eq 2 ]; then
     esac
     output=$2
 else
-    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
+    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--curator-restore-activation|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
     exit 64
 fi
 case "$output" in
@@ -245,6 +247,7 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/admission/openclaw-v2026.7.1/protected-config-activation-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-v2-probe.mjs \
+    benchmark/admission/openclaw-v2026.7.1/protected-curator-restore-denial-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-observation-v1.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-prompt-rebuild-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-route-probe.mjs \
@@ -271,6 +274,9 @@ python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/cron-rescan" \
     protected-observation-v1.mjs protected-cron-rescan-probe.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/curator-restore-activation" \
+    protected-curator-restore-denial-probe.mjs protected-observation-v1.mjs
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/fresh-session-reset" \
     protected-route-probe.mjs

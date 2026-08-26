@@ -1545,7 +1545,7 @@ def transformed_final_combined_probe(
             "protected-session-snapshot-fixed-probe.mjs",
         }:
             raw = _replace_once(raw, (FINAL_COMBINED_TARGET_REPLACEMENTS[1],))
-        elif name != "protected-curator-restore-denial-probe.mjs":
+        else:
             raw = _replace_once(
                 raw,
                 (

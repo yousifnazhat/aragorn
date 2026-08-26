@@ -212,6 +212,9 @@ python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/cron-rescan" \
     protected-observation-v1.mjs protected-cron-rescan-probe.mjs
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
+    --final-combined-v2 "$context/route-input/curator-restore-activation" \
+    protected-curator-restore-denial-probe.mjs protected-observation-v1.mjs
+python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/fresh-session-reset" \
     protected-route-probe.mjs
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \

@@ -28,6 +28,14 @@ _ROUTES = {
         "probe": "protected-config-activation-probe.mjs",
         "schema": "aragorn/openclaw-protected-config-activation-observation/v1",
     },
+    "ADM-02/update/curator-restore-activation": {
+        "files": (
+            "protected-curator-restore-denial-probe.mjs",
+            "protected-observation-v1.mjs",
+        ),
+        "probe": "protected-curator-restore-denial-probe.mjs",
+        "schema": "aragorn/openclaw-protected-curator-restore-denial-observation/v1",
+    },
 }
 _ROUTE_ROOTS = {
     route_id: Path("/route-input") / route_id.rsplit("/", 1)[1] for route_id in _ROUTES
@@ -46,6 +54,10 @@ _EXPECTED_PROBES = {
     "protected-cron-rescan-probe.mjs": {
         "bytes": 35_318,
         "digest": "sha256:94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0",
+    },
+    "protected-curator-restore-denial-probe.mjs": {
+        "bytes": 26_571,
+        "digest": "sha256:c43bbcc718df29114e9edcee8f8d6e8d3ad96f5c4dfc7e5b29b4743f3128f60d",
     },
     "protected-observation-v1.mjs": {
         "bytes": 16_324,

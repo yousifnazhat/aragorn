@@ -27,6 +27,7 @@ class FinalAdmissionV2SystemdProbeTests(unittest.TestCase):
             "archive-source-force-replacement",
             "config-entry-activation",
             "cron-rescan",
+            "curator-restore-activation",
             "fresh-session-reset",
             "missing-prompt-blob-rebuild",
             "session-snapshot-consumer",

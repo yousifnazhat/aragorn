@@ -54,6 +54,9 @@ RUN set -eux; \
             'cron-rescan:d' \
             'cron-rescan/protected-cron-rescan-probe.mjs:f' \
             'cron-rescan/protected-observation-v1.mjs:f' \
+            'curator-restore-activation:d' \
+            'curator-restore-activation/protected-curator-restore-denial-probe.mjs:f' \
+            'curator-restore-activation/protected-observation-v1.mjs:f' \
             'fresh-session-reset:d' \
             'fresh-session-reset/protected-route-probe.mjs:f' \
             'missing-prompt-blob-rebuild:d' \
@@ -70,6 +73,10 @@ RUN set -eux; \
     test "$(sha256sum /route-input/cron-rescan/protected-cron-rescan-probe.mjs | cut -d ' ' -f 1)" = \
         94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0; \
     test "$(sha256sum /route-input/cron-rescan/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
+        91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22; \
+    test "$(sha256sum /route-input/curator-restore-activation/protected-curator-restore-denial-probe.mjs | cut -d ' ' -f 1)" = \
+        c43bbcc718df29114e9edcee8f8d6e8d3ad96f5c4dfc7e5b29b4743f3128f60d; \
+    test "$(sha256sum /route-input/curator-restore-activation/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
         91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22; \
     test "$(sha256sum /route-input/fresh-session-reset/protected-route-probe.mjs | cut -d ' ' -f 1)" = \
         65fda9d7406b9813017002cd7b6cde449475685b4410e45bca5b7aeed00ae7c1; \

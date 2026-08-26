@@ -358,8 +358,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "2200529fbe50c81666359b8a5d3f11ff52c088ab32a45dcc982bd5193bede16f",
             ),
             "protected-curator-restore-denial-probe.mjs": (
-                26_564,
-                "92b57624678a58aacc5cc147958a60e2e7f204c74ebf5a724473b9c604c2a680",
+                26_571,
+                "145672bc46fd8a2435e8c3bcd03c34578915fb9104f826d121e7b1726f89e949",
             ),
             "protected-observation-v1.mjs": (
                 16_324,
@@ -430,6 +430,13 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             self.assertIn(
                 b'const TARGET = "/opt/aragorn/runtime-profile/template-skill";',
                 archive,
+            )
+            curator = transformed_final_combined_probe(
+                "protected-curator-restore-denial-probe.mjs"
+            )
+            self.assertIn(
+                b'const TARGET = "/opt/aragorn/runtime-profile/template-skill";',
+                curator,
             )
             self.assertIn(
                 b'const CONTROL_ROOT = "/tmp/aragorn-final-archive-control";',
@@ -621,8 +628,8 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0",
             ),
             "protected-curator-restore-denial-probe.mjs": (
-                26_564,
-                "27233e6340619e1113a8c2b931fc6ef9957db3b6f57d90dfd820d5af919b450e",
+                26_571,
+                "c43bbcc718df29114e9edcee8f8d6e8d3ad96f5c4dfc7e5b29b4743f3128f60d",
             ),
             "protected-observation-v1.mjs": (
                 16_324,

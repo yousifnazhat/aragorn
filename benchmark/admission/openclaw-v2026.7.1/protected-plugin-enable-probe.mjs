@@ -21,8 +21,8 @@ const STATE = "/var/lib/aragorn-agent-gateway/state";
 const WORKSPACE = "/var/lib/aragorn-agent-gateway/workspace";
 const ROUTE_INPUT = "/route-input";
 const PLUGIN_ID = "tts-local-cli";
-const PLUGIN_ROOT = `/runtime/lib/node_modules/openclaw/extensions/${PLUGIN_ID}`;
-const PLUGIN_ENTRY = `${PLUGIN_ROOT}/index.ts`;
+const PLUGIN_ROOT = `/runtime/lib/node_modules/openclaw/dist/extensions/${PLUGIN_ID}`;
+const PLUGIN_ENTRY = `${PLUGIN_ROOT}/index.js`;
 const ROUTE_ID = "ADM-02/update/plugin-enable-activation";
 const ACTION_ID = "plugin-enable-activation";
 const SELF = fileURLToPath(import.meta.url);
@@ -684,7 +684,7 @@ function selfCheck() {
     route_id_exact: ROUTE_ID === "ADM-02/update/plugin-enable-activation",
     target_is_bundled_runtime_plugin:
       PLUGIN_ROOT ===
-      "/runtime/lib/node_modules/openclaw/extensions/tts-local-cli",
+      "/runtime/lib/node_modules/openclaw/dist/extensions/tts-local-cli",
   };
   return {
     assurance: ASSURANCE,

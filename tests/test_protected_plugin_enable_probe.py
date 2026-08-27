@@ -46,6 +46,11 @@ class ProtectedPluginEnableProbeTests(unittest.TestCase):
             source,
         )
         self.assertIn(
+            "`/runtime/lib/node_modules/openclaw/dist/extensions/${PLUGIN_ID}`",
+            source,
+        )
+        self.assertIn("const PLUGIN_ENTRY = `${PLUGIN_ROOT}/index.js`;", source)
+        self.assertIn(
             'schema: "aragorn/openclaw-protected-plugin-enable-observation/v1"',
             source,
         )

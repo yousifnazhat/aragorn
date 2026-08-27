@@ -21,6 +21,8 @@ elif [ "$#" -eq 2 ]; then
             route=ADM-02/update/config-entry-activation ;;
         --curator-restore-activation)
             route=ADM-02/update/curator-restore-activation ;;
+        --plugin-enable-activation)
+            route=ADM-02/update/plugin-enable-activation ;;
         --workshop-proposal-apply)
             route=ADM-02/update/workshop-proposal-apply ;;
         --cron-rescan) route=ADM-02/reload/cron-rescan ;;
@@ -35,7 +37,7 @@ elif [ "$#" -eq 2 ]; then
     esac
     output=$2
 else
-    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--curator-restore-activation|--workshop-proposal-apply|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
+    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--curator-restore-activation|--plugin-enable-activation|--workshop-proposal-apply|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
     exit 64
 fi
 case "$output" in
@@ -251,6 +253,7 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/admission/openclaw-v2026.7.1/protected-cron-rescan-v2-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-curator-restore-denial-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-observation-v1.mjs \
+    benchmark/admission/openclaw-v2026.7.1/protected-plugin-enable-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-prompt-rebuild-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-route-probe.mjs \
     benchmark/admission/openclaw-v2026.7.1/protected-session-snapshot-fixed-probe.mjs \
@@ -286,6 +289,9 @@ python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/missing-prompt-blob-rebuild" \
     protected-observation-v1.mjs protected-prompt-rebuild-probe.mjs
+mkdir -p "$context/route-input/plugin-enable-activation"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/protected-plugin-enable-probe.mjs" \
+    "$context/route-input/plugin-enable-activation/protected-plugin-enable-probe.mjs"
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/session-snapshot-consumer" \
     protected-observation-v1.mjs protected-session-snapshot-fixed-probe.mjs

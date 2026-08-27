@@ -11,6 +11,13 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+PLUGIN_ENABLE_PROBE = (
+    ROOT
+    / "benchmark"
+    / "admission"
+    / "openclaw-v2026.7.1"
+    / "protected-plugin-enable-probe.mjs"
+)
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(SCRIPTS))
 
@@ -69,6 +76,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             "--archive-source-force-replacement",
             "--config-entry-activation",
             "--curator-restore-activation",
+            "--plugin-enable-activation",
             "--workshop-proposal-apply",
             "--cron-rescan",
             "--fresh-session-reset",
@@ -85,6 +93,20 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         )
         self.assertIn(
             "benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md",
+            source,
+        )
+        self.assertIn(
+            "benchmark/admission/openclaw-v2026.7.1/"
+            "protected-plugin-enable-probe.mjs",
+            source,
+        )
+        self.assertIn(
+            'cp "$context/benchmark/admission/openclaw-v2026.7.1/'
+            'protected-plugin-enable-probe.mjs"',
+            source,
+        )
+        self.assertNotIn(
+            '--final-combined-v2 "$context/route-input/plugin-enable-activation"',
             source,
         )
         for control in (
@@ -112,8 +134,12 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         for route_id, specification in route._ROUTES.items():
             workshop = route_id == "ADM-02/update/workshop-proposal-apply"
             for name in specification["files"]:
-                materialized = transformed_final_combined_v2_probe(
-                    name, workshop=workshop
+                materialized = (
+                    PLUGIN_ENABLE_PROBE.read_bytes()
+                    if route_id == "ADM-02/update/plugin-enable-activation"
+                    else transformed_final_combined_v2_probe(
+                        name, workshop=workshop
+                    )
                 )
                 expected = {
                     "bytes": len(materialized),
@@ -133,6 +159,16 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
         self.assertEqual(
             route._ROUTES["ADM-02/update/workshop-proposal-apply"]["probe"],
             "protected-route-probe.mjs",
+        )
+        self.assertEqual(
+            route._ROUTES["ADM-02/update/plugin-enable-activation"],
+            {
+                "files": ("protected-plugin-enable-probe.mjs",),
+                "probe": "protected-plugin-enable-probe.mjs",
+                "schema": (
+                    "aragorn/openclaw-protected-plugin-enable-observation/v1"
+                ),
+            },
         )
 
         for route_id in route._ROUTES:

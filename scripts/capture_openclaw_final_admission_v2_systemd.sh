@@ -221,6 +221,9 @@ python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/missing-prompt-blob-rebuild" \
     protected-observation-v1.mjs protected-prompt-rebuild-probe.mjs
+mkdir -p "$context/route-input/plugin-enable-activation"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/protected-plugin-enable-probe.mjs" \
+    "$context/route-input/plugin-enable-activation/protected-plugin-enable-probe.mjs"
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/session-snapshot-consumer" \
     protected-observation-v1.mjs protected-session-snapshot-fixed-probe.mjs
@@ -255,6 +258,7 @@ path = Path(sys.argv[1])
 raw = b"""ARG V2_BASE
 FROM ${V2_BASE}
 COPY benchmark/admission/openclaw-v2026.7.1/ /src/benchmark/admission/openclaw-v2026.7.1/
+COPY route-input/fresh-session-reset/protected-route-probe.mjs /src/benchmark/admission/openclaw-v2026.7.1/protected-route-probe.mjs
 COPY scripts/capture_openclaw_final_admission_v2_systemd.sh scripts/openclaw_final_admission_v2_systemd_probe.py /src/scripts/
 RUN find /src/benchmark/admission/openclaw-v2026.7.1 -type f -exec chmod 0444 {} + && chmod 0555 /src/scripts/capture_openclaw_final_admission_v2_systemd.sh /src/scripts/openclaw_final_admission_v2_systemd_probe.py
 """
@@ -292,14 +296,30 @@ fi
 
 create_attempted=1
 container_id=$(docker create --name "$container" --cidfile "$cidfile" --pull=never \
-    --network=none --cap-drop=ALL --security-opt no-new-privileges:true \
+    --privileged --cgroupns=host --network=none \
     --security-opt label=disable \
     --label dev.aragorn.profile=openclaw-final-admission-v2 \
     --label "dev.aragorn.capture-owner=$owner_token" \
     --tmpfs /run:rw,nosuid,nodev,noexec,mode=755 \
+    --tmpfs /run/lock:rw,nosuid,nodev,noexec,mode=755 \
+    -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     -v "$runtime_volume:/runtime:ro" \
-    "$child_id" /bin/sh -c 'while :; do sleep 3600; done')
+    "$child_id")
 docker start "$container_id" >/dev/null
+
+i=0
+while ! docker exec "$container_id" sh -c '
+    test -S /run/systemd/private \
+        && test "$(stat -c "%u:%g:%a" /run/aragorn-protected-install 2>/dev/null)" = 0:0:700 \
+        && test -z "$(find /run/aragorn-protected-install -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)"
+'; do
+    i=$((i + 1))
+    if [ "$i" -ge 100 ]; then
+        echo "systemd and protected-install tmpfiles did not become ready" >&2
+        exit 70
+    fi
+    sleep 0.1
+done
 
 docker inspect "$container_id" >"$container_inspect"
 docker image inspect "$v1_parent" >"$v1_inspect"
@@ -412,20 +432,34 @@ expected_volume = {
 }
 host = container["HostConfig"]
 host_profile = {
-    "cap_drop": host.get("CapDrop"),
+    "binds": sorted(host["Binds"]),
+    "cgroupns_mode": host["CgroupnsMode"],
+    "ipc_mode": host["IpcMode"],
     "network_mode": host["NetworkMode"],
     "privileged": host["Privileged"],
     "readonly_rootfs": host["ReadonlyRootfs"],
+    "runtime": host["Runtime"],
     "security_opt": sorted(host["SecurityOpt"]),
     "tmpfs": host["Tmpfs"],
+    "userns_mode": host["UsernsMode"],
 }
 expected_host = {
-    "cap_drop": ["ALL"],
+    "binds": sorted([
+        "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+        f"{runtime_volume}:/runtime:ro",
+    ]),
+    "cgroupns_mode": "host",
+    "ipc_mode": "private",
     "network_mode": "none",
-    "privileged": False,
+    "privileged": True,
     "readonly_rootfs": False,
-    "security_opt": sorted(["label=disable", "no-new-privileges:true"]),
-    "tmpfs": {"/run": "rw,nosuid,nodev,noexec,mode=755"},
+    "runtime": "runc",
+    "security_opt": ["label=disable"],
+    "tmpfs": {
+        "/run": "rw,nosuid,nodev,noexec,mode=755",
+        "/run/lock": "rw,nosuid,nodev,noexec,mode=755",
+    },
+    "userns_mode": "",
 }
 if (
     runtime_mount != expected_mount
@@ -555,9 +589,9 @@ expected_decision = {
     "semantic_pass_verified": False,
     "property_not_tested_count": 2,
     "formal_category_not_tested_count": 8,
-    "route_observed_count": 0,
+    "route_observed_count": 1,
     "route_fail_count": 0,
-    "route_not_tested_count": 21,
+    "route_not_tested_count": 20,
     "adm03_not_tested_count": 2,
     "admission_profile_eligible": False,
     "aggregate_admission_eligible": False,

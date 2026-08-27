@@ -16,11 +16,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 sys.path.insert(0, "/usr/lib/aragorn")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import runtime_action_worker_final_combined_v2_systemd_probe as bootstrap
+import runtime_action_worker_final_combined_v2_route_systemd_probe as route_probe
 
 p37c = bootstrap.p37c
 
@@ -160,6 +162,10 @@ _MAIN_PROBES = (
     "workshop-bypass-probe.mjs",
 )
 _ADM03_PROBES = ("adm03-probe.mjs",)
+_ROUTE_SLICE_ID = "ADM-02/reload/fresh-session-reset"
+_ROUTE_SLICE_PROBE = "protected-route-probe.mjs"
+_ROUTE_SLICE_REASON = "BOUND_RAW_ROUTE_EXECUTION_NOT_SEMANTICALLY_VERIFIED"
+_ROUTE_SLICE_ARTIFACT = "artifacts/fresh-session-reset.json"
 _ELIGIBILITY_KEYS = {
     "admission_profile_eligible",
     "aggregate_admission_eligible",
@@ -172,11 +178,15 @@ _ELIGIBILITY_KEYS = {
     "run_eligible",
 }
 _LIMITATIONS = [
-    "EMPTY_BOUND_INPUT_SCAFFOLD_ONLY",
-    "ALL_PROPERTIES_CATEGORIES_ROUTES_AND_ADM_03_SCENARIOS_REMAIN_NOT_TESTED",
+    "ONE_BOUND_FRESH_SESSION_RESET_ROUTE_EXECUTION_ONLY",
+    "ONE_ROUTE_OBSERVED_IS_NOT_SEMANTIC_PASS",
+    "RAW_ROUTE_DOCUMENT_RETAINED_OPAQUELY_WITH_EXACT_BYTE_IDENTITY",
+    "TWENTY_OTHER_ROUTES_REMAIN_NOT_TESTED",
+    "ALL_PROPERTIES_CATEGORIES_AND_ADM_03_SCENARIOS_REMAIN_NOT_TESTED",
     "OBSERVED_STATUS_WOULD_NOT_EQUAL_PASS",
     "SEMANTIC_CONFORMANCE_VERIFIER_NOT_COMPOSED",
     "PRIVATE_PATCHED_BUILD_NOT_OFFICIAL_OPENCLAW_RELEASE",
+    "ONE_LOCAL_PRIVILEGED_DOCKER_SYSTEMD_FIXTURE_ONLY",
     "PUBLIC_NETWORK_DENIED",
     "NO_ADMISSION_INSTALLER_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY",
 ]
@@ -233,6 +243,43 @@ def _json(raw: bytes, label: str, *, canonical_lf: bool = True) -> dict[str, Any
     _expect(isinstance(document, dict), f"{label} must be an object")
     expected = _canonical(document) + (b"\n" if canonical_lf else b"")
     _expect(raw == expected, f"{label} is not canonical JSON")
+    return document
+
+
+def _route_raw_document(record: Any) -> dict[str, Any]:
+    value = _exact_keys(
+        record,
+        {
+            "base64",
+            "bytes",
+            "canonical_digest",
+            "digest",
+            "raw_is_canonical_json_lf",
+        },
+        "aggregate route slice raw document",
+    )
+    try:
+        raw = base64.b64decode(value["base64"], validate=True)
+    except (TypeError, ValueError) as exc:
+        raise CaptureError("aggregate route slice raw base64 is invalid") from exc
+    try:
+        document = json.loads(
+            raw,
+            object_pairs_hook=_unique_object,
+            parse_constant=lambda item: (_ for _ in ()).throw(ValueError(item)),
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CaptureError(f"aggregate route slice raw is not strict JSON: {exc}") from exc
+    _expect(isinstance(document, dict), "aggregate route slice raw must be an object")
+    canonical = _canonical(document)
+    _expect(
+        value["bytes"] == len(raw)
+        and value["digest"] == _digest(raw)
+        and value["canonical_digest"] == _digest(canonical)
+        and type(value["raw_is_canonical_json_lf"]) is bool
+        and value["raw_is_canonical_json_lf"] == (raw == canonical + b"\n"),
+        "aggregate route slice raw identity changed",
+    )
     return document
 
 
@@ -299,6 +346,22 @@ def _harness() -> dict[str, Any]:
         },
         "container",
     )
+    host_profile = _exact_keys(
+        container["host_profile"],
+        {
+            "binds",
+            "cgroupns_mode",
+            "ipc_mode",
+            "network_mode",
+            "privileged",
+            "readonly_rootfs",
+            "runtime",
+            "security_opt",
+            "tmpfs",
+            "userns_mode",
+        },
+        "container host profile",
+    )
     lineage = _exact_keys(
         document["image_lineage"],
         {"v1", "v2", "admission", "v2_added_layers", "admission_added_layers"},
@@ -310,6 +373,29 @@ def _harness() -> dict[str, Any]:
     volume = _exact_keys(
         document["runtime_volume"], {"identity", "mount"}, "runtime volume"
     )
+    expected_host_profile = {
+        "binds": sorted(
+            [
+                "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+                (
+                    "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1:"
+                    "/runtime:ro"
+                ),
+            ]
+        ),
+        "cgroupns_mode": "host",
+        "ipc_mode": "private",
+        "network_mode": "none",
+        "privileged": True,
+        "readonly_rootfs": False,
+        "runtime": "runc",
+        "security_opt": ["label=disable"],
+        "tmpfs": {
+            "/run": "rw,nosuid,nodev,noexec,mode=755",
+            "/run/lock": "rw,nosuid,nodev,noexec,mode=755",
+        },
+        "userns_mode": "",
+    }
     _expect(
         document["schema"] == "aragorn/openclaw-final-admission-v2-systemd-harness/v1"
         and document["capture_disposition"]
@@ -331,6 +417,7 @@ def _harness() -> dict[str, Any]:
         == "aragorn-openclaw-final-admission-v2-systemd"
         and container["platform"] == "linux"
         and container["profile_label"] == "openclaw-final-admission-v2"
+        and host_profile == expected_host_profile
         and v1["id"]
         == "sha256:3ccea364258c367342e585113d784b7ce00642c63918e0a6f0a6594019d3121c"
         and v2["layers"][: len(v1["layers"])] == v1["layers"]
@@ -537,6 +624,20 @@ def _rows(identifiers: tuple[str, ...]) -> list[dict[str, Any]]:
     return [_row(identifier) for identifier in identifiers]
 
 
+def _observed_route_row(identifier: str, evidence_digest: str) -> dict[str, Any]:
+    _expect(identifier == _ROUTE_SLICE_ID, "aggregate route slice identity changed")
+    _expect(
+        re.fullmatch(r"sha256:[0-9a-f]{64}", evidence_digest) is not None,
+        "aggregate route slice evidence digest is invalid",
+    )
+    return {
+        "evidence_refs": [evidence_digest],
+        "id": identifier,
+        "reason_codes": [_ROUTE_SLICE_REASON],
+        "status": "OBSERVED",
+    }
+
+
 def _write_input(path: Path, document: dict[str, Any]) -> dict[str, Any]:
     raw = _canonical(document) + b"\n"
     descriptor = os.open(
@@ -559,17 +660,275 @@ def _write_input(path: Path, document: dict[str, Any]) -> dict[str, Any]:
     return {"bytes": len(raw), "digest": _digest(raw), "path": path.name}
 
 
-def _main_input(nonce: str, bindings: dict[str, Any]) -> dict[str, Any]:
+def _main_input(
+    nonce: str, bindings: dict[str, Any], artifact: dict[str, Any]
+) -> dict[str, Any]:
+    record = _exact_keys(artifact, {"digest", "path", "schema"}, "route artifact")
+    _expect(
+        record["path"] == _ROUTE_SLICE_ARTIFACT
+        and record["schema"] == _BOUND_EVIDENCE_SCHEMA
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", record["digest"]) is not None,
+        "route artifact contract changed",
+    )
+    routes = _rows(_ROUTE_IDS)
+    route_index = _ROUTE_IDS.index(_ROUTE_SLICE_ID)
+    routes[route_index] = _observed_route_row(
+        _ROUTE_SLICE_ID, record["digest"]
+    )
     return {
-        "artifacts": [],
+        "artifacts": [record],
         "bindings": bindings,
         "formal_categories": _rows(_CATEGORY_IDS),
         "mode": "main",
         "properties": _rows(_PROPERTY_IDS),
-        "routes": _rows(_ROUTE_IDS),
+        "routes": routes,
         "run_nonce": nonce,
         "schema": "aragorn/openclaw-final-admission-v2-main-input/v1",
     }
+
+
+def _reject_promoted_eligibility(value: Any, label: str = "route observation") -> None:
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _reject_promoted_eligibility(item, f"{label}[{index}]")
+        return
+    if not isinstance(value, dict):
+        return
+    for key, item in value.items():
+        if key.endswith("_eligible"):
+            _expect(item is False, f"{label}.{key} promoted eligibility")
+        _reject_promoted_eligibility(item, f"{label}.{key}")
+
+
+def _route_slice_observation() -> dict[str, Any]:
+    with mock.patch.object(bootstrap, "_harness", _harness):
+        observation = route_probe._collect(_ROUTE_SLICE_ID)
+    document = _exact_keys(
+        observation,
+        {
+            "authority",
+            "composition",
+            "decision",
+            "limitations",
+            "recorded_at",
+            "route_id",
+            "route_observation",
+            "schema",
+            "source_artifacts",
+        },
+        "aggregate route slice observation",
+    )
+    decision = _exact_keys(
+        document["decision"],
+        {
+            *_ELIGIBILITY_KEYS,
+            "route_fail_count",
+            "route_not_tested_count",
+            "route_observation_status",
+            "route_pass_count",
+            "status",
+        },
+        "aggregate route slice decision",
+    )
+    composition = _exact_keys(
+        document["composition"],
+        {
+            "action",
+            "authority",
+            "bindings",
+            "decision",
+            "limitations",
+            "profile",
+            "recorded_at",
+            "schema",
+        },
+        "aggregate route slice composition",
+    )
+    composition_decision = _exact_keys(
+        composition["decision"],
+        {
+            *_ELIGIBILITY_KEYS,
+            "p3_7c_activation_action_observed",
+            "route_fail_count",
+            "route_not_tested_count",
+            "route_pass_count",
+            "status",
+        },
+        "aggregate route slice composition decision",
+    )
+    route = _exact_keys(
+        document["route_observation"],
+        {
+            "bundle",
+            "document",
+            "execution",
+            "gateway_pid_binding",
+            "raw",
+            "route",
+            "stack_before",
+        },
+        "aggregate route slice native observation",
+    )
+    native_route = _exact_keys(
+        route["route"],
+        {
+            "action_id",
+            "id",
+            "reason_codes",
+            "status",
+        },
+        "aggregate route slice native route",
+    )
+    native_document = _route_raw_document(route["raw"])
+    _reject_promoted_eligibility(document)
+    _expect(
+        document["schema"]
+        == "aragorn/runtime-action-worker-final-combined-v2-route-systemd-observation/v1"
+        and document["authority"] == route_probe._AUTHORITY
+        and document["route_id"] == _ROUTE_SLICE_ID
+        and decision["status"]
+        == "FINAL_COMBINED_V2_ROUTE_OBSERVED_PROFILE_NOT_TESTED"
+        and decision["route_observation_status"] == "OBSERVED"
+        and decision["route_pass_count"] == 0
+        and decision["route_fail_count"] == 0
+        and decision["route_not_tested_count"] == 21
+        and all(decision[key] is False for key in _ELIGIBILITY_KEYS)
+        and composition["schema"] == bootstrap._SCHEMA
+        and composition["authority"] == bootstrap._AUTHORITY
+        and composition_decision["status"]
+        == "FINAL_COMBINED_V2_ACTION_OBSERVED_PROFILE_NOT_TESTED"
+        and composition_decision["p3_7c_activation_action_observed"] is True
+        and composition_decision["route_pass_count"] == 0
+        and composition_decision["route_fail_count"] == 0
+        and composition_decision["route_not_tested_count"] == 21
+        and all(composition_decision[key] is False for key in _ELIGIBILITY_KEYS)
+        and native_route["id"] == _ROUTE_SLICE_ID
+        and native_route["action_id"] == "fresh-session-reset"
+        and native_route["reason_codes"] == []
+        and native_route["status"] == "OBSERVED",
+        "aggregate route slice did not remain one raw non-promoting observation",
+    )
+    _expect(
+        route["document"] == native_document,
+        "aggregate route slice parsed document differs from raw bytes",
+    )
+    return document
+
+
+def _route_slice_probe_digest(observation: dict[str, Any]) -> str:
+    source_artifacts = _exact_keys(
+        observation["source_artifacts"],
+        {"collector", "materializer", "probe_bundle", "v1_route_injector"},
+        "aggregate route slice source artifacts",
+    )
+    bundle = source_artifacts["probe_bundle"]
+    _expect(isinstance(bundle, list), "aggregate route slice probe bundle changed")
+    matches = [
+        item
+        for item in bundle
+        if isinstance(item, dict) and item.get("name") == _ROUTE_SLICE_PROBE
+    ]
+    _expect(len(matches) == 1, "aggregate route slice probe identity is ambiguous")
+    match = _exact_keys(
+        matches[0], {"bytes", "digest", "name"}, "aggregate route slice probe"
+    )
+    installed = _file(_ADMISSION / _ROUTE_SLICE_PROBE)
+    _expect(
+        match["bytes"] == installed["bytes"]
+        and match["digest"] == installed["digest"],
+        "aggregate route slice probe alias differs from the executed probe",
+    )
+    return installed["digest"]
+
+
+def _bound_route_artifact_document(
+    nonce: str,
+    bindings: dict[str, Any],
+    observation: dict[str, Any],
+    probe_digest: str,
+) -> dict[str, Any]:
+    _expect(
+        re.fullmatch(r"[0-9a-f]{64}", nonce) is not None,
+        "bound route artifact nonce changed",
+    )
+    _expect(
+        re.fullmatch(r"sha256:[0-9a-f]{64}", probe_digest) is not None,
+        "bound route artifact probe digest changed",
+    )
+    return {
+        "bindings": bindings,
+        "mode": "main",
+        "observation": observation,
+        "probe_digest": probe_digest,
+        "probe_module": _ROUTE_SLICE_PROBE,
+        "run_nonce": nonce,
+        "schema": _BOUND_EVIDENCE_SCHEMA,
+    }
+
+
+def _retained_route_slice_observation(document: dict[str, Any]) -> dict[str, Any]:
+    raw = _canonical(document) + b"\n"
+    return {
+        "decision": {
+            "semantic_pass_verified": False,
+            "status": "OBSERVED_NOT_PASS",
+            **{key: False for key in sorted(_ELIGIBILITY_KEYS)},
+        },
+        "limitations": [
+            "RAW_ROUTE_EXECUTION_ONLY",
+            "OBSERVED_IS_NOT_PASS",
+            "SEMANTIC_CONFORMANCE_VERIFIER_NOT_COMPOSED",
+            "NO_ADMISSION_INSTALLER_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY",
+        ],
+        "route_capture": {
+            "base64": base64.b64encode(raw).decode("ascii"),
+            "bytes": len(raw),
+            "digest": _digest(raw),
+        },
+        "route_capture_authority": document["authority"],
+        "route_capture_schema": document["schema"],
+        "route_capture_status": "OBSERVED",
+        "route_id": _ROUTE_SLICE_ID,
+        "schema": "aragorn/openclaw-final-admission-v2-route-slice-observation/v1",
+    }
+
+
+def _write_route_slice_artifact(
+    root: Path,
+    nonce: str,
+    bindings: dict[str, Any],
+    observation: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    _expect(root.parent.parent == _WORK_ROOT, "route artifact root escaped main stack")
+    directory = root / "artifacts"
+    directory.mkdir(mode=0o700)
+    metadata = directory.stat(follow_symlinks=False)
+    _expect(
+        stat.S_ISDIR(metadata.st_mode)
+        and stat.S_IMODE(metadata.st_mode) == 0o700
+        and not directory.is_symlink(),
+        "route artifact directory metadata changed",
+    )
+    probe_digest = _route_slice_probe_digest(observation)
+    retained_observation = _retained_route_slice_observation(observation)
+    document = _bound_route_artifact_document(
+        nonce, bindings, retained_observation, probe_digest
+    )
+    source = _write_input(directory / "fresh-session-reset.json", document)
+    descriptor = {
+        "digest": source["digest"],
+        "path": _ROUTE_SLICE_ARTIFACT,
+        "schema": _BOUND_EVIDENCE_SCHEMA,
+    }
+    normalized = {
+        "digest": source["digest"],
+        "observation": retained_observation,
+        "path": _ROUTE_SLICE_ARTIFACT,
+        "probe_digest": probe_digest,
+        "probe_module": _ROUTE_SLICE_PROBE,
+        "schema": _BOUND_EVIDENCE_SCHEMA,
+    }
+    return descriptor, normalized
 
 
 def _adm03_input(nonce: str, bindings: dict[str, Any]) -> dict[str, Any]:
@@ -679,6 +1038,7 @@ def _main_output(
     nonce: str,
     bindings: dict[str, Any],
     runtime: Path,
+    expected_evidence: list[dict[str, Any]],
 ) -> None:
     _exact_keys(
         document,
@@ -706,7 +1066,7 @@ def _main_output(
         and document["mode"] == "main"
         and document["run_nonce"] == nonce
         and document["bindings"] == bindings
-        and document["evidence"] == []
+        and document["evidence"] == expected_evidence
         and document["input"]
         == {
             "digest": source["digest"],
@@ -727,7 +1087,7 @@ def _main_output(
         document["decision"],
         "NOT_TESTED",
         "main",
-        {"FAIL": 0, "NOT_TESTED": 31, "OBSERVED": 0},
+        {"FAIL": 0, "NOT_TESTED": 30, "OBSERVED": 1},
     )
 
 
@@ -790,15 +1150,21 @@ def _remove_stack(path: Path) -> None:
     )
 
 
-def _decision_document(status: str) -> dict[str, Any]:
+def _decision_document(
+    status: str, *, route_observed_count: int = 0
+) -> dict[str, Any]:
+    _expect(
+        type(route_observed_count) is int and route_observed_count in {0, 1},
+        "aggregate route observation count changed",
+    )
     return {
         "status": status,
         "semantic_pass_verified": False,
         "property_not_tested_count": 2,
         "formal_category_not_tested_count": 8,
-        "route_observed_count": 0,
+        "route_observed_count": route_observed_count,
         "route_fail_count": 0,
-        "route_not_tested_count": 21,
+        "route_not_tested_count": 21 - route_observed_count,
         "adm03_not_tested_count": 2,
         **{key: False for key in sorted(_ELIGIBILITY_KEYS)},
     }
@@ -828,12 +1194,24 @@ def _collect() -> dict[str, Any]:
         _set_stage("MANIFEST")
         manifest = _run_suite("manifest", nonce, main_runtime, main_probes)
         _manifest(manifest, nonce, bindings)
-        main_input = _main_input(nonce, bindings)
+        _set_stage("AGGREGATE_ROUTE_SLICE")
+        route_observation = _route_slice_observation()
+        route_artifact, normalized_route_evidence = _write_route_slice_artifact(
+            main_probes, nonce, bindings, route_observation
+        )
+        main_input = _main_input(nonce, bindings, route_artifact)
         main_input_file = _write_input(main_probes / "main-input.json", main_input)
         main_input["digest"] = main_input_file["digest"]
         _set_stage("MAIN_AGGREGATION")
         main = _run_suite("main", nonce, main_runtime, main_probes)
-        _main_output(main, main_input, nonce, bindings, main_runtime)
+        _main_output(
+            main,
+            main_input,
+            nonce,
+            bindings,
+            main_runtime,
+            [normalized_route_evidence],
+        )
         _remove_stack(main_stack)
         main_stack = None
         main_removed_before_adm03 = True
@@ -878,6 +1256,7 @@ def _collect() -> dict[str, Any]:
         "execution": {
             "sequence": [
                 "manifest",
+                "execute-fresh-session-reset-route-probe",
                 "main",
                 "destroy-main-stack",
                 "create-isolated-adm03-stack",
@@ -886,12 +1265,17 @@ def _collect() -> dict[str, Any]:
             ],
             "main_runtime_copy": main_copy,
             "adm03_runtime_copy": adm03_copy,
+            "route_slice": {
+                "artifact": route_artifact,
+                "route_id": _ROUTE_SLICE_ID,
+                "status": "OBSERVED",
+            },
             "main_removed_before_adm03": main_removed_before_adm03,
             "mutable_stacks_removed": True,
             "network": "none",
             "suite_process_environment": "env-i-seven-exact-ARAGORN-variables",
         },
-        "decision": _decision_document("NOT_TESTED"),
+        "decision": _decision_document("NOT_TESTED", route_observed_count=1),
         "limitations": _LIMITATIONS,
     }
 

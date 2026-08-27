@@ -62,6 +62,8 @@ RUN set -eux; \
             'missing-prompt-blob-rebuild:d' \
             'missing-prompt-blob-rebuild/protected-observation-v1.mjs:f' \
             'missing-prompt-blob-rebuild/protected-prompt-rebuild-probe.mjs:f' \
+            'plugin-enable-activation:d' \
+            'plugin-enable-activation/protected-plugin-enable-probe.mjs:f' \
             'session-snapshot-consumer:d' \
             'session-snapshot-consumer/protected-observation-v1.mjs:f' \
             'session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs:f' \
@@ -87,6 +89,8 @@ RUN set -eux; \
         91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22; \
     test "$(sha256sum /route-input/missing-prompt-blob-rebuild/protected-prompt-rebuild-probe.mjs | cut -d ' ' -f 1)" = \
         9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7; \
+    test "$(sha256sum /route-input/plugin-enable-activation/protected-plugin-enable-probe.mjs | cut -d ' ' -f 1)" = \
+        310f936b858be6f74e2049bc495008e8bf90a5a950883eddd18eadce0356cacd; \
     test "$(sha256sum /route-input/session-snapshot-consumer/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
         91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22; \
     test "$(sha256sum /route-input/session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs | cut -d ' ' -f 1)" = \

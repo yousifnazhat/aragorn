@@ -36,6 +36,11 @@ _ROUTES = {
         "probe": "protected-curator-restore-denial-probe.mjs",
         "schema": "aragorn/openclaw-protected-curator-restore-denial-observation/v1",
     },
+    "ADM-02/update/plugin-enable-activation": {
+        "files": ("protected-plugin-enable-probe.mjs",),
+        "probe": "protected-plugin-enable-probe.mjs",
+        "schema": "aragorn/openclaw-protected-plugin-enable-observation/v1",
+    },
     "ADM-02/update/workshop-proposal-apply": {
         "files": ("PROPOSAL.md", "protected-route-probe.mjs"),
         "fixtures": ("PROPOSAL.md",),
@@ -72,6 +77,10 @@ _EXPECTED_PROBES = {
     "protected-observation-v1.mjs": {
         "bytes": 16_324,
         "digest": "sha256:91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22",
+    },
+    "protected-plugin-enable-probe.mjs": {
+        "bytes": 23_584,
+        "digest": "sha256:310f936b858be6f74e2049bc495008e8bf90a5a950883eddd18eadce0356cacd",
     },
     "protected-prompt-rebuild-probe.mjs": {
         "bytes": 16_464,

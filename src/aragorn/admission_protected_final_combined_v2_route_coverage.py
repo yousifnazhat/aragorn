@@ -1,4 +1,4 @@
-"""Compose eleven current-contract V2 qualifications from nine captures."""
+"""Compose twelve current-contract V2 qualifications from ten captures."""
 
 from __future__ import annotations
 
@@ -17,6 +17,9 @@ from . import (
 from . import admission_protected_final_combined_v2_config_activation as config
 from . import admission_protected_final_combined_v2_curator_restore as curator
 from . import admission_protected_final_combined_v2_plugin_enable as plugin_enable
+from . import (
+    admission_protected_final_combined_v2_plugin_force_reinstall as plugin_force,
+)
 from . import (
     admission_protected_final_combined_v2_cron_rescan_catalog_fixed as cron,
 )
@@ -134,6 +137,7 @@ _EXPECTED_PASS_ROUTES = frozenset(
         plugin_enable._ROUTE,
     }
 )
+_EXPECTED_FAIL_ROUTES = frozenset({plugin_force._ROUTE})
 _CHILDREN = (
     {
         "name": "config_entry_activation",
@@ -369,6 +373,27 @@ _CHILDREN = (
         "route": plugin_enable._ROUTE,
         "image": plugin_enable._IMAGE,
     },
+    {
+        "name": "plugin_force_reinstall_failure",
+        "module": plugin_force,
+        "verifier": "verify_openclaw_final_combined_v2_plugin_force_reinstall",
+        "verifier_path": (
+            "src/aragorn/admission_protected_final_combined_v2_plugin_force_"
+            "reinstall.py"
+        ),
+        "verifier_digest": (
+            "sha256:675804ea995a48d8e94e39174f09e350ed675c9a20865128acff89f94d1a24f1"
+        ),
+        "result_digest": (
+            "sha256:771843731e3252cf9f3ec842fe2827a165734855555663ec1ef76288450ad98e"
+        ),
+        "capture_binding": "plugin_force_reinstall_observation",
+        "capture_digest": (
+            "sha256:b0d0679c4738ecdb317ec644124b4829d276c1f2a25ef8fec04633764c8ca4e4"
+        ),
+        "route": plugin_force._ROUTE,
+        "image": plugin_force._IMAGE,
+    },
 )
 _EXPECTED_CHILD_SEQUENCE = (
     (
@@ -469,17 +494,29 @@ _EXPECTED_CHILD_SEQUENCE = (
         "plugin_enable_observation",
         "sha256:7b81759b062b62b9337d3e8cb0455b1a52c30b981d296f74211703cdd5c7ef33",
     ),
+    (
+        "plugin_force_reinstall_failure",
+        plugin_force._ROUTE,
+        (
+            "src/aragorn/admission_protected_final_combined_v2_plugin_force_"
+            "reinstall.py"
+        ),
+        "plugin_force_reinstall_observation",
+        "sha256:b0d0679c4738ecdb317ec644124b4829d276c1f2a25ef8fec04633764c8ca4e4",
+    ),
 )
 
 
 def compose_openclaw_final_combined_v2_route_coverage(
     *, evidence_cas: CAS
 ) -> dict[str, Any]:
-    """Compose eleven exact qualifications from nine captures without authority."""
+    """Compose eleven passes and one failure from ten exact captures."""
 
     children: list[dict[str, Any]] = []
     names: set[str] = set()
+    qualified_routes: set[str] = set()
     pass_routes: set[str] = set()
+    fail_routes: set[str] = set()
     results_by_name: dict[str, Mapping[str, Any]] = {}
     captures_by_name: dict[str, Mapping[str, Any]] = {}
     routes_by_capture: dict[str, list[str]] = {}
@@ -503,10 +540,14 @@ def compose_openclaw_final_combined_v2_route_coverage(
             name = child["name"]
             route = child["route"]
             module = child["module"]
-            if name in names or route in pass_routes:
+            if name in names or route in qualified_routes:
                 raise AdmissionEvidenceError("duplicate V2 child qualification")
             names.add(name)
-            pass_routes.add(route)
+            qualified_routes.add(route)
+            if route in _EXPECTED_FAIL_ROUTES:
+                fail_routes.add(route)
+            else:
+                pass_routes.add(route)
 
             module_path = Path(module.__file__).resolve()
             if (
@@ -654,7 +695,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
             for digest, routes in routes_by_capture.items()
             if len(routes) > 1
         ]
-        if len(routes_by_capture) != 9 or shared_capture_groups != [
+        if len(routes_by_capture) != 10 or shared_capture_groups != [
             {
                 "capture_digest": session_capture["digest"],
                 "routes": [session._ROUTE, chat._ROUTE],
@@ -664,14 +705,21 @@ def compose_openclaw_final_combined_v2_route_coverage(
                 "routes": [workshop._ROUTE, workshop_reload._ROUTE],
             },
         ]:
-            raise AdmissionEvidenceError("exact V2 nine-capture model changed")
+            raise AdmissionEvidenceError("exact V2 ten-capture model changed")
     except AdmissionEvidenceError:
         raise
     except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
         raise AdmissionEvidenceError(f"invalid V2 child qualification: {exc}") from exc
 
-    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 11:
-        raise AdmissionEvidenceError("exact eleven V2 route qualifications are required")
+    if (
+        pass_routes != _EXPECTED_PASS_ROUTES
+        or fail_routes != _EXPECTED_FAIL_ROUTES
+        or qualified_routes != _EXPECTED_PASS_ROUTES | _EXPECTED_FAIL_ROUTES
+        or len(children) != 12
+    ):
+        raise AdmissionEvidenceError(
+            "exact eleven-pass one-fail V2 route qualifications are required"
+        )
     if shared is None or runtime is None:
         raise AdmissionEvidenceError("V2 child contract bindings are missing")
     implementation_digest = _digest(Path(__file__).resolve().read_bytes())
@@ -683,15 +731,19 @@ def compose_openclaw_final_combined_v2_route_coverage(
         {
             "id": route,
             "qualification_digest": qualification_digests.get(route),
-            "status": "PASS" if route in pass_routes else "NOT_TESTED",
+            "status": (
+                "PASS"
+                if route in pass_routes
+                else "FAIL" if route in fail_routes else "NOT_TESTED"
+            ),
         }
         for route in _ROUTES
     ]
     return {
         "schema": ("aragorn/admission-protected-final-combined-v2-route-coverage/v1"),
         "assurance": (
-            "ELEVEN_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_NINE_CAPTURES_"
-            "TWO_EXACT_SHARED_SUBSEQUENCES_ONLY"
+            "ELEVEN_EXACT_REVERIFIED_ROUTE_PASSES_AND_ONE_EXACT_REVERIFIED_"
+            "ROUTE_FAILURE_FROM_TEN_CAPTURES_TWO_EXACT_SHARED_SUBSEQUENCES_ONLY"
         ),
         "bindings": {
             **{key: dict(shared[key]) for key in _SHARED_BINDINGS},
@@ -703,20 +755,21 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "aggregate_execution_observed": False,
             "distinct_capture_count": len(routes_by_capture),
             "kind": (
-                "ELEVEN_EXACT_ROUTE_QUALIFICATIONS_FROM_NINE_CAPTURES_"
-                "TWO_EXACT_SHARED_SUBSEQUENCES"
+                "ELEVEN_EXACT_ROUTE_PASSES_AND_ONE_EXACT_ROUTE_FAILURE_FROM_"
+                "TEN_CAPTURES_TWO_EXACT_SHARED_SUBSEQUENCES"
             ),
-            "qualification_count": 11,
+            "qualification_count": 12,
             "same_image_required": False,
             "shared_capture_groups": shared_capture_groups,
         },
         "decision": {
-            "status": "PARTIAL_SEPARATE_CAPTURE_V2_ROUTE_COVERAGE",
+            "status": "FAIL",
             **{key: False for key in _ELIGIBILITY_KEYS},
         },
         "limitations": [
-            "ELEVEN_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_NINE_CAPTURES",
-            "TEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
+            "ELEVEN_EXACT_ROUTE_PASSES_AND_ONE_EXACT_ROUTE_FAILURE_COMPOSED_FROM_TEN_CAPTURES",
+            "NINE_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
+            "KNOWN_EXACT_ROUTE_FAILURE_PREVENTS_AGGREGATE_AUTHORITY",
             "SEPARATE_CAPTURES_DO_NOT_ESTABLISH_AGGREGATE_ADMISSION",
             "CHAT_ROUTE_REUSES_SHARED_SESSION_CAPTURE_NOT_INDEPENDENT_EXECUTION",
             "RAW_CAPTURE_ROUTE_ID_REMAINS_SESSION_SNAPSHOT_CONSUMER",
@@ -750,18 +803,23 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "WORKSHOP_INVALIDATION_BLACK_BOX_NEXT_TURN_NO_DIRECT_FUNCTION_TRACE",
             "PLUGIN_ENABLE_DENIED_PRE_EFFECT_AT_READ_ONLY_SYSTEMD_CREDENTIAL_LOCK",
             "PLUGIN_ENABLE_TARGET_REMAINED_DISABLED_NOT_ALLOWLISTED_AND_UNACTIVATED",
+            "PLUGIN_FORCE_REINSTALL_UNBROKERED_REPLACEMENT_PERSISTED_IN_CANONICAL_PLUGIN_DISCOVERY_TARGET_AND_COMMAND_FAILED_ON_CONFIG_LOCK",
+            "PLUGIN_FORCE_REINSTALL_REPLACEMENT_REMAINED_DISABLED_NOT_ALLOWLISTED_UNACTIVATED_AND_UNIMPORTED",
+            "PLUGIN_FORCE_REINSTALL_TARGET_BYTES_AND_EMPTY_INSTALL_BACKUP_DIRECTORY_PERSIST",
+            "PLUGIN_FORCE_REINSTALL_SQLITE_WAL_AND_SHM_CHANGED_NO_TABLE_LEVEL_DIFF",
+            "PLUGIN_FORCE_REINSTALL_NO_POST_RESTART_FRESH_GATEWAY_SESSION_OR_MODEL_EXECUTION",
             "SEPARATE_EXACT_CHILD_IMAGE_IDS_RETAINED_NOT_UNIFIED",
             "NO_AGGREGATE_ADMISSION_EDR_PHASE3_RELEASE_OR_INSTALLER_AUTHORITY",
         ],
         "profile": {
-            "counts": {"PASS": 11, "NOT_TESTED": 10},
+            "counts": {"FAIL": 1, "NOT_TESTED": 9, "PASS": 11},
             "name": _PROFILE,
             "route_inventory_canonical_digest": canonical_digest(list(_ROUTES)),
             "routes": routes,
         },
         "route_semantics": {
             "dynamically_exercised_routes": [
-                route for route in _ROUTES if route in pass_routes
+                route for route in _ROUTES if route in qualified_routes
             ],
             "transitions_dynamically_exercised_in_one_aggregate_execution": False,
         },
@@ -771,24 +829,29 @@ def compose_openclaw_final_combined_v2_route_coverage(
 
 def _verify_child(result: Mapping[str, Any], child: Mapping[str, Any]) -> None:
     route = child["route"]
+    expected_status = "FAIL" if route in _EXPECTED_FAIL_ROUTES else "PASS"
     expected_routes = [
-        {"id": route_id, "status": "PASS" if route_id == route else "NOT_TESTED"}
+        {
+            "id": route_id,
+            "status": expected_status if route_id == route else "NOT_TESTED",
+        }
         for route_id in _ROUTES
     ]
     expected_decision = {
-        "status": "PARTIAL_DYNAMIC_V2_ROUTE_COVERAGE",
+        "status": "FAIL" if expected_status == "FAIL" else "PARTIAL_DYNAMIC_V2_ROUTE_COVERAGE",
         **{key: False for key in _ELIGIBILITY_KEYS},
     }
+    expected_counts = {expected_status: 1, "NOT_TESTED": 20}
     counts = result["profile"]["counts"]
     decision = result["decision"]
     shared = {key: result["bindings"][key] for key in _SHARED_BINDINGS}
     if (
-        set(counts) != {"PASS", "NOT_TESTED"}
-        or type(counts["PASS"]) is not int
+        set(counts) != set(expected_counts)
+        or type(counts[expected_status]) is not int
         or type(counts["NOT_TESTED"]) is not int
         or result["profile"]
         != {
-            "counts": {"PASS": 1, "NOT_TESTED": 20},
+            "counts": expected_counts,
             "name": _PROFILE,
             "routes": expected_routes,
         }
@@ -802,6 +865,14 @@ def _verify_child(result: Mapping[str, Any], child: Mapping[str, Any]) -> None:
         != child["verifier_digest"]
         or result["route_semantics"]["dynamically_exercised_routes"] != [route]
         or result["route_semantics"]["transitions_dynamically_exercised"] is not True
+        or (
+            expected_status == "FAIL"
+            and result["route_semantics"]["failure_basis"]
+            != (
+                "FAIL_UNBROKERED_FORCE_REINSTALL_PERSISTED_PLUGIN_TARGET_"
+                "AND_FAILED_ON_CONFIG_LOCK"
+            )
+        )
     ):
         raise AdmissionEvidenceError(
             f"{child['name']} route, decision, or runtime binding changed"

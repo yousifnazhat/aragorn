@@ -65,6 +65,10 @@ _CHILD_RECEIPTS = {
         "phase3-openclaw-protected-final-combined-v2-plugin-enable-activation-"
         "route-coverage-v1-2026-08-27.json"
     ),
+    "plugin_force_reinstall_failure": (
+        "phase3-openclaw-protected-final-combined-v2-plugin-force-reinstall-"
+        "route-coverage-v1-2026-08-28.json"
+    ),
 }
 
 
@@ -116,10 +120,13 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             for child in subject._CHILDREN
         )
 
-    def test_exact_eleven_qualifications_from_nine_captures(self) -> None:
+    def test_exact_eleven_passes_one_failure_from_ten_captures(self) -> None:
         result = self.compose()
 
-        self.assertEqual(result["profile"]["counts"], {"PASS": 11, "NOT_TESTED": 10})
+        self.assertEqual(
+            result["profile"]["counts"],
+            {"FAIL": 1, "NOT_TESTED": 9, "PASS": 11},
+        )
         self.assertEqual(len(result["profile"]["routes"]), 21)
         self.assertEqual(
             {
@@ -129,17 +136,26 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             },
             subject._EXPECTED_PASS_ROUTES,
         )
+        self.assertEqual(
+            {
+                route["id"]
+                for route in result["profile"]["routes"]
+                if route["status"] == "FAIL"
+            },
+            subject._EXPECTED_FAIL_ROUTES,
+        )
+        self.assertEqual(result["decision"]["status"], "FAIL")
         self.assertTrue(
             all(result["decision"][key] is False for key in subject._ELIGIBILITY_KEYS)
         )
         self.assertFalse(result["capture_model"]["aggregate_execution_observed"])
-        self.assertEqual(result["capture_model"]["qualification_count"], 11)
-        self.assertEqual(result["capture_model"]["distinct_capture_count"], 9)
+        self.assertEqual(result["capture_model"]["qualification_count"], 12)
+        self.assertEqual(result["capture_model"]["distinct_capture_count"], 10)
         captures = {
             child["route"]: child["capture"]["digest"]
             for child in result["bindings"]["child_qualifications"]
         }
-        self.assertEqual(len(set(captures.values())), 9)
+        self.assertEqual(len(set(captures.values())), 10)
         self.assertEqual(
             captures,
             {child["route"]: child["capture_digest"] for child in subject._CHILDREN},
@@ -191,6 +207,14 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
         for limitation in (
             "PLUGIN_ENABLE_DENIED_PRE_EFFECT_AT_READ_ONLY_SYSTEMD_CREDENTIAL_LOCK",
             "PLUGIN_ENABLE_TARGET_REMAINED_DISABLED_NOT_ALLOWLISTED_AND_UNACTIVATED",
+        ):
+            self.assertIn(limitation, result["limitations"])
+        for limitation in (
+            "KNOWN_EXACT_ROUTE_FAILURE_PREVENTS_AGGREGATE_AUTHORITY",
+            "PLUGIN_FORCE_REINSTALL_UNBROKERED_REPLACEMENT_PERSISTED_IN_CANONICAL_PLUGIN_DISCOVERY_TARGET_AND_COMMAND_FAILED_ON_CONFIG_LOCK",
+            "PLUGIN_FORCE_REINSTALL_REPLACEMENT_REMAINED_DISABLED_NOT_ALLOWLISTED_UNACTIVATED_AND_UNIMPORTED",
+            "PLUGIN_FORCE_REINSTALL_TARGET_BYTES_AND_EMPTY_INSTALL_BACKUP_DIRECTORY_PERSIST",
+            "PLUGIN_FORCE_REINSTALL_SQLITE_WAL_AND_SHM_CHANGED_NO_TABLE_LEVEL_DIFF",
         ):
             self.assertIn(limitation, result["limitations"])
         for limitation in (
@@ -524,6 +548,52 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
                 )
             with self.assertRaises(AdmissionEvidenceError):
                 self.compose()
+
+    def test_failure_child_cannot_be_promoted_or_omitted(self) -> None:
+        name = "plugin_force_reinstall_failure"
+
+        promoted = deepcopy(self.child_results[name])
+        promoted["profile"]["counts"] = {"PASS": 1, "NOT_TESTED": 20}
+        for route in promoted["profile"]["routes"]:
+            if route["id"] == subject.plugin_force._ROUTE:
+                route["status"] = "PASS"
+        promoted["decision"]["status"] = "PARTIAL_DYNAMIC_V2_ROUTE_COVERAGE"
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_result(name, promoted)),
+            patch.object(
+                subject.plugin_force,
+                "verify_openclaw_final_combined_v2_plugin_force_reinstall",
+                return_value=promoted,
+            ),
+            self.assertRaises(AdmissionEvidenceError),
+        ):
+            self.compose()
+
+        bool_count = deepcopy(self.child_results[name])
+        bool_count["profile"]["counts"]["FAIL"] = True
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_result(name, bool_count)),
+            patch.object(
+                subject.plugin_force,
+                "verify_openclaw_final_combined_v2_plugin_force_reinstall",
+                return_value=bool_count,
+            ),
+            self.assertRaises(AdmissionEvidenceError),
+        ):
+            self.compose()
+
+        omitted = deepcopy(self.child_results[name])
+        omitted["route_semantics"]["dynamically_exercised_routes"] = []
+        with (
+            patch.object(subject, "_CHILDREN", self.repin_result(name, omitted)),
+            patch.object(
+                subject.plugin_force,
+                "verify_openclaw_final_combined_v2_plugin_force_reinstall",
+                return_value=omitted,
+            ),
+            self.assertRaises(AdmissionEvidenceError),
+        ):
+            self.compose()
 
     def test_duplicate_substitution_and_verifier_drift_fail_closed(self) -> None:
         name = "catalog_fixed_fresh_session_reset"

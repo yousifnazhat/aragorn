@@ -32,6 +32,10 @@ _FINAL_V3_CONFIG_ENTRY_ACTIVATION_DOCKERFILE = (
     _ROOT
     / "benchmark/runtime-action-worker-final-combined-v3-config-entry-activation-systemd/Dockerfile"
 )
+_FINAL_V3_WORKSHOP_PROPOSAL_APPLY_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-workshop-proposal-apply-systemd/Dockerfile"
+)
 
 
 class RuntimeActionWorkerPackagingTests(unittest.TestCase):
@@ -393,6 +397,96 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             self.assertEqual(dockerfile.count(check), 1)
         self.assertNotIn("config-entry-activation-activation", dockerfile)
         self.assertNotIn("protected-config-entry-activation", dockerfile)
+
+    def test_final_v3_workshop_materializes_then_rebinds_exact_bundle(self) -> None:
+        name = "protected-route-probe.mjs"
+        source = (_FINAL_PROFILES / name).read_bytes()
+        proposal = (
+            _ROOT / "benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md"
+        ).read_bytes()
+        self.assertEqual(
+            (len(source), hashlib.sha256(source).hexdigest()),
+            (
+                34_185,
+                "3d9615bbfae6c86b272c862de2faaf55f24cc7018a5e77f912f2b4f527162504",
+            ),
+        )
+        self.assertEqual(
+            (len(proposal), hashlib.sha256(proposal).hexdigest()),
+            (
+                84,
+                "a7cd9e12c3c00b4480c173ab92ffedbbbc31ff06e5c9200da829144c8a8f160a",
+            ),
+        )
+        materialized = probe_materializer.transformed_final_combined_v2_probe(
+            name, workshop=True
+        )
+        self.assertEqual(
+            (len(materialized), hashlib.sha256(materialized).hexdigest()),
+            (
+                50_175,
+                "07676570b96d8c0c54f40bd44f4132a2cdb06cb36002dd6f6c406f49afc3a705",
+            ),
+        )
+        old = b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
+        new = b"dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
+        old_size = b"configuration.file?.size === 1880"
+        new_size = b"configuration.file?.size === 2159"
+        self.assertEqual(
+            (
+                materialized.count(old),
+                materialized.count(new),
+                materialized.count(old_size),
+                materialized.count(new_size),
+            ),
+            (2, 0, 1, 0),
+        )
+        transformed = materialized.replace(old, new).replace(old_size, new_size)
+        self.assertEqual(
+            (len(transformed), hashlib.sha256(transformed).hexdigest()),
+            (
+                50_175,
+                "667dec03c90ff0df1567e8dcca9d4137f66d0de8e3f7f302f6fc279f311b2780",
+            ),
+        )
+        self.assertEqual(
+            (
+                transformed.count(old),
+                transformed.count(new),
+                transformed.count(old_size),
+                transformed.count(new_size),
+            ),
+            (0, 2, 0, 1),
+        )
+
+        dockerfile = _FINAL_V3_WORKSHOP_PROPOSAL_APPLY_DOCKERFILE.read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(dockerfile.count("FROM ${V3_FORCE_BASE}"), 1)
+        self.assertEqual(
+            dockerfile.count(
+                'test "$V3_FORCE_BASE" = \\\n'
+                '        "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f";'
+            ),
+            1,
+        )
+        for value in (
+            "3d9615bbfae6c86b272c862de2faaf55f24cc7018a5e77f912f2b4f527162504",
+            "a7cd9e12c3c00b4480c173ab92ffedbbbc31ff06e5c9200da829144c8a8f160a",
+            "07676570b96d8c0c54f40bd44f4132a2cdb06cb36002dd6f6c406f49afc3a705",
+            "667dec03c90ff0df1567e8dcca9d4137f66d0de8e3f7f302f6fc279f311b2780",
+            "/route-input/workshop-proposal-apply/PROPOSAL.md",
+            "/route-input/workshop-proposal-apply/protected-route-probe.mjs",
+        ):
+            self.assertIn(value, dockerfile)
+        for check in (
+            'test "$(grep -F -o "$old" "$v2" | wc -l)" = 2;',
+            'test "$(grep -F -o "$new" "$v3" | wc -l)" = 2;',
+            "PROPOSAL.md protected-route-probe.mjs;",
+            "'workshop-proposal-apply/PROPOSAL.md:f'",
+            "'workshop-proposal-apply/protected-route-probe.mjs:f'",
+        ):
+            self.assertEqual(dockerfile.count(check), 1)
 
     def test_worker_activator_local_digest_pins_match_sources(self) -> None:
         source = _ACTIVATOR.read_text(encoding="utf-8")

@@ -221,6 +221,13 @@ def _expect(condition: bool, message: str) -> None:
     combined._expect(condition, message)
 
 
+def _custody(record: dict[str, Any]) -> dict[str, Any]:
+    metadata = record["stat"]
+    return {
+        key: metadata[key] for key in ("gid", "mode", "nlink", "type", "uid")
+    }
+
+
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -312,7 +319,7 @@ def _policy_command() -> dict[str, Any]:
     _expect(
         command["bytes"] == 68_480
         and command["digest"] == _POLICY_COMMAND_DIGEST
-        and command["stat"]
+        and _custody(command)
         == {
             "gid": 0,
             "mode": "0755",
@@ -340,9 +347,9 @@ def _artifacts() -> dict[str, Any]:
     _expect(
         activator_source["digest"] == activator["digest"] == _ACTIVATOR_DIGEST
         and activator_source["bytes"] == activator["bytes"] == 30_504
-        and activator_source["stat"]
+        and _custody(activator_source)
         == {"gid": 0, "mode": "0555", "nlink": 1, "type": "file", "uid": 0}
-        and activator["stat"]
+        and _custody(activator)
         == {"gid": 0, "mode": "0755", "nlink": 1, "type": "file", "uid": 0}
         and preflight["digest"] == _PREFLIGHT_DIGEST
         and force_probe_source["digest"] == force_probe_runtime["digest"]
@@ -493,7 +500,7 @@ def _probe_bundle() -> list[dict[str, Any]]:
     for name in specification["files"]:
         record = p37c._file(_ROUTE_ROOT / name)
         _expect(
-            record["stat"]
+            _custody(record)
             == {"gid": 0, "mode": "0444", "nlink": 1, "type": "file", "uid": 0}
             and {key: record[key] for key in ("bytes", "digest")}
             == _EXPECTED_BUNDLE[name],
@@ -553,7 +560,7 @@ def _prepare_gateway(
         target_record = p37c._file(destination)
         _expect(
             target_record["digest"] == source_record["digest"]
-            and target_record["stat"]
+            and _custody(target_record)
             == {
                 "gid": gateway_gid,
                 "mode": "0600",

@@ -17,7 +17,11 @@ _DOCKERFILE = _ROOT / "benchmark/runtime-action-worker-openclaw-systemd/Dockerfi
 _CAPTURE = _ROOT / "scripts/capture_runtime_action_worker_openclaw_systemd.sh"
 _PROBE = _ROOT / "scripts/runtime_action_worker_openclaw_systemd_probe.py"
 _ACTIVATOR = _ROOT / "packaging/activate-runtime-action-worker-host.sh"
-_FINAL_V2 = _ROOT / "benchmark/admission/openclaw-v2026.7.1"
+_FINAL_PROFILES = _ROOT / "benchmark/admission/openclaw-v2026.7.1"
+_FINAL_V3_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-plugin-force-reinstall-systemd/Dockerfile"
+)
 
 
 class RuntimeActionWorkerPackagingTests(unittest.TestCase):
@@ -38,7 +42,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         }
         documents = {}
         for name, (size, digest) in expected.items():
-            raw = (_FINAL_V2 / name).read_bytes()
+            raw = (_FINAL_PROFILES / name).read_bytes()
             document = json.loads(raw)
             canonical = json.dumps(
                 document, sort_keys=True, separators=(",", ":"), ensure_ascii=True
@@ -98,6 +102,97 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
                 "filesystem_workspace_only": True,
                 "profile": "minimal",
             },
+        )
+
+    def test_final_v3_profile_adds_only_the_native_plugin_install_block(self) -> None:
+        expected = {
+            "protected-final-combined-config-v3.json": (
+                2160,
+                "2855474d8b709654fb8902c0dc69ec1f0a3a378518ec23bfb12c1eb9630824ab",
+            ),
+            "protected-final-combined-profile-v3.json": (
+                5302,
+                "3229bd747088199d8bae074bbc27a415169fa21f86462408434ecdb43c5b2a6c",
+            ),
+            "protected-final-combined-runtime-v3.lock.json": (
+                7620,
+                "3bbcc6568cf713f9e534f84f7a92e313b5aa357065759bd01b5f24a594fb5822",
+            ),
+        }
+        documents = {}
+        for name, identity in expected.items():
+            raw = (_FINAL_PROFILES / name).read_bytes()
+            document = json.loads(raw)
+            canonical = json.dumps(
+                document, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode()
+            self.assertEqual(raw, canonical + b"\n")
+            self.assertEqual(
+                (len(raw), hashlib.sha256(raw).hexdigest()), identity
+            )
+            documents[name] = document
+
+        config, profile, lock = documents.values()
+        policy = {
+            "enabled": True,
+            "exec": {
+                "args": [
+                    "%s",
+                    '{"protocolVersion":1,"decision":"block","reason":'
+                    '"plugin installs disabled by Aragorn protected profile"}',
+                ],
+                "command": "/usr/bin/printf",
+                "source": "exec",
+                "trustedDirs": ["/usr/bin"],
+            },
+            "targets": ["plugin"],
+        }
+        self.assertEqual(config["security"]["installPolicy"], policy)
+        self.assertEqual(len(profile["routes"]), 21)
+        self.assertTrue(
+            all(route["outcome"] == "NOT_TESTED" for route in profile["routes"])
+        )
+        self.assertTrue(
+            all(
+                value is False
+                for key, value in profile["decision"].items()
+                if key.endswith("_eligible")
+            )
+        )
+        binding = lock["deployment_bindings"]
+        self.assertIs(binding["plugin_install_policy"]["enabled"], True)
+        self.assertEqual(binding["plugin_install_policy"]["exec"], policy["exec"])
+        self.assertEqual(binding["plugin_install_policy"]["targets"], ["plugin"])
+        self.assertEqual(
+            binding["activation_contract"]["activator"]["digest"],
+            "sha256:3b25b462cf7f9c4886cce1b7057fabbaeb95e9d9de83cb33db9c7ca62f15d86c",
+        )
+        self.assertEqual(
+            binding["configuration"]["canonical_digest"],
+            "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c",
+        )
+        old = b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
+        new = b"dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
+        activator = _ACTIVATOR.read_bytes()
+        self.assertEqual(activator.count(old), 1)
+        self.assertEqual(activator.count(new), 0)
+        transformed = activator.replace(old, new)
+        self.assertEqual(len(transformed), 30_504)
+        self.assertEqual(
+            hashlib.sha256(transformed).hexdigest(),
+            "3b25b462cf7f9c4886cce1b7057fabbaeb95e9d9de83cb33db9c7ca62f15d86c",
+        )
+        dockerfile = _FINAL_V3_DOCKERFILE.read_text(encoding="utf-8")
+        pins = (old.decode(), new.decode(), hashlib.sha256(transformed).hexdigest())
+        for pin in pins:
+            self.assertIn(pin, dockerfile)
+        self.assertEqual(lock["decision"]["status"], "BUILD_LOCKED_NOT_QUALIFIED")
+        self.assertTrue(
+            all(
+                value is False
+                for key, value in lock["decision"].items()
+                if key.endswith("_eligible")
+            )
         )
 
     def test_worker_activator_local_digest_pins_match_sources(self) -> None:

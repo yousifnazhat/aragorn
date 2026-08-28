@@ -45,7 +45,7 @@ RUN set -eux; \
         615928c74bb467ed1422aa19c0ca3266fec21e6a9b195ff32e7e2fae86f966fc; \
     test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json | cut -d ' ' -f 1)" = \
         4832dc99c016bd8c0f6d97133dbb7d3681d4ad18c1c225c94f10a51d6df839c1; \
-    test "$(find /route-input -mindepth 1 -maxdepth 2 -printf '%P:%y\n' | sort)" = \
+    test "$(find /route-input -mindepth 1 -maxdepth 3 -printf '%P:%y\n' | sort)" = \
         "$(printf '%s\n' \
             'archive-source-force-replacement:d' \
             'archive-source-force-replacement/protected-archive-replacement-probe.mjs:f' \
@@ -64,6 +64,16 @@ RUN set -eux; \
             'missing-prompt-blob-rebuild/protected-prompt-rebuild-probe.mjs:f' \
             'plugin-enable-activation:d' \
             'plugin-enable-activation/protected-plugin-enable-probe.mjs:f' \
+            'plugin-force-reinstall:d' \
+            'plugin-force-reinstall/baseline-source:d' \
+            'plugin-force-reinstall/baseline-source/index.js:f' \
+            'plugin-force-reinstall/baseline-source/openclaw.plugin.json:f' \
+            'plugin-force-reinstall/baseline-source/package.json:f' \
+            'plugin-force-reinstall/candidate-source:d' \
+            'plugin-force-reinstall/candidate-source/index.js:f' \
+            'plugin-force-reinstall/candidate-source/openclaw.plugin.json:f' \
+            'plugin-force-reinstall/candidate-source/package.json:f' \
+            'plugin-force-reinstall/protected-plugin-force-reinstall-probe.py:f' \
             'session-snapshot-consumer:d' \
             'session-snapshot-consumer/protected-observation-v1.mjs:f' \
             'session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs:f' \
@@ -91,6 +101,20 @@ RUN set -eux; \
         9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7; \
     test "$(sha256sum /route-input/plugin-enable-activation/protected-plugin-enable-probe.mjs | cut -d ' ' -f 1)" = \
         b31dc052d9eaffb4712de2a716f958afeb54399452aaaf47a714ee216da1ed92; \
+    test "$(sha256sum /route-input/plugin-force-reinstall/protected-plugin-force-reinstall-probe.py | cut -d ' ' -f 1)" = \
+        6b4adf647cef823f5cfee73d0130c06ab4612e37fb704246a56fe4dca03c0bbe; \
+    test "$(sha256sum /route-input/plugin-force-reinstall/baseline-source/index.js | cut -d ' ' -f 1)" = \
+        631cc6f036f3cdf2f8fa6c814a27da075bf8c37fd2fe3681a55f7f5e593dd4ea; \
+    test "$(sha256sum /route-input/plugin-force-reinstall/baseline-source/openclaw.plugin.json | cut -d ' ' -f 1)" = \
+        9b93a70d606ec63c32d15dd9021dc603df9bdf680b74789c675f5227c1c6b077; \
+    test "$(sha256sum /route-input/plugin-force-reinstall/baseline-source/package.json | cut -d ' ' -f 1)" = \
+        cf817f208ceb1f4bb211d5cc97b190f6ba54cb27f34d7864b9fea5adc74a679e; \
+    test "$(sha256sum /route-input/plugin-force-reinstall/candidate-source/index.js | cut -d ' ' -f 1)" = \
+        0d4abd050921ecb1c29c8c97457654184137c65644ca9b3e21a920284ce5178b; \
+    test "$(sha256sum /route-input/plugin-force-reinstall/candidate-source/openclaw.plugin.json | cut -d ' ' -f 1)" = \
+        5579b471618e53e8fd72df36ad0128bb6310c0fc8111be6db31a18c672b5053c; \
+    test "$(sha256sum /route-input/plugin-force-reinstall/candidate-source/package.json | cut -d ' ' -f 1)" = \
+        7e73514c5369d1d90524663baff896f41f71e21540d1b0a311a73aaf456ee8de; \
     test "$(sha256sum /route-input/session-snapshot-consumer/protected-observation-v1.mjs | cut -d ' ' -f 1)" = \
         91febf12bd6aa2e98f63b14001a74213c653c2eb9c8c7db57a55b3520fdd4f22; \
     test "$(sha256sum /route-input/session-snapshot-consumer/protected-session-snapshot-fixed-probe.mjs | cut -d ' ' -f 1)" = \
@@ -111,17 +135,16 @@ RUN set -eux; \
         0:0:644:1; \
     test "$(stat -c '%u:%g:%a:%h' /usr/libexec/aragorn/activate-runtime-action-worker-host.sh)" = \
         0:0:755:1; \
+    find /route-input -type d -exec chmod 0555 {} +; \
     chmod 0555 \
-        /route-input \
-        /route-input/* \
         /src/packaging/activate-runtime-action-worker-host.sh \
         /src/scripts/capture_runtime_action_worker_final_combined_v2_systemd.sh \
         /src/scripts/materialize_fixed_admission_probes.py \
         /src/scripts/runtime_action_worker_final_combined_v2_route_systemd_probe.py \
         /src/scripts/runtime_action_worker_final_combined_v2_systemd_probe.py \
         /src/scripts/runtime_action_worker_final_route_systemd_probe.py; \
+    find /route-input -type f -exec chmod 0444 {} +; \
     chmod 0444 \
-        /route-input/*/* \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \

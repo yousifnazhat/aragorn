@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +41,29 @@ _ROUTES = {
         "files": ("protected-plugin-enable-probe.mjs",),
         "probe": "protected-plugin-enable-probe.mjs",
         "schema": "aragorn/openclaw-protected-plugin-enable-observation/v1",
+    },
+    "ADM-02/update/plugin-force-reinstall": {
+        "directories": ("baseline-source", "candidate-source"),
+        "files": (
+            "baseline-source/index.js",
+            "baseline-source/openclaw.plugin.json",
+            "baseline-source/package.json",
+            "candidate-source/index.js",
+            "candidate-source/openclaw.plugin.json",
+            "candidate-source/package.json",
+            "protected-plugin-force-reinstall-probe.py",
+        ),
+        "fixtures": (
+            "baseline-source/index.js",
+            "baseline-source/openclaw.plugin.json",
+            "baseline-source/package.json",
+            "candidate-source/index.js",
+            "candidate-source/openclaw.plugin.json",
+            "candidate-source/package.json",
+        ),
+        "interpreter": "/usr/local/bin/python3.12",
+        "probe": "protected-plugin-force-reinstall-probe.py",
+        "schema": "aragorn/openclaw-protected-plugin-force-reinstall-observation/v1",
     },
     "ADM-02/update/workshop-proposal-apply": {
         "files": ("PROPOSAL.md", "protected-route-probe.mjs"),
@@ -82,6 +106,34 @@ _EXPECTED_PROBES = {
         "bytes": 23_594,
         "digest": "sha256:b31dc052d9eaffb4712de2a716f958afeb54399452aaaf47a714ee216da1ed92",
     },
+    "protected-plugin-force-reinstall-probe.py": {
+        "bytes": 26_836,
+        "digest": "sha256:6b4adf647cef823f5cfee73d0130c06ab4612e37fb704246a56fe4dca03c0bbe",
+    },
+    "baseline-source/index.js": {
+        "bytes": 122,
+        "digest": "sha256:631cc6f036f3cdf2f8fa6c814a27da075bf8c37fd2fe3681a55f7f5e593dd4ea",
+    },
+    "baseline-source/openclaw.plugin.json": {
+        "bytes": 179,
+        "digest": "sha256:9b93a70d606ec63c32d15dd9021dc603df9bdf680b74789c675f5227c1c6b077",
+    },
+    "baseline-source/package.json": {
+        "bytes": 141,
+        "digest": "sha256:cf817f208ceb1f4bb211d5cc97b190f6ba54cb27f34d7864b9fea5adc74a679e",
+    },
+    "candidate-source/index.js": {
+        "bytes": 125,
+        "digest": "sha256:0d4abd050921ecb1c29c8c97457654184137c65644ca9b3e21a920284ce5178b",
+    },
+    "candidate-source/openclaw.plugin.json": {
+        "bytes": 182,
+        "digest": "sha256:5579b471618e53e8fd72df36ad0128bb6310c0fc8111be6db31a18c672b5053c",
+    },
+    "candidate-source/package.json": {
+        "bytes": 141,
+        "digest": "sha256:7e73514c5369d1d90524663baff896f41f71e21540d1b0a311a73aaf456ee8de",
+    },
     "protected-prompt-rebuild-probe.mjs": {
         "bytes": 16_464,
         "digest": "sha256:9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7",
@@ -110,6 +162,8 @@ _ORIGINAL_COHERENT_CASE = combined.p37c._coherent_case
 _ROUTE_OBSERVATION: dict[str, Any] | None = None
 _SELECTED_ROUTE = "ADM-02/reload/fresh-session-reset"
 _STAGE = "BOOTSTRAP"
+_FORCE_REINSTALL_ROUTE = "ADM-02/update/plugin-force-reinstall"
+_FORCE_REINSTALL_ID = "aragorn-force-reinstall-fixture"
 
 
 def _set_stage(value: str) -> None:
@@ -128,9 +182,22 @@ def _iso_now() -> str:
 def _probe_bundle(route_id: str) -> list[dict[str, Any]]:
     specification = _ROUTES[route_id]
     root = _ROUTE_ROOTS[route_id]
+    actual_files = []
+    actual_directories = []
+    for path in root.rglob("*"):
+        metadata = path.lstat()
+        relative = str(path.relative_to(root))
+        _expect(not stat.S_ISLNK(metadata.st_mode), "materialized route bundle symlink")
+        if stat.S_ISREG(metadata.st_mode):
+            actual_files.append(relative)
+        elif stat.S_ISDIR(metadata.st_mode):
+            actual_directories.append(relative)
+        else:
+            _expect(False, "materialized route bundle special file")
     _expect(
-        tuple(sorted(path.name for path in root.iterdir()))
-        == tuple(sorted(specification["files"])),
+        tuple(sorted(actual_files)) == tuple(sorted(specification["files"]))
+        and tuple(sorted(actual_directories))
+        == tuple(sorted(specification.get("directories", ()))),
         "materialized V2 route bundle inventory changed",
     )
     bundle = []
@@ -183,6 +250,35 @@ def _prepare_gateway(
         combined.p37c.p37b._GATEWAY_WORKSPACE / "skills",
     ):
         combined.p37c.p37b._mkdir(path, gateway_uid, gateway_gid, 0o700)
+    if _SELECTED_ROUTE == _FORCE_REINSTALL_ROUTE:
+        source = _ROUTE_ROOTS[_FORCE_REINSTALL_ROUTE] / "baseline-source"
+        target = (
+            combined.p37c.p37b._GATEWAY_STATE
+            / "extensions"
+            / _FORCE_REINSTALL_ID
+        )
+        _expect(not target.exists(), "force reinstall target was not fresh")
+        combined.p37c.p37b._mkdir(target, gateway_uid, gateway_gid, 0o700)
+        for name in ("index.js", "openclaw.plugin.json", "package.json"):
+            source_record = combined.p37c._file(source / name)
+            _expect(
+                {key: source_record[key] for key in ("bytes", "digest")}
+                == _EXPECTED_PROBES[f"baseline-source/{name}"],
+                f"force reinstall baseline source changed: {name}",
+            )
+            destination = target / name
+            destination.write_bytes((source / name).read_bytes())
+            os.chown(destination, gateway_uid, gateway_gid)
+            os.chmod(destination, 0o600)
+            target_record = combined.p37c._file(destination)
+            _expect(
+                target_record["digest"] == source_record["digest"]
+                and target_record["stat"]["uid"] == gateway_uid
+                and target_record["stat"]["gid"] == gateway_gid
+                and target_record["stat"]["mode"] == "0600"
+                and target_record["stat"]["nlink"] == 1,
+                f"force reinstall baseline target changed: {name}",
+            )
     return prepared
 
 

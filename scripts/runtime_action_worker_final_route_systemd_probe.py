@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -265,10 +266,23 @@ def _prepare_gateway(*args: Any, **kwargs: Any) -> Any:
 
 def _probe_bundle(harness: dict[str, Any]) -> list[dict[str, Any]]:
     expected = harness["document"]["probe_bundle"]
-    actual_names = tuple(sorted(path.name for path in _PROBE_ROOT.iterdir()))
     specification = _ROUTES[_SELECTED_ROUTE]
+    actual_files = []
+    actual_directories = []
+    for path in _PROBE_ROOT.rglob("*"):
+        metadata = path.lstat()
+        relative = str(path.relative_to(_PROBE_ROOT))
+        _expect(not stat.S_ISLNK(metadata.st_mode), "probe bundle symlink")
+        if stat.S_ISREG(metadata.st_mode):
+            actual_files.append(relative)
+        elif stat.S_ISDIR(metadata.st_mode):
+            actual_directories.append(relative)
+        else:
+            _expect(False, "probe bundle special file")
     _expect(
-        actual_names == tuple(sorted(specification["files"])),
+        tuple(sorted(actual_files)) == tuple(sorted(specification["files"]))
+        and tuple(sorted(actual_directories))
+        == tuple(sorted(specification.get("directories", ()))),
         "probe bundle inventory changed",
     )
     actual = []
@@ -345,7 +359,7 @@ def _run_route(
         "--ambient-caps=-all",
         "--bounding-set=-all",
         "--no-new-privs",
-        "/usr/local/bin/node",
+        specification.get("interpreter", "/usr/local/bin/node"),
         str(probe),
     ]
     if probe.name == "protected-route-probe.mjs":

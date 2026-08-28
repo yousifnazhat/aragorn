@@ -23,6 +23,8 @@ elif [ "$#" -eq 2 ]; then
             route=ADM-02/update/curator-restore-activation ;;
         --plugin-enable-activation)
             route=ADM-02/update/plugin-enable-activation ;;
+        --plugin-force-reinstall)
+            route=ADM-02/update/plugin-force-reinstall ;;
         --workshop-proposal-apply)
             route=ADM-02/update/workshop-proposal-apply ;;
         --cron-rescan) route=ADM-02/reload/cron-rescan ;;
@@ -37,7 +39,7 @@ elif [ "$#" -eq 2 ]; then
     esac
     output=$2
 else
-    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--curator-restore-activation|--plugin-enable-activation|--workshop-proposal-apply|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
+    echo "usage: capture_runtime_action_worker_final_combined_v2_systemd.sh [--archive-source-force-replacement|--config-entry-activation|--curator-restore-activation|--plugin-enable-activation|--plugin-force-reinstall|--workshop-proposal-apply|--cron-rescan|--fresh-session-reset|--missing-prompt-blob-rebuild|--session-snapshot-consumer] ABSENT_OUTPUT_PATH" >&2
     exit 64
 fi
 case "$output" in
@@ -260,6 +262,13 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-profile-v2.json \
     benchmark/admission/openclaw-v2026.7.1/protected-final-combined-runtime-v2.lock.json \
+    benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-baseline-index.js \
+    benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-baseline-openclaw.plugin.json \
+    benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-baseline-package.json \
+    benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-replacement-index.js \
+    benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-replacement-openclaw.plugin.json \
+    benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-replacement-package.json \
+    benchmark/admission/openclaw-v2026.7.1/protected-plugin-force-reinstall-probe.py \
     benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md \
     benchmark/fixtures/phase1-protected-workshop/PROPOSAL.md \
     benchmark/runtime-action-worker-final-combined-v2-systemd \
@@ -292,6 +301,23 @@ python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
 mkdir -p "$context/route-input/plugin-enable-activation"
 cp "$context/benchmark/admission/openclaw-v2026.7.1/protected-plugin-enable-probe.mjs" \
     "$context/route-input/plugin-enable-activation/protected-plugin-enable-probe.mjs"
+mkdir -p \
+    "$context/route-input/plugin-force-reinstall/baseline-source" \
+    "$context/route-input/plugin-force-reinstall/candidate-source"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/protected-plugin-force-reinstall-probe.py" \
+    "$context/route-input/plugin-force-reinstall/protected-plugin-force-reinstall-probe.py"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-baseline-index.js" \
+    "$context/route-input/plugin-force-reinstall/baseline-source/index.js"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-baseline-openclaw.plugin.json" \
+    "$context/route-input/plugin-force-reinstall/baseline-source/openclaw.plugin.json"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-baseline-package.json" \
+    "$context/route-input/plugin-force-reinstall/baseline-source/package.json"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-replacement-index.js" \
+    "$context/route-input/plugin-force-reinstall/candidate-source/index.js"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-replacement-openclaw.plugin.json" \
+    "$context/route-input/plugin-force-reinstall/candidate-source/openclaw.plugin.json"
+cp "$context/benchmark/admission/openclaw-v2026.7.1/plugin-force-reinstall-replacement-package.json" \
+    "$context/route-input/plugin-force-reinstall/candidate-source/package.json"
 python3.12 "$context/scripts/materialize_fixed_admission_probes.py" \
     --final-combined-v2 "$context/route-input/session-snapshot-consumer" \
     protected-observation-v1.mjs protected-session-snapshot-fixed-probe.mjs

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import stat
 import subprocess
 import sys
@@ -11,13 +12,28 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+ADMISSION = ROOT / "benchmark" / "admission" / "openclaw-v2026.7.1"
 PLUGIN_ENABLE_PROBE = (
-    ROOT
-    / "benchmark"
-    / "admission"
-    / "openclaw-v2026.7.1"
-    / "protected-plugin-enable-probe.mjs"
+    ADMISSION / "protected-plugin-enable-probe.mjs"
 )
+PLUGIN_FORCE_REINSTALL_PROBE = (
+    ADMISSION / "protected-plugin-force-reinstall-probe.py"
+)
+PLUGIN_FORCE_REINSTALL_SOURCES = {
+    "baseline-source/index.js": ADMISSION
+    / "plugin-force-reinstall-baseline-index.js",
+    "baseline-source/openclaw.plugin.json": ADMISSION
+    / "plugin-force-reinstall-baseline-openclaw.plugin.json",
+    "baseline-source/package.json": ADMISSION
+    / "plugin-force-reinstall-baseline-package.json",
+    "candidate-source/index.js": ADMISSION
+    / "plugin-force-reinstall-replacement-index.js",
+    "candidate-source/openclaw.plugin.json": ADMISSION
+    / "plugin-force-reinstall-replacement-openclaw.plugin.json",
+    "candidate-source/package.json": ADMISSION
+    / "plugin-force-reinstall-replacement-package.json",
+    "protected-plugin-force-reinstall-probe.py": PLUGIN_FORCE_REINSTALL_PROBE,
+}
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(SCRIPTS))
 
@@ -77,6 +93,7 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             "--config-entry-activation",
             "--curator-restore-activation",
             "--plugin-enable-activation",
+            "--plugin-force-reinstall",
             "--workshop-proposal-apply",
             "--cron-rescan",
             "--fresh-session-reset",
@@ -105,6 +122,12 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             'protected-plugin-enable-probe.mjs"',
             source,
         )
+        for name, source_path in PLUGIN_FORCE_REINSTALL_SOURCES.items():
+            self.assertIn(
+                f'cp "$context/{source_path.relative_to(ROOT)}" \\\n'
+                f'    "$context/route-input/plugin-force-reinstall/{name}"',
+                source,
+            )
         self.assertNotIn(
             '--final-combined-v2 "$context/route-input/plugin-enable-activation"',
             source,
@@ -135,11 +158,11 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
             workshop = route_id == "ADM-02/update/workshop-proposal-apply"
             for name in specification["files"]:
                 materialized = (
-                    PLUGIN_ENABLE_PROBE.read_bytes()
+                    PLUGIN_FORCE_REINSTALL_SOURCES[name].read_bytes()
+                    if route_id == "ADM-02/update/plugin-force-reinstall"
+                    else PLUGIN_ENABLE_PROBE.read_bytes()
                     if route_id == "ADM-02/update/plugin-enable-activation"
-                    else transformed_final_combined_v2_probe(
-                        name, workshop=workshop
-                    )
+                    else transformed_final_combined_v2_probe(name, workshop=workshop)
                 )
                 expected = {
                     "bytes": len(materialized),
@@ -169,6 +192,67 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
                     "aragorn/openclaw-protected-plugin-enable-observation/v1"
                 ),
             },
+        )
+        self.assertEqual(
+            route._ROUTES["ADM-02/update/plugin-force-reinstall"],
+            {
+                "directories": ("baseline-source", "candidate-source"),
+                "files": tuple(PLUGIN_FORCE_REINSTALL_SOURCES),
+                "fixtures": tuple(PLUGIN_FORCE_REINSTALL_SOURCES)[:-1],
+                "interpreter": "/usr/local/bin/python3.12",
+                "probe": "protected-plugin-force-reinstall-probe.py",
+                "schema": (
+                    "aragorn/openclaw-protected-plugin-force-reinstall-observation/v1"
+                ),
+            },
+        )
+
+        compile(
+            PLUGIN_FORCE_REINSTALL_PROBE.read_bytes(),
+            str(PLUGIN_FORCE_REINSTALL_PROBE),
+            "exec",
+        )
+        completed = subprocess.run(
+            [sys.executable, str(PLUGIN_FORCE_REINSTALL_PROBE), "self-check"],
+            capture_output=True,
+            check=False,
+            cwd=ROOT,
+            timeout=5,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr.decode())
+        self.assertEqual(completed.stderr, b"")
+        self_check = json.loads(completed.stdout)
+        self.assertEqual(
+            completed.stdout,
+            json.dumps(
+                self_check,
+                allow_nan=False,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+            + b"\n",
+        )
+        self.assertEqual(
+            self_check["assurance"],
+            "RAW_ACTION_OBSERVATION_ONLY_NOT_CONFORMANCE_AUTHORITY",
+        )
+        self.assertEqual(
+            self_check["schema"],
+            "aragorn/openclaw-protected-plugin-force-reinstall-self-check/v1",
+        )
+        self.assertEqual(self_check["status"], "SELF_CHECK_OK")
+        self.assertTrue(all(self_check["checks"].values()))
+        self.assertEqual(
+            self_check["native_action"]["argv"],
+            [
+                "/usr/local/bin/node",
+                "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+                "plugins",
+                "install",
+                "/route-input/plugin-force-reinstall/candidate-source",
+                "--force",
+            ],
         )
 
         for route_id in route._ROUTES:
@@ -231,6 +315,39 @@ class RuntimeActionWorkerFinalCombinedV2RouteTests(unittest.TestCase):
                     mock.patch.object(route.v1_route, "_ROUTES", route._ROUTES),
                     mock.patch.object(route.v1_route, "_PROBE_ROOT", root),
                     mock.patch.object(route.v1_route, "_SELECTED_ROUTE", workshop_id),
+                ):
+                    self.assertEqual(
+                        route.v1_route._probe_bundle(
+                            {"document": {"probe_bundle": bundle}}
+                        ),
+                        bundle,
+                    )
+
+        force_id = "ADM-02/update/plugin-force-reinstall"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "plugin-force-reinstall"
+            for name, source_path in PLUGIN_FORCE_REINSTALL_SOURCES.items():
+                destination = root / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(source_path.read_bytes())
+            roots = {**route._ROUTE_ROOTS, force_id: root}
+            with (
+                mock.patch.object(route, "_ROUTE_ROOTS", roots),
+                mock.patch.object(route.combined.p37c, "_file", side_effect=exact_file),
+            ):
+                bundle = route._probe_bundle(force_id)
+                self.assertEqual(
+                    [item["name"] for item in bundle],
+                    list(PLUGIN_FORCE_REINSTALL_SOURCES),
+                )
+                self.assertEqual(
+                    [item["role"] for item in bundle],
+                    ["fixture"] * 6 + ["probe"],
+                )
+                with (
+                    mock.patch.object(route.v1_route, "_ROUTES", route._ROUTES),
+                    mock.patch.object(route.v1_route, "_PROBE_ROOT", root),
+                    mock.patch.object(route.v1_route, "_SELECTED_ROUTE", force_id),
                 ):
                     self.assertEqual(
                         route.v1_route._probe_bundle(

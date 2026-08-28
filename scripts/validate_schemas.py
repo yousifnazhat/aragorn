@@ -63,6 +63,9 @@ from aragorn.admission_evidence_workshop import (
     verify_openclaw_update_reload_coverage_v3,
 )
 from aragorn.admission_gate import validate_retained_admission_conformance
+from aragorn.admission_openclaw_final_v2_aggregate_fresh_session import (
+    verify_openclaw_final_v2_aggregate_fresh_session,
+)
 from aragorn.admission_protected_archive import (
     verify_openclaw_protected_archive_replacement,
 )
@@ -87,17 +90,23 @@ from aragorn.admission_protected_final_combined_v2_chat_session_snapshot_consume
 from aragorn.admission_protected_final_combined_v2_config_activation import (
     verify_openclaw_final_combined_v2_config_activation,
 )
-from aragorn.admission_protected_final_combined_v2_curator_restore import (
-    verify_openclaw_final_combined_v2_curator_restore,
-)
 from aragorn.admission_protected_final_combined_v2_cron_rescan import (
     verify_openclaw_final_combined_v2_cron_rescan,
 )
 from aragorn.admission_protected_final_combined_v2_cron_rescan_catalog_fixed import (
     verify_openclaw_final_combined_v2_cron_rescan_catalog_fixed,
 )
+from aragorn.admission_protected_final_combined_v2_curator_restore import (
+    verify_openclaw_final_combined_v2_curator_restore,
+)
 from aragorn.admission_protected_final_combined_v2_fresh_session_reset import (
     verify_openclaw_final_combined_v2_fresh_session_reset,
+)
+from aragorn.admission_protected_final_combined_v2_plugin_enable import (
+    verify_openclaw_final_combined_v2_plugin_enable,
+)
+from aragorn.admission_protected_final_combined_v2_plugin_force_reinstall import (
+    verify_openclaw_final_combined_v2_plugin_force_reinstall,
 )
 from aragorn.admission_protected_final_combined_v2_prompt_rebuild import (
     verify_openclaw_final_combined_v2_prompt_rebuild,
@@ -120,23 +129,17 @@ from aragorn.admission_protected_final_combined_v2_workshop_invalidation import 
 from aragorn.admission_protected_final_combined_v2_workshop_proposal_apply import (
     verify_openclaw_final_combined_v2_workshop_proposal_apply,
 )
-from aragorn.admission_protected_final_combined_v2_plugin_enable import (
-    verify_openclaw_final_combined_v2_plugin_enable,
-)
-from aragorn.admission_protected_final_combined_v2_plugin_force_reinstall import (
-    verify_openclaw_final_combined_v2_plugin_force_reinstall,
+from aragorn.admission_protected_final_combined_v3_config_entry_activation import (
+    verify_openclaw_final_combined_v3_config_entry_activation,
 )
 from aragorn.admission_protected_final_combined_v3_plugin_enable import (
     verify_openclaw_final_combined_v3_plugin_enable,
 )
-from aragorn.admission_protected_final_combined_v3_config_entry_activation import (
-    verify_openclaw_final_combined_v3_config_entry_activation,
-)
 from aragorn.admission_protected_final_combined_v3_plugin_force_reinstall import (
     verify_openclaw_final_combined_v3_plugin_force_reinstall,
 )
-from aragorn.admission_openclaw_final_v2_aggregate_fresh_session import (
-    verify_openclaw_final_v2_aggregate_fresh_session,
+from aragorn.admission_protected_final_combined_v3_workshop_proposal_apply import (
+    verify_openclaw_final_combined_v3_workshop_proposal_apply,
 )
 from aragorn.admission_protected_final_fresh_session_reset import (
     verify_openclaw_final_fresh_session_reset,
@@ -3899,6 +3902,42 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V3 config-entry qualification changed"
+        )
+
+    final_v3_workshop_proposal_apply_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v3-route-workshop-proposal-apply-"
+        "systemd-p3-final-2026-08-28.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v3-workshop-proposal-apply-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v3_workshop_proposal_apply_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v3_workshop_proposal_apply_qualification = (
+            verify_openclaw_final_combined_v3_workshop_proposal_apply(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v3_workshop_proposal_apply_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v3-workshop-proposal-apply-"
+        "route-coverage-v1-2026-08-28.json"
+    )
+    retained_final_v3_workshop_proposal_apply_qualification = load(
+        final_v3_workshop_proposal_apply_qualification_path
+    )
+    if (
+        final_v3_workshop_proposal_apply_qualification
+        != retained_final_v3_workshop_proposal_apply_qualification
+        or final_v3_workshop_proposal_apply_qualification_path.read_bytes()
+        != canonical_json(final_v3_workshop_proposal_apply_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V3 workshop-proposal-apply qualification changed"
         )
 
     final_v2_aggregate_evidence_path = admission_evidence / (

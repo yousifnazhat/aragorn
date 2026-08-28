@@ -126,6 +126,9 @@ from aragorn.admission_protected_final_combined_v2_plugin_enable import (
 from aragorn.admission_protected_final_combined_v2_plugin_force_reinstall import (
     verify_openclaw_final_combined_v2_plugin_force_reinstall,
 )
+from aragorn.admission_protected_final_combined_v3_plugin_force_reinstall import (
+    verify_openclaw_final_combined_v3_plugin_force_reinstall,
+)
 from aragorn.admission_openclaw_final_v2_aggregate_fresh_session import (
     verify_openclaw_final_v2_aggregate_fresh_session,
 )
@@ -3782,6 +3785,42 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V2 plugin force-reinstall qualification changed"
+        )
+
+    final_v3_plugin_force_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v3-route-plugin-force-reinstall-"
+        "systemd-p3-final-2026-08-28.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v3-plugin-force-reinstall-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v3_plugin_force_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v3_plugin_force_qualification = (
+            verify_openclaw_final_combined_v3_plugin_force_reinstall(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v3_plugin_force_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v3-plugin-force-reinstall-"
+        "route-coverage-v1-2026-08-28.json"
+    )
+    retained_final_v3_plugin_force_qualification = load(
+        final_v3_plugin_force_qualification_path
+    )
+    if (
+        final_v3_plugin_force_qualification
+        != retained_final_v3_plugin_force_qualification
+        or final_v3_plugin_force_qualification_path.read_bytes()
+        != canonical_json(final_v3_plugin_force_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V3 plugin force-reinstall qualification changed"
         )
 
     final_v2_aggregate_evidence_path = admission_evidence / (

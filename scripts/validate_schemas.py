@@ -132,6 +132,9 @@ from aragorn.admission_protected_final_combined_v2_workshop_proposal_apply impor
 from aragorn.admission_protected_final_combined_v3_config_entry_activation import (
     verify_openclaw_final_combined_v3_config_entry_activation,
 )
+from aragorn.admission_protected_final_combined_v3_fresh_session_reset import (
+    verify_openclaw_final_combined_v3_fresh_session_reset,
+)
 from aragorn.admission_protected_final_combined_v3_plugin_enable import (
     verify_openclaw_final_combined_v3_plugin_enable,
 )
@@ -3938,6 +3941,42 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V3 workshop-proposal-apply qualification changed"
+        )
+
+    final_v3_fresh_session_reset_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v3-route-fresh-session-reset-"
+        "systemd-p3-final-2026-08-28.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v3-fresh-session-reset-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v3_fresh_session_reset_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v3_fresh_session_reset_qualification = (
+            verify_openclaw_final_combined_v3_fresh_session_reset(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v3_fresh_session_reset_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v3-fresh-session-reset-"
+        "route-coverage-v1-2026-08-28.json"
+    )
+    retained_final_v3_fresh_session_reset_qualification = load(
+        final_v3_fresh_session_reset_qualification_path
+    )
+    if (
+        final_v3_fresh_session_reset_qualification
+        != retained_final_v3_fresh_session_reset_qualification
+        or final_v3_fresh_session_reset_qualification_path.read_bytes()
+        != canonical_json(final_v3_fresh_session_reset_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V3 fresh-session-reset qualification changed"
         )
 
     final_v2_aggregate_evidence_path = admission_evidence / (

@@ -120,6 +120,12 @@ from aragorn.admission_protected_final_combined_v2_workshop_invalidation import 
 from aragorn.admission_protected_final_combined_v2_workshop_proposal_apply import (
     verify_openclaw_final_combined_v2_workshop_proposal_apply,
 )
+from aragorn.admission_protected_final_combined_v2_plugin_enable import (
+    verify_openclaw_final_combined_v2_plugin_enable,
+)
+from aragorn.admission_openclaw_final_v2_aggregate_fresh_session import (
+    verify_openclaw_final_v2_aggregate_fresh_session,
+)
 from aragorn.admission_protected_final_fresh_session_reset import (
     verify_openclaw_final_fresh_session_reset,
 )
@@ -3703,6 +3709,78 @@ def main() -> int:
             "protected final V2 workshop invalidation qualification changed"
         )
 
+    final_v2_plugin_enable_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v2-route-plugin-enable-activation-"
+        "systemd-p3-final-2026-08-27.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v2-plugin-enable-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_plugin_enable_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_plugin_enable_qualification = (
+            verify_openclaw_final_combined_v2_plugin_enable(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_plugin_enable_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v2-plugin-enable-activation-"
+        "route-coverage-v1-2026-08-27.json"
+    )
+    retained_final_v2_plugin_enable_qualification = load(
+        final_v2_plugin_enable_qualification_path
+    )
+    if (
+        final_v2_plugin_enable_qualification
+        != retained_final_v2_plugin_enable_qualification
+        or final_v2_plugin_enable_qualification_path.read_bytes()
+        != canonical_json(final_v2_plugin_enable_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V2 plugin-enable qualification changed"
+        )
+
+    final_v2_aggregate_evidence_path = admission_evidence / (
+        "openclaw-final-admission-v2-systemd-p3-final-fresh-session-observed-"
+        "2026-08-27.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-final-v2-aggregate-fresh-session-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v2_aggregate_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v2_aggregate_fresh_session_qualification = (
+            verify_openclaw_final_v2_aggregate_fresh_session(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v2_aggregate_fresh_session_qualification_path = admission_receipts / (
+        "phase3-openclaw-final-admission-v2-aggregate-fresh-session-route-"
+        "qualification-v1-2026-08-27.json"
+    )
+    retained_final_v2_aggregate_fresh_session_qualification = load(
+        final_v2_aggregate_fresh_session_qualification_path
+    )
+    if (
+        final_v2_aggregate_fresh_session_qualification
+        != retained_final_v2_aggregate_fresh_session_qualification
+        or final_v2_aggregate_fresh_session_qualification_path.read_bytes()
+        != canonical_json(final_v2_aggregate_fresh_session_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "final V2 aggregate fresh-session qualification changed"
+        )
+
     with TemporaryDirectory(prefix="aragorn-protected-final-v2-coverage-") as temporary:
         evidence_cas = CAS(temporary)
         for path in (
@@ -3714,6 +3792,7 @@ def main() -> int:
             final_v2_config_evidence_path,
             final_v2_curator_evidence_path,
             final_v2_workshop_evidence_path,
+            final_v2_plugin_enable_evidence_path,
         ):
             raw = path.read_bytes()
             evidence_cas.put_expected(

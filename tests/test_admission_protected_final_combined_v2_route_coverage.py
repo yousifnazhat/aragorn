@@ -61,6 +61,10 @@ _CHILD_RECEIPTS = {
         "phase3-openclaw-protected-final-combined-v2-workshop-invalidation-"
         "route-coverage-v1-2026-08-26.json"
     ),
+    "plugin_enable_activation": (
+        "phase3-openclaw-protected-final-combined-v2-plugin-enable-activation-"
+        "route-coverage-v1-2026-08-27.json"
+    ),
 }
 
 
@@ -112,10 +116,10 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             for child in subject._CHILDREN
         )
 
-    def test_exact_ten_qualifications_from_eight_captures(self) -> None:
+    def test_exact_eleven_qualifications_from_nine_captures(self) -> None:
         result = self.compose()
 
-        self.assertEqual(result["profile"]["counts"], {"PASS": 10, "NOT_TESTED": 11})
+        self.assertEqual(result["profile"]["counts"], {"PASS": 11, "NOT_TESTED": 10})
         self.assertEqual(len(result["profile"]["routes"]), 21)
         self.assertEqual(
             {
@@ -129,13 +133,13 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             all(result["decision"][key] is False for key in subject._ELIGIBILITY_KEYS)
         )
         self.assertFalse(result["capture_model"]["aggregate_execution_observed"])
-        self.assertEqual(result["capture_model"]["qualification_count"], 10)
-        self.assertEqual(result["capture_model"]["distinct_capture_count"], 8)
+        self.assertEqual(result["capture_model"]["qualification_count"], 11)
+        self.assertEqual(result["capture_model"]["distinct_capture_count"], 9)
         captures = {
             child["route"]: child["capture"]["digest"]
             for child in result["bindings"]["child_qualifications"]
         }
-        self.assertEqual(len(set(captures.values())), 8)
+        self.assertEqual(len(set(captures.values())), 9)
         self.assertEqual(
             captures,
             {child["route"]: child["capture_digest"] for child in subject._CHILDREN},
@@ -182,6 +186,11 @@ class FinalCombinedV2RouteCoverageTests(unittest.TestCase):
             "EXACT_EPHEMERAL_ARCHIVED_LIFECYCLE_FIXTURE_NOT_NATIVE_CURATOR_SWEEP",
             "EXACT_SELECTED_LIFECYCLE_ROW_ONLY_NOT_FULL_DATABASE_STATE",
             "SKILLS_STATUS_ARCHIVED_DIAGNOSTIC_NOT_ACTIVE_CONSUMER_PROOF",
+        ):
+            self.assertIn(limitation, result["limitations"])
+        for limitation in (
+            "PLUGIN_ENABLE_DENIED_PRE_EFFECT_AT_READ_ONLY_SYSTEMD_CREDENTIAL_LOCK",
+            "PLUGIN_ENABLE_TARGET_REMAINED_DISABLED_NOT_ALLOWLISTED_AND_UNACTIVATED",
         ):
             self.assertIn(limitation, result["limitations"])
         for limitation in (

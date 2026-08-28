@@ -1,4 +1,4 @@
-"""Compose ten current-contract V2 qualifications from eight captures."""
+"""Compose eleven current-contract V2 qualifications from nine captures."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from . import (
 )
 from . import admission_protected_final_combined_v2_config_activation as config
 from . import admission_protected_final_combined_v2_curator_restore as curator
+from . import admission_protected_final_combined_v2_plugin_enable as plugin_enable
 from . import (
     admission_protected_final_combined_v2_cron_rescan_catalog_fixed as cron,
 )
@@ -130,6 +131,7 @@ _EXPECTED_PASS_ROUTES = frozenset(
         curator._ROUTE,
         workshop._ROUTE,
         workshop_reload._ROUTE,
+        plugin_enable._ROUTE,
     }
 )
 _CHILDREN = (
@@ -347,6 +349,26 @@ _CHILDREN = (
         "route": workshop_reload._ROUTE,
         "image": workshop._IMAGE,
     },
+    {
+        "name": "plugin_enable_activation",
+        "module": plugin_enable,
+        "verifier": "verify_openclaw_final_combined_v2_plugin_enable",
+        "verifier_path": (
+            "src/aragorn/admission_protected_final_combined_v2_plugin_enable.py"
+        ),
+        "verifier_digest": (
+            "sha256:4992378c9ed3d538b82a1e8e836eb45cf2b931b067069a0c04a2c7c76206ef4d"
+        ),
+        "result_digest": (
+            "sha256:e0af5ec1d472e684374a1827a521416db7336e1564421300bcd7bd7946d8d402"
+        ),
+        "capture_binding": "plugin_enable_observation",
+        "capture_digest": (
+            "sha256:7b81759b062b62b9337d3e8cb0455b1a52c30b981d296f74211703cdd5c7ef33"
+        ),
+        "route": plugin_enable._ROUTE,
+        "image": plugin_enable._IMAGE,
+    },
 )
 _EXPECTED_CHILD_SEQUENCE = (
     (
@@ -440,13 +462,20 @@ _EXPECTED_CHILD_SEQUENCE = (
         "workshop_proposal_apply_observation",
         "sha256:55a6d55988aa79a963a49eb885bb63758daa3b575ff1d16c2d901cafe281b379",
     ),
+    (
+        "plugin_enable_activation",
+        plugin_enable._ROUTE,
+        "src/aragorn/admission_protected_final_combined_v2_plugin_enable.py",
+        "plugin_enable_observation",
+        "sha256:7b81759b062b62b9337d3e8cb0455b1a52c30b981d296f74211703cdd5c7ef33",
+    ),
 )
 
 
 def compose_openclaw_final_combined_v2_route_coverage(
     *, evidence_cas: CAS
 ) -> dict[str, Any]:
-    """Compose ten exact qualifications from eight captures without authority."""
+    """Compose eleven exact qualifications from nine captures without authority."""
 
     children: list[dict[str, Any]] = []
     names: set[str] = set()
@@ -625,7 +654,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
             for digest, routes in routes_by_capture.items()
             if len(routes) > 1
         ]
-        if len(routes_by_capture) != 8 or shared_capture_groups != [
+        if len(routes_by_capture) != 9 or shared_capture_groups != [
             {
                 "capture_digest": session_capture["digest"],
                 "routes": [session._ROUTE, chat._ROUTE],
@@ -635,14 +664,14 @@ def compose_openclaw_final_combined_v2_route_coverage(
                 "routes": [workshop._ROUTE, workshop_reload._ROUTE],
             },
         ]:
-            raise AdmissionEvidenceError("exact V2 eight-capture model changed")
+            raise AdmissionEvidenceError("exact V2 nine-capture model changed")
     except AdmissionEvidenceError:
         raise
     except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
         raise AdmissionEvidenceError(f"invalid V2 child qualification: {exc}") from exc
 
-    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 10:
-        raise AdmissionEvidenceError("exact ten V2 route qualifications are required")
+    if pass_routes != _EXPECTED_PASS_ROUTES or len(children) != 11:
+        raise AdmissionEvidenceError("exact eleven V2 route qualifications are required")
     if shared is None or runtime is None:
         raise AdmissionEvidenceError("V2 child contract bindings are missing")
     implementation_digest = _digest(Path(__file__).resolve().read_bytes())
@@ -661,7 +690,7 @@ def compose_openclaw_final_combined_v2_route_coverage(
     return {
         "schema": ("aragorn/admission-protected-final-combined-v2-route-coverage/v1"),
         "assurance": (
-            "TEN_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_EIGHT_CAPTURES_"
+            "ELEVEN_EXACT_REVERIFIED_ROUTE_QUALIFICATIONS_FROM_NINE_CAPTURES_"
             "TWO_EXACT_SHARED_SUBSEQUENCES_ONLY"
         ),
         "bindings": {
@@ -674,10 +703,10 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "aggregate_execution_observed": False,
             "distinct_capture_count": len(routes_by_capture),
             "kind": (
-                "TEN_EXACT_ROUTE_QUALIFICATIONS_FROM_EIGHT_CAPTURES_"
+                "ELEVEN_EXACT_ROUTE_QUALIFICATIONS_FROM_NINE_CAPTURES_"
                 "TWO_EXACT_SHARED_SUBSEQUENCES"
             ),
-            "qualification_count": 10,
+            "qualification_count": 11,
             "same_image_required": False,
             "shared_capture_groups": shared_capture_groups,
         },
@@ -686,8 +715,8 @@ def compose_openclaw_final_combined_v2_route_coverage(
             **{key: False for key in _ELIGIBILITY_KEYS},
         },
         "limitations": [
-            "TEN_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_EIGHT_CAPTURES",
-            "ELEVEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
+            "ELEVEN_EXACT_ROUTE_QUALIFICATIONS_COMPOSED_FROM_NINE_CAPTURES",
+            "TEN_OTHER_V2_PROFILE_ROUTES_NOT_TESTED",
             "SEPARATE_CAPTURES_DO_NOT_ESTABLISH_AGGREGATE_ADMISSION",
             "CHAT_ROUTE_REUSES_SHARED_SESSION_CAPTURE_NOT_INDEPENDENT_EXECUTION",
             "RAW_CAPTURE_ROUTE_ID_REMAINS_SESSION_SNAPSHOT_CONSUMER",
@@ -719,11 +748,13 @@ def compose_openclaw_final_combined_v2_route_coverage(
             "WORKSHOP_RESIDUE_NOT_CLEANED_UP_NO_CLEANUP_ROLLBACK_OR_QUARANTINE_CLAIM",
             "WORKSHOP_SCAN_CLEAN_IS_SELF_REPORTED_DIAGNOSTIC_ONLY",
             "WORKSHOP_INVALIDATION_BLACK_BOX_NEXT_TURN_NO_DIRECT_FUNCTION_TRACE",
+            "PLUGIN_ENABLE_DENIED_PRE_EFFECT_AT_READ_ONLY_SYSTEMD_CREDENTIAL_LOCK",
+            "PLUGIN_ENABLE_TARGET_REMAINED_DISABLED_NOT_ALLOWLISTED_AND_UNACTIVATED",
             "SEPARATE_EXACT_CHILD_IMAGE_IDS_RETAINED_NOT_UNIFIED",
             "NO_AGGREGATE_ADMISSION_EDR_PHASE3_RELEASE_OR_INSTALLER_AUTHORITY",
         ],
         "profile": {
-            "counts": {"PASS": 10, "NOT_TESTED": 11},
+            "counts": {"PASS": 11, "NOT_TESTED": 10},
             "name": _PROFILE,
             "route_inventory_canonical_digest": canonical_digest(list(_ROUTES)),
             "routes": routes,

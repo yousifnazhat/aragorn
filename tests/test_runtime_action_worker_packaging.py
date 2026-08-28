@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -35,6 +38,14 @@ _FINAL_V3_CONFIG_ENTRY_ACTIVATION_DOCKERFILE = (
 _FINAL_V3_WORKSHOP_PROPOSAL_APPLY_DOCKERFILE = (
     _ROOT
     / "benchmark/runtime-action-worker-final-combined-v3-workshop-proposal-apply-systemd/Dockerfile"
+)
+_FINAL_V3_FRESH_SESSION_RESET_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-fresh-session-reset-systemd/Dockerfile"
+)
+_FINAL_V3_FRESH_SESSION_RESET_CAPTURE = (
+    _ROOT
+    / "scripts/capture_runtime_action_worker_final_combined_v3_fresh_session_reset_systemd.sh"
 )
 
 
@@ -152,8 +163,10 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "exec": {
                 "args": [
                     "%s",
-                    '{"protocolVersion":1,"decision":"block","reason":'
-                    '"plugin installs disabled by Aragorn protected profile"}',
+                    (
+                        '{"protocolVersion":1,"decision":"block","reason":'
+                        '"plugin installs disabled by Aragorn protected profile"}'
+                    ),
                 ],
                 "command": "/usr/bin/printf",
                 "source": "exec",
@@ -487,6 +500,194 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "'workshop-proposal-apply/protected-route-probe.mjs:f'",
         ):
             self.assertEqual(dockerfile.count(check), 1)
+
+    def test_final_v3_fresh_session_materializes_then_rebinds_one_probe(
+        self,
+    ) -> None:
+        name = "protected-route-probe.mjs"
+        source = (_FINAL_PROFILES / name).read_bytes()
+        self.assertEqual(
+            (len(source), hashlib.sha256(source).hexdigest()),
+            (
+                34_185,
+                "3d9615bbfae6c86b272c862de2faaf55f24cc7018a5e77f912f2b4f527162504",
+            ),
+        )
+        materialized = probe_materializer.transformed_final_combined_v2_probe(
+            name, workshop=False
+        )
+        self.assertEqual(
+            (len(materialized), hashlib.sha256(materialized).hexdigest()),
+            (
+                44_825,
+                "65fda9d7406b9813017002cd7b6cde449475685b4410e45bca5b7aeed00ae7c1",
+            ),
+        )
+        old = b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
+        new = b"dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
+        old_size = b"configuration.file?.size === 1880"
+        new_size = b"configuration.file?.size === 2159"
+        self.assertEqual(
+            (
+                materialized.count(old),
+                materialized.count(new),
+                materialized.count(old_size),
+                materialized.count(new_size),
+            ),
+            (2, 0, 1, 0),
+        )
+        transformed = materialized.replace(old, new).replace(old_size, new_size)
+        self.assertEqual(
+            (len(transformed), hashlib.sha256(transformed).hexdigest()),
+            (
+                44_825,
+                "4687054e9d7ea264c6772de4e0560fafb195ebbbfc7397333297abd6cc4347ff",
+            ),
+        )
+        self.assertEqual(
+            (
+                transformed.count(old),
+                transformed.count(new),
+                transformed.count(old_size),
+                transformed.count(new_size),
+            ),
+            (0, 2, 0, 1),
+        )
+
+        dockerfile = _FINAL_V3_FRESH_SESSION_RESET_DOCKERFILE.read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(dockerfile.count("FROM ${V3_FORCE_BASE}"), 1)
+        self.assertEqual(
+            dockerfile.count(
+                'test "$V3_FORCE_BASE" = \\\n'
+                '        "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f";'
+            ),
+            1,
+        )
+        for value in (
+            "3d9615bbfae6c86b272c862de2faaf55f24cc7018a5e77f912f2b4f527162504",
+            "0771f973c7d544e0cf66bc2a2b3d8120041a38ce244f331a7e7b5698660281ec",
+            "65fda9d7406b9813017002cd7b6cde449475685b4410e45bca5b7aeed00ae7c1",
+            "4687054e9d7ea264c6772de4e0560fafb195ebbbfc7397333297abd6cc4347ff",
+            "/route-input/fresh-session-reset/protected-route-probe.mjs",
+        ):
+            self.assertIn(value, dockerfile)
+        for check in (
+            'test "$(grep -F -o "$old" "$v2" | wc -l)" = 2;',
+            'test "$(grep -F -o "$new" "$v3" | wc -l)" = 2;',
+            "        protected-route-probe.mjs;",
+            "'fresh-session-reset:d'",
+            "'fresh-session-reset/protected-route-probe.mjs:f'",
+        ):
+            self.assertEqual(dockerfile.count(check), 1)
+        self.assertNotIn("PROPOSAL.md", dockerfile)
+        self.assertNotIn("/route-input/workshop-proposal-apply", dockerfile)
+
+    def test_final_v3_fresh_session_publication_rejects_claim_aliases(
+        self,
+    ) -> None:
+        capture = _FINAL_V3_FRESH_SESSION_RESET_CAPTURE.read_text(encoding="utf-8")
+        marker = 'python3.12 - "$temp_output" "$output" <<\'PY\'\n'
+        publication = capture.split(marker, 1)[1].split("\nPY\n", 1)[0]
+        claims = {
+            "admission_profile_eligible": False,
+            "aggregate_admission_eligible": False,
+            "edr_eligible": False,
+            "installer_work_eligible": False,
+            "phase3_exit_eligible": False,
+            "release_eligible": False,
+            "run_01_eligible": False,
+            "run_02_eligible": False,
+            "run_eligible": False,
+        }
+        document = {
+            "schema": "aragorn/runtime-action-worker-final-combined-v3-fresh-session-reset-systemd-observation/v1",
+            "authority": (
+                "BOUND_FINAL_COMBINED_V3_RAW_FRESH_SESSION_RESET_OBSERVATION_ONLY_"
+                "NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+            ),
+            "recorded_at": "2026-08-28T00:00:00Z",
+            "route_id": "ADM-02/reload/fresh-session-reset",
+            "route_observation": {},
+            "composition": {},
+            "harness": {},
+            "source_artifacts": {},
+            "decision": {
+                "status": (
+                    "FINAL_COMBINED_V3_FRESH_SESSION_RESET_"
+                    "OBSERVED_PROFILE_NOT_TESTED"
+                ),
+                "route_observation_status": "OBSERVED",
+                "route_pass_count": 0,
+                "route_fail_count": 0,
+                "route_not_tested_count": 21,
+                **claims,
+            },
+            "limitations": [],
+        }
+        cases = (
+            ("boolean pass count", "decision", "route_pass_count", False),
+            ("float fail count", "decision", "route_fail_count", 0.0),
+            ("float not-tested count", "decision", "route_not_tested_count", 21.0),
+            ("extra decision claim", "decision", "admission_granted", True),
+            ("extra top-level failure", "document", "failure", {"code": "x"}),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            valid_source = root / "valid.tmp"
+            valid_destination = root / "valid.json"
+            valid_raw = (
+                json.dumps(
+                    document,
+                    allow_nan=False,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            valid_source.write_text(valid_raw, encoding="ascii")
+            valid = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    publication,
+                    str(valid_source),
+                    str(valid_destination),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(valid.returncode, 0, valid.stderr)
+            self.assertEqual(valid_destination.read_text(encoding="ascii"), valid_raw)
+            for label, scope, key, value in cases:
+                with self.subTest(label=label):
+                    candidate = json.loads(json.dumps(document))
+                    target = candidate["decision"] if scope == "decision" else candidate
+                    target[key] = value
+                    source = root / f"{key}.tmp"
+                    destination = root / f"{key}.json"
+                    source.write_text(
+                        json.dumps(
+                            candidate,
+                            allow_nan=False,
+                            ensure_ascii=True,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        )
+                        + "\n",
+                        encoding="ascii",
+                    )
+                    result = subprocess.run(
+                        [sys.executable, "-c", publication, str(source), str(destination)],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertNotEqual(result.returncode, 0, result.stdout)
+                    self.assertFalse(destination.exists())
 
     def test_worker_activator_local_digest_pins_match_sources(self) -> None:
         source = _ACTIVATOR.read_text(encoding="utf-8")

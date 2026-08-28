@@ -239,6 +239,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             )
 
         dockerfile = _FINAL_V3_PLUGIN_ENABLE_DOCKERFILE.read_text(encoding="utf-8")
+        self.assertEqual(dockerfile.count("0:0:600:1:23594"), 1)
         self.assertEqual(
             dockerfile.count(
                 'test "$V3_FORCE_BASE" = \\\n'

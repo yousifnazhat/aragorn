@@ -44,7 +44,7 @@ RUN set -eux; \
     new=dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c; \
     test "$(sha256sum "$source" | cut -d ' ' -f 1)" = \
         b31dc052d9eaffb4712de2a716f958afeb54399452aaaf47a714ee216da1ed92; \
-    test "$(stat -c '%u:%g:%a:%h:%s' "$source")" = 0:0:644:1:23594; \
+    test "$(stat -c '%u:%g:%a:%h:%s' "$source")" = 0:0:600:1:23594; \
     test "$(grep -F -o "$old" "$source" | wc -l)" = 2; \
     test "$(grep -F -o "$new" "$source" | wc -l)" = 0; \
     test "$(grep -F -o 'file.size === 1880' "$source" | wc -l)" = 1; \

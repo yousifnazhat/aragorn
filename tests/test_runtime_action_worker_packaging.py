@@ -5,6 +5,8 @@ import json
 import unittest
 from pathlib import Path
 
+from scripts import materialize_fixed_admission_probes as probe_materializer
+
 _ROOT = Path(__file__).resolve().parents[1]
 _SHIM = _ROOT / "packaging/libexec/aragorn-runtime-action-worker-service.py"
 _UNIT = _ROOT / "packaging/systemd/aragorn-runtime-action-worker.service"
@@ -25,6 +27,10 @@ _FINAL_V3_DOCKERFILE = (
 _FINAL_V3_PLUGIN_ENABLE_DOCKERFILE = (
     _ROOT
     / "benchmark/runtime-action-worker-final-combined-v3-plugin-enable-systemd/Dockerfile"
+)
+_FINAL_V3_CONFIG_ENTRY_ACTIVATION_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-config-entry-activation-systemd/Dockerfile"
 )
 
 
@@ -302,6 +308,91 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             1,
         )
         self.assertNotIn("/route-input/plugin-force-reinstall", dockerfile)
+
+    def test_final_v3_config_activation_materializes_then_rebinds_one_probe(
+        self,
+    ) -> None:
+        name = "protected-config-activation-probe.mjs"
+        source = (_FINAL_PROFILES / name).read_bytes()
+        self.assertEqual(
+            (len(source), hashlib.sha256(source).hexdigest()),
+            (
+                20_622,
+                "49c9c173cf6214a16e77e6cf5084c7cb91f8fd5c2e0b8555612d8c1174de2234",
+            ),
+        )
+        materialized = probe_materializer.transformed_final_combined_v2_probe(name)
+        self.assertEqual(
+            (len(materialized), hashlib.sha256(materialized).hexdigest()),
+            (
+                23_366,
+                "69a2c203e566128a2968b35b85b130cd50107b3ba9367512a50e56e73e65ca93",
+            ),
+        )
+        old = b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
+        new = b"dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
+        old_size = b"configuration.file?.size === 1880"
+        new_size = b"configuration.file?.size === 2159"
+        self.assertEqual(
+            (materialized.count(old), materialized.count(new)),
+            (3, 0),
+        )
+        self.assertEqual(
+            (materialized.count(old_size), materialized.count(new_size)),
+            (1, 0),
+        )
+        transformed = materialized.replace(old, new).replace(old_size, new_size)
+        self.assertEqual(
+            (len(transformed), hashlib.sha256(transformed).hexdigest()),
+            (
+                23_366,
+                "e577e5e6cd769bc24886b976792499f06fd6c279f3df24b7f17b652a08e66db5",
+            ),
+        )
+        self.assertEqual(
+            (
+                transformed.count(old),
+                transformed.count(new),
+                transformed.count(old_size),
+                transformed.count(new_size),
+            ),
+            (0, 3, 0, 1),
+        )
+
+        dockerfile = _FINAL_V3_CONFIG_ENTRY_ACTIVATION_DOCKERFILE.read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(dockerfile.count("FROM ${V3_FORCE_BASE}"), 1)
+        self.assertEqual(
+            dockerfile.count(
+                'test "$V3_FORCE_BASE" = \\\n'
+                '        "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f";'
+            ),
+            1,
+        )
+        for value in (
+            "49c9c173cf6214a16e77e6cf5084c7cb91f8fd5c2e0b8555612d8c1174de2234",
+            "0771f973c7d544e0cf66bc2a2b3d8120041a38ce244f331a7e7b5698660281ec",
+            "69a2c203e566128a2968b35b85b130cd50107b3ba9367512a50e56e73e65ca93",
+            "e577e5e6cd769bc24886b976792499f06fd6c279f3df24b7f17b652a08e66db5",
+            "configuration.file?.size === 1880",
+            "configuration.file?.size === 2159",
+            "/route-input/config-entry-activation/protected-config-activation-v3-probe.mjs",
+        ):
+            self.assertIn(value, dockerfile)
+        for check in (
+            'test "$(grep -F -o "$old" "$v2" | wc -l)" = 3;',
+            'test "$(grep -F -o "$new" "$v2" | wc -l)" = 0;',
+            (
+                "-e 's/configuration.file?.size === 1880/"
+                "configuration.file?.size === 2159/'"
+            ),
+            "'config-entry-activation:d'",
+            "'config-entry-activation/protected-config-activation-v3-probe.mjs:f'",
+        ):
+            self.assertEqual(dockerfile.count(check), 1)
+        self.assertNotIn("config-entry-activation-activation", dockerfile)
+        self.assertNotIn("protected-config-entry-activation", dockerfile)
 
     def test_worker_activator_local_digest_pins_match_sources(self) -> None:
         source = _ACTIVATOR.read_text(encoding="utf-8")

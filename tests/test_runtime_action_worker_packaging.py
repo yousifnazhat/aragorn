@@ -22,6 +22,10 @@ _FINAL_V3_DOCKERFILE = (
     _ROOT
     / "benchmark/runtime-action-worker-final-combined-v3-plugin-force-reinstall-systemd/Dockerfile"
 )
+_FINAL_V3_PLUGIN_ENABLE_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-plugin-enable-systemd/Dockerfile"
+)
 
 
 class RuntimeActionWorkerPackagingTests(unittest.TestCase):
@@ -194,6 +198,109 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
                 if key.endswith("_eligible")
             )
         )
+
+    def test_final_v3_plugin_enable_image_transforms_one_exact_probe(self) -> None:
+        source = (_FINAL_PROFILES / "protected-plugin-enable-probe.mjs").read_bytes()
+        old_digest = b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
+        new_digest = b"dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
+        replacements = (
+            (old_digest, new_digest, 2, 0),
+            (b"file.size === 1880", b"file.size === 2159", 1, 0),
+            (
+                b"current_v2_configuration_pinned",
+                b"current_v3_configuration_pinned",
+                1,
+                0,
+            ),
+        )
+        self.assertEqual(
+            (len(source), hashlib.sha256(source).hexdigest()),
+            (
+                23_594,
+                "b31dc052d9eaffb4712de2a716f958afeb54399452aaaf47a714ee216da1ed92",
+            ),
+        )
+        transformed = source
+        for old, new, old_count, new_count in replacements:
+            self.assertEqual(
+                (source.count(old), source.count(new)), (old_count, new_count)
+            )
+            transformed = transformed.replace(old, new)
+        self.assertEqual(
+            (len(transformed), hashlib.sha256(transformed).hexdigest()),
+            (
+                23_594,
+                "5b4f38b55770f51071f467072f186a316feb8ea0373c5621a6ceb3e7edb4489a",
+            ),
+        )
+        for old, new, old_count, _new_count in replacements:
+            self.assertEqual(
+                (transformed.count(old), transformed.count(new)), (0, old_count)
+            )
+
+        dockerfile = _FINAL_V3_PLUGIN_ENABLE_DOCKERFILE.read_text(encoding="utf-8")
+        self.assertEqual(
+            dockerfile.count(
+                'test "$V3_FORCE_BASE" = \\\n'
+                '        "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f";'
+            ),
+            1,
+        )
+        self.assertEqual(dockerfile.count("FROM ${V3_FORCE_BASE}"), 1)
+        for name, size, digest in (
+            (
+                "protected-final-combined-config-v3.json",
+                2_160,
+                "2855474d8b709654fb8902c0dc69ec1f0a3a378518ec23bfb12c1eb9630824ab",
+            ),
+            (
+                "protected-final-combined-profile-v3.json",
+                5_302,
+                "3229bd747088199d8bae074bbc27a415169fa21f86462408434ecdb43c5b2a6c",
+            ),
+            (
+                "protected-final-combined-runtime-v3.lock.json",
+                7_620,
+                "3bbcc6568cf713f9e534f84f7a92e313b5aa357065759bd01b5f24a594fb5822",
+            ),
+        ):
+            self.assertEqual(dockerfile.count(digest), 1)
+            self.assertEqual(dockerfile.count(f"/{name})\" = {size};"), 1)
+        self.assertEqual(
+            dockerfile.count(
+                "2c7b0151ee3c1ba4e829209f2ff4336de9d97143e22bf87c7448539112139957"
+            ),
+            1,
+        )
+        self.assertEqual(dockerfile.count("'regular file:0:0:755:1:68480'"), 1)
+        self.assertEqual(
+            dockerfile.count(
+                "5b4f38b55770f51071f467072f186a316feb8ea0373c5621a6ceb3e7edb4489a"
+            ),
+            2,
+        )
+        for check in (
+            'test "$(grep -F -o "$old" "$source" | wc -l)" = 2;',
+            'test "$(grep -F -o "$new" "$source" | wc -l)" = 0;',
+            'test "$(grep -F -o \'file.size === 1880\' "$source" | wc -l)" = 1;',
+            'test "$(grep -F -o \'file.size === 2159\' "$source" | wc -l)" = 0;',
+            'test "$(grep -F -o \'current_v2_configuration_pinned\' "$source" | wc -l)" = 1;',
+            'test "$(grep -F -o \'current_v3_configuration_pinned\' "$source" | wc -l)" = 0;',
+            "find /route-input -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +;",
+            "install -d -m 0555 /route-input/plugin-enable-activation;",
+            "'plugin-enable-activation:d'",
+            "'plugin-enable-activation/protected-plugin-enable-v3-probe.mjs:f'",
+        ):
+            self.assertEqual(dockerfile.count(check), 1)
+        self.assertEqual(
+            dockerfile.count(
+                'install -m 0444 "$target" \\\n'
+                "        /route-input/plugin-enable-activation/"
+                "protected-plugin-enable-v3-probe.mjs;"
+            ),
+            1,
+        )
+        self.assertNotIn("/route-input/plugin-force-reinstall", dockerfile)
 
     def test_worker_activator_local_digest_pins_match_sources(self) -> None:
         source = _ACTIVATOR.read_text(encoding="utf-8")

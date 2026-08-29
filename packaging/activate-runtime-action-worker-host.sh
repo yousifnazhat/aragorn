@@ -231,7 +231,7 @@ do
 done <<'EOF'
 755 7863a4d5e03fde7791c7f8c2c304cf3522f435e19745364ad18a6b7a0458af57 /usr/local/bin/python3.12
 755 3a988781edde7f1c76751f771cf402e0866fb4a81fbcd0852a2ce2f5bd2ccd37 /usr/local/bin/node
-755 6d8925e6195b1218d7dd81452707e88b89e1b68e41d3afa1d6211981a3bb203a /usr/libexec/aragorn/activate-runtime-capability-host.sh
+755 b4ad162940d842e93ede73143f607cff4c612716334b66430d71b885f398984c /usr/libexec/aragorn/activate-runtime-capability-host.sh
 755 9dd8e3836176e3d2a6d2ab8d6a036e078dd868a188f10a74d3808b51290405fc /usr/libexec/aragorn/aragorn-runtime-action-service-v5.py
 755 dba9cf34f9103073f9583f29bf0a83ae7f3162ca511ec2d76ec250ab161167cf /usr/libexec/aragorn/aragorn-runtime-observation-service-v4.py
 755 42ab2d99c368090be83451ac9b1d99155608fdd8cb2e86a142ef22b22bd26a8a /usr/libexec/aragorn/aragorn-runtime-revocation-service.py
@@ -501,6 +501,28 @@ require_unit_member()
     esac
 }
 
+require_only_aragorn_service_after()
+{
+    checked_unit=$1
+    checked_expected=$2
+    checked_value=$(unit_property "$checked_unit" After)
+    checked_found=0
+    for checked_dependency in $checked_value
+    do
+        case "$checked_dependency" in
+            "$checked_expected")
+                checked_found=$((checked_found + 1))
+                ;;
+            aragorn-*.service)
+                fail_activation "effective After is unsafe for $checked_unit"
+                ;;
+        esac
+    done
+    if [ "$checked_found" -ne 1 ]; then
+        fail_activation "effective After is unsafe for $checked_unit"
+    fi
+}
+
 require_unit_file()
 {
     checked_unit=$1
@@ -709,21 +731,29 @@ verify_gateway_listener()
 /usr/bin/systemctl daemon-reload
 require_unit_file \
     "$worker_unit" \
-    e231978207dd27b71ef43449cf603ac424f6129f64c8a03dd0851ddf32503723
+    e4ef9e3f2229d92ed9dd9ee4896646e646d7171ee585ecba5aecdd87dba5e790
 require_unit_file \
     "$gateway_unit" \
     70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067
 require_unit_file \
     "$broker_unit" \
-    c43a81b394e0b96b0950af94b937a79e777d7e0c815a0104f1ab45871f4afa64
+    e0273dbeb4ed40a203193a52eb6146f81ecbc6abca605fa0bfff69774676b2db
 require_unit_file \
     "$sensor_unit" \
-    d0f433abba94a4560c26cb99017f56543b432e2fc3aa74e3374ee4e04addeeaf
+    f48258b00213c2c1ff4c5c95d0f1c446f78593d1d04780719cba79bf8dd73d8a
 require_unit_file \
     aragorn-runtime-revocation-publisher.service \
     edac3cde6f441496320689edb5dd8ba202879c802dc877800cbd308be718e453
 ARAGORN_RUNTIME_ACTIVATION_LOCK_HELD=1 "$base_activator"
 /usr/bin/systemctl disable "$worker_unit" "$sensor_unit" "$broker_unit"
+for unit in "$worker_unit" "$sensor_unit" "$broker_unit"
+do
+    require_unit_value "$unit" Restart no
+done
+require_unit_value "$worker_unit" BindsTo "$sensor_unit"
+require_only_aragorn_service_after "$worker_unit" "$sensor_unit"
+require_unit_value "$sensor_unit" BindsTo "$broker_unit"
+require_only_aragorn_service_after "$sensor_unit" "$broker_unit"
 wait_socket "$broker_socket" "$broker_uid" "$sensor_gid"
 wait_socket "$sensor_socket" "$sensor_uid" "$worker_gid"
 

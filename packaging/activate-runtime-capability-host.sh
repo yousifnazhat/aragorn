@@ -149,6 +149,28 @@ require_unit_value()
     fi
 }
 
+require_only_aragorn_service_after()
+{
+    checked_unit=$1
+    checked_expected=$2
+    checked_value=$(unit_property "$checked_unit" After)
+    checked_found=0
+    for checked_dependency in $checked_value
+    do
+        case "$checked_dependency" in
+            "$checked_expected")
+                checked_found=$((checked_found + 1))
+                ;;
+            aragorn-*.service)
+                fail_activation "effective After is unsafe for $checked_unit"
+                ;;
+        esac
+    done
+    if [ "$checked_found" -ne 1 ]; then
+        fail_activation "effective After is unsafe for $checked_unit"
+    fi
+}
+
 verify_effective_unit()
 {
     verified_unit=$1
@@ -260,6 +282,10 @@ verify_effective_unit \
     observation-binding:/etc/aragorn/runtime-action-observation.json \
     capability-grant:/etc/aragorn/runtime-capability-grant.json \
     /org/freedesktop/systemd1/unit/aragorn_2druntime_2dlineage_2dcapability_2dobservation_2dpublisher_2eservice
+require_unit_value "$new_broker" Restart no
+require_unit_value "$new_sensor" Restart no
+require_unit_value "$new_sensor" BindsTo "$new_broker"
+require_only_aragorn_service_after "$new_sensor" "$new_broker"
 verify_effective_unit \
     "$revocation_publisher" \
     aragorn-broker \

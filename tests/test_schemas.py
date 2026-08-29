@@ -188,7 +188,7 @@ EXPECTED_CONTRACTS = {
     "runtime-acquisition-action-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-systemd-qualification/v1",
     "runtime-action-worker-activation-expiry-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-activation-expiry-systemd-qualification/v1",
     "runtime-action-worker-openclaw-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-openclaw-systemd-qualification/v1",
-    "runtime-action-worker-sensor-loss-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v1",
+    "runtime-action-worker-sensor-loss-systemd-qualification-v2.schema.json": "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v2",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",
     "zip-archive-inventory-v1.schema.json": "aragorn/zip-archive-inventory/v1",
 }

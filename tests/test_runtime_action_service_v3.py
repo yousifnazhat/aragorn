@@ -128,9 +128,24 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
         self.assertIn("NoNewPrivileges=yes", broker)
         self.assertIn("CapabilityBoundingSet=", broker)
         self.assertIn(
+            "BindsTo=aragorn-runtime-lineage-capability-action-broker.service",
+            sensor,
+        )
+        self.assertNotIn(
             "Requires=aragorn-runtime-lineage-capability-action-broker.service",
             sensor,
         )
+        self.assertIn(
+            "After=local-fs.target nss-user-lookup.target "
+            "aragorn-runtime-lineage-capability-action-broker.service",
+            sensor,
+        )
+        self.assertEqual(sensor.count("Restart=no"), 1)
+        self.assertNotIn("Restart=on-failure", sensor)
+        self.assertNotIn("RestartSec=", sensor)
+        self.assertEqual(broker.count("Restart=no"), 1)
+        self.assertNotIn("Restart=on-failure", broker)
+        self.assertNotIn("RestartSec=", broker)
         self.assertIn("LoadCredential=observation-binding:", sensor)
         self.assertIn("LoadCredential=capability-grant:", sensor)
         self.assertNotIn("LoadCredential=active-skill-lineage:", sensor)
@@ -366,6 +381,14 @@ class RuntimeActionServiceV3Tests(unittest.TestCase):
             "/usr/libexec/aragorn/aragorn-runtime-revocation-service.py",
             script,
         )
+        for effective_policy in (
+            'require_unit_value "$new_broker" Restart no',
+            'require_unit_value "$new_sensor" Restart no',
+            'require_unit_value "$new_sensor" BindsTo "$new_broker"',
+            'require_only_aragorn_service_after "$new_sensor" "$new_broker"',
+        ):
+            self.assertIn(effective_policy, script)
+        self.assertIn("aragorn-*.service)", script)
         self.assertNotIn('enable --now "$revocation_publisher"', script)
         self.assertNotIn('start "$revocation_publisher"', script)
         revocation_stop = script.index('stop "$revocation_publisher"')

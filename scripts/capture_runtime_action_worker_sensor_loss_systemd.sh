@@ -189,8 +189,12 @@ fi
 GIT_NO_REPLACE_OBJECTS=1 git cat-file commit "$source_commit" >"$commit_object"
 GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     benchmark/runtime-action-worker-sensor-loss-systemd/Dockerfile \
+    packaging/activate-runtime-capability-host.sh \
     packaging/activate-runtime-action-worker-host.sh \
     packaging/systemd/aragorn-agent-gateway.service \
+    packaging/systemd/aragorn-runtime-action-worker.service \
+    packaging/systemd/aragorn-runtime-lineage-capability-observation-publisher.service \
+    packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service \
     | tar -xf - -C "$context"
 
 (
@@ -201,8 +205,8 @@ GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
         -f benchmark/runtime-action-worker-sensor-loss-systemd/Dockerfile \
         .
 )
-# Keep the networkless child context limited to its Dockerfile and two copied
-# production files. The exact committed collector/verifier closure follows.
+# Keep the networkless child context limited to its Dockerfile and the exact
+# production enforcement overlay. The committed collector/verifier closure follows.
 GIT_NO_REPLACE_OBJECTS=1 git archive --format=tar "$source_commit" -- \
     scripts/capture_runtime_action_worker_sensor_loss_systemd.sh \
     scripts/runtime_action_worker_sensor_loss_systemd_probe.py \
@@ -282,10 +286,14 @@ python3.12 - \
     "$inspect" "$parent_inspect" "$child_inspect" "$volume_inspect" \
     "$harness" "$source_commit" "$commit_object" "$commit_stdout" \
     "$commit_stderr" \
+    "$context/packaging/activate-runtime-capability-host.sh" \
     "$context/packaging/activate-runtime-action-worker-host.sh" \
     "$context/scripts/capture_runtime_action_worker_sensor_loss_systemd.sh" \
     "$context/benchmark/runtime-action-worker-sensor-loss-systemd/Dockerfile" \
     "$context/packaging/systemd/aragorn-agent-gateway.service" \
+    "$context/packaging/systemd/aragorn-runtime-action-worker.service" \
+    "$context/packaging/systemd/aragorn-runtime-lineage-capability-observation-publisher.service" \
+    "$context/packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service" \
     "$context/scripts/runtime_action_worker_sensor_loss_systemd_probe.py" <<'PY'
 import base64
 import hashlib
@@ -317,22 +325,49 @@ commit = sys.argv[6]
 parent_id = "sha256:21184b7a6a096a8625994b524203bf5b521d749b24e415378a69decd4e78009b"
 runtime_volume = "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1"
 source_artifact_paths = {
-    "activator": sys.argv[10],
-    "capture_recipe": sys.argv[11],
-    "dockerfile": sys.argv[12],
-    "gateway_unit": sys.argv[13],
-    "probe": sys.argv[14],
+    "base_activator": sys.argv[10],
+    "activator": sys.argv[11],
+    "capture_recipe": sys.argv[12],
+    "dockerfile": sys.argv[13],
+    "gateway_unit": sys.argv[14],
+    "worker_unit": sys.argv[15],
+    "sensor_unit": sys.argv[16],
+    "broker_unit": sys.argv[17],
+    "probe": sys.argv[18],
 }
 source_artifacts = {
     name: raw_record(path) for name, path in source_artifact_paths.items()
 }
-if (
-    source_artifacts["activator"]["digest"]
-    != "sha256:47d03e4600813cb32b536a267608f8d7eb97219c2421ba944426444693fee009"
-    or source_artifacts["activator"]["bytes"] != 31_295
-    or source_artifacts["gateway_unit"]["digest"]
-    != "sha256:70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067"
-    or source_artifacts["gateway_unit"]["bytes"] != 3_437
+expected_enforcement_artifacts = {
+    "base_activator": (
+        "sha256:b4ad162940d842e93ede73143f607cff4c612716334b66430d71b885f398984c",
+        12_420,
+    ),
+    "activator": (
+        "sha256:dd615a00aacd5f76f52ac60400ea095f9014c2ef29d7793fd3ba35b26ffe3186",
+        32_271,
+    ),
+    "gateway_unit": (
+        "sha256:70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067",
+        3_437,
+    ),
+    "worker_unit": (
+        "sha256:e4ef9e3f2229d92ed9dd9ee4896646e646d7171ee585ecba5aecdd87dba5e790",
+        2_573,
+    ),
+    "sensor_unit": (
+        "sha256:f48258b00213c2c1ff4c5c95d0f1c446f78593d1d04780719cba79bf8dd73d8a",
+        2_777,
+    ),
+    "broker_unit": (
+        "sha256:e0273dbeb4ed40a203193a52eb6146f81ecbc6abca605fa0bfff69774676b2db",
+        2_725,
+    ),
+}
+if any(
+    source_artifacts[name]["digest"] != digest
+    or source_artifacts[name]["bytes"] != size
+    for name, (digest, size) in expected_enforcement_artifacts.items()
 ):
     raise SystemExit("current sensor-loss enforcement artifacts changed")
 
@@ -470,7 +505,7 @@ bindings = {
     },
 }
 document = {
-    "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v1",
+    "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v2",
     "capture_disposition": "EXPLICIT_OUTPUT_ONLY_NOT_RETAINED_EVIDENCE",
     "bindings": bindings,
     "container_id": container["Id"],
@@ -633,16 +668,17 @@ try:
             "schema",
             "secret_checks",
             "loss",
+            "stability",
         }
         or document.get("schema")
-        != "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v1"
+        != "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v2"
         or document.get("authority")
         != (
-            "BOUNDED_LOCAL_SYSTEMD_SENSOR_PROCESS_LOSS_OBSERVATION_ONLY_"
+            "BOUNDED_LOCAL_SYSTEMD_DURABLE_SENSOR_PROCESS_LOSS_OBSERVATION_ONLY_"
             "NOT_RUN_02_PHASE3_EDR_OR_RELEASE_AUTHORITY"
         )
         or decision.get("status")
-        != "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_OBSERVED"
+        != "SENSOR_PROCESS_LOSS_DURABLE_FAIL_STOP_OBSERVED"
         or decision.get("verifier_status") != "NOT_TESTED"
         or {key for key in decision if key.endswith("_eligible")} != false_claims
         or any(decision[key] is not False for key in false_claims)
@@ -652,6 +688,10 @@ try:
         raise SystemExit("probe output is not exact observation-only material")
 
     artifact_paths = {
+        "base_activator": (
+            Path(sys.argv[3])
+            / "packaging/activate-runtime-capability-host.sh"
+        ),
         "activator": (
             Path(sys.argv[3])
             / "packaging/activate-runtime-action-worker-host.sh"
@@ -667,6 +707,18 @@ try:
         "gateway_unit": (
             Path(sys.argv[3])
             / "packaging/systemd/aragorn-agent-gateway.service"
+        ),
+        "worker_unit": (
+            Path(sys.argv[3])
+            / "packaging/systemd/aragorn-runtime-action-worker.service"
+        ),
+        "sensor_unit": (
+            Path(sys.argv[3])
+            / "packaging/systemd/aragorn-runtime-lineage-capability-observation-publisher.service"
+        ),
+        "broker_unit": (
+            Path(sys.argv[3])
+            / "packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service"
         ),
         "probe": (
             Path(sys.argv[3])

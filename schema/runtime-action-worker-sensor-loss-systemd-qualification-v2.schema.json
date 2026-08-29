@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aragorn.dev/schema/runtime-action-worker-sensor-loss-systemd-qualification-v1.schema.json",
-  "title": "Aragorn bounded worker sensor-process-loss qualification v1",
+  "$id": "https://aragorn.dev/schema/runtime-action-worker-sensor-loss-systemd-qualification-v2.schema.json",
+  "title": "Aragorn bounded durable worker sensor-process-loss qualification v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,10 +14,10 @@
   ],
   "properties": {
     "schema": {
-      "const": "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v1"
+      "const": "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v2"
     },
     "assurance": {
-      "const": "SEMANTICALLY_REPLAY_VERIFIED_PINNED_SENSOR_PROCESS_LOSS_FAIL_STOP_OBSERVATION"
+      "const": "SEMANTICALLY_REPLAY_VERIFIED_PINNED_DURABLE_SENSOR_PROCESS_LOSS_FAIL_STOP_OBSERVATION"
     },
     "bindings": {
       "type": "object",
@@ -26,7 +26,7 @@
       "properties": {
         "implementation": {"$ref": "#/$defs/digest"},
         "outer_harness": {"$ref": "#/$defs/outerHarnessBinding"},
-        "source_observation": {"$ref": "#/$defs/digest"}
+        "source_observation": {"$ref": "#/$defs/sourceObservation"}
       }
     },
     "decision": {
@@ -40,7 +40,7 @@
         "run_01_eligible": false,
         "run_02_eligible": false,
         "source_observation_verified": true,
-        "status": "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_OBSERVED"
+        "status": "SENSOR_PROCESS_LOSS_DURABLE_FAIL_STOP_OBSERVED"
       }
     },
     "limitations": {
@@ -49,7 +49,7 @@
         "PRIVILEGED_DOCKER_ROOT_CONTROLLED_FIXTURE_ONLY",
         "CONTAINER_BUILD_AND_CAPTURE_TOOLCHAIN_NOT_INDEPENDENTLY_ATTESTED",
         "SOURCE_COMMIT_SIGNATURE_TRUSTS_LOCAL_GIT_CONFIGURATION_AND_KEYRING",
-        "ONE_SIGKILL_SENSOR_PROCESS_LOSS_WITH_SYSTEMD_RESTART_ONLY",
+        "ONE_SIGKILL_SENSOR_PROCESS_LOSS_WITH_TWO_SECOND_NO_RESTART_WINDOW_ONLY",
         "NO_HUNG_SENSOR_STALE_SOCKET_OR_HEALTH_EPOCH_COVERAGE",
         "NO_IN_FLIGHT_EFFECT_REVOCATION_QUARANTINE_OR_EGRESS_ISOLATION_COVERAGE",
         "PYTHON_STDLIB_AND_DYNAMIC_VERIFIER_DEPENDENCY_CLOSURE_NOT_PINNED",
@@ -77,17 +77,25 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
+            "base_activator",
             "activator",
             "capture_recipe",
             "dockerfile",
             "gateway_unit",
+            "worker_unit",
+            "sensor_unit",
+            "broker_unit",
             "probe"
           ],
           "properties": {
+            "base_activator": {"$ref": "#/$defs/digest"},
             "activator": {"$ref": "#/$defs/digest"},
             "capture_recipe": {"$ref": "#/$defs/digest"},
             "dockerfile": {"$ref": "#/$defs/digest"},
             "gateway_unit": {"$ref": "#/$defs/digest"},
+            "worker_unit": {"$ref": "#/$defs/digest"},
+            "sensor_unit": {"$ref": "#/$defs/digest"},
+            "broker_unit": {"$ref": "#/$defs/digest"},
             "probe": {"$ref": "#/$defs/digest"}
           }
         },
@@ -96,6 +104,30 @@
         "source_commit": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "sourceObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority",
+        "bytes",
+        "canonical_digest",
+        "path",
+        "raw_digest",
+        "schema"
+      ],
+      "properties": {
+        "authority": {
+          "const": "BOUNDED_LOCAL_SYSTEMD_DURABLE_SENSOR_PROCESS_LOSS_OBSERVATION_ONLY_NOT_RUN_02_PHASE3_EDR_OR_RELEASE_AUTHORITY"
+        },
+        "bytes": {"type": "integer", "minimum": 1},
+        "canonical_digest": {"$ref": "#/$defs/digest"},
+        "path": {"type": "string", "minLength": 1},
+        "raw_digest": {"$ref": "#/$defs/digest"},
+        "schema": {
+          "const": "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v2"
         }
       }
     }

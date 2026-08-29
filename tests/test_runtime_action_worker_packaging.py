@@ -15,8 +15,8 @@ _SHIM = _ROOT / "packaging/libexec/aragorn-runtime-action-worker-service.py"
 _UNIT = _ROOT / "packaging/systemd/aragorn-runtime-action-worker.service"
 _SYSUSERS = _ROOT / "packaging/systemd/aragorn-runtime-action-worker.sysusers"
 _CURRENT_ACTIVATOR_IDENTITY = (
-    31_295,
-    "47d03e4600813cb32b536a267608f8d7eb97219c2421ba944426444693fee009",
+    32_271,
+    "dd615a00aacd5f76f52ac60400ea095f9014c2ef29d7793fd3ba35b26ffe3186",
 )
 _DRIVER = (
     _ROOT
@@ -217,10 +217,10 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         self.assertEqual(activator.count(old), 1)
         self.assertEqual(activator.count(new), 0)
         transformed = activator.replace(old, new)
-        self.assertEqual(len(transformed), 31_295)
+        self.assertEqual(len(transformed), 32_271)
         self.assertEqual(
             hashlib.sha256(transformed).hexdigest(),
-            "751146190f852a01f08c14a38c38bfcf1ed46187440267ea385a46ecc6d1f11e",
+            "7d0eff0b1d06d9ade38c7e68366ad59731a475c5db52243d597ba14cd9c7e25c",
         )
         dockerfile = _FINAL_V3_DOCKERFILE.read_text(encoding="utf-8")
         pins = (
@@ -751,7 +751,8 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
                 "After=local-fs.target nss-user-lookup.target "
                 "aragorn-runtime-lineage-capability-observation-publisher.service"
             ),
-            "Requires=aragorn-runtime-lineage-capability-observation-publisher.service",
+            "BindsTo=aragorn-runtime-lineage-capability-observation-publisher.service",
+            "Restart=no",
             "User=aragorn-runtime",
             "Group=aragorn-runtime",
             "SupplementaryGroups=aragorn-agent-gateway",
@@ -813,6 +814,13 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("SupplementaryGroups=aragorn-sensor", unit)
+        self.assertNotIn(
+            "Requires=aragorn-runtime-lineage-capability-observation-publisher.service",
+            unit,
+        )
+        self.assertEqual(unit.count("Restart=no"), 1)
+        self.assertNotIn("Restart=on-failure", unit)
+        self.assertNotIn("RestartSec=", unit)
         self.assertNotIn("LoadCredential=observation-binding:", unit)
         self.assertNotIn("LoadCredential=capability-grant:", unit)
         self.assertNotIn("ReadWritePaths=/var/lib/aragorn-runtime-action", unit)
@@ -903,7 +911,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "runtime worker NSS group membership is unsafe",
             '"$gateway_uid" -eq 0',
             "installed unit digest changed",
-            "e231978207dd27b71ef43449cf603ac424f6129f64c8a03dd0851ddf32503723",
+            "e4ef9e3f2229d92ed9dd9ee4896646e646d7171ee585ecba5aecdd87dba5e790",
             "70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067",
             '"$gateway_unit" "$worker_unit" "$sensor_unit" "$broker_unit"',
             "previous runtime worker route remained active",
@@ -934,8 +942,9 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "/usr/bin/setpriv",
             "--clear-groups",
             "5d09f482ad1cb177eae168eaea074f6d2a6ec976d16042a3e1d665cc2371f154",
-            "c43a81b394e0b96b0950af94b937a79e777d7e0c815a0104f1ab45871f4afa64",
-            "d0f433abba94a4560c26cb99017f56543b432e2fc3aa74e3374ee4e04addeeaf",
+            "b4ad162940d842e93ede73143f607cff4c612716334b66430d71b885f398984c",
+            "e0273dbeb4ed40a203193a52eb6146f81ecbc6abca605fa0bfff69774676b2db",
+            "f48258b00213c2c1ff4c5c95d0f1c446f78593d1d04780719cba79bf8dd73d8a",
             'wait_socket "$broker_socket"',
             'wait_socket "$sensor_socket"',
             (
@@ -950,6 +959,21 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             'require_unit_value "$gateway_unit" KillMode control-group',
         ):
             self.assertIn(required, activator)
+        self.assertIn(
+            'for unit in "$worker_unit" "$sensor_unit" "$broker_unit"\n'
+            "do\n"
+            '    require_unit_value "$unit" Restart no\n'
+            "done",
+            activator,
+        )
+        for effective_dependency in (
+            'require_unit_value "$worker_unit" BindsTo "$sensor_unit"',
+            'require_only_aragorn_service_after "$worker_unit" "$sensor_unit"',
+            'require_unit_value "$sensor_unit" BindsTo "$broker_unit"',
+            'require_only_aragorn_service_after "$sensor_unit" "$broker_unit"',
+        ):
+            self.assertIn(effective_dependency, activator)
+        self.assertIn("aragorn-*.service)", activator)
         self.assertEqual(activator.count("\nverify_unit \\"), 2)
         stop_route = (
             "/usr/bin/systemctl stop \\\n"

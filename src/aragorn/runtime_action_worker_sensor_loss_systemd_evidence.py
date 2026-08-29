@@ -13,16 +13,17 @@ from typing import Any
 from .admission_evidence import AdmissionEvidenceError, _time
 from .oci_worker_protocol import canonical_digest
 
-_SCHEMA = "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v1"
+_SCHEMA = "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v2"
 _QUALIFICATION_SCHEMA = (
-    "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v1"
+    "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v2"
 )
 _AUTHORITY = (
-    "BOUNDED_LOCAL_SYSTEMD_SENSOR_PROCESS_LOSS_OBSERVATION_ONLY_"
+    "BOUNDED_LOCAL_SYSTEMD_DURABLE_SENSOR_PROCESS_LOSS_OBSERVATION_ONLY_"
     "NOT_RUN_02_PHASE3_EDR_OR_RELEASE_AUTHORITY"
 )
 _QUALIFICATION_ASSURANCE = (
-    "SEMANTICALLY_REPLAY_VERIFIED_PINNED_SENSOR_PROCESS_LOSS_FAIL_STOP_OBSERVATION"
+    "SEMANTICALLY_REPLAY_VERIFIED_PINNED_DURABLE_SENSOR_PROCESS_LOSS_"
+    "FAIL_STOP_OBSERVATION"
 )
 _UNITS = (
     "aragorn-agent-gateway.service",
@@ -51,8 +52,10 @@ _PROPERTIES = (
     "ExecMainExitTimestampMonotonic",
     "ActiveEnterTimestampMonotonic",
     "InactiveEnterTimestampMonotonic",
+    "NRestarts",
 )
 _ARTIFACT_PATHS = {
+    "base_activator": "/usr/libexec/aragorn/activate-runtime-capability-host.sh",
     "activator": "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh",
     "capture_recipe": (
         "/opt/aragorn-sensor-loss-collector/"
@@ -60,16 +63,29 @@ _ARTIFACT_PATHS = {
     ),
     "dockerfile": "/opt/aragorn-sensor-loss-collector/Dockerfile",
     "gateway_unit": "/usr/lib/systemd/system/aragorn-agent-gateway.service",
+    "worker_unit": "/usr/lib/systemd/system/aragorn-runtime-action-worker.service",
+    "sensor_unit": (
+        "/usr/lib/systemd/system/"
+        "aragorn-runtime-lineage-capability-observation-publisher.service"
+    ),
+    "broker_unit": (
+        "/usr/lib/systemd/system/"
+        "aragorn-runtime-lineage-capability-action-broker.service"
+    ),
     "probe": (
         "/opt/aragorn-sensor-loss-collector/"
         "runtime_action_worker_sensor_loss_systemd_probe.py"
     ),
 }
 _ARTIFACT_MODES = {
+    "base_activator": "0755",
     "activator": "0755",
     "capture_recipe": "0755",
     "dockerfile": "0644",
     "gateway_unit": "0644",
+    "worker_unit": "0644",
+    "sensor_unit": "0644",
+    "broker_unit": "0644",
     "probe": "0755",
 }
 _TOP_LEVEL = {
@@ -86,13 +102,14 @@ _TOP_LEVEL = {
     "schema",
     "secret_checks",
     "loss",
+    "stability",
 }
 _LIMITATIONS = [
     "ONE_LOCAL_PRIVATE_CGROUP_SYSTEMD_CONTAINER_ONLY",
     "PRIVILEGED_DOCKER_ROOT_CONTROLLED_FIXTURE_ONLY",
     "CONTAINER_BUILD_AND_CAPTURE_TOOLCHAIN_NOT_INDEPENDENTLY_ATTESTED",
     "SOURCE_COMMIT_SIGNATURE_TRUSTS_LOCAL_GIT_CONFIGURATION_AND_KEYRING",
-    "ONE_SIGKILL_SENSOR_PROCESS_LOSS_WITH_SYSTEMD_RESTART_ONLY",
+    "ONE_SIGKILL_SENSOR_PROCESS_LOSS_WITH_TWO_SECOND_NO_RESTART_WINDOW_ONLY",
     "NO_HUNG_SENSOR_STALE_SOCKET_OR_HEALTH_EPOCH_COVERAGE",
     "NO_IN_FLIGHT_EFFECT_REVOCATION_QUARANTINE_OR_EGRESS_ISOLATION_COVERAGE",
     "PYTHON_STDLIB_AND_DYNAMIC_VERIFIER_DEPENDENCY_CLOSURE_NOT_PINNED",
@@ -112,7 +129,7 @@ _SOURCE_DECISION = {
     "retained_evidence_eligible": False,
     "run_01_eligible": False,
     "run_02_eligible": False,
-    "status": "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_OBSERVED",
+    "status": "SENSOR_PROCESS_LOSS_DURABLE_FAIL_STOP_OBSERVED",
     "verifier_status": "NOT_TESTED",
 }
 _QUALIFICATION_DECISION = {
@@ -125,14 +142,16 @@ _QUALIFICATION_DECISION = {
     "run_01_eligible": False,
     "run_02_eligible": False,
     "source_observation_verified": True,
-    "status": "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_OBSERVED",
+    "status": "SENSOR_PROCESS_LOSS_DURABLE_FAIL_STOP_OBSERVED",
 }
 _CHECKS = {
     "broker_process_and_socket_unchanged": True,
+    "fail_stop_stable_for_two_seconds": True,
     "gateway_started_with_process": True,
     "gateway_stopped_with_empty_cgroup": True,
     "protected_state_unchanged": True,
-    "sensor_restarted_with_new_process": True,
+    "sensor_and_worker_sockets_absent": True,
+    "sensor_failed_without_restart_with_empty_cgroup": True,
     "singleton_skill_unchanged": True,
     "worker_stopped_with_empty_cgroup": True,
 }
@@ -146,6 +165,9 @@ _SOURCE_SIGNATURE = (
     b'Good "git" signature for yousif.snazhat@gmail.com with ED25519 key '
     b"SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk\n"
 )
+_RETAINED_PATH: str | None = None
+_EVIDENCE_BYTES: int | None = None
+_EVIDENCE_RAW_DIGEST: str | None = None
 _RETAINED_EVIDENCE_DIGEST: str | None = None
 _RETAINED_BINDINGS: Mapping[str, Any] | None = None
 
@@ -185,15 +207,33 @@ def verify_runtime_action_worker_sensor_loss_systemd_evidence(
             document["harness"],
             expected_bindings,
         )
-        before = _verify_snapshot(document["before"], active=True)
+        before = _verify_snapshot(document["before"], before_loss=True)
         sensor_pid = before["services"]["units"][_SENSOR_UNIT]["properties"]["MainPID"]
         loss = _verify_command(
             document["loss"],
             ["kill", "-KILL", sensor_pid],
             stdout_empty=True,
         )
-        after = _verify_snapshot(document["after"], active=False)
-        _verify_transition(before, loss, after, document["recorded_at"])
+        stability = document["stability"]
+        _expect(
+            isinstance(stability, Mapping)
+            and set(stability) == {"initial_services", "wait"},
+            "stability fields changed",
+        )
+        initial_services = _verify_services(
+            stability["initial_services"], before_loss=False
+        )
+        wait = _verify_command(stability["wait"], ["sleep", "2"], stdout_empty=True)
+        _expect(wait["elapsed_ns"] >= 2_000_000_000, "stability window shortened")
+        after = _verify_snapshot(document["after"], before_loss=False)
+        _verify_transition(
+            before,
+            loss,
+            initial_services,
+            wait,
+            after,
+            document["recorded_at"],
+        )
     except AdmissionEvidenceError:
         raise
     except (AttributeError, KeyError, TypeError, ValueError) as exc:
@@ -220,6 +260,13 @@ def runtime_action_worker_sensor_loss_systemd_qualification(
         _RETAINED_BINDINGS is not None and expected_bindings == _RETAINED_BINDINGS,
         "retained outer binding pin is not frozen",
     )
+    _expect(
+        isinstance(_RETAINED_PATH, str)
+        and _RETAINED_PATH != ""
+        and _positive_int(_EVIDENCE_BYTES)
+        and _is_digest(_EVIDENCE_RAW_DIGEST),
+        "retained source observation byte pins are not frozen",
+    )
     verify_runtime_action_worker_sensor_loss_systemd_evidence(
         document,
         expected_digest=expected_digest,
@@ -238,7 +285,14 @@ def runtime_action_worker_sensor_loss_systemd_qualification(
         "bindings": {
             "implementation": verifier_digest,
             "outer_harness": document["bindings"],
-            "source_observation": expected_digest,
+            "source_observation": {
+                "authority": _AUTHORITY,
+                "bytes": _EVIDENCE_BYTES,
+                "canonical_digest": expected_digest,
+                "path": _RETAINED_PATH,
+                "raw_digest": _EVIDENCE_RAW_DIGEST,
+                "schema": _SCHEMA,
+            },
         },
         "decision": dict(_QUALIFICATION_DECISION),
         "limitations": list(_LIMITATIONS),
@@ -314,7 +368,7 @@ def _verify_harness(harness: Any, bindings: Mapping[str, Any]) -> None:
     _expect(set(harness) == required, "harness fields changed")
     _expect(
         harness["schema"]
-        == "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v1"
+        == "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v2"
         and harness["capture_disposition"]
         == "EXPLICIT_OUTPUT_ONLY_NOT_RETAINED_EVIDENCE"
         and harness["platform"] == "linux"
@@ -562,12 +616,19 @@ def _verify_harness_raw_records(value: Any, harness: Mapping[str, Any]) -> None:
     )
 
 
-def _verify_snapshot(value: Any, *, active: bool) -> dict[str, Any]:
+def _verify_snapshot(value: Any, *, before_loss: bool) -> dict[str, Any]:
     _expect(
         isinstance(value, Mapping) and set(value) == {"protected", "services", "skill"},
         "snapshot fields changed",
     )
-    services = value["services"]
+    _verify_services(value["services"], before_loss=before_loss)
+    _verify_skill(value["skill"])
+    _verify_protected(value["protected"])
+    return dict(value)
+
+
+def _verify_services(value: Any, *, before_loss: bool) -> dict[str, Any]:
+    services = value
     _expect(
         isinstance(services, Mapping) and set(services) == {"sockets", "units"},
         "service snapshot fields changed",
@@ -579,10 +640,8 @@ def _verify_snapshot(value: Any, *, active: bool) -> dict[str, Any]:
     )
     for name in _UNITS:
         _verify_unit(name, units[name])
-    _verify_sockets(services["sockets"], active=active)
-    _verify_skill(value["skill"])
-    _verify_protected(value["protected"])
-    return dict(value)
+    _verify_sockets(services["sockets"], before_loss=before_loss)
+    return dict(services)
 
 
 def _verify_unit(name: str, value: Any) -> None:
@@ -651,11 +710,12 @@ def _verify_unit(name: str, value: Any) -> None:
 def _verify_transition(
     before: Mapping[str, Any],
     loss: Mapping[str, Any],
+    initial_services: Mapping[str, Any],
+    wait: Mapping[str, Any],
     after: Mapping[str, Any],
     recorded_at: str,
 ) -> None:
     before_units = before["services"]["units"]
-    after_units = after["services"]["units"]
     for name in _UNITS:
         unit = before_units[name]
         properties = unit["properties"]
@@ -667,6 +727,7 @@ def _verify_transition(
             and _CGROUP_MEMBER.fullmatch(pid) is not None
             and _INVOCATION.fullmatch(properties["InvocationID"]) is not None
             and properties["ControlGroup"] == f"/system.slice/{name}"
+            and _nonnegative_decimal(properties["NRestarts"])
             and pid in unit["cgroup_members"]
             and unit["cgroup_members"],
             f"service was not active before sensor loss: {name}",
@@ -696,94 +757,12 @@ def _verify_transition(
         == len(_UNITS),
         "active service identities were not distinct",
     )
-    for name in _STOPPED_UNITS:
-        unit = after_units[name]
-        properties = unit["properties"]
-        _expect(
-            properties["ActiveState"] == "inactive"
-            and properties["SubState"] == "dead"
-            and properties["MainPID"] == "0"
-            and properties["InvocationID"] == ""
-            and properties["ControlGroup"] == ""
-            and properties["Result"] == "success"
-            and properties["ExecMainCode"] == "0"
-            and properties["ExecMainStatus"] == "0"
-            and properties["ExecMainStartTimestampMonotonic"] == "0"
-            and properties["ExecMainExitTimestampMonotonic"] == "0"
-            and properties["ActiveEnterTimestampMonotonic"] == "0"
-            and properties["InactiveEnterTimestampMonotonic"] == "0"
-            and properties["UnitFileState"]
-            == before_units[name]["properties"]["UnitFileState"]
-            and unit["cgroup_members"] == []
-            and unit["cgroup_procs"]["present"] is False
-            and unit["cgroup_procs"]["raw"]["bytes"] == 0,
-            f"service did not fail-stop after sensor loss: {name}",
-        )
-    before_sensor = before_units[_SENSOR_UNIT]
-    before_sensor_start = int(
-        before_sensor["properties"]["ExecMainStartTimestampMonotonic"]
-    )
-    before_sensor_active = int(
-        before_sensor["properties"]["ActiveEnterTimestampMonotonic"]
-    )
-    after_sensor = after_units[_SENSOR_UNIT]
-    sensor_properties = after_sensor["properties"]
-    sensor_pid = sensor_properties["MainPID"]
+    _verify_terminal_services(before["services"], initial_services, loss)
+    _verify_terminal_services(before["services"], after["services"], loss)
     _expect(
-        sensor_properties["ActiveState"] == "active"
-        and sensor_properties["SubState"] == "running"
-        and sensor_properties["Result"] == "success"
-        and sensor_properties["ExecMainCode"] == "0"
-        and sensor_properties["ExecMainStatus"] == "0"
-        and sensor_properties["ExecMainExitTimestampMonotonic"] == "0"
-        and sensor_properties["InactiveEnterTimestampMonotonic"] == "0"
-        and _positive_decimal(sensor_properties["ExecMainStartTimestampMonotonic"])
-        and _positive_decimal(sensor_properties["ActiveEnterTimestampMonotonic"])
-        and sensor_properties["UnitFileState"]
-        == before_sensor["properties"]["UnitFileState"]
-        and _CGROUP_MEMBER.fullmatch(sensor_pid) is not None
-        and sensor_pid != before_sensor["properties"]["MainPID"]
-        and _INVOCATION.fullmatch(sensor_properties["InvocationID"]) is not None
-        and sensor_properties["InvocationID"]
-        != before_sensor["properties"]["InvocationID"]
-        and sensor_properties["ControlGroup"] == f"/system.slice/{_SENSOR_UNIT}"
-        and sensor_pid in after_sensor["cgroup_members"]
-        and after_sensor["cgroup_procs"]["present"] is True
-        and after_sensor["cgroup_procs"]["raw"]["bytes"] > 0,
-        "sensor process loss and restart were not observed",
-    )
-    after_sensor_start = int(sensor_properties["ExecMainStartTimestampMonotonic"])
-    after_sensor_active = int(sensor_properties["ActiveEnterTimestampMonotonic"])
-    _expect(
-        before_sensor_start < after_sensor_start
-        and before_sensor_active < after_sensor_active
-        and loss["completed_monotonic_ns"] <= after_sensor_start * 1_000
-        and after_sensor_start <= after_sensor_active
-        and after_sensor_active * 1_000
-        <= after_sensor["command"]["started_monotonic_ns"],
-        "sensor restart chronology changed",
-    )
-    before_broker = before_units[_BROKER_UNIT]
-    after_broker = after_units[_BROKER_UNIT]
-    _expect(
-        after_broker["properties"] == before_broker["properties"]
-        and after_broker["cgroup_members"] == before_broker["cgroup_members"]
-        and after_broker["cgroup_procs"] == before_broker["cgroup_procs"],
-        "broker continuity changed",
-    )
-    _expect(
-        sensor_pid != after_broker["properties"]["MainPID"]
-        and sensor_properties["InvocationID"]
-        != after_broker["properties"]["InvocationID"]
-        and set(after_sensor["cgroup_members"]).isdisjoint(
-            after_broker["cgroup_members"]
-        ),
-        "sensor and broker process identities overlapped",
-    )
-    _expect(
-        before["services"]["sockets"][_SOCKETS[2]]
-        == after["services"]["sockets"][_SOCKETS[2]],
-        "broker socket continuity changed",
+        _non_command_services(initial_services)
+        == _non_command_services(after["services"]),
+        "fail-stop state changed during stability window",
     )
     _expect(before["skill"] == after["skill"], "singleton skill changed")
     _expect(
@@ -794,34 +773,139 @@ def _verify_transition(
     before_completed = max(
         _time(unit["command"]["completed_at"]) for unit in before_units.values()
     )
-    after_started = min(
-        _time(unit["command"]["started_at"]) for unit in after_units.values()
+    initial_started, initial_completed, initial_started_ns, initial_completed_ns = (
+        _service_command_window(initial_services)
     )
-    after_completed = max(
-        _time(unit["command"]["completed_at"]) for unit in after_units.values()
+    after_started, after_completed, after_started_ns, _ = _service_command_window(
+        after["services"]
     )
     before_completed_monotonic = max(
         unit["command"]["completed_monotonic_ns"] for unit in before_units.values()
-    )
-    after_started_monotonic = min(
-        unit["command"]["started_monotonic_ns"] for unit in after_units.values()
     )
     _expect(
         before_completed
         <= _time(loss["started_at"])
         <= _time(loss["completed_at"])
+        <= initial_started
+        <= initial_completed
+        <= _time(wait["started_at"])
+        <= _time(wait["completed_at"])
         <= after_started
         <= after_completed
         <= _time(recorded_at)
         and before_completed_monotonic
         <= loss["started_monotonic_ns"]
         <= loss["completed_monotonic_ns"]
-        <= after_started_monotonic,
+        <= initial_started_ns
+        <= initial_completed_ns
+        <= wait["started_monotonic_ns"]
+        <= wait["completed_monotonic_ns"]
+        <= after_started_ns,
         "sensor-loss chronology changed",
     )
 
 
-def _verify_sockets(value: Any, *, active: bool) -> None:
+def _verify_terminal_services(
+    before: Mapping[str, Any],
+    terminal: Mapping[str, Any],
+    loss: Mapping[str, Any],
+) -> None:
+    before_units = before["units"]
+    terminal_units = terminal["units"]
+    for name in _STOPPED_UNITS:
+        prior = before_units[name]
+        unit = terminal_units[name]
+        properties = unit["properties"]
+        prior_properties = prior["properties"]
+        _expect(
+            properties["ActiveState"] == "inactive"
+            and properties["SubState"] == "dead"
+            and properties["MainPID"] == "0"
+            and properties["ControlGroup"] == ""
+            and properties["Result"] == "success"
+            and properties["UnitFileState"] == prior_properties["UnitFileState"]
+            and properties["NRestarts"] == prior_properties["NRestarts"]
+            and properties["InvocationID"]
+            in {"", prior_properties["InvocationID"]}
+            and properties["ExecMainStartTimestampMonotonic"]
+            in {"0", prior_properties["ExecMainStartTimestampMonotonic"]}
+            and properties["ActiveEnterTimestampMonotonic"]
+            in {"0", prior_properties["ActiveEnterTimestampMonotonic"]}
+            and _positive_decimal(properties["ExecMainExitTimestampMonotonic"])
+            and _positive_decimal(properties["InactiveEnterTimestampMonotonic"])
+            and loss["started_monotonic_ns"]
+            <= int(properties["ExecMainExitTimestampMonotonic"]) * 1_000
+            <= unit["command"]["started_monotonic_ns"]
+            and loss["started_monotonic_ns"]
+            <= int(properties["InactiveEnterTimestampMonotonic"]) * 1_000
+            <= unit["command"]["started_monotonic_ns"]
+            and unit["cgroup_members"] == []
+            and unit["cgroup_procs"]["present"] is False
+            and unit["cgroup_procs"]["raw"]["bytes"] == 0,
+            f"service did not fail-stop after sensor loss: {name}",
+        )
+
+    prior_sensor = before_units[_SENSOR_UNIT]
+    sensor = terminal_units[_SENSOR_UNIT]
+    prior_properties = prior_sensor["properties"]
+    properties = sensor["properties"]
+    _expect(
+        properties["ActiveState"] == "failed"
+        and properties["SubState"] == "failed"
+        and properties["Result"] == "signal"
+        and properties["ExecMainCode"] == "2"
+        and properties["ExecMainStatus"] == "9"
+        and properties["MainPID"] == "0"
+        and properties["InvocationID"] == prior_properties["InvocationID"]
+        and properties["UnitFileState"] == prior_properties["UnitFileState"]
+        and properties["ControlGroup"] == ""
+        and properties["ExecMainStartTimestampMonotonic"]
+        == prior_properties["ExecMainStartTimestampMonotonic"]
+        and properties["ActiveEnterTimestampMonotonic"]
+        == prior_properties["ActiveEnterTimestampMonotonic"]
+        and properties["NRestarts"] == prior_properties["NRestarts"]
+        and _positive_decimal(properties["ExecMainExitTimestampMonotonic"])
+        and loss["started_monotonic_ns"]
+        <= int(properties["ExecMainExitTimestampMonotonic"]) * 1_000
+        <= sensor["command"]["started_monotonic_ns"]
+        and sensor["cgroup_members"] == []
+        and sensor["cgroup_procs"]["present"] is False
+        and sensor["cgroup_procs"]["raw"]["bytes"] == 0,
+        "sensor did not remain failed without restart",
+    )
+
+    broker = terminal_units[_BROKER_UNIT]
+    _expect(
+        _non_command_unit(broker) == _non_command_unit(before_units[_BROKER_UNIT])
+        and terminal["sockets"][_SOCKETS[2]] == before["sockets"][_SOCKETS[2]],
+        "broker continuity changed",
+    )
+
+
+def _non_command_unit(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: item for key, item in value.items() if key != "command"}
+
+
+def _non_command_services(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "sockets": value["sockets"],
+        "units": {
+            name: _non_command_unit(unit) for name, unit in value["units"].items()
+        },
+    }
+
+
+def _service_command_window(value: Mapping[str, Any]) -> tuple[Any, Any, int, int]:
+    commands = [unit["command"] for unit in value["units"].values()]
+    return (
+        min(_time(command["started_at"]) for command in commands),
+        max(_time(command["completed_at"]) for command in commands),
+        min(command["started_monotonic_ns"] for command in commands),
+        max(command["completed_monotonic_ns"] for command in commands),
+    )
+
+
+def _verify_sockets(value: Any, *, before_loss: bool) -> None:
     _expect(
         isinstance(value, Mapping) and set(value) == set(_SOCKETS),
         "socket inventory changed",
@@ -836,7 +920,7 @@ def _verify_sockets(value: Any, *, active: bool) -> None:
             and all(isinstance(line, str) for line in record["unix"]),
             f"socket record changed: {path}",
         )
-        expected_present = active or index in {1, 2}
+        expected_present = before_loss or index == 2
         _expect(record["present"] is expected_present, f"socket state changed: {path}")
         if expected_present:
             _verify_socket_metadata(record["metadata"])
@@ -1055,6 +1139,10 @@ def _positive_int(value: Any) -> bool:
 
 def _positive_decimal(value: Any) -> bool:
     return isinstance(value, str) and _CGROUP_MEMBER.fullmatch(value) is not None
+
+
+def _nonnegative_decimal(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"0|[1-9][0-9]*", value) is not None
 
 
 def _contains_float(value: Any) -> bool:

@@ -47,17 +47,20 @@ def _file(path: str, raw: bytes, inode: int, mode: str = "0444") -> dict:
     }
 
 
-def _command(argv: list[str], stdout: bytes, tick: int) -> dict:
+def _command(
+    argv: list[str], stdout: bytes, tick: int, *, elapsed_ns: int = 100_000_000
+) -> dict:
+    completed_tick = tick + max(1, elapsed_ns // 1_000_000_000)
     return {
         "argv": argv,
         "caller": {"gid": 0, "uid": 0},
-        "completed_at": f"2026-08-29T01:10:{tick + 1:02d}Z",
-        "completed_monotonic_ns": (tick + 1) * 1_000,
-        "elapsed_ns": 1_000,
+        "completed_at": f"2026-08-29T01:10:{completed_tick:02d}Z",
+        "completed_monotonic_ns": tick * 1_000_000_000 + elapsed_ns,
+        "elapsed_ns": elapsed_ns,
         "exit_code": 0,
         "signal": None,
         "started_at": f"2026-08-29T01:10:{tick:02d}Z",
-        "started_monotonic_ns": tick * 1_000,
+        "started_monotonic_ns": tick * 1_000_000_000,
         "stderr": _raw(b""),
         "stdout": _raw(stdout),
     }
@@ -77,6 +80,7 @@ def _properties(name: str, pid: int, invocation: str, *, active: bool) -> dict:
             "InactiveEnterTimestampMonotonic": "0",
             "InvocationID": "",
             "MainPID": "0",
+            "NRestarts": "0",
             "Result": "success",
             "SubState": "dead",
             "UnitFileState": enabled,
@@ -92,6 +96,7 @@ def _properties(name: str, pid: int, invocation: str, *, active: bool) -> dict:
         "InactiveEnterTimestampMonotonic": "0",
         "InvocationID": invocation,
         "MainPID": str(pid),
+        "NRestarts": "0",
         "Result": "success",
         "SubState": "running",
         "UnitFileState": enabled,
@@ -132,33 +137,53 @@ def _socket(path: str, inode: int, *, present: bool) -> dict:
     }
 
 
-def _service_snapshot(*, before: bool) -> dict:
+def _service_snapshot(*, before: bool, tick: int) -> dict:
     pids = dict(zip(subject._UNITS, (101, 102, 103, 104), strict=True))
     invocations = {
         name: f"{index:x}" * 32 for index, name in enumerate(subject._UNITS, start=1)
     }
     units = {}
     for name in subject._UNITS:
-        active = before or name in {subject._SENSOR_UNIT, subject._BROKER_UNIT}
-        pid = 203 if not before and name == subject._SENSOR_UNIT else pids[name]
-        invocation = (
-            "a" * 32
-            if not before and name == subject._SENSOR_UNIT
-            else invocations[name]
-        )
+        active = before or name == subject._BROKER_UNIT
+        pid = pids[name]
+        invocation = invocations[name]
         units[name] = _unit(
             name,
             pid,
             invocation,
             active=active,
-            tick=1 if before else 5,
+            tick=tick,
         )
+        if not before and name in {subject._GATEWAY_UNIT, subject._WORKER_UNIT}:
+            properties = units[name]["properties"]
+            properties.update(
+                {
+                    "ActiveEnterTimestampMonotonic": "1",
+                    "ExecMainExitTimestampMonotonic": "3500000",
+                    "ExecMainStartTimestampMonotonic": "1",
+                    "InactiveEnterTimestampMonotonic": "3600000",
+                    "InvocationID": invocations[name],
+                }
+            )
+            _rebind_properties(units[name])
         if not before and name == subject._SENSOR_UNIT:
-            units[name]["properties"]["ExecMainStartTimestampMonotonic"] = "4"
-            units[name]["properties"]["ActiveEnterTimestampMonotonic"] = "4"
+            properties = units[name]["properties"]
+            properties.update(
+                {
+                    "ActiveEnterTimestampMonotonic": "1",
+                    "ActiveState": "failed",
+                    "ExecMainCode": "2",
+                    "ExecMainExitTimestampMonotonic": "3400000",
+                    "ExecMainStartTimestampMonotonic": "1",
+                    "ExecMainStatus": "9",
+                    "InvocationID": invocations[name],
+                    "Result": "signal",
+                    "SubState": "failed",
+                }
+            )
             _rebind_properties(units[name])
     sockets = {
-        path: _socket(path, 200 + index, present=before or index in {1, 2})
+        path: _socket(path, 200 + index, present=before or index == 2)
         for index, path in enumerate(subject._SOCKETS)
     }
     return {"sockets": sockets, "units": units}
@@ -341,7 +366,7 @@ def _fixture() -> tuple[dict, dict]:
             ),
         },
         "run_image_reference": child_image,
-        "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v1",
+        "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v2",
         "source_artifacts": {
             name: _raw(name.encode()) for name in subject._ARTIFACT_PATHS
         },
@@ -359,12 +384,12 @@ def _fixture() -> tuple[dict, dict]:
             "root": _metadata(inode=350, size=0, kind="directory", mode="0750"),
             "target_exists": False,
         },
-        "services": _service_snapshot(before=True),
+        "services": _service_snapshot(before=True, tick=1),
         "skill": _skill(),
     }
     after = {
         "protected": copy.deepcopy(before["protected"]),
-        "services": _service_snapshot(before=False),
+        "services": _service_snapshot(before=False, tick=9),
         "skill": copy.deepcopy(before["skill"]),
     }
     document = {
@@ -380,7 +405,13 @@ def _fixture() -> tuple[dict, dict]:
         "recorded_at": "2026-08-29T01:10:12Z",
         "schema": subject._SCHEMA,
         "secret_checks": {"gateway_token_retained": False},
-        "loss": _command(["kill", "-KILL", "103"], b"", tick=2),
+        "loss": _command(["kill", "-KILL", "103"], b"", tick=3),
+        "stability": {
+            "initial_services": _service_snapshot(before=False, tick=4),
+            "wait": _command(
+                ["sleep", "2"], b"", tick=6, elapsed_ns=2_000_000_000
+            ),
+        },
     }
     return document, bindings
 
@@ -407,6 +438,9 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
         with (
             patch.object(subject, "_RETAINED_EVIDENCE_DIGEST", digest),
             patch.object(subject, "_RETAINED_BINDINGS", self.bindings),
+            patch.object(subject, "_RETAINED_PATH", "benchmark/evidence/test.json"),
+            patch.object(subject, "_EVIDENCE_BYTES", 1),
+            patch.object(subject, "_EVIDENCE_RAW_DIGEST", _EMPTY_DIGEST),
         ):
             qualification = (
                 subject.runtime_action_worker_sensor_loss_systemd_qualification(
@@ -418,7 +452,7 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
             )
         self.assertEqual(
             qualification["decision"]["status"],
-            "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_OBSERVED",
+            "SENSOR_PROCESS_LOSS_DURABLE_FAIL_STOP_OBSERVED",
         )
         self.assertTrue(
             qualification["decision"]["bounded_sensor_process_loss_evidence_eligible"]
@@ -437,7 +471,7 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
         schema = json.loads(
             (
                 _ROOT
-                / "schema/runtime-action-worker-sensor-loss-systemd-qualification-v1.schema.json"
+                / "schema/runtime-action-worker-sensor-loss-systemd-qualification-v2.schema.json"
             ).read_bytes()
         )
         validator = validator_for(schema)
@@ -471,6 +505,9 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
         with (
             patch.object(subject, "_RETAINED_EVIDENCE_DIGEST", digest),
             patch.object(subject, "_RETAINED_BINDINGS", self.bindings),
+            patch.object(subject, "_RETAINED_PATH", "benchmark/evidence/test.json"),
+            patch.object(subject, "_EVIDENCE_BYTES", 1),
+            patch.object(subject, "_EVIDENCE_RAW_DIGEST", _EMPTY_DIGEST),
             self.assertRaises(AdmissionEvidenceError),
         ):
             subject.runtime_action_worker_sensor_loss_systemd_qualification(
@@ -515,33 +552,118 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
 
         self._assert_rejected(mutate)
 
-    def test_sensor_restart_timestamps_must_follow_the_sigkill(self) -> None:
+    def test_sensor_cannot_restart_with_a_new_process(self) -> None:
         def mutate(value: dict) -> None:
-            sensor = value["after"]["services"]["units"][subject._SENSOR_UNIT]
-            sensor["properties"]["ExecMainStartTimestampMonotonic"] = "2"
-            _rebind_properties(sensor)
+            for services in (
+                value["stability"]["initial_services"],
+                value["after"]["services"],
+            ):
+                sensor = services["units"][subject._SENSOR_UNIT]
+                sensor["properties"].update(
+                    {
+                        "ActiveState": "active",
+                        "ControlGroup": f"/system.slice/{subject._SENSOR_UNIT}",
+                        "ExecMainCode": "0",
+                        "ExecMainExitTimestampMonotonic": "0",
+                        "ExecMainStartTimestampMonotonic": "3800000",
+                        "ExecMainStatus": "0",
+                        "InvocationID": "a" * 32,
+                        "MainPID": "203",
+                        "Result": "success",
+                        "SubState": "running",
+                    }
+                )
+                _rebind_cgroup(sensor, ["203"])
+                _rebind_properties(sensor)
 
         self._assert_rejected(mutate)
 
     def test_before_sensor_timestamps_must_precede_its_snapshot(self) -> None:
         def mutate(value: dict) -> None:
             sensor = value["before"]["services"]["units"][subject._SENSOR_UNIT]
-            sensor["properties"]["ActiveEnterTimestampMonotonic"] = "3"
+            sensor["properties"]["ActiveEnterTimestampMonotonic"] = "2000000"
             _rebind_properties(sensor)
 
         self._assert_rejected(mutate)
 
-    def test_restarted_sensor_and_broker_identities_must_be_disjoint(self) -> None:
+    def test_sensor_failure_must_be_the_observed_sigkill(self) -> None:
         def mutate(value: dict) -> None:
-            units = value["after"]["services"]["units"]
-            sensor = units[subject._SENSOR_UNIT]
-            broker = units[subject._BROKER_UNIT]
-            sensor["properties"]["MainPID"] = broker["properties"]["MainPID"]
-            sensor["properties"]["InvocationID"] = broker["properties"]["InvocationID"]
-            _rebind_cgroup(sensor, broker["cgroup_members"])
+            sensor = value["after"]["services"]["units"][subject._SENSOR_UNIT]
+            sensor["properties"]["ExecMainStatus"] = "15"
             _rebind_properties(sensor)
 
         self._assert_rejected(mutate)
+
+    def test_sensor_restart_counter_must_not_change(self) -> None:
+        def mutate(value: dict) -> None:
+            for services in (
+                value["stability"]["initial_services"],
+                value["after"]["services"],
+            ):
+                sensor = services["units"][subject._SENSOR_UNIT]
+                sensor["properties"]["NRestarts"] = "1"
+                _rebind_properties(sensor)
+
+        self._assert_rejected(mutate)
+
+    def test_initial_terminal_snapshot_is_required(self) -> None:
+        self._assert_rejected(
+            lambda value: value["stability"].pop("initial_services")
+        )
+
+    def test_stability_wait_is_exact_successful_root_sleep(self) -> None:
+        for mutate in (
+            lambda value: value["stability"]["wait"].__setitem__(
+                "argv", ["sleep", "1"]
+            ),
+            lambda value: value["stability"]["wait"].update(
+                {
+                    "completed_monotonic_ns": 7_999_999_999,
+                    "elapsed_ns": 1_999_999_999,
+                }
+            ),
+            lambda value: value["stability"]["wait"].__setitem__("exit_code", 1),
+            lambda value: value["stability"]["wait"]["caller"].__setitem__(
+                "uid", 1000
+            ),
+        ):
+            self._assert_rejected(mutate)
+
+    def test_terminal_state_must_remain_exactly_stable(self) -> None:
+        def mutate(value: dict) -> None:
+            gateway = value["after"]["services"]["units"][subject._GATEWAY_UNIT]
+            gateway["properties"]["InactiveEnterTimestampMonotonic"] = "3700000"
+            _rebind_properties(gateway)
+
+        self._assert_rejected(mutate)
+
+    def test_stability_snapshots_must_bracket_the_wait(self) -> None:
+        def mutate(value: dict) -> None:
+            wait = value["stability"]["wait"]
+            wait["started_monotonic_ns"] = 3_900_000_000
+            wait["completed_monotonic_ns"] = 5_900_000_000
+
+        self._assert_rejected(mutate)
+
+    def test_sensor_and_worker_sockets_cannot_reappear(self) -> None:
+        def mutate(value: dict) -> None:
+            for services in (
+                value["stability"]["initial_services"],
+                value["after"]["services"],
+            ):
+                for index, path in enumerate(subject._SOCKETS[:2], start=1):
+                    services["sockets"][path] = _socket(
+                        path, 998 + index, present=True
+                    )
+
+        self._assert_rejected(mutate)
+
+    def test_reported_stability_check_cannot_be_tampered(self) -> None:
+        self._assert_rejected(
+            lambda value: value["checks"].__setitem__(
+                "fail_stop_stable_for_two_seconds", False
+            )
+        )
 
     def test_skill_or_protected_target_change_is_rejected(self) -> None:
         for mutate in (
@@ -603,7 +725,6 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
 
         def source(value: dict) -> None:
             value["bindings"]["source_commit"] = "7" * 40
-            value["harness"]["source_commit"] = "7" * 40
 
         for mutate in (artifact, child, source):
             self._assert_rejected(mutate)

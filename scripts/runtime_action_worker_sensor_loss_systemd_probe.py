@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture one bounded gateway fail-stop after lineage-sensor process loss."""
+"""Capture one bounded durable fail-stop after lineage-sensor process loss."""
 
 from __future__ import annotations
 
@@ -32,14 +32,34 @@ _PARENT_IMAGE = (
     "sha256:21184b7a6a096a8625994b524203bf5b521d749b24e415378a69decd4e78009b"
 )
 _RUNTIME_VOLUME = "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1"
-_ACTIVATOR_DIGEST = (
-    "sha256:47d03e4600813cb32b536a267608f8d7eb97219c2421ba944426444693fee009"
-)
-_GATEWAY_UNIT_DIGEST = (
-    "sha256:70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067"
-)
+_EXPECTED_ENFORCEMENT_ARTIFACTS = {
+    "base_activator": (
+        "sha256:b4ad162940d842e93ede73143f607cff4c612716334b66430d71b885f398984c",
+        12_420,
+    ),
+    "activator": (
+        "sha256:dd615a00aacd5f76f52ac60400ea095f9014c2ef29d7793fd3ba35b26ffe3186",
+        32_271,
+    ),
+    "gateway_unit": (
+        "sha256:70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067",
+        3_437,
+    ),
+    "worker_unit": (
+        "sha256:e4ef9e3f2229d92ed9dd9ee4896646e646d7171ee585ecba5aecdd87dba5e790",
+        2_573,
+    ),
+    "sensor_unit": (
+        "sha256:f48258b00213c2c1ff4c5c95d0f1c446f78593d1d04780719cba79bf8dd73d8a",
+        2_777,
+    ),
+    "broker_unit": (
+        "sha256:e0273dbeb4ed40a203193a52eb6146f81ecbc6abca605fa0bfff69774676b2db",
+        2_725,
+    ),
+}
 _AUTHORITY = (
-    "BOUNDED_LOCAL_SYSTEMD_SENSOR_PROCESS_LOSS_OBSERVATION_ONLY_"
+    "BOUNDED_LOCAL_SYSTEMD_DURABLE_SENSOR_PROCESS_LOSS_OBSERVATION_ONLY_"
     "NOT_RUN_02_PHASE3_EDR_OR_RELEASE_AUTHORITY"
 )
 _LIMITATIONS = [
@@ -47,7 +67,7 @@ _LIMITATIONS = [
     "PRIVILEGED_DOCKER_ROOT_CONTROLLED_FIXTURE_ONLY",
     "CONTAINER_BUILD_AND_CAPTURE_TOOLCHAIN_NOT_INDEPENDENTLY_ATTESTED",
     "SOURCE_COMMIT_SIGNATURE_TRUSTS_LOCAL_GIT_CONFIGURATION_AND_KEYRING",
-    "ONE_SIGKILL_SENSOR_PROCESS_LOSS_WITH_SYSTEMD_RESTART_ONLY",
+    "ONE_SIGKILL_SENSOR_PROCESS_LOSS_WITH_TWO_SECOND_NO_RESTART_WINDOW_ONLY",
     "NO_HUNG_SENSOR_STALE_SOCKET_OR_HEALTH_EPOCH_COVERAGE",
     "NO_IN_FLIGHT_EFFECT_REVOCATION_QUARANTINE_OR_EGRESS_ISOLATION_COVERAGE",
     "PYTHON_STDLIB_AND_DYNAMIC_VERIFIER_DEPENDENCY_CLOSURE_NOT_PINNED",
@@ -59,20 +79,54 @@ _LIMITATIONS = [
     "PUBLIC_RELEASE_NOT_AUTHORIZED",
 ]
 _ARTIFACT_PATHS = {
+    "base_activator": Path(
+        "/usr/libexec/aragorn/activate-runtime-capability-host.sh"
+    ),
     "activator": Path("/usr/libexec/aragorn/activate-runtime-action-worker-host.sh"),
     "capture_recipe": _COLLECTOR_ROOT
     / "capture_runtime_action_worker_sensor_loss_systemd.sh",
     "dockerfile": _COLLECTOR_ROOT / "Dockerfile",
     "gateway_unit": Path("/usr/lib/systemd/system/aragorn-agent-gateway.service"),
+    "worker_unit": Path(
+        "/usr/lib/systemd/system/aragorn-runtime-action-worker.service"
+    ),
+    "sensor_unit": Path(
+        "/usr/lib/systemd/system/"
+        "aragorn-runtime-lineage-capability-observation-publisher.service"
+    ),
+    "broker_unit": Path(
+        "/usr/lib/systemd/system/"
+        "aragorn-runtime-lineage-capability-action-broker.service"
+    ),
     "probe": _COLLECTOR_ROOT / "runtime_action_worker_sensor_loss_systemd_probe.py",
 }
 _EXPECTED_MODES = {
+    "base_activator": "0755",
     "activator": "0755",
     "capture_recipe": "0755",
     "dockerfile": "0644",
     "gateway_unit": "0644",
+    "worker_unit": "0644",
+    "sensor_unit": "0644",
+    "broker_unit": "0644",
     "probe": "0755",
 }
+_SERVICE_PROPERTIES = (
+    "ActiveState",
+    "SubState",
+    "Result",
+    "ExecMainCode",
+    "ExecMainStatus",
+    "MainPID",
+    "InvocationID",
+    "UnitFileState",
+    "ControlGroup",
+    "ExecMainStartTimestampMonotonic",
+    "ExecMainExitTimestampMonotonic",
+    "ActiveEnterTimestampMonotonic",
+    "InactiveEnterTimestampMonotonic",
+    "NRestarts",
+)
 
 _CAPTURE: dict[str, Any] | None = None
 _HARNESS: dict[str, Any] | None = None
@@ -80,7 +134,6 @@ _ARTIFACTS: dict[str, Any] | None = None
 _TOKEN: bytes | None = None
 _ORIGINAL_ACTIVE_STACK = p37c._active_stack
 _ORIGINAL_ARTIFACTS = p37c._artifacts
-_ORIGINAL_SERVICE_SNAPSHOT = p37c._service_snapshot
 
 
 def _iso_now() -> str:
@@ -201,7 +254,7 @@ def _harness() -> dict[str, Any]:
         isinstance(value, dict)
         and set(value) == expected_fields
         and value["schema"]
-        == "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v1"
+        == "aragorn/runtime-action-worker-sensor-loss-systemd-harness/v2"
         and value["capture_disposition"] == "EXPLICIT_OUTPUT_ONLY_NOT_RETAINED_EVIDENCE"
         and value["parent_image_id"] == _PARENT_IMAGE
         and value["image_id"] == value["run_image_reference"]
@@ -353,10 +406,11 @@ def _artifacts() -> dict[str, Any]:
             f"sensor-loss artifact changed: {name}",
         )
     p37c._expect(
-        retained["activator"]["digest"] == _ACTIVATOR_DIGEST
-        and retained["activator"]["bytes"] == 31_295
-        and retained["gateway_unit"]["digest"] == _GATEWAY_UNIT_DIGEST
-        and retained["gateway_unit"]["bytes"] == 3_437,
+        all(
+            retained[name]["digest"] == digest
+            and retained[name]["bytes"] == size
+            for name, (digest, size) in _EXPECTED_ENFORCEMENT_ARTIFACTS.items()
+        ),
         "sensor-loss enforcement artifact identity changed",
     )
     _ARTIFACTS = retained
@@ -370,8 +424,35 @@ def _private_service_cgroup(unit: str) -> str:
 
 
 def _service_snapshot() -> dict[str, Any]:
-    snapshot = _ORIGINAL_SERVICE_SNAPSHOT()
-    for name, unit in snapshot["units"].items():
+    units = {}
+    for name in p37c._UNITS:
+        command = p37c._command(
+            [
+                "systemctl",
+                "show",
+                name,
+                *[f"-p{property_name}" for property_name in _SERVICE_PROPERTIES],
+            ]
+        )
+        p37c._expect(command["exit_code"] == 0, f"systemd snapshot failed: {name}")
+        try:
+            lines = p37c._raw_bytes(command["stdout"]).decode("utf-8").splitlines()
+        except UnicodeDecodeError as exc:
+            raise p37c.openclaw.ProbeError(
+                f"non-UTF-8 systemd snapshot: {name}"
+            ) from exc
+        pairs = [line.split("=", 1) for line in lines]
+        p37c._expect(
+            len(pairs) == len(_SERVICE_PROPERTIES)
+            and all(len(pair) == 2 for pair in pairs)
+            and len({pair[0] for pair in pairs}) == len(_SERVICE_PROPERTIES),
+            f"systemd snapshot changed: {name}",
+        )
+        properties = dict(pairs)
+        p37c._expect(
+            set(properties) == set(_SERVICE_PROPERTIES),
+            f"systemd snapshot changed: {name}",
+        )
         path = Path("/sys/fs/cgroup/system.slice") / name / "cgroup.procs"
         try:
             descriptor = os.open(
@@ -402,13 +483,22 @@ def _service_snapshot() -> dict[str, Any]:
             all(re.fullmatch(r"[1-9][0-9]*", member) for member in members),
             f"invalid cgroup membership: {name}",
         )
-        unit["cgroup_members"] = members
-        unit["cgroup_procs"] = {
-            "path": str(path),
-            "present": present,
-            "raw": p37c._raw_record(raw),
+        units[name] = {
+            "command": command,
+            "properties": properties,
+            "cgroup_members": members,
+            "cgroup_procs": {
+                "path": str(path),
+                "present": present,
+                "raw": p37c._raw_record(raw),
+            },
         }
-    return snapshot
+    return {
+        "units": units,
+        "sockets": {
+            str(path): p37c._socket_record(path) for path in p37c._SOCKETS
+        },
+    }
 
 
 def _prepare_gateway(*args: Any, **kwargs: Any) -> tuple[Any, ...]:
@@ -442,21 +532,65 @@ def _stopped(unit: dict[str, Any]) -> bool:
     )
 
 
-def _restarted(before: dict[str, Any], after: dict[str, Any]) -> bool:
+def _failed_without_restart(before: dict[str, Any], after: dict[str, Any]) -> bool:
     before_properties = before["properties"]
     after_properties = after["properties"]
-    pid = after_properties["MainPID"]
     return (
-        after_properties["ActiveState"] == "active"
-        and after_properties["SubState"] == "running"
-        and re.fullmatch(r"[1-9][0-9]*", pid) is not None
-        and pid != before_properties["MainPID"]
-        and after_properties["InvocationID"] != before_properties["InvocationID"]
-        and after_properties["InvocationID"] != ""
-        and after["cgroup_members"] != []
-        and pid in after["cgroup_members"]
-        and after["cgroup_procs"]["present"] is True
+        after_properties["ActiveState"] == "failed"
+        and after_properties["SubState"] == "failed"
+        and after_properties["MainPID"] == "0"
+        and after_properties["NRestarts"] == before_properties["NRestarts"]
+        and after["cgroup_members"] == []
+        and after["cgroup_procs"]["present"] is False
+        and p37c._raw_bytes(after["cgroup_procs"]["raw"]) == b""
     )
+
+
+def _socket_absent(snapshot: dict[str, Any], path: Path) -> bool:
+    record = snapshot["sockets"][str(path)]
+    return (
+        record["present"] is False
+        and record["metadata"] is None
+        and record["unix"] == []
+    )
+
+
+def _terminal_state(before: dict[str, Any], after: dict[str, Any]) -> bool:
+    broker_before = before["units"][p37c._BROKER_UNIT]
+    broker_after = after["units"][p37c._BROKER_UNIT]
+    return (
+        all(
+            _stopped(after["units"][unit])
+            for unit in (p37c._GATEWAY_UNIT, p37c._WORKER_UNIT)
+        )
+        and _failed_without_restart(
+            before["units"][p37c._SENSOR_UNIT],
+            after["units"][p37c._SENSOR_UNIT],
+        )
+        and _socket_absent(after, p37c._WORKER_SOCKET)
+        and _socket_absent(after, p37c._SENSOR_SOCKET)
+        and broker_after["properties"]["ActiveState"] == "active"
+        and broker_after["properties"]["SubState"] == "running"
+        and broker_after["properties"] == broker_before["properties"]
+        and broker_after["cgroup_members"] == broker_before["cgroup_members"]
+        and broker_after["cgroup_procs"] == broker_before["cgroup_procs"]
+        and after["sockets"][str(p37c._BROKER_SOCKET)]
+        == before["sockets"][str(p37c._BROKER_SOCKET)]
+    )
+
+
+def _non_command_state(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "units": {
+            name: {
+                key: value
+                for key, value in unit.items()
+                if key != "command"
+            }
+            for name, unit in snapshot["units"].items()
+        },
+        "sockets": snapshot["sockets"],
+    }
 
 
 def _capture_sensor_loss() -> dict[str, Any]:
@@ -470,41 +604,50 @@ def _capture_sensor_loss() -> dict[str, Any]:
     before = stack["service_state"]
     skill_before = final._skill_snapshot()
     protected_before = _protected_state()
-    broker_before = before["units"][p37c._BROKER_UNIT]
     sensor_before = before["units"][p37c._SENSOR_UNIT]
     sensor_pid = sensor_before["properties"]["MainPID"]
+    p37c._expect(
+        re.fullmatch(r"[1-9][0-9]*", sensor_pid) is not None
+        and int(sensor_pid) == stack["pids"][p37c._SENSOR_UNIT]
+        and sensor_pid in sensor_before["cgroup_members"]
+        and sensor_before["cgroup_procs"]["present"] is True,
+        "lineage sensor MainPID changed before fault injection",
+    )
     loss = p37c._command(["kill", "-KILL", sensor_pid])
     p37c._expect(loss["exit_code"] == 0, "lineage sensor SIGKILL failed")
 
     deadline = time.monotonic() + 10
     while True:
-        after = p37c._service_snapshot()
-        broker_after = after["units"][p37c._BROKER_UNIT]
-        if (
-            all(
-                _stopped(after["units"][unit])
-                for unit in (p37c._GATEWAY_UNIT, p37c._WORKER_UNIT)
-            )
-            and _restarted(sensor_before, after["units"][p37c._SENSOR_UNIT])
-            and broker_after["properties"]["ActiveState"] == "active"
-            and broker_after["properties"]["SubState"] == "running"
-            and broker_after["properties"] == broker_before["properties"]
-            and broker_after["cgroup_members"] == broker_before["cgroup_members"]
-            and broker_after["cgroup_procs"] == broker_before["cgroup_procs"]
-            and after["sockets"][str(p37c._BROKER_SOCKET)]
-            == before["sockets"][str(p37c._BROKER_SOCKET)]
-        ):
+        initial_services = p37c._service_snapshot()
+        if _terminal_state(before, initial_services):
             break
         if time.monotonic() >= deadline:
             raise p37c.openclaw.ProbeError(
-                "gateway and worker did not fail-stop after sensor process loss"
+                "enforcement stack did not fail-stop after sensor process loss"
             )
         time.sleep(0.05)
+
+    stability_wait = p37c._command(["sleep", "2"])
+    p37c._expect(
+        stability_wait["exit_code"] == 0
+        and p37c._raw_bytes(stability_wait["stdout"]) == b""
+        and p37c._raw_bytes(stability_wait["stderr"]) == b""
+        and stability_wait["completed_monotonic_ns"]
+        - stability_wait["started_monotonic_ns"]
+        >= 2_000_000_000,
+        "two-second no-restart stability wait changed",
+    )
+    after = p37c._service_snapshot()
+    p37c._expect(
+        _terminal_state(before, after),
+        "enforcement fail-stop did not remain stable for two seconds",
+    )
 
     skill_after = final._skill_snapshot()
     protected_after = _protected_state()
     gateway_before = before["units"][p37c._GATEWAY_UNIT]
     gateway_after = after["units"][p37c._GATEWAY_UNIT]
+    broker_before = before["units"][p37c._BROKER_UNIT]
     checks = {
         "gateway_started_with_process": (
             gateway_before["properties"]["ActiveState"] == "active"
@@ -514,8 +657,12 @@ def _capture_sensor_loss() -> dict[str, Any]:
         ),
         "gateway_stopped_with_empty_cgroup": _stopped(gateway_after),
         "worker_stopped_with_empty_cgroup": _stopped(after["units"][p37c._WORKER_UNIT]),
-        "sensor_restarted_with_new_process": _restarted(
+        "sensor_failed_without_restart_with_empty_cgroup": _failed_without_restart(
             sensor_before, after["units"][p37c._SENSOR_UNIT]
+        ),
+        "sensor_and_worker_sockets_absent": (
+            _socket_absent(after, p37c._SENSOR_SOCKET)
+            and _socket_absent(after, p37c._WORKER_SOCKET)
         ),
         "broker_process_and_socket_unchanged": (
             after["units"][p37c._BROKER_UNIT]["properties"]
@@ -527,6 +674,13 @@ def _capture_sensor_loss() -> dict[str, Any]:
             and after["sockets"][str(p37c._BROKER_SOCKET)]
             == before["sockets"][str(p37c._BROKER_SOCKET)]
         ),
+        "fail_stop_stable_for_two_seconds": (
+            _terminal_state(before, initial_services)
+            and _non_command_state(initial_services) == _non_command_state(after)
+            and stability_wait["completed_monotonic_ns"]
+            - stability_wait["started_monotonic_ns"]
+            >= 2_000_000_000
+        ),
         "singleton_skill_unchanged": skill_after == skill_before,
         "protected_state_unchanged": (
             protected_after == protected_before
@@ -535,7 +689,7 @@ def _capture_sensor_loss() -> dict[str, Any]:
     }
     p37c._expect(all(checks.values()), "sensor-loss fail-stop checks changed")
     _CAPTURE = {
-        "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v1",
+        "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v2",
         "authority": _AUTHORITY,
         "recorded_at": _iso_now(),
         "bindings": _HARNESS["bindings"],
@@ -547,6 +701,10 @@ def _capture_sensor_loss() -> dict[str, Any]:
             "protected": protected_before,
         },
         "loss": loss,
+        "stability": {
+            "initial_services": initial_services,
+            "wait": stability_wait,
+        },
         "after": {
             "services": after,
             "skill": skill_after,
@@ -555,7 +713,7 @@ def _capture_sensor_loss() -> dict[str, Any]:
         "checks": checks,
         "secret_checks": {"gateway_token_retained": False},
         "decision": {
-            "status": "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_OBSERVED",
+            "status": "SENSOR_PROCESS_LOSS_DURABLE_FAIL_STOP_OBSERVED",
             "verifier_status": "NOT_TESTED",
             "retained_evidence_eligible": False,
             "aggregate_gate_eligible": False,
@@ -623,12 +781,12 @@ def _collect() -> dict[str, Any]:
 def _failure(exc: Exception) -> dict[str, Any]:
     raw = str(exc).encode("utf-8", errors="replace")
     return {
-        "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v1",
+        "schema": "aragorn/runtime-action-worker-sensor-loss-systemd-observation/v2",
         "authority": _AUTHORITY,
         "recorded_at": _iso_now(),
         "limitations": _LIMITATIONS,
         "decision": {
-            "status": "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_NOT_OBSERVED",
+            "status": "SENSOR_PROCESS_LOSS_DURABLE_FAIL_STOP_NOT_OBSERVED",
             "verifier_status": "NOT_TESTED",
             "retained_evidence_eligible": False,
             "aggregate_gate_eligible": False,

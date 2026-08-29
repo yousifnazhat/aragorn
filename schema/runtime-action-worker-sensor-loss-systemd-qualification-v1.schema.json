@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/runtime-action-worker-sensor-loss-systemd-qualification-v1.schema.json",
+  "title": "Aragorn bounded worker sensor-process-loss qualification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "bindings",
+    "decision",
+    "limitations",
+    "source_recorded_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v1"
+    },
+    "assurance": {
+      "const": "SEMANTICALLY_REPLAY_VERIFIED_PINNED_SENSOR_PROCESS_LOSS_FAIL_STOP_OBSERVATION"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation", "outer_harness", "source_observation"],
+      "properties": {
+        "implementation": {"$ref": "#/$defs/digest"},
+        "outer_harness": {"$ref": "#/$defs/outerHarnessBinding"},
+        "source_observation": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "decision": {
+      "const": {
+        "aggregate_gate_eligible": false,
+        "bounded_sensor_process_loss_evidence_eligible": true,
+        "edr_claim_eligible": false,
+        "installer_authority_eligible": false,
+        "phase3_exit_eligible": false,
+        "public_release_eligible": false,
+        "run_01_eligible": false,
+        "run_02_eligible": false,
+        "source_observation_verified": true,
+        "status": "SENSOR_PROCESS_LOSS_GATEWAY_FAIL_STOP_OBSERVED"
+      }
+    },
+    "limitations": {
+      "const": [
+        "ONE_LOCAL_PRIVATE_CGROUP_SYSTEMD_CONTAINER_ONLY",
+        "PRIVILEGED_DOCKER_ROOT_CONTROLLED_FIXTURE_ONLY",
+        "CONTAINER_BUILD_AND_CAPTURE_TOOLCHAIN_NOT_INDEPENDENTLY_ATTESTED",
+        "SOURCE_COMMIT_SIGNATURE_TRUSTS_LOCAL_GIT_CONFIGURATION_AND_KEYRING",
+        "ONE_SIGKILL_SENSOR_PROCESS_LOSS_WITH_SYSTEMD_RESTART_ONLY",
+        "NO_HUNG_SENSOR_STALE_SOCKET_OR_HEALTH_EPOCH_COVERAGE",
+        "NO_IN_FLIGHT_EFFECT_REVOCATION_QUARANTINE_OR_EGRESS_ISOLATION_COVERAGE",
+        "PYTHON_STDLIB_AND_DYNAMIC_VERIFIER_DEPENDENCY_CLOSURE_NOT_PINNED",
+        "RUN_01_NOT_ESTABLISHED",
+        "RUN_02_NOT_ESTABLISHED",
+        "PHASE_3_EXIT_NOT_ESTABLISHED",
+        "EDR_CLAIM_NOT_ESTABLISHED",
+        "INSTALLER_AUTHORITY_NOT_ESTABLISHED",
+        "PUBLIC_RELEASE_NOT_AUTHORIZED"
+      ]
+    },
+    "source_recorded_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "outerHarnessBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifacts", "child_image_id", "parent_image_id", "source_commit"],
+      "properties": {
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "activator",
+            "capture_recipe",
+            "dockerfile",
+            "gateway_unit",
+            "probe"
+          ],
+          "properties": {
+            "activator": {"$ref": "#/$defs/digest"},
+            "capture_recipe": {"$ref": "#/$defs/digest"},
+            "dockerfile": {"$ref": "#/$defs/digest"},
+            "gateway_unit": {"$ref": "#/$defs/digest"},
+            "probe": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "child_image_id": {"$ref": "#/$defs/digest"},
+        "parent_image_id": {"$ref": "#/$defs/digest"},
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    }
+  }
+}

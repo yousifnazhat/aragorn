@@ -849,6 +849,17 @@ modified, cross-profile, or PASS/FAIL-substituted qualifications are rejected;
 aggregate admission, installer, Phase 3, EDR, and release authority remain
 false.
 
+The [Phase 3 V1 exit-gate manifest](./benchmark/phase3-exit-gate-manifest-v1.json)
+now freezes the admission, runtime-prevention, response, and quantitative
+requirements without evaluating them. The matching non-executing V3 campaign
+contract and dispatcher enumerate 31 fresh isolated subfixtures against one
+exact parent: five have current V3 implementations, while 26 still require a
+V3 rebind, port, or route adapter. A separate fail-closed metrics qualifier
+recomputes the 100-attempt attribution and latency rules plus 100
+caller-bound baseline/instrumented pairs. No campaign or metrics evidence has
+been captured or composed, so all admission, `RUN-01`, `RUN-02`, Phase 3, EDR,
+installer, and release eligibility remains false.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

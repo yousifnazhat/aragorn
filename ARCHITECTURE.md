@@ -1606,6 +1606,17 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 | 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× the frozen reference workload without dropped evidence |
 | 5. OSS 1.0 | Ongoing | Signed releases, SBOM, reproducible builds, parser fuzzing, disclosure process, compatibility policy | The security tool's own supply chain is defensible | Independent review; no unresolved critical/high findings; 72-hour parser fuzz run; clean supported install and upgrade tests |
 
+The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
+campaign, seven required event classes, six required response classes, and the
+exact quantitative measurement rules. Its dispatcher is intentionally
+non-executing: five cases map to current V3 implementations, six require V3
+rebinding, fifteen require V3 ports, and five still lack route adapters. The
+quantitative leaf independently checks exact caller-held inventories, one
+blocked residue-free unattributed negative control, separate exfiltration and
+destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate
+paired overhead. These are contracts and verifier code only; no new dynamic
+evidence or eligibility follows from them.
+
 The historical
 `benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json`
 records `PASS` and `acquisition_lock_exit_eligible: true` for its bound

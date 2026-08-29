@@ -238,6 +238,9 @@ from aragorn.gvisor_runtime import (
 )
 from aragorn.label_blind_prepare import validate_private_dispatch_v2
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.phase3_exit_gate_manifest import (
+    load_phase3_exit_gate_manifest_bytes,
+)
 from aragorn.runtime_acquisition_action_binding import (
     runtime_acquisition_action_binding_qualification,
 )
@@ -981,6 +984,16 @@ def main() -> int:
             registry=registry,
         )
 
+    phase3_exit_gate_manifest_path = (
+        ROOT / "benchmark" / "phase3-exit-gate-manifest-v1.json"
+    )
+    phase3_exit_gate_manifest_raw = phase3_exit_gate_manifest_path.read_bytes()
+    phase3_exit_gate_manifest = load_phase3_exit_gate_manifest_bytes(
+        phase3_exit_gate_manifest_raw
+    )
+    validators["phase3-exit-gate-manifest-v1.schema.json"].validate(
+        phase3_exit_gate_manifest
+    )
     digest = "sha256:" + "0" * 64
     behavior_capability_diff = derive_behavior_capability_diff(
         subject_digest=digest,

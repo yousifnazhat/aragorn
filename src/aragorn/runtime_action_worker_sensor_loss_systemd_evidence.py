@@ -817,6 +817,30 @@ def _verify_terminal_services(
         unit = terminal_units[name]
         properties = unit["properties"]
         prior_properties = prior["properties"]
+        cleared_execution = (
+            properties["ExecMainCode"] == "0"
+            and properties["ExecMainStatus"] == "0"
+            and properties["InvocationID"] == ""
+            and properties["ExecMainStartTimestampMonotonic"] == "0"
+            and properties["ExecMainExitTimestampMonotonic"] == "0"
+            and properties["ActiveEnterTimestampMonotonic"] == "0"
+            and properties["InactiveEnterTimestampMonotonic"] == "0"
+        )
+        retained_execution = (
+            properties["ExecMainCode"] == "1"
+            and properties["ExecMainStatus"] == "0"
+            and properties["InvocationID"] == prior_properties["InvocationID"]
+            and properties["ExecMainStartTimestampMonotonic"]
+            == prior_properties["ExecMainStartTimestampMonotonic"]
+            and properties["ActiveEnterTimestampMonotonic"]
+            == prior_properties["ActiveEnterTimestampMonotonic"]
+            and _positive_decimal(properties["ExecMainExitTimestampMonotonic"])
+            and _positive_decimal(properties["InactiveEnterTimestampMonotonic"])
+            and loss["started_monotonic_ns"]
+            <= int(properties["ExecMainExitTimestampMonotonic"]) * 1_000
+            <= int(properties["InactiveEnterTimestampMonotonic"]) * 1_000
+            <= unit["command"]["started_monotonic_ns"]
+        )
         _expect(
             properties["ActiveState"] == "inactive"
             and properties["SubState"] == "dead"
@@ -825,20 +849,7 @@ def _verify_terminal_services(
             and properties["Result"] == "success"
             and properties["UnitFileState"] == prior_properties["UnitFileState"]
             and properties["NRestarts"] == prior_properties["NRestarts"]
-            and properties["InvocationID"]
-            in {"", prior_properties["InvocationID"]}
-            and properties["ExecMainStartTimestampMonotonic"]
-            in {"0", prior_properties["ExecMainStartTimestampMonotonic"]}
-            and properties["ActiveEnterTimestampMonotonic"]
-            in {"0", prior_properties["ActiveEnterTimestampMonotonic"]}
-            and _positive_decimal(properties["ExecMainExitTimestampMonotonic"])
-            and _positive_decimal(properties["InactiveEnterTimestampMonotonic"])
-            and loss["started_monotonic_ns"]
-            <= int(properties["ExecMainExitTimestampMonotonic"]) * 1_000
-            <= unit["command"]["started_monotonic_ns"]
-            and loss["started_monotonic_ns"]
-            <= int(properties["InactiveEnterTimestampMonotonic"]) * 1_000
-            <= unit["command"]["started_monotonic_ns"]
+            and (cleared_execution or retained_execution)
             and unit["cgroup_members"] == []
             and unit["cgroup_procs"]["present"] is False
             and unit["cgroup_procs"]["raw"]["bytes"] == 0,

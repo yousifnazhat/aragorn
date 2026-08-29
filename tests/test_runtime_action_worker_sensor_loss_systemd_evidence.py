@@ -159,6 +159,7 @@ def _service_snapshot(*, before: bool, tick: int) -> dict:
             properties.update(
                 {
                     "ActiveEnterTimestampMonotonic": "1",
+                    "ExecMainCode": "1",
                     "ExecMainExitTimestampMonotonic": "3500000",
                     "ExecMainStartTimestampMonotonic": "1",
                     "InactiveEnterTimestampMonotonic": "3600000",
@@ -634,6 +635,43 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
             gateway = value["after"]["services"]["units"][subject._GATEWAY_UNIT]
             gateway["properties"]["InactiveEnterTimestampMonotonic"] = "3700000"
             _rebind_properties(gateway)
+
+        self._assert_rejected(mutate)
+
+    def test_fully_cleared_stopped_execution_state_is_accepted(self) -> None:
+        cleared = copy.deepcopy(self.evidence)
+        for services in (
+            cleared["stability"]["initial_services"],
+            cleared["after"]["services"],
+        ):
+            for name in subject._STOPPED_UNITS:
+                unit = services["units"][name]
+                unit["properties"].update(
+                    {
+                        "ActiveEnterTimestampMonotonic": "0",
+                        "ExecMainCode": "0",
+                        "ExecMainExitTimestampMonotonic": "0",
+                        "ExecMainStartTimestampMonotonic": "0",
+                        "InactiveEnterTimestampMonotonic": "0",
+                        "InvocationID": "",
+                    }
+                )
+                _rebind_properties(unit)
+        subject.verify_runtime_action_worker_sensor_loss_systemd_evidence(
+            cleared,
+            expected_digest=canonical_digest(cleared),
+            expected_bindings=self.bindings,
+        )
+
+    def test_mixed_cleared_and_retained_stopped_execution_is_rejected(self) -> None:
+        def mutate(value: dict) -> None:
+            for services in (
+                value["stability"]["initial_services"],
+                value["after"]["services"],
+            ):
+                gateway = services["units"][subject._GATEWAY_UNIT]
+                gateway["properties"]["InvocationID"] = ""
+                _rebind_properties(gateway)
 
         self._assert_rejected(mutate)
 

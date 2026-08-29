@@ -461,8 +461,9 @@ The bounded [sensor-process-loss observation](./benchmark/evidence/runtime-actio
 and [qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-sensor-loss-systemd-qualification-v2-2026-08-28.json)
 bind one root-issued `SIGKILL` of the exact active sensor PID to a durable
 fail-stop. The sensor remains `failed` with signal 9 and no restart; the
-gateway and worker remain inactive with empty cgroups and absent sockets; the
-broker PID, invocation, cgroup, and socket remain unchanged. A successful
+gateway and worker remain inactive with empty cgroups; the sensor and worker
+sockets remain absent; the broker PID, invocation, cgroup, and socket remain
+unchanged. A successful
 two-second stability window separates two terminal snapshots with identical
 non-command service and socket state, while the protected target and projected
 skill remain unchanged. This is one

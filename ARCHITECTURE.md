@@ -1152,8 +1152,9 @@ The bounded [sensor-process-loss observation](./benchmark/evidence/runtime-actio
 and [qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-sensor-loss-systemd-qualification-v2-2026-08-28.json)
 exercise one exact enforcement-plane dependency failure. After root sends
 `SIGKILL` to the active sensor PID, systemd leaves that unit failed without a
-restart, stops the gateway and worker with empty cgroups and absent sockets,
-and preserves the broker process and socket unchanged. The verifier replays
+restart, stops the gateway and worker with empty cgroups, leaves the sensor and
+worker sockets absent, and preserves the broker process and socket unchanged.
+The verifier replays
 the raw systemd, cgroup, socket, artifact, image-lineage, and signed-source
 records and requires the terminal state to remain identical across an exact
 successful two-second wait. This qualifies only that local private-cgroup

@@ -842,7 +842,10 @@ def _verify_terminal_services(
             and unit["cgroup_members"] == []
             and unit["cgroup_procs"]["present"] is False
             and unit["cgroup_procs"]["raw"]["bytes"] == 0,
-            f"service did not fail-stop after sensor loss: {name}",
+            f"service did not fail-stop after sensor loss: {name}: "
+            f"properties={properties!r}; "
+            f"cgroup_members={unit['cgroup_members']!r}; "
+            f"cgroup_procs={unit['cgroup_procs']!r}",
         )
 
     prior_sensor = before_units[_SENSOR_UNIT]

@@ -21,6 +21,8 @@ sys.path.insert(0, "/src/scripts")
 import runtime_action_worker_activation_expiry_systemd_probe as p37c
 import runtime_action_worker_final_combined_v2_systemd_probe as final
 
+_INHERITED_WRITE_REQUEST = p37c.p37b.prior._write_request
+
 
 class _SensorLossObserved(Exception):
     pass
@@ -741,13 +743,18 @@ def _collect() -> dict[str, Any]:
             "collector requires root in the fixed systemd container"
         )
     harness = _harness()
-    final._reset_transient_request_directory()
+
+    def write_request() -> dict[str, Any]:
+        final._reset_transient_request_directory()
+        return _INHERITED_WRITE_REQUEST()
+
     try:
         with (
             mock.patch.object(p37c, "_artifacts", _artifacts),
             mock.patch.object(p37c, "_prepare_gateway", _prepare_gateway),
             mock.patch.object(p37c, "_service_snapshot", _service_snapshot),
             mock.patch.object(p37c, "_active_stack", _capture_sensor_loss),
+            mock.patch.object(p37c.p37b.prior, "_write_request", write_request),
             mock.patch.object(
                 p37c.p37b,
                 "_predicted_service_cgroup",

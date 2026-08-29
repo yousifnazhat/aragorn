@@ -14,6 +14,10 @@ _ROOT = Path(__file__).resolve().parents[1]
 _SHIM = _ROOT / "packaging/libexec/aragorn-runtime-action-worker-service.py"
 _UNIT = _ROOT / "packaging/systemd/aragorn-runtime-action-worker.service"
 _SYSUSERS = _ROOT / "packaging/systemd/aragorn-runtime-action-worker.sysusers"
+_CURRENT_ACTIVATOR_IDENTITY = (
+    31_295,
+    "47d03e4600813cb32b536a267608f8d7eb97219c2421ba944426444693fee009",
+)
 _DRIVER = (
     _ROOT
     / "benchmark/runtime-action-worker-openclaw-systemd/openclaw-worker-driver.mjs"
@@ -110,7 +114,12 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         activation = lock["deployment_bindings"]["activation_contract"]
         self.assertEqual(
             activation["activator"]["digest"],
-            "sha256:" + hashlib.sha256(_ACTIVATOR.read_bytes()).hexdigest(),
+            "sha256:52dbdae05a0a394b7314d87337b1a536ba3cf9a0b999d95432341daa068ca5cf",
+        )
+        current_activator = _ACTIVATOR.read_bytes()
+        self.assertEqual(
+            (len(current_activator), hashlib.sha256(current_activator).hexdigest()),
+            _CURRENT_ACTIVATOR_IDENTITY,
         )
         self.assertEqual(
             activation["preflight"]["digest"],
@@ -201,16 +210,25 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         old = b"b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e"
         new = b"dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
         activator = _ACTIVATOR.read_bytes()
+        self.assertEqual(
+            (len(activator), hashlib.sha256(activator).hexdigest()),
+            _CURRENT_ACTIVATOR_IDENTITY,
+        )
         self.assertEqual(activator.count(old), 1)
         self.assertEqual(activator.count(new), 0)
         transformed = activator.replace(old, new)
-        self.assertEqual(len(transformed), 30_504)
+        self.assertEqual(len(transformed), 31_295)
         self.assertEqual(
             hashlib.sha256(transformed).hexdigest(),
-            "3b25b462cf7f9c4886cce1b7057fabbaeb95e9d9de83cb33db9c7ca62f15d86c",
+            "751146190f852a01f08c14a38c38bfcf1ed46187440267ea385a46ecc6d1f11e",
         )
         dockerfile = _FINAL_V3_DOCKERFILE.read_text(encoding="utf-8")
-        pins = (old.decode(), new.decode(), hashlib.sha256(transformed).hexdigest())
+        pins = (
+            old.decode(),
+            new.decode(),
+            "52dbdae05a0a394b7314d87337b1a536ba3cf9a0b999d95432341daa068ca5cf",
+            "3b25b462cf7f9c4886cce1b7057fabbaeb95e9d9de83cb33db9c7ca62f15d86c",
+        )
         for pin in pins:
             self.assertIn(pin, dockerfile)
         self.assertEqual(lock["decision"]["status"], "BUILD_LOCKED_NOT_QUALIFIED")
@@ -886,7 +904,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             '"$gateway_uid" -eq 0',
             "installed unit digest changed",
             "e231978207dd27b71ef43449cf603ac424f6129f64c8a03dd0851ddf32503723",
-            "32dea7dfdf5ccb9914c46ea2aadfc88a491d6eadba5bdb8b4982d473af1a0ebe",
+            "70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067",
             '"$gateway_unit" "$worker_unit" "$sensor_unit" "$broker_unit"',
             "previous runtime worker route remained active",
             "previous runtime worker endpoint remained present",
@@ -925,6 +943,11 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
                 '"/lib/systemd/system/$checked_unit"'
             ),
             'RestrictAddressFamilies "AF_INET AF_INET6 AF_UNIX"',
+            'gateway_binds_to=$(unit_property "$gateway_unit" BindsTo)',
+            'if [ "$#" -ne 3 ]',
+            'require_unit_member "$gateway_unit" BindsTo "$dependency"',
+            'require_unit_member "$gateway_unit" After "$dependency"',
+            'require_unit_value "$gateway_unit" KillMode control-group',
         ):
             self.assertIn(required, activator)
         self.assertEqual(activator.count("\nverify_unit \\"), 2)

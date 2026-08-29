@@ -486,6 +486,21 @@ require_unit_value()
     fi
 }
 
+require_unit_member()
+{
+    checked_unit=$1
+    checked_property=$2
+    checked_member=$3
+    checked_value=$(unit_property "$checked_unit" "$checked_property")
+    case " $checked_value " in
+        *" $checked_member "*)
+            ;;
+        *)
+            fail_activation "effective $checked_property is unsafe for $checked_unit"
+            ;;
+    esac
+}
+
 require_unit_file()
 {
     checked_unit=$1
@@ -697,7 +712,7 @@ require_unit_file \
     e231978207dd27b71ef43449cf603ac424f6129f64c8a03dd0851ddf32503723
 require_unit_file \
     "$gateway_unit" \
-    32dea7dfdf5ccb9914c46ea2aadfc88a491d6eadba5bdb8b4982d473af1a0ebe
+    70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067
 require_unit_file \
     "$broker_unit" \
     c43a81b394e0b96b0950af94b937a79e777d7e0c815a0104f1ab45871f4afa64
@@ -736,10 +751,21 @@ verify_unit \
     /org/freedesktop/systemd1/unit/aragorn_2dagent_2dgateway_2eservice
 require_unit_value "$gateway_unit" PrivateNetwork no
 require_unit_value "$gateway_unit" RestrictAddressFamilies "AF_INET AF_INET6 AF_UNIX"
+require_unit_value "$gateway_unit" KillMode control-group
 require_unit_value \
     "$gateway_unit" \
     EnvironmentFiles \
     "$gateway_environment (ignore_errors=no)"
+gateway_binds_to=$(unit_property "$gateway_unit" BindsTo)
+set -- $gateway_binds_to
+if [ "$#" -ne 3 ]; then
+    fail_activation "effective BindsTo is unsafe for $gateway_unit"
+fi
+for dependency in "$worker_unit" "$sensor_unit" "$broker_unit"
+do
+    require_unit_member "$gateway_unit" BindsTo "$dependency"
+    require_unit_member "$gateway_unit" After "$dependency"
+done
 
 /usr/bin/systemctl start "$worker_unit"
 wait_socket "$worker_socket" "$worker_uid" "$gateway_gid"

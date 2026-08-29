@@ -21,7 +21,7 @@ def _section(raw: str, name: str) -> list[str]:
 
 
 class AgentGatewayPackagingTests(unittest.TestCase):
-    def test_unit_is_static_and_requires_the_worker(self) -> None:
+    def test_unit_is_static_and_binds_to_the_enforcement_plane(self) -> None:
         raw = _UNIT.read_text(encoding="utf-8")
         self.assertEqual(raw.count("[Unit]"), 1)
         self.assertEqual(raw.count("[Service]"), 1)
@@ -29,15 +29,53 @@ class AgentGatewayPackagingTests(unittest.TestCase):
         self.assertNotIn("WantedBy=", raw)
 
         unit = _section(raw, "Unit")
-        self.assertIn(
-            "After=local-fs.target nss-user-lookup.target "
+        expected_dependencies = {
             "aragorn-runtime-action-worker.service",
-            unit,
-        )
+            "aragorn-runtime-lineage-capability-observation-publisher.service",
+            "aragorn-runtime-lineage-capability-action-broker.service",
+        }
+        after = [
+            line.removeprefix("After=").split()
+            for line in unit
+            if line.startswith("After=")
+        ]
+        binds_to = [
+            line.removeprefix("BindsTo=").split()
+            for line in unit
+            if line.startswith("BindsTo=")
+        ]
+        self.assertEqual(len(after), 1)
+        self.assertTrue(expected_dependencies <= set(after[0]))
+        self.assertEqual(len(binds_to), 1)
+        self.assertEqual(set(binds_to[0]), expected_dependencies)
         self.assertEqual(
             [line for line in unit if line.startswith("Requires=")],
-            ["Requires=aragorn-runtime-action-worker.service"],
+            [],
         )
+        for dependency in expected_dependencies:
+            with self.subTest(dependency=dependency):
+                hostile = raw.replace(dependency, "hostile.service")
+                self.assertNotEqual(hostile, raw)
+                hostile_unit = _section(hostile, "Unit")
+                hostile_after = next(
+                    line.removeprefix("After=").split()
+                    for line in hostile_unit
+                    if line.startswith("After=")
+                )
+                hostile_binds_to = next(
+                    line.removeprefix("BindsTo=").split()
+                    for line in hostile_unit
+                    if line.startswith("BindsTo=")
+                )
+                self.assertFalse(expected_dependencies <= set(hostile_after))
+                self.assertNotEqual(set(hostile_binds_to), expected_dependencies)
+        extra = raw.replace("BindsTo=", "BindsTo=hostile.service ", 1)
+        extra_binds_to = next(
+            line.removeprefix("BindsTo=").split()
+            for line in _section(extra, "Unit")
+            if line.startswith("BindsTo=")
+        )
+        self.assertNotEqual(set(extra_binds_to), expected_dependencies)
         self.assertEqual(
             [line for line in unit if line.startswith("ConditionPathExists=")],
             [

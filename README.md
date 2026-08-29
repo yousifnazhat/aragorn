@@ -457,6 +457,20 @@ native-host production evidence, automatic or concurrent renewal, reboot,
 crash or power-loss coverage, aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR,
 installer authority, or public-release authority.
 
+The bounded [sensor-process-loss observation](./benchmark/evidence/runtime-action-worker-sensor-loss-systemd-composition-2026-08-28.json)
+and [qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-sensor-loss-systemd-qualification-v2-2026-08-28.json)
+bind one root-issued `SIGKILL` of the exact active sensor PID to a durable
+fail-stop. The sensor remains `failed` with signal 9 and no restart; the
+gateway and worker remain inactive with empty cgroups and absent sockets; the
+broker PID, invocation, cgroup, and socket remain unchanged. A successful
+two-second stability window separates two terminal snapshots with identical
+non-command service and socket state, while the protected target and projected
+skill remain unchanged. This is one
+privileged private-cgroup systemd fixture and one process-loss case, not full
+sensor-health, in-flight response, worker/broker-loss, hostile-root,
+power-loss, `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, or release
+authority.
+
 P3.8a adds only a receipt-level cross-capture composition; it adds no new live
 runtime capture. Its
 [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-binding-v1-2026-08-11.json)

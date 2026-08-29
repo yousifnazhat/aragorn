@@ -165,11 +165,55 @@ _SOURCE_SIGNATURE = (
     b'Good "git" signature for yousif.snazhat@gmail.com with ED25519 key '
     b"SHA256:HJb87ljuOOkonZk+6GzgpASjhRMkRKBHKO3bzjuIDNk\n"
 )
-_RETAINED_PATH: str | None = None
-_EVIDENCE_BYTES: int | None = None
-_EVIDENCE_RAW_DIGEST: str | None = None
-_RETAINED_EVIDENCE_DIGEST: str | None = None
-_RETAINED_BINDINGS: Mapping[str, Any] | None = None
+_RETAINED_PATH = (
+    "benchmark/evidence/runtime-action-worker-sensor-loss-systemd-"
+    "composition-2026-08-28.json"
+)
+_EVIDENCE_BYTES = 417_638
+_EVIDENCE_RAW_DIGEST = (
+    "sha256:b15947e1ef7444c1478850980d3e5a6463e752db19bfdbd2fb6e8db4e9a2d0be"
+)
+_RETAINED_EVIDENCE_DIGEST = (
+    "sha256:a06ada8eb76be3df5a0195aabe0e0de5dfa8c4be4834e9180a16bee80af1591c"
+)
+_RETAINED_BINDINGS: Mapping[str, Any] = {
+    "artifacts": {
+        "activator": (
+            "sha256:dd615a00aacd5f76f52ac60400ea095f9014c2ef29d7793fd3ba35b26ffe3186"
+        ),
+        "base_activator": (
+            "sha256:b4ad162940d842e93ede73143f607cff4c612716334b66430d71b885f398984c"
+        ),
+        "broker_unit": (
+            "sha256:e0273dbeb4ed40a203193a52eb6146f81ecbc6abca605fa0bfff69774676b2db"
+        ),
+        "capture_recipe": (
+            "sha256:6b39d26f33383cd951c55039f94a906e154fb41078a6dffd139248dac56400e3"
+        ),
+        "dockerfile": (
+            "sha256:cc6011d910dc0fc0579df7334cd540746cb5a7c120234ebb3b1f400e669664e0"
+        ),
+        "gateway_unit": (
+            "sha256:70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067"
+        ),
+        "probe": (
+            "sha256:f9b0ceb24376bccb52dfc569df386bb2199401f2cc042032539c10856b392989"
+        ),
+        "sensor_unit": (
+            "sha256:f48258b00213c2c1ff4c5c95d0f1c446f78593d1d04780719cba79bf8dd73d8a"
+        ),
+        "worker_unit": (
+            "sha256:e4ef9e3f2229d92ed9dd9ee4896646e646d7171ee585ecba5aecdd87dba5e790"
+        ),
+    },
+    "child_image_id": (
+        "sha256:7481b561d820f45cf9fa0491ddbb323eb001a5b63a55c6d2163022c8e030881f"
+    ),
+    "parent_image_id": (
+        "sha256:21184b7a6a096a8625994b524203bf5b521d749b24e415378a69decd4e78009b"
+    ),
+    "source_commit": "12deef871077c75743334983683221a82aa7892f",
+}
 
 
 def verify_runtime_action_worker_sensor_loss_systemd_evidence(

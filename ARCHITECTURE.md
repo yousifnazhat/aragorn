@@ -1148,6 +1148,20 @@ The negative outcomes and effect snapshots are retained, but causal
 classification of those cases relies on the pinned capture setup rather than
 retained runtime reason evidence.
 
+The bounded [sensor-process-loss observation](./benchmark/evidence/runtime-action-worker-sensor-loss-systemd-composition-2026-08-28.json)
+and [qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-sensor-loss-systemd-qualification-v2-2026-08-28.json)
+exercise one exact enforcement-plane dependency failure. After root sends
+`SIGKILL` to the active sensor PID, systemd leaves that unit failed without a
+restart, stops the gateway and worker with empty cgroups and absent sockets,
+and preserves the broker process and socket unchanged. The verifier replays
+the raw systemd, cgroup, socket, artifact, image-lineage, and signed-source
+records and requires the terminal state to remain identical across an exact
+successful two-second wait. This qualifies only that local private-cgroup
+process-loss boundary. It does not cover a hung sensor, stale endpoint,
+in-flight effect response, worker or broker loss, hostile root, power loss,
+aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer, or release
+authority.
+
 The [retained P3.7b observation](./benchmark/evidence/runtime-action-worker-openclaw-systemd-composition-p3-7b-2026-08-09.json)
 has canonical digest
 `sha256:4b668b1eae1875c6e129afd8fd0a56c4dc2e912179644bba22cc3e5a285b969e`.

@@ -12,7 +12,7 @@ from jsonschema.validators import validator_for
 
 from aragorn import runtime_action_worker_sensor_loss_systemd_evidence as subject
 from aragorn.admission_evidence import AdmissionEvidenceError
-from aragorn.oci_worker_protocol import canonical_digest
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 
 _ROOT = Path(__file__).resolve().parents[1]
 _EMPTY_DIGEST = "sha256:" + hashlib.sha256(b"").hexdigest()
@@ -478,6 +478,57 @@ class RuntimeActionWorkerSensorLossSystemdEvidenceTests(unittest.TestCase):
         validator = validator_for(schema)
         validator.check_schema(schema)
         validator(schema).validate(qualification)
+
+    def test_retained_observation_and_receipt_are_an_exact_qualified_pair(
+        self,
+    ) -> None:
+        evidence_path = _ROOT / subject._RETAINED_PATH
+        evidence_raw = evidence_path.read_bytes()
+        evidence = json.loads(evidence_raw)
+        self.assertEqual(evidence_raw, canonical_json(evidence) + b"\n")
+        self.assertEqual(len(evidence_raw), subject._EVIDENCE_BYTES)
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(evidence_raw).hexdigest(),
+            subject._EVIDENCE_RAW_DIGEST,
+        )
+        self.assertEqual(
+            canonical_digest(evidence), subject._RETAINED_EVIDENCE_DIGEST
+        )
+        self.assertEqual(evidence["bindings"], subject._RETAINED_BINDINGS)
+
+        qualification = (
+            subject.runtime_action_worker_sensor_loss_systemd_qualification(
+                evidence,
+                expected_digest=subject._RETAINED_EVIDENCE_DIGEST,
+                expected_bindings=subject._RETAINED_BINDINGS,
+                implementation_digest=self._implementation_digest(),
+            )
+        )
+        receipt_path = _ROOT / (
+            "benchmark/receipts/"
+            "phase3-runtime-action-worker-sensor-loss-systemd-"
+            "qualification-v2-2026-08-28.json"
+        )
+        receipt_raw = receipt_path.read_bytes()
+        self.assertEqual(receipt_raw, canonical_json(qualification) + b"\n")
+        self.assertEqual(json.loads(receipt_raw), qualification)
+
+    def test_retained_qualification_rejects_a_coherent_source_repin(self) -> None:
+        evidence = json.loads((_ROOT / subject._RETAINED_PATH).read_bytes())
+        evidence["recorded_at"] = "2026-08-29T02:56:35Z"
+        hostile_digest = canonical_digest(evidence)
+        subject.verify_runtime_action_worker_sensor_loss_systemd_evidence(
+            evidence,
+            expected_digest=hostile_digest,
+            expected_bindings=subject._RETAINED_BINDINGS,
+        )
+        with self.assertRaises(AdmissionEvidenceError):
+            subject.runtime_action_worker_sensor_loss_systemd_qualification(
+                evidence,
+                expected_digest=hostile_digest,
+                expected_bindings=subject._RETAINED_BINDINGS,
+                implementation_digest=self._implementation_digest(),
+            )
 
     def test_explicit_observation_binding_and_implementation_pins_are_required(
         self,

@@ -259,6 +259,9 @@ from aragorn.runtime_action_worker_activation_expiry_systemd_evidence import (
 from aragorn.runtime_action_worker_openclaw_systemd_evidence import (
     runtime_action_worker_openclaw_systemd_qualification,
 )
+from aragorn.runtime_action_worker_sensor_loss_systemd_evidence import (
+    runtime_action_worker_sensor_loss_systemd_qualification,
+)
 from aragorn.standards_gate import validate_standards_gate
 
 
@@ -2940,6 +2943,55 @@ def main() -> int:
         != canonical_json(activation_expiry_qualification) + b"\n"
     ):
         raise AssertionError("activation-expiry qualification changed")
+
+    sensor_loss_evidence_path = admission_evidence / (
+        "runtime-action-worker-sensor-loss-systemd-composition-2026-08-28.json"
+    )
+    sensor_loss_evidence_raw = sensor_loss_evidence_path.read_bytes()
+    sensor_loss_evidence = json.loads(sensor_loss_evidence_raw)
+    sensor_loss_evidence_digest = (
+        "sha256:a06ada8eb76be3df5a0195aabe0e0de5dfa8c4be4834e9180a16bee80af1591c"
+    )
+    if (
+        sensor_loss_evidence_raw != canonical_json(sensor_loss_evidence) + b"\n"
+        or len(sensor_loss_evidence_raw) != 417638
+        or "sha256:" + hashlib.sha256(sensor_loss_evidence_raw).hexdigest()
+        != "sha256:b15947e1ef7444c1478850980d3e5a6463e752db19bfdbd2fb6e8db4e9a2d0be"
+        or canonical_digest(sensor_loss_evidence) != sensor_loss_evidence_digest
+    ):
+        raise AssertionError("sensor-loss source observation changed")
+    sensor_loss_verifier_path = (
+        ROOT
+        / "src"
+        / "aragorn"
+        / "runtime_action_worker_sensor_loss_systemd_evidence.py"
+    )
+    sensor_loss_verifier_digest = (
+        "sha256:"
+        + hashlib.sha256(sensor_loss_verifier_path.read_bytes()).hexdigest()
+    )
+    sensor_loss_qualification = (
+        runtime_action_worker_sensor_loss_systemd_qualification(
+            sensor_loss_evidence,
+            expected_digest=sensor_loss_evidence_digest,
+            expected_bindings=sensor_loss_evidence["bindings"],
+            implementation_digest=sensor_loss_verifier_digest,
+        )
+    )
+    validators[
+        "runtime-action-worker-sensor-loss-systemd-qualification-v2.schema.json"
+    ].validate(sensor_loss_qualification)
+    sensor_loss_qualification_path = admission_receipts / (
+        "phase3-runtime-action-worker-sensor-loss-systemd-qualification-"
+        "v2-2026-08-28.json"
+    )
+    retained_sensor_loss_qualification = load(sensor_loss_qualification_path)
+    if (
+        sensor_loss_qualification != retained_sensor_loss_qualification
+        or sensor_loss_qualification_path.read_bytes()
+        != canonical_json(sensor_loss_qualification) + b"\n"
+    ):
+        raise AssertionError("sensor-loss qualification changed")
 
     acquisition_action_verifier_path = (
         ROOT / "src" / "aragorn" / "runtime_acquisition_action_binding.py"

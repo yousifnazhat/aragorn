@@ -252,25 +252,25 @@ while ! docker exec "$container_id" sh -c '
 done
 
 docker exec "$container_id" install -d -o 0 -g 0 -m 0700 \
-    /run/aragorn-sensor-loss-collector /observation
+    /opt/aragorn-sensor-loss-collector /observation
 docker cp \
     "$context/benchmark/runtime-action-worker-sensor-loss-systemd/Dockerfile" \
-    "$container_id:/run/aragorn-sensor-loss-collector/Dockerfile"
+    "$container_id:/opt/aragorn-sensor-loss-collector/Dockerfile"
 docker cp \
     "$context/scripts/capture_runtime_action_worker_sensor_loss_systemd.sh" \
-    "$container_id:/run/aragorn-sensor-loss-collector/capture_runtime_action_worker_sensor_loss_systemd.sh"
+    "$container_id:/opt/aragorn-sensor-loss-collector/capture_runtime_action_worker_sensor_loss_systemd.sh"
 docker cp \
     "$context/scripts/runtime_action_worker_sensor_loss_systemd_probe.py" \
-    "$container_id:/run/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py"
+    "$container_id:/opt/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py"
 docker exec "$container_id" sh -eu -c '
     chown 0:0 \
-        /run/aragorn-sensor-loss-collector/Dockerfile \
-        /run/aragorn-sensor-loss-collector/capture_runtime_action_worker_sensor_loss_systemd.sh \
-        /run/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py
-    chmod 0644 /run/aragorn-sensor-loss-collector/Dockerfile
+        /opt/aragorn-sensor-loss-collector/Dockerfile \
+        /opt/aragorn-sensor-loss-collector/capture_runtime_action_worker_sensor_loss_systemd.sh \
+        /opt/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py
+    chmod 0644 /opt/aragorn-sensor-loss-collector/Dockerfile
     chmod 0755 \
-        /run/aragorn-sensor-loss-collector/capture_runtime_action_worker_sensor_loss_systemd.sh \
-        /run/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py
+        /opt/aragorn-sensor-loss-collector/capture_runtime_action_worker_sensor_loss_systemd.sh \
+        /opt/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py
 '
 
 docker inspect "$container_id" >"$inspect"
@@ -525,7 +525,7 @@ PY
 
 docker exec -i "$container_id" /bin/sh -c \
     'umask 077; cat > /run/aragorn-harness.json' <"$harness"
-probe_path=/run/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py
+probe_path=/opt/aragorn-sensor-loss-collector/runtime_action_worker_sensor_loss_systemd_probe.py
 observation_path=/observation/runtime-action-worker-sensor-loss-systemd.json
 probe_status=0
 docker exec "$container_id" /usr/local/bin/python3.12 -I -S -B \

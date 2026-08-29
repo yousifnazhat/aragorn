@@ -27,7 +27,7 @@ class _SensorLossObserved(Exception):
 
 
 _HARNESS_PATH = Path("/run/aragorn-harness.json")
-_COLLECTOR_ROOT = Path("/run/aragorn-sensor-loss-collector")
+_COLLECTOR_ROOT = Path("/opt/aragorn-sensor-loss-collector")
 _PARENT_IMAGE = (
     "sha256:21184b7a6a096a8625994b524203bf5b521d749b24e415378a69decd4e78009b"
 )

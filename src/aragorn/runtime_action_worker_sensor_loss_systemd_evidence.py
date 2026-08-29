@@ -55,13 +55,13 @@ _PROPERTIES = (
 _ARTIFACT_PATHS = {
     "activator": "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh",
     "capture_recipe": (
-        "/run/aragorn-sensor-loss-collector/"
+        "/opt/aragorn-sensor-loss-collector/"
         "capture_runtime_action_worker_sensor_loss_systemd.sh"
     ),
-    "dockerfile": "/run/aragorn-sensor-loss-collector/Dockerfile",
+    "dockerfile": "/opt/aragorn-sensor-loss-collector/Dockerfile",
     "gateway_unit": "/usr/lib/systemd/system/aragorn-agent-gateway.service",
     "probe": (
-        "/run/aragorn-sensor-loss-collector/"
+        "/opt/aragorn-sensor-loss-collector/"
         "runtime_action_worker_sensor_loss_systemd_probe.py"
     ),
 }

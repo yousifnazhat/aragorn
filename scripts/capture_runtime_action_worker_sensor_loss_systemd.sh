@@ -252,7 +252,8 @@ while ! docker exec "$container_id" sh -c '
 done
 
 docker exec "$container_id" install -d -o 0 -g 0 -m 0700 \
-    /opt/aragorn-sensor-loss-collector /observation
+    /opt/aragorn-sensor-loss-collector /observation \
+    /run/aragorn-protected-install
 docker cp \
     "$context/benchmark/runtime-action-worker-sensor-loss-systemd/Dockerfile" \
     "$container_id:/opt/aragorn-sensor-loss-collector/Dockerfile"

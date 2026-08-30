@@ -76,6 +76,18 @@ _FINAL_V3_PROMPT_REBUILD_COLLECTOR = (
     _ROOT
     / "scripts/runtime_action_worker_final_combined_v3_prompt_rebuild_systemd_probe.py"
 )
+_FINAL_V3_CURATOR_RESTORE_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-curator-restore-systemd/Dockerfile"
+)
+_FINAL_V3_CURATOR_RESTORE_CAPTURE = (
+    _ROOT
+    / "scripts/capture_runtime_action_worker_final_combined_v3_curator_restore_systemd.sh"
+)
+_FINAL_V3_CURATOR_RESTORE_COLLECTOR = (
+    _ROOT
+    / "scripts/runtime_action_worker_final_combined_v3_curator_restore_systemd_probe.py"
+)
 
 
 class RuntimeActionWorkerPackagingTests(unittest.TestCase):
@@ -825,6 +837,61 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
         self.assertIn(
             "ADM-02/reload/missing-prompt-blob-rebuild \\\n"
             "        /route-input/missing-prompt-blob-rebuild;",
+            dockerfile,
+        )
+        self.assertIn("'directory:0:0:555:2';", dockerfile)
+        for required in (
+            'git status --porcelain=v1',
+            'git verify-commit --raw "$source_commit"',
+            'git archive --format=tar "$source_commit"',
+            "remove_created_container",
+            'docker volume rm "$route_input_volume"',
+            "trap cleanup EXIT",
+        ):
+            self.assertIn(required, capture)
+        marker = 'python3.12 - "$temp_output" "$output" <<\'PY\'\n'
+        publication = capture.split(marker, 1)[1].split("\nPY\n", 1)[0]
+        for source in (publication, collector):
+            strings = {
+                node.value
+                for node in ast.walk(ast.parse(source))
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            }
+            self.assertIn(authority, strings)
+        self.assertIn("**{key: False for key in sorted(_ELIGIBILITY_KEYS)}", collector)
+        self.assertIn(
+            "or any(decision[key] is not False for key in expected_claims)",
+            publication,
+        )
+
+    def test_final_v3_curator_restore_capture_binds_exact_authority(self) -> None:
+        dockerfile = _FINAL_V3_CURATOR_RESTORE_DOCKERFILE.read_text(encoding="utf-8")
+        capture = _FINAL_V3_CURATOR_RESTORE_CAPTURE.read_text(encoding="utf-8")
+        collector = _FINAL_V3_CURATOR_RESTORE_COLLECTOR.read_text(encoding="utf-8")
+        parent = (
+            "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f"
+        )
+        route = "ADM-02/update/curator-restore-activation"
+        route_schema = (
+            "aragorn/openclaw-protected-curator-restore-denial-observation/v1"
+        )
+        authority = (
+            "BOUND_FINAL_COMBINED_V3_RAW_CURATOR_RESTORE_OBSERVATION_ONLY_"
+            "NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+        )
+        for source in (dockerfile, capture, collector):
+            self.assertIn(parent, source)
+            self.assertIn(route, source)
+        for digest in (
+            "fd3fa9ec7dce5b626eb1243c3391279093d08555e7c81f67d1b4549160fca089",
+            "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+        ):
+            self.assertIn(digest, dockerfile)
+            self.assertIn(digest, collector)
+        self.assertIn(route_schema, collector)
+        self.assertIn(
+            "ADM-02/update/curator-restore-activation \\\n"
+            "        /route-input/curator-restore-activation;",
             dockerfile,
         )
         self.assertIn("'directory:0:0:555:2';", dockerfile)

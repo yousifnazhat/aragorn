@@ -74,7 +74,7 @@ RUN set -eux; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /route-input/cron-rescan/protected-observation-v1.mjs)" = \
         'regular file:0:0:444:1:16324'; \
     test "$(stat -c '%F:%u:%g:%a:%h' /route-input/cron-rescan)" = \
-        'directory:0:0:555:1'; \
+        'directory:0:0:555:2'; \
     /usr/local/bin/node --check \
         /route-input/cron-rescan/protected-cron-rescan-probe.mjs; \
     /usr/local/bin/node --check \

@@ -759,6 +759,7 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             "        ADM-02/reload/cron-rescan /route-input/cron-rescan;",
             dockerfile,
         )
+        self.assertIn("'directory:0:0:555:2';", dockerfile)
         marker = 'python3.12 - "$temp_output" "$output" <<\'PY\'\n'
         publication = capture.split(marker, 1)[1].split("\nPY\n", 1)[0]
         for source in (publication, collector):

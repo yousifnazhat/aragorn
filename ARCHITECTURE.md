@@ -1624,7 +1624,7 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
 campaign, seven required event classes, six required response classes, and the
 exact quantitative measurement rules. Its dispatcher is intentionally
-non-executing: six cases map to retained current V3 implementations; six now
+non-executing: seven cases map to retained current V3 implementations; five now
 have exact, read-only V3 materialized bundles but still require fresh capture
 and semantic verification; fourteen require V3 ports; and five still lack route
 adapters. The

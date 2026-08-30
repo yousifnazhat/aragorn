@@ -1,4 +1,4 @@
-"""Materialize exact V3 probe bundles for the six rebound-only campaign cases."""
+"""Materialize exact V3 probe bundles for rebound and directly portable cases."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ _V2_MATERIALIZER_BYTES = 87_912
 _V2_MATERIALIZER_DIGEST = (
     "sha256:0771f973c7d544e0cf66bc2a2b3d8120041a38ce244f331a7e7b5698660281ec"
 )
-_SCHEMA = "aragorn/openclaw-final-admission-v3-rebound-probe-bundle/v1"
+_SCHEMA = "aragorn/openclaw-final-admission-v3-materialized-probe-bundle/v1"
 _AUTHORITY = "PINNED_V3_PROBE_BUNDLE_ONLY_NOT_EXECUTION_OR_QUALIFICATION_AUTHORITY"
 _REPLACEMENTS = (
     (
@@ -33,6 +33,21 @@ _REPLACEMENTS = (
         b"configuration.file?.size === 2159",
     ),
     (b"file.size === 1880", b"file.size === 2159"),
+)
+_CHAT_CASE = "ADM-02/reload/chat-session-snapshot-consumer"
+_CHAT_REPLACEMENTS = (
+    (
+        b"ADM-02/reload/session-snapshot-consumer",
+        b"ADM-02/reload/chat-session-snapshot-consumer",
+    ),
+    (
+        b"aragorn/openclaw-protected-session-snapshot-fixed-observation/v1",
+        b"aragorn/openclaw-protected-chat-session-snapshot-consumer-observation/v1",
+    ),
+    (
+        b"aragorn/openclaw-protected-session-snapshot-fixed-error/v1",
+        b"aragorn/openclaw-protected-chat-session-snapshot-consumer-error/v1",
+    ),
 )
 _BUNDLES = {
     "ADM-02/update/archive-source-force-replacement": {
@@ -97,16 +112,30 @@ _BUNDLES = {
             "sha256:672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
         ),
     },
+    _CHAT_CASE: {
+        "protected-chat-session-snapshot-consumer-v3-probe.mjs": (
+            (0, 0, 0, 1, 1, 1),
+            42_287,
+            "sha256:9a091bd617bf2e78d436218098f2c2b9ca616815ec1a1598afe42b28a263aaa7",
+        ),
+        "protected-observation-v1.mjs": (
+            (3, 1, 0, 0, 0, 0),
+            16_324,
+            "sha256:672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+        ),
+    },
 }
 
 
 def materialize_openclaw_final_v3_rebound_case(
     case_id: object, output: Path
 ) -> dict[str, Any]:
-    """Write one exact, read-only rebound bundle into a new directory."""
+    """Write one exact, read-only materialized bundle into a new directory."""
 
     if type(case_id) is not str or case_id not in _BUNDLES:
-        raise V3RebindError("case id is not an exact V3 rebound registry member")
+        raise V3RebindError(
+            "case id is not an exact V3 materialization registry member"
+        )
     if not isinstance(output, Path) or output.exists() or output.is_symlink():
         raise V3RebindError("output must be a new Path")
 
@@ -117,16 +146,25 @@ def materialize_openclaw_final_v3_rebound_case(
 
     materialized = []
     for name, (counts, expected_bytes, expected_digest) in _BUNDLES[case_id].items():
-        raw = transform(name, workshop=False)
+        source_name = (
+            "protected-session-snapshot-fixed-probe.mjs"
+            if case_id == _CHAT_CASE
+            and name == "protected-chat-session-snapshot-consumer-v3-probe.mjs"
+            else name
+        )
+        raw = transform(source_name, workshop=False)
         if type(raw) is not bytes:
             raise V3RebindError(f"V2 materializer returned non-bytes for {name}")
-        observed_counts = tuple(raw.count(old) for old, _new in _REPLACEMENTS)
+        replacements = _REPLACEMENTS + (
+            _CHAT_REPLACEMENTS if case_id == _CHAT_CASE else ()
+        )
+        observed_counts = tuple(raw.count(old) for old, _new in replacements)
         if observed_counts != counts:
             raise V3RebindError(f"V3 replacement shape changed for {name}")
-        for old, new in _REPLACEMENTS:
+        for old, new in replacements:
             raw = raw.replace(old, new)
         if len(raw) != expected_bytes or _digest(raw) != expected_digest:
-            raise V3RebindError(f"V3 rebound bytes changed for {name}")
+            raise V3RebindError(f"V3 materialized bytes changed for {name}")
         materialized.append((name, raw, expected_digest))
 
     output.mkdir(mode=0o755)

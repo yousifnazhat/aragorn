@@ -33,20 +33,20 @@ _REGISTRY_SCHEMA = "aragorn/openclaw-final-admission-v3-campaign-registry/v1"
 _DISPATCH_SCHEMA = "aragorn/openclaw-final-admission-v3-campaign-dispatch/v1"
 _READINESS_SCHEMA = "aragorn/openclaw-final-admission-v3-campaign-dispatch-readiness/v1"
 _AUTHORITY = (
-    "V3_CAMPAIGN_CASE_INVENTORY_AND_PINNED_REBOUND_BUNDLE_DESCRIPTORS_ONLY_"
+    "V3_CAMPAIGN_CASE_INVENTORY_AND_PINNED_MATERIALIZED_BUNDLE_DESCRIPTORS_ONLY_"
     "NATIVE_EXECUTION_DISABLED_"
     "NO_QUALIFICATION_AUTHORITY"
 )
 _LIMITATIONS = [
     "PROVISIONAL_STAGING_PATHS_NOT_EXECUTABLE_BYTE_PINS",
-    "SIX_REBOUND_V3_BUNDLES_NOT_CAPTURED_OR_SEMANTICALLY_VERIFIED",
+    "SEVEN_MATERIALIZED_V3_BUNDLES_NOT_CAPTURED_OR_SEMANTICALLY_VERIFIED",
     "NO_NATIVE_INTERPRETER_RUNTIME_OR_IMAGE_DIGEST_EXECUTION_BINDINGS",
     "LEGACY_MULTI_SCENARIO_PROBES_REQUIRE_V3_PER_CASE_PORTS",
     "MISSING_ROUTE_ADAPTERS_ARE_NOT_EXECUTED_BY_THE_CURRENT_ROUTE_PROBE",
 ]
 _REBINDER = {
-    "bytes": 6_317,
-    "digest": "sha256:478ba1210ac3c1e95354a05d5e9108a0b7a11b14b8522240a667ab5c3d129979",
+    "bytes": 7_691,
+    "digest": "sha256:8321a6c423b03c283d175185de6886ca12aaa08c244f81b67be3a73a47279a1c",
     "path": "/src/scripts/materialize_openclaw_final_v3_rebound_probes.py",
 }
 _ROUTE_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
@@ -253,10 +253,16 @@ _CASES = (
     _descriptor(
         17,
         "ADM-02/reload/chat-session-snapshot-consumer",
-        V3_PORT_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-chat-session-snapshot-consumer-v3-probe.mjs",
         "aragorn/openclaw-protected-chat-session-snapshot-consumer-observation/v1",
+        bundle=(
+            _bundle_item(
+                "protected-chat-session-snapshot-consumer-v3-probe.mjs", "probe"
+            ),
+            _bundle_item("protected-observation-v1.mjs", "probe-dependency"),
+        ),
     ),
     _descriptor(
         18,

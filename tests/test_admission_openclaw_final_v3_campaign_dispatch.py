@@ -20,6 +20,9 @@ from aragorn.admission_openclaw_final_v3_campaign_dispatch import (
     openclaw_final_v3_campaign_readiness,
     openclaw_final_v3_campaign_registry,
 )
+from scripts.materialize_openclaw_final_v3_rebound_probes import (
+    _BUNDLES as V3_MATERIALIZED_BUNDLES,
+)
 
 
 class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
@@ -34,9 +37,9 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             readiness["implementation_counts"],
             {
                 CURRENT_V3: 5,
-                V3_CAPTURE_REQUIRED: 6,
+                V3_CAPTURE_REQUIRED: 7,
                 V3_REBIND_REQUIRED: 0,
-                V3_PORT_REQUIRED: 15,
+                V3_PORT_REQUIRED: 14,
                 MISSING_ADAPTER: 5,
             },
         )
@@ -50,6 +53,7 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
                 "ADM-02/update/archive-source-force-replacement",
                 "ADM-02/update/core-updater-plugin-replacement",
                 "ADM-02/update/curator-restore-activation",
+                "ADM-02/reload/chat-session-snapshot-consumer",
                 "ADM-02/reload/cron-rescan",
                 "ADM-02/reload/missing-prompt-blob-rebuild",
                 "ADM-02/reload/session-snapshot-consumer",
@@ -98,7 +102,7 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             for case in registry["cases"]
             if case["implementation_state"] == V3_CAPTURE_REQUIRED
         ]
-        self.assertEqual(len(rebound), 6)
+        self.assertEqual(len(rebound), 7)
         source_path = (
             Path(__file__).resolve().parents[1]
             / "scripts/materialize_openclaw_final_v3_rebound_probes.py"
@@ -106,6 +110,10 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         source_raw = source_path.read_bytes()
         for case in rebound:
             materializer = case["materializer"]
+            self.assertEqual(
+                [item["path"].rsplit("/", 1)[-1] for item in case["bundle"]],
+                list(V3_MATERIALIZED_BUNDLES[case["case_id"]]),
+            )
             self.assertEqual(
                 materializer["argv"],
                 [

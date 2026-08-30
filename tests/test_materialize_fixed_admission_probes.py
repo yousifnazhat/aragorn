@@ -857,7 +857,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             with self.subTest(literal=literal):
                 self.assertEqual(cron.count(literal), 1)
 
-    def test_materializes_all_six_exact_v3_rebound_bundles(self) -> None:
+    def test_materializes_all_seven_exact_v3_bundles(self) -> None:
         expected = {
             "ADM-02/update/archive-source-force-replacement": {
                 "protected-archive-replacement-probe.mjs": "c89af8975bcdc8963659b39b354fc8b754d4805f7249a1cc766458cdad891328",
@@ -881,6 +881,10 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                 "protected-session-snapshot-fixed-probe.mjs": "9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11",
                 "protected-observation-v1.mjs": "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
             },
+            "ADM-02/reload/chat-session-snapshot-consumer": {
+                "protected-chat-session-snapshot-consumer-v3-probe.mjs": "9a091bd617bf2e78d436218098f2c2b9ca616815ec1a1598afe42b28a263aaa7",
+                "protected-observation-v1.mjs": "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+            },
         }
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -891,6 +895,14 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                         case_id, output
                     )
                     self.assertEqual(manifest["case_id"], case_id)
+                    self.assertEqual(
+                        manifest["schema"],
+                        "aragorn/openclaw-final-admission-v3-materialized-probe-bundle/v1",
+                    )
+                    self.assertEqual(
+                        manifest["authority"],
+                        "PINNED_V3_PROBE_BUNDLE_ONLY_NOT_EXECUTION_OR_QUALIFICATION_AUTHORITY",
+                    )
                     self.assertEqual(
                         [item["name"] for item in manifest["files"]], list(files)
                     )
@@ -903,7 +915,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
                         )
 
             rejected = root / "rejected"
-            with self.assertRaisesRegex(V3RebindError, "exact V3 rebound"):
+            with self.assertRaisesRegex(V3RebindError, "exact V3 materialization"):
                 materialize_openclaw_final_v3_rebound_case("DET-01", rejected)
             self.assertFalse(rejected.exists())
 

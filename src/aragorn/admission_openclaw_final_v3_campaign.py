@@ -135,6 +135,13 @@ _REGRESSION_ORACLES = (
         ),
     ),
     (
+        "ADM-02/reload/cron-rescan",
+        (
+            "benchmark/receipts/phase3-openclaw-protected-final-combined-v3-"
+            "cron-rescan-route-coverage-v1-2026-08-30.json"
+        ),
+    ),
+    (
         "ADM-02/reload/fresh-session-reset",
         (
             "benchmark/receipts/phase3-openclaw-protected-final-combined-v3-"
@@ -145,7 +152,7 @@ _REGRESSION_ORACLES = (
 _CONTRACT_LIMITATIONS = [
     "SKELETON_ONLY_NO_NATIVE_CAMPAIGN_CAPTURE_EXECUTED",
     "THIRTY_ONE_FRESH_ISOLATED_SUBFIXTURES_REQUIRED",
-    "FIVE_EXISTING_RECEIPTS_ARE_REGRESSION_ORACLES_ONLY",
+    "SIX_EXISTING_RECEIPTS_ARE_REGRESSION_ORACLES_ONLY",
     "REGRESSION_ORACLES_CANNOT_PROMOTE_CAMPAIGN_ELIGIBILITY",
     "SUBFIXTURE_BACKEND_AND_SEMANTIC_COMPOSER_NOT_IMPLEMENTED",
     "NO_ADMISSION_INSTALLER_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY",

@@ -132,6 +132,9 @@ from aragorn.admission_protected_final_combined_v2_workshop_proposal_apply impor
 from aragorn.admission_protected_final_combined_v3_config_entry_activation import (
     verify_openclaw_final_combined_v3_config_entry_activation,
 )
+from aragorn.admission_protected_final_combined_v3_cron_rescan import (
+    verify_openclaw_final_combined_v3_cron_rescan,
+)
 from aragorn.admission_protected_final_combined_v3_fresh_session_reset import (
     verify_openclaw_final_combined_v3_fresh_session_reset,
 )
@@ -3862,6 +3865,42 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V2 plugin force-reinstall qualification changed"
+        )
+
+    final_v3_cron_rescan_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v3-route-cron-rescan-"
+        "systemd-p3-final-2026-08-30.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v3-cron-rescan-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v3_cron_rescan_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v3_cron_rescan_qualification = (
+            verify_openclaw_final_combined_v3_cron_rescan(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v3_cron_rescan_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v3-cron-rescan-"
+        "route-coverage-v1-2026-08-30.json"
+    )
+    retained_final_v3_cron_rescan_qualification = load(
+        final_v3_cron_rescan_qualification_path
+    )
+    if (
+        final_v3_cron_rescan_qualification
+        != retained_final_v3_cron_rescan_qualification
+        or final_v3_cron_rescan_qualification_path.read_bytes()
+        != canonical_json(final_v3_cron_rescan_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V3 cron-rescan qualification changed"
         )
 
     final_v3_plugin_force_evidence_path = admission_evidence / (

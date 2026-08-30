@@ -1624,13 +1624,15 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
 campaign, seven required event classes, six required response classes, and the
 exact quantitative measurement rules. Its dispatcher is intentionally
-non-executing: five cases map to current V3 implementations, six require V3
-rebinding, fifteen require V3 ports, and five still lack route adapters. The
+non-executing: five cases map to retained current V3 implementations; six now
+have exact, read-only V3 rebound bundles but still require fresh capture and
+semantic verification; fifteen require V3 ports; and five still lack route
+adapters. The
 quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate
-paired overhead. These are contracts and verifier code only; no new dynamic
-evidence or eligibility follows from them.
+paired overhead. These are contracts, byte materialization, and verifier code
+only; no new dynamic evidence or eligibility follows from them.
 
 The historical
 `benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json`

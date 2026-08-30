@@ -19,6 +19,10 @@ from scripts.materialize_fixed_admission_probes import (
     transformed_probe,
     transformed_restore_authority_probe,
 )
+from scripts.materialize_openclaw_final_v3_rebound_probes import (
+    V3RebindError,
+    materialize_openclaw_final_v3_rebound_case,
+)
 
 
 class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
@@ -669,8 +673,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             {
                 name: digest
                 for name, digest in FINAL_COMBINED_V2_SOURCE_DIGESTS.items()
-                if name
-                not in {"PROPOSAL.md", "protected-cron-rescan-probe.mjs"}
+                if name not in {"PROPOSAL.md", "protected-cron-rescan-probe.mjs"}
             },
             {
                 name: digest
@@ -682,9 +685,7 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
             FINAL_COMBINED_V2_SOURCE_DIGESTS["protected-cron-rescan-probe.mjs"],
             "3733b27d34e692271b0ac7c93956017d55b318fef1dcabc27e3478531c0e47b3",
         )
-        workshop_selection = frozenset(
-            {"PROPOSAL.md", "protected-route-probe.mjs"}
-        )
+        workshop_selection = frozenset({"PROPOSAL.md", "protected-route-probe.mjs"})
         self.assertEqual(
             FINAL_COMBINED_V2_SELECTIONS - {workshop_selection},
             FINAL_COMBINED_SELECTIONS,
@@ -855,6 +856,56 @@ class FixedAdmissionProbeMaterializerTests(unittest.TestCase):
         ):
             with self.subTest(literal=literal):
                 self.assertEqual(cron.count(literal), 1)
+
+    def test_materializes_all_six_exact_v3_rebound_bundles(self) -> None:
+        expected = {
+            "ADM-02/update/archive-source-force-replacement": {
+                "protected-archive-replacement-probe.mjs": "c89af8975bcdc8963659b39b354fc8b754d4805f7249a1cc766458cdad891328",
+            },
+            "ADM-02/update/core-updater-plugin-replacement": {
+                "protected-route-probe.mjs": "4687054e9d7ea264c6772de4e0560fafb195ebbbfc7397333297abd6cc4347ff",
+            },
+            "ADM-02/update/curator-restore-activation": {
+                "protected-curator-restore-denial-probe.mjs": "fd3fa9ec7dce5b626eb1243c3391279093d08555e7c81f67d1b4549160fca089",
+                "protected-observation-v1.mjs": "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+            },
+            "ADM-02/reload/cron-rescan": {
+                "protected-cron-rescan-probe.mjs": "94d3b47162fd1bdc97028f44115ef54acfe8b7a296210a47a8a24a71771bb2d0",
+                "protected-observation-v1.mjs": "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+            },
+            "ADM-02/reload/missing-prompt-blob-rebuild": {
+                "protected-prompt-rebuild-probe.mjs": "9d6eb33127e5e7fd2439adfc1e6bb5fc87286ed03b3b2717cdaf55df54227dd7",
+                "protected-observation-v1.mjs": "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+            },
+            "ADM-02/reload/session-snapshot-consumer": {
+                "protected-session-snapshot-fixed-probe.mjs": "9ab66a23f17b85caed2593cb0300df8a71201b9f12f6ecb28fcde6b165eccd11",
+                "protected-observation-v1.mjs": "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+            },
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for ordinal, (case_id, files) in enumerate(expected.items()):
+                with self.subTest(case_id=case_id):
+                    output = root / f"case-{ordinal}"
+                    manifest = materialize_openclaw_final_v3_rebound_case(
+                        case_id, output
+                    )
+                    self.assertEqual(manifest["case_id"], case_id)
+                    self.assertEqual(
+                        [item["name"] for item in manifest["files"]], list(files)
+                    )
+                    self.assertEqual(output.stat().st_mode & 0o777, 0o555)
+                    for name, digest in files.items():
+                        path = output / name
+                        self.assertEqual(path.stat().st_mode & 0o777, 0o444)
+                        self.assertEqual(
+                            hashlib.sha256(path.read_bytes()).hexdigest(), digest
+                        )
+
+            rejected = root / "rejected"
+            with self.assertRaisesRegex(V3RebindError, "exact V3 rebound"):
+                materialize_openclaw_final_v3_rebound_case("DET-01", rejected)
+            self.assertFalse(rejected.exists())
 
 
 if __name__ == "__main__":

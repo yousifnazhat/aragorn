@@ -1,4 +1,4 @@
-"""Describe provisional V3 campaign invocations without executing probes."""
+"""Describe fixed V3 campaign invocations without executing probes."""
 
 from __future__ import annotations
 
@@ -14,12 +14,14 @@ class CampaignDispatchError(ValueError):
 
 
 CURRENT_V3 = "CURRENT_V3"
+V3_CAPTURE_REQUIRED = "V3_CAPTURE_REQUIRED"
 V3_REBIND_REQUIRED = "V3_REBIND_REQUIRED"
 V3_PORT_REQUIRED = "V3_PORT_REQUIRED"
 MISSING_ADAPTER = "MISSING_ADAPTER"
 
 _IMPLEMENTATION_STATES = (
     CURRENT_V3,
+    V3_CAPTURE_REQUIRED,
     V3_REBIND_REQUIRED,
     V3_PORT_REQUIRED,
     MISSING_ADAPTER,
@@ -31,16 +33,22 @@ _REGISTRY_SCHEMA = "aragorn/openclaw-final-admission-v3-campaign-registry/v1"
 _DISPATCH_SCHEMA = "aragorn/openclaw-final-admission-v3-campaign-dispatch/v1"
 _READINESS_SCHEMA = "aragorn/openclaw-final-admission-v3-campaign-dispatch-readiness/v1"
 _AUTHORITY = (
-    "V3_CAMPAIGN_CASE_INVENTORY_AND_PROVISIONAL_PATH_DESCRIPTORS_ONLY_"
+    "V3_CAMPAIGN_CASE_INVENTORY_AND_PINNED_REBOUND_BUNDLE_DESCRIPTORS_ONLY_"
     "NATIVE_EXECUTION_DISABLED_"
     "NO_QUALIFICATION_AUTHORITY"
 )
 _LIMITATIONS = [
     "PROVISIONAL_STAGING_PATHS_NOT_EXECUTABLE_BYTE_PINS",
-    "NO_SOURCE_MATERIALIZER_INTERPRETER_RUNTIME_OR_IMAGE_DIGEST_BINDINGS",
+    "SIX_REBOUND_V3_BUNDLES_NOT_CAPTURED_OR_SEMANTICALLY_VERIFIED",
+    "NO_NATIVE_INTERPRETER_RUNTIME_OR_IMAGE_DIGEST_EXECUTION_BINDINGS",
     "LEGACY_MULTI_SCENARIO_PROBES_REQUIRE_V3_PER_CASE_PORTS",
     "MISSING_ROUTE_ADAPTERS_ARE_NOT_EXECUTED_BY_THE_CURRENT_ROUTE_PROBE",
 ]
+_REBINDER = {
+    "bytes": 6_317,
+    "digest": "sha256:478ba1210ac3c1e95354a05d5e9108a0b7a11b14b8522240a667ab5c3d129979",
+    "path": "/src/scripts/materialize_openclaw_final_v3_rebound_probes.py",
+}
 _ROUTE_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
 _CONTAINED_SCHEMA = "aragorn/openclaw-contained-profile-probe-evidence/v1"
 
@@ -70,6 +78,14 @@ def _descriptor(
         "expected_schema": expected_schema,
         "implementation_state": implementation_state,
         "interpreter": interpreter,
+        "materializer": (
+            {
+                "argv": [_PYTHON, _REBINDER["path"], case_id, root],
+                "source": dict(_REBINDER),
+            }
+            if implementation_state == V3_CAPTURE_REQUIRED
+            else None
+        ),
         "native_execution_enabled": False,
         "ordinal": ordinal,
     }
@@ -124,7 +140,7 @@ _CASES = (
     _descriptor(
         8,
         "ADM-02/update/archive-source-force-replacement",
-        V3_REBIND_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-archive-replacement-probe.mjs",
         "aragorn/openclaw-protected-archive-replacement-observation/v1",
@@ -156,7 +172,7 @@ _CASES = (
     _descriptor(
         11,
         "ADM-02/update/core-updater-plugin-replacement",
-        V3_REBIND_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-route-probe.mjs",
         _ROUTE_SCHEMA,
@@ -168,7 +184,7 @@ _CASES = (
     _descriptor(
         12,
         "ADM-02/update/curator-restore-activation",
-        V3_REBIND_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-curator-restore-denial-probe.mjs",
         "aragorn/openclaw-protected-curator-restore-denial-observation/v1",
@@ -253,7 +269,7 @@ _CASES = (
     _descriptor(
         19,
         "ADM-02/reload/cron-rescan",
-        V3_REBIND_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-cron-rescan-probe.mjs",
         "aragorn/openclaw-protected-cron-rescan-observation/v1",
@@ -295,7 +311,7 @@ _CASES = (
     _descriptor(
         23,
         "ADM-02/reload/missing-prompt-blob-rebuild",
-        V3_REBIND_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-prompt-rebuild-probe.mjs",
         "aragorn/openclaw-protected-prompt-rebuild-observation/v1",
@@ -345,7 +361,7 @@ _CASES = (
     _descriptor(
         27,
         "ADM-02/reload/session-snapshot-consumer",
-        V3_REBIND_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-session-snapshot-fixed-probe.mjs",
         "aragorn/openclaw-protected-session-snapshot-fixed-observation/v1",
@@ -434,6 +450,11 @@ def openclaw_final_v3_campaign_readiness() -> dict[str, Any]:
             if case["implementation_state"] == CURRENT_V3
         ],
         "case_inventory_complete": True,
+        "capture_required_case_ids": [
+            case["case_id"]
+            for case in _CASES
+            if case["implementation_state"] == V3_CAPTURE_REQUIRED
+        ],
         "execution_descriptors_complete": False,
         "implementation_counts": {
             state: counts.get(state, 0) for state in _IMPLEMENTATION_STATES
@@ -463,6 +484,7 @@ def _validate_registry() -> None:
             "expected_schema",
             "implementation_state",
             "interpreter",
+            "materializer",
             "native_execution_enabled",
             "ordinal",
         }:
@@ -483,6 +505,21 @@ def _validate_registry() -> None:
             or len(bundle_paths) != len(set(bundle_paths))
         ):
             raise RuntimeError("fixed V3 campaign bundle binding changed")
+        expected_materializer = (
+            {
+                "argv": [
+                    _PYTHON,
+                    _REBINDER["path"],
+                    case["case_id"],
+                    str(PurePosixPath(case["argv"][1]).parent),
+                ],
+                "source": _REBINDER,
+            }
+            if case["implementation_state"] == V3_CAPTURE_REQUIRED
+            else None
+        )
+        if case["materializer"] != expected_materializer:
+            raise RuntimeError("fixed V3 campaign materializer binding changed")
         for item in case["bundle"]:
             path = PurePosixPath(item["path"])
             if (

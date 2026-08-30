@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
+from pathlib import Path
 
 from aragorn.admission_openclaw_final_v3_campaign import (
     build_openclaw_final_v3_campaign_contract,
@@ -9,6 +11,7 @@ from aragorn.admission_openclaw_final_v3_campaign import (
 from aragorn.admission_openclaw_final_v3_campaign_dispatch import (
     CURRENT_V3,
     MISSING_ADAPTER,
+    V3_CAPTURE_REQUIRED,
     V3_PORT_REQUIRED,
     V3_REBIND_REQUIRED,
     CampaignDispatchError,
@@ -31,7 +34,8 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             readiness["implementation_counts"],
             {
                 CURRENT_V3: 5,
-                V3_REBIND_REQUIRED: 6,
+                V3_CAPTURE_REQUIRED: 6,
+                V3_REBIND_REQUIRED: 0,
                 V3_PORT_REQUIRED: 15,
                 MISSING_ADAPTER: 5,
             },
@@ -40,6 +44,17 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertFalse(readiness["native_execution_enabled"])
         self.assertTrue(readiness["case_inventory_complete"])
         self.assertFalse(readiness["execution_descriptors_complete"])
+        self.assertEqual(
+            readiness["capture_required_case_ids"],
+            [
+                "ADM-02/update/archive-source-force-replacement",
+                "ADM-02/update/core-updater-plugin-replacement",
+                "ADM-02/update/curator-restore-activation",
+                "ADM-02/reload/cron-rescan",
+                "ADM-02/reload/missing-prompt-blob-rebuild",
+                "ADM-02/reload/session-snapshot-consumer",
+            ],
+        )
 
     def test_every_descriptor_has_only_fixed_paths_and_no_execution(self) -> None:
         registry = openclaw_final_v3_campaign_registry()
@@ -77,6 +92,35 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
                 for case in missing
             )
         )
+
+        rebound = [
+            case
+            for case in registry["cases"]
+            if case["implementation_state"] == V3_CAPTURE_REQUIRED
+        ]
+        self.assertEqual(len(rebound), 6)
+        source_path = (
+            Path(__file__).resolve().parents[1]
+            / "scripts/materialize_openclaw_final_v3_rebound_probes.py"
+        )
+        source_raw = source_path.read_bytes()
+        for case in rebound:
+            materializer = case["materializer"]
+            self.assertEqual(
+                materializer["argv"],
+                [
+                    "/usr/local/bin/python3.12",
+                    ("/src/scripts/materialize_openclaw_final_v3_rebound_probes.py"),
+                    case["case_id"],
+                    case["argv"][1].rsplit("/", 1)[0],
+                ],
+            )
+            self.assertRegex(materializer["source"]["digest"], r"^sha256:[0-9a-f]{64}$")
+            self.assertEqual(materializer["source"]["bytes"], len(source_raw))
+            self.assertEqual(
+                materializer["source"]["digest"],
+                "sha256:" + hashlib.sha256(source_raw).hexdigest(),
+            )
 
     def test_representative_invocations_are_exact_and_non_authoritative(self) -> None:
         det = dispatch_openclaw_final_v3_campaign_case("DET-01")

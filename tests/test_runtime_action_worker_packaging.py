@@ -100,6 +100,18 @@ _FINAL_V3_SESSION_SNAPSHOT_CONSUMER_COLLECTOR = (
     _ROOT
     / "scripts/runtime_action_worker_final_combined_v3_session_snapshot_consumer_systemd_probe.py"
 )
+_FINAL_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-archive-source-force-replacement-systemd/Dockerfile"
+)
+_FINAL_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_CAPTURE = (
+    _ROOT
+    / "scripts/capture_runtime_action_worker_final_combined_v3_archive_source_force_replacement_systemd.sh"
+)
+_FINAL_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_COLLECTOR = (
+    _ROOT
+    / "scripts/runtime_action_worker_final_combined_v3_archive_source_force_replacement_systemd_probe.py"
+)
 
 
 class RuntimeActionWorkerPackagingTests(unittest.TestCase):
@@ -978,6 +990,76 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             'git archive --format=tar "$source_commit"',
             "remove_created_container",
             'docker volume rm "$route_input_volume"',
+            "trap cleanup EXIT",
+        ):
+            self.assertIn(required, capture)
+        marker = 'python3.12 - "$temp_output" "$output" <<\'PY\'\n'
+        publication = capture.split(marker, 1)[1].split("\nPY\n", 1)[0]
+        for source in (publication, collector):
+            strings = {
+                node.value
+                for node in ast.walk(ast.parse(source))
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            }
+            self.assertIn(authority, strings)
+        self.assertIn("**{key: False for key in sorted(_ELIGIBILITY_KEYS)}", collector)
+        self.assertIn(
+            "or any(decision[key] is not False for key in expected_claims)",
+            publication,
+        )
+
+    def test_final_v3_archive_source_capture_binds_exact_authority(self) -> None:
+        dockerfile = _FINAL_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_DOCKERFILE.read_text(
+            encoding="utf-8"
+        )
+        capture = _FINAL_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_CAPTURE.read_text(
+            encoding="utf-8"
+        )
+        collector = _FINAL_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_COLLECTOR.read_text(
+            encoding="utf-8"
+        )
+        parent = (
+            "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f"
+        )
+        route = "ADM-02/update/archive-source-force-replacement"
+        route_schema = "aragorn/openclaw-protected-archive-replacement-observation/v1"
+        authority = (
+            "BOUND_FINAL_COMBINED_V3_RAW_ARCHIVE_SOURCE_FORCE_REPLACEMENT_"
+            "OBSERVATION_ONLY_NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+        )
+        for source in (dockerfile, capture, collector):
+            self.assertIn(parent, source)
+            self.assertIn(route, source)
+            self.assertNotIn("session-snapshot-consumer", source)
+        for digest in (
+            "90bf211226365ede1cf781fa3faa45217b1ed72fd636cc48824c4b39e5ac7c22",
+            "c89af8975bcdc8963659b39b354fc8b754d4805f7249a1cc766458cdad891328",
+        ):
+            self.assertIn(digest, dockerfile)
+            self.assertIn(digest, collector)
+        fixture_digest = (
+            "d30e0a2e568941e37c5f9427b920917a9edf694beadb41f8a5469e820c0dfdf1"
+        )
+        self.assertIn(fixture_digest, capture)
+        self.assertIn(fixture_digest, collector)
+        self.assertIn(route_schema, collector)
+        self.assertIn(
+            "ADM-02/update/archive-source-force-replacement \\\n"
+            "        /route-input/archive-source-force-replacement;",
+            dockerfile,
+        )
+        self.assertIn("'directory:0:0:555:2';", dockerfile)
+        for required in (
+            'git status --porcelain=v1',
+            'git verify-commit --raw "$source_commit"',
+            'git archive --format=tar "$source_commit"',
+            "remove_created_container",
+            'docker volume rm "$route_input_volume"',
+            'docker volume rm "$archive_source_volume"',
+            '-v "$archive_source_volume:/sources:ro"',
+            '"archive_source_fixture": archive_fixture',
+            '"archive_source_mount": archive_mount',
+            '"archive_source_volume_identity": archive_identity',
             "trap cleanup EXIT",
         ):
             self.assertIn(required, capture)

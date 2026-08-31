@@ -36,14 +36,14 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertEqual(
             readiness["implementation_counts"],
             {
-                CURRENT_V3: 7,
-                V3_CAPTURE_REQUIRED: 5,
+                CURRENT_V3: 8,
+                V3_CAPTURE_REQUIRED: 4,
                 V3_REBIND_REQUIRED: 0,
                 V3_PORT_REQUIRED: 14,
                 MISSING_ADAPTER: 5,
             },
         )
-        self.assertEqual(readiness["remaining_implementation_count"], 24)
+        self.assertEqual(readiness["remaining_implementation_count"], 23)
         self.assertFalse(readiness["native_execution_enabled"])
         self.assertTrue(readiness["case_inventory_complete"])
         self.assertFalse(readiness["execution_descriptors_complete"])
@@ -52,7 +52,6 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             [
                 "ADM-02/update/archive-source-force-replacement",
                 "ADM-02/update/core-updater-plugin-replacement",
-                "ADM-02/update/curator-restore-activation",
                 "ADM-02/reload/chat-session-snapshot-consumer",
                 "ADM-02/reload/session-snapshot-consumer",
             ],
@@ -100,7 +99,7 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             for case in registry["cases"]
             if case["implementation_state"] == V3_CAPTURE_REQUIRED
         ]
-        self.assertEqual(len(rebound), 5)
+        self.assertEqual(len(rebound), 4)
         source_path = (
             Path(__file__).resolve().parents[1]
             / "scripts/materialize_openclaw_final_v3_rebound_probes.py"
@@ -148,6 +147,12 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertEqual(force["implementation_state"], CURRENT_V3)
         self.assertEqual(force["interpreter"], "/usr/local/bin/python3.12")
         self.assertEqual(sum(item["role"] == "fixture" for item in force["bundle"]), 6)
+
+        curator = dispatch_openclaw_final_v3_campaign_case(
+            "ADM-02/update/curator-restore-activation"
+        )["descriptor"]
+        self.assertEqual(curator["implementation_state"], CURRENT_V3)
+        self.assertIsNone(curator["materializer"])
 
         cron = dispatch_openclaw_final_v3_campaign_case(
             "ADM-02/reload/cron-rescan"

@@ -135,6 +135,9 @@ from aragorn.admission_protected_final_combined_v3_config_entry_activation impor
 from aragorn.admission_protected_final_combined_v3_cron_rescan import (
     verify_openclaw_final_combined_v3_cron_rescan,
 )
+from aragorn.admission_protected_final_combined_v3_curator_restore import (
+    verify_openclaw_final_combined_v3_curator_restore,
+)
 from aragorn.admission_protected_final_combined_v3_fresh_session_reset import (
     verify_openclaw_final_combined_v3_fresh_session_reset,
 )
@@ -3904,6 +3907,42 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V3 cron-rescan qualification changed"
+        )
+
+    final_v3_curator_restore_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v3-route-curator-restore-activation-"
+        "systemd-p3-final-2026-08-30.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v3-curator-restore-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v3_curator_restore_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v3_curator_restore_qualification = (
+            verify_openclaw_final_combined_v3_curator_restore(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v3_curator_restore_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v3-curator-restore-"
+        "route-coverage-v1-2026-08-30.json"
+    )
+    retained_final_v3_curator_restore_qualification = load(
+        final_v3_curator_restore_qualification_path
+    )
+    if (
+        final_v3_curator_restore_qualification
+        != retained_final_v3_curator_restore_qualification
+        or final_v3_curator_restore_qualification_path.read_bytes()
+        != canonical_json(final_v3_curator_restore_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V3 curator-restore qualification changed"
         )
 
     final_v3_prompt_rebuild_evidence_path = admission_evidence / (

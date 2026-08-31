@@ -1624,10 +1624,11 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
 campaign, seven required event classes, six required response classes, and the
 exact quantitative measurement rules. Its dispatcher is intentionally
-non-executing: seven cases map to retained current V3 implementations; five now
+non-executing: eight cases map to retained current V3 implementations; four now
 have exact, read-only V3 materialized bundles but still require fresh capture
 and semantic verification; fourteen require V3 ports; and five still lack route
-adapters. The
+adapters. Eight retained receipt paths remain regression-oracle-only and cannot
+promote campaign eligibility. The
 quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate

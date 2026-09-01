@@ -1625,8 +1625,10 @@ The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
 campaign, seven required event classes, six required response classes, and the
 exact quantitative measurement rules. Its dispatcher is intentionally
 non-executing: eleven cases map to retained current V3 implementations; three now
-have exact, read-only V3 materialized bundles but still require fresh capture
-and semantic verification; twelve require V3 ports; and five still lack route
+have exact, read-only V3 materialized bundles but remain unqualified—two await
+fresh capture, while workshop invalidation has a dedicated fresh raw observation
+with verified semantics but no qualification authority; twelve require V3 ports;
+and five still lack route
 adapters. Twelve retained receipt paths remain regression-oracle-only and cannot
 promote campaign eligibility. The shared-capture workshop-invalidation child is
 a regression oracle only; its dedicated materializer and DET-01's exact

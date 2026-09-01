@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import stat
 import subprocess
@@ -20,33 +21,14 @@ from scripts import (
 _ROOT = Path(__file__).resolve().parents[1]
 _EVIDENCE = _ROOT / (
     "benchmark/evidence/runtime-action-worker-final-combined-v3-route-"
-    "workshop-proposal-apply-systemd-p3-final-2026-08-28.json"
+    "workshop-invalidation-systemd-p3-final-2026-09-01.json"
 )
-_REPLACEMENTS = {
-    "ADM-02/update/workshop-proposal-apply": subject._ROUTE,
-    "workshop-protected-apply": subject._ACTION,
-    "/route-input/workshop-proposal-apply/PROPOSAL.md": (
-        "/route-input/workshop-invalidation/PROPOSAL.md"
-    ),
-    "aragorn/openclaw-protected-route-action-observations/v1": subject._SCHEMA,
-}
 
 
-def _replace(value: object) -> object:
-    if type(value) is str:
-        return _REPLACEMENTS.get(value, value)
-    if type(value) is list:
-        return [_replace(item) for item in value]
-    if type(value) is dict:
-        return {key: _replace(item) for key, item in value.items()}
-    return value
-
-
-def _synthetic_compatibility_document() -> dict[str, object]:
+def _captured_document() -> dict[str, object]:
     outer = json.loads(_EVIDENCE.read_bytes())
-    document = _replace(outer["route_observation"]["document"])
+    document = outer["route_observation"]["document"]
     assert type(document) is dict
-    document["implementation_digest"] = subject._PROBE_DIGEST
     return document
 
 
@@ -194,7 +176,32 @@ class WorkshopInvalidationMaterializerTests(unittest.TestCase):
 class WorkshopInvalidationSemanticCompatibilityTests(unittest.TestCase):
     def verify(self, document: dict[str, object] | None = None) -> dict[str, object]:
         return subject.verify_openclaw_final_v3_workshop_invalidation_semantic_compatibility(
-            _synthetic_compatibility_document() if document is None else document
+            _captured_document() if document is None else document
+        )
+
+    def test_retained_raw_capture_is_observation_not_pass(self) -> None:
+        raw = _EVIDENCE.read_bytes()
+        self.assertEqual(len(raw), 581_618)
+        self.assertEqual(
+            hashlib.sha256(raw).hexdigest(),
+            "35c48bd6552d15682b8c500f540212d1e1deab8533edbfcc0c2188476ffff3c6",
+        )
+        outer = json.loads(raw)
+        self.assertNotIn("failure", outer)
+        self.assertEqual(outer["route_id"], subject._ROUTE)
+        self.assertEqual(
+            outer["harness"]["document"]["source_commit"],
+            "276d5f3a6a33f4cf5ddfccaa800486d73682358a",
+        )
+        self.assertEqual(
+            outer["decision"]["route_observation_status"], "OBSERVED"
+        )
+        self.assertEqual(outer["decision"]["route_pass_count"], 0)
+        self.assertTrue(
+            all(
+                outer["decision"][key] is False
+                for key in subject._ELIGIBILITY_KEYS
+            )
         )
 
     def test_exact_semantic_compatibility_preserves_claim_ceiling(self) -> None:
@@ -227,7 +234,7 @@ class WorkshopInvalidationSemanticCompatibilityTests(unittest.TestCase):
             self.assertIn(limitation, result["limitations"])
 
     def test_raw_relations_not_summary_booleans_are_authority(self) -> None:
-        document = _synthetic_compatibility_document()
+        document = _captured_document()
         after = document["actions"][0]["observations"]
         for key in (
             "catalog_after_apply_excludes_workshop",
@@ -243,32 +250,32 @@ class WorkshopInvalidationSemanticCompatibilityTests(unittest.TestCase):
     def test_route_transition_and_fresh_identity_tampering_fail_closed(self) -> None:
         mutations = []
 
-        changed = _synthetic_compatibility_document()
+        changed = _captured_document()
         changed["routes"][0]["id"] = "ADM-02/update/workshop-proposal-apply"
         mutations.append(changed)
 
-        changed = _synthetic_compatibility_document()
+        changed = _captured_document()
         after = changed["actions"][0]["observations"]
         after["final_snapshot"]["entry"]["session_id"] = (
             "00000000-0000-4000-8000-000000000000"
         )
         mutations.append(changed)
 
-        changed = _synthetic_compatibility_document()
+        changed = _captured_document()
         after = changed["actions"][0]["observations"]
         after["final_snapshot"]["entry"]["snapshot_version"] = after[
             "initial_snapshot"
         ]["entry"]["snapshot_version"]
         mutations.append(changed)
 
-        changed = _synthetic_compatibility_document()
+        changed = _captured_document()
         after = changed["actions"][0]["observations"]
         after["final_snapshot"]["file"] = deepcopy(
             after["initial_snapshot"]["file"]
         )
         mutations.append(changed)
 
-        changed = _synthetic_compatibility_document()
+        changed = _captured_document()
         changed["actions"][0]["commands"][7:9] = reversed(
             changed["actions"][0]["commands"][7:9]
         )

@@ -869,8 +869,9 @@ now freezes the admission, runtime-prevention, response, and quantitative
 requirements without evaluating them. The matching non-executing V3 campaign
 contract and dispatcher enumerate 31 fresh isolated subfixtures against one
 exact parent: eleven have retained current V3 implementations; three now have
-exact, read-only V3 materialized bundles awaiting fresh capture and semantic
-verification; and seventeen still require a V3 port or route adapter. A separate
+exact, read-only V3 materialized bundles but remain unqualified—two await fresh
+capture, while workshop invalidation has a dedicated fresh raw observation whose
+semantics verify; and seventeen still require a V3 port or route adapter. A separate
 set of twelve retained receipt paths remains regression-oracle-only and cannot
 promote campaign eligibility. The shared-capture workshop-invalidation child is
 one of those oracles; its new dedicated materializer and DET-01's exact

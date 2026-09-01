@@ -39,7 +39,7 @@ _AUTHORITY = (
 )
 _LIMITATIONS = [
     "PROVISIONAL_STAGING_PATHS_NOT_EXECUTABLE_BYTE_PINS",
-    "ONE_MATERIALIZED_V3_BUNDLE_NOT_CAPTURED_OR_SEMANTICALLY_VERIFIED",
+    "THREE_MATERIALIZED_V3_BUNDLES_REQUIRE_FRESH_SUBFIXTURE_CAPTURE",
     "NO_NATIVE_INTERPRETER_RUNTIME_OR_IMAGE_DIGEST_EXECUTION_BINDINGS",
     "LEGACY_MULTI_SCENARIO_PROBES_REQUIRE_V3_PER_CASE_PORTS",
     "MISSING_ROUTE_ADAPTERS_ARE_NOT_EXECUTED_BY_THE_CURRENT_ROUTE_PROBE",
@@ -49,12 +49,45 @@ _REBINDER = {
     "digest": "sha256:8321a6c423b03c283d175185de6886ca12aaa08c244f81b67be3a73a47279a1c",
     "path": "/src/scripts/materialize_openclaw_final_v3_rebound_probes.py",
 }
+_DET01_MATERIALIZER = {
+    "bytes": 6_960,
+    "digest": "sha256:42af9e1c895a2e63de4c5803b5fb0dfc9aedcef2b164e4d8bd53b4cbf1660081",
+    "path": "/src/scripts/materialize_openclaw_final_v3_det01.py",
+}
+_WORKSHOP_INVALIDATION_MATERIALIZER = {
+    "bytes": 8_612,
+    "digest": "sha256:d60da66234d68f180e19e61f74f16a8ce9422221015f726fa9b839549edd06fc",
+    "path": (
+        "/src/scripts/materialize_openclaw_final_v3_workshop_invalidation_probe.py"
+    ),
+}
+_MATERIALIZER_BY_CASE = {
+    "DET-01": ("det01", _DET01_MATERIALIZER),
+    "ADM-02/update/core-updater-plugin-replacement": ("rebound", _REBINDER),
+    "ADM-02/reload/workshop-invalidation": (
+        "workshop-invalidation",
+        _WORKSHOP_INVALIDATION_MATERIALIZER,
+    ),
+}
 _ROUTE_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
 _CONTAINED_SCHEMA = "aragorn/openclaw-contained-profile-probe-evidence/v1"
 
 
 def _bundle_item(name: str, role: str) -> tuple[str, str]:
     return name, role
+
+
+def _case_materializer(
+    case_id: str, root: str, implementation_state: str
+) -> dict[str, Any] | None:
+    if implementation_state != V3_CAPTURE_REQUIRED:
+        return None
+    kind, source = _MATERIALIZER_BY_CASE[case_id]
+    arguments = [case_id, root] if kind == "rebound" else [root]
+    return {
+        "argv": [_PYTHON, source["path"], *arguments],
+        "source": dict(source),
+    }
 
 
 def _descriptor(
@@ -78,14 +111,7 @@ def _descriptor(
         "expected_schema": expected_schema,
         "implementation_state": implementation_state,
         "interpreter": interpreter,
-        "materializer": (
-            {
-                "argv": [_PYTHON, _REBINDER["path"], case_id, root],
-                "source": dict(_REBINDER),
-            }
-            if implementation_state == V3_CAPTURE_REQUIRED
-            else None
-        ),
+        "materializer": _case_materializer(case_id, root, implementation_state),
         "native_execution_enabled": False,
         "ordinal": ordinal,
     }
@@ -95,13 +121,18 @@ _CASES = (
     _descriptor(
         0,
         "DET-01",
-        V3_PORT_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _PYTHON,
         "run_admission_authority_replay.py",
         "aragorn/admission-authority-replay-evidence/v1",
         bundle=(
             _bundle_item("run_admission_authority_replay.py", "probe"),
             _bundle_item("deterministic-authority-vectors-v1.json", "vector"),
+            _bundle_item("aragorn/__init__.py", "probe-dependency"),
+            _bundle_item("aragorn/admission_decision.py", "probe-dependency"),
+            _bundle_item("aragorn/analyze.py", "probe-dependency"),
+            _bundle_item("aragorn/oci_worker_protocol.py", "probe-dependency"),
+            _bundle_item("aragorn/policy.py", "probe-dependency"),
         ),
     ),
     _descriptor(
@@ -379,10 +410,15 @@ _CASES = (
     _descriptor(
         28,
         "ADM-02/reload/workshop-invalidation",
-        V3_PORT_REQUIRED,
+        V3_CAPTURE_REQUIRED,
         _NODE,
         "protected-workshop-invalidation-v3-probe.mjs",
         "aragorn/openclaw-protected-workshop-invalidation-observation/v1",
+        arguments=("--route-id", "ADM-02/reload/workshop-invalidation"),
+        bundle=(
+            _bundle_item("protected-workshop-invalidation-v3-probe.mjs", "probe"),
+            _bundle_item("PROPOSAL.md", "fixture"),
+        ),
     ),
     *(
         _descriptor(
@@ -482,6 +518,13 @@ def openclaw_final_v3_campaign_readiness() -> dict[str, Any]:
 def _validate_registry() -> None:
     if len(_CASES) != 31 or len(_BY_CASE_ID) != len(_CASES):
         raise RuntimeError("fixed V3 campaign registry cardinality changed")
+    capture_cases = {
+        case["case_id"]
+        for case in _CASES
+        if case["implementation_state"] == V3_CAPTURE_REQUIRED
+    }
+    if capture_cases != set(_MATERIALIZER_BY_CASE):
+        raise RuntimeError("fixed V3 campaign materializer registry changed")
     for ordinal, case in enumerate(_CASES):
         if set(case) != {
             "argv",
@@ -511,18 +554,10 @@ def _validate_registry() -> None:
             or len(bundle_paths) != len(set(bundle_paths))
         ):
             raise RuntimeError("fixed V3 campaign bundle binding changed")
-        expected_materializer = (
-            {
-                "argv": [
-                    _PYTHON,
-                    _REBINDER["path"],
-                    case["case_id"],
-                    str(PurePosixPath(case["argv"][1]).parent),
-                ],
-                "source": _REBINDER,
-            }
-            if case["implementation_state"] == V3_CAPTURE_REQUIRED
-            else None
+        expected_materializer = _case_materializer(
+            case["case_id"],
+            str(PurePosixPath(case["argv"][1]).parent),
+            case["implementation_state"],
         )
         if case["materializer"] != expected_materializer:
             raise RuntimeError("fixed V3 campaign materializer binding changed")

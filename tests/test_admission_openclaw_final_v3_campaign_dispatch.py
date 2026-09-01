@@ -24,6 +24,26 @@ from scripts.materialize_openclaw_final_v3_rebound_probes import (
     _BUNDLES as V3_MATERIALIZED_BUNDLES,
 )
 
+_ROOT = Path(__file__).resolve().parents[1]
+_CAPTURE_BUNDLES = {
+    "DET-01": [
+        "run_admission_authority_replay.py",
+        "deterministic-authority-vectors-v1.json",
+        "aragorn/__init__.py",
+        "aragorn/admission_decision.py",
+        "aragorn/analyze.py",
+        "aragorn/oci_worker_protocol.py",
+        "aragorn/policy.py",
+    ],
+    "ADM-02/update/core-updater-plugin-replacement": list(
+        V3_MATERIALIZED_BUNDLES["ADM-02/update/core-updater-plugin-replacement"]
+    ),
+    "ADM-02/reload/workshop-invalidation": [
+        "protected-workshop-invalidation-v3-probe.mjs",
+        "PROPOSAL.md",
+    ],
+}
+
 
 class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
     def test_registry_matches_contract_order_and_readiness_counts(self) -> None:
@@ -37,9 +57,9 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             readiness["implementation_counts"],
             {
                 CURRENT_V3: 11,
-                V3_CAPTURE_REQUIRED: 1,
+                V3_CAPTURE_REQUIRED: 3,
                 V3_REBIND_REQUIRED: 0,
-                V3_PORT_REQUIRED: 14,
+                V3_PORT_REQUIRED: 12,
                 MISSING_ADAPTER: 5,
             },
         )
@@ -50,7 +70,9 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertEqual(
             readiness["capture_required_case_ids"],
             [
+                "DET-01",
                 "ADM-02/update/core-updater-plugin-replacement",
+                "ADM-02/reload/workshop-invalidation",
             ],
         )
 
@@ -96,33 +118,59 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             for case in registry["cases"]
             if case["implementation_state"] == V3_CAPTURE_REQUIRED
         ]
-        self.assertEqual(len(rebound), 1)
-        source_path = (
-            Path(__file__).resolve().parents[1]
-            / "scripts/materialize_openclaw_final_v3_rebound_probes.py"
-        )
-        source_raw = source_path.read_bytes()
+        self.assertEqual(len(rebound), 3)
+        expected_argv = {
+            "DET-01": [
+                "/usr/local/bin/python3.12",
+                "/src/scripts/materialize_openclaw_final_v3_det01.py",
+                "/campaign/cases/00-det-01",
+            ],
+            "ADM-02/update/core-updater-plugin-replacement": [
+                "/usr/local/bin/python3.12",
+                "/src/scripts/materialize_openclaw_final_v3_rebound_probes.py",
+                "ADM-02/update/core-updater-plugin-replacement",
+                "/campaign/cases/11-adm-02-update-core-updater-plugin-replacement",
+            ],
+            "ADM-02/reload/workshop-invalidation": [
+                "/usr/local/bin/python3.12",
+                (
+                    "/src/scripts/"
+                    "materialize_openclaw_final_v3_workshop_invalidation_probe.py"
+                ),
+                "/campaign/cases/28-adm-02-reload-workshop-invalidation",
+            ],
+        }
         for case in rebound:
             materializer = case["materializer"]
             self.assertEqual(
-                [item["path"].rsplit("/", 1)[-1] for item in case["bundle"]],
-                list(V3_MATERIALIZED_BUNDLES[case["case_id"]]),
-            )
-            self.assertEqual(
-                materializer["argv"],
                 [
-                    "/usr/local/bin/python3.12",
-                    ("/src/scripts/materialize_openclaw_final_v3_rebound_probes.py"),
-                    case["case_id"],
-                    case["argv"][1].rsplit("/", 1)[0],
+                    item["path"].split(
+                        f"/{case['ordinal']:02d}-{case['case_id'].lower().replace('/', '-')}/",
+                        1,
+                    )[1]
+                    for item in case["bundle"]
                 ],
+                _CAPTURE_BUNDLES[case["case_id"]],
             )
+            self.assertEqual(materializer["argv"], expected_argv[case["case_id"]])
             self.assertRegex(materializer["source"]["digest"], r"^sha256:[0-9a-f]{64}$")
+            source_path = _ROOT / "scripts" / Path(
+                materializer["source"]["path"]
+            ).name
+            source_raw = source_path.read_bytes()
             self.assertEqual(materializer["source"]["bytes"], len(source_raw))
             self.assertEqual(
                 materializer["source"]["digest"],
                 "sha256:" + hashlib.sha256(source_raw).hexdigest(),
             )
+
+        self.assertTrue(
+            all(
+                (case["materializer"] is not None)
+                == (case["implementation_state"] == V3_CAPTURE_REQUIRED)
+                for case in registry["cases"]
+            )
+        )
 
     def test_representative_invocations_are_exact_and_non_authoritative(self) -> None:
         det = dispatch_openclaw_final_v3_campaign_case("DET-01")
@@ -135,7 +183,18 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         )
         self.assertEqual(
             [item["role"] for item in det["descriptor"]["bundle"]],
-            ["probe", "vector"],
+            [
+                "probe",
+                "vector",
+                "probe-dependency",
+                "probe-dependency",
+                "probe-dependency",
+                "probe-dependency",
+                "probe-dependency",
+            ],
+        )
+        self.assertEqual(
+            det["descriptor"]["implementation_state"], V3_CAPTURE_REQUIRED
         )
 
         force = dispatch_openclaw_final_v3_campaign_case(
@@ -184,13 +243,22 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         invalidation = dispatch_openclaw_final_v3_campaign_case(
             "ADM-02/reload/workshop-invalidation"
         )["descriptor"]
-        self.assertEqual(invalidation["implementation_state"], V3_PORT_REQUIRED)
+        self.assertEqual(invalidation["implementation_state"], V3_CAPTURE_REQUIRED)
         self.assertEqual(
-            invalidation["argv"][1],
-            (
-                "/campaign/cases/28-adm-02-reload-workshop-invalidation/"
-                "protected-workshop-invalidation-v3-probe.mjs"
-            ),
+            invalidation["argv"],
+            [
+                "/usr/local/bin/node",
+                (
+                    "/campaign/cases/28-adm-02-reload-workshop-invalidation/"
+                    "protected-workshop-invalidation-v3-probe.mjs"
+                ),
+                "--route-id",
+                "ADM-02/reload/workshop-invalidation",
+            ],
+        )
+        self.assertEqual(
+            [item["role"] for item in invalidation["bundle"]],
+            ["probe", "fixture"],
         )
 
         serialized = json.dumps(

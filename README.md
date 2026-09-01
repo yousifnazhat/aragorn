@@ -868,12 +868,13 @@ The [Phase 3 V1 exit-gate manifest](./benchmark/phase3-exit-gate-manifest-v1.jso
 now freezes the admission, runtime-prevention, response, and quantitative
 requirements without evaluating them. The matching non-executing V3 campaign
 contract and dispatcher enumerate 31 fresh isolated subfixtures against one
-exact parent: eleven have retained current V3 implementations; one now has an
-exact, read-only V3 materialized bundle awaiting fresh capture and semantic
-verification; and nineteen still require a V3 port or route adapter. A separate
+exact parent: eleven have retained current V3 implementations; three now have
+exact, read-only V3 materialized bundles awaiting fresh capture and semantic
+verification; and seventeen still require a V3 port or route adapter. A separate
 set of twelve retained receipt paths remains regression-oracle-only and cannot
 promote campaign eligibility. The shared-capture workshop-invalidation child is
-one of those oracles and does not satisfy its dedicated fresh-subfixture V3 port.
+one of those oracles; its new dedicated materializer and DET-01's exact
+seven-file closure remain capture-required and grant no new route result.
 A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
 caller-bound baseline/instrumented pairs. No campaign or metrics evidence has

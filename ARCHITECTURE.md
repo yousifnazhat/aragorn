@@ -1627,8 +1627,10 @@ exact quantitative measurement rules. Its dispatcher is intentionally
 non-executing: eleven cases map to retained current V3 implementations; one now
 has an exact, read-only V3 materialized bundle but still requires fresh capture
 and semantic verification; fourteen require V3 ports; and five still lack route
-adapters. Eleven retained receipt paths remain regression-oracle-only and cannot
-promote campaign eligibility. The
+adapters. Twelve retained receipt paths remain regression-oracle-only and cannot
+promote campaign eligibility. The shared-capture workshop-invalidation child is
+a regression oracle only and does not satisfy its dedicated fresh-subfixture V3
+port. The
 quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate

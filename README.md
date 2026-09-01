@@ -871,8 +871,10 @@ contract and dispatcher enumerate 31 fresh isolated subfixtures against one
 exact parent: eleven have retained current V3 implementations; one now has an
 exact, read-only V3 materialized bundle awaiting fresh capture and semantic
 verification; and nineteen still require a V3 port or route adapter. A separate
-set of eleven retained receipt paths remains regression-oracle-only and cannot
-promote campaign eligibility. A separate fail-closed metrics qualifier
+set of twelve retained receipt paths remains regression-oracle-only and cannot
+promote campaign eligibility. The shared-capture workshop-invalidation child is
+one of those oracles and does not satisfy its dedicated fresh-subfixture V3 port.
+A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
 caller-bound baseline/instrumented pairs. No campaign or metrics evidence has
 been captured or composed, so all admission, `RUN-01`, `RUN-02`, Phase 3, EDR,

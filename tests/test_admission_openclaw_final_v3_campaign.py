@@ -65,7 +65,7 @@ class OpenClawFinalV3CampaignTests(unittest.TestCase):
         oracles = [
             case["regression_oracle"] for case in cases if case["regression_oracle"]
         ]
-        self.assertEqual(len(oracles), 11)
+        self.assertEqual(len(oracles), 12)
         self.assertEqual(
             cases[8]["regression_oracle"]["path"],
             (
@@ -108,6 +108,13 @@ class OpenClawFinalV3CampaignTests(unittest.TestCase):
                 "session-snapshot-consumer-route-coverage-v1-2026-08-31.json"
             ),
         )
+        self.assertEqual(
+            cases[28]["regression_oracle"]["path"],
+            (
+                "benchmark/receipts/phase3-openclaw-protected-final-combined-v3-"
+                "workshop-invalidation-route-coverage-v1-2026-09-01.json"
+            ),
+        )
         self.assertTrue(
             all(
                 oracle["authority"] == "REGRESSION_ORACLE_ONLY_NOT_CAMPAIGN_EVIDENCE"
@@ -145,7 +152,7 @@ class OpenClawFinalV3CampaignTests(unittest.TestCase):
         self.assertEqual(result["execution"]["attested_fresh_subfixture_count"], 31)
         self.assertEqual(result["decision"]["case_observed_count"], 31)
         self.assertEqual(result["decision"]["case_total"], 31)
-        self.assertEqual(len(result["declared_regression_oracles"]), 11)
+        self.assertEqual(len(result["declared_regression_oracles"]), 12)
         self.assertTrue(
             all(
                 value is False

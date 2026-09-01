@@ -183,11 +183,18 @@ _REGRESSION_ORACLES = (
             "session-snapshot-consumer-route-coverage-v1-2026-08-31.json"
         ),
     ),
+    (
+        "ADM-02/reload/workshop-invalidation",
+        (
+            "benchmark/receipts/phase3-openclaw-protected-final-combined-v3-"
+            "workshop-invalidation-route-coverage-v1-2026-09-01.json"
+        ),
+    ),
 )
 _CONTRACT_LIMITATIONS = [
     "SKELETON_ONLY_NO_NATIVE_CAMPAIGN_CAPTURE_EXECUTED",
     "THIRTY_ONE_FRESH_ISOLATED_SUBFIXTURES_REQUIRED",
-    "ELEVEN_EXISTING_RECEIPTS_ARE_REGRESSION_ORACLES_ONLY",
+    "TWELVE_EXISTING_RECEIPTS_ARE_REGRESSION_ORACLES_ONLY",
     "REGRESSION_ORACLES_CANNOT_PROMOTE_CAMPAIGN_ELIGIBILITY",
     "SUBFIXTURE_BACKEND_AND_SEMANTIC_COMPOSER_NOT_IMPLEMENTED",
     "NO_ADMISSION_INSTALLER_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY",

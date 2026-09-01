@@ -39,7 +39,7 @@ _AUTHORITY = (
 )
 _LIMITATIONS = [
     "PROVISIONAL_STAGING_PATHS_NOT_EXECUTABLE_BYTE_PINS",
-    "TWO_MATERIALIZED_V3_BUNDLES_NOT_CAPTURED_OR_SEMANTICALLY_VERIFIED",
+    "ONE_MATERIALIZED_V3_BUNDLE_NOT_CAPTURED_OR_SEMANTICALLY_VERIFIED",
     "NO_NATIVE_INTERPRETER_RUNTIME_OR_IMAGE_DIGEST_EXECUTION_BINDINGS",
     "LEGACY_MULTI_SCENARIO_PROBES_REQUIRE_V3_PER_CASE_PORTS",
     "MISSING_ROUTE_ADAPTERS_ARE_NOT_EXECUTED_BY_THE_CURRENT_ROUTE_PROBE",
@@ -253,7 +253,7 @@ _CASES = (
     _descriptor(
         17,
         "ADM-02/reload/chat-session-snapshot-consumer",
-        V3_CAPTURE_REQUIRED,
+        CURRENT_V3,
         _NODE,
         "protected-chat-session-snapshot-consumer-v3-probe.mjs",
         "aragorn/openclaw-protected-chat-session-snapshot-consumer-observation/v1",

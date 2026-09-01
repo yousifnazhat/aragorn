@@ -20,6 +20,7 @@ p37c = proposal.p37c
 
 _INHERITED_HARNESS = proposal._harness
 _INHERITED_ARTIFACTS = proposal._artifacts
+_INHERITED_RUN_ROUTE = proposal._run_route
 _INHERITED_HARNESS_SCHEMA = proposal._HARNESS_SCHEMA
 _HARNESS = Path("/run/aragorn-harness.json")
 _OUTPUT = Path(
@@ -237,6 +238,26 @@ def _decision(status: str) -> dict[str, Any]:
     }
 
 
+def _run_route(tokens: dict[str, str], gateway_pid: int) -> dict[str, Any]:
+    inherited_run = proposal.v1_route.subprocess.run
+
+    def run_with_selector(
+        command: list[str], *args: Any, **kwargs: Any
+    ) -> Any:
+        proposal.combined._expect(
+            command[-2:] == ["/usr/local/bin/node", str(_ROUTE_PROBE)]
+            and "--route-id" not in command,
+            "V3 workshop-invalidation route command changed",
+        )
+        command.extend(["--route-id", _ROUTE])
+        return inherited_run(command, *args, **kwargs)
+
+    with mock.patch.object(
+        proposal.v1_route.subprocess, "run", side_effect=run_with_selector
+    ):
+        return _INHERITED_RUN_ROUTE(tokens, gateway_pid)
+
+
 def _collect() -> dict[str, Any]:
     with (
         mock.patch.object(proposal, "_HARNESS", _HARNESS),
@@ -254,6 +275,7 @@ def _collect() -> dict[str, Any]:
         mock.patch.object(proposal, "_harness", _harness),
         mock.patch.object(proposal, "_artifacts", _artifacts),
         mock.patch.object(proposal, "_decision", _decision),
+        mock.patch.object(proposal, "_run_route", _run_route),
         mock.patch.object(
             proposal, "_route_input_volume_name", _route_input_volume_name
         ),

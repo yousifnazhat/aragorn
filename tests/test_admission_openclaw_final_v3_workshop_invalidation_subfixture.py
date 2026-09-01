@@ -188,6 +188,7 @@ class WorkshopInvalidationMaterializerTests(unittest.TestCase):
         self.assertNotIn(
             'normalized["schema"] = proposal._HARNESS_SCHEMA', collector
         )
+        self.assertIn('command.extend(["--route-id", _ROUTE])', collector)
 
 
 class WorkshopInvalidationSemanticCompatibilityTests(unittest.TestCase):

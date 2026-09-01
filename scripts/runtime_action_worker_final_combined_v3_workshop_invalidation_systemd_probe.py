@@ -113,7 +113,7 @@ def _harness() -> dict[str, Any]:
         "outer V3 workshop-invalidation harness identity changed",
     )
     normalized = proposal.json.loads(p37c.canonical_json(document))
-    normalized["schema"] = proposal._HARNESS_SCHEMA
+    normalized["schema"] = _INHERITED_HARNESS_SCHEMA
     normalized["image_reference"] = (
         "aragorn-phase3-final-combined-v3-workshop-proposal-apply-systemd"
     )

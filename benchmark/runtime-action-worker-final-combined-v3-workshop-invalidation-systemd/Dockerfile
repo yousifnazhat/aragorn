@@ -25,9 +25,9 @@ RUN set -eux; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/materialize_openclaw_final_v3_workshop_invalidation_probe.py)" = \
         'regular file:0:0:700:1:8612'; \
     test "$(sha256sum /src/scripts/runtime_action_worker_final_combined_v3_workshop_invalidation_systemd_probe.py | cut -d ' ' -f 1)" = \
-        9fbb5203c42007d39be55603207e240a8e3f3a52055a69c3bd44677f794f44e4; \
+        93a218c1ff24d43176765002025b518fd8cfcd03ad66cd9f19ed88454f901e1d; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/runtime_action_worker_final_combined_v3_workshop_invalidation_systemd_probe.py)" = \
-        'regular file:0:0:700:1:11916'; \
+        'regular file:0:0:700:1:11917'; \
     test "$(sha256sum /src/scripts/capture_runtime_action_worker_final_combined_v3_workshop_invalidation_systemd.sh | cut -d ' ' -f 1)" = \
         0aab169f990453a1de2a3529ae63e598ae7ca355201dee1357a66f6bdddc6495; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/capture_runtime_action_worker_final_combined_v3_workshop_invalidation_systemd.sh)" = \

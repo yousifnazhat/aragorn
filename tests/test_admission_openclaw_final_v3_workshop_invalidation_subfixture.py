@@ -178,6 +178,17 @@ class WorkshopInvalidationMaterializerTests(unittest.TestCase):
         ):
             self.assertIn(binding, docker)
 
+        collector = (_ROOT / "scripts" / (
+            "runtime_action_worker_final_combined_v3_"
+            "workshop_invalidation_systemd_probe.py"
+        )).read_text(encoding="utf-8")
+        self.assertIn(
+            'normalized["schema"] = _INHERITED_HARNESS_SCHEMA', collector
+        )
+        self.assertNotIn(
+            'normalized["schema"] = proposal._HARNESS_SCHEMA', collector
+        )
+
 
 class WorkshopInvalidationSemanticCompatibilityTests(unittest.TestCase):
     def verify(self, document: dict[str, object] | None = None) -> dict[str, object]:

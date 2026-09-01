@@ -129,6 +129,9 @@ from aragorn.admission_protected_final_combined_v2_workshop_invalidation import 
 from aragorn.admission_protected_final_combined_v2_workshop_proposal_apply import (
     verify_openclaw_final_combined_v2_workshop_proposal_apply,
 )
+from aragorn.admission_protected_final_combined_v3_archive_replacement import (
+    verify_openclaw_final_combined_v3_archive_replacement,
+)
 from aragorn.admission_protected_final_combined_v3_config_entry_activation import (
     verify_openclaw_final_combined_v3_config_entry_activation,
 )
@@ -3874,6 +3877,42 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V2 plugin force-reinstall qualification changed"
+        )
+
+    final_v3_archive_replacement_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v3-route-archive-source-force-"
+        "replacement-systemd-p3-final-2026-08-31.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v3-archive-replacement-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v3_archive_replacement_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v3_archive_replacement_qualification = (
+            verify_openclaw_final_combined_v3_archive_replacement(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v3_archive_replacement_qualification_path = admission_receipts / (
+        "phase3-openclaw-protected-final-combined-v3-archive-source-force-"
+        "replacement-route-coverage-v1-2026-08-31.json"
+    )
+    retained_final_v3_archive_replacement_qualification = load(
+        final_v3_archive_replacement_qualification_path
+    )
+    if (
+        final_v3_archive_replacement_qualification
+        != retained_final_v3_archive_replacement_qualification
+        or final_v3_archive_replacement_qualification_path.read_bytes()
+        != canonical_json(final_v3_archive_replacement_qualification) + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V3 archive replacement qualification changed"
         )
 
     final_v3_cron_rescan_evidence_path = admission_evidence / (

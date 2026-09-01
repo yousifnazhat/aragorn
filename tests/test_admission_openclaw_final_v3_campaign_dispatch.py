@@ -36,21 +36,20 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertEqual(
             readiness["implementation_counts"],
             {
-                CURRENT_V3: 9,
-                V3_CAPTURE_REQUIRED: 3,
+                CURRENT_V3: 10,
+                V3_CAPTURE_REQUIRED: 2,
                 V3_REBIND_REQUIRED: 0,
                 V3_PORT_REQUIRED: 14,
                 MISSING_ADAPTER: 5,
             },
         )
-        self.assertEqual(readiness["remaining_implementation_count"], 22)
+        self.assertEqual(readiness["remaining_implementation_count"], 21)
         self.assertFalse(readiness["native_execution_enabled"])
         self.assertTrue(readiness["case_inventory_complete"])
         self.assertFalse(readiness["execution_descriptors_complete"])
         self.assertEqual(
             readiness["capture_required_case_ids"],
             [
-                "ADM-02/update/archive-source-force-replacement",
                 "ADM-02/update/core-updater-plugin-replacement",
                 "ADM-02/reload/chat-session-snapshot-consumer",
             ],
@@ -98,7 +97,7 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             for case in registry["cases"]
             if case["implementation_state"] == V3_CAPTURE_REQUIRED
         ]
-        self.assertEqual(len(rebound), 3)
+        self.assertEqual(len(rebound), 2)
         source_path = (
             Path(__file__).resolve().parents[1]
             / "scripts/materialize_openclaw_final_v3_rebound_probes.py"
@@ -164,6 +163,12 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         )["descriptor"]
         self.assertEqual(prompt["implementation_state"], CURRENT_V3)
         self.assertIsNone(prompt["materializer"])
+
+        archive = dispatch_openclaw_final_v3_campaign_case(
+            "ADM-02/update/archive-source-force-replacement"
+        )["descriptor"]
+        self.assertEqual(archive["implementation_state"], CURRENT_V3)
+        self.assertIsNone(archive["materializer"])
 
         session = dispatch_openclaw_final_v3_campaign_case(
             "ADM-02/reload/session-snapshot-consumer"

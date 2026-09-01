@@ -100,6 +100,18 @@ _FINAL_V3_SESSION_SNAPSHOT_CONSUMER_COLLECTOR = (
     _ROOT
     / "scripts/runtime_action_worker_final_combined_v3_session_snapshot_consumer_systemd_probe.py"
 )
+_FINAL_V3_CHAT_SESSION_SNAPSHOT_CONSUMER_DOCKERFILE = (
+    _ROOT
+    / "benchmark/runtime-action-worker-final-combined-v3-chat-session-snapshot-consumer-systemd/Dockerfile"
+)
+_FINAL_V3_CHAT_SESSION_SNAPSHOT_CONSUMER_CAPTURE = (
+    _ROOT
+    / "scripts/capture_runtime_action_worker_final_combined_v3_chat_session_snapshot_consumer_systemd.sh"
+)
+_FINAL_V3_CHAT_SESSION_SNAPSHOT_CONSUMER_COLLECTOR = (
+    _ROOT
+    / "scripts/runtime_action_worker_final_combined_v3_chat_session_snapshot_consumer_systemd_probe.py"
+)
 _FINAL_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_DOCKERFILE = (
     _ROOT
     / "benchmark/runtime-action-worker-final-combined-v3-archive-source-force-replacement-systemd/Dockerfile"
@@ -984,6 +996,77 @@ class RuntimeActionWorkerPackagingTests(unittest.TestCase):
             dockerfile,
         )
         self.assertIn("'directory:0:0:555:2';", dockerfile)
+        for required in (
+            'git status --porcelain=v1',
+            'git verify-commit --raw "$source_commit"',
+            'git archive --format=tar "$source_commit"',
+            "remove_created_container",
+            'docker volume rm "$route_input_volume"',
+            "trap cleanup EXIT",
+        ):
+            self.assertIn(required, capture)
+        marker = 'python3.12 - "$temp_output" "$output" <<\'PY\'\n'
+        publication = capture.split(marker, 1)[1].split("\nPY\n", 1)[0]
+        for source in (publication, collector):
+            strings = {
+                node.value
+                for node in ast.walk(ast.parse(source))
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            }
+            self.assertIn(authority, strings)
+        self.assertIn("**{key: False for key in sorted(_ELIGIBILITY_KEYS)}", collector)
+        self.assertIn(
+            "or any(decision[key] is not False for key in expected_claims)",
+            publication,
+        )
+
+    def test_final_v3_chat_session_snapshot_capture_binds_exact_authority(self) -> None:
+        dockerfile = _FINAL_V3_CHAT_SESSION_SNAPSHOT_CONSUMER_DOCKERFILE.read_text(
+            encoding="utf-8"
+        )
+        capture = _FINAL_V3_CHAT_SESSION_SNAPSHOT_CONSUMER_CAPTURE.read_text(
+            encoding="utf-8"
+        )
+        collector = _FINAL_V3_CHAT_SESSION_SNAPSHOT_CONSUMER_COLLECTOR.read_text(
+            encoding="utf-8"
+        )
+        parent = (
+            "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f"
+        )
+        route = "ADM-02/reload/chat-session-snapshot-consumer"
+        route_schema = (
+            "aragorn/openclaw-protected-chat-session-snapshot-consumer-observation/v1"
+        )
+        authority = (
+            "BOUND_FINAL_COMBINED_V3_RAW_CHAT_SESSION_SNAPSHOT_CONSUMER_"
+            "OBSERVATION_ONLY_NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+        )
+        for source in (dockerfile, capture, collector):
+            self.assertIn(parent, source)
+            self.assertIn(route, source)
+        for digest in (
+            "1efe13c3beb3ac2ff6fc1293aa64875c95424f1576a10b12943f0b875af223e2",
+            "9a091bd617bf2e78d436218098f2c2b9ca616815ec1a1598afe42b28a263aaa7",
+            "44ee65e2014e44681d2efe2b2fa76abbede7c6eaf7719aecb104e4be441d635b",
+            "672ef56e3e2d7e39dbba09eb49e388e4b8522c29d84dd5f610ca1427445ff13f",
+        ):
+            self.assertIn(digest, dockerfile)
+            self.assertIn(digest, collector)
+        collector_strings = {
+            node.value
+            for node in ast.walk(ast.parse(collector))
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        }
+        self.assertIn(route_schema, collector_strings)
+        self.assertIn(
+            "ADM-02/reload/chat-session-snapshot-consumer \\\n"
+            "        /route-input/chat-session-snapshot-consumer;",
+            dockerfile,
+        )
+        self.assertIn(
+            "protected-chat-session-snapshot-consumer-v3-probe.mjs", dockerfile
+        )
+        self.assertIn("'regular file:0:0:444:1:42287';", dockerfile)
         for required in (
             'git status --porcelain=v1',
             'git verify-commit --raw "$source_commit"',

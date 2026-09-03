@@ -42,7 +42,7 @@ _VERIFIER = Path(
     "admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py"
 )
 _PROBE_DIGEST = (
-    "sha256:358fa6968024e9ef951727237a9722ff7a5d1d4b1ea1e9fb37270d14a1a6f9fa"
+    "sha256:7ade7b9f12010dc1a4f7cc06a8410bc01436efebc6a184bc9d0b748f010bce38"
 )
 _DELEGATED_DIGEST = (
     "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
@@ -91,7 +91,7 @@ _ROUTES = {
 }
 _EXPECTED_BUNDLE = {
     "protected-core-updater-plugin-replacement-v3-probe.mjs": {
-        "bytes": 27_038,
+        "bytes": 27_698,
         "digest": _PROBE_DIGEST,
         "role": "probe",
     },
@@ -237,7 +237,7 @@ def _artifacts() -> dict[str, Any]:
         )
     )
     combined._expect(
-        source_probe["bytes"] == runtime_probe["bytes"] == 27_038
+        source_probe["bytes"] == runtime_probe["bytes"] == 27_698
         and source_probe["digest"] == runtime_probe["digest"] == _PROBE_DIGEST
         and source_audit["bytes"] == runtime_audit["bytes"] == 2_971
         and source_audit["digest"] == runtime_audit["digest"] == _AUDIT_DIGEST

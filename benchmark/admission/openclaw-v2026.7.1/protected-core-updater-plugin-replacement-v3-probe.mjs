@@ -213,14 +213,27 @@ function verifyWorkingConfigTransition(before, after) {
   const expected = structuredClone(before.document);
   const observed = structuredClone(after.document);
   expected.plugins.entries[PLUGIN_ID].enabled = false;
+  delete expected.plugins.allow;
+  expected.plugins.bundledDiscovery = "compat";
   delete expected.meta;
   const observedMeta = observed.meta;
+  const observedWizard = observed.wizard;
   delete observed.meta;
+  delete observed.wizard;
   if (
     canonicalJson(observed) !== canonicalJson(expected) ||
+    canonicalJson(Object.keys(observedMeta ?? {}).sort()) !==
+      '["lastTouchedAt","lastTouchedVersion"]' ||
     observedMeta?.lastTouchedVersion !== "2026.7.1" ||
     typeof observedMeta?.lastTouchedAt !== "string" ||
-    Number.isNaN(Date.parse(observedMeta.lastTouchedAt))
+    Number.isNaN(Date.parse(observedMeta.lastTouchedAt)) ||
+    canonicalJson(Object.keys(observedWizard ?? {}).sort()) !==
+      '["lastRunAt","lastRunCommand","lastRunMode","lastRunVersion"]' ||
+    observedWizard?.lastRunVersion !== "2026.7.1" ||
+    observedWizard?.lastRunCommand !== "doctor" ||
+    observedWizard?.lastRunMode !== "local" ||
+    typeof observedWizard?.lastRunAt !== "string" ||
+    Number.isNaN(Date.parse(observedWizard.lastRunAt))
   ) {
     throw new Error("core-updater config bookkeeping changed");
   }

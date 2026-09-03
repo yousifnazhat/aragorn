@@ -92,6 +92,14 @@ def _working_configs() -> tuple[dict[str, object], dict[str, object]]:
     ).encode("ascii")
     after_document = deepcopy(before_document)
     after_document["plugins"]["entries"][subject._PLUGIN_ID]["enabled"] = False
+    after_document["plugins"].pop("allow")
+    after_document["plugins"]["bundledDiscovery"] = "compat"
+    after_document["wizard"] = {
+        "lastRunAt": "2026-01-01T00:00:00.000Z",
+        "lastRunCommand": "doctor",
+        "lastRunMode": "local",
+        "lastRunVersion": "2026.7.1",
+    }
     after_document["meta"] = {
         "lastTouchedAt": "2026-01-01T00:00:01.000Z",
         "lastTouchedVersion": "2026.7.1",
@@ -564,8 +572,8 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             "regular file:0:0:600:1:7691",
             "regular file:0:0:700:1:19423",
             "regular file:0:0:700:1:8364",
-            "regular file:0:0:600:1:27946",
-            "regular file:0:0:600:1:27038",
+            "regular file:0:0:600:1:28561",
+            "regular file:0:0:600:1:27698",
             "regular file:0:0:600:1:2971",
         ):
             self.assertIn(archived_mode, docker)
@@ -781,6 +789,12 @@ class CoreUpdaterSemanticCompatibilityTests(unittest.TestCase):
         changed["core_updater_preflight"]["working_config_after"] = deepcopy(
             changed["core_updater_preflight"]["working_config_before"]
         )
+        mutations.append(changed)
+
+        changed = _document()
+        changed["core_updater_preflight"]["working_config_after"]["document"][
+            "wizard"
+        ]["lastRunCommand"] = "onboard"
         mutations.append(changed)
 
         for changed in mutations:

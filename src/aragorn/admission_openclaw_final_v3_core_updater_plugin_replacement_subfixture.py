@@ -18,7 +18,7 @@ _SCHEMA = (
 )
 _DELEGATED_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
 _IMPLEMENTATION_DIGEST = (
-    "sha256:358fa6968024e9ef951727237a9722ff7a5d1d4b1ea1e9fb37270d14a1a6f9fa"
+    "sha256:7ade7b9f12010dc1a4f7cc06a8410bc01436efebc6a184bc9d0b748f010bce38"
 )
 _DELEGATED_DIGEST = (
     "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
@@ -629,7 +629,10 @@ def _verify_working_config_transition(before: Any, after: Any) -> None:
     observed = deepcopy(after["document"])
     try:
         expected["plugins"]["entries"][_PLUGIN_ID]["enabled"] = False
+        expected["plugins"].pop("allow")
+        expected["plugins"]["bundledDiscovery"] = "compat"
         observed_meta = observed.pop("meta")
+        observed_wizard = observed.pop("wizard")
         expected.pop("meta", None)
     except (AttributeError, KeyError, TypeError) as exc:
         raise AdmissionEvidenceError(
@@ -643,6 +646,16 @@ def _verify_working_config_transition(before: Any, after: Any) -> None:
         or not re.fullmatch(
             r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z",
             observed_meta["lastTouchedAt"],
+        )
+        or type(observed_wizard) is not dict
+        or set(observed_wizard)
+        != {"lastRunAt", "lastRunCommand", "lastRunMode", "lastRunVersion"}
+        or observed_wizard["lastRunVersion"] != "2026.7.1"
+        or observed_wizard["lastRunCommand"] != "doctor"
+        or observed_wizard["lastRunMode"] != "local"
+        or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z",
+            observed_wizard["lastRunAt"],
         )
     ):
         raise AdmissionEvidenceError("working core-updater config transition changed")

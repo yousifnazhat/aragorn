@@ -521,6 +521,15 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             / "benchmark/runtime-action-worker-final-combined-v3-core-updater-"
             "plugin-replacement-systemd/Dockerfile"
         ).read_text(encoding="utf-8")
+        for archived_mode in (
+            "regular file:0:0:700:1:8219",
+            "regular file:0:0:700:1:18556",
+            "regular file:0:0:700:1:7933",
+            "regular file:0:0:600:1:27805",
+            "regular file:0:0:600:1:26844",
+            "regular file:0:0:600:1:2947",
+        ):
+            self.assertIn(archived_mode, docker)
         for path in (
             recipe,
             _ROOT

@@ -404,7 +404,7 @@ Runtime selection is conformance-based, not brand-based:
 
 OpenClaw, Hermes, Pi, or another runtime earns a role only by passing the applicable mandatory properties. A failed mandatory property cannot be averaged away by scanner accuracy.
 
-Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never satisfies a profile. No runtime currently has a passing conformance result. The retained OpenClaw `2026.7.1` probe passed explicit install blocking but failed `ADM-02/direct-write`: OpenClaw discovered a directly written, model-visible skill without invoking `security.installPolicy`. That mandatory failure eliminates this version as a standalone admission reference monitor; its hook remains usable only as defense in depth. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, formal `ADM-01` exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. `ADM-02/update/workshop-proposal-apply` failed because the configured install policy blocked the positive-control installer but was not invoked when workshop apply created the workspace skill. The cumulative route ledger therefore records 3/9 update `PASS`, 1/9 update `FAIL`, and 6/12 reload `PASS`; the formal profile is `FAIL` and installer-ineligible. The remaining routes, including `reload/workshop-invalidation`, stay `NOT_TESTED`. This is a bounded result for the pinned runtime, configuration, route, and retained evidence, not a general OpenClaw security claim. A DET-only receipt separately passes four fixed decision exits across three clean processes each but is not composed with the runtime receipt; host, daemon, and root tampering are outside the retained claim. A fake runtime validates only Aragorn's harness, not mediation, privilege separation, hook timing, tamper resistance, or attribution in a real runtime.
+Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never satisfies a profile. No runtime currently has a passing conformance result. The retained OpenClaw `2026.7.1` probe passed explicit install blocking but failed `ADM-02/direct-write`: OpenClaw discovered a directly written, model-visible skill without invoking `security.installPolicy`. That mandatory failure eliminates this version as a standalone admission reference monitor; its hook remains usable only as defense in depth. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, formal `ADM-01` exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. `ADM-02/update/workshop-proposal-apply` failed because the configured install policy blocked the positive-control installer but was not invoked when workshop apply created the workspace skill. The cumulative route ledger therefore records 3/9 update `PASS`, 1/9 update `FAIL`, and 6/12 reload `PASS`; the formal profile is `FAIL` and installer-ineligible, and its ledger leaves `reload/workshop-invalidation` `NOT_TESTED`. A separately pinned dedicated current-V3 capture qualifies workshop invalidation only at route level and does not rewrite that formal profile. This is a bounded result for the pinned runtime, configuration, route, and retained evidence, not a general OpenClaw security claim. A DET-only receipt separately passes four fixed decision exits across three clean processes each but is not composed with the runtime receipt; host, daemon, and root tampering are outside the retained claim. A fake runtime validates only Aragorn's harness, not mediation, privilege separation, hook timing, tamper resistance, or attribution in a real runtime.
 
 The separate protected-route raw-action receipt binds a hardened read-only-root
 profile to five `OBSERVED` actions and seven `NOT_TESTED` routes. It records no
@@ -1624,15 +1624,13 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
 campaign, seven required event classes, six required response classes, and the
 exact quantitative measurement rules. Its dispatcher is intentionally
-non-executing: eleven cases map to retained current V3 implementations; three now
-have exact, read-only V3 materialized bundles but remain unqualified—two await
-fresh capture, while workshop invalidation has a dedicated fresh raw observation
-with verified semantics but no qualification authority; twelve require V3 ports;
-and five still lack route
-adapters. Twelve retained receipt paths remain regression-oracle-only and cannot
-promote campaign eligibility. The shared-capture workshop-invalidation child is
-a regression oracle only; its dedicated materializer and DET-01's exact
-seven-file closure remain capture-required and grant no new route result. The
+non-executing: twelve cases map to retained current V3 implementations; two have
+exact, read-only V3 materialized bundles but await fresh capture; twelve require
+V3 ports; and five still lack route adapters. Twelve retained receipt paths remain
+regression-oracle-only and cannot promote campaign eligibility. The dedicated
+workshop-invalidation capture now has one fail-closed route-level qualification
+and replaces the shared-capture child as that route's regression oracle. DET-01
+and core-updater replacement remain capture-required. The
 quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate

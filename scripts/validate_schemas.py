@@ -66,6 +66,9 @@ from aragorn.admission_gate import validate_retained_admission_conformance
 from aragorn.admission_openclaw_final_v2_aggregate_fresh_session import (
     verify_openclaw_final_v2_aggregate_fresh_session,
 )
+from aragorn.admission_openclaw_final_v3_workshop_invalidation_subfixture import (
+    qualify_openclaw_final_v3_workshop_invalidation_subfixture,
+)
 from aragorn.admission_protected_archive import (
     verify_openclaw_protected_archive_replacement,
 )
@@ -4279,6 +4282,47 @@ def main() -> int:
     ):
         raise AssertionError(
             "protected final V3 workshop-invalidation qualification changed"
+        )
+
+    final_v3_workshop_invalidation_dedicated_evidence_path = admission_evidence / (
+        "runtime-action-worker-final-combined-v3-route-workshop-invalidation-"
+        "systemd-p3-final-2026-09-01.json"
+    )
+    with TemporaryDirectory(
+        prefix="aragorn-protected-final-v3-workshop-invalidation-dedicated-"
+    ) as temporary:
+        evidence_cas = CAS(temporary)
+        raw = final_v3_workshop_invalidation_dedicated_evidence_path.read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw),
+            expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        final_v3_workshop_invalidation_dedicated_qualification = (
+            qualify_openclaw_final_v3_workshop_invalidation_subfixture(
+                evidence_cas=evidence_cas
+            )
+        )
+    final_v3_workshop_invalidation_dedicated_qualification_path = (
+        admission_receipts
+        / (
+            "phase3-openclaw-protected-final-combined-v3-workshop-invalidation-"
+            "dedicated-route-coverage-v1-2026-09-03.json"
+        )
+    )
+    retained_final_v3_workshop_invalidation_dedicated_qualification = load(
+        final_v3_workshop_invalidation_dedicated_qualification_path
+    )
+    if (
+        final_v3_workshop_invalidation_dedicated_qualification
+        != retained_final_v3_workshop_invalidation_dedicated_qualification
+        or final_v3_workshop_invalidation_dedicated_qualification_path.read_bytes()
+        != canonical_json(final_v3_workshop_invalidation_dedicated_qualification)
+        + b"\n"
+    ):
+        raise AssertionError(
+            "protected final V3 dedicated workshop-invalidation qualification "
+            "changed"
         )
 
     final_v3_fresh_session_reset_evidence_path = admission_evidence / (

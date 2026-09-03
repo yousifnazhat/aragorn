@@ -20,9 +20,6 @@ from aragorn.admission_openclaw_final_v3_campaign_dispatch import (
     openclaw_final_v3_campaign_readiness,
     openclaw_final_v3_campaign_registry,
 )
-from scripts.materialize_openclaw_final_v3_rebound_probes import (
-    _BUNDLES as V3_MATERIALIZED_BUNDLES,
-)
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CAPTURE_BUNDLES = {
@@ -35,12 +32,13 @@ _CAPTURE_BUNDLES = {
         "aragorn/oci_worker_protocol.py",
         "aragorn/policy.py",
     ],
-    "ADM-02/update/core-updater-plugin-replacement": list(
-        V3_MATERIALIZED_BUNDLES["ADM-02/update/core-updater-plugin-replacement"]
-    ),
-    "ADM-02/reload/workshop-invalidation": [
-        "protected-workshop-invalidation-v3-probe.mjs",
-        "PROPOSAL.md",
+    "ADM-02/update/core-updater-plugin-replacement": [
+        "protected-core-updater-plugin-replacement-v3-probe.mjs",
+        "protected-route-action-probe.mjs",
+        "core-updater-plugin-replacement-audit-listener.mjs",
+        "candidate-source/index.js",
+        "candidate-source/openclaw.plugin.json",
+        "candidate-source/package.json",
     ],
 }
 
@@ -56,14 +54,14 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertEqual(
             readiness["implementation_counts"],
             {
-                CURRENT_V3: 11,
-                V3_CAPTURE_REQUIRED: 3,
+                CURRENT_V3: 12,
+                V3_CAPTURE_REQUIRED: 2,
                 V3_REBIND_REQUIRED: 0,
                 V3_PORT_REQUIRED: 12,
                 MISSING_ADAPTER: 5,
             },
         )
-        self.assertEqual(readiness["remaining_implementation_count"], 20)
+        self.assertEqual(readiness["remaining_implementation_count"], 19)
         self.assertFalse(readiness["native_execution_enabled"])
         self.assertTrue(readiness["case_inventory_complete"])
         self.assertFalse(readiness["execution_descriptors_complete"])
@@ -72,7 +70,6 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             [
                 "DET-01",
                 "ADM-02/update/core-updater-plugin-replacement",
-                "ADM-02/reload/workshop-invalidation",
             ],
         )
 
@@ -118,7 +115,7 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             for case in registry["cases"]
             if case["implementation_state"] == V3_CAPTURE_REQUIRED
         ]
-        self.assertEqual(len(rebound), 3)
+        self.assertEqual(len(rebound), 2)
         expected_argv = {
             "DET-01": [
                 "/usr/local/bin/python3.12",
@@ -127,17 +124,11 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             ],
             "ADM-02/update/core-updater-plugin-replacement": [
                 "/usr/local/bin/python3.12",
-                "/src/scripts/materialize_openclaw_final_v3_rebound_probes.py",
-                "ADM-02/update/core-updater-plugin-replacement",
-                "/campaign/cases/11-adm-02-update-core-updater-plugin-replacement",
-            ],
-            "ADM-02/reload/workshop-invalidation": [
-                "/usr/local/bin/python3.12",
                 (
-                    "/src/scripts/"
-                    "materialize_openclaw_final_v3_workshop_invalidation_probe.py"
+                    "/src/scripts/materialize_openclaw_final_v3_"
+                    "core_updater_plugin_replacement.py"
                 ),
-                "/campaign/cases/28-adm-02-reload-workshop-invalidation",
+                "/campaign/cases/11-adm-02-update-core-updater-plugin-replacement",
             ],
         }
         for case in rebound:
@@ -193,6 +184,23 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
                 "probe-dependency",
             ],
         )
+
+        core = dispatch_openclaw_final_v3_campaign_case(
+            "ADM-02/update/core-updater-plugin-replacement"
+        )
+        self.assertEqual(
+            core["descriptor"]["argv"],
+            [
+                "/usr/local/bin/node",
+                (
+                    "/campaign/cases/11-adm-02-update-core-updater-plugin-"
+                    "replacement/protected-core-updater-plugin-replacement-"
+                    "v3-probe.mjs"
+                ),
+                "--route-id",
+                "ADM-02/update/core-updater-plugin-replacement",
+            ],
+        )
         self.assertEqual(
             det["descriptor"]["implementation_state"], V3_CAPTURE_REQUIRED
         )
@@ -243,7 +251,8 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         invalidation = dispatch_openclaw_final_v3_campaign_case(
             "ADM-02/reload/workshop-invalidation"
         )["descriptor"]
-        self.assertEqual(invalidation["implementation_state"], V3_CAPTURE_REQUIRED)
+        self.assertEqual(invalidation["implementation_state"], CURRENT_V3)
+        self.assertIsNone(invalidation["materializer"])
         self.assertEqual(
             invalidation["argv"],
             [

@@ -4,7 +4,7 @@
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
-Current status: **private qualified Phase 0 validation milestone complete; the bounded Phase 1 acquisition lock is complete for the public-GitHub exact-commit profile; the bounded exercised-profile Phase 2 exit is complete; Phase 3 runtime-prevention engineering is active**. The machine-derived [Phase 1 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json) derives its numerical gate from the signed `c87b82b9` production ingress and cross-binds request-v4 release-pin custody; the earlier v2 numerical receipt remains historical evidence only. It does not make a runtime admission-conformant, grant installer authority, or authorize public release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; the remaining routes, including `reload/workshop-invalidation`, remain `NOT_TESTED`. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not EDR, a supported release, an installer-authority claim, a general OpenClaw security finding, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
+Current status: **private qualified Phase 0 validation milestone complete; the bounded Phase 1 acquisition lock is complete for the public-GitHub exact-commit profile; the bounded exercised-profile Phase 2 exit is complete; Phase 3 runtime-prevention engineering is active**. The machine-derived [Phase 1 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json) derives its numerical gate from the signed `c87b82b9` production ingress and cross-binds request-v4 release-pin custody; the earlier v2 numerical receipt remains historical evidence only. It does not make a runtime admission-conformant, grant installer authority, or authorize public release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; its cumulative ledger still leaves `reload/workshop-invalidation` `NOT_TESTED`. A separately pinned dedicated current-V3 capture now qualifies workshop invalidation only at route level and does not rewrite that formal profile. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not EDR, a supported release, an installer-authority claim, a general OpenClaw security finding, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.
 
 Phase 2 P2.1 now has a deterministic category-only declared-versus-observed
 behavior diff contract. It verifies set arithmetic only; it is not detonation
@@ -868,14 +868,13 @@ The [Phase 3 V1 exit-gate manifest](./benchmark/phase3-exit-gate-manifest-v1.jso
 now freezes the admission, runtime-prevention, response, and quantitative
 requirements without evaluating them. The matching non-executing V3 campaign
 contract and dispatcher enumerate 31 fresh isolated subfixtures against one
-exact parent: eleven have retained current V3 implementations; three now have
-exact, read-only V3 materialized bundles but remain unqualified—two await fresh
-capture, while workshop invalidation has a dedicated fresh raw observation whose
-semantics verify; and seventeen still require a V3 port or route adapter. A separate
-set of twelve retained receipt paths remains regression-oracle-only and cannot
-promote campaign eligibility. The shared-capture workshop-invalidation child is
-one of those oracles; its new dedicated materializer and DET-01's exact
-seven-file closure remain capture-required and grant no new route result.
+exact parent: twelve have retained current V3 implementations; two have exact,
+read-only V3 materialized bundles but await fresh capture; and seventeen still
+require a V3 port or route adapter. A separate set of twelve retained receipt
+paths remains regression-oracle-only and cannot promote campaign eligibility.
+The dedicated workshop-invalidation capture now has one fail-closed route-level
+qualification and replaces the shared-capture child as that route's regression
+oracle. DET-01 and core-updater replacement remain capture-required.
 A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
 caller-bound baseline/instrumented pairs. No campaign or metrics evidence has
@@ -1606,6 +1605,7 @@ observations are explicitly operator-observed rather than separately attested.
 
 ```console
 PYTHONPATH=src uv run --python 3.12 --with-requirements requirements-worker.lock \
+  --with jsonschema \
   python -W error::ResourceWarning -m unittest discover -s tests -v
 
 PYTHONPATH=src uv run --python 3.12 \

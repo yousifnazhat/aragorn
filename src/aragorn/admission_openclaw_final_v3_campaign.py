@@ -187,7 +187,7 @@ _REGRESSION_ORACLES = (
         "ADM-02/reload/workshop-invalidation",
         (
             "benchmark/receipts/phase3-openclaw-protected-final-combined-v3-"
-            "workshop-invalidation-route-coverage-v1-2026-09-01.json"
+            "workshop-invalidation-dedicated-route-coverage-v1-2026-09-03.json"
         ),
     ),
 )

@@ -112,7 +112,7 @@ class OpenClawFinalV3CampaignTests(unittest.TestCase):
             cases[28]["regression_oracle"]["path"],
             (
                 "benchmark/receipts/phase3-openclaw-protected-final-combined-v3-"
-                "workshop-invalidation-route-coverage-v1-2026-09-01.json"
+                "workshop-invalidation-dedicated-route-coverage-v1-2026-09-03.json"
             ),
         )
         self.assertTrue(

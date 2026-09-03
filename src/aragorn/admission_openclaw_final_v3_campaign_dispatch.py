@@ -40,35 +40,27 @@ _AUTHORITY = (
 _LIMITATIONS = [
     "PROVISIONAL_STAGING_PATHS_NOT_EXECUTABLE_BYTE_PINS",
     "TWO_MATERIALIZED_V3_BUNDLES_REQUIRE_FRESH_SUBFIXTURE_CAPTURE",
-    "WORKSHOP_INVALIDATION_RAW_CAPTURE_REMAINS_UNQUALIFIED",
+    "WORKSHOP_INVALIDATION_HAS_ROUTE_ONLY_QUALIFICATION_NOT_CAMPAIGN_EVIDENCE",
     "NO_NATIVE_INTERPRETER_RUNTIME_OR_IMAGE_DIGEST_EXECUTION_BINDINGS",
     "LEGACY_MULTI_SCENARIO_PROBES_REQUIRE_V3_PER_CASE_PORTS",
     "MISSING_ROUTE_ADAPTERS_ARE_NOT_EXECUTED_BY_THE_CURRENT_ROUTE_PROBE",
 ]
-_REBINDER = {
-    "bytes": 7_691,
-    "digest": "sha256:8321a6c423b03c283d175185de6886ca12aaa08c244f81b67be3a73a47279a1c",
-    "path": "/src/scripts/materialize_openclaw_final_v3_rebound_probes.py",
-}
 _DET01_MATERIALIZER = {
     "bytes": 6_960,
     "digest": "sha256:42af9e1c895a2e63de4c5803b5fb0dfc9aedcef2b164e4d8bd53b4cbf1660081",
     "path": "/src/scripts/materialize_openclaw_final_v3_det01.py",
 }
-_WORKSHOP_INVALIDATION_MATERIALIZER = {
-    "bytes": 8_612,
-    "digest": "sha256:d60da66234d68f180e19e61f74f16a8ce9422221015f726fa9b839549edd06fc",
+_CORE_UPDATER_MATERIALIZER = {
+    "bytes": 8_219,
+    "digest": "sha256:dafa4fc1f21d72be7ab25eca917c75ed4a0ae2a524fa24abc96f791ba040d9a0",
     "path": (
-        "/src/scripts/materialize_openclaw_final_v3_workshop_invalidation_probe.py"
+        "/src/scripts/"
+        "materialize_openclaw_final_v3_core_updater_plugin_replacement.py"
     ),
 }
 _MATERIALIZER_BY_CASE = {
-    "DET-01": ("det01", _DET01_MATERIALIZER),
-    "ADM-02/update/core-updater-plugin-replacement": ("rebound", _REBINDER),
-    "ADM-02/reload/workshop-invalidation": (
-        "workshop-invalidation",
-        _WORKSHOP_INVALIDATION_MATERIALIZER,
-    ),
+    "DET-01": _DET01_MATERIALIZER,
+    "ADM-02/update/core-updater-plugin-replacement": _CORE_UPDATER_MATERIALIZER,
 }
 _ROUTE_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
 _CONTAINED_SCHEMA = "aragorn/openclaw-contained-profile-probe-evidence/v1"
@@ -83,10 +75,9 @@ def _case_materializer(
 ) -> dict[str, Any] | None:
     if implementation_state != V3_CAPTURE_REQUIRED:
         return None
-    kind, source = _MATERIALIZER_BY_CASE[case_id]
-    arguments = [case_id, root] if kind == "rebound" else [root]
+    source = _MATERIALIZER_BY_CASE[case_id]
     return {
-        "argv": [_PYTHON, source["path"], *arguments],
+        "argv": [_PYTHON, source["path"], root],
         "source": dict(source),
     }
 
@@ -206,11 +197,28 @@ _CASES = (
         "ADM-02/update/core-updater-plugin-replacement",
         V3_CAPTURE_REQUIRED,
         _NODE,
-        "protected-route-probe.mjs",
-        _ROUTE_SCHEMA,
+        "protected-core-updater-plugin-replacement-v3-probe.mjs",
+        (
+            "aragorn/openclaw-protected-core-updater-plugin-"
+            "replacement-observation/v1"
+        ),
         arguments=(
             "--route-id",
             "ADM-02/update/core-updater-plugin-replacement",
+        ),
+        bundle=(
+            _bundle_item(
+                "protected-core-updater-plugin-replacement-v3-probe.mjs",
+                "probe",
+            ),
+            _bundle_item("protected-route-action-probe.mjs", "probe-dependency"),
+            _bundle_item(
+                "core-updater-plugin-replacement-audit-listener.mjs",
+                "probe-dependency",
+            ),
+            _bundle_item("candidate-source/index.js", "fixture"),
+            _bundle_item("candidate-source/openclaw.plugin.json", "fixture"),
+            _bundle_item("candidate-source/package.json", "fixture"),
         ),
     ),
     _descriptor(
@@ -411,7 +419,7 @@ _CASES = (
     _descriptor(
         28,
         "ADM-02/reload/workshop-invalidation",
-        V3_CAPTURE_REQUIRED,
+        CURRENT_V3,
         _NODE,
         "protected-workshop-invalidation-v3-probe.mjs",
         "aragorn/openclaw-protected-workshop-invalidation-observation/v1",

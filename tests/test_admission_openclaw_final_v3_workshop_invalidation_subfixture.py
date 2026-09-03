@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import stat
@@ -7,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +16,7 @@ from aragorn import (
     admission_openclaw_final_v3_workshop_invalidation_subfixture as subject,
 )
 from aragorn.admission_evidence import AdmissionEvidenceError
+from aragorn.cas import CAS
 from scripts import (
     materialize_openclaw_final_v3_workshop_invalidation_probe as materializer,
 )
@@ -281,9 +284,176 @@ class WorkshopInvalidationSemanticCompatibilityTests(unittest.TestCase):
         )
         mutations.append(changed)
 
+        changed = _captured_document()
+        changed["protected_boundary"]["runtime"]["ready"] = False
+        mutations.append(changed)
+
         for changed in mutations:
             with self.assertRaises(AdmissionEvidenceError):
                 self.verify(changed)
+
+
+class WorkshopInvalidationDedicatedQualificationTests(unittest.TestCase):
+    def qualify(self) -> dict[str, object]:
+        raw = _EVIDENCE.read_bytes()
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence_cas = CAS(temporary)
+            evidence_cas.put_expected(
+                BytesIO(raw),
+                expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+                max_bytes=len(raw),
+            )
+            return subject.qualify_openclaw_final_v3_workshop_invalidation_subfixture(
+                evidence_cas=evidence_cas
+            )
+
+    def test_signed_dedicated_capture_qualifies_only_one_route(self) -> None:
+        result = self.qualify()
+        self.assertEqual(result, self.qualify())
+        self.assertEqual(result["profile"]["counts"], {"PASS": 1, "NOT_TESTED": 20})
+        self.assertEqual(
+            [
+                route["id"]
+                for route in result["profile"]["routes"]
+                if route["status"] == "PASS"
+            ],
+            [subject._ROUTE],
+        )
+        self.assertTrue(result["capture"]["cleanup_protocol_verified"])
+        self.assertTrue(result["capture"]["dedicated_route_container"])
+        self.assertTrue(result["capture"]["dedicated_route_volume"])
+        self.assertTrue(result["capture"]["independent_from_regression_oracle"])
+        self.assertFalse(result["capture"]["independent_host_destruction_attestation"])
+        self.assertTrue(
+            result["route_semantics"]["native_independent_route_execution"]
+        )
+        self.assertTrue(
+            all(result["decision"][key] is False for key in subject._ELIGIBILITY_KEYS)
+        )
+
+    def test_outer_capture_or_execution_tampering_fails_closed(self) -> None:
+        evidence = json.loads(_EVIDENCE.read_bytes())
+        mutations = []
+
+        changed = deepcopy(evidence)
+        changed["harness"]["document"]["host_config"]["network_mode"] = "host"
+        mutations.append(changed)
+
+        changed = deepcopy(evidence)
+        changed["route_observation"]["execution"]["exit_code"] = 1
+        mutations.append(changed)
+
+        changed = deepcopy(evidence)
+        changed["route_observation"]["route"]["status"] = "PASS"
+        mutations.append(changed)
+
+        changed = deepcopy(evidence)
+        changed["source_artifacts"]["collector"]["digest"] = "sha256:" + "0" * 64
+        mutations.append(changed)
+
+        for changed in mutations:
+            with self.assertRaises(AdmissionEvidenceError):
+                subject._verify_dedicated_evidence(changed)
+
+    def test_dependency_and_route_registry_drift_fails_closed(self) -> None:
+        with patch.object(
+            subject.parent.v3_contract.contract,
+            "_ROUTES",
+            (*subject._ROUTES, "ADM-02/reload/unexpected-route"),
+        ), self.assertRaises(AdmissionEvidenceError):
+            self.qualify()
+
+    def test_deep_composition_materialization_and_stack_drift_fails_closed(
+        self,
+    ) -> None:
+        evidence = json.loads(_EVIDENCE.read_bytes())
+        mutations: list[tuple[dict[str, object], tuple[str, ...]]] = []
+
+        changed = deepcopy(evidence)
+        changed["composition"]["action"]["inputs"]["gateway_config"] = {}
+        mutations.append((changed, ("composition",)))
+
+        changed = deepcopy(evidence)
+        changed["source_artifacts"]["materialized_v2_probe"]["digest"] = (
+            "sha256:" + "0" * 64
+        )
+        mutations.append((changed, ("source_artifacts",)))
+
+        changed = deepcopy(evidence)
+        changed["composition"]["action"]["artifacts"][
+            "final_combined_v3_workshop_invalidation"
+        ]["probe"]["runtime"]["digest"] = "sha256:" + "0" * 64
+        mutations.append((changed, ("composition",)))
+
+        changed = deepcopy(evidence)
+        changed["route_observation"]["stack_before"]["units"][
+            "aragorn-runtime-action-worker.service"
+        ]["ActiveState"] = "inactive"
+        mutations.append((changed, ("route_observation",)))
+
+        for changed, components in mutations:
+            updates = {
+                component: subject.canonical_digest(changed[component])
+                for component in components
+            }
+            with patch.dict(subject._COMPONENT_DIGESTS, updates), self.assertRaises(
+                AdmissionEvidenceError
+            ):
+                subject._verify_dedicated_evidence(changed)
+
+    def test_coordinated_route_document_repins_reach_deep_validators(self) -> None:
+        evidence = json.loads(_EVIDENCE.read_bytes())
+        mutations = (
+            (
+                lambda document: document["protected_boundary"]["runtime"].update(
+                    ready=False
+                ),
+                "read-only mount changed",
+            ),
+            (
+                lambda document: document["actions"][0]["prerequisites"][
+                    "gateway_process"
+                ].update(pid=1),
+                "dedicated execution changed",
+            ),
+            (
+                lambda document: document["actions"][0]["prerequisites"].update(
+                    runtime_files={}
+                ),
+                "invalid V3 workshop-invalidation prerequisite",
+            ),
+        )
+        for mutate, message in mutations:
+            changed = deepcopy(evidence)
+            document = changed["route_observation"]["document"]
+            mutate(document)
+            canonical = subject.canonical_json(document)
+            raw = canonical + b"\n"
+            route_pin = {
+                "bytes": len(raw),
+                "canonical_digest": "sha256:"
+                + hashlib.sha256(canonical).hexdigest(),
+                "digest": "sha256:" + hashlib.sha256(raw).hexdigest(),
+            }
+            changed["route_observation"]["raw"] = {
+                "base64": base64.b64encode(raw).decode("ascii"),
+                **route_pin,
+                "raw_is_canonical_json_lf": False,
+            }
+            with (
+                self.subTest(mutation=message),
+                patch.dict(subject._ROUTE_RAW, route_pin),
+                patch.dict(
+                    subject._COMPONENT_DIGESTS,
+                    {
+                        "route_observation": subject.canonical_digest(
+                            changed["route_observation"]
+                        )
+                    },
+                ),
+                self.assertRaisesRegex(AdmissionEvidenceError, message),
+            ):
+                subject._verify_dedicated_evidence(changed)
 
 
 if __name__ == "__main__":

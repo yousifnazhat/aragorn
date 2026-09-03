@@ -574,7 +574,7 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         for archived_mode in (
             "regular file:0:0:700:1:8295",
             "regular file:0:0:600:1:7691",
-            "regular file:0:0:700:1:19454",
+            "regular file:0:0:700:1:19627",
             "regular file:0:0:700:1:8364",
             "regular file:0:0:600:1:28641",
             "regular file:0:0:600:1:27682",

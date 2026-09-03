@@ -238,11 +238,16 @@ def _artifacts() -> dict[str, Any]:
         )
     )
     combined._expect(
-        source_probe["bytes"] == runtime_probe["bytes"] == 27_682
+        source_probe["bytes"]
+        == runtime_probe["bytes"]
+        == _EXPECTED_BUNDLE[_ROUTE_PROBE.name]["bytes"]
         and source_probe["digest"] == runtime_probe["digest"] == _PROBE_DIGEST
-        and source_audit["bytes"] == runtime_audit["bytes"] == 3_029
+        and source_audit["bytes"]
+        == runtime_audit["bytes"]
+        == _EXPECTED_BUNDLE[_SOURCE_AUDIT.name]["bytes"]
         and source_audit["digest"] == runtime_audit["digest"] == _AUDIT_DIGEST
-        and delegated["bytes"] == 45_137
+        and delegated["bytes"]
+        == _EXPECTED_BUNDLE["protected-route-action-probe.mjs"]["bytes"]
         and delegated["digest"] == _DELEGATED_DIGEST
         and _custody(source_probe)
         == _custody(runtime_probe)

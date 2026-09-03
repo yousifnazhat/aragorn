@@ -51,8 +51,8 @@ _DET01_MATERIALIZER = {
     "path": "/src/scripts/materialize_openclaw_final_v3_det01.py",
 }
 _CORE_UPDATER_MATERIALIZER = {
-    "bytes": 8_219,
-    "digest": "sha256:7fa566ee1aac1c73b4df851c1bdb8d7ad81b4484a2c53268ea1efa2f636c7c0a",
+    "bytes": 8_295,
+    "digest": "sha256:ffdc59114c0ec55bbd5c0c32a1da6facdce71e8c21bfc36169221122e1b486b9",
     "path": (
         "/src/scripts/"
         "materialize_openclaw_final_v3_core_updater_plugin_replacement.py"

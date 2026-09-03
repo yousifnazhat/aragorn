@@ -18,19 +18,20 @@ _SCHEMA = (
 )
 _DELEGATED_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
 _IMPLEMENTATION_DIGEST = (
-    "sha256:7348d0ee886ccdbb315a950a8793d2cd654c39019b52849b40bcd43cc9ba5ee3"
+    "sha256:358fa6968024e9ef951727237a9722ff7a5d1d4b1ea1e9fb37270d14a1a6f9fa"
 )
 _DELEGATED_DIGEST = (
-    "sha256:18f17a79ba6c72b247857d9213abc1093f699a2000e4d8c4f5192b719e905132"
+    "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
 )
 _CANDIDATE_COMMIT = "222d0c39429841044b95549407422873ec106a54"
 _CANDIDATE_TREE = "fc3f1336c488b32d3b668f637ec4bdc6ccf56213"
 _CANDIDATE_REPOSITORY = (
-    "/profile/workspace/aragorn-core-updater-plugin-replacement-source"
+    "/var/lib/aragorn-agent-gateway/workspace/"
+    "aragorn-core-updater-plugin-replacement-source"
 )
 _SPEC = f"git:file://{_CANDIDATE_REPOSITORY}@{_CANDIDATE_COMMIT}"
 _MANAGED_REPOSITORY = (
-    "/profile/state/git/git-0641f817708cba2b/repo"
+    "/var/lib/aragorn-agent-gateway/state/git/git-79bb9b8ab164a123/repo"
 )
 _POLICY_REASON = "plugin installs disabled by Aragorn protected profile"
 _RAW_FAILURE = (
@@ -53,7 +54,9 @@ _EXPECTED_OUTCOME = {
     "status": "skipped",
 }
 _TARGET = "/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker"
-_WORKING_CONFIG = "/profile/state/core-updater-openclaw.json"
+_WORKING_CONFIG = (
+    "/var/lib/aragorn-agent-gateway/state/core-updater-openclaw.json"
+)
 _CONFIG_BYTES = 2_159
 _CONFIG_DIGEST = (
     "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
@@ -403,7 +406,7 @@ def _verify_preflight(
     _verify_git_commands(repository.get("commands"))
     delegated = value["delegated_probe"]
     if delegated != {
-        "bytes": 45_093,
+        "bytes": 45_137,
         "digest": _DELEGATED_DIGEST,
         "path": (
             "/route-input/core-updater-plugin-replacement/"
@@ -452,7 +455,8 @@ def _verify_preflight(
         or type(store) is not dict
         or set(store)
         != {"bytes", "gid", "mode", "nlink", "path", "type", "uid"}
-        or store.get("path") != "/profile/state/state/openclaw.sqlite"
+        or store.get("path")
+        != "/var/lib/aragorn-agent-gateway/state/state/openclaw.sqlite"
         or store.get("type") != "file"
         or store.get("uid") != 992
         or store.get("gid") != 992
@@ -563,7 +567,8 @@ def _verify_trusted_policy_audit(value: Any) -> None:
         type(journal) is not dict
         or set(journal)
         != {"bytes", "digest", "gid", "mode", "nlink", "path", "type", "uid"}
-        or journal.get("path") != "/profile/state/core-updater-policy-audit.jsonl"
+        or journal.get("path")
+        != "/var/lib/aragorn-agent-gateway/state/core-updater-policy-audit.jsonl"
         or journal.get("type") != "file"
         or journal.get("uid") != 992
         or journal.get("gid") != 992

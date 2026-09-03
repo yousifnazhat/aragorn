@@ -42,13 +42,13 @@ _VERIFIER = Path(
     "admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py"
 )
 _PROBE_DIGEST = (
-    "sha256:7348d0ee886ccdbb315a950a8793d2cd654c39019b52849b40bcd43cc9ba5ee3"
+    "sha256:358fa6968024e9ef951727237a9722ff7a5d1d4b1ea1e9fb37270d14a1a6f9fa"
 )
 _DELEGATED_DIGEST = (
-    "sha256:18f17a79ba6c72b247857d9213abc1093f699a2000e4d8c4f5192b719e905132"
+    "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
 )
 _AUDIT_DIGEST = (
-    "sha256:66da837cb9c1f54ce66ccf5f3c2012021715bf6848005f545102d18155976545"
+    "sha256:91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f"
 )
 _CANDIDATE = {
     "index.js": (
@@ -91,17 +91,17 @@ _ROUTES = {
 }
 _EXPECTED_BUNDLE = {
     "protected-core-updater-plugin-replacement-v3-probe.mjs": {
-        "bytes": 26_844,
+        "bytes": 27_038,
         "digest": _PROBE_DIGEST,
         "role": "probe",
     },
     "protected-route-action-probe.mjs": {
-        "bytes": 45_093,
+        "bytes": 45_137,
         "digest": _DELEGATED_DIGEST,
         "role": "probe-dependency",
     },
     "core-updater-plugin-replacement-audit-listener.mjs": {
-        "bytes": 2_947,
+        "bytes": 2_971,
         "digest": _AUDIT_DIGEST,
         "role": "probe-dependency",
     },
@@ -237,11 +237,11 @@ def _artifacts() -> dict[str, Any]:
         )
     )
     combined._expect(
-        source_probe["bytes"] == runtime_probe["bytes"] == 26_844
+        source_probe["bytes"] == runtime_probe["bytes"] == 27_038
         and source_probe["digest"] == runtime_probe["digest"] == _PROBE_DIGEST
-        and source_audit["bytes"] == runtime_audit["bytes"] == 2_947
+        and source_audit["bytes"] == runtime_audit["bytes"] == 2_971
         and source_audit["digest"] == runtime_audit["digest"] == _AUDIT_DIGEST
-        and delegated["bytes"] == 45_093
+        and delegated["bytes"] == 45_137
         and delegated["digest"] == _DELEGATED_DIGEST
         and _custody(source_probe)
         == _custody(runtime_probe)

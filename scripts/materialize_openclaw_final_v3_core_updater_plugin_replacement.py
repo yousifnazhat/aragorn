@@ -34,14 +34,14 @@ _AUTHORITY = (
 _SOURCES = {
     _PROBE: (
         _ADMISSION / _PROBE,
-        26_844,
-        "sha256:7348d0ee886ccdbb315a950a8793d2cd654c39019b52849b40bcd43cc9ba5ee3",
+        27_038,
+        "sha256:358fa6968024e9ef951727237a9722ff7a5d1d4b1ea1e9fb37270d14a1a6f9fa",
         "probe",
     ),
     "core-updater-plugin-replacement-audit-listener.mjs": (
         _ADMISSION / "core-updater-plugin-replacement-audit-listener.mjs",
-        2_947,
-        "sha256:66da837cb9c1f54ce66ccf5f3c2012021715bf6848005f545102d18155976545",
+        2_971,
+        "sha256:91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f",
         "probe-dependency",
     ),
     "candidate-source/index.js": (
@@ -67,9 +67,9 @@ _REBIND_DELEGATED_BYTES = 44_825
 _REBIND_DELEGATED_DIGEST = (
     "sha256:4687054e9d7ea264c6772de4e0560fafb195ebbbfc7397333297abd6cc4347ff"
 )
-_DELEGATED_BYTES = 45_093
+_DELEGATED_BYTES = 45_137
 _DELEGATED_DIGEST = (
-    "sha256:18f17a79ba6c72b247857d9213abc1093f699a2000e4d8c4f5192b719e905132"
+    "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
 )
 _AUDIT_ENV_REPLACEMENTS = (
     (
@@ -80,12 +80,14 @@ _AUDIT_ENV_REPLACEMENTS = (
         (
             b'    NO_PROXY: "127.0.0.1,localhost",\n'
             b"    ARAGORN_CORE_UPDATER_AUDIT_PATH:\n"
-            b'      "/profile/state/core-updater-policy-audit.jsonl",\n'
+            b'      "/var/lib/aragorn-agent-gateway/state/'
+            b'core-updater-policy-audit.jsonl",\n'
             b"    NODE_OPTIONS:\n"
             b'      "--import=/route-input/core-updater-plugin-replacement/'
             b'core-updater-plugin-replacement-audit-listener.mjs",\n'
             b"    OPENCLAW_CONFIG_PATH:\n"
-            b'      "/profile/state/core-updater-openclaw.json",'
+            b'      "/var/lib/aragorn-agent-gateway/state/'
+            b'core-updater-openclaw.json",'
         ),
     ),
 )

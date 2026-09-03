@@ -304,7 +304,7 @@ def _document() -> dict[str, object]:
             "tree": subject._CANDIDATE_TREE,
         },
         "delegated_probe": {
-            "bytes": 45_093,
+            "bytes": 45_137,
             "digest": subject._DELEGATED_DIGEST,
             "path": (
                 "/route-input/core-updater-plugin-replacement/"
@@ -320,7 +320,9 @@ def _document() -> dict[str, object]:
                 "gid": 992,
                 "mode": "600",
                 "nlink": 1,
-                "path": "/profile/state/state/openclaw.sqlite",
+                "path": (
+                    "/var/lib/aragorn-agent-gateway/state/state/openclaw.sqlite"
+                ),
                 "type": "file",
                 "uid": 992,
             },
@@ -340,7 +342,10 @@ def _document() -> dict[str, object]:
                 "gid": 992,
                 "mode": "600",
                 "nlink": 1,
-                "path": "/profile/state/core-updater-policy-audit.jsonl",
+                "path": (
+                    "/var/lib/aragorn-agent-gateway/state/"
+                    "core-updater-policy-audit.jsonl"
+                ),
                 "type": "file",
                 "uid": 992,
             },
@@ -435,6 +440,17 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
                 delegated,
             )
             self.assertIn(subject._WORKING_CONFIG, delegated)
+            probe = (first / materializer._PROBE).read_text(encoding="utf-8")
+            self.assertIn(
+                'writeFileSync(WORKING_CONFIG, sourceRaw, { flag: "wx", mode: 0o600 })',
+                probe,
+            )
+            self.assertNotIn("copyFileSync(CONFIG, WORKING_CONFIG)", probe)
+            self.assertIn("OPENCLAW_CONFIG_PATH: WORKING_CONFIG", probe)
+            audit = (
+                first / "core-updater-plugin-replacement-audit-listener.mjs"
+            ).read_text(encoding="utf-8")
+            self.assertNotIn("/profile/", probe + delegated + audit)
 
     def test_materializer_fails_closed_on_reuse_or_source_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -536,13 +552,13 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             "plugin-replacement-systemd/Dockerfile"
         ).read_text(encoding="utf-8")
         for archived_mode in (
-            "regular file:0:0:700:1:8219",
+            "regular file:0:0:700:1:8295",
             "regular file:0:0:600:1:7691",
             "regular file:0:0:700:1:19423",
             "regular file:0:0:700:1:8009",
-            "regular file:0:0:600:1:27805",
-            "regular file:0:0:600:1:26844",
-            "regular file:0:0:600:1:2947",
+            "regular file:0:0:600:1:27946",
+            "regular file:0:0:600:1:27038",
+            "regular file:0:0:600:1:2971",
         ):
             self.assertIn(archived_mode, docker)
         self.assertIn(

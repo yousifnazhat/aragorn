@@ -9,6 +9,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -26,13 +27,15 @@ const AUDIT_LISTENER = join(
   "core-updater-plugin-replacement-audit-listener.mjs",
 );
 const CANDIDATE_ROOT = join(ROUTE_ROOT, "candidate-source");
-const WORKSPACE = "/profile/workspace";
-const STATE = "/profile/state";
+const WORKSPACE = "/var/lib/aragorn-agent-gateway/workspace";
+const STATE = "/var/lib/aragorn-agent-gateway/state";
 const CONFIG =
   "/run/credentials/aragorn-agent-gateway.service/openclaw-config";
 const DIST = "/runtime/lib/node_modules/openclaw/dist";
-const AUDIT_PATH = "/profile/state/core-updater-policy-audit.jsonl";
-const WORKING_CONFIG = "/profile/state/core-updater-openclaw.json";
+const AUDIT_PATH =
+  "/var/lib/aragorn-agent-gateway/state/core-updater-policy-audit.jsonl";
+const WORKING_CONFIG =
+  "/var/lib/aragorn-agent-gateway/state/core-updater-openclaw.json";
 const TARGET =
   "/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker";
 const SELF = fileURLToPath(import.meta.url);
@@ -54,14 +57,14 @@ const CONFIG_EXPECTED = Object.freeze({
     "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c",
 });
 const DELEGATED_EXPECTED = Object.freeze({
-  bytes: 45_093,
+  bytes: 45_137,
   digest:
-    "sha256:18f17a79ba6c72b247857d9213abc1093f699a2000e4d8c4f5192b719e905132",
+    "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902",
 });
 const AUDIT_LISTENER_EXPECTED = Object.freeze({
-  bytes: 2_947,
+  bytes: 2_971,
   digest:
-    "sha256:66da837cb9c1f54ce66ccf5f3c2012021715bf6848005f545102d18155976545",
+    "sha256:91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f",
 });
 
 const CANDIDATE_FILES = Object.freeze({
@@ -193,7 +196,7 @@ function prepareWorkingConfig() {
   ) {
     throw new Error("pinned protected configuration changed");
   }
-  copyFileSync(CONFIG, WORKING_CONFIG);
+  writeFileSync(WORKING_CONFIG, sourceRaw, { flag: "wx", mode: 0o600 });
   chmodSync(WORKING_CONFIG, 0o600);
   const snapshot = workingConfigSnapshot();
   if (
@@ -333,7 +336,7 @@ function gitEnvironment() {
     GIT_SEQUENCE_EDITOR: "",
     GIT_TEMPLATE_DIR: "",
     GIT_TERMINAL_PROMPT: "0",
-    HOME: "/profile/home",
+    HOME: "/var/lib/aragorn-agent-gateway/home",
     LANG: "C",
     LC_ALL: "C",
     PATH: "/usr/local/bin:/usr/bin:/bin",
@@ -344,8 +347,8 @@ function gitEnvironment() {
 function runtimeEnvironment() {
   return {
     ...process.env,
-    HOME: "/profile/home",
-    OPENCLAW_CONFIG_PATH: CONFIG,
+    HOME: "/var/lib/aragorn-agent-gateway/home",
+    OPENCLAW_CONFIG_PATH: WORKING_CONFIG,
     OPENCLAW_STATE_DIR: STATE,
     PATH: "/usr/local/bin:/usr/bin:/bin",
   };

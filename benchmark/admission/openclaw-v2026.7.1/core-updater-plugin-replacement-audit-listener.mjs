@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const DIST = "/runtime/lib/node_modules/openclaw/dist";
-const JOURNAL = "/profile/state/core-updater-policy-audit.jsonl";
+const JOURNAL =
+  "/var/lib/aragorn-agent-gateway/state/core-updater-policy-audit.jsonl";
 const PLUGIN_ID = "aragorn-runtime-action-worker";
 
 function canonicalJson(value) {

@@ -42,13 +42,13 @@ _VERIFIER = Path(
     "admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py"
 )
 _PROBE_DIGEST = (
-    "sha256:327a1745e392520608f06740f7fbbbdadf541ceddcad4cbd5752a05772cc7e5c"
+    "sha256:e7c38a03ee2d1d2927a228444cf7172ad67dc5dbbd11acfeaaf11345cd67c30c"
 )
 _DELEGATED_DIGEST = (
     "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
 )
 _AUDIT_DIGEST = (
-    "sha256:9da1c03bcc111b950a05908057061f4c3923591edfb8b064a4ce1f801d7b84d3"
+    "sha256:37aa36c0d9b6d66dd3af8a7ca3d0bd557bb9a727383d8fb9126dd5d7e2426edc"
 )
 _CANDIDATE = {
     "index.js": (
@@ -69,6 +69,7 @@ _CANDIDATE = {
 }
 _ROUTES = {
     _ROUTE: {
+        "directories": ("candidate-source",),
         "files": (
             "protected-core-updater-plugin-replacement-v3-probe.mjs",
             "protected-route-action-probe.mjs",
@@ -101,7 +102,7 @@ _EXPECTED_BUNDLE = {
         "role": "probe-dependency",
     },
     "core-updater-plugin-replacement-audit-listener.mjs": {
-        "bytes": 3_029,
+        "bytes": 3_177,
         "digest": _AUDIT_DIGEST,
         "role": "probe-dependency",
     },

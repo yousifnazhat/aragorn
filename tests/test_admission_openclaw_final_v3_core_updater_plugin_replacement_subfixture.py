@@ -417,6 +417,10 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             self.assertEqual(manifest, repeated)
             self.assertEqual(manifest["case_id"], subject._ROUTE)
             self.assertEqual(
+                capture._ROUTES[capture._ROUTE]["directories"],
+                ("candidate-source",),
+            )
+            self.assertEqual(
                 [item["name"] for item in manifest["files"]],
                 [
                     "protected-core-updater-plugin-replacement-v3-probe.mjs",
@@ -570,11 +574,11 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         for archived_mode in (
             "regular file:0:0:700:1:8295",
             "regular file:0:0:600:1:7691",
-            "regular file:0:0:700:1:19408",
+            "regular file:0:0:700:1:19454",
             "regular file:0:0:700:1:8364",
             "regular file:0:0:600:1:28641",
             "regular file:0:0:600:1:27682",
-            "regular file:0:0:600:1:3029",
+            "regular file:0:0:600:1:3177",
         ):
             self.assertIn(archived_mode, docker)
         self.assertIn(

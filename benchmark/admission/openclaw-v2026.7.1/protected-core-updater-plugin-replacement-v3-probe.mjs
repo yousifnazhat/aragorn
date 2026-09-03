@@ -62,9 +62,9 @@ const DELEGATED_EXPECTED = Object.freeze({
     "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902",
 });
 const AUDIT_LISTENER_EXPECTED = Object.freeze({
-  bytes: 3_029,
+  bytes: 3_177,
   digest:
-    "sha256:9da1c03bcc111b950a05908057061f4c3923591edfb8b064a4ce1f801d7b84d3",
+    "sha256:37aa36c0d9b6d66dd3af8a7ca3d0bd557bb9a727383d8fb9126dd5d7e2426edc",
 });
 
 const CANDIDATE_FILES = Object.freeze({

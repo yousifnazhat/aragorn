@@ -22,6 +22,10 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+if (canonicalJson({ omitted: undefined, retained: true }) !== '{"retained":true}') {
+  throw new Error("audit canonical JSON invariant failed");
+}
+
 function sha256(raw) {
   return `sha256:${createHash("sha256").update(raw).digest("hex")}`;
 }

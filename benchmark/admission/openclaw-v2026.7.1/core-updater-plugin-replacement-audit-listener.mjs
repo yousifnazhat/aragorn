@@ -14,6 +14,7 @@ function canonicalJson(value) {
   }
   if (value && typeof value === "object") {
     return `{${Object.keys(value)
+      .filter((key) => value[key] !== undefined)
       .sort()
       .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
       .join(",")}}`;
@@ -85,8 +86,8 @@ subscribe((event, metadata) => {
   ) {
     return;
   }
-  if (metadata?.internal !== true || metadata?.trusted !== true) {
-    throw new Error("plugin audit event lacks trusted internal provenance");
+  if (canonicalJson(metadata) !== canonicalJson({ trusted: true })) {
+    throw new Error("plugin audit event lacks exact trusted diagnostic metadata");
   }
   writeFileSync(
     JOURNAL,

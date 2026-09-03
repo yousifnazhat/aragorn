@@ -18,7 +18,7 @@ _SCHEMA = (
 )
 _DELEGATED_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
 _IMPLEMENTATION_DIGEST = (
-    "sha256:7ade7b9f12010dc1a4f7cc06a8410bc01436efebc6a184bc9d0b748f010bce38"
+    "sha256:327a1745e392520608f06740f7fbbbdadf541ceddcad4cbd5752a05772cc7e5c"
 )
 _DELEGATED_DIGEST = (
     "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
@@ -222,6 +222,7 @@ def verify_openclaw_final_v3_core_updater_plugin_replacement_semantic_compatibil
             "CAPTURE_FRESHNESS_NOT_VERIFIED",
             "CAPTURE_DESTRUCTION_NOT_VERIFIED",
             "CAPTURE_INDEPENDENCE_NOT_VERIFIED",
+            "TRUSTED_METADATA_NOT_INDEPENDENT_CALL_SITE_PROVENANCE",
             "WRITER_MODULE_DIGEST_NOT_FORMALLY_PINNED_TO_SIGNED_CAPTURE_SOURCE",
             "DIAGNOSTIC_MODULE_DIGEST_NOT_FORMALLY_PINNED_TO_SIGNED_CAPTURE_SOURCE",
             "EPHEMERAL_WRITABLE_CONFIG_COPY_USED_FOR_FAILURE_BOOKKEEPING",
@@ -498,8 +499,10 @@ def _verify_trusted_policy_audit(value: Any) -> None:
         "metadata",
     }:
         raise AdmissionEvidenceError("trusted plugin audit shape changed")
-    if value["metadata"] != {"internal": True, "trusted": True}:
-        raise AdmissionEvidenceError("plugin audit is not trusted internal evidence")
+    if value["metadata"] != {"trusted": True}:
+        raise AdmissionEvidenceError(
+            "plugin audit lacks exact trusted diagnostic metadata"
+        )
     module = value["diagnostic_module"]
     if (
         type(module) is not dict

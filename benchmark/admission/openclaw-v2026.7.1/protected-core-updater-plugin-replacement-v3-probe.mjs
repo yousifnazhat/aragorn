@@ -62,9 +62,9 @@ const DELEGATED_EXPECTED = Object.freeze({
     "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902",
 });
 const AUDIT_LISTENER_EXPECTED = Object.freeze({
-  bytes: 2_971,
+  bytes: 3_029,
   digest:
-    "sha256:91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f",
+    "sha256:9da1c03bcc111b950a05908057061f4c3923591edfb8b064a4ce1f801d7b84d3",
 });
 
 const CANDIDATE_FILES = Object.freeze({
@@ -747,7 +747,7 @@ function trustedPolicyAudit() {
     canonicalJson(actualEventKeys) ===
       canonicalJson([...eventKeys, "trace"].sort());
   if (
-    canonicalJson(record?.metadata) !== canonicalJson({ internal: true, trusted: true }) ||
+    canonicalJson(record?.metadata) !== canonicalJson({ trusted: true }) ||
     !exactEventKeys ||
     event?.type !== "security.event" ||
     event?.category !== "plugin" ||

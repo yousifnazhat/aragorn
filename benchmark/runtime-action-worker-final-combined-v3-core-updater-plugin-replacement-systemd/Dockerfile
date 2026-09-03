@@ -39,7 +39,7 @@ RUN set -eux; \
     test "$(readlink /usr/bin/git-upload-pack)" = git; \
     test "$(/usr/bin/git --version)" = 'git version 2.39.5'; \
     test "$(sha256sum /src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py | cut -d ' ' -f 1)" = \
-        0f7d04c91765ce85039a3f55ad4a2320d26556af2c4e1683d2eb8b858afe9ada; \
+        097d421ceebffff819bd08b7b2806afc76347bedc426772dca07e41825a7be3d; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py)" = \
         'regular file:0:0:700:1:8295'; \
     test "$(sha256sum /src/scripts/materialize_openclaw_final_v3_rebound_probes.py | cut -d ' ' -f 1)" = \
@@ -47,25 +47,25 @@ RUN set -eux; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/materialize_openclaw_final_v3_rebound_probes.py)" = \
         'regular file:0:0:600:1:7691'; \
     test "$(sha256sum /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py | cut -d ' ' -f 1)" = \
-        d0f2cf26603116c73cdc8b1f9f80f1cc32a83a10aa8df1008d83fbc96857d208; \
+        cd86285d64c02966a8007a0f0a589dd053c16e0551cb02100cd49951f5907dfe; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py)" = \
-        'regular file:0:0:700:1:19423'; \
+        'regular file:0:0:700:1:19408'; \
     test "$(sha256sum /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh | cut -d ' ' -f 1)" = \
         3dd7550d3cc3ac816e35423f42a2923fc749e087e5640cfb619dc524170e365b; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh)" = \
         'regular file:0:0:700:1:8364'; \
     test "$(sha256sum /src/src/aragorn/admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py | cut -d ' ' -f 1)" = \
-        a8f018ebc4d636ec42eb5df938aba6e8d1779b766c1dc41904152dd7586f832b; \
+        ead9285680e7744d4a5a89b5e65b61b908b8ae3232f5233646d665cee64e2186; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/src/aragorn/admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py)" = \
-        'regular file:0:0:600:1:28561'; \
+        'regular file:0:0:600:1:28641'; \
     test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/protected-core-updater-plugin-replacement-v3-probe.mjs | cut -d ' ' -f 1)" = \
-        7ade7b9f12010dc1a4f7cc06a8410bc01436efebc6a184bc9d0b748f010bce38; \
+        327a1745e392520608f06740f7fbbbdadf541ceddcad4cbd5752a05772cc7e5c; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/benchmark/admission/openclaw-v2026.7.1/protected-core-updater-plugin-replacement-v3-probe.mjs)" = \
-        'regular file:0:0:600:1:27698'; \
+        'regular file:0:0:600:1:27682'; \
     test "$(sha256sum /src/benchmark/admission/openclaw-v2026.7.1/core-updater-plugin-replacement-audit-listener.mjs | cut -d ' ' -f 1)" = \
-        91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f; \
+        9da1c03bcc111b950a05908057061f4c3923591edfb8b064a4ce1f801d7b84d3; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/benchmark/admission/openclaw-v2026.7.1/core-updater-plugin-replacement-audit-listener.mjs)" = \
-        'regular file:0:0:600:1:2971'; \
+        'regular file:0:0:600:1:3029'; \
     materialized=/tmp/core-updater-plugin-replacement-v3; \
     /usr/local/bin/python3.12 \
         /src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py \
@@ -81,11 +81,11 @@ RUN set -eux; \
             'protected-route-action-probe.mjs:f' \
             | sort)"; \
     test "$(sha256sum "$materialized/protected-core-updater-plugin-replacement-v3-probe.mjs" | cut -d ' ' -f 1)" = \
-        7ade7b9f12010dc1a4f7cc06a8410bc01436efebc6a184bc9d0b748f010bce38; \
+        327a1745e392520608f06740f7fbbbdadf541ceddcad4cbd5752a05772cc7e5c; \
     test "$(sha256sum "$materialized/protected-route-action-probe.mjs" | cut -d ' ' -f 1)" = \
         2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902; \
     test "$(sha256sum "$materialized/core-updater-plugin-replacement-audit-listener.mjs" | cut -d ' ' -f 1)" = \
-        91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f; \
+        9da1c03bcc111b950a05908057061f4c3923591edfb8b064a4ce1f801d7b84d3; \
     cmp "$materialized/protected-core-updater-plugin-replacement-v3-probe.mjs" \
         /src/benchmark/admission/openclaw-v2026.7.1/protected-core-updater-plugin-replacement-v3-probe.mjs; \
     cmp "$materialized/core-updater-plugin-replacement-audit-listener.mjs" \

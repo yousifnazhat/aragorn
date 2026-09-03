@@ -34,14 +34,14 @@ _AUTHORITY = (
 _SOURCES = {
     _PROBE: (
         _ADMISSION / _PROBE,
-        27_698,
-        "sha256:7ade7b9f12010dc1a4f7cc06a8410bc01436efebc6a184bc9d0b748f010bce38",
+        27_682,
+        "sha256:327a1745e392520608f06740f7fbbbdadf541ceddcad4cbd5752a05772cc7e5c",
         "probe",
     ),
     "core-updater-plugin-replacement-audit-listener.mjs": (
         _ADMISSION / "core-updater-plugin-replacement-audit-listener.mjs",
-        2_971,
-        "sha256:91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f",
+        3_029,
+        "sha256:9da1c03bcc111b950a05908057061f4c3923591edfb8b064a4ce1f801d7b84d3",
         "probe-dependency",
     ),
     "candidate-source/index.js": (

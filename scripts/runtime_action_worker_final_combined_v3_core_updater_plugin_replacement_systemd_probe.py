@@ -42,13 +42,13 @@ _VERIFIER = Path(
     "admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py"
 )
 _PROBE_DIGEST = (
-    "sha256:7ade7b9f12010dc1a4f7cc06a8410bc01436efebc6a184bc9d0b748f010bce38"
+    "sha256:327a1745e392520608f06740f7fbbbdadf541ceddcad4cbd5752a05772cc7e5c"
 )
 _DELEGATED_DIGEST = (
     "sha256:2e655f7039cf6f2c06f815b281bb7a5ca7a84ed48ef44cf4d2ce8dfdc7df6902"
 )
 _AUDIT_DIGEST = (
-    "sha256:91670edb5383e6f23137733bb128da7f437a74cd279f5dc33139443399230f6f"
+    "sha256:9da1c03bcc111b950a05908057061f4c3923591edfb8b064a4ce1f801d7b84d3"
 )
 _CANDIDATE = {
     "index.js": (
@@ -91,7 +91,7 @@ _ROUTES = {
 }
 _EXPECTED_BUNDLE = {
     "protected-core-updater-plugin-replacement-v3-probe.mjs": {
-        "bytes": 27_698,
+        "bytes": 27_682,
         "digest": _PROBE_DIGEST,
         "role": "probe",
     },
@@ -101,7 +101,7 @@ _EXPECTED_BUNDLE = {
         "role": "probe-dependency",
     },
     "core-updater-plugin-replacement-audit-listener.mjs": {
-        "bytes": 2_971,
+        "bytes": 3_029,
         "digest": _AUDIT_DIGEST,
         "role": "probe-dependency",
     },
@@ -134,7 +134,7 @@ _LIMITATIONS = [
     "DEDICATED_CORE_UPDATER_PLUGIN_REPLACEMENT_ROUTE_AND_ACTION_ID_ONLY",
     "EPHEMERAL_WRITABLE_CONFIG_COPY_USED_FOR_FAILURE_BOOKKEEPING",
     "PINNED_INSTALLED_PLUGIN_INDEX_WRITER_LOCATED_FROM_PRIVATE_BUILD",
-    "TRUSTED_INTERNAL_DIAGNOSTIC_EVENT_BOUND_BUT_NOT_EXTERNAL_ATTESTATION",
+    "TRUSTED_DIAGNOSTIC_METADATA_BOUND_NOT_INDEPENDENT_CALL_SITE_ATTESTATION",
     "TARGET_BYTES_UNCHANGED_AFTER_POLICY_DENIAL",
     "NO_CONFIG_DISABLEMENT_ROLLBACK_OR_GENERAL_UPDATE_CLAIM",
     "PRIVATE_PATCHED_BUILD_NOT_OFFICIAL_OPENCLAW_RELEASE",
@@ -237,9 +237,9 @@ def _artifacts() -> dict[str, Any]:
         )
     )
     combined._expect(
-        source_probe["bytes"] == runtime_probe["bytes"] == 27_698
+        source_probe["bytes"] == runtime_probe["bytes"] == 27_682
         and source_probe["digest"] == runtime_probe["digest"] == _PROBE_DIGEST
-        and source_audit["bytes"] == runtime_audit["bytes"] == 2_971
+        and source_audit["bytes"] == runtime_audit["bytes"] == 3_029
         and source_audit["digest"] == runtime_audit["digest"] == _AUDIT_DIGEST
         and delegated["bytes"] == 45_137
         and delegated["digest"] == _DELEGATED_DIGEST
@@ -448,7 +448,7 @@ def _collect() -> dict[str, Any]:
         and event.get("outcome") == "denied"
         and event.get("reason") == "security_scan_blocked"
         and event.get("attributes") == {"mode": "update", "source_family": "git"}
-        and audit.get("metadata") == {"internal": True, "trusted": True}
+        and audit.get("metadata") == {"trusted": True}
         and result["decision"]["route_pass_count"] == 0
         and result["decision"]["route_fail_count"] == 0
         and all(result["decision"][key] is False for key in proposal._ELIGIBILITY_KEYS),

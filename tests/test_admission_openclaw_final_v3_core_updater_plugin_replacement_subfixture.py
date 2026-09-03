@@ -357,7 +357,7 @@ def _document() -> dict[str, object]:
                 "type": "file",
                 "uid": 992,
             },
-            "metadata": {"internal": True, "trusted": True},
+            "metadata": {"trusted": True},
         },
         "working_config_after": after_config,
         "working_config_before": before_config,
@@ -570,11 +570,11 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         for archived_mode in (
             "regular file:0:0:700:1:8295",
             "regular file:0:0:600:1:7691",
-            "regular file:0:0:700:1:19423",
+            "regular file:0:0:700:1:19408",
             "regular file:0:0:700:1:8364",
-            "regular file:0:0:600:1:28561",
-            "regular file:0:0:600:1:27698",
-            "regular file:0:0:600:1:2971",
+            "regular file:0:0:600:1:28641",
+            "regular file:0:0:600:1:27682",
+            "regular file:0:0:600:1:3029",
         ):
             self.assertIn(archived_mode, docker)
         self.assertIn(

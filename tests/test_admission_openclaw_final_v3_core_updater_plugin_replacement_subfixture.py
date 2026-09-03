@@ -421,6 +421,14 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
                 ("candidate-source",),
             )
             self.assertEqual(
+                {
+                    capture._EXPECTED_BUNDLE[name]["role"]
+                    for name in capture._ROUTES[capture._ROUTE]["files"]
+                    if name not in capture._ROUTES[capture._ROUTE]["fixtures"]
+                },
+                {"probe"},
+            )
+            self.assertEqual(
                 [item["name"] for item in manifest["files"]],
                 [
                     "protected-core-updater-plugin-replacement-v3-probe.mjs",
@@ -574,7 +582,7 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         for archived_mode in (
             "regular file:0:0:700:1:8295",
             "regular file:0:0:600:1:7691",
-            "regular file:0:0:700:1:19627",
+            "regular file:0:0:700:1:19605",
             "regular file:0:0:700:1:8364",
             "regular file:0:0:600:1:28641",
             "regular file:0:0:600:1:27682",

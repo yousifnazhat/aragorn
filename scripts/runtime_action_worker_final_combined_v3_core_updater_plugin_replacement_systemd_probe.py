@@ -99,12 +99,12 @@ _EXPECTED_BUNDLE = {
     "protected-route-action-probe.mjs": {
         "bytes": 45_137,
         "digest": _DELEGATED_DIGEST,
-        "role": "probe-dependency",
+        "role": "probe",
     },
     "core-updater-plugin-replacement-audit-listener.mjs": {
         "bytes": 3_177,
         "digest": _AUDIT_DIGEST,
-        "role": "probe-dependency",
+        "role": "probe",
     },
     **{
         f"candidate-source/{name}": {

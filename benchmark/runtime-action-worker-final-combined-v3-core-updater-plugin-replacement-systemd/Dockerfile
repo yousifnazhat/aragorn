@@ -47,9 +47,9 @@ RUN set -eux; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/materialize_openclaw_final_v3_rebound_probes.py)" = \
         'regular file:0:0:600:1:7691'; \
     test "$(sha256sum /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py | cut -d ' ' -f 1)" = \
-        981274187ca450eb245571f9be19410af977feb0c96f16462827291f050476b9; \
+        d458622db87dd946481010f6fb77a42fdf6c1db5113a62e67ff0abe47122e6c2; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py)" = \
-        'regular file:0:0:700:1:19627'; \
+        'regular file:0:0:700:1:19605'; \
     test "$(sha256sum /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh | cut -d ' ' -f 1)" = \
         3dd7550d3cc3ac816e35423f42a2923fc749e087e5640cfb619dc524170e365b; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh)" = \

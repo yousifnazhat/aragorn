@@ -36,6 +36,7 @@ _SOURCE_AUDIT = _ADMISSION / "core-updater-plugin-replacement-audit-listener.mjs
 _MATERIALIZER = Path(
     "/src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py"
 )
+_REBINDER = Path("/src/scripts/materialize_openclaw_final_v3_rebound_probes.py")
 _VERIFIER = Path(
     "/src/src/aragorn/"
     "admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py"
@@ -220,6 +221,7 @@ def _artifacts() -> dict[str, Any]:
     )
     delegated = p37c._file(_ROUTE_ROOT / "protected-route-action-probe.mjs")
     materializer = p37c._file(_MATERIALIZER)
+    rebound_materializer = p37c._file(_REBINDER)
     verifier = p37c._file(_VERIFIER)
     collector = p37c._file(Path(__file__).resolve())
     capture_recipe = p37c._file(
@@ -248,6 +250,7 @@ def _artifacts() -> dict[str, Any]:
         == _custody(delegated)
         == {"gid": 0, "mode": "0444", "nlink": 1, "type": "file", "uid": 0}
         and _custody(materializer)
+        == _custody(rebound_materializer)
         == _custody(collector)
         == _custody(capture_recipe)
         == {"gid": 0, "mode": "0555", "nlink": 1, "type": "file", "uid": 0}
@@ -284,6 +287,7 @@ def _artifacts() -> dict[str, Any]:
                 "final_combined_v3_workshop_proposal_apply"
             ],
             "materializer": materializer,
+            "rebound_materializer": rebound_materializer,
             "probe": {"checked_in_source": source_probe, "runtime": runtime_probe},
             "semantic_verifier_source": verifier,
         },

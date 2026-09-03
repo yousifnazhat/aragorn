@@ -18,6 +18,7 @@ COPY src/aragorn/admission_openclaw_final_v3_core_updater_plugin_replacement_sub
     /src/src/aragorn/
 COPY scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh \
     scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py \
+    scripts/materialize_openclaw_final_v3_rebound_probes.py \
     scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py \
     /src/scripts/
 
@@ -28,14 +29,18 @@ RUN set -eux; \
         dafa4fc1f21d72be7ab25eca917c75ed4a0ae2a524fa24abc96f791ba040d9a0; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py)" = \
         'regular file:0:0:700:1:8219'; \
+    test "$(sha256sum /src/scripts/materialize_openclaw_final_v3_rebound_probes.py | cut -d ' ' -f 1)" = \
+        8321a6c423b03c283d175185de6886ca12aaa08c244f81b67be3a73a47279a1c; \
+    test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/materialize_openclaw_final_v3_rebound_probes.py)" = \
+        'regular file:0:0:600:1:7691'; \
     test "$(sha256sum /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py | cut -d ' ' -f 1)" = \
-        3cc321a35babbb899d3ff38eff0377c62c05f5d9642d2d21f612ddfaa13b2f65; \
+        c0b3a015c31671de0b67d4873c3ad02b744513122fcf0cbf5d1f6b7044667f86; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py)" = \
-        'regular file:0:0:700:1:18556'; \
+        'regular file:0:0:700:1:18786'; \
     test "$(sha256sum /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh | cut -d ' ' -f 1)" = \
-        3377f3cb9078b3250ba51c707ee32b27ad5e1b6ed1717b0a458a3def6feca90d; \
+        e9931c492ec19ac3f7f136e837839266b97fb2336679aea4db6c5aff5ab58510; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh)" = \
-        'regular file:0:0:700:1:7933'; \
+        'regular file:0:0:700:1:8009'; \
     test "$(sha256sum /src/src/aragorn/admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py | cut -d ' ' -f 1)" = \
         ea4dfe6b52318ce5e70bb6810a95ebbd3af0c76300fd7c12a78727c7203993c2; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/src/aragorn/admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py)" = \
@@ -119,6 +124,7 @@ RUN set -eux; \
     chmod 0555 \
         /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh \
         /src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py \
+        /src/scripts/materialize_openclaw_final_v3_rebound_probes.py \
         /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py; \
     find /route-input -type d -exec chmod 0555 {} +; \
     find /route-input -type f -exec chmod 0444 {} +; \

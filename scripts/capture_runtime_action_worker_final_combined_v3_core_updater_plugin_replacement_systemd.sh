@@ -136,7 +136,8 @@ replacements = (
     (
         b"    scripts/materialize_fixed_admission_probes.py \\\n",
         b"    scripts/materialize_fixed_admission_probes.py \\\n"
-        b"    scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py \\\n",
+        b"    scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py \\\n"
+        b"    scripts/materialize_openclaw_final_v3_rebound_probes.py \\\n",
         1,
     ),
     (b"workshop-proposal-apply", b"core-updater-plugin-replacement", 43),

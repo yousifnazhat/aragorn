@@ -493,6 +493,10 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
                 "materialize_openclaw_final_v3_core_updater_plugin_replacement.py",
                 generated_text,
             )
+            self.assertIn(
+                "scripts/materialize_openclaw_final_v3_rebound_probes.py",
+                generated_text,
+            )
             create = "created_volume=$(docker volume create"
             self.assertLess(
                 generated_text.index("route_input_volume_created=1\n" + create),
@@ -523,13 +527,18 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         for archived_mode in (
             "regular file:0:0:700:1:8219",
-            "regular file:0:0:700:1:18556",
-            "regular file:0:0:700:1:7933",
+            "regular file:0:0:600:1:7691",
+            "regular file:0:0:700:1:18786",
+            "regular file:0:0:700:1:8009",
             "regular file:0:0:600:1:27805",
             "regular file:0:0:600:1:26844",
             "regular file:0:0:600:1:2947",
         ):
             self.assertIn(archived_mode, docker)
+        self.assertIn(
+            "8321a6c423b03c283d175185de6886ca12aaa08c244f81b67be3a73a47279a1c",
+            docker,
+        )
         for path in (
             recipe,
             _ROOT

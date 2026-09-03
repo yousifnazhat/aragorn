@@ -99,12 +99,12 @@ _EXPECTED_BUNDLE = {
     "protected-route-action-probe.mjs": {
         "bytes": 45_137,
         "digest": _DELEGATED_DIGEST,
-        "role": "probe",
+        "role": "probe-dependency",
     },
     "core-updater-plugin-replacement-audit-listener.mjs": {
         "bytes": 3_177,
         "digest": _AUDIT_DIGEST,
-        "role": "probe",
+        "role": "probe-dependency",
     },
     **{
         f"candidate-source/{name}": {
@@ -385,11 +385,17 @@ def _run_route(tokens: dict[str, str], gateway_pid: int) -> dict[str, Any]:
             )
         return process
 
-    harness = {"document": {"probe_bundle": _probe_bundle()}}
+    bundle = _probe_bundle()
+    harness = {"document": {"probe_bundle": bundle}}
     with (
         mock.patch.object(proposal.v1_route, "_ROUTES", _ROUTES),
         mock.patch.object(proposal.v1_route, "_PROBE_ROOT", _ROUTE_ROOT),
         mock.patch.object(proposal.v1_route, "_SELECTED_ROUTE", _ROUTE),
+        mock.patch.object(
+            proposal.v1_route,
+            "_probe_bundle",
+            side_effect=lambda _harness: _probe_bundle(),
+        ),
         mock.patch.object(
             proposal.v1_route.subprocess, "run", side_effect=run_with_selector
         ),
@@ -414,6 +420,7 @@ def _collect() -> dict[str, Any]:
         mock.patch.object(proposal, "_artifacts", _artifacts),
         mock.patch.object(proposal, "_decision", _decision),
         mock.patch.object(proposal, "_run_route", _run_route),
+        mock.patch.object(proposal, "_probe_bundle", _probe_bundle),
         mock.patch.object(proposal, "_route_input_volume_name", _route_input_volume_name),
     ):
         result = proposal._collect()

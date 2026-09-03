@@ -422,11 +422,14 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             )
             self.assertEqual(
                 {
-                    capture._EXPECTED_BUNDLE[name]["role"]
-                    for name in capture._ROUTES[capture._ROUTE]["files"]
-                    if name not in capture._ROUTES[capture._ROUTE]["fixtures"]
+                    name: capture._EXPECTED_BUNDLE[name]["role"]
+                    for name in capture._ROUTES[capture._ROUTE]["files"][:3]
                 },
-                {"probe"},
+                {
+                    "protected-core-updater-plugin-replacement-v3-probe.mjs": "probe",
+                    "protected-route-action-probe.mjs": "probe-dependency",
+                    "core-updater-plugin-replacement-audit-listener.mjs": "probe-dependency",
+                },
             )
             self.assertEqual(
                 [item["name"] for item in manifest["files"]],
@@ -582,7 +585,7 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         for archived_mode in (
             "regular file:0:0:700:1:8295",
             "regular file:0:0:600:1:7691",
-            "regular file:0:0:700:1:19605",
+            "regular file:0:0:700:1:19872",
             "regular file:0:0:700:1:8364",
             "regular file:0:0:600:1:28641",
             "regular file:0:0:600:1:27682",
@@ -625,6 +628,26 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             ),
         ):
             capture._run_route({"OPENCLAW_GATEWAY_TOKEN": "safe-token"}, 123)
+
+    def test_inherited_route_revalidates_the_core_bundle(self) -> None:
+        bundle = [{"name": "dependency", "role": "probe-dependency"}]
+
+        def inherited(_tokens: object, harness: object, _pid: object) -> object:
+            self.assertEqual(
+                capture.proposal.v1_route._probe_bundle(harness), bundle
+            )
+            return {"bundle": bundle}
+
+        with (
+            patch.object(capture, "_probe_bundle", return_value=bundle) as validator,
+            patch.object(
+                capture.proposal.v1_route,
+                "_run_route",
+                side_effect=inherited,
+            ),
+        ):
+            self.assertEqual(capture._run_route({}, 123), {"bundle": bundle})
+        self.assertEqual(validator.call_count, 2)
 
     @unittest.skipUnless(_NODE, "Node.js is required")
     def test_all_materialized_javascript_is_syntactically_valid(self) -> None:

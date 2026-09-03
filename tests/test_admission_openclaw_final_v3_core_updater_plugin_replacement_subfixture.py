@@ -21,6 +21,9 @@ from aragorn.oci_worker_protocol import canonical_digest
 from scripts import (
     materialize_openclaw_final_v3_core_updater_plugin_replacement as materializer,
 )
+from scripts import (
+    runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe as capture,
+)
 
 _ROOT = Path(__file__).resolve().parents[1]
 _ADMISSION = _ROOT / "benchmark/admission/openclaw-v2026.7.1"
@@ -528,7 +531,7 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         for archived_mode in (
             "regular file:0:0:700:1:8219",
             "regular file:0:0:600:1:7691",
-            "regular file:0:0:700:1:18786",
+            "regular file:0:0:700:1:19423",
             "regular file:0:0:700:1:8009",
             "regular file:0:0:600:1:27805",
             "regular file:0:0:600:1:26844",
@@ -553,6 +556,24 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             raw = path.read_bytes()
             self.assertIn(hashlib.sha256(raw).hexdigest(), docker)
             self.assertIn(str(len(raw)), docker)
+
+    def test_failed_live_route_reports_bounded_token_safe_diagnostic(self) -> None:
+        failed = subprocess.CompletedProcess(
+            args=[], returncode=2, stdout=b"", stderr=b"bounded route failure\n"
+        )
+        with (
+            patch.object(capture, "_probe_bundle", return_value=[]),
+            patch.object(
+                capture.proposal.v1_route.subprocess,
+                "run",
+                return_value=failed,
+            ),
+            self.assertRaisesRegex(
+                capture.combined.openclaw.ProbeError,
+                "core-updater route exited 2: bounded route failure",
+            ),
+        ):
+            capture._run_route({"OPENCLAW_GATEWAY_TOKEN": "safe-token"}, 123)
 
     @unittest.skipUnless(_NODE, "Node.js is required")
     def test_all_materialized_javascript_is_syntactically_valid(self) -> None:

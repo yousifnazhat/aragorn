@@ -363,7 +363,21 @@ def _run_route(tokens: dict[str, str], gateway_pid: int) -> dict[str, Any]:
             "V3 core-updater route command changed",
         )
         command.extend(["--route-id", _ROUTE])
-        return inherited_run(command, *args, **kwargs)
+        process = inherited_run(command, *args, **kwargs)
+        if process.returncode != 0:
+            token_values = [value.encode("ascii") for value in tokens.values()]
+            combined._expect(
+                all(
+                    token not in process.stdout and token not in process.stderr
+                    for token in token_values
+                ),
+                "failed core-updater route retained a token",
+            )
+            stderr = process.stderr.decode("utf-8", errors="replace").strip()
+            raise combined.openclaw.ProbeError(
+                f"core-updater route exited {process.returncode}: {stderr[:2048]}"
+            )
+        return process
 
     harness = {"document": {"probe_bundle": _probe_bundle()}}
     with (

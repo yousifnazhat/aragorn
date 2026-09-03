@@ -18,7 +18,7 @@ _SCHEMA = (
 )
 _DELEGATED_SCHEMA = "aragorn/openclaw-protected-route-action-observations/v1"
 _IMPLEMENTATION_DIGEST = (
-    "sha256:db868cc300cac7f07bc2aafb0619a6f326d3d70015b1821744e9f4d9ebc07760"
+    "sha256:7348d0ee886ccdbb315a950a8793d2cd654c39019b52849b40bcd43cc9ba5ee3"
 )
 _DELEGATED_DIGEST = (
     "sha256:18f17a79ba6c72b247857d9213abc1093f699a2000e4d8c4f5192b719e905132"
@@ -54,9 +54,9 @@ _EXPECTED_OUTCOME = {
 }
 _TARGET = "/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker"
 _WORKING_CONFIG = "/profile/state/core-updater-openclaw.json"
-_CONFIG_BYTES = 2_160
+_CONFIG_BYTES = 2_159
 _CONFIG_DIGEST = (
-    "sha256:2855474d8b709654fb8902c0dc69ec1f0a3a378518ec23bfb12c1eb9630824ab"
+    "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
 )
 _CONFIG_CANONICAL_DIGEST = (
     "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"

@@ -35,7 +35,7 @@ _SOURCES = {
     _PROBE: (
         _ADMISSION / _PROBE,
         26_844,
-        "sha256:db868cc300cac7f07bc2aafb0619a6f326d3d70015b1821744e9f4d9ebc07760",
+        "sha256:7348d0ee886ccdbb315a950a8793d2cd654c39019b52849b40bcd43cc9ba5ee3",
         "probe",
     ),
     "core-updater-plugin-replacement-audit-listener.mjs": (

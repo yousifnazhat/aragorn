@@ -83,6 +83,13 @@ def _working_configs() -> tuple[dict[str, object], dict[str, object]]:
     before_document = json.loads(
         (_ADMISSION / "protected-final-combined-config-v3.json").read_bytes()
     )
+    before_raw = json.dumps(
+        before_document,
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
     after_document = deepcopy(before_document)
     after_document["plugins"]["entries"][subject._PLUGIN_ID]["enabled"] = False
     after_document["meta"] = {
@@ -98,9 +105,9 @@ def _working_configs() -> tuple[dict[str, object], dict[str, object]]:
         "uid": 992,
     }
     before = {
-        "bytes": subject._CONFIG_BYTES,
-        "canonical_digest": subject._CONFIG_CANONICAL_DIGEST,
-        "digest": subject._CONFIG_DIGEST,
+        "bytes": len(before_raw),
+        "canonical_digest": "sha256:" + hashlib.sha256(before_raw).hexdigest(),
+        "digest": "sha256:" + hashlib.sha256(before_raw).hexdigest(),
         "document": before_document,
         **custody,
     }

@@ -47,11 +47,11 @@ const EXPECTED_TREE = "fc3f1336c488b32d3b668f637ec4bdc6ccf56213";
 const POLICY_REASON = "plugin installs disabled by Aragorn protected profile";
 const OUTPUT_LIMIT = 4 * 1024 * 1024;
 const CONFIG_EXPECTED = Object.freeze({
-  bytes: 2_160,
+  bytes: 2_159,
   canonicalDigest:
     "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c",
   digest:
-    "sha256:2855474d8b709654fb8902c0dc69ec1f0a3a378518ec23bfb12c1eb9630824ab",
+    "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c",
 });
 const DELEGATED_EXPECTED = Object.freeze({
   bytes: 45_093,

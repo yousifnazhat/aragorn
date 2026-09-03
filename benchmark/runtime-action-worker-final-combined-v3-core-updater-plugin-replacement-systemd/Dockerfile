@@ -1,10 +1,16 @@
 ARG V3_FORCE_BASE
 
+FROM sha256:8530f76a96d88820d288761f022e318970dda93d01536919fbc16076b7983e63 AS git-source
+
 # Exact retained proposal child; its rootfs is itself an additive child of the
 # exact V3 force-policy parent supplied and rechecked by the capture recipe.
 FROM sha256:601a0b582406193cf031b0f5512b564464452a60a00bc97098266182ccd13ff7
 
 ARG V3_FORCE_BASE
+
+# ponytail: this bounded file:// route needs only Git and git-upload-pack;
+# copy the full Git runtime if a future route exercises another transport.
+COPY --from=git-source /usr/bin/git /usr/bin/git
 
 COPY benchmark/runtime-action-worker-final-combined-v3-core-updater-plugin-replacement-systemd/ \
     /src/benchmark/runtime-action-worker-final-combined-v3-core-updater-plugin-replacement-systemd/
@@ -23,8 +29,15 @@ COPY scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin
     /src/scripts/
 
 RUN set -eux; \
+    ln -s git /usr/bin/git-upload-pack; \
     test "$V3_FORCE_BASE" = \
         "sha256:e0fa63e8c57a865b8209f47c21e7ba327f6c3300156c3366e6b4e4253b55521f"; \
+    test "$(sha256sum /usr/bin/git | cut -d ' ' -f 1)" = \
+        54af380ba6ca1b36305358e99427a31ae4b0af5dc5cb6d0198c6f2f16e97651d; \
+    test "$(stat -c '%F:%u:%g:%a:%h:%s' /usr/bin/git)" = \
+        'regular file:0:0:755:1:3756992'; \
+    test "$(readlink /usr/bin/git-upload-pack)" = git; \
+    test "$(/usr/bin/git --version)" = 'git version 2.39.5'; \
     test "$(sha256sum /src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py | cut -d ' ' -f 1)" = \
         ffdc59114c0ec55bbd5c0c32a1da6facdce71e8c21bfc36169221122e1b486b9; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/materialize_openclaw_final_v3_core_updater_plugin_replacement.py)" = \
@@ -38,9 +51,9 @@ RUN set -eux; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd_probe.py)" = \
         'regular file:0:0:700:1:19423'; \
     test "$(sha256sum /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh | cut -d ' ' -f 1)" = \
-        e9931c492ec19ac3f7f136e837839266b97fb2336679aea4db6c5aff5ab58510; \
+        3dd7550d3cc3ac816e35423f42a2923fc749e087e5640cfb619dc524170e365b; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh)" = \
-        'regular file:0:0:700:1:8009'; \
+        'regular file:0:0:700:1:8364'; \
     test "$(sha256sum /src/src/aragorn/admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py | cut -d ' ' -f 1)" = \
         dcd168fa59ad74597d6184c4d57f284fac1d86393485b9be177963f26e9bbcca; \
     test "$(stat -c '%F:%u:%g:%a:%h:%s' /src/src/aragorn/admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture.py)" = \

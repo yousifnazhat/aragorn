@@ -3,6 +3,8 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 source_recipe=$root/scripts/capture_runtime_action_worker_final_combined_v3_workshop_proposal_apply_systemd.sh
+docker_context=colima-aragorn-bakeoff
+git_source=sha256:8530f76a96d88820d288761f022e318970dda93d01536919fbc16076b7983e63
 temporary=
 
 cleanup()
@@ -23,6 +25,13 @@ if [ ! -f "$source_recipe" ] \
         != a4f03cf2788f097d556be2b6ef93d758d6b12622a292a530784599d20b00ae96 ]
 then
     echo "pinned V3 workshop-proposal capture recipe changed" >&2
+    exit 66
+fi
+if [ "$#" -eq 1 ] \
+    && [ "$(docker --context "$docker_context" image inspect --format '{{.Id}}' \
+        "$git_source" 2>/dev/null || :)" != "$git_source" ]
+then
+    echo "missing exact local Git source image" >&2
     exit 66
 fi
 

@@ -484,6 +484,11 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
         self.assertIn("usage:", result.stderr)
 
         wrapper = recipe.read_text(encoding="utf-8")
+        git_source = (
+            "sha256:8530f76a96d88820d288761f022e318970dda93d01536919fbc16076b7983e63"
+        )
+        self.assertIn(git_source, wrapper)
+        self.assertIn('docker --context "$docker_context" image inspect', wrapper)
         transformer = wrapper.partition("<<'PY'\n")[2].partition("\nPY\nchmod")[0]
         inherited = _ROOT / (
             "scripts/capture_runtime_action_worker_final_combined_v3_"
@@ -551,11 +556,14 @@ class CoreUpdaterMaterializerTests(unittest.TestCase):
             / "benchmark/runtime-action-worker-final-combined-v3-core-updater-"
             "plugin-replacement-systemd/Dockerfile"
         ).read_text(encoding="utf-8")
+        self.assertIn(git_source, docker)
+        self.assertIn("COPY --from=git-source /usr/bin/git /usr/bin/git", docker)
+        self.assertIn("ln -s git /usr/bin/git-upload-pack", docker)
         for archived_mode in (
             "regular file:0:0:700:1:8295",
             "regular file:0:0:600:1:7691",
             "regular file:0:0:700:1:19423",
-            "regular file:0:0:700:1:8009",
+            "regular file:0:0:700:1:8364",
             "regular file:0:0:600:1:27946",
             "regular file:0:0:600:1:27038",
             "regular file:0:0:600:1:2971",

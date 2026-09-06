@@ -12,7 +12,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from . import admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture as semantic
+from . import (
+    admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture as semantic,
+)
 from . import admission_openclaw_final_v3_workshop_invalidation_subfixture as custody
 from .admission_evidence import AdmissionEvidenceError
 from .cas import CAS, CASError
@@ -405,13 +407,7 @@ def _verify_acquisition(store: CAS, evidence: dict[str, Any]) -> tuple[dict[str,
         and {key: live["volume"][key] for key in namespace["_EXPECTED_VOLUME"]} == namespace["_EXPECTED_VOLUME"]
         and live["commands"]["acquisition"] == namespace["_command"]()
         and live["running_volume_users_before"] == live["running_volume_users_after"] == []
-        and acquired["containment"] == {
-            "capabilities_dropped": ["ALL"], "network_mode": "none", "no_new_privileges": True,
-            "read_only_root_filesystem": True,
-            "runtime_mount": {"source": _VOLUME, "destination": "/runtime", "mode": "ro"},
-            "helper_mount": {"source": namespace["_HELPER_PATH"].as_posix(), "destination": namespace["_HELPER"], "mode": "ro"},
-            "selected_modules_executed": False,
-        },
+        and acquired["containment"] == namespace["_containment"](),
         "native acquisition containment or original-runtime join changed",
     )
     preflight = evidence["route_observation"]["document"]["core_updater_preflight"]

@@ -43,15 +43,24 @@ class CoreUpdaterQualificationTests(unittest.TestCase):
                     subject._verify_capture(changed)
 
     def test_missing_cas_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaises(AdmissionEvidenceError):
+            subject.qualify_openclaw_final_v3_core_updater_subfixture(evidence_cas=CAS(temporary))
+
+    def test_original_observation_without_native_provenance_cannot_gain_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
+            store = CAS(temporary)
+            raw = (_ROOT / subject._EVIDENCE["path"]).read_bytes()
+            store.put_expected(BytesIO(raw), expected_digest=subject._EVIDENCE["digest"], max_bytes=len(raw))
             with self.assertRaises(AdmissionEvidenceError):
-                subject.qualify_openclaw_final_v3_core_updater_subfixture(evidence_cas=CAS(temporary))
+                subject.qualify_openclaw_final_v3_core_updater_subfixture(evidence_cas=store)
 
     def test_unsigned_source_change_fails_closed(self) -> None:
         evidence = json.loads((_ROOT / subject._EVIDENCE["path"]).read_bytes())
-        with patch.object(subject, "_signed_record", return_value=b"changed"):
-            with self.assertRaisesRegex(AdmissionEvidenceError, "source checkout drift"):
-                subject._verify_materialization(evidence)
+        with (
+            patch.object(subject, "_signed_record", return_value=b"changed"),
+            self.assertRaisesRegex(AdmissionEvidenceError, "source checkout drift"),
+        ):
+            subject._verify_materialization(evidence)
 
 
 if __name__ == "__main__":

@@ -42,16 +42,17 @@ class Det01QualificationTests(unittest.TestCase):
             cas = CAS(Path(temporary) / "cas")
             with self.assertRaises(AdmissionEvidenceError):
                 subject.qualify_openclaw_final_v3_det01_subfixture(evidence_cas=cas)
-            with patch.object(cas, "read", return_value=self.raw.replace(b'"OBSERVED"', b'"PASS"', 1)):
-                with self.assertRaises(AdmissionEvidenceError):
-                    subject.qualify_openclaw_final_v3_det01_subfixture(evidence_cas=cas)
+            with (
+                patch.object(cas, "read", return_value=self.raw.replace(b'"OBSERVED"', b'"PASS"', 1)),
+                self.assertRaises(AdmissionEvidenceError),
+            ):
+                subject.qualify_openclaw_final_v3_det01_subfixture(evidence_cas=cas)
 
     def test_signed_source_parent_change_fails_closed(self) -> None:
         with TemporaryDirectory() as temporary:
             cas = CAS(Path(temporary) / "cas")
-            with patch.dict(subject._SOURCE, {"parent": "0" * 40}):
-                with self.assertRaises(AdmissionEvidenceError):
-                    subject.qualify_openclaw_final_v3_det01_subfixture(evidence_cas=cas)
+            with patch.dict(subject._SOURCE, {"parent": "0" * 40}), self.assertRaises(AdmissionEvidenceError):
+                subject.qualify_openclaw_final_v3_det01_subfixture(evidence_cas=cas)
 
     def test_lifecycle_and_execution_mutations_are_rejected(self) -> None:
         mutations = [

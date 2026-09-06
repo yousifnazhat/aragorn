@@ -24,14 +24,12 @@ def _fixture():
                     "nlink": 1, "path": path, "size": len(raw), "type": "file", "uid": 0}
         records.append({"path": path, **identity, "content_base64": base64.b64encode(raw).decode(),
                         "stat_before": metadata, "stat_after": deepcopy(metadata)})
-    helper_metadata = {"path": subject._HELPER, "type": "file"}
     live = {
         "runtime_tree_before": deepcopy(subject._RUNTIME_TREE),
         "runtime_tree_after": deepcopy(subject._RUNTIME_TREE),
         "module_files": records,
-        "runtime_tree_helper": {"path": subject._HELPER, **subject._HELPER_IDENTITY,
-                                "stat_before": helper_metadata, "stat_after": deepcopy(helper_metadata)},
-        "mounts": [{"path": path, "read_only": True, "ready": True} for path in ("/runtime", subject._HELPER)],
+        "runtime_tree_helper": subject._helper_input()[1],
+        "mounts": [{"path": "/runtime", "read_only": True, "ready": True}],
     }
     observed = {path: {"path": path, **identities[path]} for path in subject._PATHS[:2]}
     return live, identities, observed
@@ -69,16 +67,16 @@ class CoreUpdaterModuleAcquisitionTests(unittest.TestCase):
             with self.subTest(label=label):
                 live, identities, observed = _fixture()
                 mutate(live)
-                with patch.object(subject, "_MODULE_IDENTITIES", identities):
-                    with self.assertRaises((subject.CaptureError, ValueError)):
-                        subject._validate_live(live, observed)
+                with patch.object(subject, "_MODULE_IDENTITIES", identities), \
+                        self.assertRaises((subject.CaptureError, ValueError)):
+                    subject._validate_live(live, observed)
 
     def test_original_module_digest_mismatch_fails_closed(self):
         live, identities, observed = _fixture()
         observed[subject._PATHS[0]]["digest"] = "sha256:" + "0" * 64
-        with patch.object(subject, "_MODULE_IDENTITIES", identities):
-            with self.assertRaisesRegex(subject.CaptureError, "original route"):
-                subject._validate_live(live, observed)
+        with patch.object(subject, "_MODULE_IDENTITIES", identities), \
+                self.assertRaisesRegex(subject.CaptureError, "original route"):
+            subject._validate_live(live, observed)
 
     def test_container_command_is_explicitly_read_only_and_offline(self):
         command = subject._command()
@@ -88,12 +86,13 @@ class CoreUpdaterModuleAcquisitionTests(unittest.TestCase):
             self.assertEqual(command[command.index(flag) + 1], value)
         self.assertIn("--read-only", command)
         mounts = [command[index + 1] for index, value in enumerate(command) if value == "--mount"]
-        self.assertEqual(len(mounts), 2)
+        self.assertEqual(len(mounts), 1)
         self.assertTrue(all(mount.endswith(",readonly") for mount in mounts))
+        self.assertNotIn("type=bind", " ".join(command))
         self.assertIn(subject._IMAGE, command)
         program = command[-1]
         self.assertEqual(program.count("await import("), 1)
-        self.assertIn("await import('file://' + helperPath)", program)
+        self.assertIn("await import(helperUrl)", program)
         self.assertIn("fs.constants.O_NOFOLLOW", program)
         self.assertNotIn("spawn", program)
         self.assertNotIn("eval(", program)
@@ -101,7 +100,7 @@ class CoreUpdaterModuleAcquisitionTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node is unavailable")
     def test_node_reader_is_syntactically_valid(self):
         result = subprocess.run([shutil.which("node"), "--check", "--input-type=module"],
-                                input=subject._program(), text=True, capture_output=True, timeout=10)
+                                input=subject._program(), text=True, capture_output=True, timeout=10, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which("node"), "Node is unavailable")
@@ -111,17 +110,20 @@ class CoreUpdaterModuleAcquisitionTests(unittest.TestCase):
             raw = b"throw new Error('selected modules must never execute');\n"
             native.write_bytes(raw)
             helper = Path(directory) / "helper.mjs"
-            helper_raw = (b"export const runtimeTree = () => ({test_tree:true});\n"
+            helper_raw = (b"const SELF = fileURLToPath(import.meta.url);\n"
+                          b"export function runtimeTree() { return {test_tree:true}; }\n"
+                          b"function decodeMountInfoPath() {}\n"
                           b"export const mountObservation = path => ({path,ready:true,read_only:true});\n")
             helper.write_bytes(helper_raw)
             identities = {str(native): {"bytes": len(raw), "digest": subject._digest(raw)}}
             with patch.object(subject, "_PATHS", (str(native),)), \
                     patch.object(subject, "_MODULE_IDENTITIES", identities), \
                     patch.object(subject, "_HELPER", str(helper)), \
+                    patch.object(subject, "_HELPER_PATH", helper), \
                     patch.object(subject, "_HELPER_IDENTITY", {"bytes": len(helper_raw), "digest": subject._digest(helper_raw)}):
                 program = subject._program()
             result = subprocess.run([shutil.which("node"), "--input-type=module", "-e", program],
-                                    text=True, capture_output=True, timeout=10,
+                                    text=True, capture_output=True, timeout=10, check=False,
                                     env={**os.environ, "NODE_OPTIONS": "", "NODE_PATH": ""})
             self.assertEqual(result.returncode, 0, result.stderr)
             acquired = subject._load_json(result.stdout.encode(), "test reader output")
@@ -130,9 +132,10 @@ class CoreUpdaterModuleAcquisitionTests(unittest.TestCase):
 
     def test_dirty_acquisition_source_is_rejected_before_docker(self):
         answers = [str(subject._ROOT).encode() + b"\n", b"sha1\n", b"?? unrelated-new-file\n"]
-        with patch.object(subject.shared, "_git", side_effect=answers), patch.object(subject, "_run") as run:
-            with self.assertRaisesRegex(subject.CaptureError, "clean repository"):
-                subject._source_identity()
+        with patch.object(subject.shared, "_git", side_effect=answers), \
+                patch.object(subject, "_run") as run, \
+                self.assertRaisesRegex(subject.CaptureError, "clean repository"):
+            subject._source_identity()
         run.assert_not_called()
 
     def test_capture_retains_no_positive_eligibility(self):
@@ -149,9 +152,9 @@ class CoreUpdaterModuleAcquisitionTests(unittest.TestCase):
     def test_source_change_during_capture_is_rejected(self):
         with patch.object(subject, "_source_identity", side_effect=[{"commit": "a"}, {"commit": "b"}]), \
                 patch.object(subject, "_route_evidence", return_value=({}, {})), \
-                patch.object(subject, "_live_acquisition", return_value={}):
-            with self.assertRaisesRegex(subject.CaptureError, "source changed"):
-                subject.capture()
+                patch.object(subject, "_live_acquisition", return_value={}), \
+                self.assertRaisesRegex(subject.CaptureError, "source changed"):
+            subject.capture()
 
     def test_output_is_exclusive_and_rejects_symlinks(self):
         raw = b'{"status":"NOT_TESTED"}\n'

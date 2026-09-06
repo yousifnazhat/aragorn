@@ -8,7 +8,9 @@ from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture as semantic
+from . import (
+    admission_openclaw_final_v3_core_updater_plugin_replacement_subfixture as semantic,
+)
 from .admission_evidence import AdmissionEvidenceError
 from .oci_worker_protocol import canonical_digest
 

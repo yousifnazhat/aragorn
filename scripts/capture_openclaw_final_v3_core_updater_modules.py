@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Acquire pinned native call-site bytes without executing the selected modules."""
 
 from __future__ import annotations
@@ -15,7 +14,9 @@ from typing import Any
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
-from scripts import capture_openclaw_final_combined_v2_session_snapshot_closure as shared
+from scripts import (
+    capture_openclaw_final_combined_v2_session_snapshot_closure as shared,
+)
 
 CaptureError = shared.CaptureError
 _canonical = shared._canonical
@@ -131,14 +132,35 @@ def _route_evidence() -> tuple[dict[str, Any], dict[str, Any]]:
     return evidence, {item["path"]: item for item in observed}
 
 
+def _helper_input() -> tuple[bytes, dict[str, Any]]:
+    raw = (_ROOT / _HELPER_PATH).read_bytes()
+    shared._verify_identity(raw, _HELPER_IDENTITY, "runtime tree helper")
+    old = b"const SELF = fileURLToPath(import.meta.url);"
+    new = f"const SELF = {json.dumps(_HELPER)};".encode("ascii")
+    if raw.count(old) != 1:
+        raise CaptureError("runtime tree helper SELF binding changed")
+    transformed = raw.replace(old, new)
+    start = b"export function runtimeTree("
+    end = b"\nfunction decodeMountInfoPath("
+    if (raw.count(start) != 1 or raw.count(end) != 1
+        or raw.split(start)[1].split(end)[0] != transformed.split(start)[1].split(end)[0]):
+        raise CaptureError("runtime tree helper function changed")
+    return raw, {"path": _HELPER, **_HELPER_IDENTITY, "transport": "inline_base64_data_url",
+                 "transformation": {"from": old.decode(), "to": new.decode(), "count": 1},
+                 "transformed_bytes": len(transformed), "transformed_digest": _digest(transformed),
+                 "runtime_tree_function_unchanged": True}
+
+
 def _program() -> str:
     # Only the pinned observation helper is imported; selected native modules are bytes.
+    helper_raw, helper_record = _helper_input()
     return f"""
 import * as fs from 'node:fs';
 import {{createHash}} from 'node:crypto';
 const paths = {json.dumps(_PATHS)};
 const expected = {json.dumps(_MODULE_IDENTITIES)};
-const helperPath = {json.dumps(_HELPER)};
+const helper = {json.dumps(helper_record)};
+const helperRaw = Buffer.from({json.dumps(base64.b64encode(helper_raw).decode('ascii'))},'base64');
 const sha = raw => 'sha256:' + createHash('sha256').update(raw).digest('hex');
 const stat = (s, path) => ({{path,device:s.dev,inode:s.ino,uid:s.uid,gid:s.gid,
   mode:(s.mode & 0o7777).toString(8).padStart(4,'0'),nlink:s.nlink,size:s.size,
@@ -160,16 +182,24 @@ function read(path, expectedIdentity) {{
     return {{path,bytes:raw.length,digest:sha(raw),content_base64:raw.toString('base64'),stat_before:before,stat_after:after}};
   }} finally {{ fs.closeSync(fd); }}
 }}
-const helper = read(helperPath,{json.dumps(_HELPER_IDENTITY)});
-const {{runtimeTree,mountObservation}} = await import('file://' + helperPath);
-const mounts = [mountObservation('/runtime'),mountObservation(helperPath,'file')];
+if (helperRaw.length !== helper.bytes || sha(helperRaw) !== helper.digest)
+  throw new Error('inline runtime helper input changed');
+const helperText = helperRaw.toString('utf8');
+if (helperText.split(helper.transformation.from).length !== 2)
+  throw new Error('runtime helper SELF replacement count changed');
+const transformed = helperText.replace(helper.transformation.from,helper.transformation.to);
+const functionBody = text => text.split('export function runtimeTree(')[1].split('\\nfunction decodeMountInfoPath(')[0];
+if (Buffer.byteLength(transformed) !== helper.transformed_bytes ||
+    sha(Buffer.from(transformed)) !== helper.transformed_digest ||
+    functionBody(helperText) !== functionBody(transformed))
+  throw new Error('runtime helper function changed');
+const helperUrl = 'data:text/javascript;base64,' + Buffer.from(transformed).toString('base64');
+const {{runtimeTree,mountObservation}} = await import(helperUrl);
+const mounts = [mountObservation('/runtime')];
 if (!mounts.every(m => m.ready === true)) throw new Error('read-only mounts changed');
 const runtime_tree_before = runtimeTree('/runtime');
 const module_files = paths.map(path => read(path,expected[path]));
 const runtime_tree_after = runtimeTree('/runtime');
-if (JSON.stringify(helper) !== JSON.stringify(read(helperPath,{json.dumps(_HELPER_IDENTITY)})))
-  throw new Error('runtime helper changed');
-delete helper.content_base64;
 console.log(JSON.stringify({{runtime_tree_before,runtime_tree_after,module_files,runtime_tree_helper:helper,mounts}}));
 """
 
@@ -179,7 +209,6 @@ def _command() -> list[str]:
             "--security-opt", "no-new-privileges", "--pids-limit", "32", "--memory", "512m",
             "--env", "NODE_OPTIONS=", "--env", "NODE_PATH=",
             "--mount", f"type=volume,src={_VOLUME},dst=/runtime,readonly",
-            "--mount", f"type=bind,src={_ROOT / _HELPER_PATH},dst={_HELPER},readonly",
             "--entrypoint", "/usr/local/bin/node", _IMAGE, "--input-type=module", "-e", _program()]
 
 
@@ -216,12 +245,10 @@ def _validate_live(live: dict[str, Any], observed: dict[str, Any]) -> None:
         record["observed_in_original_route"] = path in observed
     if len(devices) != 1 or set(observed) != set(_PATHS[:2]):
         raise CaptureError("selected module runtime binding changed")
-    helper = live["runtime_tree_helper"]
-    if ({key: helper[key] for key in ("bytes", "digest")} != _HELPER_IDENTITY
-        or helper["path"] != _HELPER or helper["stat_before"] != helper["stat_after"]):
+    if live["runtime_tree_helper"] != _helper_input()[1]:
         raise CaptureError("runtime tree helper changed")
-    if (not isinstance(live["mounts"], list) or len(live["mounts"]) != 2
-        or [item["path"] for item in live["mounts"]] != ["/runtime", _HELPER]
+    if (not isinstance(live["mounts"], list) or len(live["mounts"]) != 1
+        or [item["path"] for item in live["mounts"]] != ["/runtime"]
         or any(item["ready"] is not True or item["read_only"] is not True for item in live["mounts"])):
         raise CaptureError("read-only acquisition mounts changed")
 
@@ -255,6 +282,14 @@ def _live_acquisition(observed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _containment() -> dict[str, Any]:
+    return {"capabilities_dropped": ["ALL"], "network_mode": "none", "no_new_privileges": True,
+            "read_only_root_filesystem": True, "runtime_mount": {"source": _VOLUME, "destination": "/runtime", "mode": "ro"},
+            "helper_input": {"source": _HELPER_PATH.as_posix(), "transport": "inline_base64_data_url",
+                             "digest": _HELPER_IDENTITY["digest"], "bytes": _HELPER_IDENTITY["bytes"]},
+            "selected_modules_executed": False}
+
+
 def capture() -> dict[str, Any]:
     source = _source_identity()
     shared._verify_identity((_ROOT / _HELPER_PATH).read_bytes(), _HELPER_IDENTITY, "runtime tree helper")
@@ -270,10 +305,7 @@ def capture() -> dict[str, Any]:
         "original_route": {"route_id": _ROUTE, "recorded_at": evidence["recorded_at"], "capture_image_id": _IMAGE,
             "evidence": {"path": _ROUTE_EVIDENCE_PATH.as_posix(), **_ROUTE_EVIDENCE_IDENTITY},
             "source_commit": _ROUTE_SOURCE_COMMIT, "retention_commit": _ROUTE_RETENTION_COMMIT},
-        "containment": {"capabilities_dropped": ["ALL"], "network_mode": "none", "no_new_privileges": True,
-            "read_only_root_filesystem": True, "runtime_mount": {"source": _VOLUME, "destination": "/runtime", "mode": "ro"},
-            "helper_mount": {"source": _HELPER_PATH.as_posix(), "destination": _HELPER, "mode": "ro"},
-            "selected_modules_executed": False},
+        "containment": _containment(),
         "acquisition": live,
         "decision": {"status": "NATIVE_CALL_SITE_BYTES_ACQUIRED_ROUTE_REMAINS_NOT_TESTED", **{key: False for key in shared._ELIGIBILITY_KEYS}},
         "limitations": ["POST_ROUTE_READ_ONLY_ACQUISITION_BOUND_BY_IDENTICAL_FULL_RUNTIME_TREE",

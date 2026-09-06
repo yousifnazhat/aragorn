@@ -46,10 +46,19 @@ _VOLUME = "aragorn-openclaw-2026-7-1-phase3-final-7fa98d8-v1"
 _INPUT_VOLUME = "aragorn-phase3-final-combined-v3-core-updater-plugin-replacement-route-input-6512"
 _INPUT_ROOT = "/route-input/core-updater-plugin-replacement/"
 _ELIGIBILITY_KEYS = custody._ELIGIBILITY_KEYS
-# Filled only from the signed acquisition checkpoint; absent pins deny PASS.
-_ACQUISITION: dict[str, Any] = {}
-_ACQUISITION_RETENTION: dict[str, str] = {}
-_ACQUISITION_BLOB = ""
+_ACQUISITION = {
+    "bytes": 602_069,
+    "canonical_bytes": 602_068,
+    "canonical_digest": "sha256:bf6a5813b4c4494649db0164f206ca98ec31f8126850de5d78378973f85bf9f6",
+    "digest": "sha256:8850d7abdc99f101a12e4d83dfac50f1ec479b970c377f3acbe52b915d602f39",
+    "path": "benchmark/evidence/openclaw-final-v3-core-updater-compiled-modules-2026-09-06.json",
+}
+_ACQUISITION_RETENTION = {
+    "commit": "0f965c5430cd9eb53d56e59712e71cd6a6666600",
+    "parent": "c6f5266e9a6544ebdc679136f98445943bb922f4",
+    "tree": "50c9fdbe7f892b041a434dda214b3ff68ec94c09",
+}
+_ACQUISITION_BLOB = "62882efd1d90779724563e49220926bea2705668"
 _contract = custody.parent.v3_contract.contract
 _git = custody.parent.v3_contract.config.base.legacy._git
 _verify_commit = custody.parent.v3_contract.config.base._verify_commit
@@ -311,7 +320,7 @@ def _verify_materialization(evidence: dict[str, Any]) -> None:
 
 
 def qualify_openclaw_final_v3_core_updater_subfixture(*, evidence_cas: CAS) -> dict[str, Any]:
-    """Fail closed until signed native-module provenance is retained and joined."""
+    """Return one route PASS after signed capture and native provenance joins."""
     try:
         evidence = _load_original(evidence_cas)
         semantics = _verify_capture(evidence)
@@ -364,7 +373,6 @@ def qualify_openclaw_final_v3_core_updater_subfixture(*, evidence_cas: CAS) -> d
 def _verify_acquisition(store: CAS, evidence: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     from . import admission_openclaw_final_v3_core_updater_provenance as native
 
-    _require(bool(_ACQUISITION) and bool(_ACQUISITION_RETENTION), "signed native-module acquisition not yet retained")
     _verify_commit(_ACQUISITION_RETENTION)
     retained = custody._read_signed_blob(
         _git, commit=_ACQUISITION_RETENTION["commit"], mode="100644", blob=_ACQUISITION_BLOB,
@@ -431,6 +439,13 @@ def _verify_acquisition(store: CAS, evidence: dict[str, Any]) -> tuple[dict[str,
         "post-capture runtime-tree or module custody changed",
     )
     files = {record["path"]: base64.b64decode(record["content_base64"], validate=True) for record in live["module_files"]}
+    native_path = "src/aragorn/admission_openclaw_final_v3_core_updater_provenance.py"
+    _require(
+        Path(native.__file__).resolve() == _ROOT / native_path
+        and Path(native.__file__).read_bytes()
+        == _git(["show", f"{source['commit']}:{native_path}"]),
+        "native provenance verifier dependency changed",
+    )
     provenance = native.verify_core_updater_native_provenance(files, evidence["route_observation"]["document"])
     binding = {
         **_ACQUISITION, "retention": dict(_ACQUISITION_RETENTION),

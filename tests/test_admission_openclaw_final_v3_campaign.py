@@ -65,12 +65,26 @@ class OpenClawFinalV3CampaignTests(unittest.TestCase):
         oracles = [
             case["regression_oracle"] for case in cases if case["regression_oracle"]
         ]
-        self.assertEqual(len(oracles), 12)
+        self.assertEqual(len(oracles), 14)
+        self.assertEqual(
+            cases[0]["regression_oracle"]["path"],
+            (
+                "benchmark/receipts/phase3-openclaw-final-v3-det01-"
+                "dedicated-qualification-v1-2026-09-06.json"
+            ),
+        )
         self.assertEqual(
             cases[8]["regression_oracle"]["path"],
             (
                 "benchmark/receipts/phase3-openclaw-protected-final-combined-v3-"
                 "archive-source-force-replacement-route-coverage-v1-2026-08-31.json"
+            ),
+        )
+        self.assertEqual(
+            cases[11]["regression_oracle"]["path"],
+            (
+                "benchmark/receipts/phase3-openclaw-final-v3-core-updater-"
+                "route-qualification-v1-2026-09-06.json"
             ),
         )
         self.assertEqual(
@@ -152,7 +166,7 @@ class OpenClawFinalV3CampaignTests(unittest.TestCase):
         self.assertEqual(result["execution"]["attested_fresh_subfixture_count"], 31)
         self.assertEqual(result["decision"]["case_observed_count"], 31)
         self.assertEqual(result["decision"]["case_total"], 31)
-        self.assertEqual(len(result["declared_regression_oracles"]), 12)
+        self.assertEqual(len(result["declared_regression_oracles"]), 14)
         self.assertTrue(
             all(
                 value is False

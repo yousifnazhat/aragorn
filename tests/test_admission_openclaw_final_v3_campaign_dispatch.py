@@ -54,24 +54,18 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertEqual(
             readiness["implementation_counts"],
             {
-                CURRENT_V3: 12,
-                V3_CAPTURE_REQUIRED: 2,
+                CURRENT_V3: 14,
+                V3_CAPTURE_REQUIRED: 0,
                 V3_REBIND_REQUIRED: 0,
                 V3_PORT_REQUIRED: 12,
                 MISSING_ADAPTER: 5,
             },
         )
-        self.assertEqual(readiness["remaining_implementation_count"], 19)
+        self.assertEqual(readiness["remaining_implementation_count"], 17)
         self.assertFalse(readiness["native_execution_enabled"])
         self.assertTrue(readiness["case_inventory_complete"])
         self.assertFalse(readiness["execution_descriptors_complete"])
-        self.assertEqual(
-            readiness["capture_required_case_ids"],
-            [
-                "DET-01",
-                "ADM-02/update/core-updater-plugin-replacement",
-            ],
-        )
+        self.assertEqual(readiness["capture_required_case_ids"], [])
 
     def test_every_descriptor_has_only_fixed_paths_and_no_execution(self) -> None:
         registry = openclaw_final_v3_campaign_registry()
@@ -110,12 +104,12 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             )
         )
 
-        rebound = [
+        materialized = [
             case
             for case in registry["cases"]
-            if case["implementation_state"] == V3_CAPTURE_REQUIRED
+            if case["materializer"] is not None
         ]
-        self.assertEqual(len(rebound), 2)
+        self.assertEqual(len(materialized), 2)
         expected_argv = {
             "DET-01": [
                 "/usr/local/bin/python3.12",
@@ -131,7 +125,8 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
                 "/campaign/cases/11-adm-02-update-core-updater-plugin-replacement",
             ],
         }
-        for case in rebound:
+        for case in materialized:
+            self.assertEqual(case["implementation_state"], CURRENT_V3)
             materializer = case["materializer"]
             self.assertEqual(
                 [
@@ -158,7 +153,7 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
         self.assertTrue(
             all(
                 (case["materializer"] is not None)
-                == (case["implementation_state"] == V3_CAPTURE_REQUIRED)
+                == (case["case_id"] in _CAPTURE_BUNDLES)
                 for case in registry["cases"]
             )
         )
@@ -202,8 +197,9 @@ class OpenClawFinalV3CampaignDispatchTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            det["descriptor"]["implementation_state"], V3_CAPTURE_REQUIRED
+            det["descriptor"]["implementation_state"], CURRENT_V3
         )
+        self.assertEqual(core["descriptor"]["implementation_state"], CURRENT_V3)
 
         force = dispatch_openclaw_final_v3_campaign_case(
             "ADM-02/update/plugin-force-reinstall"

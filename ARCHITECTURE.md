@@ -4,6 +4,11 @@ Date: 2026-07-27
 
 Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; bounded exercised-profile Phase 2 exit complete; Phase 3 runtime-prevention engineering active; universal capture completeness, general archives, private repositories, trusted runtime/host attestation, runtime conformance, installer eligibility, EDR status, and public release remain blocked
 
+Separate signed current-V3 DET-01 and core-updater subfixtures now have bounded
+decision-case and route-level qualifications, respectively. Along with dedicated
+workshop invalidation, they remain standalone regression evidence rather than
+final campaign evidence; the historical formal `FAIL` profile is unchanged.
+
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
 **Aragorn** stands for **Agent Runtime Admission, Governance, Observation, Response, and Neutralization**. It is the working name of both the open-source project and its CLI.
@@ -1624,18 +1629,19 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
 campaign, seven required event classes, six required response classes, and the
 exact quantitative measurement rules. Its dispatcher is intentionally
-non-executing: twelve cases map to retained current V3 implementations; two have
-exact, read-only V3 materialized bundles but await fresh capture; twelve require
-V3 ports; and five still lack route adapters. Twelve retained receipt paths remain
+non-executing: fourteen cases map to retained current V3 implementations; twelve
+require V3 ports; and five still lack route adapters. Fourteen retained receipt paths remain
 regression-oracle-only and cannot promote campaign eligibility. The dedicated
 workshop-invalidation capture now has one fail-closed route-level qualification
-and replaces the shared-capture child as that route's regression oracle. DET-01
-and core-updater replacement remain capture-required. The
+and replaces the shared-capture child as that route's regression oracle. The new
+standalone DET-01 and core-updater qualifications supply two additional regression
+oracles; their exact, read-only materialized bundle descriptors remain available.
+All 31 final campaign subfixtures still require fresh isolated execution. The
 quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate
-paired overhead. These are contracts, byte materialization, and verifier code
-only; no new dynamic evidence or eligibility follows from them.
+paired overhead. The campaign and metrics contracts have not executed or composed
+their own evidence; no aggregate eligibility follows from the standalone receipts.
 
 The historical
 `benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json`

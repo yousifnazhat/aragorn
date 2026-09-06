@@ -39,7 +39,7 @@ _AUTHORITY = (
 )
 _LIMITATIONS = [
     "PROVISIONAL_STAGING_PATHS_NOT_EXECUTABLE_BYTE_PINS",
-    "TWO_MATERIALIZED_V3_BUNDLES_REQUIRE_FRESH_SUBFIXTURE_CAPTURE",
+    "TWO_MATERIALIZED_V3_BUNDLES_HAVE_STANDALONE_QUALIFICATION_NOT_CAMPAIGN_EVIDENCE",
     "WORKSHOP_INVALIDATION_HAS_ROUTE_ONLY_QUALIFICATION_NOT_CAMPAIGN_EVIDENCE",
     "NO_NATIVE_INTERPRETER_RUNTIME_OR_IMAGE_DIGEST_EXECUTION_BINDINGS",
     "LEGACY_MULTI_SCENARIO_PROBES_REQUIRE_V3_PER_CASE_PORTS",
@@ -70,12 +70,10 @@ def _bundle_item(name: str, role: str) -> tuple[str, str]:
     return name, role
 
 
-def _case_materializer(
-    case_id: str, root: str, implementation_state: str
-) -> dict[str, Any] | None:
-    if implementation_state != V3_CAPTURE_REQUIRED:
+def _case_materializer(case_id: str, root: str) -> dict[str, Any] | None:
+    source = _MATERIALIZER_BY_CASE.get(case_id)
+    if source is None:
         return None
-    source = _MATERIALIZER_BY_CASE[case_id]
     return {
         "argv": [_PYTHON, source["path"], root],
         "source": dict(source),
@@ -103,7 +101,7 @@ def _descriptor(
         "expected_schema": expected_schema,
         "implementation_state": implementation_state,
         "interpreter": interpreter,
-        "materializer": _case_materializer(case_id, root, implementation_state),
+        "materializer": _case_materializer(case_id, root),
         "native_execution_enabled": False,
         "ordinal": ordinal,
     }
@@ -113,7 +111,7 @@ _CASES = (
     _descriptor(
         0,
         "DET-01",
-        V3_CAPTURE_REQUIRED,
+        CURRENT_V3,
         _PYTHON,
         "run_admission_authority_replay.py",
         "aragorn/admission-authority-replay-evidence/v1",
@@ -195,7 +193,7 @@ _CASES = (
     _descriptor(
         11,
         "ADM-02/update/core-updater-plugin-replacement",
-        V3_CAPTURE_REQUIRED,
+        CURRENT_V3,
         _NODE,
         "protected-core-updater-plugin-replacement-v3-probe.mjs",
         (
@@ -527,12 +525,12 @@ def openclaw_final_v3_campaign_readiness() -> dict[str, Any]:
 def _validate_registry() -> None:
     if len(_CASES) != 31 or len(_BY_CASE_ID) != len(_CASES):
         raise RuntimeError("fixed V3 campaign registry cardinality changed")
-    capture_cases = {
+    materialized_cases = {
         case["case_id"]
         for case in _CASES
-        if case["implementation_state"] == V3_CAPTURE_REQUIRED
+        if case["materializer"] is not None
     }
-    if capture_cases != set(_MATERIALIZER_BY_CASE):
+    if materialized_cases != set(_MATERIALIZER_BY_CASE):
         raise RuntimeError("fixed V3 campaign materializer registry changed")
     for ordinal, case in enumerate(_CASES):
         if set(case) != {
@@ -566,7 +564,6 @@ def _validate_registry() -> None:
         expected_materializer = _case_materializer(
             case["case_id"],
             str(PurePosixPath(case["argv"][1]).parent),
-            case["implementation_state"],
         )
         if case["materializer"] != expected_materializer:
             raise RuntimeError("fixed V3 campaign materializer binding changed")

@@ -63,6 +63,9 @@ from aragorn.admission_evidence_workshop import (
     verify_openclaw_update_reload_coverage_v3,
 )
 from aragorn.admission_gate import validate_retained_admission_conformance
+from aragorn.admission_openclaw_final_v3_det01_qualification import (
+    qualify_openclaw_final_v3_det01_subfixture,
+)
 from aragorn.admission_openclaw_final_v2_aggregate_fresh_session import (
     verify_openclaw_final_v2_aggregate_fresh_session,
 )
@@ -4324,6 +4327,25 @@ def main() -> int:
             "protected final V3 dedicated workshop-invalidation qualification "
             "changed"
         )
+
+    with TemporaryDirectory(prefix="aragorn-final-v3-det01-qualification-") as temporary:
+        evidence_cas = CAS(temporary)
+        raw = (admission_evidence / (
+            "runtime-action-worker-final-combined-v3-det01-systemd-p3-final-2026-09-03.json"
+        )).read_bytes()
+        evidence_cas.put_expected(
+            BytesIO(raw), expected_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+            max_bytes=len(raw),
+        )
+        det01_qualification = qualify_openclaw_final_v3_det01_subfixture(evidence_cas=evidence_cas)
+    det01_qualification_path = admission_receipts / (
+        "phase3-openclaw-final-v3-det01-dedicated-qualification-v1-2026-09-06.json"
+    )
+    if (
+        load(det01_qualification_path) != det01_qualification
+        or det01_qualification_path.read_bytes() != canonical_json(det01_qualification) + b"\n"
+    ):
+        raise AssertionError("dedicated V3 DET-01 qualification changed")
 
     final_v3_fresh_session_reset_evidence_path = admission_evidence / (
         "runtime-action-worker-final-combined-v3-route-fresh-session-reset-"

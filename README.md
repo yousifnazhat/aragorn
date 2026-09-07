@@ -884,6 +884,13 @@ qualification and replaces the shared-capture child as that route's regression
 oracle. DET-01 and core-updater replacement now have standalone qualifications;
 their exact, read-only materialized bundle descriptors remain available. These
 receipts do not replace the 31 fresh, isolated final campaign subfixtures.
+The first small campaign wave now provides a shared exact-request builder and
+a [DET-01 request-to-byte binder](./src/aragorn/admission_openclaw_final_v3_det01_binding.py).
+It joins a caller-held campaign contract to the pinned materializer, source
+files, and read-only local bundle. This is a point-in-time byte check, not
+execution, live runtime custody, or qualification; all eligibility stays false.
+The next wave is the one-case native backend, which must reverify those bytes
+and retain campaign-bound execution and cleanup evidence.
 A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
 caller-bound baseline/instrumented pairs. No campaign or metrics evidence has

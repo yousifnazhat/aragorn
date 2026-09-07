@@ -321,6 +321,29 @@ def validate_openclaw_final_v3_campaign_contract(
     return _copy_json(expected)
 
 
+def build_openclaw_final_v3_subfixture_request(
+    contract: dict[str, Any], case_id: str
+) -> dict[str, Any]:
+    """Build one exact request from a validated caller-held campaign contract."""
+
+    bound = validate_openclaw_final_v3_campaign_contract(contract)
+    if type(case_id) is not str or case_id not in _CASE_IDS:
+        raise CampaignContractError("campaign case id is not an exact contract member")
+    return _subfixture_request(bound, bound["ordered_cases"][_CASE_IDS.index(case_id)])
+
+
+def _subfixture_request(
+    bound: dict[str, Any], case: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "schema": _REQUEST_SCHEMA,
+        "authority": "FRESH_SUBFIXTURE_REQUEST_ONLY_NOT_QUALIFICATION_AUTHORITY",
+        "campaign_nonce": bound["campaign_nonce"],
+        "case": _copy_json(case),
+        "frozen_parent": _copy_json(bound["frozen_parent"]),
+    }
+
+
 def run_openclaw_final_v3_campaign(
     contract: dict[str, Any],
     execute_subfixture: Callable[[dict[str, Any]], dict[str, Any]],
@@ -332,13 +355,7 @@ def run_openclaw_final_v3_campaign(
     seen_evidence_refs: set[str] = set()
     counts = {"FAIL": 0, "NOT_TESTED": 0, "OBSERVED": 0}
     for case in bound["ordered_cases"]:
-        request = {
-            "schema": _REQUEST_SCHEMA,
-            "authority": "FRESH_SUBFIXTURE_REQUEST_ONLY_NOT_QUALIFICATION_AUTHORITY",
-            "campaign_nonce": bound["campaign_nonce"],
-            "case": _copy_json(case),
-            "frozen_parent": _copy_json(bound["frozen_parent"]),
-        }
+        request = _subfixture_request(bound, case)
         result = _subfixture_result(execute_subfixture(_copy_json(request)), case)
         reused = seen_evidence_refs.intersection(result["evidence_refs"])
         if reused:

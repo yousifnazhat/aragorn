@@ -1636,8 +1636,13 @@ workshop-invalidation capture now has one fail-closed route-level qualification
 and replaces the shared-capture child as that route's regression oracle. The new
 standalone DET-01 and core-updater qualifications supply two additional regression
 oracles; their exact, read-only materialized bundle descriptors remain available.
-All 31 final campaign subfixtures still require fresh isolated execution. The
-quantitative leaf independently checks exact caller-held inventories, one
+All 31 final campaign subfixtures still require fresh isolated execution.
+The DET-01 request binder now checks the exact caller-held contract/request join,
+fixed dispatcher paths, pinned materializer/source bytes, and the read-only
+materialized bundle without executing it. Parent identities remain declarations;
+the future backend must reverify execution bytes and live custody. This binding
+does not establish signatures, freshness, cleanup, replay results, or eligibility.
+The quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate
 paired overhead. The campaign and metrics contracts have not executed or composed

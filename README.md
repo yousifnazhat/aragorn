@@ -889,12 +889,17 @@ a [DET-01 request-to-byte binder](./src/aragorn/admission_openclaw_final_v3_det0
 It joins a caller-held campaign contract to the pinned materializer, source
 files, and read-only local bundle. This is a point-in-time byte check, not
 execution, live runtime custody, or qualification; all eligibility stays false.
-The next wave is the one-case native backend, which must reverify those bytes
-and retain campaign-bound execution and cleanup evidence.
+An opt-in [one-case DET-01 backend](./scripts/capture_openclaw_final_v3_det01_campaign.py)
+now wraps the unchanged native capture recipe, checks actual source/bundle/argv
+bindings, snapshots the complete frozen parent before and after execution, and
+publishes CAS evidence only after local cleanup checks. Its campaign nonce is
+associated by the host wrapper, not echoed by the native collector. Independent
+qualification of this fresh evidence is the next wave; the 31-case dispatcher
+remains non-executing and has no resume support.
 A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
-caller-bound baseline/instrumented pairs. No campaign or metrics evidence has
-been captured or composed, so all admission, `RUN-01`, `RUN-02`, Phase 3, EDR,
+caller-bound baseline/instrumented pairs. No complete campaign or metrics evidence
+set has been captured and composed, so all admission, `RUN-01`, `RUN-02`, Phase 3, EDR,
 installer, and release eligibility remains false.
 
 ## What works now

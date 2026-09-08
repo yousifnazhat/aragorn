@@ -1640,8 +1640,14 @@ All 31 final campaign subfixtures still require fresh isolated execution.
 The DET-01 request binder now checks the exact caller-held contract/request join,
 fixed dispatcher paths, pinned materializer/source bytes, and the read-only
 materialized bundle without executing it. Parent identities remain declarations;
-the future backend must reverify execution bytes and live custody. This binding
+the execution backend must reverify execution bytes and live custody. This binding
 does not establish signatures, freshness, cleanup, replay results, or eligibility.
+The opt-in DET-01 wrapper reuses the historical native recipe unchanged, binds
+the exact request to its invocation and captured source/bundle/argv, and checks
+full parent snapshots and local daemon cleanup before CAS publication. The
+nonce association is wrapper-only, not collector-observed. These snapshots do
+not establish an exclusive volume lease, and this one-case backend neither
+qualifies fresh evidence nor enables/resumes the complete campaign.
 The quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate

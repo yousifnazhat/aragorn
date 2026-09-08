@@ -306,13 +306,15 @@ class Det01CaptureAndParentValidationTests(unittest.TestCase):
                 self.assertFalse(
                     any("rm" in call.args[0] for call in run.call_args_list)
                 )
-        with patch.object(
-            subject.acquisition,
-            "_run",
-            side_effect=[b"", subject.CaptureError("daemon unavailable")],
+        with (
+            patch.object(
+                subject.acquisition,
+                "_run",
+                side_effect=[b"", subject.CaptureError("daemon unavailable")],
+            ),
+            self.assertRaises(subject.CaptureError),
         ):
-            with self.assertRaises(subject.CaptureError):
-                snapshot._cleanup_snapshot(name, owner, parent["image_id"])
+            snapshot._cleanup_snapshot(name, owner, parent["image_id"])
 
     def test_retained_native_capture_recomputes_and_rejects_source_or_argv_drift(
         self,

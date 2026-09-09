@@ -15,11 +15,13 @@ import tempfile
 import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from . import runtime_action_broker as broker
 from . import runtime_action_worker as worker
+from .cas import CAS, CASError
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .runtime_action_decision import qualify_runtime_revocation_generation
 from .runtime_process_profile import (
@@ -38,6 +40,7 @@ _LIVE_WORKER_BINDING = Path(
 )
 _CGROUP_ROOT = Path("/sys/fs/cgroup")
 _MASK_ROOT = Path("/etc/systemd/system")
+_EVIDENCE_ROOT = Path("/var/lib/aragorn-runtime-response")
 _PROPERTIES = (
     "Id",
     "LoadState",
@@ -67,12 +70,17 @@ class RuntimeResponseIndeterminate(RuntimeResponseError):
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    prevent_starts = bool(arguments and arguments[0] == "--prevent-starts")
-    if prevent_starts:
-        arguments.pop(0)
+    options: set[str] = set()
+    while arguments and arguments[0] in {"--prevent-starts", "--retain-evidence"}:
+        option = arguments.pop(0)
+        if option in options:
+            arguments = []
+            break
+        options.add(option)
+    prevent_starts = "--prevent-starts" in options
     if len(arguments) != 2:
         print(
-            "usage: aragorn-runtime-response-service [--prevent-starts] EXPECTED_SKILL_DIGEST "
+            "usage: aragorn-runtime-response-service [--prevent-starts] [--retain-evidence] EXPECTED_SKILL_DIGEST "
             "EXPECTED_REVOCATION_SNAPSHOT_DIGEST",
             file=sys.stderr,
         )
@@ -85,6 +93,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             else _run(*arguments)
         )
         completed = True
+        if "--retain-evidence" in options:
+            result = _retain_result(result)
         print(canonical_json(result).decode("ascii"))
         return 0
     except RuntimeResponseIndeterminate as exc:
@@ -100,6 +110,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 125
         return 130
     except (
+        CASError,
         OSError,
         ValueError,
         TypeError,
@@ -110,12 +121,74 @@ def main(argv: Sequence[str] | None = None) -> int:
         if completed:
             print(
                 "aragorn runtime response: INDETERMINATE: termination completed "
-                "but result delivery failed",
+                "but evidence retention or result delivery failed",
                 file=sys.stderr,
             )
             return 125
         print(f"aragorn runtime response: REFUSED: {exc}", file=sys.stderr)
         return 126
+
+
+def _retain_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Retain the response bytes, not the envelope that names their digest."""
+    if sys.platform != "linux" or os.geteuid() != 0:
+        raise RuntimeResponseError("root Linux evidence retention is required")
+    root_fd = broker._open_protected_directory(_EVIDENCE_ROOT, 0, "response evidence")
+    try:
+        before = os.fstat(root_fd)
+        if before.st_gid != 0 or stat.S_IMODE(before.st_mode) != 0o700:
+            raise RuntimeResponseError("response evidence root must be root:root 0700")
+        raw = canonical_json(result)
+        digest = canonical_digest(result)
+        store = CAS(_EVIDENCE_ROOT)
+        if (
+            store.put_expected(
+                BytesIO(raw), expected_digest=digest, max_bytes=_MAX_BYTES
+            )
+            != digest
+        ):
+            raise RuntimeResponseError("response evidence publication digest changed")
+        blob = _EVIDENCE_ROOT / "blobs" / "sha256" / digest[7:9] / digest[9:]
+        if (
+            store.read(digest, max_bytes=_MAX_BYTES) != raw
+            or _read_regular(blob, 0, {0o444}) != raw
+        ):
+            raise RuntimeResponseError("response evidence readback changed")
+        # CAS syncs new blobs; also cover deduplication and newly created parents.
+        for path in (
+            blob,
+            blob.parent,
+            blob.parent.parent,
+            _EVIDENCE_ROOT / "blobs",
+            _EVIDENCE_ROOT,
+            _EVIDENCE_ROOT.parent,
+        ):
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+            if path != blob:
+                flags |= os.O_DIRECTORY
+            descriptor = os.open(path, flags)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        if broker._directory_identity(
+            os.lstat(_EVIDENCE_ROOT)
+        ) != broker._directory_identity(before):
+            raise RuntimeResponseError("response evidence root changed")
+        return {
+            "schema": "aragorn/retained-runtime-response/v1",
+            "authority": "LOCAL_ROOT_EVIDENCE_RETENTION_NOT_INDEPENDENT_QUALIFICATION",
+            "response": result,
+            "evidence": {
+                "cas_root": str(_EVIDENCE_ROOT),
+                "digest": digest,
+                "bytes": len(raw),
+                "readback_verified": True,
+                "blob_and_directory_chain_fsynced": True,
+            },
+        }
+    finally:
+        os.close(root_fd)
 
 
 def _run(

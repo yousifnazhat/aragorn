@@ -324,7 +324,8 @@ credentials, checks the fresh broker snapshot and persisted generation floor und
 the existing locks, then stops only the fixed gateway and worker units. Success
 requires inactive units and empty process subtrees; partial stops fail explicitly.
 [Installation](./packaging/install-runtime-response-host.sh) adds the command
-without activating it or changing the historical worker, broker, or unit files.
+and a root-only evidence directory without activating it or changing the historical
+worker, broker, or unit files.
 After installation, a root operator supplies both exact `sha256:` digests:
 
 ```sh
@@ -339,6 +340,13 @@ automatic detector. The [bounded Linux check](./scripts/capture_runtime_response
 exercises wrong-digest refusal, unit-wide stop, an extra gateway-cgroup process,
 and refused restart in a disposable fixture. Live RUN qualification and final
 common-deployment qualification remain required.
+Add `--retain-evidence` to retain the canonical response in the fixed root-owned
+`/var/lib/aragorn-runtime-response` CAS. This opt-in mode returns a separate response
+and digest-receipt envelope after exact readback and file/directory syncing;
+the default output is unchanged. Retention failure after a stop returns
+`INDETERMINATE` (125), never a claim that no stop occurred. The store is local,
+not independently attested or protected from root; retention/rotation and external
+alert delivery are not implemented.
 The [September 9 live observation](./benchmark/evidence/phase3-runtime-response-systemd-development-v1-2026-09-09.json)
 confirms those bounded checks, persistent masks, absent cgroups, and owned-container
 cleanup. It is local integration evidence, not automatic response or digest quarantine.

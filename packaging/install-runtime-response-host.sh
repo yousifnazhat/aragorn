@@ -4,6 +4,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 destdir=${DESTDIR:-}
 DESTDIR=$destdir "$root/packaging/install-runtime-action-worker-host.sh"
+install -d -m 0700 "$destdir/var/lib/aragorn-runtime-response"
 
 install -m 0644 \
     "$root/src/aragorn/runtime_response_service.py" \

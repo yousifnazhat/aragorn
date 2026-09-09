@@ -1045,6 +1045,14 @@ unchanged. One retained disposable-fixture observation now demonstrates stop and
 persistent start masking, including an extra gateway-cgroup member. It does not
 prove gateway child genealogy, automatic response dispatch, general digest
 quarantine, or final common-deployment qualification.
+Optional `--retain-evidence` stores the canonical completed response under its
+SHA-256 digest in a fixed root:root 0700 CAS. The returned envelope keeps that
+response separate from its receipt to avoid a self-referential digest. It verifies
+blob bytes, root ownership, read-only mode and single-link custody, then syncs the
+blob and complete directory chain, including deduplicated writes. Storage or
+delivery failure after termination remains indeterminate and never rolls back
+the stop or masks. This local audit artifact does not add external alert delivery,
+automatic dispatch, retention rotation, or independent qualification authority.
 
 P3.6a closes the next bounded dependency: the capability route now consumes a
 live, lock-stable protected-install transaction instead of relying only on

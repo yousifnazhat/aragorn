@@ -17,6 +17,7 @@ from scripts import openclaw_final_v3_parent_snapshot as parent_snapshot
 
 _IMAGE = "sha256:1c75f0c37070aa5b702e134e6e6c830690f596891ce0f4fa389ea7515300ea17"
 _OVERLAY = {
+    "src/aragorn/cas.py": "/usr/lib/aragorn/aragorn/cas.py",
     "src/aragorn/runtime_response_service.py": "/usr/lib/aragorn/aragorn/runtime_response_service.py",
     "packaging/libexec/aragorn-runtime-response-service.py": "/usr/libexec/aragorn/aragorn-runtime-response-service.py",
     "scripts/runtime_response_systemd_check.py": "/opt/aragorn/runtime-response-systemd-check.py",

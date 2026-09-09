@@ -32,6 +32,7 @@ def _require_fixture() -> None:
 
 def _run() -> dict:
     _require_fixture()
+    response._EVIDENCE_ROOT.mkdir(mode=0o700)
     import runtime_action_worker_final_combined_v3_plugin_force_reinstall_systemd_probe as v3
 
     combined, p37c = v3.combined, v3.p37c

@@ -14,7 +14,7 @@ from typing import Any
 sys.path.insert(0, "/usr/lib/aragorn")
 
 from aragorn import runtime_response_service as response
-from aragorn.oci_worker_protocol import canonical_json
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.runtime_process_profile import _read_virtual_file
 
 _ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
@@ -174,6 +174,50 @@ def _start_refused() -> dict[str, Any]:
     }
 
 
+def _retained_response(
+    envelope: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    result = envelope["response"]
+    raw = canonical_json(result)
+    expected = {
+        "cas_root": str(response._EVIDENCE_ROOT),
+        "digest": canonical_digest(result),
+        "bytes": len(raw),
+        "readback_verified": True,
+        "blob_and_directory_chain_fsynced": True,
+    }
+    _expect(
+        set(envelope) == {"schema", "authority", "response", "evidence"}
+        and envelope["schema"] == "aragorn/retained-runtime-response/v1"
+        and envelope["authority"]
+        == "LOCAL_ROOT_EVIDENCE_RETENTION_NOT_INDEPENDENT_QUALIFICATION"
+        and canonical_json(envelope["evidence"]) == canonical_json(expected),
+        "retained response envelope changed",
+    )
+    # Read from a separate process, not the writer's in-memory return value.
+    program = "import sys;sys.path.insert(0,'/usr/lib/aragorn');from aragorn.cas import CAS;sys.stdout.buffer.write(CAS('/var/lib/aragorn-runtime-response',read_only=True).read(sys.argv[1],max_bytes=131072))"
+    readback = subprocess.run(
+        ["/usr/bin/python3.12", "-I", "-S", "-B", "-c", program, expected["digest"]],
+        capture_output=True,
+        timeout=5,
+        check=False,
+        env=_ENV,
+    )
+    _expect(
+        readback.returncode == 0 and not readback.stderr and readback.stdout == raw,
+        "separate-process evidence readback changed",
+    )
+    _expect(
+        response._retain_result(result) == envelope,
+        "deduplicated evidence retention changed",
+    )
+    return result, {
+        **expected,
+        "separate_process_readback": True,
+        "deduplication_checked": True,
+    }
+
+
 def _run(skill: str, snapshot: str) -> dict[str, Any]:
     response.broker._require_digest(skill, "expected skill digest")
     response.broker._require_digest(snapshot, "expected snapshot digest")
@@ -201,14 +245,17 @@ def _run(skill: str, snapshot: str) -> dict[str, Any]:
             _child_identity(child, identities[3], identities[4]) == child_before,
             "wrong-skill request changed the fixture child",
         )
-        positive = _invoke(["--prevent-starts", skill, snapshot])
+        positive = _invoke(["--prevent-starts", "--retain-evidence", skill, snapshot])
         _expect(
             positive["exit_code"] == 0 and not positive["stderr"],
             "stop/revoke response was not confirmed: " + positive["stderr"][:2048],
         )
         raw = positive["stdout"].encode("ascii")
         _expect(raw.endswith(b"\n"), "response output is not newline terminated")
-        result = response.broker._parse_canonical_document(raw[:-1], "response result")
+        envelope = response.broker._parse_canonical_document(
+            raw[:-1], "response result"
+        )
+        result, retention = _retained_response(envelope)
         _expect(
             result["status"] == "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE"
             and result["expected_skill_digest"] == skill
@@ -235,6 +282,7 @@ def _run(skill: str, snapshot: str) -> dict[str, Any]:
         "extra_gateway_cgroup_member": child_before,
         "wrong_skill_refusal": negative,
         "response_invocation": positive,
+        "evidence_retention": retention,
         "direct_start_refusal": start,
         "cgroups_after_refused_start": cgroups,
         "extra_gateway_cgroup_member_exit_code": child.returncode,

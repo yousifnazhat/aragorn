@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 import stat
 import subprocess
@@ -124,6 +125,124 @@ def _environment(fixture: _Fixture):
 
 
 class RuntimeResponseServiceTests(unittest.TestCase):
+    def test_retention_is_opt_in_and_failure_after_response_is_indeterminate(
+        self,
+    ) -> None:
+        result = {"status": "TERMINATED_FIXED_RUNTIME_PROFILE"}
+        for options in (
+            ["--retain-evidence"],
+            ["--prevent-starts", "--retain-evidence"],
+            ["--retain-evidence", "--prevent-starts"],
+        ):
+            with (
+                patch.object(service, "_run", return_value=result) as run,
+                patch.object(
+                    service, "_retain_result", return_value={"response": result}
+                ) as retain,
+                redirect_stdout(StringIO()) as output,
+            ):
+                self.assertEqual(service.main([*options, _SKILL, _OTHER]), 0)
+                self.assertEqual(json.loads(output.getvalue()), {"response": result})
+                retain.assert_called_once_with(result)
+                self.assertEqual(
+                    run.call_args.kwargs,
+                    {"prevent_starts": True} if "--prevent-starts" in options else {},
+                )
+        for failure in (
+            service.CASError("disk failure"),
+            OSError("fsync failure"),
+            RuntimeError("readback changed"),
+        ):
+            with (
+                patch.object(service, "_run", return_value=result),
+                patch.object(service, "_retain_result", side_effect=failure),
+                redirect_stdout(StringIO()) as output,
+                redirect_stderr(StringIO()) as errors,
+            ):
+                self.assertEqual(
+                    service.main(["--retain-evidence", _SKILL, _OTHER]), 125
+                )
+                self.assertEqual(output.getvalue(), "")
+                self.assertIn("INDETERMINATE", errors.getvalue())
+        with patch.object(service, "_run") as run, redirect_stderr(StringIO()):
+            for options in (["--retain-evidence", "--retain-evidence"], ["--unknown"]):
+                self.assertEqual(service.main([*options, _SKILL, _OTHER]), 64)
+            run.assert_not_called()
+
+    def test_retention_requires_custody_exact_readback_and_complete_sync(self) -> None:
+        result = {"status": "TERMINATED_FIXED_RUNTIME_PROFILE"}
+        raw, digest = canonical_json(result), canonical_digest(result)
+        root = service._EVIDENCE_ROOT
+        blob = root / "blobs" / "sha256" / digest[7:9] / digest[9:]
+        for failure in (None, "mode", "digest", "readback", "custody", "fsync", "root"):
+            metadata = SimpleNamespace(
+                st_dev=1,
+                st_ino=2,
+                st_uid=0,
+                st_gid=0,
+                st_mode=stat.S_IFDIR | (0o755 if failure == "mode" else 0o700),
+            )
+            with (
+                self.subTest(failure=failure),
+                patch.object(service.sys, "platform", "linux"),
+                patch.object(service.os, "geteuid", return_value=0),
+                patch.object(
+                    service.broker, "_open_protected_directory", return_value=9
+                ) as opened,
+                patch.object(service.os, "fstat", return_value=metadata),
+                patch.object(
+                    service.os,
+                    "lstat",
+                    return_value=SimpleNamespace(**{**vars(metadata), "st_ino": 3})
+                    if failure == "root"
+                    else metadata,
+                ),
+                patch.object(service.os, "open", return_value=10) as descriptors,
+                patch.object(service.os, "close") as close,
+                patch.object(
+                    service.os,
+                    "fsync",
+                    side_effect=OSError("fsync failed") if failure == "fsync" else None,
+                ) as sync,
+                patch.object(service, "CAS") as cas,
+                patch.object(
+                    service,
+                    "_read_regular",
+                    return_value=b"changed" if failure == "custody" else raw,
+                ) as read,
+            ):
+                cas.return_value.put_expected.return_value = (
+                    _OTHER if failure == "digest" else digest
+                )
+                cas.return_value.read.return_value = (
+                    b"changed" if failure == "readback" else raw
+                )
+                if failure:
+                    with self.assertRaises((service.RuntimeResponseError, OSError)):
+                        service._retain_result(result)
+                else:
+                    retained = service._retain_result(result)
+                    self.assertEqual(retained["response"], result)
+                    self.assertEqual(retained["evidence"]["digest"], digest)
+                    self.assertTrue(
+                        retained["evidence"]["blob_and_directory_chain_fsynced"]
+                    )
+                    self.assertEqual(sync.call_count, 6)
+                    self.assertEqual(
+                        [call.args[0] for call in descriptors.call_args_list],
+                        [
+                            blob,
+                            blob.parent,
+                            blob.parent.parent,
+                            root / "blobs",
+                            root,
+                            root.parent,
+                        ],
+                    )
+                    read.assert_called_once_with(blob, 0, {0o444})
+                opened.assert_called_once_with(root, 0, "response evidence")
+                self.assertEqual(close.call_args.args, (9,))
+
     def test_future_start_masks_follow_confirmed_stop_under_both_locks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = _Fixture(Path(temporary).resolve())
@@ -772,7 +891,16 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             for installed, (source, mode) in expected.items():
                 self.assertEqual(installed.read_bytes(), source.read_bytes())
                 self.assertEqual(stat.S_IMODE(installed.stat().st_mode), mode)
-            for untouched in ("etc", "run", "var", "opt"):
+            self.assertEqual(
+                stat.S_IMODE(
+                    (staged / "var/lib/aragorn-runtime-response").stat().st_mode
+                ),
+                0o700,
+            )
+            self.assertEqual(
+                list((staged / "var/lib/aragorn-runtime-response").iterdir()), []
+            )
+            for untouched in ("etc", "run", "opt"):
                 self.assertFalse((staged / untouched).exists())
             result = subprocess.run(
                 [sys.executable, "-I", "-S", "-B", str(launcher)],

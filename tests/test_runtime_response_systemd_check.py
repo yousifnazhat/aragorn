@@ -4,11 +4,12 @@ import subprocess
 import sys
 import unittest
 from contextlib import ExitStack, contextmanager, redirect_stderr
+from copy import deepcopy
 from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from aragorn.oci_worker_protocol import canonical_json
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from scripts import runtime_response_systemd_check as check
 
 _SKILL = "sha256:" + "a" * 64
@@ -69,6 +70,14 @@ def _environment():
             (check, "_gateway_child", child),
             (check, "_child_identity", Mock(return_value=_CHILD)),
             (check.response, "main", response),
+            (
+                check,
+                "_retained_response",
+                lambda result: (
+                    result,
+                    {"separate_process_readback": True, "deduplication_checked": True},
+                ),
+            ),
             (check, "_start_refused", Mock(return_value={"exit_code": 1})),
             (check.response, "_cgroup_empty", Mock(return_value={"status": "ABSENT"})),
         ):
@@ -77,6 +86,53 @@ def _environment():
 
 
 class RuntimeResponseSystemdCheckTests(unittest.TestCase):
+    def test_retained_envelope_rejects_receipt_or_readback_substitution(self):
+        result = {"status": "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE"}
+        raw = canonical_json(result)
+        original = {
+            "schema": "aragorn/retained-runtime-response/v1",
+            "authority": "LOCAL_ROOT_EVIDENCE_RETENTION_NOT_INDEPENDENT_QUALIFICATION",
+            "response": result,
+            "evidence": {
+                "cas_root": str(check.response._EVIDENCE_ROOT),
+                "digest": canonical_digest(result),
+                "bytes": len(raw),
+                "readback_verified": True,
+                "blob_and_directory_chain_fsynced": True,
+            },
+        }
+        for failure in (None, "schema", "receipt", "readback", "dedup"):
+            envelope = deepcopy(original)
+            if failure == "schema":
+                envelope["schema"] = "unrelated"
+            if failure == "receipt":
+                envelope["evidence"]["bytes"] = True
+            with (
+                self.subTest(failure=failure),
+                patch.object(
+                    check.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(
+                        returncode=0,
+                        stdout=b"changed" if failure == "readback" else raw,
+                        stderr=b"",
+                    ),
+                ),
+                patch.object(
+                    check.response,
+                    "_retain_result",
+                    return_value={} if failure == "dedup" else original,
+                ),
+            ):
+                if failure:
+                    with self.assertRaises(RuntimeError):
+                        check._retained_response(envelope)
+                else:
+                    observed, proof = check._retained_response(envelope)
+                    self.assertEqual(observed, result)
+                    self.assertTrue(proof["separate_process_readback"])
+                    self.assertTrue(proof["deduplication_checked"])
+
     def test_one_negative_then_stop_revoke_and_direct_start_refusal(self):
         with _environment() as (process, calls):
             result = check._run(_SKILL, _SNAPSHOT)
@@ -86,7 +142,7 @@ class RuntimeResponseSystemdCheckTests(unittest.TestCase):
             calls,
             [
                 ["sha256:" + "0" + "a" * 63, _SNAPSHOT],
-                ["--prevent-starts", _SKILL, _SNAPSHOT],
+                ["--prevent-starts", "--retain-evidence", _SKILL, _SNAPSHOT],
             ],
         )
         self.assertEqual(result["status"], "OBSERVED")

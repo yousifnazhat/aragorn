@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import ExitStack, contextmanager, redirect_stderr
+from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -124,6 +124,174 @@ def _environment(fixture: _Fixture):
 
 
 class RuntimeResponseServiceTests(unittest.TestCase):
+    def test_future_start_masks_follow_confirmed_stop_under_both_locks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            snapshot = canonical_digest(_accepted(fixture))
+            with _environment(fixture) as (_binding, events, _stop):
+                barrier = {"status": "PERSISTENT_FIXED_PROFILE_STARTS_MASKED"}
+
+                def mask():
+                    self.assertEqual(service._cgroup_empty.call_count, 2)
+                    self.assertEqual(events, ["activation-lock", "stop"])
+                    with (
+                        fixture.lock_path.open("rb") as lock,
+                        self.assertRaises(BlockingIOError),
+                    ):
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    events.append("mask")
+                    return barrier
+
+                with patch.object(service, "_mask_future_starts", side_effect=mask):
+                    result = service._run(_SKILL, snapshot, prevent_starts=True)
+                self.assertEqual(
+                    events, ["activation-lock", "stop", "mask", "activation-unlock"]
+                )
+                self.assertEqual(result["future_start_barrier"], barrier)
+                self.assertEqual(
+                    result["status"], "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE"
+                )
+                self.assertIn(
+                    "FIXED_PROFILE_MASKS_NOT_GENERAL_INSTALLED_DIGEST_QUARANTINE",
+                    result["limitations"],
+                )
+        with (
+            patch.object(service, "_run", return_value={}) as run,
+            redirect_stdout(StringIO()),
+        ):
+            self.assertEqual(service.main(["--prevent-starts", _SKILL, _OTHER]), 0)
+            run.assert_called_once_with(_SKILL, _OTHER, prevent_starts=True)
+
+    def test_mask_failure_after_stop_never_reports_success_or_rolls_back(self) -> None:
+        for failure in (OSError("mask failure"), KeyboardInterrupt()):
+            with (
+                self.subTest(failure=type(failure)),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                snapshot = canonical_digest(_accepted(fixture))
+                with (
+                    _environment(fixture) as (_binding, events, stop),
+                    patch.object(service, "_mask_future_starts", side_effect=failure),
+                    self.assertRaises(service.RuntimeResponseIndeterminate),
+                ):
+                    service._run(_SKILL, snapshot, prevent_starts=True)
+                stop.assert_called_once_with()
+                self.assertEqual(
+                    events, ["activation-lock", "stop", "activation-unlock"]
+                )
+
+    def test_persistent_masks_require_exact_paths_durability_and_systemd_state(
+        self,
+    ) -> None:
+        cases = ("good", "existing", "bad-target", "bad-owner", "not-masked", "fsync")
+        real_stat, real_lstat, real_fstat = os.stat, os.lstat, os.fstat
+
+        def root_metadata(metadata, *, uid=0):
+            return SimpleNamespace(
+                **{
+                    name: getattr(metadata, name)
+                    for name in ("st_mode", "st_dev", "st_ino", "st_nlink")
+                },
+                st_uid=uid,
+                st_gid=0,
+            )
+
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary).resolve()
+                events = []
+                if case == "existing":
+                    (directory / service._UNITS[0]).write_bytes(b"existing authority")
+
+                def command(
+                    argv, *, timeout, events=events, directory=directory, case=case
+                ):
+                    if "mask" in argv:
+                        self.assertEqual(timeout, 5)
+                        self.assertEqual(
+                            argv,
+                            [
+                                "/usr/bin/systemctl",
+                                "--system",
+                                "--no-pager",
+                                "--no-ask-password",
+                                "--quiet",
+                                "--no-reload",
+                                "mask",
+                                *service._UNITS,
+                            ],
+                        )
+                        events.append("mask")
+                        for unit in service._UNITS:
+                            (directory / unit).symlink_to(
+                                "/bad-target" if case == "bad-target" else "/dev/null"
+                            )
+                        return b""
+                    if "daemon-reload" in argv:
+                        self.assertEqual(events, ["mask", "fsync"])
+                        events.append("reload")
+                        return b""
+                    self.assertIn("show", argv)
+                    self.assertEqual(events, ["mask", "fsync", "reload"])
+                    return (
+                        f"Id={argv[-1]}\nLoadState=masked\n"
+                        f"UnitFileState={'enabled' if case == 'not-masked' else 'masked'}\n"
+                        "ActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n"
+                    ).encode("ascii")
+
+                def fsync(descriptor, events=events, case=case):
+                    self.assertTrue(stat.S_ISDIR(real_fstat(descriptor).st_mode))
+                    events.append("fsync")
+                    if case == "fsync":
+                        raise OSError("durability was not confirmed")
+
+                with (
+                    patch.object(service, "_MASK_ROOT", directory),
+                    patch.object(service.broker, "_require_protected_ancestry"),
+                    patch.object(service, "_command", side_effect=command),
+                    patch.object(service.os, "fsync", side_effect=fsync),
+                    patch.object(
+                        service.os,
+                        "fstat",
+                        side_effect=lambda fd: root_metadata(real_fstat(fd)),
+                    ),
+                    patch.object(
+                        service.os,
+                        "lstat",
+                        side_effect=lambda path: root_metadata(real_lstat(path)),
+                    ),
+                    patch.object(
+                        service.os,
+                        "stat",
+                        side_effect=lambda *args, case=case, **kwargs: root_metadata(
+                            real_stat(*args, **kwargs),
+                            uid=7 if case == "bad-owner" else 0,
+                        ),
+                    ),
+                ):
+                    if case == "good":
+                        result = service._mask_future_starts()
+                        self.assertTrue(result["directory_fsynced"])
+                        self.assertFalse(result["automatic_unmask_supported"])
+                        self.assertEqual(
+                            [mask["path"] for mask in result["masks"]],
+                            [str(directory / unit) for unit in service._UNITS],
+                        )
+                    else:
+                        with self.assertRaises((service.RuntimeResponseError, OSError)):
+                            service._mask_future_starts()
+                if case == "existing":
+                    self.assertEqual(events, [])
+                    self.assertEqual(
+                        (directory / service._UNITS[0]).read_bytes(),
+                        b"existing authority",
+                    )
+                else:
+                    self.assertTrue(
+                        all((directory / unit).is_symlink() for unit in service._UNITS)
+                    )
+
     def test_accepted_snapshot_is_locked_through_fixed_unit_stop(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = _Fixture(Path(temporary).resolve())
@@ -145,6 +313,7 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                 result["revocation_snapshot_digest"], canonical_digest(document)
             )
             self.assertEqual(result["status"], "TERMINATED_FIXED_RUNTIME_PROFILE")
+            self.assertNotIn("future_start_barrier", result)
             self.assertEqual(
                 result["authority"],
                 "LOCAL_ROOT_RESPONSE_RESULT_NOT_RUN_OR_PHASE3_CONFORMANCE",
@@ -406,7 +575,44 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             ):
                 service._read_bindings(1001)
 
-    def test_native_cgroup_confirmation_includes_descendants(self) -> None:
+    def test_service_cgroup_derives_only_fixed_native_or_docker_systemd_roots(
+        self,
+    ) -> None:
+        unit = service._UNITS[0]
+        docker = "/docker/" + "a" * 64
+        for init_scope, expected in (
+            ("/init.scope", f"/system.slice/{unit}"),
+            (f"{docker}/init.scope", f"{docker}/system.slice/{unit}"),
+        ):
+            with patch.object(
+                service, "_process_cgroup", return_value=init_scope
+            ) as read:
+                self.assertEqual(service._service_cgroup(unit), expected)
+                read.assert_called_once_with(1)
+        for unsafe in (
+            "/",
+            "/user.slice/init.scope",
+            "/docker/short/init.scope",
+            "/docker/" + "A" * 64 + "/init.scope",
+            docker,
+            docker + "/../init.scope",
+            docker + "/system.slice/init.scope",
+        ):
+            with (
+                self.subTest(cgroup=unsafe),
+                patch.object(service, "_process_cgroup", return_value=unsafe),
+                self.assertRaises(service.RuntimeResponseError),
+            ):
+                service._service_cgroup(unit)
+        with (
+            patch.object(service, "_process_cgroup") as read,
+            self.assertRaises(service.RuntimeResponseError),
+        ):
+            service._service_cgroup("unrelated.service")
+        read.assert_not_called()
+
+    @patch.object(service, "_process_cgroup", return_value="/init.scope")
+    def test_native_cgroup_confirmation_includes_descendants(self, _cgroup) -> None:
         unit = service._UNITS[0]
         cgroup = f"/system.slice/{unit}"
         before = {"ControlGroup": cgroup}

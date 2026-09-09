@@ -21,13 +21,19 @@ from aragorn import admission_openclaw_final_v3_campaign as campaign
 from aragorn.cas import CAS, CASError
 from scripts import capture_openclaw_final_v3_det01_campaign as det01
 from scripts import openclaw_final_v3_core_updater_case as core
+from scripts import openclaw_final_v3_workshop_invalidation_case as workshop
 
 CaptureError = det01.CaptureError
 _canonical = campaign._canonical
 _digest = campaign._digest
 _DOCKER = det01.acquisition._DOCKER
 _CORE_CASE = "ADM-02/update/core-updater-plugin-replacement"
-_SUPPORTED = ("DET-01", _CORE_CASE)
+_WORKSHOP_CASE = "ADM-02/reload/workshop-invalidation"
+_BACKENDS = {
+    _CORE_CASE: (core, "core-updater-plugin-replacement"),
+    _WORKSHOP_CASE: (workshop, "workshop-invalidation"),
+}
+_SUPPORTED = ("DET-01", *_BACKENDS)
 _RECIPE = "scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh"
 _ROLE = "final-combined-v3-core-updater-plugin-replacement-route-input"
 _PREFIX = "aragorn-phase3-final-combined-v3-core-updater-plugin-replacement"
@@ -74,7 +80,10 @@ def _source_identity() -> dict[str, Any]:
     source = det01._source_identity()
     git = det01.acquisition.shared._git
     files = {item["path"]: item for item in source["files"]}
-    for path in sorted({_RECIPE, *core.SOURCE_PATHS} - files.keys()):
+    inputs = {
+        path for backend, _ in _BACKENDS.values() for path in backend.SOURCE_PATHS
+    }
+    for path in sorted(inputs - files.keys()):
         entry = git(["ls-tree", "-z", source["commit"], "--", path])
         metadata, separator, name = entry.partition(b"\t")
         fields = metadata.split()
@@ -99,7 +108,10 @@ def _source_identity() -> dict[str, Any]:
     return source
 
 
-def _namespace_state() -> dict[str, Any]:
+def _namespace_state(*, case_id: str = _CORE_CASE) -> dict[str, Any]:
+    _, stem = _BACKENDS[case_id]
+    prefix = "aragorn-phase3-final-combined-v3-" + stem
+    role = "final-combined-v3-" + stem + "-route-input"
     commands = {
         "containers": [
             *_DOCKER,
@@ -107,7 +119,7 @@ def _namespace_state() -> dict[str, Any]:
             "-aq",
             "--no-trunc",
             "--filter",
-            "name=^/" + _PREFIX + "-[0-9]+$",
+            "name=^/" + prefix + "-[0-9]+$",
         ],
         "volumes": [
             *_DOCKER,
@@ -116,7 +128,7 @@ def _namespace_state() -> dict[str, Any]:
             "--format",
             "{{.Name}}",
             "--filter",
-            "label=dev.aragorn.role=" + _ROLE,
+            "label=dev.aragorn.role=" + role,
         ],
     }
     state = {
@@ -125,13 +137,14 @@ def _namespace_state() -> dict[str, Any]:
     }
     _expect(
         not any(state.values()),
-        "core-updater resources remain or another capture is active",
+        stem + " resources remain or another capture is active",
     )
     return {"commands": commands, **state}
 
 
-def _invoke(output: Path) -> dict[str, Any]:
-    argv = ["/bin/sh", str(_ROOT / _RECIPE), str(output)]
+def _invoke(output: Path, *, case_id: str = _CORE_CASE) -> dict[str, Any]:
+    backend, _ = _BACKENDS[case_id]
+    argv = ["/bin/sh", str(_ROOT / backend._RECIPE), str(output)]
     started = det01._now()
     with (
         TemporaryDirectory(prefix="aragorn-v3-case-logs-") as temporary,
@@ -183,15 +196,19 @@ def _invoke(output: Path) -> dict[str, Any]:
     }
 
 
-def _verify_cleanup(harness: dict[str, Any]) -> dict[str, Any]:
-    state = _namespace_state()
+def _verify_cleanup(
+    harness: dict[str, Any], *, case_id: str = _CORE_CASE
+) -> dict[str, Any]:
+    state = _namespace_state(case_id=case_id)
+    _, stem = _BACKENDS[case_id]
+    prefix = "aragorn-phase3-final-combined-v3-" + stem
     container = harness["container_id"]
     volume = harness["route_input_volume_identity"]["name"]
     _expect(
         type(container) is str
         and re.fullmatch(r"[0-9a-f]{64}", container) is not None
         and type(volume) is str
-        and re.fullmatch(re.escape(_PREFIX) + r"-route-input-[1-9][0-9]*", volume)
+        and re.fullmatch(re.escape(prefix) + r"-route-input-[1-9][0-9]*", volume)
         is not None,
         "capture cleanup identity changed",
     )
@@ -242,23 +259,24 @@ def capture_case(
     request = campaign.build_openclaw_final_v3_subfixture_request(contract, case_id)
     if case_id == "DET-01":
         return det01.capture_det01(contract, request, evidence_cas=evidence_cas)
+    backend, _ = _BACKENDS[case_id]
     source = _source_identity()
-    with TemporaryDirectory(prefix="aragorn-v3-core-case-") as temporary:
+    with TemporaryDirectory(prefix="aragorn-v3-native-case-") as temporary:
         directory = Path(temporary).resolve()
-        prepared = core.prepare_case(contract, request, directory=directory)
+        prepared = backend.prepare_case(contract, request, directory=directory)
         parent = contract["frozen_parent"]["identity"]
         before = det01.snapshot.snapshot_parent(parent)
-        namespace_before = _namespace_state()
+        namespace_before = _namespace_state(case_id=case_id)
         try:
             output = directory / "native.json"
-            invocation = _invoke(output)
+            invocation = _invoke(output, case_id=case_id)
             raw = _read_output(output)
-            verified = core.verify_capture(
+            verified = backend.verify_capture(
                 raw, prepared, source=source, invocation=invocation
             )
-            cleanup = _verify_cleanup(verified["harness"])
+            cleanup = _verify_cleanup(verified["harness"], case_id=case_id)
         finally:
-            _namespace_state()
+            _namespace_state(case_id=case_id)
         after = det01.snapshot.snapshot_parent(parent)
         _expect(
             before["image_inspect"] == after["image_inspect"]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 import binascii
-import re
 import runpy
 import stat
 from pathlib import Path
@@ -19,7 +18,8 @@ from aragorn.admission_evidence import AdmissionEvidenceError
 from aragorn.admission_openclaw_final_v3_campaign_dispatch import (
     dispatch_openclaw_final_v3_campaign_case,
 )
-from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.oci_worker_protocol import canonical_digest
+from scripts import openclaw_final_v3_case_checks as checks
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CASE = "ADM-02/update/core-updater-plugin-replacement"
@@ -70,53 +70,12 @@ def _expect(value: bool, message: str) -> None:
         raise AdmissionEvidenceError("core-updater campaign " + message)
 
 
-def _same(left: Any, right: Any) -> bool:
-    return canonical_json(left) == canonical_json(right)
-
-
-def _decision(status: str) -> dict[str, Any]:
-    return {
-        **{
-            key: False
-            for key in det.semantic._FALSE_DECISION
-            if key.endswith("_eligible")
-        },
-        "status": status,
-    }
+_same = checks._same
+_decision = checks._decision
 
 
 def _historical_sources() -> list[dict[str, Any]]:
-    old._verify_commit(old._SOURCE)
-    files = []
-    for path in _SOURCE_PATHS:
-        entry = old._git(["ls-tree", "-z", old._SOURCE["commit"], "--", path])
-        metadata, separator, name = entry.partition(b"\t")
-        fields = metadata.split()
-        _expect(
-            separator == b"\t"
-            and name == path.encode() + b"\0"
-            and len(fields) == 3
-            and fields[0] in {b"100644", b"100755"}
-            and fields[1] == b"blob",
-            "historical source entry changed",
-        )
-        raw = old._git(["cat-file", "blob", fields[2].decode()], maximum=1_048_577)
-        _expect(0 < len(raw) <= 1_048_576, "historical source size changed")
-        digest = det._digest(raw)
-        _expect(
-            bounded._read_source(path, len(raw), digest) == raw,
-            "historical source bytes changed",
-        )
-        files.append(
-            {
-                "path": path,
-                "bytes": len(raw),
-                "digest": digest,
-                "mode": fields[0].decode(),
-                "blob": fields[2].decode(),
-            }
-        )
-    return files
+    return checks.historical_sources(old._SOURCE, _SOURCE_PATHS)
 
 
 def _verify_bundle(bundle: Path, files: list[dict[str, Any]]) -> None:
@@ -265,33 +224,6 @@ def _collector_literals() -> dict[str, Any]:
     }
 
 
-def _record_bytes(record: dict[str, Any]) -> bytes:
-    return det._decode({key: record[key] for key in ("base64", "bytes", "digest")})
-
-
-def _numeric_types(value: Any) -> None:
-    # Do not let Python's True == 1 turn custody/count checks into positive proof.
-    if type(value) is dict:
-        for key, item in value.items():
-            if key in {
-                "uid",
-                "gid",
-                "nlink",
-                "bytes",
-                "size",
-                "pid",
-                "exit_code",
-                "route_pass_count",
-                "route_fail_count",
-                "route_not_tested_count",
-            }:
-                _expect(type(item) is int, "numeric custody field type changed")
-            _numeric_types(item)
-    elif type(value) is list:
-        for item in value:
-            _numeric_types(item)
-
-
 def verify_capture(
     raw: bytes,
     prepared: dict[str, Any],
@@ -308,22 +240,9 @@ def verify_capture(
                 directory=Path(temporary).resolve(),
             )
         _expect(_same(prepared, expected), "prepared binding changed")
-        source_files = {item["path"]: item for item in source["files"]}
-        _expect(
-            len(source_files) == len(source["files"])
-            and all(
-                _same(source_files[item["path"]], item)
-                for item in prepared["source_files"]
-            ),
-            "capture source closure changed",
-        )
-        _expect(
-            type(source["commit"]) is str
-            and re.fullmatch(r"[0-9a-f]{40}", source["commit"]),
-            "capture source commit changed",
-        )
+        checks.verify_source(prepared, source)
         evidence = det.semantic._load_canonical(raw, "fresh core-updater observation")
-        _numeric_types(evidence)
+        checks._numeric_types(evidence)
         old.custody.parent.v3_contract.config._verify_no_positive_eligibility(evidence)
         literals = _collector_literals()
         _expect(
@@ -360,85 +279,15 @@ def verify_capture(
         harness, composition = evidence["harness"], evidence["composition"]
         host, action = harness["document"], composition["action"]
         parent = prepared["request"]["frozen_parent"]["identity"]
-        _expect(
-            _record_bytes(harness["file"]) == canonical_json(host)
-            and harness["digest"] == harness["file"]["digest"] == canonical_digest(host)
-            and _same(action["harness"], harness),
-            "native harness raw/document join changed",
+        checks.verify_harness(
+            harness,
+            action,
+            source=source,
+            parent=parent,
+            stem="core-updater-plugin-replacement",
+            image_id=old._IMAGE,
         )
-        old._file_record(harness["file"], mode="0600")
-        volume = host["route_input_volume_identity"]
-        match = re.fullmatch(
-            r"aragorn-phase3-final-combined-v3-core-updater-plugin-replacement-route-input-([1-9][0-9]*)",
-            volume["name"],
-        )
-        _expect(
-            match is not None
-            and re.fullmatch(r"[0-9a-f]{64}", host["container_id"])
-            and host["source_commit"] == source["commit"]
-            and host["schema"]
-            == "aragorn/runtime-action-worker-final-combined-v3-core-updater-plugin-replacement-systemd-harness/v1"
-            and host["image_id"] == host["run_image_reference"] == old._IMAGE
-            and host["parent_image_id"] == parent["image_id"]
-            and host["host_config"]["network_mode"] == "none"
-            and host["openclaw_runtime_mount"]["source"] == parent["runtime_volume"]
-            and host["openclaw_runtime_mount"]["rw"] is False
-            and host["route_input_mount"]["source"] == volume["name"]
-            and host["route_input_mount"]["rw"] is False,
-            "native runtime/image/input binding changed",
-        )
-        _expect(
-            volume["labels"]
-            == {
-                "dev.aragorn.capture-owner": source["commit"] + ":" + match[1],
-                "dev.aragorn.role": "final-combined-v3-core-updater-plugin-replacement-route-input",
-                "dev.aragorn.source-commit": source["commit"],
-            },
-            "native input owner changed",
-        )
-        lineage = host["image_lineage"]
-        _expect(
-            lineage["child"]["id"] == old._IMAGE
-            and lineage["parent"]["id"] == parent["image_id"]
-            and lineage["child"]["layers"]
-            == lineage["parent"]["layers"] + lineage["added_layers"],
-            "native image lineage changed",
-        )
-        signature = host["source_commit_verification"]
-        _expect(
-            signature["command"] == ["git", "verify-commit", "--raw", source["commit"]]
-            and type(signature["exit_code"]) is int
-            and signature["exit_code"] == 0
-            and _record_bytes(signature["commit_object"])
-            == old._git(["cat-file", "commit", source["commit"]]),
-            "native source commit object changed",
-        )
-        _record_bytes(signature["stdout"])
-        _record_bytes(signature["stderr"])
-        inherited = action["artifacts"]["final_combined_v3_workshop_proposal_apply"]
-        old.custody.parent.v3_contract.parent._verify_contract_artifacts(inherited)
-        _expect(
-            _same(composition["profile"]["before"], composition["profile"]["after"])
-            and _same(
-                composition["profile"]["before"]["document"],
-                inherited["profile"]["document"],
-            )
-            and _same(
-                composition["profile"]["before"]["outcomes"],
-                {"FAIL": 0, "NOT_TESTED": 21, "PASS": 0},
-            )
-            and _same(
-                action["inputs"]["gateway_config"], inherited["config"]["document"]
-            )
-            and canonical_digest(inherited["config"]["document"])
-            == parent["configuration_canonical_digest"]
-            and _same(
-                action["runtime"]["tree"],
-                old.custody.parent.v3_contract.config._RUNTIME_TREE,
-            )
-            and composition["bindings"]["runtime_volume"] == parent["runtime_volume"],
-            "protected parent/configuration changed",
-        )
+        checks.verify_parent(composition, action, parent)
         route = evidence["route_observation"]
         document = old._decode(route["raw"])
         _expect(_same(document, route["document"]), "route raw/document changed")
@@ -453,64 +302,14 @@ def verify_capture(
             ),
             "route or native bundle changed",
         )
-        execution, stack = route["execution"], route["stack_before"]
-        pid = route["gateway_pid_binding"]["pid"]
-        gateway = "aragorn-agent-gateway.service"
-        process = stack["processes"][gateway]
-        prerequisite = document["actions"][0]["prerequisites"]["gateway_process"]
-        _expect(
-            type(pid) is int
-            and pid > 0
-            and execution["exit_code"] == 0
-            and execution["argv"]
-            == [
-                "nsenter",
-                "--target",
-                str(pid),
-                "--mount",
-                "--",
-                "setpriv",
-                "--reuid=992",
-                "--regid=992",
-                "--groups=992",
-                "--inh-caps=-all",
-                "--ambient-caps=-all",
-                "--bounding-set=-all",
-                "--no-new-privs",
-                *prepared["path_mapping"]["native_probe_argv"],
-            ]
-            and _same(
-                execution["effective_identity"],
-                {"gid": 992, "groups": [992], "uid": 992},
-            )
-            and _same(
-                execution["stderr"],
-                {"bytes": 0, "digest": det._digest(b""), "excerpt": ""},
-            )
-            and process["pid"] == pid == stack["pids"][gateway] == prerequisite["pid"]
-            and process["uids"] == process["gids"] == [992] * 4
-            and process["capabilities_effective"] == "0000000000000000"
-            and process["no_new_privileges"] == 1
-            and prerequisite["hostname"] == host["container_id"][:12]
-            and prerequisite["start_time_ticks"] == process["start_time_ticks"],
-            "actual native argv/identity changed",
-        )
-        legacy = old.custody.parent.contract.base.legacy
-        legacy._verify_stack_boundary(
-            stack,
-            trusted=action["boundaries"],
-            container_id=host["container_id"],
-            snapshot_before=execution["started_at"],
-        )
-        legacy._verify_gateway_listener(stack["gateway_listener"], stack["processes"])
-        _expect(
-            det._timestamp(invocation["started_at"])
-            < det._timestamp(execution["started_at"])
-            <= det._timestamp(document["recorded_at"])
-            <= det._timestamp(execution["completed_at"])
-            <= det._timestamp(evidence["recorded_at"])
-            < det._timestamp(invocation["completed_at"]),
-            "capture invocation chronology changed",
+        checks.verify_execution(
+            route,
+            document,
+            host=host,
+            action=action,
+            invocation=invocation,
+            native_argv=prepared["path_mapping"]["native_probe_argv"],
+            recorded_at=evidence["recorded_at"],
         )
         # This lower-level helper binds materializer/source/runtime bundle bytes
         # against the unchanged historical source. It does not qualify a capture.
@@ -526,7 +325,7 @@ def verify_capture(
                 "historical_source": dict(old._SOURCE),
                 "current_source_commit": source["commit"],
                 "path_mapping": prepared["path_mapping"],
-                "actual_native_argv": execution["argv"],
+                "actual_native_argv": route["execution"]["argv"],
                 "semantic_compatibility_digest": canonical_digest(semantics),
                 "limitations": [
                     "HOST_WRAPPER_REQUEST_ASSOCIATION_NOT_NATIVE_COLLECTOR_NONCE",

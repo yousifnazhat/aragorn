@@ -331,9 +331,14 @@ After installation, a root operator supplies both exact `sha256:` digests:
 /usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-response-service.py EXPECTED_SKILL_DIGEST EXPECTED_REVOCATION_SNAPSHOT_DIGEST
 ```
 
-This response is not an automatic detector, a future-start ban, live RUN
-qualification, or Phase 3 completion. A bounded live termination capture remains
-required before promoting its evidence.
+The optional `--prevent-starts` flag also creates and verifies persistent systemd
+masks for those two fixed units under the same locks. It refuses existing unit
+overrides and never automatically unmasks; a partial response remains indeterminate.
+This is a whole-profile start barrier, not installed-digest quarantine or an
+automatic detector. The [bounded Linux check](./scripts/capture_runtime_response_systemd_check.py)
+exercises wrong-digest refusal, unit-wide stop, an extra gateway-cgroup process,
+and refused restart in a disposable fixture. Live RUN qualification and final
+common-deployment qualification remain required.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
@@ -921,10 +926,12 @@ an exclusive parent-volume lease, or independent host attestation. All eligibili
 flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
-now dispatches DET-01 to its existing backend and core-updater replacement to a
-request-aware backend. The latter binds all six bundle files and explicitly maps
-provisional campaign paths to the unchanged native recipe's read-only route-input
-paths. Unsupported cases fail before execution. Each call checks the signed
+now supports DET-01, core-updater replacement, and workshop invalidation. The
+native backends bind their six-file and two-file bundles respectively, explicitly
+mapping provisional campaign paths to unchanged native read-only route-input
+paths. Workshop's descriptor still declares no materializer; its separate pinned
+native materializer is recorded without rewriting that descriptor.
+Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.
 The remaining work is implementation, not repeated DET-01 captures: connect the

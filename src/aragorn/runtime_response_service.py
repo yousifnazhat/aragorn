@@ -37,6 +37,7 @@ _LIVE_WORKER_BINDING = Path(
     "/run/credentials/aragorn-runtime-action-worker.service/worker-binding"
 )
 _CGROUP_ROOT = Path("/sys/fs/cgroup")
+_MASK_ROOT = Path("/etc/systemd/system")
 _PROPERTIES = (
     "Id",
     "LoadState",
@@ -66,16 +67,23 @@ class RuntimeResponseIndeterminate(RuntimeResponseError):
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    prevent_starts = bool(arguments and arguments[0] == "--prevent-starts")
+    if prevent_starts:
+        arguments.pop(0)
     if len(arguments) != 2:
         print(
-            "usage: aragorn-runtime-response-service EXPECTED_SKILL_DIGEST "
+            "usage: aragorn-runtime-response-service [--prevent-starts] EXPECTED_SKILL_DIGEST "
             "EXPECTED_REVOCATION_SNAPSHOT_DIGEST",
             file=sys.stderr,
         )
         return 64
     completed = False
     try:
-        result = _run(*arguments)
+        result = (
+            _run(*arguments, prevent_starts=True)
+            if prevent_starts
+            else _run(*arguments)
+        )
         completed = True
         print(canonical_json(result).decode("ascii"))
         return 0
@@ -110,9 +118,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 126
 
 
-def _run(expected_skill_digest: str, expected_snapshot_digest: str) -> dict[str, Any]:
+def _run(
+    expected_skill_digest: str,
+    expected_snapshot_digest: str,
+    *,
+    prevent_starts: bool = False,
+) -> dict[str, Any]:
     broker._require_digest(expected_skill_digest, "expected skill digest")
     broker._require_digest(expected_snapshot_digest, "expected revocation snapshot")
+    if type(prevent_starts) is not bool:
+        raise RuntimeResponseError("future-start response selection must be boolean")
     if sys.platform != "linux" or os.geteuid() != 0:
         raise RuntimeResponseError("root Linux execution is required")
     stop_attempted = False
@@ -214,6 +229,13 @@ def _run(expected_skill_digest: str, expected_snapshot_digest: str) -> dict[str,
                         "NO_RUN_PHASE3_EDR_OR_RELEASE_CONFORMANCE_AUTHORITY",
                     ],
                 }
+                if prevent_starts:
+                    result["future_start_barrier"] = _mask_future_starts()
+                    result["status"] = "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE"
+                    result["limitations"][2:3] = [
+                        "FIXED_PROFILE_MASKS_NOT_GENERAL_INSTALLED_DIGEST_QUARANTINE",
+                        "MASKS_PERSIST_AFTER_SNAPSHOT_EXPIRY_UNTIL_INDEPENDENT_ROOT_REMOVAL",
+                    ]
         return result
     except BaseException as exc:
         if stop_attempted:
@@ -507,7 +529,7 @@ def _command(argv: list[str], *, timeout: float) -> bytes:
         return raw
 
 
-def _unit_state(unit: str) -> dict[str, str]:
+def _show_unit(unit: str, properties: tuple[str, ...]) -> dict[str, str]:
     if unit not in _UNITS:
         raise RuntimeResponseError("unsupported response unit")
     raw = _command(
@@ -517,7 +539,7 @@ def _unit_state(unit: str) -> dict[str, str]:
             "--no-pager",
             "--no-ask-password",
             "show",
-            "--property=" + ",".join(_PROPERTIES),
+            "--property=" + ",".join(properties),
             unit,
         ],
         timeout=3,
@@ -528,11 +550,16 @@ def _unit_state(unit: str) -> dict[str, str]:
         if not separator or key in document:
             raise RuntimeResponseError("systemd properties are malformed")
         document[key] = value
+    if set(document) != set(properties) or document["Id"] != unit:
+        raise RuntimeResponseError("systemd properties are incomplete or unbound")
+    return document
+
+
+def _unit_state(unit: str) -> dict[str, str]:
+    document = _show_unit(unit, _PROPERTIES)
     name = _NAMES[_UNITS.index(unit)]
     if (
-        set(document) != set(_PROPERTIES)
-        or document["Id"] != unit
-        or document["LoadState"] != "loaded"
+        document["LoadState"] != "loaded"
         or document["User"] != name
         or document["Group"] != name
         or document["KillMode"] != "control-group"
@@ -544,11 +571,107 @@ def _unit_state(unit: str) -> dict[str, str]:
     return document
 
 
+def _mask_future_starts() -> dict[str, Any]:
+    # ponytail: durable whole-profile masks; multiple profiles need digest-bound units.
+    broker._require_protected_ancestry(_MASK_ROOT, 0)
+    descriptor = os.open(
+        _MASK_ROOT, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    )
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(before.st_mode)
+            or before.st_uid != 0
+            or before.st_gid != 0
+            or stat.S_IMODE(before.st_mode) & 0o022
+        ):
+            raise RuntimeResponseError("persistent mask directory is unsafe")
+        for unit in _UNITS:
+            try:
+                os.stat(unit, dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            raise RuntimeResponseError("persistent unit override already exists")
+        _command(
+            [
+                "/usr/bin/systemctl",
+                "--system",
+                "--no-pager",
+                "--no-ask-password",
+                "--quiet",
+                "--no-reload",
+                "mask",
+                *_UNITS,
+            ],
+            timeout=5,
+        )
+        os.fsync(descriptor)
+        _command(
+            [
+                "/usr/bin/systemctl",
+                "--system",
+                "--no-pager",
+                "--no-ask-password",
+                "daemon-reload",
+            ],
+            timeout=5,
+        )
+        masks = []
+        for unit in _UNITS:
+            metadata = os.stat(unit, dir_fd=descriptor, follow_symlinks=False)
+            if (
+                not stat.S_ISLNK(metadata.st_mode)
+                or metadata.st_uid != 0
+                or metadata.st_gid != 0
+                or metadata.st_nlink != 1
+                or os.readlink(unit, dir_fd=descriptor) != "/dev/null"
+            ):
+                raise RuntimeResponseError("persistent unit mask is unsafe")
+            expected = {
+                "Id": unit,
+                "LoadState": "masked",
+                "UnitFileState": "masked",
+                "ActiveState": "inactive",
+                "SubState": "dead",
+                "MainPID": "0",
+                "ControlPID": "0",
+            }
+            actual = _show_unit(unit, tuple(expected))
+            if actual != expected:
+                raise RuntimeResponseError("persistent start barrier was not confirmed")
+            masks.append(
+                {"path": str(_MASK_ROOT / unit), "target": "/dev/null", "unit": actual}
+            )
+        after = os.lstat(_MASK_ROOT)
+        if broker._directory_identity(before) != broker._directory_identity(after):
+            raise RuntimeResponseError("persistent mask directory changed")
+        return {
+            "status": "PERSISTENT_FIXED_PROFILE_STARTS_MASKED",
+            "masks": masks,
+            "directory_fsynced": True,
+            "automatic_unmask_supported": False,
+        }
+    finally:
+        os.close(descriptor)
+
+
+def _service_cgroup(unit: str) -> str:
+    if unit not in _UNITS:
+        raise RuntimeResponseError("unsupported response unit")
+    pid1 = _process_cgroup(1)
+    if (
+        pid1 != "/init.scope"
+        and re.fullmatch(r"/docker/[0-9a-f]{64}/init\.scope", pid1) is None
+    ):
+        raise RuntimeResponseError("PID1 is not in an accepted systemd init scope")
+    return f"{pid1.removesuffix('/init.scope')}/system.slice/{unit}"
+
+
 def _process_identity(
     unit: str, state: dict[str, str], uid: int, gid: int
 ) -> dict[str, Any]:
     pid = int(state["MainPID"])
-    cgroup = f"/system.slice/{unit}"
+    cgroup = _service_cgroup(unit)
     if (
         str(pid) != state["MainPID"]
         or pid <= 0
@@ -593,8 +716,8 @@ def _stop_units() -> None:
 
 
 def _cgroup_empty(unit: str, before: dict[str, str]) -> dict[str, Any]:
-    cgroup = f"/system.slice/{unit}"
-    if unit not in _UNITS or before["ControlGroup"] != cgroup:
+    cgroup = _service_cgroup(unit)
+    if before["ControlGroup"] != cgroup:
         raise RuntimeResponseError("unbound termination cgroup")
     path = _CGROUP_ROOT / cgroup.removeprefix("/")
     try:

@@ -85,6 +85,7 @@ class CampaignCaseExecutorTests(unittest.TestCase):
         self.actual_namespace = subject._namespace_state
         self.actual_cleanup = subject._verify_cleanup
         self.actual_read = subject._read_output
+        self.actual_invoke = subject._invoke
 
         def event(name, value):
             def observe(*_args, **_kwargs):
@@ -93,11 +94,12 @@ class CampaignCaseExecutorTests(unittest.TestCase):
 
             return observe
 
-        def invoke(output):
+        def invoke(output, *, case_id=_CORE):
             self.events.append("invoke")
             self.outputs.append(output)
             output.write_bytes(b"{}\n")
-            return {"argv": ["/bin/sh", subject._RECIPE], "exit_code": 0}
+            backend, _ = subject._BACKENDS[case_id]
+            return {"argv": ["/bin/sh", backend._RECIPE], "exit_code": 0}
 
         original_put = self.cas.put_expected
 
@@ -250,6 +252,60 @@ class CampaignCaseExecutorTests(unittest.TestCase):
             subject.capture_case(changed, _CORE, evidence_cas=self.cas)
         self.assertEqual(self.events, [])
         self.put.assert_not_called()
+
+    def test_workshop_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        case = subject._WORKSHOP_CASE
+        request = campaign.build_openclaw_final_v3_subfixture_request(
+            self.contract, case
+        )
+        with (
+            patch.object(
+                subject.workshop, "prepare_case", return_value={"request": request}
+            ) as prepare,
+            patch.object(
+                subject.workshop,
+                "verify_capture",
+                return_value={"harness": self.harness, "proof": {"observed": True}},
+            ) as verify,
+        ):
+            captured = subject.capture_case(self.contract, case, evidence_cas=self.cas)
+        self.prepare.assert_not_called()
+        self.verify.assert_not_called()
+        self.assertEqual(prepare.call_args.args, (self.contract, request))
+        self.assertEqual(verify.call_args.kwargs["source"], self.source)
+        self.assertEqual(captured["document"]["request"], request)
+        self.assertEqual(captured["result"]["case_id"], case)
+        self.assertEqual(captured["result"]["outcome"], "OBSERVED")
+        self.assertEqual(self.invoke.call_args.kwargs, {"case_id": case})
+        self.assertEqual(self.cleanup.call_args.kwargs, {"case_id": case})
+        self.assertTrue(
+            all(
+                call.kwargs == {"case_id": case}
+                for call in self.namespace.call_args_list
+            )
+        )
+        self.put.assert_called_once()
+
+    def test_native_recipe_and_resource_namespaces_are_case_specific(self) -> None:
+        for case, (backend, stem) in subject._BACKENDS.items():
+            with self.subTest(case=case):
+                with patch.object(subject.det01.acquisition, "_run", return_value=b""):
+                    state = self.actual_namespace(case_id=case)
+                self.assertEqual(
+                    state["commands"]["containers"][-1],
+                    "name=^/aragorn-phase3-final-combined-v3-" + stem + "-[0-9]+$",
+                )
+                self.assertEqual(
+                    state["commands"]["volumes"][-1],
+                    "label=dev.aragorn.role=final-combined-v3-" + stem + "-route-input",
+                )
+                with patch.object(subject.subprocess, "Popen") as launch:
+                    launch.return_value.returncode = 0
+                    observation = self.actual_invoke(
+                        self.directory / "native.json", case_id=case
+                    )
+                self.assertEqual(observation["argv"][1], str(_ROOT / backend._RECIPE))
+                self.assertEqual(launch.call_args.args[0], observation["argv"])
 
     def test_det01_delegates_only_the_exact_contract_request_and_cas(self) -> None:
         expected = campaign.build_openclaw_final_v3_subfixture_request(

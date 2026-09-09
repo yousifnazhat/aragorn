@@ -1030,11 +1030,16 @@ or recursively unpopulated cgroups. This uses systemd's
 [unit-wide stop semantics](https://github.com/systemd/systemd/blob/main/man/systemd.kill.xml)
 and the kernel's [recursive populated indicator](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#un-populated-notification),
 not a PID-list kill loop. Timeouts or failed post-stop checks remain indeterminate.
-The command is manual and local: it does not block later root-authorized starts,
-persistently quarantine a digest, or claim protection against concurrent root
-control outside the activator lock. Its installer is additive; the frozen V3
-deployment and retained historical evidence are unchanged. Live termination and
-final common-deployment qualification are still required.
+The command is manual and local. Its optional `--prevent-starts` mode persists
+root-owned systemd masks for the two fixed units after confirming termination,
+fsyncs their directory, reloads systemd, and verifies masked/inactive state under
+the same locks. It neither overwrites existing unit overrides nor automatically
+unmasks. This whole-profile barrier is not installed-digest quarantine or
+protection against independent root control. Cgroups are derived from a tightly
+checked native or Docker systemd PID1 scope, then joined with fixed unit names.
+Its installer is additive; frozen V3 deployment and historical evidence remain
+unchanged. Live termination and final common-deployment qualification remain
+separate gates.
 
 P3.6a closes the next bounded dependency: the capability route now consumes a
 live, lock-stable protected-install transaction instead of relying only on

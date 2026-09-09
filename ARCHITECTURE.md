@@ -1648,6 +1648,14 @@ full parent snapshots and local daemon cleanup before CAS publication. The
 nonce association is wrapper-only, not collector-observed. These snapshots do
 not establish an exclusive volume lease, and this one-case backend neither
 qualifies fresh evidence nor enables/resumes the complete campaign.
+A separate exact-capture consumer now binds the September 8 wrapper observation
+to its signed source and evidence-only retention, checks its CAS bytes, rebuilds
+the request/bundle binding, recomputes the native replay, and validates recorded
+parent snapshots and cleanup evidence. Its receipt qualifies one wrapper-associated
+DET-01 replay only. It does not turn the wrapper nonce into a native collector observation,
+the local cleanup record into external attestation, or the point-in-time parent
+snapshots into a lease. Every eligibility flag remains false, and the receipt is
+not wired into campaign PASS aggregation.
 The quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate

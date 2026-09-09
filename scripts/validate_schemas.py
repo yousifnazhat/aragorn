@@ -69,6 +69,9 @@ from aragorn.admission_openclaw_final_v2_aggregate_fresh_session import (
 from aragorn.admission_openclaw_final_v3_core_updater_qualification import (
     qualify_openclaw_final_v3_core_updater_subfixture,
 )
+from aragorn.admission_openclaw_final_v3_det01_campaign_qualification import (
+    qualify_openclaw_final_v3_det01_campaign_observation,
+)
 from aragorn.admission_openclaw_final_v3_det01_qualification import (
     qualify_openclaw_final_v3_det01_subfixture,
 )
@@ -4336,6 +4339,11 @@ def main() -> int:
             ("runtime-action-worker-final-combined-v3-det01-systemd-p3-final-2026-09-03.json",),
             qualify_openclaw_final_v3_det01_subfixture,
             "phase3-openclaw-final-v3-det01-dedicated-qualification-v1-2026-09-06.json",
+        ),
+        (
+            ("openclaw-final-v3-det01-campaign-observation-2026-09-08.json",),
+            qualify_openclaw_final_v3_det01_campaign_observation,
+            "phase3-openclaw-final-v3-det01-wrapper-qualification-v1-2026-09-09.json",
         ),
         (
             (

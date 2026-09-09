@@ -893,9 +893,15 @@ An opt-in [one-case DET-01 backend](./scripts/capture_openclaw_final_v3_det01_ca
 now wraps the unchanged native capture recipe, checks actual source/bundle/argv
 bindings, snapshots the complete frozen parent before and after execution, and
 publishes CAS evidence only after local cleanup checks. Its campaign nonce is
-associated by the host wrapper, not echoed by the native collector. Independent
-qualification of this fresh evidence is the next wave; the 31-case dispatcher
-remains non-executing and has no resume support.
+associated by the host wrapper, not echoed by the native collector. The third
+small wave adds an independent consumer and a
+[one-case wrapper qualification](./benchmark/receipts/phase3-openclaw-final-v3-det01-wrapper-qualification-v1-2026-09-09.json)
+for the exact signed September 8 observation. It recomputes request and replay
+bindings and validates recorded parent snapshots and local cleanup checks without
+rerunning Docker. Its bounded DET-01 replay `PASS` is not collector-observed nonce binding,
+an exclusive parent-volume lease, or independent host attestation. All eligibility
+flags remain false; the 31-case dispatcher remains non-executing with no resume
+support, and this receipt does not promote a campaign result.
 A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
 caller-bound baseline/instrumented pairs. No complete campaign or metrics evidence

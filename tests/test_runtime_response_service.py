@@ -1,0 +1,569 @@
+from __future__ import annotations
+
+import fcntl
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+import unittest
+from contextlib import ExitStack, contextmanager, redirect_stderr
+from io import StringIO
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from aragorn import runtime_response_service as service
+from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn.runtime_action_broker import publish_runtime_control_document
+from aragorn.runtime_action_worker import RuntimeActionWorkerBinding
+from tests.test_runtime_action_broker import _SKILL, _Fixture, _write_control
+
+_ROOT = Path(__file__).resolve().parents[1]
+_OTHER = "sha256:" + "9" * 64
+
+
+def _accepted(fixture: _Fixture) -> dict[str, object]:
+    document = {**fixture.revocations, "generation": 4, "skill_digests": [_SKILL]}
+    publish_runtime_control_document(
+        fixture.paths["revocations"], document, fixture.config, clock=lambda: 100
+    )
+    return document
+
+
+@contextmanager
+def _environment(fixture: _Fixture):
+    identities = (
+        os.geteuid(),
+        os.geteuid() + 1,
+        os.getegid() + 1,
+        os.geteuid() + 2,
+        os.getegid() + 2,
+        os.geteuid() + 3,
+        os.getegid() + 3,
+    )
+    binding = RuntimeActionWorkerBinding(
+        runtime_digest=fixture.config.expected_runtime_digest,
+        active_skill_digest=_SKILL,
+        policy_digest=canonical_digest(fixture.policy),
+        policy_version=fixture.policy["version"],
+    )
+    events: list[str] = []
+    stopped = False
+
+    @contextmanager
+    def guard():
+        events.append("activation-lock")
+        try:
+            yield
+        finally:
+            events.append("activation-unlock")
+
+    def unit_state(unit):
+        return {
+            "Id": unit,
+            "LoadState": "loaded",
+            "ActiveState": "inactive" if stopped else "active",
+            "SubState": "dead" if stopped else "running",
+            "MainPID": "0" if stopped else "123",
+            "ControlPID": "0",
+            "ControlGroup": "" if stopped else f"/system.slice/{unit}",
+            "InvocationID": "a" * 32,
+            "KillMode": "control-group",
+            "Restart": "no",
+            "SendSIGKILL": "yes",
+            "Delegate": "no",
+            "User": "aragorn-agent-gateway" if "gateway" in unit else "aragorn-runtime",
+            "Group": "aragorn-agent-gateway"
+            if "gateway" in unit
+            else "aragorn-runtime",
+        }
+
+    def stop_units():
+        nonlocal stopped
+        events.append("stop")
+        with fixture.lock_path.open("rb") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pass
+            else:
+                raise AssertionError("broker lock not held through native stop")
+        stopped = True
+
+    with ExitStack() as stack:
+        for name, value in (
+            ("_identities", identities),
+            ("_read_bindings", binding),
+            ("_broker_config", fixture.config),
+            (
+                "_process_identity",
+                {
+                    "pid": 123,
+                    "start_time_ticks": 456,
+                    "cgroup_device": 7,
+                    "cgroup_inode": 8,
+                },
+            ),
+            ("_cgroup_empty", {"status": "EMPTY", "device": 7, "inode": 8}),
+        ):
+            stack.enter_context(patch.object(service, name, return_value=value))
+        stack.enter_context(patch.object(service.sys, "platform", "linux"))
+        stack.enter_context(patch.object(service.os, "geteuid", return_value=0))
+        stack.enter_context(patch.object(service.time, "time", return_value=100))
+        stack.enter_context(
+            patch.object(service, "_activation_guard", side_effect=guard)
+        )
+        stack.enter_context(
+            patch.object(service, "_unit_state", side_effect=unit_state)
+        )
+        stop = stack.enter_context(
+            patch.object(service, "_stop_units", side_effect=stop_units)
+        )
+        yield binding, events, stop
+
+
+class RuntimeResponseServiceTests(unittest.TestCase):
+    def test_accepted_snapshot_is_locked_through_fixed_unit_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            document = _accepted(fixture)
+            before = {name: path.read_bytes() for name, path in fixture.paths.items()}
+            with _environment(fixture) as (_binding, events, stop):
+                result = service._run(_SKILL, canonical_digest(document))
+                stop.assert_called_once_with()
+                self.assertEqual(
+                    events, ["activation-lock", "stop", "activation-unlock"]
+                )
+            self.assertEqual(
+                {name: path.read_bytes() for name, path in fixture.paths.items()},
+                before,
+            )
+            self.assertIsInstance(result, dict)
+            self.assertEqual(result["expected_skill_digest"], _SKILL)
+            self.assertEqual(
+                result["revocation_snapshot_digest"], canonical_digest(document)
+            )
+            self.assertEqual(result["status"], "TERMINATED_FIXED_RUNTIME_PROFILE")
+            self.assertEqual(
+                result["authority"],
+                "LOCAL_ROOT_RESPONSE_RESULT_NOT_RUN_OR_PHASE3_CONFORMANCE",
+            )
+            self.assertEqual(result["accepted_revocation"]["generation"], 4)
+            self.assertEqual(
+                [entry["unit"]["Id"] for entry in result["after"]], list(service._UNITS)
+            )
+
+    def test_unbound_unaccepted_stale_or_unrevoked_snapshots_never_stop(self) -> None:
+        mutations = (
+            {"generation": 3},
+            {"generation": 5},
+            {"observed_at_unix": 80, "expires_at_unix": 90},
+            {"observed_at_unix": 101, "expires_at_unix": 110},
+            {"skill_digests": []},
+            {"source_digest": _OTHER},
+        )
+        for changes in mutations:
+            with (
+                self.subTest(changes=changes),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                document = {**_accepted(fixture), **changes}
+                _write_control(fixture.paths["revocations"], document)
+                with _environment(fixture) as (_binding, _events, stop):
+                    with self.assertRaises((service.RuntimeResponseError, ValueError)):
+                        service._run(_SKILL, canonical_digest(document))
+                    stop.assert_not_called()
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            _accepted(fixture)
+            with _environment(fixture) as (_binding, _events, stop):
+                with self.assertRaises(service.RuntimeResponseError):
+                    service._run(_SKILL, _OTHER)
+                stop.assert_not_called()
+
+    def test_preflight_identity_or_worker_binding_mismatch_never_stops(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = _Fixture(Path(temporary).resolve())
+            snapshot = canonical_digest(_accepted(fixture))
+            with _environment(fixture) as (binding, _events, stop):
+                for name in ("_read_bindings", "_process_identity", "_unit_state"):
+                    with (
+                        self.subTest(name=name),
+                        patch.object(
+                            service,
+                            name,
+                            side_effect=service.RuntimeResponseError("unsafe"),
+                        ),
+                        self.assertRaises(service.RuntimeResponseError),
+                    ):
+                        service._run(_SKILL, snapshot)
+                    stop.assert_not_called()
+                wrong = RuntimeActionWorkerBinding(
+                    runtime_digest=binding.runtime_digest,
+                    active_skill_digest=_OTHER,
+                    policy_digest=binding.policy_digest,
+                    policy_version=binding.policy_version,
+                )
+                with (
+                    patch.object(service, "_read_bindings", return_value=wrong),
+                    self.assertRaises(service.RuntimeResponseError),
+                ):
+                    service._run(_SKILL, snapshot)
+                stop.assert_not_called()
+                for name, values in (
+                    ("_read_bindings", [binding, wrong]),
+                    ("_process_identity", [{"pid": 123}, {"pid": 456}, {"pid": 789}]),
+                ):
+                    with (
+                        self.subTest(drift=name),
+                        patch.object(service, name, side_effect=values),
+                        self.assertRaises(service.RuntimeResponseError),
+                    ):
+                        service._run(_SKILL, snapshot)
+                    stop.assert_not_called()
+                with (
+                    patch.object(service.time, "time", side_effect=[100, 106]),
+                    self.assertRaises(service.RuntimeResponseError),
+                ):
+                    service._run(_SKILL, snapshot)
+                stop.assert_not_called()
+
+    def test_stop_failure_timeout_and_interrupt_are_indeterminate(self) -> None:
+        failures = (
+            OSError("native stop failed"),
+            subprocess.TimeoutExpired("systemctl", 20),
+            KeyboardInterrupt(),
+        )
+        for failure in failures:
+            with (
+                self.subTest(failure=type(failure)),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                snapshot = canonical_digest(_accepted(fixture))
+                with (
+                    _environment(fixture),
+                    patch.object(service, "_stop_units", side_effect=failure),
+                    self.assertRaises(service.RuntimeResponseIndeterminate),
+                ):
+                    service._run(_SKILL, snapshot)
+
+    def test_post_stop_population_or_confirmation_failure_is_not_success(self) -> None:
+        for failure in ("populated", "replaced", "still-active"):
+            with (
+                self.subTest(failure=failure),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                snapshot = canonical_digest(_accepted(fixture))
+                with (
+                    _environment(fixture) as (_binding, _events, stop),
+                    ExitStack() as stack,
+                ):
+                    if failure == "populated":
+                        stack.enter_context(
+                            patch.object(
+                                service,
+                                "_cgroup_empty",
+                                side_effect=service.RuntimeResponseError(
+                                    "descendants remain"
+                                ),
+                            )
+                        )
+                    elif failure == "replaced":
+                        stack.enter_context(
+                            patch.object(
+                                service,
+                                "_cgroup_empty",
+                                return_value={
+                                    "status": "EMPTY",
+                                    "device": 7,
+                                    "inode": 999,
+                                },
+                            )
+                        )
+                    else:
+                        original = service._unit_state
+
+                        def still_active(unit, original=original):
+                            return {**original(unit), "ActiveState": "active"}
+
+                        stack.enter_context(
+                            patch.object(
+                                service, "_unit_state", side_effect=still_active
+                            )
+                        )
+                    with self.assertRaises(service.RuntimeResponseIndeterminate):
+                        service._run(_SKILL, snapshot)
+                    stop.assert_called_once_with()
+
+    def test_usage_platform_root_and_digest_gates_never_stop(self) -> None:
+        for arguments in ([], [_SKILL], [_SKILL, _OTHER, "extra"]):
+            with self.subTest(arguments=arguments), redirect_stderr(StringIO()):
+                self.assertEqual(service.main(arguments), 64)
+        cases = (
+            ("darwin", 0, [_SKILL, _OTHER]),
+            ("linux", 501, [_SKILL, _OTHER]),
+            ("linux", 0, ["--all", _OTHER]),
+            ("linux", 0, [_SKILL, "not-a-digest"]),
+        )
+        for platform, uid, arguments in cases:
+            with (
+                self.subTest(platform=platform, uid=uid, arguments=arguments),
+                patch.object(service.sys, "platform", platform),
+                patch.object(service.os, "geteuid", return_value=uid),
+                patch.object(service, "_stop_units") as stop,
+                redirect_stderr(StringIO()),
+            ):
+                self.assertEqual(service.main(arguments), 126)
+                stop.assert_not_called()
+
+    def test_provisioned_and_live_binding_must_join_exactly(self) -> None:
+        binding = {
+            "schema": service.worker._BINDING_SCHEMA,
+            "runtime_digest": "sha256:" + "1" * 64,
+            "active_skill_digest": _SKILL,
+            "policy_digest": "sha256:" + "3" * 64,
+            "policy_version": 1,
+        }
+        for live_uid in (0, 1001):
+
+            def metadata(path, live_uid=live_uid):
+                live = path in {
+                    service._LIVE_WORKER_BINDING,
+                    service._LIVE_WORKER_BINDING.parent,
+                }
+                return SimpleNamespace(
+                    st_uid=live_uid if live else 0,
+                    st_gid=live_uid if live else 0,
+                    st_mode=stat.S_IFDIR | 0o500,
+                )
+
+            with (
+                self.subTest(live_uid=live_uid),
+                patch.object(service.broker, "_require_protected_ancestry") as ancestry,
+                patch.object(service.os, "lstat", side_effect=metadata),
+                patch.object(
+                    service.os,
+                    "statvfs",
+                    return_value=SimpleNamespace(f_flag=os.ST_RDONLY),
+                ),
+                patch.object(
+                    service, "_read_regular", return_value=canonical_json(binding)
+                ) as read,
+            ):
+                result = service._read_bindings(1001)
+                self.assertEqual(result.active_skill_digest, _SKILL)
+                self.assertEqual(
+                    [call.args for call in ancestry.call_args_list],
+                    [
+                        (service._WORKER_BINDING.parent, 0),
+                        (service._LIVE_WORKER_BINDING.parent.parent, 0),
+                    ],
+                )
+                self.assertEqual(
+                    [call.args[1] for call in read.call_args_list], [0, live_uid]
+                )
+        with (
+            patch.object(service.broker, "_require_protected_ancestry"),
+            patch.object(
+                service.os, "lstat", side_effect=lambda path: metadata(path, 1001)
+            ),
+            patch.object(service.os, "statvfs", return_value=SimpleNamespace(f_flag=0)),
+            patch.object(
+                service, "_read_regular", return_value=canonical_json(binding)
+            ),
+            self.assertRaises(service.RuntimeResponseError),
+        ):
+            service._read_bindings(1001)
+        for field, value in (
+            ("active_skill_digest", _OTHER),
+            ("runtime_digest", _OTHER),
+            ("policy_digest", _OTHER),
+            ("policy_version", 2),
+        ):
+            with (
+                self.subTest(field=field),
+                patch.object(service.broker, "_require_protected_ancestry"),
+                patch.object(
+                    service.os,
+                    "lstat",
+                    return_value=SimpleNamespace(
+                        st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o500
+                    ),
+                ),
+                patch.object(
+                    service,
+                    "_read_regular",
+                    side_effect=[
+                        canonical_json(binding),
+                        canonical_json({**binding, field: value}),
+                    ],
+                ),
+                self.assertRaisesRegex(service.RuntimeResponseError, "bindings differ"),
+            ):
+                service._read_bindings(1001)
+
+    def test_native_cgroup_confirmation_includes_descendants(self) -> None:
+        unit = service._UNITS[0]
+        cgroup = f"/system.slice/{unit}"
+        before = {"ControlGroup": cgroup}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(service, "_CGROUP_ROOT", root):
+                self.assertEqual(
+                    service._cgroup_empty(unit, before)["status"], "ABSENT"
+                )
+                directory = root / cgroup.removeprefix("/")
+                directory.mkdir(parents=True)
+                events = directory / "cgroup.events"
+                events.write_bytes(b"populated 0\nfrozen 0\n")
+                with patch.object(
+                    service.os,
+                    "fstat",
+                    return_value=SimpleNamespace(st_uid=0, st_dev=7, st_ino=8),
+                ):
+                    self.assertEqual(
+                        service._cgroup_empty(unit, before),
+                        {
+                            "path": cgroup,
+                            "status": "EMPTY",
+                            "events": {"populated": "0", "frozen": "0"},
+                            "device": 7,
+                            "inode": 8,
+                        },
+                    )
+                    for raw in (
+                        b"populated 1\n",
+                        b"populated 0\npopulated 0\n",
+                        b"frozen 0\n",
+                    ):
+                        events.write_bytes(raw)
+                        with (
+                            self.subTest(raw=raw),
+                            self.assertRaises(service.RuntimeResponseError),
+                        ):
+                            service._cgroup_empty(unit, before)
+        with patch.object(service, "_command", return_value=b"") as command:
+            service._stop_units()
+        command.assert_called_once_with(
+            [
+                "/usr/bin/systemctl",
+                "--system",
+                "--no-pager",
+                "--no-ask-password",
+                "stop",
+                *service._UNITS,
+            ],
+            timeout=15,
+        )
+        state = {
+            "Id": unit,
+            "LoadState": "loaded",
+            "ActiveState": "active",
+            "SubState": "running",
+            "MainPID": "123",
+            "ControlPID": "0",
+            "ControlGroup": cgroup,
+            "User": "aragorn-agent-gateway",
+            "Group": "aragorn-agent-gateway",
+            "KillMode": "control-group",
+            "Delegate": "no",
+            "Restart": "no",
+            "SendSIGKILL": "yes",
+            "InvocationID": "a" * 32,
+        }
+        raw = "".join(f"{key}={value}\n" for key, value in state.items()).encode()
+        with patch.object(service, "_command", return_value=raw):
+            self.assertEqual(service._unit_state(unit), state)
+        for bad in (
+            raw.replace(b"KillMode=control-group", b"KillMode=process"),
+            raw.replace(b"SendSIGKILL=yes", b"SendSIGKILL=no"),
+            raw.replace(b"Restart=no", b"Restart=always"),
+            raw + b"Id=another.service\n",
+        ):
+            with (
+                self.subTest(properties=bad),
+                patch.object(service, "_command", return_value=bad),
+                self.assertRaises(service.RuntimeResponseError),
+            ):
+                service._unit_state(unit)
+
+    def test_authority_files_refuse_fifo_symlink_hardlink_and_unsafe_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            regular = root / "regular"
+            regular.write_bytes(b"safe")
+            regular.chmod(0o400)
+            self.assertEqual(
+                service._read_regular(regular, os.geteuid(), {0o400}), b"safe"
+            )
+            fifo = root / "fifo"
+            os.mkfifo(fifo, 0o400)
+            symlink = root / "symlink"
+            symlink.symlink_to(regular)
+            for path in (fifo, symlink):
+                with (
+                    self.subTest(path=path),
+                    self.assertRaises((OSError, service.RuntimeResponseError)),
+                ):
+                    service._read_regular(path, os.geteuid(), {0o400})
+            hardlink = root / "hardlink"
+            os.link(regular, hardlink)
+            with self.assertRaises(service.RuntimeResponseError):
+                service._read_regular(regular, os.geteuid(), {0o400})
+            hardlink.unlink()
+            regular.chmod(0o600)
+            with self.assertRaises(service.RuntimeResponseError):
+                service._read_regular(regular, os.geteuid(), {0o400})
+
+    def test_installer_stages_exact_inert_files_and_isolated_launcher(self) -> None:
+        installer = _ROOT / "packaging/install-runtime-response-host.sh"
+        for forbidden in ("/etc/", "systemctl", "systemd-sysusers", "systemd-tmpfiles"):
+            self.assertNotIn(forbidden, installer.read_text())
+        subprocess.run(["sh", "-n", str(installer)], check=True, capture_output=True)
+        with tempfile.TemporaryDirectory() as temporary:
+            staged = Path(temporary)
+            subprocess.run(
+                ["sh", str(installer)],
+                check=True,
+                cwd=_ROOT,
+                env={**os.environ, "DESTDIR": temporary},
+                capture_output=True,
+                timeout=30,
+            )
+            launcher = (
+                staged / "usr/libexec/aragorn/aragorn-runtime-response-service.py"
+            )
+            expected = {
+                staged / "usr/lib/aragorn/aragorn/runtime_response_service.py": (
+                    _ROOT / "src/aragorn/runtime_response_service.py",
+                    0o644,
+                ),
+                launcher: (
+                    _ROOT / "packaging/libexec/aragorn-runtime-response-service.py",
+                    0o755,
+                ),
+            }
+            for installed, (source, mode) in expected.items():
+                self.assertEqual(installed.read_bytes(), source.read_bytes())
+                self.assertEqual(stat.S_IMODE(installed.stat().st_mode), mode)
+            for untouched in ("etc", "run", "var", "opt"):
+                self.assertFalse((staged / untouched).exists())
+            result = subprocess.run(
+                [sys.executable, "-I", "-S", "-B", str(launcher)],
+                check=False,
+                cwd=staged,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            self.assertEqual(result.returncode, 64, result.stderr)
+            self.assertIn("usage: aragorn-runtime-response", result.stderr)
+            self.assertEqual(result.stdout, "")
+
+
+if __name__ == "__main__":
+    unittest.main()

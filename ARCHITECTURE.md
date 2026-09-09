@@ -1020,6 +1020,22 @@ P3.5b is therefore closed only for this one local create slice; aggregate
 `RUN-02`, Phase 3 exit, EDR status, installer authority, and release authority
 remain false.
 
+An additive root-authorized response command consumes, but does not publish,
+an exact accepted revocation snapshot. It serializes with activation and broker
+publication, joins the running and provisioned worker bindings, checks the caller's
+skill and snapshot digests, and confirms the current policy and generation floor
+before stopping the two fixed gateway/worker units. It requires effective
+`KillMode=control-group` and `Delegate=no`, then verifies inactive units and absent
+or recursively unpopulated cgroups. This uses systemd's
+[unit-wide stop semantics](https://github.com/systemd/systemd/blob/main/man/systemd.kill.xml)
+and the kernel's [recursive populated indicator](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#un-populated-notification),
+not a PID-list kill loop. Timeouts or failed post-stop checks remain indeterminate.
+The command is manual and local: it does not block later root-authorized starts,
+persistently quarantine a digest, or claim protection against concurrent root
+control outside the activator lock. Its installer is additive; the frozen V3
+deployment and retained historical evidence are unchanged. Live termination and
+final common-deployment qualification are still required.
+
 P3.6a closes the next bounded dependency: the capability route now consumes a
 live, lock-stable protected-install transaction instead of relying only on
 root-provisioned digest claims. The protected installer atomically replaces

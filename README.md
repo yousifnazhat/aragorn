@@ -317,6 +317,24 @@ is local process evidence, not durable provenance. The semantic verifier is
 This closes only the bounded P3.5b composition slice and does not establish
 aggregate `RUN-02`, Phase 3 exit, EDR, installer, or release authority.
 
+The additive [runtime stop response](./src/aragorn/runtime_response_service.py)
+provides a manual root-only command for an exact revoked active-skill digest and
+accepted revocation-snapshot digest. It binds the provisioned and running worker
+credentials, checks the fresh broker snapshot and persisted generation floor under
+the existing locks, then stops only the fixed gateway and worker units. Success
+requires inactive units and empty process subtrees; partial stops fail explicitly.
+[Installation](./packaging/install-runtime-response-host.sh) adds the command
+without activating it or changing the historical worker, broker, or unit files.
+After installation, a root operator supplies both exact `sha256:` digests:
+
+```sh
+/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-response-service.py EXPECTED_SKILL_DIGEST EXPECTED_REVOCATION_SNAPSHOT_DIGEST
+```
+
+This response is not an automatic detector, a future-start ban, live RUN
+qualification, or Phase 3 completion. A bounded live termination capture remains
+required before promoting its evidence.
+
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
 transaction record under its exclusive root lock after verifying the active

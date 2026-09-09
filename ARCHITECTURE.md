@@ -1656,6 +1656,17 @@ DET-01 replay only. It does not turn the wrapper nonce into a native collector o
 the local cleanup record into external attestation, or the point-in-time parent
 snapshots into a lease. Every eligibility flag remains false, and the receipt is
 not wired into campaign PASS aggregation.
+The one-case development executor now supports DET-01 and the core-updater route
+behind a fixed case selector, with unsupported cases rejected before execution.
+The core-updater binding explicitly maps provisional campaign paths to the existing
+native recipe paths and checks the six exact read-only bundle members. Source and
+parent custody, native evidence checks, cleanup, and CAS publication are ordered
+per call; this is not final campaign execution, resume, or qualification.
+Final capture follows implementation of the remaining ports/adapters and RUN
+coverage, then a common deployment freeze. Changing the worker, broker, policy,
+configuration, or runtime can invalidate the shared binding. The existing create-
+file mediation and bounded sensor-loss evidence do not yet establish all seven
+required event classes or all six required response classes.
 The quantitative leaf independently checks exact caller-held inventories, one
 blocked residue-free unattributed negative control, separate exfiltration and
 destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate

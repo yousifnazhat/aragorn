@@ -902,6 +902,20 @@ rerunning Docker. Its bounded DET-01 replay `PASS` is not collector-observed non
 an exclusive parent-volume lease, or independent host attestation. All eligibility
 flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
+The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
+now dispatches DET-01 to its existing backend and core-updater replacement to a
+request-aware backend. The latter binds all six bundle files and explicitly maps
+provisional campaign paths to the unchanged native recipe's read-only route-input
+paths. Unsupported cases fail before execution. Each call checks the signed
+checkout, parent snapshots, native source/action evidence, resource cleanup, and
+CAS readback; it returns `OBSERVED`, never campaign `PASS`.
+The remaining work is implementation, not repeated DET-01 captures: connect the
+remaining current routes, complete the 12 V3 ports and five adapters, and implement
+the required RUN event/response coverage,
+then freeze one common deployment. Only after that freeze should the 31 admission
+cases and real 100-attempt/100-pair measurements be captured and independently
+composed into the final exit gate. The current worker mediates file creation;
+that alone does not cover the manifest's seven event classes and six responses.
 A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
 caller-bound baseline/instrumented pairs. No complete campaign or metrics evidence

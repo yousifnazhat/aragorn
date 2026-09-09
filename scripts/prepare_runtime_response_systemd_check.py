@@ -159,4 +159,8 @@ def _run() -> dict:
 if __name__ == "__main__":
     if len(sys.argv) != 1:
         raise SystemExit("fixture preparation accepts no arguments")
-    print(canonical_json(_run()).decode("ascii"))
+    try:
+        print(canonical_json(_run()).decode("ascii"))
+    except (RuntimeError, OSError, ValueError) as exc:
+        print(f"response fixture not confirmed: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None

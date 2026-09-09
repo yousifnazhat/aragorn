@@ -567,7 +567,21 @@ def _unit_state(unit: str) -> dict[str, str]:
         or document["Restart"] != "no"
         or document["SendSIGKILL"] != "yes"
     ):
-        raise RuntimeResponseError("fixed unit security properties changed")
+        actual = {
+            key: document[key]
+            for key in (
+                "LoadState",
+                "User",
+                "Group",
+                "KillMode",
+                "Delegate",
+                "Restart",
+                "SendSIGKILL",
+            )
+        }
+        raise RuntimeResponseError(
+            f"fixed unit security properties changed: {unit}: {actual}"
+        )
     return document
 
 

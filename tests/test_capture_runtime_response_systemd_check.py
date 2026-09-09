@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from copy import deepcopy
+from hashlib import sha256
 from unittest.mock import patch
 
 from scripts import capture_runtime_response_systemd_check as subject
@@ -10,6 +11,46 @@ from scripts import prepare_runtime_response_systemd_check as prep
 
 
 class ResponseCaptureTests(unittest.TestCase):
+    def test_retained_response_observation_keeps_exact_overlay_and_claim_ceiling(
+        self,
+    ) -> None:
+        path = (
+            subject._ROOT
+            / "benchmark/evidence/phase3-runtime-response-systemd-development-v1-2026-09-09.json"
+        )
+        raw = path.read_bytes()
+        self.assertEqual(
+            sha256(raw).hexdigest(),
+            "145d990301c2e5ee414dea56c662a93f5189275addbdc35b8320701d6bb75d0e",
+        )
+        capture = json.loads(raw)
+        self.assertEqual(subject.campaign._canonical(capture), raw)
+        for item in capture["response_overlay"].values():
+            committed = subject.existing.acquisition.shared._git(
+                ["show", capture["source"]["commit"] + ":" + item["path"]]
+            )
+            self.assertEqual("sha256:" + sha256(committed).hexdigest(), item["digest"])
+        check = capture["observation"]["check"]
+        result = json.loads(check["response_invocation"]["stdout"])
+        self.assertEqual(
+            result["status"], "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE"
+        )
+        self.assertEqual(check["wrong_skill_refusal"]["exit_code"], 126)
+        self.assertEqual(check["direct_start_refusal"]["exit_code"], 1)
+        self.assertEqual(check["extra_gateway_cgroup_member_exit_code"], -15)
+        self.assertTrue(
+            all(
+                item["status"] == "ABSENT"
+                for item in check["cgroups_after_refused_start"]
+            )
+        )
+        self.assertTrue(result["future_start_barrier"]["directory_fsynced"])
+        self.assertEqual(len(result["future_start_barrier"]["masks"]), 2)
+        self.assertTrue(capture["cleanup"]["container_name_absent"])
+        self.assertTrue(capture["cleanup"]["removed_id_absent"])
+        self.assertFalse(capture["phase3_eligible"])
+        self.assertFalse(capture["run_conformance_eligible"])
+
     def test_preparation_refuses_native_host_and_accepts_only_docker_systemd(
         self,
     ) -> None:

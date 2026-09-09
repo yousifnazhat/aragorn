@@ -18,6 +18,26 @@ _ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkshopInvalidationCaseTests(unittest.TestCase):
+    def test_retained_fresh_workshop_capture_reverifies(self) -> None:
+        raw = (
+            _ROOT
+            / "benchmark/evidence/phase3-openclaw-final-v3-workshop-invalidation-development-case-v1-2026-09-09.json"
+        ).read_bytes()
+        self.assertEqual(
+            subject.checks.det._digest(raw),
+            "sha256:3c2aebb607dc6d2bc71735162f90598cee4242227bb2346a8e02c861d08f5d42",
+        )
+        capture = json.loads(raw)
+        verified = subject.verify_capture(
+            base64.b64decode(capture["native_capture"]["base64"], validate=True),
+            capture["request_binding"],
+            source=capture["source"],
+            invocation=capture["invocation"],
+        )
+        self.assertEqual(verified["proof"], capture["capture_checks"])
+        self.assertTrue(capture["cleanup"]["container_absent"])
+        self.assertTrue(capture["cleanup"]["volume_absent"])
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.temporary = TemporaryDirectory()

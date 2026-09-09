@@ -339,6 +339,9 @@ automatic detector. The [bounded Linux check](./scripts/capture_runtime_response
 exercises wrong-digest refusal, unit-wide stop, an extra gateway-cgroup process,
 and refused restart in a disposable fixture. Live RUN qualification and final
 common-deployment qualification remain required.
+The [September 9 live observation](./benchmark/evidence/phase3-runtime-response-systemd-development-v1-2026-09-09.json)
+confirms those bounded checks, persistent masks, absent cgroups, and owned-container
+cleanup. It is local integration evidence, not automatic response or digest quarantine.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
@@ -934,6 +937,9 @@ native materializer is recorded without rewriting that descriptor.
 Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.
+The [fresh workshop-invalidation development observation](./benchmark/evidence/phase3-openclaw-final-v3-workshop-invalidation-development-case-v1-2026-09-09.json)
+was captured and reverified through this backend, with unchanged parent snapshots,
+exact native evidence, CAS readback, and container/input-volume cleanup.
 The remaining work is implementation, not repeated DET-01 captures: connect the
 remaining current routes, complete the 12 V3 ports and five adapters, and implement
 the required RUN event/response coverage,

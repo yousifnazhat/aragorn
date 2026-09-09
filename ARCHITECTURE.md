@@ -1041,8 +1041,10 @@ unmasks. This whole-profile barrier is not installed-digest quarantine or
 protection against independent root control. Cgroups are derived from a tightly
 checked native or Docker systemd PID1 scope, then joined with fixed unit names.
 Its installer is additive; frozen V3 deployment and historical evidence remain
-unchanged. Live termination and final common-deployment qualification remain
-separate gates.
+unchanged. One retained disposable-fixture observation now demonstrates stop and
+persistent start masking, including an extra gateway-cgroup member. It does not
+prove gateway child genealogy, automatic response dispatch, general digest
+quarantine, or final common-deployment qualification.
 
 P3.6a closes the next bounded dependency: the capability route now consumes a
 live, lock-stable protected-install transaction instead of relying only on

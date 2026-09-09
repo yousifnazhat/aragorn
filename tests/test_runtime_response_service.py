@@ -688,6 +688,7 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             raw.replace(b"KillMode=control-group", b"KillMode=process"),
             raw.replace(b"SendSIGKILL=yes", b"SendSIGKILL=no"),
             raw.replace(b"Restart=no", b"Restart=always"),
+            raw.replace(b"Restart=no", b"Restart=on-failure"),
             raw + b"Id=another.service\n",
         ):
             with (
@@ -696,6 +697,21 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                 self.assertRaises(service.RuntimeResponseError),
             ):
                 service._unit_state(unit)
+        worker = {
+            **state,
+            "Id": service._UNITS[1],
+            "User": "aragorn-runtime",
+            "Group": "aragorn-runtime",
+            "Restart": "on-failure",
+        }
+        with patch.object(
+            service,
+            "_command",
+            return_value="".join(
+                f"{key}={value}\n" for key, value in worker.items()
+            ).encode(),
+        ):
+            self.assertEqual(service._unit_state(service._UNITS[1]), worker)
 
     def test_authority_files_refuse_fifo_symlink_hardlink_and_unsafe_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

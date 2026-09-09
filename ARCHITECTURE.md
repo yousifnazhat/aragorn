@@ -1030,6 +1030,9 @@ or recursively unpopulated cgroups. This uses systemd's
 [unit-wide stop semantics](https://github.com/systemd/systemd/blob/main/man/systemd.kill.xml)
 and the kernel's [recursive populated indicator](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#un-populated-notification),
 not a PID-list kill loop. Timeouts or failed post-stop checks remain indeterminate.
+The fixed worker also accepts its frozen `Restart=on-failure` setting:
+[explicit systemd stop suppresses automatic restart](https://github.com/systemd/systemd/blob/main/man/systemd.service.xml).
+The gateway remains restricted to `Restart=no`; termination proof is still required.
 The command is manual and local. Its optional `--prevent-starts` mode persists
 root-owned systemd masks for the two fixed units after confirming termination,
 fsyncs their directory, reloads systemd, and verifies masked/inactive state under

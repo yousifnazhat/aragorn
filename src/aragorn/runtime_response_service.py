@@ -564,7 +564,10 @@ def _unit_state(unit: str) -> dict[str, str]:
         or document["Group"] != name
         or document["KillMode"] != "control-group"
         or document["Delegate"] != "no"
-        or document["Restart"] != "no"
+        # Explicit systemctl stop suppresses the frozen worker's on-failure
+        # restart policy; process-exit signaling alone would not suffice.
+        or document["Restart"]
+        not in ({"no", "on-failure"} if unit == _UNITS[1] else {"no"})
         or document["SendSIGKILL"] != "yes"
     ):
         actual = {

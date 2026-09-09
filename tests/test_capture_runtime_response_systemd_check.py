@@ -11,6 +11,40 @@ from scripts import prepare_runtime_response_systemd_check as prep
 
 
 class ResponseCaptureTests(unittest.TestCase):
+    def test_retained_live_evidence_receipt_binds_exact_response_bytes(self) -> None:
+        raw = (
+            subject._ROOT
+            / "benchmark/evidence/phase3-runtime-response-retention-development-v1-2026-09-09.json"
+        ).read_bytes()
+        self.assertEqual(
+            sha256(raw).hexdigest(),
+            "d61d9e3df0bd4f46bc6f0348dd95625812b28f965b25c250fa3fef16eab71c81",
+        )
+        capture = json.loads(raw)
+        check = capture["observation"]["check"]
+        envelope = json.loads(check["response_invocation"]["stdout"])
+        response = subject.campaign._canonical(envelope["response"])
+        proof = check["evidence_retention"]
+        self.assertEqual(proof["digest"], envelope["evidence"]["digest"])
+        self.assertEqual(proof["digest"], "sha256:" + sha256(response).hexdigest())
+        self.assertEqual(proof["bytes"], len(response))
+        self.assertTrue(proof["separate_process_readback"])
+        self.assertTrue(proof["deduplication_checked"])
+        self.assertTrue(proof["blob_and_directory_chain_fsynced"])
+        self.assertEqual(
+            envelope["response"]["status"],
+            "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE",
+        )
+        for item in capture["response_overlay"].values():
+            committed = subject.existing.acquisition.shared._git(
+                ["show", capture["source"]["commit"] + ":" + item["path"]]
+            )
+            self.assertEqual("sha256:" + sha256(committed).hexdigest(), item["digest"])
+        self.assertTrue(capture["cleanup"]["container_name_absent"])
+        self.assertTrue(capture["cleanup"]["removed_id_absent"])
+        self.assertFalse(capture["phase3_eligible"])
+        self.assertFalse(capture["run_conformance_eligible"])
+
     def test_retained_response_observation_keeps_exact_overlay_and_claim_ceiling(
         self,
     ) -> None:

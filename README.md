@@ -347,6 +347,10 @@ the default output is unchanged. Retention failure after a stop returns
 `INDETERMINATE` (125), never a claim that no stop occurred. The store is local,
 not independently attested or protected from root; retention/rotation and external
 alert delivery are not implemented.
+The [retention development observation](./benchmark/evidence/phase3-runtime-response-retention-development-v1-2026-09-09.json)
+records successful separate-process CAS readback and deduplication alongside the
+stop/mask checks. This verifies the local integration, not power-loss recovery
+or independent evidence attestation.
 The [September 9 live observation](./benchmark/evidence/phase3-runtime-response-systemd-development-v1-2026-09-09.json)
 confirms those bounded checks, persistent masks, absent cgroups, and owned-container
 cleanup. It is local integration evidence, not automatic response or digest quarantine.

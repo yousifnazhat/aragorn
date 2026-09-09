@@ -105,8 +105,8 @@ def _capture() -> dict[str, Any]:
         for path, target in _OVERLAY.items():
             _docker("cp", str(_ROOT / path), container + ":" + target)
         _docker("start", container)
-        # Only the new response and check files are overlaid. The frozen V3
-        # worker, activator, configuration and runtime are not reinstalled.
+        # Only response/check files and their exact CAS dependency are overlaid.
+        # The frozen V3 worker, activator, configuration and runtime are unchanged.
         verify = """
 import hashlib,json,os,stat,sys,time
 from pathlib import Path

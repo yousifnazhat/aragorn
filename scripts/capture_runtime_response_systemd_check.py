@@ -40,6 +40,7 @@ def _capture() -> dict[str, Any]:
         path: {
             **existing.acquisition._tree_file(source["commit"], Path(path)),
             "installed_path": target,
+            "installed_mode": "0644" if path == "src/aragorn/cas.py" else "0444",
         }
         for path, target in _OVERLAY.items()
     }
@@ -111,9 +112,9 @@ import hashlib,json,os,stat,sys,time
 from pathlib import Path
 expected=json.loads(sys.argv[1])
 for item in expected.values():
- p=Path(item['installed_path']); os.chown(p,0,0); os.chmod(p,0o444)
+ p=Path(item['installed_path']); os.chown(p,0,0); os.chmod(p,int(item['installed_mode'],8))
  s=p.lstat(); raw=p.read_bytes()
- if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or len(raw)!=item['bytes'] or 'sha256:'+hashlib.sha256(raw).hexdigest()!=item['digest']:
+ if not stat.S_ISREG(s.st_mode) or s.st_uid!=0 or s.st_gid!=0 or stat.S_IMODE(s.st_mode)!=int(item['installed_mode'],8) or s.st_nlink!=1 or len(raw)!=item['bytes'] or 'sha256:'+hashlib.sha256(raw).hexdigest()!=item['digest']:
   raise RuntimeError('response overlay changed')
 deadline=time.monotonic()+20
 while not (Path('/run/systemd/private').exists() and Path('/run/aragorn-protected-install').is_dir()):

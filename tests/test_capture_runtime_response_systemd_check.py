@@ -11,6 +11,93 @@ from scripts import prepare_runtime_response_systemd_check as prep
 
 
 class ResponseCaptureTests(unittest.TestCase):
+    def test_retained_dispatch_binds_two_ordered_publications_and_local_receipts(
+        self,
+    ) -> None:
+        raw = (
+            subject._ROOT
+            / "benchmark/evidence/phase3-runtime-response-dispatch-development-v1-2026-09-09.json"
+        ).read_bytes()
+        self.assertEqual(
+            sha256(raw).hexdigest(),
+            "895c14c168afc9145ebe076a2efae06ecf9d9914ab06a3c2a98574de3f2181cd",
+        )
+        capture = json.loads(raw)
+        self.assertEqual(subject.campaign._canonical(capture), raw)
+        check = capture["observation"]["check"]
+        proof = check["automatic_dispatch"]
+        self.assertIn(
+            "aragorn-runtime-revocation-publisher.service start waiting\n",
+            proof["second_publisher_waiting_jobs"],
+        )
+        self.assertEqual(len(proof["invocations"]), 2)
+        for generation, status, record, snapshot in zip(
+            (2, 3),
+            (
+                "NO_REVOCATION_FOR_ACTIVE_PROFILE",
+                "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE",
+            ),
+            proof["invocations"],
+            proof["publications"],
+            strict=True,
+        ):
+            envelope = record["response"]["result"]
+            result = envelope["response"]
+            digest = subject.campaign._digest(subject.campaign._canonical(snapshot))
+            self.assertEqual(record["publication"]["result"]["generation"], generation)
+            self.assertEqual(
+                record["publication"]["result"]["revocations_digest"], digest
+            )
+            self.assertEqual(result["accepted_revocation"]["generation"], generation)
+            self.assertEqual(result["revocation_snapshot_digest"], digest)
+            self.assertEqual(result["status"], status)
+            self.assertEqual(result["before"], check["before"])
+            response_raw = subject.campaign._canonical(result)
+            self.assertEqual(
+                envelope["evidence"]["digest"], subject.campaign._digest(response_raw)
+            )
+            self.assertEqual(envelope["evidence"]["bytes"], len(response_raw))
+            self.assertTrue(record["retention"]["separate_process_readback"])
+            self.assertTrue(record["retention"]["deduplication_checked"])
+            self.assertTrue(record["retention"]["blob_and_directory_chain_fsynced"])
+            for name in ("publication", "response"):
+                self.assertEqual(
+                    record[name]["journal"]["_SYSTEMD_INVOCATION_ID"],
+                    record[name]["invocation_id"],
+                )
+                self.assertEqual(
+                    json.loads(record[name]["journal"]["MESSAGE"]),
+                    record[name]["result"],
+                )
+            if generation == 2:
+                self.assertEqual(result["after"], result["before"])
+                self.assertNotIn("future_start_barrier", result)
+            else:
+                self.assertEqual(len(result["future_start_barrier"]["masks"]), 2)
+        for name in ("publication", "response"):
+            self.assertEqual(
+                len({item[name]["invocation_id"] for item in proof["invocations"]}), 2
+            )
+        for item in capture["response_overlay"].values():
+            committed = subject.existing.acquisition.shared._git(
+                ["show", capture["source"]["commit"] + ":" + item["path"]]
+            )
+            self.assertEqual(subject.campaign._digest(committed), item["digest"])
+        self.assertEqual(check["wrong_skill_refusal"]["exit_code"], 126)
+        self.assertEqual(check["direct_start_refusal"]["exit_code"], 1)
+        self.assertEqual(check["extra_gateway_cgroup_member_exit_code"], -15)
+        self.assertTrue(
+            all(
+                item["status"] == "ABSENT"
+                for item in check["cgroups_after_refused_start"]
+            )
+        )
+        self.assertTrue(capture["cleanup"]["container_name_absent"])
+        self.assertTrue(capture["cleanup"]["removed_id_absent"])
+        for document in (capture, check):
+            self.assertFalse(document["phase3_eligible"])
+            self.assertFalse(document["run_conformance_eligible"])
+
     def test_retained_live_evidence_receipt_binds_exact_response_bytes(self) -> None:
         raw = (
             subject._ROOT

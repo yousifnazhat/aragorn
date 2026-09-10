@@ -383,6 +383,14 @@ exposes only the loaded worker credential directory while preserving the source
 mount's read-only status for the custody check. It does not copy or force that
 credential read-only. Use the manual exact-digest command for an operator retry
 outside the service namespace.
+The [dispatch development observation](./benchmark/evidence/phase3-runtime-response-dispatch-development-v1-2026-09-09.json)
+records two distinct publisher/response invocations: generation 2 is a retained
+nonrevoking no-op; generation 3 terminates and masks the fixed profile. A bounded
+fixture-only two-second delay proves the second publisher waits behind the first
+response. Both CAS results pass separate-process readback and deduplication;
+the owned container is removed and frozen-parent bytes remain unchanged. This
+is a local dispatch integration observation, not a latency benchmark, unattended
+delivery guarantee, independent qualification or Phase 3 completion.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

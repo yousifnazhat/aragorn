@@ -123,13 +123,19 @@ class ResponseCaptureTests(unittest.TestCase):
                 "run_conformance_eligible": False,
             }
         }
-        for failure in (None, "create", "exec", "parent", "claim"):
-            with self.subTest(failure=failure):
+        for case in (None, "dispatch", "create", "exec", "parent", "claim"):
+            dispatch = case == "dispatch"
+            failure = None if dispatch else case
+            with self.subTest(failure=failure, dispatch=dispatch):
                 after = deepcopy(before)
                 if failure == "parent":
                     after["content"]["runtime_tree_after"]["digest"] = "changed"
 
-                def docker(*arguments: str, failure: str | None = failure) -> bytes:
+                def docker(
+                    *arguments: str,
+                    failure: str | None = failure,
+                    dispatch: bool = dispatch,
+                ) -> bytes:
                     if arguments[0] == failure:
                         raise RuntimeError("fixture command failed")
                     if arguments[:2] == ("image", "inspect"):
@@ -167,9 +173,11 @@ class ResponseCaptureTests(unittest.TestCase):
                                 }
                             ]
                         ).encode()
-                    if arguments[0] == "exec" and arguments[-1].endswith(
-                        "prepare_runtime_response_systemd_check.py"
+                    if arguments[0] == "exec" and any(
+                        item.endswith("prepare_runtime_response_systemd_check.py")
+                        for item in arguments
                     ):
+                        self.assertEqual(arguments[-1] == "--dispatch", dispatch)
                         result = deepcopy(observation)
                         if failure == "claim":
                             result["check"]["phase3_eligible"] = True
@@ -202,11 +210,16 @@ class ResponseCaptureTests(unittest.TestCase):
                 ):
                     if failure:
                         with self.assertRaises(RuntimeError):
-                            subject._capture()
+                            subject._capture(dispatch=dispatch)
                     else:
-                        result = subject._capture()
+                        result = subject._capture(dispatch=dispatch)
                         self.assertEqual(result["observation"], observation)
                         self.assertFalse(result["phase3_eligible"])
+                        self.assertEqual(
+                            set(result["response_overlay"]),
+                            set(subject._OVERLAY)
+                            | (set(subject._DISPATCH_OVERLAY) if dispatch else set()),
+                        )
                     cleanup.assert_called_once_with(
                         "aragorn-runtime-response-check-" + "a" * 16,
                         "a" * 64,

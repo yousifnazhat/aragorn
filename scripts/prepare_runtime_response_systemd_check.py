@@ -30,7 +30,7 @@ def _require_fixture() -> None:
         )
 
 
-def _run() -> dict:
+def _run(*, dispatch: bool = False) -> dict:
     _require_fixture()
     response._EVIDENCE_ROOT.mkdir(mode=0o700)
     import runtime_action_worker_final_combined_v3_plugin_force_reinstall_systemd_probe as v3
@@ -120,25 +120,59 @@ def _run() -> dict:
     ):
         raise RuntimeError("response fixture stack is not active")
     listener = p37c._gateway_listener(int(units[p37b._GATEWAY_UNIT]["MainPID"]))
+    if dispatch:
+        hook = Path(
+            "/etc/systemd/system/aragorn-runtime-revocation-publisher.service.d"
+        )
+        delay = Path(
+            "/etc/systemd/system/aragorn-runtime-revocation-response.service.d"
+        )
+        # This owned fixture hook is installed only after the frozen activator.
+        hook.mkdir(mode=0o755)
+        delay.mkdir(mode=0o700)
+        for path, raw, mode in (
+            (
+                hook / "50-runtime-response.conf",
+                Path("/opt/aragorn/50-runtime-response.conf").read_bytes(),
+                0o644,
+            ),
+            (
+                delay / "50-fixture-delay.conf",
+                b"[Service]\nExecStartPre=/usr/bin/sleep 2\n",
+                0o600,
+            ),
+        ):
+            with path.open("xb") as stream:
+                stream.write(raw)
+            os.chmod(path, mode)
+        response._command(["/usr/bin/systemctl", "daemon-reload"], timeout=5)
     now = int(time.time())
     revocations = {
         **controls["revocations"],
         "generation": 2,
         "observed_at_unix": now,
         "expires_at_unix": now + 15,
-        "skill_digests": [skill_digest],
+        "skill_digests": [] if dispatch else [skill_digest],
     }
     p37b._write_document(
         Path("/etc/aragorn/runtime-action-revocation-publication.json"), revocations
     )
-    publication = p37c._command(
-        ["/usr/bin/systemctl", "start", "aragorn-runtime-revocation-publisher.service"],
-        timeout=10,
-    )
-    if publication["exit_code"] != 0:
-        raise RuntimeError("fixture revocation publication failed")
+    publication = None
+    if not dispatch:
+        publication = p37c._command(
+            [
+                "/usr/bin/systemctl",
+                "start",
+                "aragorn-runtime-revocation-publisher.service",
+            ],
+            timeout=10,
+        )
+        if publication["exit_code"] != 0:
+            raise RuntimeError("fixture revocation publication failed")
     checker = runpy.run_path("/opt/aragorn/runtime-response-systemd-check.py")
-    result = checker["_run"](skill_digest, canonical_digest(revocations))
+    result = checker["_run"](
+        skill_digest, canonical_digest(revocations), dispatch=dispatch
+    )
     return {
         "schema": "aragorn/runtime-response-systemd-fixture/v1",
         "setup": {
@@ -158,10 +192,10 @@ def _run() -> dict:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 1:
-        raise SystemExit("fixture preparation accepts no arguments")
+    if sys.argv[1:] not in ([], ["--dispatch"]):
+        raise SystemExit("fixture preparation accepts only optional --dispatch")
     try:
-        print(canonical_json(_run()).decode("ascii"))
+        print(canonical_json(_run(dispatch=bool(sys.argv[1:]))).decode("ascii"))
     except (RuntimeError, OSError, ValueError) as exc:
         print(f"response fixture not confirmed: {exc}", file=sys.stderr)
         raise SystemExit(1) from None

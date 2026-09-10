@@ -23,6 +23,10 @@ _OVERLAY = {
     "scripts/runtime_response_systemd_check.py": "/opt/aragorn/runtime-response-systemd-check.py",
     "scripts/prepare_runtime_response_systemd_check.py": "/opt/aragorn/prepare_runtime_response_systemd_check.py",
 }
+_DISPATCH_OVERLAY = {
+    "packaging/systemd/aragorn-runtime-revocation-response.service": "/usr/lib/systemd/system/aragorn-runtime-revocation-response.service",
+    "packaging/systemd/50-runtime-response.conf": "/opt/aragorn/50-runtime-response.conf",
+}
 
 
 def _expect(value: bool, message: str) -> None:
@@ -34,15 +38,20 @@ def _docker(*arguments: str) -> bytes:
     return existing.acquisition._run([*existing.acquisition._DOCKER, *arguments])
 
 
-def _capture() -> dict[str, Any]:
+def _capture(*, dispatch: bool = False) -> dict[str, Any]:
     source = existing._source_identity()
+    paths = {**_OVERLAY, **(_DISPATCH_OVERLAY if dispatch else {})}
     overlays = {
         path: {
             **existing.acquisition._tree_file(source["commit"], Path(path)),
             "installed_path": target,
-            "installed_mode": "0644" if path == "src/aragorn/cas.py" else "0444",
+            "installed_mode": (
+                "0644"
+                if path == "src/aragorn/cas.py" or path in _DISPATCH_OVERLAY
+                else "0444"
+            ),
         }
-        for path, target in _OVERLAY.items()
+        for path, target in paths.items()
     }
     parent = campaign.current_v3_parent_identity()
     before = parent_snapshot.snapshot_parent(parent)
@@ -102,7 +111,7 @@ def _capture() -> dict[str, Any]:
             ),
             "created fixture identity or isolation changed",
         )
-        for path, target in _OVERLAY.items():
+        for path, target in paths.items():
             _docker("cp", str(_ROOT / path), container + ":" + target)
         _docker("start", container)
         # Only response/check files and their exact CAS dependency are overlaid.
@@ -141,6 +150,8 @@ while not (Path('/run/systemd/private').exists() and Path('/run/aragorn-protecte
             "-B",
             _OVERLAY["scripts/prepare_runtime_response_systemd_check.py"],
         ]
+        if dispatch:
+            argv.append("--dispatch")
         raw = _docker(*argv)
         observation = json.loads(raw)
         _expect(
@@ -194,15 +205,19 @@ while not (Path('/run/systemd/private').exists() and Path('/run/aragorn-protecte
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    dispatch = bool(arguments and arguments[0] == "--dispatch")
+    if dispatch:
+        arguments.pop(0)
     if len(arguments) != 1:
         print(
-            "usage: capture_runtime_response_systemd_check OUTPUT_JSON", file=sys.stderr
+            "usage: capture_runtime_response_systemd_check [--dispatch] OUTPUT_JSON",
+            file=sys.stderr,
         )
         return 64
     output = Path(arguments[0])
     if output.exists() or output.is_symlink():
         raise RuntimeError("output already exists")
-    result = _capture()
+    result = _capture(dispatch=True) if dispatch else _capture()
     with output.open("xb") as stream:
         stream.write(campaign._canonical(result))
     print(

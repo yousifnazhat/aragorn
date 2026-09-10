@@ -125,6 +125,191 @@ def _environment(fixture: _Fixture):
 
 
 class RuntimeResponseServiceTests(unittest.TestCase):
+    def test_dispatch_has_no_target_arguments_and_always_retains(self) -> None:
+        result = {"status": "NO_REVOCATION_FOR_ACTIVE_PROFILE"}
+        with (
+            patch.object(service, "_respond", return_value=result) as respond,
+            patch.object(
+                service, "_retain_result", return_value={"response": result}
+            ) as retain,
+            redirect_stdout(StringIO()) as output,
+            redirect_stderr(StringIO()),
+        ):
+            self.assertEqual(service.main(["--dispatch"]), 0)
+            respond.assert_called_once_with(prevent_starts=True)
+            retain.assert_called_once_with(result)
+            self.assertEqual(json.loads(output.getvalue()), {"response": result})
+            for arguments in (
+                ["--dispatch", _SKILL],
+                ["--dispatch", _SKILL, _OTHER],
+                ["--retain-evidence", "--dispatch"],
+                ["--prevent-starts", "--dispatch"],
+            ):
+                self.assertEqual(service.main(arguments), 64)
+            respond.assert_called_once()
+        for failure, exit_code in (
+            (service.RuntimeResponseError("stale snapshot"), 126),
+            (service.RuntimeResponseIndeterminate("stop attempted"), 125),
+        ):
+            with (
+                patch.object(service, "_respond", side_effect=failure),
+                patch.object(service, "_retain_result") as retain,
+                redirect_stderr(StringIO()),
+                redirect_stdout(StringIO()) as output,
+            ):
+                self.assertEqual(service.main(["--dispatch"]), exit_code)
+                self.assertEqual(output.getvalue(), "")
+                retain.assert_not_called()
+        with (
+            patch.object(service, "_respond", return_value=result),
+            patch.object(
+                service, "_retain_result", side_effect=service.CASError("disk")
+            ),
+            redirect_stderr(StringIO()),
+        ):
+            self.assertEqual(service.main(["--dispatch"]), 125)
+
+    def test_dispatch_selects_current_snapshot_under_existing_locks(self) -> None:
+        for revoked in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                fixture = _Fixture(Path(temporary).resolve())
+                document = {
+                    **fixture.revocations,
+                    "generation": 4,
+                    "skill_digests": [_SKILL] if revoked else [],
+                }
+                publish_runtime_control_document(
+                    fixture.paths["revocations"],
+                    document,
+                    fixture.config,
+                    clock=lambda: 100,
+                )
+                with (
+                    _environment(fixture) as (_binding, events, stop),
+                    patch.object(service, "_inactive_profile", return_value=None),
+                    patch.object(
+                        service, "_mask_future_starts", return_value={}
+                    ) as mask,
+                ):
+                    result = service._respond(prevent_starts=True)
+                    self.assertEqual(result["expected_skill_digest"], _SKILL)
+                    self.assertEqual(
+                        result["revocation_snapshot_digest"], canonical_digest(document)
+                    )
+                    self.assertEqual(result["accepted_revocation"]["generation"], 4)
+                    self.assertIs(
+                        result["accepted_revocation"]["revokes_active_skill"], revoked
+                    )
+                    if revoked:
+                        stop.assert_called_once()
+                        mask.assert_called_once()
+                        self.assertEqual(
+                            events, ["activation-lock", "stop", "activation-unlock"]
+                        )
+                        self.assertEqual(
+                            result["status"],
+                            "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE",
+                        )
+                    else:
+                        stop.assert_not_called()
+                        mask.assert_not_called()
+                        self.assertEqual(
+                            events, ["activation-lock", "activation-unlock"]
+                        )
+                        self.assertEqual(
+                            result["status"], "NO_REVOCATION_FOR_ACTIVE_PROFILE"
+                        )
+                        self.assertEqual(result["before"], result["after"])
+                        self.assertNotIn("future_start_barrier", result)
+
+    def test_dispatch_noop_still_requires_fresh_accepted_bound_snapshot(self) -> None:
+        for mutation in (
+            {"generation": 3},
+            {"generation": 5},
+            {"source_digest": _OTHER},
+            {"observed_at_unix": 80, "expires_at_unix": 90},
+        ):
+            with tempfile.TemporaryDirectory() as temporary:
+                fixture = _Fixture(Path(temporary).resolve())
+                document = {**_accepted(fixture), "skill_digests": [], **mutation}
+                _write_control(fixture.paths["revocations"], document)
+                with (
+                    _environment(fixture) as (_binding, _events, stop),
+                    patch.object(service, "_inactive_profile", return_value=None),
+                    self.assertRaises(service.RuntimeResponseError),
+                ):
+                    service._respond(prevent_starts=True)
+                stop.assert_not_called()
+
+    def test_inactive_dispatch_requires_two_empty_stable_fixed_units(self) -> None:
+        for case in (
+            "loaded",
+            "masked",
+            "missing",
+            "pid",
+            "substate",
+            "cgroup",
+            "populated",
+            "changed",
+            "partial",
+        ):
+            states = [
+                {
+                    "Id": unit,
+                    "LoadState": "masked" if case == "masked" else "loaded",
+                    "ActiveState": "inactive",
+                    "SubState": "dead",
+                    "MainPID": "0",
+                    "ControlPID": "0",
+                    "ControlGroup": "",
+                }
+                for unit in service._UNITS
+            ]
+            changes = {
+                "missing": {"LoadState": "not-found"},
+                "pid": {"ControlPID": "42"},
+                "substate": {"SubState": "failed"},
+                "cgroup": {"ControlGroup": "/other"},
+                "partial": {
+                    "ActiveState": "active",
+                    "SubState": "running",
+                    "MainPID": "42",
+                },
+            }
+            states[0].update(changes.get(case, {}))
+            repeated = [dict(item) for item in states]
+            if case == "changed":
+                repeated[0]["MainPID"] = "42"
+            with (
+                self.subTest(case=case),
+                patch.object(service, "_show_unit", side_effect=states + repeated),
+                patch.object(
+                    service,
+                    "_service_cgroup",
+                    side_effect=lambda unit: f"/system.slice/{unit}",
+                ),
+                patch.object(
+                    service,
+                    "_cgroup_empty",
+                    return_value={"status": "ABSENT"},
+                    side_effect=service.RuntimeResponseError("populated")
+                    if case == "populated"
+                    else None,
+                ),
+                patch.object(service, "_read_bindings") as bindings,
+            ):
+                if case == "partial":
+                    self.assertIsNone(service._inactive_profile())
+                elif case in {"loaded", "masked"}:
+                    result = service._inactive_profile()
+                    self.assertEqual(result["status"], "NO_ACTIVE_RUNTIME_PROFILE")
+                    self.assertNotIn("accepted_revocation", result)
+                    self.assertNotIn("future_start_barrier", result)
+                else:
+                    with self.assertRaises(service.RuntimeResponseError):
+                        service._inactive_profile()
+                bindings.assert_not_called()
+
     def test_retention_is_opt_in_and_failure_after_response_is_indeterminate(
         self,
     ) -> None:
@@ -879,6 +1064,16 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                 staged / "usr/libexec/aragorn/aragorn-runtime-response-service.py"
             )
             expected = {
+                staged
+                / "usr/lib/systemd/system/aragorn-runtime-revocation-response.service": (
+                    _ROOT
+                    / "packaging/systemd/aragorn-runtime-revocation-response.service",
+                    0o644,
+                ),
+                staged / "usr/share/aragorn/systemd/50-runtime-response.conf": (
+                    _ROOT / "packaging/systemd/50-runtime-response.conf",
+                    0o644,
+                ),
                 staged / "usr/lib/aragorn/aragorn/runtime_response_service.py": (
                     _ROOT / "src/aragorn/runtime_response_service.py",
                     0o644,
@@ -913,6 +1108,35 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 64, result.stderr)
             self.assertIn("usage: aragorn-runtime-response", result.stderr)
             self.assertEqual(result.stdout, "")
+
+        unit = (
+            _ROOT / "packaging/systemd/aragorn-runtime-revocation-response.service"
+        ).read_text()
+        for required in (
+            "Before=aragorn-runtime-revocation-publisher.service\n",
+            "RefuseManualStart=yes\n",
+            "User=root\n",
+            "Group=root\n",
+            "Type=oneshot\n",
+            "RemainAfterExit=no\n",
+            "CapabilityBoundingSet=CAP_DAC_OVERRIDE\n",
+            "ProtectProc=default\n",
+            "ProtectSystem=strict\n",
+            "ProtectControlGroups=yes\n",
+            "ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-response-service.py --dispatch\n",
+        ):
+            self.assertIn(required, unit)
+        for forbidden in (
+            "[Install]",
+            "After=aragorn-runtime-revocation-publisher",
+            "Restart=",
+            "ExecStartPost=",
+        ):
+            self.assertNotIn(forbidden, unit)
+        self.assertEqual(
+            (_ROOT / "packaging/systemd/50-runtime-response.conf").read_text(),
+            "[Unit]\nOnSuccess=aragorn-runtime-revocation-response.service\nOnSuccessJobMode=fail\n",
+        )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -18,6 +20,9 @@ from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.runtime_process_profile import _read_virtual_file
 
 _ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
+_PUBLISHER = "aragorn-runtime-revocation-publisher.service"
+_DISPATCH = "aragorn-runtime-revocation-response.service"
+_PUBLICATION = Path("/etc/aragorn/runtime-action-revocation-publication.json")
 
 
 def _expect(condition: bool, message: str) -> None:
@@ -218,7 +223,264 @@ def _retained_response(
     }
 
 
-def _run(skill: str, snapshot: str) -> dict[str, Any]:
+def _service_state(unit: str) -> dict[str, str]:
+    _expect(unit in {_PUBLISHER, _DISPATCH}, "unsupported fixture service")
+    properties = (
+        "Id",
+        "InvocationID",
+        "ActiveState",
+        "SubState",
+        "ControlPID",
+        "ExecMainStatus",
+        "Result",
+    )
+    raw = response._command(
+        ["/usr/bin/systemctl", "show", "--property=" + ",".join(properties), unit],
+        timeout=3,
+    )
+    pairs = [line.split("=", 1) for line in raw.decode("ascii").splitlines()]
+    _expect(all(len(pair) == 2 for pair in pairs), "malformed service properties")
+    state = dict(pairs)
+    _expect(
+        len(pairs) == len(properties)
+        and set(state) == set(properties)
+        and state["Id"] == unit,
+        "incomplete or unbound service properties",
+    )
+    return state
+
+
+def _wait_dispatch(previous: str = "", *, start_pre: bool = False) -> dict[str, str]:
+    deadline = time.monotonic() + (3 if start_pre else 45)
+    seen = ""
+    while True:
+        state = _service_state(_DISPATCH)
+        if state["ActiveState"] == "failed" or time.monotonic() >= deadline:
+            try:
+                journal = response._command(
+                    [
+                        "/usr/bin/journalctl",
+                        "--no-pager",
+                        "--output=cat",
+                        "-u",
+                        _DISPATCH,
+                        "-n",
+                        "12",
+                    ],
+                    timeout=5,
+                ).decode("utf-8", errors="replace")[-4096:]
+            except (RuntimeError, OSError) as exc:
+                journal = str(exc)
+            raise RuntimeError(f"automatic response incomplete: {state}: {journal}")
+        if (
+            re.fullmatch(r"[0-9a-f]{32}", state["InvocationID"])
+            and state["InvocationID"] != previous
+        ):
+            seen = state["InvocationID"]
+            if start_pre and state["SubState"] == "start-pre":
+                _expect(
+                    state["ActiveState"] == "activating"
+                    and int(state["ControlPID"]) > 0,
+                    "dispatch fixture delay is not running",
+                )
+                return state
+        if not start_pre and seen and state["ActiveState"] == "inactive":
+            _expect(
+                state["InvocationID"] in {"", seen}
+                and state["SubState"] == "dead"
+                and state["ExecMainStatus"] == "0"
+                and state["Result"] == "success"
+                and state["ControlPID"] == "0",
+                "automatic response did not complete successfully",
+            )
+            return {**state, "observed_invocation_id": seen}
+        time.sleep(0.02)
+
+
+def _journal_result(
+    unit: str, invocation: str = "", *, generation: int | None = None
+) -> dict[str, Any]:
+    _expect(
+        unit in {_PUBLISHER, _DISPATCH}
+        and (
+            re.fullmatch(r"[0-9a-f]{32}", invocation) is not None
+            or (not invocation and unit == _PUBLISHER and generation in {2, 3})
+        ),
+        "journal selection is not a fixed service invocation",
+    )
+    response._command(["/usr/bin/journalctl", "--sync"], timeout=5)
+    raw = response._command(
+        [
+            "/usr/bin/journalctl",
+            "--quiet",
+            "--all",
+            "--no-pager",
+            "--output=json",
+            "--output-fields=MESSAGE,_SYSTEMD_INVOCATION_ID,_SYSTEMD_UNIT",
+            "_SYSTEMD_UNIT=" + unit,
+            *(["_SYSTEMD_INVOCATION_ID=" + invocation] if invocation else []),
+        ],
+        timeout=5,
+    )
+    results = []
+    for line in raw.splitlines():
+        entry = json.loads(line)
+        actual = entry.get("_SYSTEMD_INVOCATION_ID")
+        _expect(
+            entry.get("_SYSTEMD_UNIT") == unit
+            and isinstance(actual, str)
+            and re.fullmatch(r"[0-9a-f]{32}", actual) is not None
+            and (not invocation or actual == invocation)
+            and isinstance(entry.get("MESSAGE"), str),
+            "journal result identity changed",
+        )
+        document = response.broker._parse_canonical_document(
+            entry["MESSAGE"].encode("ascii"), "service journal result"
+        )
+        if generation is None or document.get("generation") == generation:
+            results.append(
+                {
+                    "unit": unit,
+                    "invocation_id": actual,
+                    "journal": entry,
+                    "result": document,
+                }
+            )
+    _expect(len(results) == 1, "service journal does not contain one exact result")
+    return results[0]
+
+
+def _dispatch_publications(skill: str, snapshot: str) -> tuple[dict, dict, str]:
+    first = response.broker._parse_canonical_document(
+        response._read_regular(_PUBLICATION, 0, {0o400}), "fixture publication"
+    )
+    _expect(
+        canonical_digest(first) == snapshot
+        and first["skill_digests"] == []
+        and first["generation"] == 2,
+        "initial dispatch publication changed",
+    )
+    argv = ["/usr/bin/systemctl", "start", _PUBLISHER]
+    response._command(argv, timeout=10)
+    first_publisher = _service_state(_PUBLISHER)
+    first_dispatch = _wait_dispatch(start_pre=True)
+    now = int(time.time())
+    second = {
+        **first,
+        "generation": 3,
+        "observed_at_unix": now,
+        "expires_at_unix": now + 15,
+        "skill_digests": [skill],
+    }
+    # The first publisher exited, so its LoadCredential copy is already fixed.
+    with _PUBLICATION.open("wb") as stream:
+        stream.write(canonical_json(second))
+    process = subprocess.Popen(
+        argv,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=_ENV,
+        start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 1
+        while True:
+            jobs = response._command(
+                [
+                    "/usr/bin/systemctl",
+                    "list-jobs",
+                    "--no-legend",
+                    "--no-pager",
+                    "--plain",
+                ],
+                timeout=3,
+            ).decode("ascii")
+            if any(
+                fields[1:] == [_PUBLISHER, "start", "waiting"]
+                for fields in (line.split() for line in jobs.splitlines())
+            ):
+                break
+            _expect(
+                time.monotonic() < deadline,
+                "next publication was not queued behind response",
+            )
+            time.sleep(0.01)
+        held = _service_state(_DISPATCH)
+        _expect(
+            process.poll() is None
+            and held["InvocationID"] == first_dispatch["InvocationID"]
+            and held["SubState"] == "start-pre"
+            and _service_state(_PUBLISHER) == first_publisher,
+            "publication ran before the previous response completed",
+        )
+        stdout, stderr = process.communicate(timeout=45)
+        _expect(
+            process.returncode == 0 and not stdout and not stderr,
+            "second fixture publication failed",
+        )
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=2)
+    final = _wait_dispatch(first_dispatch["InvocationID"])
+    receipts = []
+    for document, dispatch_id in (
+        (first, first_dispatch["InvocationID"]),
+        (second, final["observed_invocation_id"]),
+    ):
+        publication = _journal_result(_PUBLISHER, generation=document["generation"])
+        receipt = _journal_result(_DISPATCH, dispatch_id)
+        envelope = receipt["result"]
+        result, retention = _retained_response(envelope)
+        expected_digest = canonical_digest(document)
+        _expect(
+            publication["result"]["schema"]
+            == "aragorn/runtime-revocation-publication-result/v1"
+            and publication["result"]["generation"] == document["generation"]
+            and publication["result"]["revocations_digest"] == expected_digest
+            and result["expected_skill_digest"] == skill
+            and result["revocation_snapshot_digest"] == expected_digest
+            and result["accepted_revocation"]["generation"] == document["generation"],
+            "automatic response did not join its accepted publication",
+        )
+        receipts.append(
+            {"publication": publication, "response": receipt, "retention": retention}
+        )
+    _expect(
+        receipts[0]["publication"]["invocation_id"]
+        != receipts[1]["publication"]["invocation_id"],
+        "publication invocation did not advance",
+    )
+    noop = receipts[0]["response"]["result"]["response"]
+    _expect(
+        noop["status"] == "NO_REVOCATION_FOR_ACTIVE_PROFILE"
+        and noop["before"] == noop["after"]
+        and "future_start_barrier" not in noop,
+        "nonrevoking publication was not a no-op",
+    )
+    positive = {
+        "argv": ["--dispatch"],
+        "exit_code": int(final["ExecMainStatus"]),
+        "stdout": canonical_json(receipts[1]["response"]["result"]).decode("ascii")
+        + "\n",
+        "stderr": "",
+        "service": final,
+    }
+    return (
+        positive,
+        {
+            "first_dispatch_start_pre": first_dispatch,
+            "second_publisher_waiting_jobs": jobs,
+            "held_dispatch": held,
+            "publications": [first, second],
+            "invocations": receipts,
+        },
+        canonical_digest(second),
+    )
+
+
+def _run(skill: str, snapshot: str, *, dispatch: bool = False) -> dict[str, Any]:
     response.broker._require_digest(skill, "expected skill digest")
     response.broker._require_digest(snapshot, "expected snapshot digest")
     _expect(
@@ -245,7 +507,13 @@ def _run(skill: str, snapshot: str) -> dict[str, Any]:
             _child_identity(child, identities[3], identities[4]) == child_before,
             "wrong-skill request changed the fixture child",
         )
-        positive = _invoke(["--prevent-starts", "--retain-evidence", skill, snapshot])
+        dispatch_proof = None
+        if dispatch:
+            positive, dispatch_proof, snapshot = _dispatch_publications(skill, snapshot)
+        else:
+            positive = _invoke(
+                ["--prevent-starts", "--retain-evidence", skill, snapshot]
+            )
         _expect(
             positive["exit_code"] == 0 and not positive["stderr"],
             "stop/revoke response was not confirmed: " + positive["stderr"][:2048],
@@ -255,7 +523,19 @@ def _run(skill: str, snapshot: str) -> dict[str, Any]:
         envelope = response.broker._parse_canonical_document(
             raw[:-1], "response result"
         )
-        result, retention = _retained_response(envelope)
+        if dispatch_proof is not None:
+            result = envelope["response"]
+            retention = dispatch_proof["invocations"][1]["retention"]
+            _expect(
+                result["before"] == before
+                and dispatch_proof["invocations"][0]["response"]["result"]["response"][
+                    "before"
+                ]
+                == before,
+                "automatic dispatch changed the initial runtime identity",
+            )
+        else:
+            result, retention = _retained_response(envelope)
         _expect(
             result["status"] == "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE"
             and result["expected_skill_digest"] == skill
@@ -274,7 +554,7 @@ def _run(skill: str, snapshot: str) -> dict[str, Any]:
             all(item["status"] in {"EMPTY", "ABSENT"} for item in cgroups),
             "runtime cgroups are not empty after refused restart",
         )
-    return {
+    observation = {
         "schema": "aragorn/runtime-response-systemd-integration-observation/v1",
         "authority": "LOCAL_FIXED_PROFILE_INTEGRATION_OBSERVATION_NOT_RUN_OR_PHASE3_QUALIFICATION",
         "status": "OBSERVED",
@@ -295,18 +575,30 @@ def _run(skill: str, snapshot: str) -> dict[str, Any]:
             "NO_AUTOMATIC_RESPONSE_DISPATCH_OR_INDEPENDENT_QUALIFICATION",
         ],
     }
+    if dispatch:
+        observation["automatic_dispatch"] = dispatch_proof
+        observation["limitations"][0] = (
+            "TWO_ORDERED_PUBLICATIONS_IN_A_LOCAL_SYSTEMD_FIXTURE"
+        )
+        observation["limitations"][-1] = (
+            "NO_INDEPENDENT_QUALIFICATION_OR_EVENT_DETECTION_CLAIM"
+        )
+    return observation
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    dispatch = bool(arguments and arguments[0] == "--dispatch")
+    if dispatch:
+        arguments.pop(0)
     if len(arguments) != 2:
         print(
-            "usage: runtime-response-systemd-check EXPECTED_SKILL_DIGEST EXPECTED_REVOCATION_SNAPSHOT_DIGEST",
+            "usage: runtime-response-systemd-check [--dispatch] EXPECTED_SKILL_DIGEST EXPECTED_REVOCATION_SNAPSHOT_DIGEST",
             file=sys.stderr,
         )
         return 64
     try:
-        print(canonical_json(_run(*arguments)).decode("ascii"))
+        print(canonical_json(_run(*arguments, dispatch=dispatch)).decode("ascii"))
         return 0
     except (
         OSError,

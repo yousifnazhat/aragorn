@@ -355,6 +355,30 @@ The [September 9 live observation](./benchmark/evidence/phase3-runtime-response-
 confirms those bounded checks, persistent masks, absent cgroups, and owned-container
 cleanup. It is local integration evidence, not automatic response or digest quarantine.
 
+The opt-in `--dispatch` mode selects only the current fixed profile and accepted
+broker snapshot under the same locks; it always stops and masks a revoked active
+profile and retains the result. A valid nonrevoking snapshot is an explicit
+no-op. Both units already inactive with empty/absent cgroups yield
+`NO_ACTIVE_RUNTIME_PROFILE`, which makes no snapshot-acceptance or restart-barrier
+claim. Partial, stale, malformed or changing state fails nonzero.
+
+The installer also stages an inert root oneshot and the publisher hook
+`/usr/share/aragorn/systemd/50-runtime-response.conf`. To opt in, a root operator
+installs that hook as
+`/etc/systemd/system/aragorn-runtime-revocation-publisher.service.d/50-runtime-response.conf`
+**after** the fixed stack's activation, then reloads systemd. The existing frozen
+activator rejects publisher drop-ins: remove this opt-in hook before reactivation;
+do not alter that check. This is a development deployment change requiring a new
+common-deployment freeze, not authority granted by historical captures.
+
+The hook starts the separate response after a successful publisher invocation.
+The response is ordered before subsequent publisher starts to avoid overlapping
+oneshot jobs coalescing. Publisher success is **not** response completion: inspect
+the response unit's result and its invocation-scoped retained-response envelope.
+Failed dispatch requires root attention/retry; no retry daemon, external alert
+delivery, durable event queue or general installed-digest quarantine is provided.
+See [systemd trigger and ordering semantics](https://raw.githubusercontent.com/systemd/systemd/main/man/systemd.unit.xml).
+
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
 transaction record under its exclusive root lock after verifying the active

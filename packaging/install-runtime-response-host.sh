@@ -12,3 +12,10 @@ install -m 0644 \
 install -m 0755 \
     "$root/packaging/libexec/aragorn-runtime-response-service.py" \
     "$destdir/usr/libexec/aragorn/"
+install -d -m 0755 "$destdir/usr/lib/systemd/system" "$destdir/usr/share/aragorn/systemd"
+install -m 0644 \
+    "$root/packaging/systemd/aragorn-runtime-revocation-response.service" \
+    "$destdir/usr/lib/systemd/system/"
+install -m 0644 \
+    "$root/packaging/systemd/50-runtime-response.conf" \
+    "$destdir/usr/share/aragorn/systemd/"

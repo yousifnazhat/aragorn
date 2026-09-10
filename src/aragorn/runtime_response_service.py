@@ -1,4 +1,4 @@
-"""Manual, root-authorized termination of one revoked runtime profile."""
+"""Root-authorized response for one fixed revoked runtime profile."""
 
 from __future__ import annotations
 
@@ -70,6 +70,7 @@ class RuntimeResponseIndeterminate(RuntimeResponseError):
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    dispatch = arguments == ["--dispatch"]
     options: set[str] = set()
     while arguments and arguments[0] in {"--prevent-starts", "--retain-evidence"}:
         option = arguments.pop(0)
@@ -78,22 +79,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             break
         options.add(option)
     prevent_starts = "--prevent-starts" in options
-    if len(arguments) != 2:
+    if not dispatch and (len(arguments) != 2 or "--dispatch" in arguments):
         print(
-            "usage: aragorn-runtime-response-service [--prevent-starts] [--retain-evidence] EXPECTED_SKILL_DIGEST "
+            "usage: aragorn-runtime-response-service --dispatch | [--prevent-starts] [--retain-evidence] EXPECTED_SKILL_DIGEST "
             "EXPECTED_REVOCATION_SNAPSHOT_DIGEST",
             file=sys.stderr,
         )
         return 64
     completed = False
     try:
-        result = (
-            _run(*arguments, prevent_starts=True)
-            if prevent_starts
-            else _run(*arguments)
-        )
+        if dispatch:
+            result = _respond(prevent_starts=True)
+        else:
+            result = (
+                _run(*arguments, prevent_starts=True)
+                if prevent_starts
+                else _run(*arguments)
+            )
         completed = True
-        if "--retain-evidence" in options:
+        if dispatch or "--retain-evidence" in options:
             result = _retain_result(result)
         print(canonical_json(result).decode("ascii"))
         return 0
@@ -104,7 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if completed:
             print(
                 "aragorn runtime response: INDETERMINATE: result delivery interrupted "
-                "after termination",
+                "after response",
                 file=sys.stderr,
             )
             return 125
@@ -120,7 +124,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ) as exc:
         if completed:
             print(
-                "aragorn runtime response: INDETERMINATE: termination completed "
+                "aragorn runtime response: INDETERMINATE: response completed "
                 "but evidence retention or result delivery failed",
                 file=sys.stderr,
             )
@@ -199,6 +203,21 @@ def _run(
 ) -> dict[str, Any]:
     broker._require_digest(expected_skill_digest, "expected skill digest")
     broker._require_digest(expected_snapshot_digest, "expected revocation snapshot")
+    return _respond(
+        expected_skill_digest, expected_snapshot_digest, prevent_starts=prevent_starts
+    )
+
+
+def _respond(
+    expected_skill_digest: str | None = None,
+    expected_snapshot_digest: str | None = None,
+    *,
+    prevent_starts: bool,
+) -> dict[str, Any]:
+    dispatch = expected_skill_digest is None and expected_snapshot_digest is None
+    if not dispatch:
+        broker._require_digest(expected_skill_digest, "expected skill digest")
+        broker._require_digest(expected_snapshot_digest, "expected revocation snapshot")
     if type(prevent_starts) is not bool:
         raise RuntimeResponseError("future-start response selection must be boolean")
     if sys.platform != "linux" or os.geteuid() != 0:
@@ -206,6 +225,10 @@ def _run(
     stop_attempted = False
     try:
         with _activation_guard():
+            if dispatch:
+                inactive = _inactive_profile()
+                if inactive is not None:
+                    return inactive
             identities = _identities()
             before = [_unit_state(unit) for unit in _UNITS]
             processes = [
@@ -218,6 +241,8 @@ def _run(
                 )
             ]
             binding = _read_bindings(identities[1])
+            if dispatch:
+                expected_skill_digest = binding.active_skill_digest
             if binding.active_skill_digest != expected_skill_digest:
                 raise RuntimeResponseError(
                     "requested digest is not the running binding"
@@ -229,7 +254,9 @@ def _run(
                     config,
                     binding,
                     expected_snapshot_digest,
+                    require_revoked=not dispatch,
                 )
+                expected_snapshot_digest = accepted["snapshot_digest"]
                 # The activation lock serializes this fixed profile with its activator.
                 # ponytail: whole-profile stop; per-capability units need a new binding.
                 if _read_bindings(identities[1]) != binding:
@@ -255,12 +282,28 @@ def _run(
                         config,
                         binding,
                         expected_snapshot_digest,
+                        require_revoked=not dispatch,
                     )
                     != accepted
                 ):
                     raise RuntimeResponseError(
                         "revocation authority changed before stop"
                     )
+                if not accepted["revokes_active_skill"]:
+                    observed = [
+                        {"unit": unit, "process": process}
+                        for unit, process in zip(before, processes, strict=True)
+                    ]
+                    return {
+                        "authority": "LOCAL_ROOT_RESPONSE_RESULT_NOT_RUN_OR_PHASE3_CONFORMANCE",
+                        "status": "NO_REVOCATION_FOR_ACTIVE_PROFILE",
+                        "expected_skill_digest": expected_skill_digest,
+                        "revocation_snapshot_digest": expected_snapshot_digest,
+                        "accepted_revocation": accepted,
+                        "before": observed,
+                        "after": observed,
+                        "limitations": ["NO_STOP_OR_FUTURE_START_BARRIER_APPLIED"],
+                    }
                 stop_attempted = True
                 _stop_units()
                 after = []
@@ -288,14 +331,22 @@ def _run(
                     "status": "TERMINATED_FIXED_RUNTIME_PROFILE",
                     "expected_skill_digest": expected_skill_digest,
                     "revocation_snapshot_digest": expected_snapshot_digest,
-                    "accepted_revocation": accepted,
+                    "accepted_revocation": accepted
+                    if dispatch
+                    else {
+                        key: value
+                        for key, value in accepted.items()
+                        if key not in {"snapshot_digest", "revokes_active_skill"}
+                    },
                     "before": [
                         {"unit": unit, "process": process}
                         for unit, process in zip(before, processes, strict=True)
                     ],
                     "after": after,
                     "limitations": [
-                        "MANUAL_ROOT_COMMAND_NOT_AUTOMATIC_RESPONSE_DISPATCH",
+                        "CURRENT_ACCEPTED_SNAPSHOT_NOT_A_DETECTOR_OR_DURABLE_EVENT_QUEUE"
+                        if dispatch
+                        else "MANUAL_ROOT_COMMAND_NOT_AUTOMATIC_RESPONSE_DISPATCH",
                         "FIXED_SINGLE_PROFILE_NOT_ARBITRARY_CAPABILITY_TARGETING",
                         "NO_FUTURE_START_REVOCATION_OR_INSTALLED_DIGEST_QUARANTINE",
                         "NO_PROTECTION_AGAINST_INDEPENDENT_ROOT_CONTROL",
@@ -316,6 +367,46 @@ def _run(
                 "stop was submitted; complete termination or cleanup is unconfirmed"
             ) from exc
         raise
+
+
+def _inactive_profile() -> dict[str, Any] | None:
+    properties = (
+        "Id",
+        "LoadState",
+        "ActiveState",
+        "SubState",
+        "MainPID",
+        "ControlPID",
+        "ControlGroup",
+    )
+    before = [_show_unit(unit, properties) for unit in _UNITS]
+    if any(item["ActiveState"] != "inactive" for item in before):
+        return None  # The active path refuses partial, failed or transitional units.
+    after = []
+    for unit, state in zip(_UNITS, before, strict=True):
+        cgroup = _service_cgroup(unit)
+        if (
+            state["LoadState"] not in {"loaded", "masked"}
+            or state["SubState"] != "dead"
+            or state["MainPID"] != "0"
+            or state["ControlPID"] != "0"
+            or state["ControlGroup"] not in {"", cgroup}
+        ):
+            raise RuntimeResponseError("inactive fixed profile is inconsistent")
+        after.append(
+            {
+                "unit": state,
+                "cgroup": _cgroup_empty(unit, {"ControlGroup": cgroup}),
+            }
+        )
+    if [_show_unit(unit, properties) for unit in _UNITS] != before:
+        raise RuntimeResponseError("inactive profile changed during response")
+    return {
+        "authority": "LOCAL_ROOT_RESPONSE_RESULT_NOT_RUN_OR_PHASE3_CONFORMANCE",
+        "status": "NO_ACTIVE_RUNTIME_PROFILE",
+        "after": after,
+        "limitations": ["NO_SNAPSHOT_ACCEPTANCE_OR_FUTURE_START_BARRIER_CLAIM"],
+    }
 
 
 def _identities() -> tuple[int, int, int, int, int, int, int]:
@@ -530,7 +621,9 @@ def _locked_revocations(
     control_fd: int,
     config: broker.RuntimeActionBrokerConfig,
     binding: worker.RuntimeActionWorkerBinding,
-    expected_digest: str,
+    expected_digest: str | None,
+    *,
+    require_revoked: bool = True,
 ) -> dict[str, Any]:
     def read(path: Path) -> dict[str, Any]:
         return broker._parse_canonical_document(
@@ -550,8 +643,14 @@ def _locked_revocations(
     if (
         generation is None
         or generation != state["minimum_revocation_generation"]
-        or canonical_digest(snapshot) != expected_digest
-        or binding.active_skill_digest not in snapshot["skill_digests"]
+        or (
+            expected_digest is not None
+            and canonical_digest(snapshot) != expected_digest
+        )
+        or (
+            require_revoked
+            and binding.active_skill_digest not in snapshot["skill_digests"]
+        )
         or canonical_digest(policy) != binding.policy_digest
         or policy["version"] != binding.policy_version
     ):
@@ -559,6 +658,9 @@ def _locked_revocations(
             "revocation snapshot is stale, unbound, or does not revoke this skill"
         )
     return {
+        "snapshot_digest": canonical_digest(snapshot),
+        "revokes_active_skill": binding.active_skill_digest
+        in snapshot["skill_digests"],
         "generation": generation,
         "minimum_revocation_generation": state["minimum_revocation_generation"],
         "policy_digest": canonical_digest(policy),

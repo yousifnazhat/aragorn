@@ -7,7 +7,7 @@ from contextlib import ExitStack, contextmanager, redirect_stderr
 from copy import deepcopy
 from io import StringIO
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, mock_open, patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from scripts import runtime_response_systemd_check as check
@@ -86,6 +86,177 @@ def _environment():
 
 
 class RuntimeResponseSystemdCheckTests(unittest.TestCase):
+    def test_dispatch_publications_require_waiting_job_and_exact_generation_joins(self):
+        first = {
+            "generation": 2,
+            "skill_digests": [],
+            "observed_at_unix": 99,
+            "expires_at_unix": 114,
+        }
+        second = {
+            "generation": 3,
+            "skill_digests": [_SKILL],
+            "observed_at_unix": 100,
+            "expires_at_unix": 115,
+        }
+        first_dispatch = {"InvocationID": "1" * 32, "SubState": "start-pre"}
+        final = {
+            "InvocationID": "",
+            "observed_invocation_id": "2" * 32,
+            "ExecMainStatus": "0",
+        }
+        first_publisher = {"InvocationID": "3" * 32}
+        for failure in (None, "ordering", "publication", "response", "noop"):
+            with self.subTest(failure=failure), ExitStack() as stack:
+
+                def journal(unit, invocation="", *, generation=None, failure=failure):
+                    is_first = generation == 2 or invocation in {"1" * 32, "3" * 32}
+                    document = first if is_first else second
+                    if unit == check._PUBLISHER:
+                        result = {
+                            "schema": "aragorn/runtime-revocation-publication-result/v1",
+                            "generation": 99
+                            if failure == "publication"
+                            else document["generation"],
+                            "revocations_digest": canonical_digest(document),
+                        }
+                    else:
+                        response = {
+                            "status": "NO_REVOCATION_FOR_ACTIVE_PROFILE"
+                            if is_first
+                            else "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE",
+                            "expected_skill_digest": _SKILL,
+                            "revocation_snapshot_digest": _SNAPSHOT
+                            if failure == "response"
+                            else canonical_digest(document),
+                            "accepted_revocation": {
+                                "generation": document["generation"]
+                            },
+                            "before": _BEFORE,
+                            "after": [] if failure == "noop" else _BEFORE,
+                        }
+                        result = {"response": response}
+                    return {
+                        "result": result,
+                        "invocation_id": invocation or ("3" if is_first else "4") * 32,
+                    }
+
+                child = Mock()
+                child.poll.side_effect = [None, 0]
+                child.communicate.return_value = (b"", b"")
+                child.returncode = 0
+                publication = mock_open()
+                for target, name, value in (
+                    (
+                        check.response,
+                        "_read_regular",
+                        Mock(return_value=canonical_json(first)),
+                    ),
+                    (check.Path, "open", publication),
+                    (check.time, "time", Mock(return_value=100)),
+                    (
+                        check.response,
+                        "_command",
+                        Mock(
+                            return_value=f"42 {check._PUBLISHER} start waiting\n".encode()
+                        ),
+                    ),
+                    (check.subprocess, "Popen", Mock(return_value=child)),
+                    (
+                        check,
+                        "_wait_dispatch",
+                        Mock(side_effect=[first_dispatch, final]),
+                    ),
+                    (
+                        check,
+                        "_service_state",
+                        Mock(
+                            side_effect=[
+                                first_publisher,
+                                {} if failure == "ordering" else first_dispatch,
+                                first_publisher,
+                            ]
+                        ),
+                    ),
+                    (check, "_journal_result", journal),
+                    (
+                        check,
+                        "_retained_response",
+                        lambda envelope: (envelope["response"], {"verified": True}),
+                    ),
+                ):
+                    stack.enter_context(patch.object(target, name, value))
+                if failure:
+                    with self.assertRaises((RuntimeError, KeyError)):
+                        check._dispatch_publications(_SKILL, canonical_digest(first))
+                else:
+                    positive, proof, digest = check._dispatch_publications(
+                        _SKILL, canonical_digest(first)
+                    )
+                    self.assertEqual(positive["argv"], ["--dispatch"])
+                    self.assertEqual(digest, canonical_digest(second))
+                    self.assertEqual(len(proof["invocations"]), 2)
+                    self.assertIn(
+                        "start waiting", proof["second_publisher_waiting_jobs"]
+                    )
+                    publication().write.assert_called_once_with(canonical_json(second))
+
+    def test_dispatch_completion_keeps_observed_id_after_systemd_clears_it(self):
+        running = {
+            "InvocationID": "a" * 32,
+            "ActiveState": "activating",
+            "SubState": "start",
+            "ControlPID": "0",
+            "ExecMainStatus": "0",
+            "Result": "success",
+        }
+        finished = {
+            **running,
+            "InvocationID": "",
+            "ActiveState": "inactive",
+            "SubState": "dead",
+        }
+        with (
+            patch.object(check, "_service_state", side_effect=[running, finished]),
+            patch.object(check.time, "sleep"),
+        ):
+            result = check._wait_dispatch("b" * 32)
+        self.assertEqual(result["InvocationID"], "")
+        self.assertEqual(result["observed_invocation_id"], "a" * 32)
+
+    def test_journal_result_refuses_unbound_or_duplicate_envelopes(self):
+        import json
+
+        invocation = "a" * 32
+        entry = {
+            "_SYSTEMD_UNIT": check._DISPATCH,
+            "_SYSTEMD_INVOCATION_ID": invocation,
+            "MESSAGE": '{"response":{}}',
+        }
+        for failure in (None, "unit", "invocation", "duplicate", "noncanonical"):
+            changed = dict(entry)
+            if failure == "unit":
+                changed["_SYSTEMD_UNIT"] = check._PUBLISHER
+            elif failure == "invocation":
+                changed["_SYSTEMD_INVOCATION_ID"] = "b" * 32
+            elif failure == "noncanonical":
+                changed["MESSAGE"] = '{"response": {}}'
+            raw = json.dumps(changed).encode() + b"\n"
+            if failure == "duplicate":
+                raw += raw
+            with (
+                self.subTest(failure=failure),
+                patch.object(check.response, "_command", side_effect=[b"", raw]),
+            ):
+                if failure:
+                    with self.assertRaises(RuntimeError):
+                        check._journal_result(check._DISPATCH, invocation)
+                else:
+                    self.assertEqual(
+                        check._journal_result(check._DISPATCH, invocation)["result"],
+                        {"response": {}},
+                    )
+
     def test_retained_envelope_rejects_receipt_or_readback_substitution(self):
         result = {"status": "TERMINATED_AND_REVOKED_FIXED_RUNTIME_PROFILE"}
         raw = canonical_json(result)

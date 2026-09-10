@@ -33,6 +33,9 @@ Delegate=no
 PrivateDevices=yes
 PrivateIPC=yes
 PrivateMounts=yes
+# Namespaced services cannot see another unit's credentials at /run/credentials.
+# Plain bind preserves source RO/RW for the reader's custody check; do not force RO.
+BindPaths=-/run/credentials/aragorn-runtime-action-worker.service:/run/aragorn-runtime-response-worker-credential
 PrivateNetwork=yes
 PrivateTmp=yes
 ProtectClock=yes

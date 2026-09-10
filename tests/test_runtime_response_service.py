@@ -801,12 +801,19 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             "policy_digest": "sha256:" + "3" * 64,
             "policy_version": 1,
         }
-        for live_uid in (0, 1001):
+        for live_uid, dispatch in ((0, False), (1001, False), (0, True), (1001, True)):
+            live_path = (
+                service._DISPATCH_WORKER_BINDING
+                if dispatch
+                else service._LIVE_WORKER_BINDING
+            )
 
             def metadata(path, live_uid=live_uid):
                 live = path in {
                     service._LIVE_WORKER_BINDING,
                     service._LIVE_WORKER_BINDING.parent,
+                    service._DISPATCH_WORKER_BINDING,
+                    service._DISPATCH_WORKER_BINDING.parent,
                 }
                 return SimpleNamespace(
                     st_uid=live_uid if live else 0,
@@ -815,7 +822,7 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                 )
 
             with (
-                self.subTest(live_uid=live_uid),
+                self.subTest(live_uid=live_uid, dispatch=dispatch),
                 patch.object(service.broker, "_require_protected_ancestry") as ancestry,
                 patch.object(service.os, "lstat", side_effect=metadata),
                 patch.object(
@@ -827,18 +834,19 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                     service, "_read_regular", return_value=canonical_json(binding)
                 ) as read,
             ):
-                result = service._read_bindings(1001)
+                result = service._read_bindings(1001, dispatch=dispatch)
                 self.assertEqual(result.active_skill_digest, _SKILL)
                 self.assertEqual(
                     [call.args for call in ancestry.call_args_list],
                     [
                         (service._WORKER_BINDING.parent, 0),
-                        (service._LIVE_WORKER_BINDING.parent.parent, 0),
+                        (live_path.parent.parent, 0),
                     ],
                 )
                 self.assertEqual(
                     [call.args[1] for call in read.call_args_list], [0, live_uid]
                 )
+                self.assertEqual(read.call_args.args[0], live_path)
         with (
             patch.object(service.broker, "_require_protected_ancestry"),
             patch.object(
@@ -848,9 +856,10 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             patch.object(
                 service, "_read_regular", return_value=canonical_json(binding)
             ),
-            self.assertRaises(service.RuntimeResponseError),
         ):
-            service._read_bindings(1001)
+            for dispatch in (False, True):
+                with self.assertRaises(service.RuntimeResponseError):
+                    service._read_bindings(1001, dispatch=dispatch)
         for field, value in (
             ("active_skill_digest", _OTHER),
             ("runtime_digest", _OTHER),
@@ -1123,6 +1132,7 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             "ProtectProc=default\n",
             "ProtectSystem=strict\n",
             "ProtectControlGroups=yes\n",
+            "BindPaths=-/run/credentials/aragorn-runtime-action-worker.service:/run/aragorn-runtime-response-worker-credential\n",
             "ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-response-service.py --dispatch\n",
         ):
             self.assertIn(required, unit)
@@ -1131,6 +1141,7 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             "After=aragorn-runtime-revocation-publisher",
             "Restart=",
             "ExecStartPost=",
+            "BindReadOnlyPaths=",
         ):
             self.assertNotIn(forbidden, unit)
         self.assertEqual(

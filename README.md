@@ -378,6 +378,11 @@ the response unit's result and its invocation-scoped retained-response envelope.
 Failed dispatch requires root attention/retry; no retry daemon, external alert
 delivery, durable event queue or general installed-digest quarantine is provided.
 See [systemd trigger and ordering semantics](https://raw.githubusercontent.com/systemd/systemd/main/man/systemd.unit.xml).
+Dispatch is intended for this oneshot's namespace: its fixed `BindPaths` alias
+exposes only the loaded worker credential directory while preserving the source
+mount's read-only status for the custody check. It does not copy or force that
+credential read-only. Use the manual exact-digest command for an operator retry
+outside the service namespace.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

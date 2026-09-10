@@ -38,6 +38,9 @@ _WORKER_BINDING = Path("/etc/aragorn/runtime-action-worker.json")
 _LIVE_WORKER_BINDING = Path(
     "/run/credentials/aragorn-runtime-action-worker.service/worker-binding"
 )
+_DISPATCH_WORKER_BINDING = Path(
+    "/run/aragorn-runtime-response-worker-credential/worker-binding"
+)
 _CGROUP_ROOT = Path("/sys/fs/cgroup")
 _MASK_ROOT = Path("/etc/systemd/system")
 _EVIDENCE_ROOT = Path("/var/lib/aragorn-runtime-response")
@@ -240,7 +243,7 @@ def _respond(
                     strict=True,
                 )
             ]
-            binding = _read_bindings(identities[1])
+            binding = _read_bindings(identities[1], dispatch=dispatch)
             if dispatch:
                 expected_skill_digest = binding.active_skill_digest
             if binding.active_skill_digest != expected_skill_digest:
@@ -259,7 +262,7 @@ def _respond(
                 expected_snapshot_digest = accepted["snapshot_digest"]
                 # The activation lock serializes this fixed profile with its activator.
                 # ponytail: whole-profile stop; per-capability units need a new binding.
-                if _read_bindings(identities[1]) != binding:
+                if _read_bindings(identities[1], dispatch=dispatch) != binding:
                     raise RuntimeResponseError("worker binding changed before stop")
                 for unit, state, process, (uid, gid) in zip(
                     _UNITS,
@@ -476,10 +479,15 @@ def _read_regular(
         os.close(descriptor)
 
 
-def _read_bindings(worker_uid: int) -> worker.RuntimeActionWorkerBinding:
+def _read_bindings(
+    worker_uid: int, *, dispatch: bool = False
+) -> worker.RuntimeActionWorkerBinding:
+    # The root oneshot sees this exact source through a plain systemd bind mount.
+    # Plain BindPaths preserves source RO/RW; forcing RO would hide unsafe custody.
+    live_path = _DISPATCH_WORKER_BINDING if dispatch else _LIVE_WORKER_BINDING
     bindings = []
-    for path in (_WORKER_BINDING, _LIVE_WORKER_BINDING):
-        if path == _LIVE_WORKER_BINDING:
+    for path in (_WORKER_BINDING, live_path):
+        if path == live_path:
             broker._require_protected_ancestry(path.parent.parent, 0)
             parent = os.lstat(path.parent)
             if (
@@ -494,12 +502,12 @@ def _read_bindings(worker_uid: int) -> worker.RuntimeActionWorkerBinding:
             broker._require_protected_ancestry(path.parent, 0)
         metadata = os.lstat(path)
         allowed_owner = metadata.st_uid == 0 or (
-            path == _LIVE_WORKER_BINDING and metadata.st_uid == worker_uid
+            path == live_path and metadata.st_uid == worker_uid
         )
         if not allowed_owner or (metadata.st_uid == 0 and metadata.st_gid != 0):
             raise RuntimeResponseError("worker credential owner is unsafe")
         if (
-            path == _LIVE_WORKER_BINDING
+            path == live_path
             and worker_uid in {parent.st_uid, metadata.st_uid}
             and not os.statvfs(path.parent).f_flag & os.ST_RDONLY
         ):

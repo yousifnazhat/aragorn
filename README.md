@@ -371,6 +371,22 @@ refused before effects; partial effects remain indeterminate. This mode is an
 operator command, not an automatic health trigger, stale/hung-sensor detector,
 or installed-digest revocation. Its regression tests are not a live qualification.
 
+The additive [health publisher](./src/aragorn/runtime_health_service.py) reads only
+the fixed root-provisioned runtime-binding and health credentials, then uses the
+broker's existing publication lock and acceptance rules. The response installer
+stages its hardened oneshot, a separate root response using `--health-dispatch`,
+and the inert hook `/usr/share/aragorn/systemd/50-runtime-health-response.conf`.
+A root operator may opt in by installing that hook under
+`/etc/systemd/system/aragorn-runtime-health-publisher.service.d/` and reloading
+systemd. Installation alone neither starts nor enables them. The hook responds
+to a successful publication of the current accepted health snapshot; it is not
+a sensor detector, an expiry timer, or a durable queue. Concurrent revocation and
+health responses share a nonblocking activation lock; contention fails nonzero
+and requires root retry. `--health` remains the manual retry outside the service
+namespace. Publisher success does not establish response completion; cleanup
+failure may occur after publication without emitting success. This development
+integration still needs live testing and a new common-deployment freeze.
+
 The installer also stages an inert root oneshot and the publisher hook
 `/usr/share/aragorn/systemd/50-runtime-response.conf`. To opt in, a root operator
 installs that hook as
@@ -988,7 +1004,8 @@ flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
 now supports DET-01, core-updater replacement, workshop invalidation,
-workshop proposal/apply, curator restore, config-entry activation, and plugin enable.
+workshop proposal/apply, curator restore, config-entry activation, plugin enable,
+and fresh-session reset.
 The native backends bind their exact read-only bundles,
 explicitly mapping provisional campaign paths to unchanged native read-only route-input
 paths. Workshop's descriptor still declares no materializer; its separate pinned
@@ -1023,7 +1040,12 @@ checks the unchanged native `plugins enable tts-local-cli` credential-lock denia
 including the disabled and not-imported plugin state before and after the attempt.
 It reuses config-entry's common artifact and composition checks. Retained replay
 and synthetic-fresh regression checks are not a new live observation or final pass.
-Seven development cases are wired; 24 remain unwired: seven retained current-V3
+The [fresh-session reset backend](./scripts/openclaw_final_v3_fresh_session_reset_case.py)
+checks session rotation, prompt clearing, and rebuild with exact native UTF-8 raw
+evidence, fresh process/session identities, and protected-state joins. The retained
+provider-error outcome does not establish successful model or provider execution.
+Offline retained and synthetic-fresh checks are not a new live observation.
+Eight development cases are wired; 23 remain unwired: six retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
 Unsupported cases fail before execution. Each call checks the signed

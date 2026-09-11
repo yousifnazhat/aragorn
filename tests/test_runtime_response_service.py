@@ -137,6 +137,126 @@ def _environment(fixture: _Fixture):
 
 
 class RuntimeResponseServiceTests(unittest.TestCase):
+    def test_health_dispatch_is_exact_fixed_profile_and_always_retains(self) -> None:
+        result = {"status": "SUSPENDED_UNHEALTHY_FIXED_RUNTIME_PROFILE"}
+        with (
+            patch.object(service, "_respond", return_value=result) as respond,
+            patch.object(service, "_retain_result", return_value=result) as retain,
+            redirect_stdout(StringIO()) as output,
+            redirect_stderr(StringIO()),
+        ):
+            self.assertEqual(service.main(["--health-dispatch"]), 0)
+            respond.assert_called_once_with(
+                prevent_starts=True, health=True, health_dispatch=True
+            )
+            retain.assert_called_once_with(result)
+            self.assertEqual(json.loads(output.getvalue()), result)
+            for arguments in (
+                ["--health-dispatch", _SKILL],
+                ["--health-dispatch", _SKILL, _OTHER],
+                ["--health-dispatch", "--health"],
+                ["--health-dispatch", "--dispatch"],
+                ["--dispatch", "--health-dispatch"],
+                ["--retain-evidence", "--health-dispatch"],
+                ["--prevent-starts", "--health-dispatch"],
+            ):
+                self.assertEqual(service.main(arguments), 64)
+            respond.assert_called_once()
+        for failure, code in (
+            (service.RuntimeResponseError("stale health"), 126),
+            (service.RuntimeResponseIndeterminate("partial effect"), 125),
+        ):
+            with (
+                patch.object(service, "_respond", side_effect=failure),
+                patch.object(service, "_retain_result") as retain,
+                redirect_stdout(StringIO()) as output,
+                redirect_stderr(StringIO()),
+            ):
+                self.assertEqual(service.main(["--health-dispatch"]), code)
+                self.assertEqual(output.getvalue(), "")
+                retain.assert_not_called()
+        with (
+            patch.object(service, "_respond", return_value=result),
+            patch.object(
+                service, "_retain_result", side_effect=service.CASError("disk")
+            ),
+            redirect_stdout(StringIO()) as output,
+            redirect_stderr(StringIO()),
+        ):
+            self.assertEqual(service.main(["--health-dispatch"]), 125)
+            self.assertEqual(output.getvalue(), "")
+
+    def test_health_dispatch_rejects_other_modes_or_targets_before_authority(
+        self,
+    ) -> None:
+        for arguments, options in (
+            ((), {"health": False, "health_dispatch": True}),
+            ((), {"health": True, "health_dispatch": 1}),
+            ((), {"health": True, "health_dispatch": "true"}),
+            ((), {"health": 1, "health_dispatch": True}),
+            ((_SKILL, _OTHER), {"health": True, "health_dispatch": True}),
+            ((), {"health": True, "health_dispatch": True, "prevent_starts": False}),
+        ):
+            with (
+                self.subTest(arguments=arguments, options=options),
+                patch.object(service, "_activation_guard") as guard,
+                self.assertRaises(service.RuntimeResponseError),
+            ):
+                service._respond(*arguments, **{"prevent_starts": True, **options})
+            guard.assert_not_called()
+
+    def test_dispatch_kinds_refuse_shared_activation_lock_contention(self) -> None:
+        real_fstat, real_lstat = os.fstat, os.lstat
+
+        def root_metadata(metadata):
+            return SimpleNamespace(
+                **{
+                    name: getattr(metadata, name)
+                    for name in dir(metadata)
+                    if name.startswith("st_") and name != "st_uid"
+                },
+                st_uid=0,
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            lock_path = Path(temporary) / "activation.lock"
+            lock_path.touch(mode=0o600)
+            with (
+                lock_path.open("rb") as lock,
+                patch.object(service, "_ACTIVATION_LOCK", lock_path),
+                patch.object(service.sys, "platform", "linux"),
+                patch.object(service.os, "geteuid", return_value=0),
+                patch.object(service.broker, "_require_protected_ancestry"),
+                patch.object(
+                    service.os,
+                    "fstat",
+                    side_effect=lambda fd: root_metadata(real_fstat(fd)),
+                ),
+                patch.object(
+                    service.os,
+                    "lstat",
+                    side_effect=lambda path: root_metadata(real_lstat(path)),
+                ),
+                patch.object(service, "_inactive_profile") as inactive,
+                patch.object(service, "_read_bindings") as binding,
+                patch.object(service, "_stop_units") as stop,
+                patch.object(service, "_retain_result") as retain,
+            ):
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                for mode in ("--dispatch", "--health-dispatch"):
+                    with (
+                        self.subTest(mode=mode),
+                        redirect_stdout(StringIO()) as output,
+                        redirect_stderr(StringIO()) as error,
+                    ):
+                        self.assertEqual(service.main([mode]), 126)
+                        self.assertEqual(output.getvalue(), "")
+                        self.assertIn("REFUSED", error.getvalue())
+                inactive.assert_not_called()
+                binding.assert_not_called()
+                stop.assert_not_called()
+                retain.assert_not_called()
+
     def test_health_mode_is_explicit_fixed_profile_and_always_retains(self) -> None:
         result = {"status": "SUSPENDED_UNHEALTHY_FIXED_RUNTIME_PROFILE"}
         with (
@@ -185,9 +305,14 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             self.assertEqual(output.getvalue(), "")
 
     def test_accepted_unhealthy_suspends_under_locks_and_healthy_does_not(self) -> None:
-        for unhealthy in (False, True):
+        for unhealthy, health_dispatch in (
+            (False, False),
+            (False, True),
+            (True, False),
+            (True, True),
+        ):
             with (
-                self.subTest(unhealthy=unhealthy),
+                self.subTest(unhealthy=unhealthy, dispatch=health_dispatch),
                 tempfile.TemporaryDirectory() as temporary,
             ):
                 fixture = _Fixture(Path(temporary).resolve())
@@ -203,7 +328,11 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                         service, "_mask_future_starts", return_value={}
                     ) as mask,
                 ):
-                    result = service._respond(prevent_starts=True, health=True)
+                    result = service._respond(
+                        prevent_starts=True,
+                        health=True,
+                        health_dispatch=health_dispatch,
+                    )
                     self.assertEqual(
                         result["health_snapshot_digest"], canonical_digest(document)
                     )
@@ -215,13 +344,24 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                     self.assertNotIn("accepted_revocation", result)
                     self.assertNotIn("revocation_snapshot_digest", result)
                     revoked.assert_not_called()
+                    self.assertEqual(service._read_bindings.call_count, 2)
                     self.assertTrue(
                         all(
-                            call.kwargs == {"dispatch": False}
+                            call.kwargs == {"dispatch": health_dispatch}
                             for call in service._read_bindings.call_args_list
                         )
                     )
-                    self.assertIn(service._HEALTH_LIMITATIONS[0], result["limitations"])
+                    limitations = (
+                        service._HEALTH_DISPATCH_LIMITATIONS
+                        if health_dispatch
+                        else service._HEALTH_LIMITATIONS
+                    )
+                    for limitation in limitations:
+                        self.assertIn(limitation, result["limitations"])
+                    if health_dispatch:
+                        self.assertNotIn(
+                            service._HEALTH_LIMITATIONS[0], result["limitations"]
+                        )
                     if unhealthy:
                         stop.assert_called_once_with()
                         mask.assert_called_once_with()
@@ -280,9 +420,17 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                 with (
                     _environment(fixture) as (_binding, _events, stop),
                     patch.object(service, "_inactive_profile", return_value=None),
-                    self.assertRaises((RuntimeError, ValueError, OSError)),
                 ):
-                    service._respond(prevent_starts=True, health=True)
+                    for health_dispatch in (False, True):
+                        with (
+                            self.subTest(dispatch=health_dispatch),
+                            self.assertRaises((RuntimeError, ValueError, OSError)),
+                        ):
+                            service._respond(
+                                prevent_starts=True,
+                                health=True,
+                                health_dispatch=health_dispatch,
+                            )
                 stop.assert_not_called()
 
     def test_health_rechecks_control_time_and_running_identity_before_stop(
@@ -1336,6 +1484,35 @@ class RuntimeResponseServiceTests(unittest.TestCase):
                     0o755,
                 ),
             }
+            for relative, directory, mode in (
+                (
+                    "src/aragorn/runtime_health_service.py",
+                    "usr/lib/aragorn/aragorn",
+                    0o644,
+                ),
+                (
+                    "packaging/libexec/aragorn-runtime-health-service.py",
+                    "usr/libexec/aragorn",
+                    0o755,
+                ),
+                (
+                    "packaging/systemd/aragorn-runtime-health-publisher.service",
+                    "usr/lib/systemd/system",
+                    0o644,
+                ),
+                (
+                    "packaging/systemd/aragorn-runtime-health-response.service",
+                    "usr/lib/systemd/system",
+                    0o644,
+                ),
+                (
+                    "packaging/systemd/50-runtime-health-response.conf",
+                    "usr/share/aragorn/systemd",
+                    0o644,
+                ),
+            ):
+                source = _ROOT / relative
+                expected[staged / directory / source.name] = (source, mode)
             for installed, (source, mode) in expected.items():
                 self.assertEqual(installed.read_bytes(), source.read_bytes())
                 self.assertEqual(stat.S_IMODE(installed.stat().st_mode), mode)
@@ -1350,17 +1527,21 @@ class RuntimeResponseServiceTests(unittest.TestCase):
             )
             for untouched in ("etc", "run", "opt"):
                 self.assertFalse((staged / untouched).exists())
-            result = subprocess.run(
-                [sys.executable, "-I", "-S", "-B", str(launcher)],
-                check=False,
-                cwd=staged,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            self.assertEqual(result.returncode, 64, result.stderr)
-            self.assertIn("usage: aragorn-runtime-response", result.stderr)
-            self.assertEqual(result.stdout, "")
+            for name in ("response", "health"):
+                launcher = (
+                    staged / f"usr/libexec/aragorn/aragorn-runtime-{name}-service.py"
+                )
+                result = subprocess.run(
+                    [sys.executable, "-I", "-S", "-B", str(launcher)],
+                    check=False,
+                    cwd=staged,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 64, result.stderr)
+                self.assertIn(f"usage: aragorn-runtime-{name}", result.stderr)
+                self.assertEqual(result.stdout, "")
 
         unit = (
             _ROOT / "packaging/systemd/aragorn-runtime-revocation-response.service"
@@ -1391,6 +1572,44 @@ class RuntimeResponseServiceTests(unittest.TestCase):
         self.assertEqual(
             (_ROOT / "packaging/systemd/50-runtime-response.conf").read_text(),
             "[Unit]\nOnSuccess=aragorn-runtime-revocation-response.service\nOnSuccessJobMode=fail\n",
+        )
+
+    def test_health_units_preserve_fixed_hardening_and_opt_in_hook(self) -> None:
+        directory = _ROOT / "packaging/systemd"
+        for kind in ("publisher", "response"):
+            original = (
+                directory / f"aragorn-runtime-revocation-{kind}.service"
+            ).read_text()
+            health = (directory / f"aragorn-runtime-health-{kind}.service").read_text()
+            expected = original.replace("revocations", "health").replace(
+                "revocation", "health"
+            )
+            if kind == "response":
+                expected = expected.replace("--dispatch", "--health-dispatch")
+
+            def directives(value):
+                return [
+                    line
+                    for line in value.splitlines()
+                    if line and not line.startswith("#")
+                ]
+
+            self.assertEqual(directives(health), directives(expected))
+            for forbidden in (
+                "[Install]",
+                "OnSuccess=",
+                "ExecStartPost=",
+                "Restart=",
+                "BindReadOnlyPaths=",
+            ):
+                self.assertNotIn(forbidden, health)
+        self.assertEqual(
+            (directory / "50-runtime-health-response.conf").read_text(),
+            "[Unit]\nOnSuccess=aragorn-runtime-health-response.service\nOnSuccessJobMode=fail\n",
+        )
+        self.assertIn(
+            "contention needs root retry",
+            (directory / "aragorn-runtime-health-response.service").read_text(),
         )
 
 

@@ -69,6 +69,11 @@ _HEALTH_LIMITATIONS = (
     "ACCEPTED_UNHEALTHY_SNAPSHOT_ONLY_NOT_STALE_MISSING_OR_HUNG_SENSOR_COVERAGE",
     "PROFILE_START_BARRIER_NOT_SKILL_DIGEST_REVOCATION",
 )
+_HEALTH_DISPATCH_LIMITATIONS = (
+    "PUBLISHER_TRIGGERED_CURRENT_ACCEPTED_HEALTH_NOT_DETECTOR_OR_DURABLE_EVENT_QUEUE",
+    "LOCK_CONTENTION_OR_DISPATCH_FAILURE_REQUIRES_ROOT_RETRY",
+    *_HEALTH_LIMITATIONS[1:],
+)
 
 
 class RuntimeResponseError(RuntimeError):
@@ -82,7 +87,8 @@ class RuntimeResponseIndeterminate(RuntimeResponseError):
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     dispatch = arguments == ["--dispatch"]
-    health = arguments == ["--health"]
+    health_dispatch = arguments == ["--health-dispatch"]
+    health = arguments == ["--health"] or health_dispatch
     options: set[str] = set()
     while arguments and arguments[0] in {"--prevent-starts", "--retain-evidence"}:
         option = arguments.pop(0)
@@ -92,17 +98,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         options.add(option)
     prevent_starts = "--prevent-starts" in options
     if not (dispatch or health) and (
-        len(arguments) != 2 or {"--dispatch", "--health"}.intersection(arguments)
+        len(arguments) != 2
+        or {"--dispatch", "--health", "--health-dispatch"}.intersection(arguments)
     ):
         print(
-            "usage: aragorn-runtime-response-service --dispatch | --health | [--prevent-starts] [--retain-evidence] EXPECTED_SKILL_DIGEST "
+            "usage: aragorn-runtime-response-service --dispatch | --health | --health-dispatch | [--prevent-starts] [--retain-evidence] EXPECTED_SKILL_DIGEST "
             "EXPECTED_REVOCATION_SNAPSHOT_DIGEST",
             file=sys.stderr,
         )
         return 64
     completed = False
     try:
-        if health:
+        if health_dispatch:
+            result = _respond(prevent_starts=True, health=True, health_dispatch=True)
+        elif health:
             result = _respond(prevent_starts=True, health=True)
         elif dispatch:
             result = _respond(prevent_starts=True)
@@ -230,8 +239,11 @@ def _respond(
     *,
     prevent_starts: bool,
     health: bool = False,
+    health_dispatch: bool = False,
 ) -> dict[str, Any]:
     dispatch = expected_skill_digest is None and expected_snapshot_digest is None
+    if type(health_dispatch) is not bool or (health_dispatch and not health):
+        raise RuntimeResponseError("health dispatch requires health response mode")
     if type(health) is not bool or (
         health and (not dispatch or prevent_starts is not True)
     ):
@@ -245,6 +257,10 @@ def _respond(
         raise RuntimeResponseError("future-start response selection must be boolean")
     if sys.platform != "linux" or os.geteuid() != 0:
         raise RuntimeResponseError("root Linux execution is required")
+    binding_dispatch = dispatch and (not health or health_dispatch)
+    health_limitations = (
+        _HEALTH_DISPATCH_LIMITATIONS if health_dispatch else _HEALTH_LIMITATIONS
+    )
     stop_attempted = False
     try:
         with _activation_guard():
@@ -263,8 +279,8 @@ def _respond(
                     strict=True,
                 )
             ]
-            # --health is an explicit root command, not the namespaced publisher hook.
-            binding = _read_bindings(identities[1], dispatch=dispatch and not health)
+            # Only publisher hooks use the namespaced credential bind alias.
+            binding = _read_bindings(identities[1], dispatch=binding_dispatch)
             if dispatch:
                 expected_skill_digest = binding.active_skill_digest
             if binding.active_skill_digest != expected_skill_digest:
@@ -289,10 +305,7 @@ def _respond(
                 expected_snapshot_digest = accepted["snapshot_digest"]
                 # The activation lock serializes this fixed profile with its activator.
                 # ponytail: whole-profile stop; per-capability units need a new binding.
-                if (
-                    _read_bindings(identities[1], dispatch=dispatch and not health)
-                    != binding
-                ):
+                if _read_bindings(identities[1], dispatch=binding_dispatch) != binding:
                     raise RuntimeResponseError("worker binding changed before stop")
                 for unit, state, process, (uid, gid) in zip(
                     _UNITS,
@@ -348,7 +361,7 @@ def _respond(
                         "after": observed,
                         "limitations": [
                             "NO_STOP_OR_FUTURE_START_BARRIER_APPLIED",
-                            *(_HEALTH_LIMITATIONS if health else ()),
+                            *(health_limitations if health else ()),
                         ],
                     }
                 stop_attempted = True
@@ -401,7 +414,7 @@ def _respond(
                     ]
                 if health:
                     result["status"] = "SUSPENDED_UNHEALTHY_FIXED_RUNTIME_PROFILE"
-                    result["limitations"][0:1] = _HEALTH_LIMITATIONS
+                    result["limitations"][0:1] = health_limitations
         return result
     except BaseException as exc:
         if stop_attempted:

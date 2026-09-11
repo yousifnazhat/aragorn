@@ -1005,6 +1005,10 @@ The [config-entry backend](./scripts/openclaw_final_v3_config_entry_case.py)
 reconstructs the frozen V2-to-V3 probe and checks fresh source, gateway, mount,
 command, and protected-state joins. It observes an `enabled=true` persistence
 denial for an already available skill, not a disabled-to-enabled transition.
+One [fresh config-entry development observation](./benchmark/evidence/phase3-openclaw-final-v3-config-entry-development-case-v1-2026-09-11.json)
+was captured from signed `4691fc1` on September 11. Backend replay, unchanged
+parent snapshots, CAS readback, and removal of its exact container and input
+volume were verified. This is `OBSERVED`, not a final-campaign pass.
 Six development cases are wired; 25 remain unwired: eight retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.

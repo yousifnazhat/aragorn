@@ -42,6 +42,41 @@ def _sync_harness(native: dict) -> None:
 
 
 class ConfigEntryCaseTests(unittest.TestCase):
+    def test_retained_fresh_development_capture_reverifies(self) -> None:
+        raw = (
+            _ROOT
+            / "benchmark/evidence/phase3-openclaw-final-v3-config-entry-development-case-v1-2026-09-11.json"
+        ).read_bytes()
+        self.assertEqual(
+            subject.old._digest(raw),
+            "sha256:6514406c19ec4047c6bc1375567a9cb8fe4ad217745b9a753aba568629fcdf52",
+        )
+        captured = json.loads(raw)
+        verified = subject.verify_capture(
+            base64.b64decode(captured["native_capture"]["base64"], validate=True),
+            captured["request_binding"],
+            source=captured["source"],
+            invocation=captured["invocation"],
+        )
+        self.assertEqual(verified["proof"], captured["capture_checks"])
+        self.assertIs(captured["cleanup"]["container_absent"], True)
+        self.assertIs(captured["cleanup"]["volume_absent"], True)
+        for field in ("image_inspect", "volume_inspect"):
+            self.assertEqual(
+                captured["parent_before"][field], captured["parent_after"][field]
+            )
+        self.assertEqual(
+            captured["parent_before"]["content"]["runtime_tree_before"],
+            captured["parent_after"]["content"]["runtime_tree_after"],
+        )
+        self.assertTrue(
+            all(
+                value is False
+                for key, value in captured["decision"].items()
+                if key.endswith("_eligible")
+            )
+        )
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.temporary = TemporaryDirectory()

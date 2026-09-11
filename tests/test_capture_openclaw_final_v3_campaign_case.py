@@ -254,16 +254,23 @@ class CampaignCaseExecutorTests(unittest.TestCase):
         self.put.assert_not_called()
 
     def test_workshop_selects_only_its_backend_and_cleanup_namespace(self) -> None:
-        case = subject._WORKSHOP_CASE
+        self._check_selected_backend(subject._WORKSHOP_CASE, subject.workshop)
+
+    def test_proposal_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        self._check_selected_backend(
+            "ADM-02/update/workshop-proposal-apply", subject.proposal
+        )
+
+    def _check_selected_backend(self, case, backend) -> None:
         request = campaign.build_openclaw_final_v3_subfixture_request(
             self.contract, case
         )
         with (
             patch.object(
-                subject.workshop, "prepare_case", return_value={"request": request}
+                backend, "prepare_case", return_value={"request": request}
             ) as prepare,
             patch.object(
-                subject.workshop,
+                backend,
                 "verify_capture",
                 return_value={"harness": self.harness, "proof": {"observed": True}},
             ) as verify,

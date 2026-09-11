@@ -978,11 +978,15 @@ an exclusive parent-volume lease, or independent host attestation. All eligibili
 flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
-now supports DET-01, core-updater replacement, and workshop invalidation. The
-native backends bind their six-file and two-file bundles respectively, explicitly
+now supports DET-01, core-updater replacement, workshop invalidation, and
+workshop proposal/apply. The native backends bind their exact read-only bundles, explicitly
 mapping provisional campaign paths to unchanged native read-only route-input
 paths. Workshop's descriptor still declares no materializer; its separate pinned
 native materializer is recorded without rewriting that descriptor.
+The proposal/apply backend reuses the frozen two-file transformation and checks
+fresh proposal/session identities, command and snapshot transitions, source and
+mount custody, and capture chronology. Its offline regression coverage is not a
+fresh live observation or independent qualification; all eligibility stays false.
 Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.

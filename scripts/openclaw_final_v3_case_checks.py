@@ -128,6 +128,31 @@ def verify_harness(
         "native harness raw/document join changed",
     )
     old._file_record(harness["file"], mode="0600")
+    harness_file = harness["file"]
+    metadata = harness_file["stat"]
+    _expect(
+        set(harness_file) == {"base64", "bytes", "digest", "path", "stat"}
+        and harness_file["path"] == "/run/aragorn-harness.json"
+        and set(metadata)
+        == {
+            "ctime_ns",
+            "device",
+            "gid",
+            "inode",
+            "mode",
+            "mtime_ns",
+            "nlink",
+            "size",
+            "type",
+            "uid",
+        }
+        and all(
+            type(metadata[key]) is int and metadata[key] > 0
+            for key in ("ctime_ns", "mtime_ns", "device", "inode")
+        )
+        and metadata["mtime_ns"] == metadata["ctime_ns"],
+        "harness file custody changed",
+    )
     volume = host["route_input_volume_identity"]
     match = re.fullmatch(
         re.escape("aragorn-phase3-final-combined-v3-" + stem)
@@ -337,6 +362,19 @@ def verify_execution(
     prerequisite: dict[str, Any] | None = None,
 ) -> None:
     execution, stack = route["execution"], route["stack_before"]
+    pids, processes = stack["pids"], stack["processes"]
+    _expect(
+        set(pids) == set(processes) == set(stack["units"])
+        and all(
+            type(pid) is int
+            and pid > 0
+            and type(processes[name]["pid"]) is int
+            and pid == processes[name]["pid"]
+            for name, pid in pids.items()
+        )
+        and len(set(pids.values())) == len(pids),
+        "service PID map/process join changed",
+    )
     pid = route["gateway_pid_binding"]["pid"]
     gateway = "aragorn-agent-gateway.service"
     process = stack["processes"][gateway]

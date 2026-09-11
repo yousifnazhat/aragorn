@@ -319,6 +319,11 @@ class CampaignCaseExecutorTests(unittest.TestCase):
                 self.assertEqual(observation["argv"][1], str(_ROOT / backend._RECIPE))
                 self.assertEqual(launch.call_args.args[0], observation["argv"])
 
+    def test_config_entry_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        self._check_selected_backend(
+            "ADM-02/update/config-entry-activation", subject.config_entry
+        )
+
     def test_det01_delegates_only_the_exact_contract_request_and_cas(self) -> None:
         expected = campaign.build_openclaw_final_v3_subfixture_request(
             self.contract, "DET-01"

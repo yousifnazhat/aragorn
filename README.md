@@ -979,7 +979,8 @@ flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
 now supports DET-01, core-updater replacement, workshop invalidation,
-workshop proposal/apply, and curator restore. The native backends bind their exact read-only bundles,
+workshop proposal/apply, curator restore, and config-entry activation.
+The native backends bind their exact read-only bundles,
 explicitly mapping provisional campaign paths to unchanged native read-only route-input
 paths. Workshop's descriptor still declares no materializer; its separate pinned
 native materializer is recorded without rewriting that descriptor.
@@ -1000,7 +1001,11 @@ One [fresh curator-restore development observation](./benchmark/evidence/phase3-
 was captured from signed `763d3c2` on September 11. Backend replay, unchanged
 parent snapshots, CAS readback, and removal of its exact container and input
 volume were verified. This is `OBSERVED`, not a final-campaign pass.
-Five development cases are wired; 26 remain unwired: nine retained current-V3
+The [config-entry backend](./scripts/openclaw_final_v3_config_entry_case.py)
+reconstructs the frozen V2-to-V3 probe and checks fresh source, gateway, mount,
+command, and protected-state joins. It observes an `enabled=true` persistence
+denial for an already available skill, not a disabled-to-enabled transition.
+Six development cases are wired; 25 remain unwired: eight retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
 Unsupported cases fail before execution. Each call checks the signed

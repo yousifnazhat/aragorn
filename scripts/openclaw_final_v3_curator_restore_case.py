@@ -391,31 +391,6 @@ def verify_capture(
             stem=_STEM,
             image_id=old._IMAGE,
         )
-        harness_file = evidence["harness"]["file"]
-        metadata = harness_file["stat"]
-        _expect(
-            set(harness_file) == {"base64", "bytes", "digest", "path", "stat"}
-            and harness_file["path"] == "/run/aragorn-harness.json"
-            and set(metadata)
-            == {
-                "ctime_ns",
-                "device",
-                "gid",
-                "inode",
-                "mode",
-                "mtime_ns",
-                "nlink",
-                "size",
-                "type",
-                "uid",
-            }
-            and all(
-                type(metadata[key]) is int and metadata[key] > 0
-                for key in ("ctime_ns", "mtime_ns", "device", "inode")
-            )
-            and metadata["mtime_ns"] == metadata["ctime_ns"],
-            "harness file custody changed",
-        )
         checks.verify_host(host, parent, stem=_STEM)
         _verify_composition(evidence, parent)
         route = evidence["route_observation"]

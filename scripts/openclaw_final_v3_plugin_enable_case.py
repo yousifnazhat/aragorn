@@ -1,4 +1,4 @@
-"""Bind one fresh config-entry persistence denial; never qualify a campaign."""
+"""Bind one fresh plugin-enable persistence denial; never qualify a campaign."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from aragorn import admission_openclaw_final_v3_campaign as campaign
-from aragorn import admission_openclaw_final_v3_config_entry_subfixture as semantic
-from aragorn import admission_protected_final_combined_v3_config_entry_activation as old
+from aragorn import admission_openclaw_final_v3_plugin_enable_subfixture as semantic
+from aragorn import admission_protected_final_combined_v3_plugin_enable as old
 from aragorn.admission_evidence import AdmissionEvidenceError
 from aragorn.admission_openclaw_final_v3_campaign_dispatch import (
     dispatch_openclaw_final_v3_campaign_case,
@@ -21,24 +21,30 @@ from scripts import openclaw_final_v3_case_checks as checks
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CASE = old._ROUTE
-_STEM = "config-entry-activation"
+_STEM = "plugin-enable"
 _RECIPE = old._COLLECTOR_ARTIFACTS["capture_recipe"]["path"]
 _PROBE = old._PROBE["name"]
-_PROVISIONAL_ROOT = "/campaign/cases/10-adm-02-update-config-entry-activation"
-_NATIVE_ROOT = "/route-input/config-entry-activation"
+_PROVISIONAL_ROOT = "/campaign/cases/13-adm-02-update-plugin-enable-activation"
+_NATIVE_ROOT = "/route-input/plugin-enable-activation"
 SOURCE_PATHS = tuple(
     sorted(
         {old._SOURCE_ARTIFACTS[name]["path"] for name in old._SIGNED_SOURCE_ARTIFACTS}
         | {item["path"] for item in old._COLLECTOR_ARTIFACTS.values()}
     )
 )
-_SCHEMA = "aragorn/runtime-action-worker-final-combined-v3-config-entry-activation-systemd-observation/v1"
-_AUTHORITY = "BOUND_FINAL_COMBINED_V3_RAW_CONFIG_ENTRY_ENABLED_TRUE_PERSISTENCE_ATTEMPT_OBSERVATION_ONLY_NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+_SCHEMA = "aragorn/runtime-action-worker-final-combined-v3-plugin-enable-systemd-observation/v1"
+_AUTHORITY = "BOUND_FINAL_COMBINED_V3_RAW_PLUGIN_ENABLE_OBSERVATION_ONLY_NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+_ADDED_LAYERS = [
+    "sha256:86d678ec2731c58b36666ad71281618776a5cefc7968d4f6dbb0d3b4c6c72261",
+    "sha256:9ccec6e4a81e24c82554d3afb3d116a6ea1eeae9e0c4345f08d38a42fce3d082",
+    "sha256:886974f09fb31d4af061b11c3a4a938ebaeab81b81aa765b75960fbe36043ffd",
+    "sha256:4fefd3c304635585a459372f65bbc47a9a459d08261c8c087d584fab5ca8f6b0",
+]
 
 
 def _expect(condition: bool, message: str) -> None:
     if not condition:
-        raise AdmissionEvidenceError("config-entry campaign " + message)
+        raise AdmissionEvidenceError("plugin-enable campaign " + message)
 
 
 def prepare_case(
@@ -85,7 +91,7 @@ def prepare_case(
             "native bundle changed",
         )
         return {
-            "schema": "aragorn/openclaw-final-v3-config-entry-case-preparation/v1",
+            "schema": "aragorn/openclaw-final-v3-plugin-enable-case-preparation/v1",
             "authority": "LOCAL_REQUEST_AND_BUNDLE_PREPARATION_NOT_EXECUTION_OR_QUALIFICATION_AUTHORITY",
             "contract": contract,
             "request": expected,
@@ -97,9 +103,9 @@ def prepare_case(
                 "source": next(
                     item
                     for item in sources
-                    if item["path"] == old._MATERIALIZER["path"]
+                    if item["path"] == old._COLLECTOR_ARTIFACTS["dockerfile"]["path"]
                 ),
-                "entrypoint": "transformed_final_combined_v2_probe",
+                "entrypoint": "dockerfile_fixed_probe_transform",
                 "transform": old._TRANSFORM,
             },
             "path_mapping": {
@@ -122,7 +128,7 @@ def prepare_case(
                 ],
             },
             "decision": checks._decision(
-                "CONFIG_ENTRY_REQUEST_AND_LOCAL_BUNDLE_PREPARED_NOT_EXECUTED"
+                "PLUGIN_ENABLE_REQUEST_AND_LOCAL_BUNDLE_PREPARED_NOT_EXECUTED"
             ),
         }
     except AdmissionEvidenceError:
@@ -136,7 +142,7 @@ def prepare_case(
         RuntimeError,
     ) as exc:
         raise AdmissionEvidenceError(
-            f"invalid config-entry preparation: {exc}"
+            f"invalid plugin-enable preparation: {exc}"
         ) from exc
 
 
@@ -147,12 +153,12 @@ def _verify_composition(evidence: dict[str, Any], parent: dict[str, Any]) -> Non
         verifier=old,
         schema=_SCHEMA,
         authority=_AUTHORITY,
-        artifact_key="final_combined_v3_config_entry_activation",
+        artifact_key="final_combined_v3_plugin_enable",
     )
     checks.verify_native_artifacts(
         artifact,
         verifier=old,
-        probe_key="config_entry_activation_probe",
+        probe_key="plugin_enable_probe",
     )
 
 
@@ -165,7 +171,9 @@ def verify_capture(
 ) -> dict[str, Any]:
     """Verify native bytes and actual joins; caller owns live cleanup and retention."""
     try:
-        with TemporaryDirectory(prefix="aragorn-config-case-recheck-") as temporary:
+        with TemporaryDirectory(
+            prefix="aragorn-plugin-enable-case-recheck-"
+        ) as temporary:
             expected = prepare_case(
                 prepared["contract"],
                 prepared["request"],
@@ -173,7 +181,7 @@ def verify_capture(
             )
         _expect(checks._same(prepared, expected), "prepared binding changed")
         checks.verify_source(prepared, source)
-        evidence = checks.det.semantic._load_canonical(raw, "config-entry observation")
+        evidence = checks.det.semantic._load_canonical(raw, "plugin-enable observation")
         _expect(
             set(evidence)
             == {
@@ -214,7 +222,7 @@ def verify_capture(
         )
         checks.verify_host(host, parent, stem=_STEM)
         _expect(
-            host["image_lineage"]["added_layers"] == old._ADDED_LAYERS,
+            host["image_lineage"]["added_layers"] == _ADDED_LAYERS,
             "child image layers changed",
         )
         _verify_composition(evidence, parent)
@@ -250,7 +258,7 @@ def verify_capture(
             "route raw/document/bundle join changed",
         )
         semantics = (
-            semantic.verify_openclaw_final_v3_config_entry_semantic_compatibility(
+            semantic.verify_openclaw_final_v3_plugin_enable_semantic_compatibility(
                 document
             )
         )
@@ -274,7 +282,7 @@ def verify_capture(
             )
             and stack["processes"][gateway]["groups"] == [992]
             and stack["processes"][gateway]["cmdline"] == ["openclaw-gateway"]
-            and document["action"]["prerequisites"]["boundary_before"]["probe"][
+            and document["action"]["prerequisites"]["boundary_before"]["route_input"][
                 "records"
             ][0]["root"]
             == f"/docker/volumes/{host['route_input_volume_identity']['name']}/_data"
@@ -295,12 +303,12 @@ def verify_capture(
             recorded_at=evidence["recorded_at"],
             prerequisite=document["action"]["prerequisites"]["gateway_process_before"],
         )
-        old._verify_commands(
-            document["action"],
-            document["recorded_at"],
-            evidence["recorded_at"],
-            execution=execution,
-            service_pids=set(stack["pids"].values()),
+        commands = document["action"]["commands"]
+        _expect(
+            not {command["pid"] for command in commands} & set(stack["pids"].values())
+            and checks.det._timestamp(execution["started_at"])
+            <= checks.det._timestamp(commands[0]["started_at"]),
+            "command service identity or start chronology changed",
         )
         timestamp = checks.det._timestamp
         _expect(
@@ -326,14 +334,14 @@ def verify_capture(
                 "limitations": [
                     "HOST_WRAPPER_REQUEST_ASSOCIATION_NOT_NATIVE_COLLECTOR_NONCE",
                     "MAPPED_HISTORICAL_ROUTE_NOT_LITERAL_CAMPAIGN_DISPATCH_ARGV",
-                    "ENABLED_TRUE_PERSISTENCE_DENIAL_NOT_DISABLED_TO_ENABLED_ACTIVATION",
+                    "PLUGIN_ENABLE_PRE_EFFECT_CREDENTIAL_LOCK_DENIAL_NOT_SUCCESSFUL_PLUGIN_ACTIVATION",
                     "NO_INDEPENDENT_ROUTE_OR_INHERITED_ACTIVATION_QUALIFICATION",
                     "CALLER_OWNS_LIVE_PARENT_SNAPSHOTS_CLEANUP_AND_SIGNED_RETENTION",
                     "NO_FINAL_CAMPAIGN_RESUME_ADMISSION_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY",
                 ],
             },
             "decision": checks._decision(
-                "CONFIG_ENTRY_DEVELOPMENT_ROUTE_OBSERVED_NOT_QUALIFIED"
+                "PLUGIN_ENABLE_DEVELOPMENT_ROUTE_OBSERVED_NOT_QUALIFIED"
             ),
         }
     except AdmissionEvidenceError:
@@ -348,4 +356,4 @@ def verify_capture(
         ValueError,
         RuntimeError,
     ) as exc:
-        raise AdmissionEvidenceError(f"invalid config-entry capture: {exc}") from exc
+        raise AdmissionEvidenceError(f"invalid plugin-enable capture: {exc}") from exc

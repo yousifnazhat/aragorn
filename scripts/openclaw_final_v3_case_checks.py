@@ -8,6 +8,7 @@ from typing import Any
 from aragorn import admission_openclaw_final_v3_core_updater_qualification as old
 from aragorn import admission_openclaw_final_v3_det01_binding as bounded
 from aragorn import admission_openclaw_final_v3_det01_qualification as det
+from aragorn import admission_protected_final_combined_v3_plugin_enable as records
 from aragorn.admission_evidence import AdmissionEvidenceError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 
@@ -326,7 +327,57 @@ def verify_parent(
     artifact_key: str = "final_combined_v3_workshop_proposal_apply",
 ) -> dict[str, Any]:
     inherited = action["artifacts"][artifact_key]
-    old.custody.parent.v3_contract.parent._verify_contract_artifacts(inherited)
+    frozen = old.custody.parent.v3_contract.parent
+    frozen._verify_contract_artifacts(inherited)
+    for name, expected in frozen._CONTRACT_FILES.items():
+        bound = inherited[name]
+        _expect(
+            set(bound)
+            == {"document", "file", *({"outcomes"} if name == "profile" else set())}
+            and set(bound["file"]) == {"canonical_bytes", "canonical_digest", "source"},
+            "contract file wrapper changed",
+        )
+        records._verify_file_record(
+            bound["file"]["source"],
+            path="/src/" + expected["path"],
+            bytes_=expected["bytes"],
+            digest=expected["digest"],
+            mode="0444",
+            label=name,
+        )
+    policy = inherited["runtime_lock"]["document"]["deployment_bindings"][
+        "plugin_install_policy"
+    ]["command"]
+    records._verify_file_record(
+        inherited["policy_command"],
+        path=policy["path"],
+        bytes_=policy["bytes"],
+        digest=policy["digest"],
+        mode=policy["mode"],
+        label="policy command",
+    )
+    _expect(
+        set(inherited["skill"]) == {"file", "parents"}
+        and _same(
+            inherited["skill"]["parents"],
+            [
+                {
+                    "path": path,
+                    "mode": "0755" if path == "/" else "0555",
+                    "uid": 0,
+                    "gid": 0,
+                }
+                for path in (
+                    "/",
+                    "/opt",
+                    "/opt/aragorn",
+                    "/opt/aragorn/runtime-profile",
+                    "/opt/aragorn/runtime-profile/template-skill",
+                )
+            ],
+        ),
+        "skill parent custody changed",
+    )
     _expect(
         _same(composition["profile"]["before"], composition["profile"]["after"])
         and _same(
@@ -374,6 +425,20 @@ def verify_execution(
         )
         and len(set(pids.values())) == len(pids),
         "service PID map/process join changed",
+    )
+    _expect(
+        all(
+            _same(stack[name], action["boundaries"][name])
+            for name in (
+                "enablement",
+                "gateway_listener",
+                "processes",
+                "service_state",
+                "sockets",
+                "units",
+            )
+        ),
+        "same-run stack/composition identity changed",
     )
     pid = route["gateway_pid_binding"]["pid"]
     gateway = "aragorn-agent-gateway.service"
@@ -434,3 +499,183 @@ def verify_execution(
         < det._timestamp(invocation["completed_at"]),
         "capture invocation chronology changed",
     )
+
+
+def verify_native_artifacts(
+    artifact: dict[str, Any], *, verifier: Any, probe_key: str
+) -> None:
+    """Use the frozen content contract, not retained inode-dependent record hashes."""
+    _expect(
+        set(artifact) == set(verifier._ARTIFACT_DIGESTS)
+        and set(artifact["collector"]) == set(verifier._COLLECTOR_ARTIFACTS)
+        and _same(
+            artifact["installed_runtime"],
+            artifact["runtime_lock"]["document"]["installed_runtime"],
+        ),
+        "artifact inventory/runtime changed",
+    )
+    git = old._git
+    for expected in verifier.parent._CONTRACT_FILES.values():
+        verifier._verify_signed_bytes(git, expected)
+    activation = artifact["runtime_lock"]["document"]["deployment_bindings"][
+        "activation_contract"
+    ]
+    for name, installed, source_path, size, source_mode, installed_mode in (
+        (
+            "activator",
+            activation["activator"],
+            "packaging/activate-runtime-action-worker-host-v3.sh",
+            30504,
+            "0555",
+            "0755",
+        ),
+        (
+            "preflight",
+            activation["preflight"],
+            "src/aragorn/runtime_action_worker.py",
+            37878,
+            "0444",
+            "0644",
+        ),
+    ):
+        expected = {"path": source_path, "bytes": size, "digest": installed["digest"]}
+        # The activator is generated in the frozen parent, not tracked at this
+        # route's source commit; the verified runtime lock pins its exact bytes.
+        if name == "preflight":
+            verifier._verify_signed_bytes(git, expected)
+        for key, path, mode in (
+            (name, installed["path"], installed_mode),
+            (name + "_source", "/src/" + source_path, source_mode),
+        ):
+            records._verify_file_record(
+                artifact[key],
+                path=path,
+                bytes_=size,
+                digest=installed["digest"],
+                mode=mode,
+                label=key,
+            )
+    for name, expected in verifier._COLLECTOR_ARTIFACTS.items():
+        records._verify_file_record(
+            artifact["collector"][name],
+            path="/src/" + expected["path"],
+            bytes_=expected["bytes"],
+            digest=expected["digest"],
+            mode=expected["mode"],
+            label=name,
+        )
+        verifier._verify_signed_bytes(git, expected)
+    plugin = {
+        "index.js": (
+            23860,
+            "sha256:71dfcdc6d2f1d51472230e9cda240c25d0b316fee39434e6761bb2e7b411467b",
+        ),
+        "openclaw.plugin.json": (
+            723,
+            "sha256:d90c95c23da3de4a32b8088a69d927bf10a45ed4e116e3ccece491ee3c766036",
+        ),
+        "package.json": (
+            134,
+            "sha256:0097f2e532b1a5d99e3cfc4990d4bbf83a01c10ee11d567b139bd9144a859ad2",
+        ),
+    }
+    _expect(set(artifact["plugin"]) == set(plugin), "plugin inventory changed")
+    for name, (size, digest) in plugin.items():
+        records._verify_file_record(
+            artifact["plugin"][name],
+            path="/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/" + name,
+            bytes_=size,
+            digest=digest,
+            mode="0644",
+            label=name,
+        )
+    records._verify_file_record(
+        artifact["skill"]["file"],
+        path="/opt/aragorn/runtime-profile/template-skill/SKILL.md",
+        bytes_=140,
+        digest=verifier.config._SOURCES["skill"]["digest"],
+        mode="0444",
+        label="skill",
+    )
+    verifier._verify_artifact_probe(artifact[probe_key], git)
+
+
+def verify_native_composition(
+    evidence: dict[str, Any],
+    parent: dict[str, Any],
+    *,
+    verifier: Any,
+    schema: str,
+    authority: str,
+    artifact_key: str,
+) -> dict[str, Any]:
+    composition = evidence["composition"]
+    action = composition["action"]
+    artifact = verify_parent(
+        composition,
+        action,
+        parent,
+        artifact_key=artifact_key,
+    )
+    _expect(
+        set(composition)
+        == {
+            "action",
+            "authority",
+            "bindings",
+            "decision",
+            "limitations",
+            "profile",
+            "recorded_at",
+            "schema",
+        }
+        and composition["schema"] == schema
+        and composition["authority"] == authority
+        and composition["limitations"] == verifier._RAW_LIMITATIONS
+        and _same(composition["decision"], verifier._COMPOSITION_DECISION)
+        and _same(
+            composition["bindings"],
+            {
+                "config_materialization": "canonical_json_without_trailing_lf",
+                "network": "none",
+                "openclaw_test_fast": "absent",
+                "runtime_digest": verifier.config._RUNTIME_TREE["tree_digest"],
+                "runtime_volume": parent["runtime_volume"],
+                "sandbox": "off",
+                "sessions": "fresh-only",
+                "skill_digest": verifier.config._SOURCES["skill"]["digest"],
+            },
+        )
+        and _same(
+            action["identities"],
+            {
+                "broker": {"gid": 997, "uid": 995},
+                "gateway": {"gid": 992, "uid": 992},
+                "sensor": {"gid": 996, "uid": 996},
+                "worker": {"gid": 997, "uid": 997},
+            },
+        )
+        and _same(
+            action["secret_checks"],
+            {
+                "forbidden_driver_fields": [],
+                "gateway_environment_bytes_retained": False,
+                "gateway_environment_digest_retained": False,
+                "provider_and_gateway_token_values_retained": False,
+            },
+        )
+        and _same(
+            action["runtime"],
+            {
+                "entrypoint": "/runtime/lib/node_modules/openclaw/openclaw.mjs",
+                "entrypoint_digest": verifier.contract._RUNTIME["entrypoint_digest"],
+                "expected_version": verifier.contract._RUNTIME["version_output"],
+                "root": "/runtime",
+                "tree": verifier.config._RUNTIME_TREE,
+                "version_output": verifier.contract._RUNTIME["version_output"],
+            },
+        ),
+        "composition contract changed",
+    )
+    verifier._verify_sources(evidence["source_artifacts"])
+    return artifact

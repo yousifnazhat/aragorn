@@ -362,6 +362,15 @@ no-op. Both units already inactive with empty/absent cgroups yield
 `NO_ACTIVE_RUNTIME_PROFILE`, which makes no snapshot-acceptance or restart-barrier
 claim. Partial, stale, malformed or changing state fails nonzero.
 
+The explicit root-only `--health` mode instead checks the current profile's
+broker-accepted health snapshot, bound policy/runtime/sensor, and persisted epoch
+under those locks. A fresh accepted `unhealthy` report stops and masks the fixed
+gateway and worker; a valid `healthy` report is a no-op. Both completed outcomes
+are retained in CAS. Invalid, stale, future, rollback, or changing snapshots are
+refused before effects; partial effects remain indeterminate. This mode is an
+operator command, not an automatic health trigger, stale/hung-sensor detector,
+or installed-digest revocation. Its regression tests are not a live qualification.
+
 The installer also stages an inert root oneshot and the publisher hook
 `/usr/share/aragorn/systemd/50-runtime-response.conf`. To opt in, a root operator
 installs that hook as
@@ -979,7 +988,7 @@ flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
 now supports DET-01, core-updater replacement, workshop invalidation,
-workshop proposal/apply, curator restore, and config-entry activation.
+workshop proposal/apply, curator restore, config-entry activation, and plugin enable.
 The native backends bind their exact read-only bundles,
 explicitly mapping provisional campaign paths to unchanged native read-only route-input
 paths. Workshop's descriptor still declares no materializer; its separate pinned
@@ -1009,7 +1018,12 @@ One [fresh config-entry development observation](./benchmark/evidence/phase3-ope
 was captured from signed `4691fc1` on September 11. Backend replay, unchanged
 parent snapshots, CAS readback, and removal of its exact container and input
 volume were verified. This is `OBSERVED`, not a final-campaign pass.
-Six development cases are wired; 25 remain unwired: eight retained current-V3
+The [plugin-enable backend](./scripts/openclaw_final_v3_plugin_enable_case.py)
+checks the unchanged native `plugins enable tts-local-cli` credential-lock denial,
+including the disabled and not-imported plugin state before and after the attempt.
+It reuses config-entry's common artifact and composition checks. Retained replay
+and synthetic-fresh regression checks are not a new live observation or final pass.
+Seven development cases are wired; 24 remain unwired: seven retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
 Unsupported cases fail before execution. Each call checks the signed

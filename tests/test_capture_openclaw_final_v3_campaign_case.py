@@ -324,6 +324,11 @@ class CampaignCaseExecutorTests(unittest.TestCase):
             "ADM-02/update/config-entry-activation", subject.config_entry
         )
 
+    def test_plugin_enable_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        self._check_selected_backend(
+            "ADM-02/update/plugin-enable-activation", subject.plugin_enable
+        )
+
     def test_det01_delegates_only_the_exact_contract_request_and_cas(self) -> None:
         expected = campaign.build_openclaw_final_v3_subfixture_request(
             self.contract, "DET-01"

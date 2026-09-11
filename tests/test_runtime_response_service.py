@@ -32,6 +32,18 @@ def _accepted(fixture: _Fixture) -> dict[str, object]:
     return document
 
 
+def _accepted_health(fixture: _Fixture, *, unhealthy: bool = True) -> dict[str, object]:
+    document = {
+        **fixture.health,
+        "epoch": 5,
+        "status": "unhealthy" if unhealthy else "healthy",
+    }
+    publish_runtime_control_document(
+        fixture.paths["health"], document, fixture.config, clock=lambda: 100
+    )
+    return document
+
+
 @contextmanager
 def _environment(fixture: _Fixture):
     identities = (
@@ -125,6 +137,238 @@ def _environment(fixture: _Fixture):
 
 
 class RuntimeResponseServiceTests(unittest.TestCase):
+    def test_health_mode_is_explicit_fixed_profile_and_always_retains(self) -> None:
+        result = {"status": "SUSPENDED_UNHEALTHY_FIXED_RUNTIME_PROFILE"}
+        with (
+            patch.object(service, "_respond", return_value=result) as respond,
+            patch.object(
+                service, "_retain_result", return_value={"response": result}
+            ) as retain,
+            redirect_stdout(StringIO()) as output,
+            redirect_stderr(StringIO()),
+        ):
+            self.assertEqual(service.main(["--health"]), 0)
+            respond.assert_called_once_with(prevent_starts=True, health=True)
+            retain.assert_called_once_with(result)
+            self.assertEqual(json.loads(output.getvalue()), {"response": result})
+            for arguments in (
+                ["--health", _SKILL],
+                ["--health", _SKILL, _OTHER],
+                ["--health", "--dispatch"],
+                ["--retain-evidence", "--health"],
+                ["--prevent-starts", "--health"],
+            ):
+                self.assertEqual(service.main(arguments), 64)
+            respond.assert_called_once()
+        for failure, code in (
+            (service.RuntimeResponseError("unaccepted health"), 126),
+            (service.RuntimeResponseIndeterminate("partial stop"), 125),
+        ):
+            with (
+                patch.object(service, "_respond", side_effect=failure),
+                patch.object(service, "_retain_result") as retain,
+                redirect_stdout(StringIO()) as output,
+                redirect_stderr(StringIO()),
+            ):
+                self.assertEqual(service.main(["--health"]), code)
+                self.assertEqual(output.getvalue(), "")
+                retain.assert_not_called()
+        with (
+            patch.object(service, "_respond", return_value=result),
+            patch.object(
+                service, "_retain_result", side_effect=service.CASError("disk")
+            ),
+            redirect_stdout(StringIO()) as output,
+            redirect_stderr(StringIO()),
+        ):
+            self.assertEqual(service.main(["--health"]), 125)
+            self.assertEqual(output.getvalue(), "")
+
+    def test_accepted_unhealthy_suspends_under_locks_and_healthy_does_not(self) -> None:
+        for unhealthy in (False, True):
+            with (
+                self.subTest(unhealthy=unhealthy),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                document = _accepted_health(fixture, unhealthy=unhealthy)
+                before = {
+                    name: path.read_bytes() for name, path in fixture.paths.items()
+                }
+                with (
+                    _environment(fixture) as (_binding, events, stop),
+                    patch.object(service, "_inactive_profile", return_value=None),
+                    patch.object(service, "_locked_revocations") as revoked,
+                    patch.object(
+                        service, "_mask_future_starts", return_value={}
+                    ) as mask,
+                ):
+                    result = service._respond(prevent_starts=True, health=True)
+                    self.assertEqual(
+                        result["health_snapshot_digest"], canonical_digest(document)
+                    )
+                    self.assertEqual(result["accepted_health"]["epoch"], 5)
+                    self.assertEqual(
+                        result["accepted_health"]["minimum_mediator_health_epoch"], 5
+                    )
+                    self.assertEqual(result["expected_skill_digest"], _SKILL)
+                    self.assertNotIn("accepted_revocation", result)
+                    self.assertNotIn("revocation_snapshot_digest", result)
+                    revoked.assert_not_called()
+                    self.assertTrue(
+                        all(
+                            call.kwargs == {"dispatch": False}
+                            for call in service._read_bindings.call_args_list
+                        )
+                    )
+                    self.assertIn(service._HEALTH_LIMITATIONS[0], result["limitations"])
+                    if unhealthy:
+                        stop.assert_called_once_with()
+                        mask.assert_called_once_with()
+                        self.assertEqual(
+                            result["status"],
+                            "SUSPENDED_UNHEALTHY_FIXED_RUNTIME_PROFILE",
+                        )
+                        self.assertEqual(
+                            events, ["activation-lock", "stop", "activation-unlock"]
+                        )
+                    else:
+                        stop.assert_not_called()
+                        mask.assert_not_called()
+                        self.assertEqual(
+                            result["status"], "ACCEPTED_HEALTHY_FIXED_RUNTIME_PROFILE"
+                        )
+                        self.assertEqual(result["before"], result["after"])
+                self.assertEqual(
+                    {name: path.read_bytes() for name, path in fixture.paths.items()},
+                    before,
+                )
+
+    def test_health_requires_accepted_fresh_bound_snapshot_and_policy(self) -> None:
+        for mutation in (
+            {"epoch": 4},
+            {"epoch": 6},
+            {"epoch": True},
+            {"runtime_digest": _OTHER},
+            {"sensor_digest": _OTHER},
+            {"observed_at_unix": 80, "expires_at_unix": 90},
+            {"observed_at_unix": 101, "expires_at_unix": 110},
+            {"status": "unknown"},
+            {"extra": "field"},
+            "malformed",
+            "missing",
+            "policy",
+        ):
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                document = _accepted_health(fixture)
+                if isinstance(mutation, dict):
+                    _write_control(fixture.paths["health"], {**document, **mutation})
+                elif mutation == "malformed":
+                    fixture.paths["health"].chmod(0o600)
+                    fixture.paths["health"].write_bytes(b"{")
+                    fixture.paths["health"].chmod(0o400)
+                elif mutation == "missing":
+                    fixture.paths["health"].unlink()
+                elif mutation == "policy":
+                    _write_control(
+                        fixture.paths["policy"], {**fixture.policy, "version": 2}
+                    )
+                with (
+                    _environment(fixture) as (_binding, _events, stop),
+                    patch.object(service, "_inactive_profile", return_value=None),
+                    self.assertRaises((RuntimeError, ValueError, OSError)),
+                ):
+                    service._respond(prevent_starts=True, health=True)
+                stop.assert_not_called()
+
+    def test_health_rechecks_control_time_and_running_identity_before_stop(
+        self,
+    ) -> None:
+        for change in ("time", "snapshot", "binding", "process"):
+            with (
+                self.subTest(change=change),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                document = _accepted_health(fixture)
+                with (
+                    _environment(fixture) as (binding, _events, stop),
+                    patch.object(service, "_inactive_profile", return_value=None),
+                    ExitStack() as patches,
+                ):
+                    if change == "time":
+                        patches.enter_context(
+                            patch.object(service.time, "time", side_effect=[100, 106])
+                        )
+                    elif change == "snapshot":
+                        original = service._locked_health
+
+                        def replace_after_read(
+                            *args, original=original, fixture=fixture, document=document
+                        ):
+                            result = original(*args)
+                            _write_control(
+                                fixture.paths["health"],
+                                {**document, "status": "healthy"},
+                            )
+                            return result
+
+                        patches.enter_context(
+                            patch.object(
+                                service,
+                                "_locked_health",
+                                side_effect=replace_after_read,
+                            )
+                        )
+                    elif change == "binding":
+                        wrong = RuntimeActionWorkerBinding(
+                            binding.runtime_digest,
+                            _OTHER,
+                            binding.policy_digest,
+                            binding.policy_version,
+                        )
+                        patches.enter_context(
+                            patch.object(
+                                service, "_read_bindings", side_effect=[binding, wrong]
+                            )
+                        )
+                    else:
+                        patches.enter_context(
+                            patch.object(
+                                service,
+                                "_process_identity",
+                                side_effect=[{"pid": 123}, {"pid": 456}, {"pid": 789}],
+                            )
+                        )
+                    with self.assertRaises(service.RuntimeResponseError):
+                        service._respond(prevent_starts=True, health=True)
+                    stop.assert_not_called()
+
+    def test_health_partial_effects_are_indeterminate(self) -> None:
+        for failure in ("stop", "population", "mask"):
+            with (
+                self.subTest(failure=failure),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                fixture = _Fixture(Path(temporary).resolve())
+                _accepted_health(fixture)
+                name = {
+                    "stop": "_stop_units",
+                    "population": "_cgroup_empty",
+                    "mask": "_mask_future_starts",
+                }[failure]
+                with (
+                    _environment(fixture),
+                    patch.object(service, "_inactive_profile", return_value=None),
+                    patch.object(service, name, side_effect=OSError("partial effect")),
+                    self.assertRaises(service.RuntimeResponseIndeterminate),
+                ):
+                    service._respond(prevent_starts=True, health=True)
+
     def test_dispatch_has_no_target_arguments_and_always_retains(self) -> None:
         result = {"status": "NO_REVOCATION_FOR_ACTIVE_PROFILE"}
         with (

@@ -1,4 +1,4 @@
-"""Root-authorized response for one fixed revoked runtime profile."""
+"""Root-authorized response for one fixed revoked or unhealthy runtime profile."""
 
 from __future__ import annotations
 
@@ -23,7 +23,10 @@ from . import runtime_action_broker as broker
 from . import runtime_action_worker as worker
 from .cas import CAS, CASError
 from .oci_worker_protocol import canonical_digest, canonical_json
-from .runtime_action_decision import qualify_runtime_revocation_generation
+from .runtime_action_decision import (
+    qualify_runtime_health_epoch,
+    qualify_runtime_revocation_generation,
+)
 from .runtime_process_profile import (
     _process_cgroup,
     _process_start_time,
@@ -61,6 +64,11 @@ _PROPERTIES = (
     "InvocationID",
 )
 _MAX_BYTES = broker._MAX_CONTROL_BYTES
+_HEALTH_LIMITATIONS = (
+    "EXPLICIT_ROOT_HEALTH_RESPONSE_NOT_AUTOMATIC_DETECTION_OR_DISPATCH",
+    "ACCEPTED_UNHEALTHY_SNAPSHOT_ONLY_NOT_STALE_MISSING_OR_HUNG_SENSOR_COVERAGE",
+    "PROFILE_START_BARRIER_NOT_SKILL_DIGEST_REVOCATION",
+)
 
 
 class RuntimeResponseError(RuntimeError):
@@ -74,6 +82,7 @@ class RuntimeResponseIndeterminate(RuntimeResponseError):
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     dispatch = arguments == ["--dispatch"]
+    health = arguments == ["--health"]
     options: set[str] = set()
     while arguments and arguments[0] in {"--prevent-starts", "--retain-evidence"}:
         option = arguments.pop(0)
@@ -82,16 +91,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             break
         options.add(option)
     prevent_starts = "--prevent-starts" in options
-    if not dispatch and (len(arguments) != 2 or "--dispatch" in arguments):
+    if not (dispatch or health) and (
+        len(arguments) != 2 or {"--dispatch", "--health"}.intersection(arguments)
+    ):
         print(
-            "usage: aragorn-runtime-response-service --dispatch | [--prevent-starts] [--retain-evidence] EXPECTED_SKILL_DIGEST "
+            "usage: aragorn-runtime-response-service --dispatch | --health | [--prevent-starts] [--retain-evidence] EXPECTED_SKILL_DIGEST "
             "EXPECTED_REVOCATION_SNAPSHOT_DIGEST",
             file=sys.stderr,
         )
         return 64
     completed = False
     try:
-        if dispatch:
+        if health:
+            result = _respond(prevent_starts=True, health=True)
+        elif dispatch:
             result = _respond(prevent_starts=True)
         else:
             result = (
@@ -100,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else _run(*arguments)
             )
         completed = True
-        if dispatch or "--retain-evidence" in options:
+        if dispatch or health or "--retain-evidence" in options:
             result = _retain_result(result)
         print(canonical_json(result).decode("ascii"))
         return 0
@@ -216,8 +229,15 @@ def _respond(
     expected_snapshot_digest: str | None = None,
     *,
     prevent_starts: bool,
+    health: bool = False,
 ) -> dict[str, Any]:
     dispatch = expected_skill_digest is None and expected_snapshot_digest is None
+    if type(health) is not bool or (
+        health and (not dispatch or prevent_starts is not True)
+    ):
+        raise RuntimeResponseError(
+            "health response requires current-profile suspension"
+        )
     if not dispatch:
         broker._require_digest(expected_skill_digest, "expected skill digest")
         broker._require_digest(expected_snapshot_digest, "expected revocation snapshot")
@@ -243,7 +263,8 @@ def _respond(
                     strict=True,
                 )
             ]
-            binding = _read_bindings(identities[1], dispatch=dispatch)
+            # --health is an explicit root command, not the namespaced publisher hook.
+            binding = _read_bindings(identities[1], dispatch=dispatch and not health)
             if dispatch:
                 expected_skill_digest = binding.active_skill_digest
             if binding.active_skill_digest != expected_skill_digest:
@@ -252,17 +273,26 @@ def _respond(
                 )
             config = _broker_config(identities, binding)
             with _broker_guard(config) as control_fd:
-                accepted = _locked_revocations(
-                    control_fd,
-                    config,
-                    binding,
-                    expected_snapshot_digest,
-                    require_revoked=not dispatch,
-                )
+
+                def snapshot() -> dict[str, Any]:
+                    if health:
+                        return _locked_health(control_fd, config, binding)
+                    return _locked_revocations(
+                        control_fd,
+                        config,
+                        binding,
+                        expected_snapshot_digest,
+                        require_revoked=not dispatch,
+                    )
+
+                accepted = snapshot()
                 expected_snapshot_digest = accepted["snapshot_digest"]
                 # The activation lock serializes this fixed profile with its activator.
                 # ponytail: whole-profile stop; per-capability units need a new binding.
-                if _read_bindings(identities[1], dispatch=dispatch) != binding:
+                if (
+                    _read_bindings(identities[1], dispatch=dispatch and not health)
+                    != binding
+                ):
                     raise RuntimeResponseError("worker binding changed before stop")
                 for unit, state, process, (uid, gid) in zip(
                     _UNITS,
@@ -279,33 +309,47 @@ def _respond(
                         raise RuntimeResponseError(
                             "runtime identity changed before stop"
                         )
-                if (
-                    _locked_revocations(
-                        control_fd,
-                        config,
-                        binding,
-                        expected_snapshot_digest,
-                        require_revoked=not dispatch,
-                    )
-                    != accepted
-                ):
+                if snapshot() != accepted:
                     raise RuntimeResponseError(
-                        "revocation authority changed before stop"
+                        "health authority changed before stop"
+                        if health
+                        else "revocation authority changed before stop"
                     )
-                if not accepted["revokes_active_skill"]:
+                response_binding = {
+                    "expected_skill_digest": expected_skill_digest,
+                    "health_snapshot_digest"
+                    if health
+                    else "revocation_snapshot_digest": expected_snapshot_digest,
+                    "accepted_health" if health else "accepted_revocation": accepted,
+                }
+                if not dispatch:
+                    response_binding["accepted_revocation"] = {
+                        key: value
+                        for key, value in accepted.items()
+                        if key not in {"snapshot_digest", "revokes_active_skill"}
+                    }
+                should_stop = (
+                    accepted["status"] == "unhealthy"
+                    if health
+                    else accepted["revokes_active_skill"]
+                )
+                if not should_stop:
                     observed = [
                         {"unit": unit, "process": process}
                         for unit, process in zip(before, processes, strict=True)
                     ]
                     return {
                         "authority": "LOCAL_ROOT_RESPONSE_RESULT_NOT_RUN_OR_PHASE3_CONFORMANCE",
-                        "status": "NO_REVOCATION_FOR_ACTIVE_PROFILE",
-                        "expected_skill_digest": expected_skill_digest,
-                        "revocation_snapshot_digest": expected_snapshot_digest,
-                        "accepted_revocation": accepted,
+                        "status": "ACCEPTED_HEALTHY_FIXED_RUNTIME_PROFILE"
+                        if health
+                        else "NO_REVOCATION_FOR_ACTIVE_PROFILE",
+                        **response_binding,
                         "before": observed,
                         "after": observed,
-                        "limitations": ["NO_STOP_OR_FUTURE_START_BARRIER_APPLIED"],
+                        "limitations": [
+                            "NO_STOP_OR_FUTURE_START_BARRIER_APPLIED",
+                            *(_HEALTH_LIMITATIONS if health else ()),
+                        ],
                     }
                 stop_attempted = True
                 _stop_units()
@@ -332,15 +376,7 @@ def _respond(
                 result = {
                     "authority": "LOCAL_ROOT_RESPONSE_RESULT_NOT_RUN_OR_PHASE3_CONFORMANCE",
                     "status": "TERMINATED_FIXED_RUNTIME_PROFILE",
-                    "expected_skill_digest": expected_skill_digest,
-                    "revocation_snapshot_digest": expected_snapshot_digest,
-                    "accepted_revocation": accepted
-                    if dispatch
-                    else {
-                        key: value
-                        for key, value in accepted.items()
-                        if key not in {"snapshot_digest", "revokes_active_skill"}
-                    },
+                    **response_binding,
                     "before": [
                         {"unit": unit, "process": process}
                         for unit, process in zip(before, processes, strict=True)
@@ -363,6 +399,9 @@ def _respond(
                         "FIXED_PROFILE_MASKS_NOT_GENERAL_INSTALLED_DIGEST_QUARANTINE",
                         "MASKS_PERSIST_AFTER_SNAPSHOT_EXPIRY_UNTIL_INDEPENDENT_ROOT_REMOVAL",
                     ]
+                if health:
+                    result["status"] = "SUSPENDED_UNHEALTHY_FIXED_RUNTIME_PROFILE"
+                    result["limitations"][0:1] = _HEALTH_LIMITATIONS
         return result
     except BaseException as exc:
         if stop_attempted:
@@ -673,6 +712,46 @@ def _locked_revocations(
         "minimum_revocation_generation": state["minimum_revocation_generation"],
         "policy_digest": canonical_digest(policy),
         "worker_runtime_digest": binding.runtime_digest,
+        "expires_at_unix": snapshot["expires_at_unix"],
+    }
+
+
+def _locked_health(
+    control_fd: int,
+    config: broker.RuntimeActionBrokerConfig,
+    binding: worker.RuntimeActionWorkerBinding,
+) -> dict[str, Any]:
+    def read(path: Path) -> dict[str, Any]:
+        return broker._parse_canonical_document(
+            _read_regular(path, config.expected_broker_uid, {0o400}, dir_fd=control_fd),
+            "runtime response health control",
+        )
+
+    policy = read(config.policy_path)
+    state = broker._state(read(config.state_path))
+    snapshot = read(config.health_path)
+    epoch = qualify_runtime_health_epoch(
+        policy,
+        snapshot,
+        expected_runtime_digest=binding.runtime_digest,
+        now_unix=int(time.time()),
+        minimum_mediator_health_epoch=state["minimum_mediator_health_epoch"],
+    )
+    if (
+        epoch is None
+        or epoch != state["minimum_mediator_health_epoch"]
+        or canonical_digest(policy) != binding.policy_digest
+        or policy["version"] != binding.policy_version
+    ):
+        raise RuntimeResponseError("health snapshot is stale, unaccepted, or unbound")
+    return {
+        "snapshot_digest": canonical_digest(snapshot),
+        "status": snapshot["status"],
+        "epoch": epoch,
+        "minimum_mediator_health_epoch": state["minimum_mediator_health_epoch"],
+        "policy_digest": canonical_digest(policy),
+        "worker_runtime_digest": binding.runtime_digest,
+        "sensor_digest": snapshot["sensor_digest"],
         "expires_at_unix": snapshot["expires_at_unix"],
     }
 

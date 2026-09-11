@@ -996,6 +996,10 @@ The [curator-restore backend](./scripts/openclaw_final_v3_curator_restore_case.p
 reuses the frozen two-file V3 materializer and checks fresh gateway, command,
 mount, database-row, and source identities. The exact synthetic archived-row
 denial fixture is not a native curator sweep or an independent qualification.
+One [fresh curator-restore development observation](./benchmark/evidence/phase3-openclaw-final-v3-curator-restore-development-case-v1-2026-09-11.json)
+was captured from signed `763d3c2` on September 11. Backend replay, unchanged
+parent snapshots, CAS readback, and removal of its exact container and input
+volume were verified. This is `OBSERVED`, not a final-campaign pass.
 Five development cases are wired; 26 remain unwired: nine retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.

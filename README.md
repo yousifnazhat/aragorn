@@ -978,8 +978,8 @@ an exclusive parent-volume lease, or independent host attestation. All eligibili
 flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
-now supports DET-01, core-updater replacement, workshop invalidation, and
-workshop proposal/apply. The native backends bind their exact read-only bundles,
+now supports DET-01, core-updater replacement, workshop invalidation,
+workshop proposal/apply, and curator restore. The native backends bind their exact read-only bundles,
 explicitly mapping provisional campaign paths to unchanged native read-only route-input
 paths. Workshop's descriptor still declares no materializer; its separate pinned
 native materializer is recorded without rewriting that descriptor.
@@ -992,6 +992,13 @@ was captured from signed `e26dfbe` on September 11 and replayed through the back
 It binds unchanged parent snapshots, CAS readback, and verified removal of its
 container and input volume. It remains `OBSERVED`, not independent route or final
 campaign qualification.
+The [curator-restore backend](./scripts/openclaw_final_v3_curator_restore_case.py)
+reuses the frozen two-file V3 materializer and checks fresh gateway, command,
+mount, database-row, and source identities. The exact synthetic archived-row
+denial fixture is not a native curator sweep or an independent qualification.
+Five development cases are wired; 26 remain unwired: nine retained current-V3
+routes, 12 V3 ports, and five missing adapters. These are integration counts,
+not final-campaign passes or a Phase 3 completion percentage.
 Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.

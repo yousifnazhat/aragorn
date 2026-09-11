@@ -1,4 +1,4 @@
-"""Checks shared by the two native V3 development case backends; no PASS authority."""
+"""Checks shared by native V3 development case backends; no PASS authority."""
 
 from __future__ import annotations
 
@@ -182,10 +182,125 @@ def verify_harness(
     return host
 
 
+def verify_host(host: dict[str, Any], parent: dict[str, Any], *, stem: str) -> None:
+    volume = host["route_input_volume_identity"]["name"]
+    runtime = parent["runtime_volume"]
+    _expect(
+        set(host)
+        == {
+            "capture_disposition",
+            "container_id",
+            "host_config",
+            "image_id",
+            "image_lineage",
+            "image_reference",
+            "openclaw_runtime_mount",
+            "openclaw_runtime_volume",
+            "openclaw_runtime_volume_identity",
+            "parent_image_id",
+            "platform",
+            "profile_label",
+            "route_input_mount",
+            "route_input_volume_identity",
+            "run_image_reference",
+            "schema",
+            "source_commit",
+            "source_commit_verification",
+        }
+        and set(host["source_commit_verification"])
+        == {"command", "commit_object", "exit_code", "stderr", "stdout"}
+        and host["capture_disposition"] == "EXPLICIT_OUTPUT_ONLY_NOT_RETAINED_EVIDENCE"
+        and host["image_reference"]
+        == f"aragorn-phase3-final-combined-v3-{stem}-systemd"
+        and host["platform"] == "linux"
+        and host["profile_label"] == f"phase3-final-combined-v3-{stem}"
+        and host["openclaw_runtime_volume"] == runtime
+        and _same(
+            host["host_config"],
+            {
+                "binds": [
+                    "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+                    f"{runtime}:/runtime:ro",
+                    f"{volume}:/route-input:ro",
+                ],
+                "cgroupns_mode": "host",
+                "ipc_mode": "private",
+                "network_mode": "none",
+                "privileged": True,
+                "readonly_rootfs": False,
+                "runtime": "runc",
+                "security_opt": ["label=disable"],
+                "tmpfs": {
+                    "/run": "rw,nosuid,nodev,noexec,mode=755",
+                    "/run/lock": "rw,nosuid,nodev,noexec,mode=755",
+                },
+                "userns_mode": "",
+            },
+        )
+        and _same(
+            host["route_input_volume_identity"],
+            {
+                "driver": "local",
+                "labels": host["route_input_volume_identity"]["labels"],
+                "name": volume,
+                "options": None,
+                "scope": "local",
+            },
+        )
+        and _same(
+            host["openclaw_runtime_volume_identity"],
+            {
+                "driver": "local",
+                "labels": {
+                    "io.aragorn.phase": "phase3-final",
+                    "io.aragorn.role": "installed-runtime",
+                    "io.aragorn.source-commit": old.custody.parent.v3_contract.contract._OPENCLAW[
+                        "commit"
+                    ],
+                    "io.aragorn.source-tree": old.custody.parent.v3_contract.contract._OPENCLAW[
+                        "source_tree"
+                    ],
+                },
+                "name": runtime,
+                "options": None,
+                "scope": "local",
+            },
+        ),
+        "native host configuration changed",
+    )
+    for field, name, destination in (
+        ("openclaw_runtime_mount", runtime, "/runtime"),
+        ("route_input_mount", volume, "/route-input"),
+    ):
+        _expect(
+            _same(
+                host[field],
+                {
+                    "destination": destination,
+                    "driver": "local",
+                    "mode": "ro",
+                    "rw": False,
+                    "source": name,
+                    "type": "volume",
+                },
+            ),
+            "native mount changed",
+        )
+    for side in ("parent", "child"):
+        _expect(
+            host["image_lineage"][side]["rootfs_type"] == "layers",
+            "image rootfs changed",
+        )
+
+
 def verify_parent(
-    composition: dict[str, Any], action: dict[str, Any], parent: dict[str, Any]
+    composition: dict[str, Any],
+    action: dict[str, Any],
+    parent: dict[str, Any],
+    *,
+    artifact_key: str = "final_combined_v3_workshop_proposal_apply",
 ) -> dict[str, Any]:
-    inherited = action["artifacts"]["final_combined_v3_workshop_proposal_apply"]
+    inherited = action["artifacts"][artifact_key]
     old.custody.parent.v3_contract.parent._verify_contract_artifacts(inherited)
     _expect(
         _same(composition["profile"]["before"], composition["profile"]["after"])
@@ -219,12 +334,14 @@ def verify_execution(
     invocation: dict[str, Any],
     native_argv: list[str],
     recorded_at: str,
+    prerequisite: dict[str, Any] | None = None,
 ) -> None:
     execution, stack = route["execution"], route["stack_before"]
     pid = route["gateway_pid_binding"]["pid"]
     gateway = "aragorn-agent-gateway.service"
     process = stack["processes"][gateway]
-    prerequisite = document["actions"][0]["prerequisites"]["gateway_process"]
+    if prerequisite is None:
+        prerequisite = document["actions"][0]["prerequisites"]["gateway_process"]
     _expect(
         type(pid) is int
         and pid > 0

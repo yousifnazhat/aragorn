@@ -293,6 +293,11 @@ class CampaignCaseExecutorTests(unittest.TestCase):
         )
         self.put.assert_called_once()
 
+    def test_curator_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        self._check_selected_backend(
+            "ADM-02/update/curator-restore-activation", subject.curator
+        )
+
     def test_native_recipe_and_resource_namespaces_are_case_specific(self) -> None:
         for case, (backend, stem) in subject._BACKENDS.items():
             with self.subTest(case=case):

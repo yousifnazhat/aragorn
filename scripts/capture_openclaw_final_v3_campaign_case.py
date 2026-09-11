@@ -21,6 +21,7 @@ from aragorn import admission_openclaw_final_v3_campaign as campaign
 from aragorn.cas import CAS, CASError
 from scripts import capture_openclaw_final_v3_det01_campaign as det01
 from scripts import openclaw_final_v3_core_updater_case as core
+from scripts import openclaw_final_v3_curator_restore_case as curator
 from scripts import openclaw_final_v3_workshop_invalidation_case as workshop
 from scripts import openclaw_final_v3_workshop_proposal_apply_case as proposal
 
@@ -34,6 +35,7 @@ _BACKENDS = {
     _CORE_CASE: (core, "core-updater-plugin-replacement"),
     _WORKSHOP_CASE: (workshop, "workshop-invalidation"),
     "ADM-02/update/workshop-proposal-apply": (proposal, "workshop-proposal-apply"),
+    "ADM-02/update/curator-restore-activation": (curator, "curator-restore"),
 }
 _SUPPORTED = ("DET-01", *_BACKENDS)
 _RECIPE = "scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh"

@@ -434,8 +434,18 @@ validate every denial record under a shared lock. Unknown entries remain subject
 to the original namespace rules. Both rendered producers exercise the inert
 install/update/rollback fixture and reject matching denied skill bytes before
 transaction state is created. The overlay is not standalone: it excludes the full
-source package, dependency lock, and deployment identity bindings. Mandatory
-startup checks, successor deployment pins, and accepted-revocation-to-stop/retention
+source package, dependency lock, and deployment identity bindings. The separate
+[runtime source overlay](./scripts/materialize_runtime_quarantine_services.py)
+pins three import-only overrides so the sensor, capability issuer, and action
+broker use the digest-denial lineage wrappers while preserving their existing
+lock scopes and result authority. It also requires a complete, separately bound
+package; it does not install services or enforce startup. The private
+[startup byte verifier](./src/aragorn/runtime_skill_startup.py) checks the actual
+installed tree, fixed external source, worker binding, and V3 gateway selection
+under the shared install lock and rejects a matching denial record. Its bounded
+nonblocking reads and point-in-time snapshot do not prove process consumption or
+mandatory startup enforcement. Authenticated gateway-config delivery and mandatory
+invocation, successor deployment pins, and accepted-revocation-to-stop/retention
 integration remain required. The frozen historical producers are unchanged and
 must not be deployed with denial records. No installed-digest quarantine or
 future-start qualification is claimed by these offline tests alone.
@@ -1028,7 +1038,7 @@ support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
 now supports DET-01, archive-source replacement, core-updater replacement, workshop invalidation,
 workshop proposal/apply, curator restore, config-entry activation, plugin enable,
-fresh-session reset, and missing-prompt-blob rebuild.
+fresh-session reset, missing-prompt-blob rebuild, and cron rescan.
 Shared native checks bind static process identities, unit restrictions, and
 socket permissions to the signed, hash-pinned V3 parent reference; matching
 same-run copies alone are not accepted as proof of those restrictions.
@@ -1081,7 +1091,12 @@ binds the exact source fixture, both read-only input volumes, and the isolated
 positive control. Cleanup checks cover the archive volume and its unnamed setup
 container as well as the route container and input volume. These checks cover
 protected catalog exclusion, not an absence of writes to the excluded workspace.
-Ten development cases are wired; 21 remain unwired: four retained current-V3
+The [cron-rescan backend](./scripts/openclaw_final_v3_cron_rescan_case.py)
+binds the fixed forced job, terminal poll, exact 737-byte prompt, and actual
+pre/post session-store bytes while preserving unrelated prior session data.
+SQLite metadata and WAL transitions are checked, not complete database contents;
+the observed model-not-found outcome is not successful model execution.
+Eleven development cases are wired; 20 remain unwired: three retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
 Retained status is not fresh execution readiness: the plugin-force-reinstall

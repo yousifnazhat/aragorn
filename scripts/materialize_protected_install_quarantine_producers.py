@@ -147,6 +147,41 @@ def _verified_inputs() -> tuple[dict[str, bytes], list[dict[str, Any]]]:
     return rendered, dependencies
 
 
+def _write_overlay(
+    output: Path, rendered: dict[str, bytes], directory_parts: tuple[str, ...]
+) -> None:
+    """Publish already-pinned sources beneath one fixed, caller-owned leaf."""
+    if not isinstance(output, Path) or output.exists() or output.is_symlink():
+        raise ProducerOverlayError("output must be a new Path")
+    output.mkdir(mode=0o755)
+    directories = [output]
+    parent = output
+    for part in directory_parts:
+        parent = parent / part
+        parent.mkdir(mode=0o755)
+        directories.append(parent)
+    for name, raw in rendered.items():
+        fd = os.open(
+            output / name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+            0o444,
+        )
+        try:
+            written = 0
+            while written < len(raw):
+                count = os.write(fd, raw[written:])
+                if count <= 0:
+                    raise ProducerOverlayError("overlay write made no progress")
+                written += count
+            os.fchmod(fd, 0o444)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        _read_pinned(name, len(raw), _digest(raw), root=output)
+    for directory in reversed(directories):
+        directory.chmod(0o555, follow_symlinks=False)
+
+
 def materialize_protected_install_quarantine_producers(output: Path) -> dict[str, Any]:
     """Write only two producer sources into a new, read-only relative-path tree.
 
@@ -161,33 +196,12 @@ def materialize_protected_install_quarantine_producers(output: Path) -> dict[str
         if not isinstance(output, Path) or output.exists() or output.is_symlink():
             raise ProducerOverlayError("output must be a new Path")
         rendered, dependencies = _verified_inputs()
-        output.mkdir(mode=0o755)
-        directories = [output]
-        parent = output
-        for part in ("benchmark", "admission", "openclaw-v2026.7.1"):
-            parent = parent / part
-            parent.mkdir(mode=0o755)
-            directories.append(parent)
+        _write_overlay(
+            output, rendered, ("benchmark", "admission", "openclaw-v2026.7.1")
+        )
         files = []
         for name, raw in rendered.items():
-            fd = os.open(
-                output / name,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-                0o444,
-            )
-            try:
-                written = 0
-                while written < len(raw):
-                    count = os.write(fd, raw[written:])
-                    if count <= 0:
-                        raise ProducerOverlayError("overlay write made no progress")
-                    written += count
-                os.fchmod(fd, 0o444)
-                os.fsync(fd)
-            finally:
-                os.close(fd)
             source_size, source_digest, _, output_digest = _PRODUCERS[name]
-            _read_pinned(name, len(raw), output_digest, root=output)
             files.append(
                 {
                     "name": name,
@@ -197,8 +211,6 @@ def materialize_protected_install_quarantine_producers(output: Path) -> dict[str
                     "source_digest": source_digest,
                 }
             )
-        for directory in reversed(directories):
-            directory.chmod(0o555, follow_symlinks=False)
         return {
             "schema": _SCHEMA,
             "authority": _AUTHORITY,

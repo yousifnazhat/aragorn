@@ -259,6 +259,9 @@ class CampaignCaseExecutorTests(unittest.TestCase):
     def test_archive_selects_only_its_backend_and_cleanup_namespace(self) -> None:
         self._check_selected_backend(subject._ARCHIVE_CASE, subject.archive)
 
+    def test_cron_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        self._check_selected_backend("ADM-02/reload/cron-rescan", subject.cron)
+
     def test_proposal_selects_only_its_backend_and_cleanup_namespace(self) -> None:
         self._check_selected_backend(
             "ADM-02/update/workshop-proposal-apply", subject.proposal

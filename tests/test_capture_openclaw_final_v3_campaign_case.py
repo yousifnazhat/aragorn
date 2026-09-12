@@ -334,6 +334,13 @@ class CampaignCaseExecutorTests(unittest.TestCase):
             "ADM-02/reload/fresh-session-reset", subject.fresh_session
         )
 
+    def test_missing_prompt_selects_only_its_backend_and_cleanup_namespace(
+        self,
+    ) -> None:
+        self._check_selected_backend(
+            "ADM-02/reload/missing-prompt-blob-rebuild", subject.missing_prompt
+        )
+
     def test_det01_delegates_only_the_exact_contract_request_and_cas(self) -> None:
         expected = campaign.build_openclaw_final_v3_subfixture_request(
             self.contract, "DET-01"

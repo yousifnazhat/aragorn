@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from functools import cache
 from typing import Any
 
 from aragorn import admission_openclaw_final_v3_core_updater_qualification as old
@@ -11,6 +13,8 @@ from aragorn import admission_openclaw_final_v3_det01_qualification as det
 from aragorn import admission_protected_final_combined_v3_plugin_enable as records
 from aragorn.admission_evidence import AdmissionEvidenceError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+
+_PARENT_REFERENCE = old.custody.parent.v3_contract.parent
 
 
 def _expect(value: bool, message: str) -> None:
@@ -482,14 +486,11 @@ def verify_execution(
         and prerequisite["start_time_ticks"] == process["start_time_ticks"],
         "actual native argv/identity changed",
     )
-    legacy = old.custody.parent.contract.base.legacy
-    legacy._verify_stack_boundary(
+    _verify_static_stack(
         stack,
-        trusted=action["boundaries"],
         container_id=host["container_id"],
         snapshot_before=execution["started_at"],
     )
-    legacy._verify_gateway_listener(stack["gateway_listener"], stack["processes"])
     _expect(
         det._timestamp(invocation["started_at"])
         < det._timestamp(execution["started_at"])
@@ -499,6 +500,94 @@ def verify_execution(
         < det._timestamp(invocation["completed_at"]),
         "capture invocation chronology changed",
     )
+
+
+@cache
+def _static_reference_bytes() -> bytes:
+    """Cache immutable bytes from the signed, hash-pinned V3 parent observation.
+
+    The frozen loader verifies its source/retention commits and exact Git blob
+    (SHA-256 800684a30faca6c42d4a9229949b90e56076e9eef87d8a075321931888e42962).
+    This is an independent static contract, never the observation under review.
+    """
+    evidence = json.loads(_PARENT_REFERENCE._verify_retained_evidence())
+    return canonical_json(evidence["composition"]["action"]["boundaries"])
+
+
+def _verify_static_stack(
+    stack: dict[str, Any], *, container_id: str, snapshot_before: str
+) -> None:
+    reference = json.loads(_static_reference_bytes())
+    services, socket_paths = set(reference["units"]), set(reference["sockets"])
+    _expect(
+        set(stack)
+        == {
+            "enablement",
+            "gateway_listener",
+            "pids",
+            "processes",
+            "service_state",
+            "sockets",
+            "units",
+        }
+        and set(stack["pids"])
+        == set(stack["processes"])
+        == set(stack["units"])
+        == services
+        and _same(stack["enablement"], reference["enablement"])
+        and set(stack["sockets"]) == socket_paths,
+        "independent static stack inventory changed",
+    )
+    legacy = old.custody.parent.contract.base.legacy
+    legacy._verify_process_projection(stack["processes"], reference["processes"])
+    legacy._verify_unit_projection(
+        stack["units"], reference["units"], stack["processes"], container_id
+    )
+    identities: set[tuple[int, int]] = set()
+    for path in socket_paths:
+        record, expected = stack["sockets"][path], reference["sockets"][path]
+        metadata = record["metadata"]
+        _expect(
+            set(record) == set(expected)
+            and set(metadata) == set(expected["metadata"])
+            and all(
+                type(metadata[key]) is int and metadata[key] > 0
+                for key in ("device", "inode")
+            )
+            and _same(
+                {
+                    **record,
+                    "metadata": {
+                        key: value
+                        for key, value in metadata.items()
+                        if key not in {"device", "inode"}
+                    },
+                },
+                {
+                    **expected,
+                    "metadata": {
+                        key: value
+                        for key, value in expected["metadata"].items()
+                        if key not in {"device", "inode"}
+                    },
+                },
+            ),
+            "independent socket custody changed",
+        )
+        identity = (metadata["device"], metadata["inode"])
+        _expect(identity not in identities, "socket identity reused")
+        identities.add(identity)
+    legacy._verify_service_state(
+        stack["service_state"],
+        trusted=reference["service_state"],
+        processes=stack["processes"],
+        units=stack["units"],
+        enablement=stack["enablement"],
+        sockets=stack["sockets"],
+        container_id=container_id,
+        snapshot_before=snapshot_before,
+    )
+    legacy._verify_gateway_listener(stack["gateway_listener"], stack["processes"])
 
 
 def verify_native_artifacts(

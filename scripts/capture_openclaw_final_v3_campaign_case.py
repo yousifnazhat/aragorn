@@ -24,6 +24,7 @@ from scripts import openclaw_final_v3_config_entry_case as config_entry
 from scripts import openclaw_final_v3_core_updater_case as core
 from scripts import openclaw_final_v3_curator_restore_case as curator
 from scripts import openclaw_final_v3_fresh_session_reset_case as fresh_session
+from scripts import openclaw_final_v3_missing_prompt_blob_case as missing_prompt
 from scripts import openclaw_final_v3_plugin_enable_case as plugin_enable
 from scripts import openclaw_final_v3_workshop_invalidation_case as workshop
 from scripts import openclaw_final_v3_workshop_proposal_apply_case as proposal
@@ -42,6 +43,7 @@ _BACKENDS = {
     "ADM-02/update/config-entry-activation": (config_entry, "config-entry-activation"),
     "ADM-02/update/plugin-enable-activation": (plugin_enable, "plugin-enable"),
     "ADM-02/reload/fresh-session-reset": (fresh_session, "fresh-session-reset"),
+    "ADM-02/reload/missing-prompt-blob-rebuild": (missing_prompt, "prompt-rebuild"),
 }
 _SUPPORTED = ("DET-01", *_BACKENDS)
 _RECIPE = "scripts/capture_runtime_action_worker_final_combined_v3_core_updater_plugin_replacement_systemd.sh"

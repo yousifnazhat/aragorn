@@ -417,6 +417,22 @@ the owned container is removed and frozen-parent bytes remain unchanged. This
 is a local dispatch integration observation, not a latency benchmark, unattended
 delivery guarantee, independent qualification or Phase 3 completion.
 
+The additive [digest denial state](./src/aragorn/protected_skill_quarantine.py)
+is a quarantine prerequisite, not a complete response. Its private primitive
+retains the first immutable per-digest record under the install-root lock; there
+is no unquarantine operation or publishing CLI. The
+[successor installer](./src/aragorn/protected_install_v2.py) and
+[live lineage wrapper](./src/aragorn/runtime_active_skill_lineage_v2.py) enforce it
+under the existing exclusive/shared locks while
+preserving frozen modules and their pins. They deny the same `SKILL.md` bytes
+even under a new manifest/context and preserve predecessor evidence for a clean
+different-digest update. This is currently offline primitive coverage: validated
+producer namespace handling, mandatory startup checks, successor deployment
+pins, and accepted-revocation-to-stop/retention integration remain required.
+The historical producer must not be used with these records until that namespace
+integration exists. No installed-digest quarantine or future-start qualification
+is claimed by the private state and wrapper tests alone.
+
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
 transaction record under its exclusive root lock after verifying the active
@@ -1005,7 +1021,10 @@ support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
 now supports DET-01, core-updater replacement, workshop invalidation,
 workshop proposal/apply, curator restore, config-entry activation, plugin enable,
-and fresh-session reset.
+fresh-session reset, and missing-prompt-blob rebuild.
+Shared native checks bind static process identities, unit restrictions, and
+socket permissions to the signed, hash-pinned V3 parent reference; matching
+same-run copies alone are not accepted as proof of those restrictions.
 The native backends bind their exact read-only bundles,
 explicitly mapping provisional campaign paths to unchanged native read-only route-input
 paths. Workshop's descriptor still declares no materializer; its separate pinned
@@ -1045,7 +1064,12 @@ checks session rotation, prompt clearing, and rebuild with exact native UTF-8 ra
 evidence, fresh process/session identities, and protected-state joins. The retained
 provider-error outcome does not establish successful model or provider execution.
 Offline retained and synthetic-fresh checks are not a new live observation.
-Eight development cases are wired; 23 remain unwired: six retained current-V3
+The [missing-prompt backend](./scripts/openclaw_final_v3_missing_prompt_blob_case.py)
+reuses the frozen two-file materializer and verifies deletion and exact rebuilding
+of the prompt blob while preserving the session and protected skill contents.
+It retains the native UTF-8 raw evidence, command chronology, and input-volume
+binding; provider-error output is not a successful model execution claim.
+Nine development cases are wired; 22 remain unwired: five retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
 Unsupported cases fail before execution. Each call checks the signed

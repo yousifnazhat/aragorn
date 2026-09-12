@@ -426,12 +426,19 @@ is no unquarantine operation or publishing CLI. The
 under the existing exclusive/shared locks while
 preserving frozen modules and their pins. They deny the same `SKILL.md` bytes
 even under a new manifest/context and preserve predecessor evidence for a clean
-different-digest update. This is currently offline primitive coverage: validated
-producer namespace handling, mandatory startup checks, successor deployment
-pins, and accepted-revocation-to-stop/retention integration remain required.
-The historical producer must not be used with these records until that namespace
-integration exists. No installed-digest quarantine or future-start qualification
-is claimed by the private state and wrapper tests alone.
+different-digest update. The
+[producer source overlay](./scripts/materialize_protected_install_quarantine_producers.py)
+renders both frozen producers with exact input/output pins and uses a
+[strict namespace adapter](./src/aragorn/protected_install_namespace_v2.py) to
+validate every denial record under a shared lock. Unknown entries remain subject
+to the original namespace rules. Both rendered producers exercise the inert
+install/update/rollback fixture and reject matching denied skill bytes before
+transaction state is created. The overlay is not standalone: it excludes the full
+source package, dependency lock, and deployment identity bindings. Mandatory
+startup checks, successor deployment pins, and accepted-revocation-to-stop/retention
+integration remain required. The frozen historical producers are unchanged and
+must not be deployed with denial records. No installed-digest quarantine or
+future-start qualification is claimed by these offline tests alone.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
@@ -1019,7 +1026,7 @@ an exclusive parent-volume lease, or independent host attestation. All eligibili
 flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
-now supports DET-01, core-updater replacement, workshop invalidation,
+now supports DET-01, archive-source replacement, core-updater replacement, workshop invalidation,
 workshop proposal/apply, curator restore, config-entry activation, plugin enable,
 fresh-session reset, and missing-prompt-blob rebuild.
 Shared native checks bind static process identities, unit restrictions, and
@@ -1069,9 +1076,16 @@ reuses the frozen two-file materializer and verifies deletion and exact rebuildi
 of the prompt blob while preserving the session and protected skill contents.
 It retains the native UTF-8 raw evidence, command chronology, and input-volume
 binding; provider-error output is not a successful model execution claim.
-Nine development cases are wired; 22 remain unwired: five retained current-V3
+The [archive-replacement backend](./scripts/openclaw_final_v3_archive_replacement_case.py)
+binds the exact source fixture, both read-only input volumes, and the isolated
+positive control. Cleanup checks cover the archive volume and its unnamed setup
+container as well as the route container and input volume. These checks cover
+protected catalog exclusion, not an absence of writes to the excluded workspace.
+Ten development cases are wired; 21 remain unwired: four retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
+Retained status is not fresh execution readiness: the plugin-force-reinstall
+recipe builds the V3 parent from V2 and still needs a current-parent-derived case adapter.
 Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.

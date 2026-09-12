@@ -768,3 +768,75 @@ def verify_native_composition(
     )
     verifier._verify_sources(evidence["source_artifacts"])
     return artifact
+
+
+def verify_native_lean_artifacts(artifact: dict[str, Any]) -> None:
+    """Verify the exact common records present in older native V3 artifacts."""
+    activation = artifact["runtime_lock"]["document"]["deployment_bindings"][
+        "activation_contract"
+    ]
+    # These actual records predate installed_runtime/preflight_source wrappers.
+    # The generated activator is pinned by the verified lock, not a source blob.
+    for name, expected, path, size, mode in (
+        (
+            "activator",
+            activation["activator"],
+            activation["activator"]["path"],
+            30504,
+            "0755",
+        ),
+        (
+            "activator_source",
+            activation["activator"],
+            "/src/packaging/activate-runtime-action-worker-host-v3.sh",
+            30504,
+            "0555",
+        ),
+        (
+            "preflight",
+            activation["preflight"],
+            activation["preflight"]["path"],
+            37878,
+            "0644",
+        ),
+    ):
+        records._verify_file_record(
+            artifact[name],
+            path=path,
+            bytes_=size,
+            digest=expected["digest"],
+            mode=mode,
+            label=name,
+        )
+    plugin = {
+        "index.js": (
+            23860,
+            "sha256:71dfcdc6d2f1d51472230e9cda240c25d0b316fee39434e6761bb2e7b411467b",
+        ),
+        "openclaw.plugin.json": (
+            723,
+            "sha256:d90c95c23da3de4a32b8088a69d927bf10a45ed4e116e3ccece491ee3c766036",
+        ),
+        "package.json": (
+            134,
+            "sha256:0097f2e532b1a5d99e3cfc4990d4bbf83a01c10ee11d567b139bd9144a859ad2",
+        ),
+    }
+    _expect(set(artifact["plugin"]) == set(plugin), "plugin inventory changed")
+    for name, (size, digest) in plugin.items():
+        records._verify_file_record(
+            artifact["plugin"][name],
+            path="/usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/" + name,
+            bytes_=size,
+            digest=digest,
+            mode="0644",
+            label=name,
+        )
+    records._verify_file_record(
+        artifact["skill"]["file"],
+        path="/opt/aragorn/runtime-profile/template-skill/SKILL.md",
+        bytes_=140,
+        digest=old.custody.parent.v3_contract.config._SOURCES["skill"]["digest"],
+        mode="0444",
+        label="skill",
+    )

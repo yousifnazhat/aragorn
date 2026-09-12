@@ -20,6 +20,7 @@ sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
 from aragorn import admission_openclaw_final_v3_campaign as campaign
 from aragorn.cas import CAS, CASError
 from scripts import capture_openclaw_final_v3_det01_campaign as det01
+from scripts import openclaw_final_v3_archive_replacement_case as archive
 from scripts import openclaw_final_v3_config_entry_case as config_entry
 from scripts import openclaw_final_v3_core_updater_case as core
 from scripts import openclaw_final_v3_curator_restore_case as curator
@@ -35,7 +36,9 @@ _digest = campaign._digest
 _DOCKER = det01.acquisition._DOCKER
 _CORE_CASE = "ADM-02/update/core-updater-plugin-replacement"
 _WORKSHOP_CASE = "ADM-02/reload/workshop-invalidation"
+_ARCHIVE_CASE = "ADM-02/update/archive-source-force-replacement"
 _BACKENDS = {
+    _ARCHIVE_CASE: (archive, "archive-source-force-replacement"),
     _CORE_CASE: (core, "core-updater-plugin-replacement"),
     _WORKSHOP_CASE: (workshop, "workshop-invalidation"),
     "ADM-02/update/workshop-proposal-apply": (proposal, "workshop-proposal-apply"),
@@ -143,6 +146,16 @@ def _namespace_state(*, case_id: str = _CORE_CASE) -> dict[str, Any]:
             "label=dev.aragorn.role=" + role,
         ],
     }
+    if case_id == _ARCHIVE_CASE:
+        commands["archive_source_volumes"] = [
+            *_DOCKER,
+            "volume",
+            "ls",
+            "--format",
+            "{{.Name}}",
+            "--filter",
+            "label=dev.aragorn.role=final-combined-v3-" + stem + "-archive-source",
+        ]
     state = {
         key: det01.acquisition._run(argv).decode().splitlines()
         for key, argv in commands.items()
@@ -216,12 +229,15 @@ def _verify_cleanup(
     prefix = "aragorn-phase3-final-combined-v3-" + stem
     container = harness["container_id"]
     volume = harness["route_input_volume_identity"]["name"]
+    volume_match = (
+        re.fullmatch(re.escape(prefix) + r"-route-input-([1-9][0-9]*)", volume)
+        if type(volume) is str
+        else None
+    )
     _expect(
         type(container) is str
         and re.fullmatch(r"[0-9a-f]{64}", container) is not None
-        and type(volume) is str
-        and re.fullmatch(re.escape(prefix) + r"-route-input-[1-9][0-9]*", volume)
-        is not None,
+        and volume_match is not None,
         "capture cleanup identity changed",
     )
     commands = {
@@ -236,6 +252,31 @@ def _verify_cleanup(
         "volumes": [*_DOCKER, "volume", "ls", "--format", "{{.Name}}"],
         "daemon": [*_DOCKER, "info", "--format", "{{.ServerVersion}}"],
     }
+    extra = {}
+    if case_id == _ARCHIVE_CASE:
+        archive_volume = harness["archive_source_volume_identity"]["name"]
+        commit = harness["source_commit"]
+        _expect(
+            archive_volume == prefix + "-archive-source-" + volume_match[1]
+            and type(commit) is str
+            and re.fullmatch(r"[0-9a-f]{40}", commit) is not None,
+            "archive cleanup cohort changed",
+        )
+        owner = commit + ":" + volume_match[1]
+        commands["capture_owner_containers"] = [
+            *_DOCKER,
+            "ps",
+            "-aq",
+            "--no-trunc",
+            "--filter",
+            "label=dev.aragorn.capture-owner=" + owner,
+        ]
+        extra = {
+            "archive_source_volume_name": archive_volume,
+            "archive_source_volume_absent": True,
+            "capture_owner": owner,
+            "capture_owner_containers_absent": True,
+        }
     outputs = {
         key: det01.acquisition._run(argv).decode() for key, argv in commands.items()
     }
@@ -245,6 +286,12 @@ def _verify_cleanup(
         and bool(outputs["daemon"].strip()),
         "capture resources remain or daemon unavailable",
     )
+    if extra:
+        _expect(
+            extra["archive_source_volume_name"] not in outputs["volumes"].splitlines()
+            and not outputs["capture_owner_containers"].strip(),
+            "archive source volume or population container remains",
+        )
     return {
         "authority": "LOCAL_DOCKER_OBSERVATION_NOT_EXTERNAL_ATTESTATION",
         "checked_at": det01._now(),
@@ -253,6 +300,7 @@ def _verify_cleanup(
         "volume_name": volume,
         "container_absent": True,
         "volume_absent": True,
+        **extra,
         "commands": [
             {"argv": commands[key], "stdout": outputs[key], "exit_code": 0}
             for key in commands

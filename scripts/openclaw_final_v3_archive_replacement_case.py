@@ -1,20 +1,21 @@
-"""Bind a fresh missing-prompt-blob rebuild observation; never qualify it."""
+"""Bind a fresh archive-source replacement observation; never qualify it."""
 
 from __future__ import annotations
 
 import binascii
 import json
+import re
 import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from typing import Any
 
-from aragorn import admission_openclaw_final_v3_campaign as campaign
 from aragorn import (
-    admission_openclaw_final_v3_missing_prompt_blob_subfixture as semantic,
+    admission_openclaw_final_v3_archive_replacement_subfixture as semantic,
 )
-from aragorn import admission_protected_final_combined_v3_prompt_rebuild as old
+from aragorn import admission_openclaw_final_v3_campaign as campaign
+from aragorn import admission_protected_final_combined_v3_archive_replacement as old
 from aragorn.admission_evidence import AdmissionEvidenceError
 from aragorn.admission_openclaw_final_v3_campaign_dispatch import (
     dispatch_openclaw_final_v3_campaign_case,
@@ -25,28 +26,47 @@ from scripts import openclaw_final_v3_case_checks as checks
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CASE = old._ROUTE
-_STEM = "prompt-rebuild"
+_STEM = "archive-source-force-replacement"
 _RECIPE = old._COLLECTOR_ARTIFACTS["capture_recipe"][2]
 _MATERIALIZER = old._SOURCE_ARTIFACTS["rebound_materializer"][2]
-_PROBE = "protected-prompt-rebuild-probe.mjs"
-_PROVISIONAL_ROOT = "/campaign/cases/23-adm-02-reload-missing-prompt-blob-rebuild"
-_NATIVE_ROOT = "/route-input/missing-prompt-blob-rebuild"
+_PROBE = "protected-archive-replacement-probe.mjs"
+_PROVISIONAL_ROOT = "/campaign/cases/08-adm-02-update-archive-source-force-replacement"
+_NATIVE_ROOT = "/route-input/archive-source-force-replacement"
+_ARCHIVE_FIXTURE = {
+    "path": "benchmark/fixtures/phase3-protected-archive-replacement/SKILL.md",
+    "bytes": 144,
+    "digest": "sha256:d30e0a2e568941e37c5f9427b920917a9edf694beadb41f8a5469e820c0dfdf1",
+}
+_ARTIFACT_KEYS = {
+    "activator",
+    "activator_source",
+    "archive_source_force_replacement_probe",
+    "collector",
+    "config",
+    "plugin",
+    "policy_command",
+    "preflight",
+    "profile",
+    "runtime_lock",
+    "skill",
+}
 SOURCE_PATHS = tuple(
     sorted(
         {item[2] for item in old._SOURCE_ARTIFACTS.values()}
         | {item[2] for item in old._COLLECTOR_ARTIFACTS.values()}
+        | {_ARCHIVE_FIXTURE["path"]}
     )
 )
-_SCHEMA = "aragorn/runtime-action-worker-final-combined-v3-prompt-rebuild-systemd-observation/v1"
-_AUTHORITY = "BOUND_FINAL_COMBINED_V3_RAW_PROMPT_REBUILD_OBSERVATION_ONLY_NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
+_SCHEMA = "aragorn/runtime-action-worker-final-combined-v3-archive-source-force-replacement-systemd-observation/v1"
+_AUTHORITY = "BOUND_FINAL_COMBINED_V3_RAW_ARCHIVE_SOURCE_FORCE_REPLACEMENT_OBSERVATION_ONLY_NOT_ADMISSION_RUN_PHASE3_EDR_INSTALLER_RELEASE_AUTHORITY"
 _ADDED_LAYERS = [
-    "sha256:7e0c18302aa83722169c5e2fe4b240f87e605e343fc7b602a23d0bab4995e066",
-    "sha256:995468d83e19b73f5c2f582c358ac965d07677241c6c0097d7dce66f7116418f",
-    "sha256:cc0c1b9be1ee7689d85b50d9aacd8dcacdfb62c38404e1bb657b64b2e59b9556",
-    "sha256:9f5df485255b9f10dd86b97fcbea97aba47085e9f0a26e5160f8548eaa27bdbf",
+    "sha256:6908de5a0d83d30a1712f15bbbebc0c8f2304f1ac200d7a135ef99b8da763235",
+    "sha256:b8025fae5ac05ed3fb3e9bc0ab1288706e79fa8fc82a44468e271b0a1c7c90a4",
+    "sha256:f80003bcb42d3cf0062e31f2d33aaadf3a58023da43d3fe91ee0c27b053364cf",
+    "sha256:3b378e0db40625506fcc258ed8181b7429ed732a5e95be95125a4537af46dfd0",
 ]
 _OUTER_DECISION = {
-    "status": "FINAL_COMBINED_V3_PROMPT_REBUILD_OBSERVED_PROFILE_NOT_TESTED",
+    "status": "FINAL_COMBINED_V3_ARCHIVE_SOURCE_FORCE_REPLACEMENT_OBSERVED_PROFILE_NOT_TESTED",
     "route_observation_status": "OBSERVED",
     "route_pass_count": 0,
     "route_fail_count": 0,
@@ -79,13 +99,13 @@ def _native_json(document: dict[str, Any]) -> bytes:
 
 def _expect(condition: bool, message: str) -> None:
     if not condition:
-        raise AdmissionEvidenceError("missing-prompt-blob campaign " + message)
+        raise AdmissionEvidenceError("archive-replacement campaign " + message)
 
 
 def prepare_case(
     contract: dict[str, Any], request: dict[str, Any], *, directory: Path
 ) -> dict[str, Any]:
-    """Reuse the frozen two-file materializer with an explicit native path mapping."""
+    """Reuse the frozen single-file materializer with an explicit native path mapping."""
     try:
         contract = campaign.validate_openclaw_final_v3_campaign_contract(contract)
         expected = campaign.build_openclaw_final_v3_subfixture_request(contract, _CASE)
@@ -99,6 +119,15 @@ def prepare_case(
             "staging directory changed",
         )
         sources = checks.historical_sources(old._SOURCE, SOURCE_PATHS)
+        fixture = next(
+            item for item in sources if item["path"] == _ARCHIVE_FIXTURE["path"]
+        )
+        _expect(
+            checks._same(
+                {key: fixture[key] for key in _ARCHIVE_FIXTURE}, _ARCHIVE_FIXTURE
+            ),
+            "signed archive fixture changed",
+        )
         descriptor = dispatch_openclaw_final_v3_campaign_case(_CASE)["descriptor"]
         files = [dict(item) for item in old._PROBE_BUNDLE]
         mapping = [
@@ -145,13 +174,14 @@ def prepare_case(
                 bundle / item["name"], item["bytes"], item["digest"], mode=0o444
             )
         return {
-            "schema": "aragorn/openclaw-final-v3-missing-prompt-blob-case-preparation/v1",
+            "schema": "aragorn/openclaw-final-v3-archive-replacement-case-preparation/v1",
             "authority": "LOCAL_REQUEST_AND_BUNDLE_PREPARATION_NOT_EXECUTION_OR_QUALIFICATION_AUTHORITY",
             "contract": contract,
             "request": expected,
             "descriptor": descriptor,
             "source_files": sources,
             "bundle_files": files,
+            "archive_source_fixture": dict(_ARCHIVE_FIXTURE),
             "native_materializer": {
                 "authority": "PINNED_NATIVE_RECIPE_TRANSFORMATION_NOT_DECLARED_DISPATCH_MATERIALIZER",
                 "source": next(
@@ -172,7 +202,7 @@ def prepare_case(
                 "files": mapping,
             },
             "decision": checks._decision(
-                "MISSING_PROMPT_BLOB_REQUEST_AND_LOCAL_BUNDLE_PREPARED_NOT_EXECUTED"
+                "ARCHIVE_REPLACEMENT_REQUEST_AND_LOCAL_BUNDLE_PREPARED_NOT_EXECUTED"
             ),
         }
     except AdmissionEvidenceError:
@@ -186,7 +216,7 @@ def prepare_case(
         RuntimeError,
     ) as exc:
         raise AdmissionEvidenceError(
-            f"invalid missing-prompt-blob preparation: {exc}"
+            f"invalid archive-replacement preparation: {exc}"
         ) from exc
 
 
@@ -197,12 +227,113 @@ def _verify_composition(evidence: dict[str, Any], parent: dict[str, Any]) -> Non
         verifier=_COMMON,
         schema=_SCHEMA,
         authority=_AUTHORITY,
-        artifact_key="final_combined_v3_prompt_rebuild",
+        artifact_key="final_combined_v3_archive_source_force_replacement",
     )
-    _expect(set(artifact) == set(old._ARTIFACT_DIGESTS), "artifact inventory changed")
+    _expect(set(artifact) == set(_ARTIFACT_KEYS), "artifact inventory changed")
     old._verify_collector_artifacts(artifact["collector"])
-    old._verify_probe_artifact(artifact["prompt_rebuild_probe"])
+    old._verify_probe_artifact(artifact["archive_source_force_replacement_probe"])
     checks.verify_native_lean_artifacts(artifact)
+
+
+def _verify_archive_host(
+    host: dict[str, Any], parent: dict[str, Any], *, source: dict[str, Any]
+) -> None:
+    """Check all added archive fields before applying the unchanged base host check."""
+    volume = host["archive_source_volume_identity"]
+    match = re.fullmatch(
+        re.escape("aragorn-phase3-final-combined-v3-" + _STEM)
+        + r"-archive-source-([1-9][0-9]*)",
+        volume["name"],
+    )
+    _expect(match is not None, "archive source volume name changed")
+    prefix = "aragorn-phase3-final-combined-v3-" + _STEM
+    _expect(
+        host["route_input_volume_identity"]["name"]
+        == prefix + "-route-input-" + match[1]
+        and checks._same(
+            volume,
+            {
+                "driver": "local",
+                "labels": {
+                    "dev.aragorn.capture-owner": source["commit"] + ":" + match[1],
+                    "dev.aragorn.role": "final-combined-v3-"
+                    + _STEM
+                    + "-archive-source",
+                    "dev.aragorn.route": _CASE,
+                    "dev.aragorn.source-commit": source["commit"],
+                },
+                "name": volume["name"],
+                "options": None,
+                "scope": "local",
+            },
+        )
+        and checks._same(
+            host["archive_source_mount"],
+            {
+                "destination": "/sources",
+                "driver": "local",
+                "mode": "ro",
+                "rw": False,
+                "source": volume["name"],
+                "type": "volume",
+            },
+        ),
+        "archive source owner or mount changed",
+    )
+    fixture = host["archive_source_fixture"]
+    _expect(
+        set(fixture) == {"base64", *_ARCHIVE_FIXTURE}
+        and checks._same(
+            {key: fixture[key] for key in _ARCHIVE_FIXTURE}, _ARCHIVE_FIXTURE
+        )
+        and checks._record_bytes(fixture)
+        == checks.bounded._read_source(
+            _ARCHIVE_FIXTURE["path"],
+            _ARCHIVE_FIXTURE["bytes"],
+            _ARCHIVE_FIXTURE["digest"],
+        ),
+        "archive source fixture bytes changed",
+    )
+    base_binds = [
+        "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+        parent["runtime_volume"] + ":/runtime:ro",
+        host["route_input_volume_identity"]["name"] + ":/route-input:ro",
+    ]
+    _expect(
+        host["host_config"]["binds"]
+        == sorted([*base_binds, volume["name"] + ":/sources:ro"]),
+        "archive source host bind inventory changed",
+    )
+    # Raw harness custody above binds the full host; only fully checked additions
+    # are projected out for the fixed three-mount helper. Evidence stays untouched.
+    base_host = {
+        key: value
+        for key, value in host.items()
+        if key
+        not in {
+            "archive_source_fixture",
+            "archive_source_mount",
+            "archive_source_volume_identity",
+        }
+    }
+    base_host["host_config"] = {**host["host_config"], "binds": base_binds}
+    checks.verify_host(base_host, parent, stem=_STEM)
+
+
+def _verify_public_mounts(document: dict[str, Any], host: dict[str, Any]) -> None:
+    for boundary in (
+        document["protected_boundary"],
+        document["action"]["observations"]["boundary_after"],
+    ):
+        for name, field in (
+            ("probe", "route_input_volume_identity"),
+            ("source", "archive_source_volume_identity"),
+        ):
+            _expect(
+                boundary["inputs"][name]["records"][0]["root"]
+                == "/docker/volumes/" + host[field]["name"] + "/_data",
+                "public source/probe mount join changed",
+            )
 
 
 def verify_capture(
@@ -215,7 +346,7 @@ def verify_capture(
     """Verify native bytes and actual joins; caller owns live cleanup and retention."""
     try:
         with TemporaryDirectory(
-            prefix="aragorn-missing-prompt-blob-case-recheck-"
+            prefix="aragorn-archive-replacement-case-recheck-"
         ) as temporary:
             expected = prepare_case(
                 prepared["contract"],
@@ -225,7 +356,7 @@ def verify_capture(
         _expect(checks._same(prepared, expected), "prepared binding changed")
         checks.verify_source(prepared, source)
         evidence = checks.det.semantic._load_canonical(
-            raw, "missing-prompt-blob observation"
+            raw, "archive-replacement observation"
         )
         _expect(
             set(evidence)
@@ -245,7 +376,7 @@ def verify_capture(
             "observation inventory changed",
         )
         checks._numeric_types(evidence)
-        old.semantics._verify_scalar_types(evidence)
+        old.semantics.base._verify_scalar_types(evidence)
         old.current._verify_no_positive_eligibility(evidence)
         _expect(
             evidence["schema"] == _SCHEMA
@@ -265,7 +396,7 @@ def verify_capture(
             stem=_STEM,
             image_id=old._IMAGE,
         )
-        checks.verify_host(host, parent, stem=_STEM)
+        _verify_archive_host(host, parent, source=source)
         _expect(
             host["image_lineage"]["added_layers"] == _ADDED_LAYERS,
             "child image layers changed",
@@ -303,7 +434,7 @@ def verify_capture(
             and checks._same(route["bundle"], prepared["bundle_files"]),
             "route raw/document/bundle join changed",
         )
-        semantics = semantic.verify_openclaw_final_v3_missing_prompt_blob_semantic_compatibility(
+        semantics = semantic.verify_openclaw_final_v3_archive_replacement_semantic_compatibility(
             document
         )
         execution, binding, stack = (
@@ -350,10 +481,6 @@ def verify_capture(
             )
             and stack["processes"][gateway]["groups"] == [992]
             and stack["processes"][gateway]["cmdline"] == ["openclaw-gateway"]
-            and native_action["prerequisites"]["boundary_before"]["probe"]["records"][
-                0
-            ]["root"]
-            == f"/docker/volumes/{host['route_input_volume_identity']['name']}/_data"
             and type(invocation["exit_code"]) is int
             and invocation["exit_code"] == 0
             and len(invocation["argv"]) == 3
@@ -361,6 +488,7 @@ def verify_capture(
             and Path(invocation["argv"][2]).is_absolute(),
             "native execution binding changed",
         )
+        _verify_public_mounts(document, host)
         checks.verify_execution(
             route,
             document,
@@ -369,7 +497,7 @@ def verify_capture(
             invocation=invocation,
             native_argv=prepared["path_mapping"]["native_probe_argv"],
             recorded_at=evidence["recorded_at"],
-            prerequisite=native_action["prerequisites"]["gateway_process_before"],
+            prerequisite=native_action["prerequisites"]["gateway_process"],
         )
         commands = native_action["commands"]
         timestamp = checks.det._timestamp
@@ -401,14 +529,14 @@ def verify_capture(
                 "limitations": [
                     "HOST_WRAPPER_REQUEST_ASSOCIATION_NOT_NATIVE_COLLECTOR_NONCE",
                     "MAPPED_HISTORICAL_ROUTE_NOT_LITERAL_CAMPAIGN_DISPATCH_ARGV",
-                    "MISSING_BLOB_REBUILD_OBSERVATION_NOT_PROVIDER_OR_MODEL_SUCCESS",
+                    "UPLOAD_DENIAL_AND_EXCLUDED_WORKSPACE_WRITE_NOT_GLOBAL_NO_WRITE",
                     "NO_INDEPENDENT_ROUTE_OR_INHERITED_ACTIVATION_QUALIFICATION",
                     "CALLER_OWNS_LIVE_PARENT_SNAPSHOTS_CLEANUP_AND_SIGNED_RETENTION",
                     "NO_FINAL_CAMPAIGN_RESUME_ADMISSION_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY",
                 ],
             },
             "decision": checks._decision(
-                "MISSING_PROMPT_BLOB_DEVELOPMENT_ROUTE_OBSERVED_NOT_QUALIFIED"
+                "ARCHIVE_REPLACEMENT_DEVELOPMENT_ROUTE_OBSERVED_NOT_QUALIFIED"
             ),
         }
     except AdmissionEvidenceError:
@@ -424,5 +552,5 @@ def verify_capture(
         RuntimeError,
     ) as exc:
         raise AdmissionEvidenceError(
-            f"invalid missing-prompt-blob capture: {exc}"
+            f"invalid archive-replacement capture: {exc}"
         ) from exc

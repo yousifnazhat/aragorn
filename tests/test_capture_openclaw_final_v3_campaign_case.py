@@ -256,6 +256,9 @@ class CampaignCaseExecutorTests(unittest.TestCase):
     def test_workshop_selects_only_its_backend_and_cleanup_namespace(self) -> None:
         self._check_selected_backend(subject._WORKSHOP_CASE, subject.workshop)
 
+    def test_archive_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        self._check_selected_backend(subject._ARCHIVE_CASE, subject.archive)
+
     def test_proposal_selects_only_its_backend_and_cleanup_namespace(self) -> None:
         self._check_selected_backend(
             "ADM-02/update/workshop-proposal-apply", subject.proposal
@@ -463,6 +466,75 @@ class CampaignCaseExecutorTests(unittest.TestCase):
                 with self.assertRaises(subject.CaptureError):
                     self.actual_cleanup(changed)
                 calls.assert_not_called()
+
+    def test_archive_cleanup_checks_extra_volume_and_unnamed_population_container(
+        self,
+    ) -> None:
+        case = subject._ARCHIVE_CASE
+        prefix = "aragorn-phase3-final-combined-v3-archive-source-force-replacement"
+        volume = prefix + "-archive-source-42"
+        harness = {
+            "container_id": "c" * 64,
+            "source_commit": "a" * 40,
+            "route_input_volume_identity": {"name": prefix + "-route-input-42"},
+            "archive_source_volume_identity": {"name": volume},
+        }
+        run = subject.det01.acquisition
+        with patch.object(run, "_run", return_value=b""):
+            namespace = self.actual_namespace(case_id=case)
+        self.assertEqual(
+            namespace["commands"]["archive_source_volumes"][-1],
+            "label=dev.aragorn.role=final-combined-v3-"
+            "archive-source-force-replacement-archive-source",
+        )
+        with (
+            patch.object(run, "_run", side_effect=[b"", b"", volume.encode()]),
+            self.assertRaises(subject.CaptureError),
+        ):
+            self.actual_namespace(case_id=case)
+
+        with patch.object(run, "_run", side_effect=[b"", b"", b"29\n", b""]):
+            cleanup = self.actual_cleanup(harness, case_id=case)
+        self.assertEqual(cleanup["archive_source_volume_name"], volume)
+        self.assertIs(cleanup["archive_source_volume_absent"], True)
+        self.assertIs(cleanup["capture_owner_containers_absent"], True)
+        self.assertEqual(cleanup["capture_owner"], "a" * 40 + ":42")
+        self.assertEqual(
+            cleanup["commands"][-1]["argv"],
+            [
+                *subject._DOCKER,
+                "ps",
+                "-aq",
+                "--no-trunc",
+                "--filter",
+                "label=dev.aragorn.capture-owner=" + "a" * 40 + ":42",
+            ],
+        )
+        for volumes, containers in (
+            ((volume + "\n").encode(), b""),
+            (b"", b"unnamed-population-container\n"),
+        ):
+            with (
+                self.subTest(volumes=volumes, containers=containers),
+                patch.object(
+                    run, "_run", side_effect=[b"", volumes, b"29\n", containers]
+                ),
+                self.assertRaises(subject.CaptureError),
+            ):
+                self.actual_cleanup(harness, case_id=case)
+        for field, value in (
+            ("archive_source_volume_identity", {"name": prefix + "-archive-source-7"}),
+            ("archive_source_volume_identity", {"name": "unrelated"}),
+            ("source_commit", "F" * 40),
+            ("source_commit", True),
+        ):
+            with (
+                self.subTest(field=field, value=value),
+                patch.object(run, "_run") as commands,
+                self.assertRaises(subject.CaptureError),
+            ):
+                self.actual_cleanup({**harness, field: value}, case_id=case)
+            commands.assert_not_called()
 
     def test_dirty_source_rejects_before_signature_or_execution(self) -> None:
         shared = subject.det01.acquisition.shared

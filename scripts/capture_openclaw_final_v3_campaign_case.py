@@ -21,6 +21,7 @@ from aragorn import admission_openclaw_final_v3_campaign as campaign
 from aragorn.cas import CAS, CASError
 from scripts import capture_openclaw_final_v3_det01_campaign as det01
 from scripts import openclaw_final_v3_archive_replacement_case as archive
+from scripts import openclaw_final_v3_chat_session_snapshot_case as chat_snapshot
 from scripts import openclaw_final_v3_config_entry_case as config_entry
 from scripts import openclaw_final_v3_core_updater_case as core
 from scripts import openclaw_final_v3_cron_rescan_case as cron
@@ -39,6 +40,10 @@ _CORE_CASE = "ADM-02/update/core-updater-plugin-replacement"
 _WORKSHOP_CASE = "ADM-02/reload/workshop-invalidation"
 _ARCHIVE_CASE = "ADM-02/update/archive-source-force-replacement"
 _BACKENDS = {
+    "ADM-02/reload/chat-session-snapshot-consumer": (
+        chat_snapshot,
+        "chat-session-snapshot-consumer",
+    ),
     "ADM-02/reload/cron-rescan": (cron, "cron-rescan"),
     _ARCHIVE_CASE: (archive, "archive-source-force-replacement"),
     _CORE_CASE: (core, "core-updater-plugin-replacement"),

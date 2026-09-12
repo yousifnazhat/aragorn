@@ -445,8 +445,15 @@ installed tree, fixed external source, worker binding, and V3 gateway selection
 under the shared install lock and rejects a matching denial record. Its bounded
 nonblocking reads and point-in-time snapshot do not prove process consumption or
 mandatory startup enforcement. Authenticated gateway-config delivery and mandatory
-invocation, successor deployment pins, and accepted-revocation-to-stop/retention
-integration remain required. The frozen historical producers are unchanged and
+invocation and successor deployment pins remain required. A private
+[quarantine response composition](./src/aragorn/runtime_quarantine_response.py)
+now joins a current accepted revocation to the measured installed digest and
+running worker binding, publishes the permanent denial first, then stops and masks
+the fixed profile and retains its result. Activation, install, and broker locks
+are held in that order; any failure after publication begins is indeterminate,
+never evidence of rollback. Tests use real denial records and mocked systemd/CAS
+effects; there is no CLI, deployment hook, process byte-consumption proof, or live
+quarantine qualification. The frozen historical producers are unchanged and
 must not be deployed with denial records. No installed-digest quarantine or
 future-start qualification is claimed by these offline tests alone.
 
@@ -1038,7 +1045,8 @@ support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
 now supports DET-01, archive-source replacement, core-updater replacement, workshop invalidation,
 workshop proposal/apply, curator restore, config-entry activation, plugin enable,
-fresh-session reset, missing-prompt-blob rebuild, and cron rescan.
+fresh-session reset, missing-prompt-blob rebuild, cron rescan, and chat-session
+snapshot consumption.
 Shared native checks bind static process identities, unit restrictions, and
 socket permissions to the signed, hash-pinned V3 parent reference; matching
 same-run copies alone are not accepted as proof of those restrictions.
@@ -1096,7 +1104,13 @@ binds the fixed forced job, terminal poll, exact 737-byte prompt, and actual
 pre/post session-store bytes while preserving unrelated prior session data.
 SQLite metadata and WAL transitions are checked, not complete database contents;
 the observed model-not-found outcome is not successful model execution.
-Eleven development cases are wired; 20 remain unwired: three retained current-V3
+The [chat-session snapshot backend](./scripts/openclaw_final_v3_chat_session_snapshot_case.py)
+checks exact protected prompt bytes, reported mutation/recovery joins, and a
+signed compiled-render template with fresh session identities. Fourteen selected
+compiled modules and their source bridges are verified, not the full transitive
+runtime. This probe does not capture complete entry/store bytes, so reported
+digests do not prove full-session-state equivalence or local replay execution.
+Twelve development cases are wired; 19 remain unwired: two retained current-V3
 routes, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
 Retained status is not fresh execution readiness: the plugin-force-reinstall

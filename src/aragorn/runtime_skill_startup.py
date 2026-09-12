@@ -318,6 +318,62 @@ def _strict_transaction(record: dict[str, Any]) -> dict[str, Any]:
     return transaction
 
 
+def _installed_snapshot(
+    root_fd: int, entries: list[_HeldEntry]
+) -> tuple[dict[str, Any], str, str, os.stat_result]:
+    """Measure installed bytes under the caller's already-held root SH or EX.
+
+    The caller must safely open the fixed root, acquire its lock, and register
+    its named/FD baseline in entries before calling. This helper never changes
+    that lock or closes descriptors. All descriptors it opens are appended to
+    entries even on failure; the caller owns their eventual cleanup. It checks
+    neither external selection nor denial state, and confers no response or
+    transaction authorization. Recheck the active link and entries before any
+    later effect; publication can legitimately change only the root baseline.
+    """
+    if type(root_fd) is not int or root_fd < 0:
+        raise RuntimeSkillStartupError("installed snapshot root descriptor is invalid")
+    roots = [entry for entry in entries if entry.fd == root_fd]
+    if (
+        len(roots) != 1
+        or roots[0].parent_fd is not None
+        or roots[0].name != _PROTECTED_ROOT
+    ):
+        raise RuntimeSkillStartupError(
+            "installed snapshot root baseline is missing or unbound"
+        )
+    root_state = require_owned_directory(
+        root_fd,
+        expected_uid=_EXPECTED_INSTALL_UID,
+        require_owner_write=True,
+        label="installed snapshot root",
+    )
+    _check_entries(entries)
+    record_raw, _ = _read_file(
+        root_fd, ACTIVE_RUNTIME_RECORD, entries, max_bytes=_MAX_RECORD_BYTES
+    )
+    record = parse_active_runtime_record(record_raw)
+    transaction = _strict_transaction(record)
+    destination = transaction["destination"]
+    if (
+        destination["root_device"] != root_state.st_dev
+        or destination["root_inode"] != root_state.st_ino
+    ):
+        raise RuntimeSkillStartupError("installed transaction is bound to another root")
+    target = destination["target_name"]
+    version_name = _version_names(transaction, target)
+    active_before = _active_link(
+        root_fd, target, transaction["version_path"], _EXPECTED_INSTALL_UID
+    )
+    versions_fd = _open_directory(root_fd, ".aragorn-versions", 0o755, entries)
+    target_fd = _open_directory(versions_fd, target, 0o755, entries)
+    version_fd = _open_directory(target_fd, version_name, 0o555, entries)
+    tree_digest, installed_digest = _measure_tree(version_fd, entries)
+    if tree_digest != transaction["tree_digest"]:
+        raise RuntimeSkillStartupError("installed tree is unbound to the active record")
+    return record, tree_digest, installed_digest, active_before
+
+
 def _verify_runtime_skill_startup(
     binding: RuntimeActionWorkerBinding,
     gateway_config: Mapping[str, Any],
@@ -350,33 +406,11 @@ def _verify_runtime_skill_startup(
         _acquire_shared_lock(root_fd, None)
         locked = True
         entries.append(_HeldEntry(None, _PROTECTED_ROOT, root_fd, root_state))
-        _check_entries(entries)
-        record_raw, _ = _read_file(
-            root_fd, ACTIVE_RUNTIME_RECORD, entries, max_bytes=_MAX_RECORD_BYTES
+        record, tree_digest, installed_digest, active_before = _installed_snapshot(
+            root_fd, entries
         )
-        record = parse_active_runtime_record(record_raw)
-        transaction = _strict_transaction(record)
-        destination = transaction["destination"]
-        if (
-            destination["root_device"] != root_state.st_dev
-            or destination["root_inode"] != root_state.st_ino
-        ):
-            raise RuntimeSkillStartupError(
-                "installed transaction is bound to another root"
-            )
-        target = destination["target_name"]
-        version_name = _version_names(transaction, target)
-        active_before = _active_link(
-            root_fd, target, transaction["version_path"], _EXPECTED_INSTALL_UID
-        )
-        versions_fd = _open_directory(root_fd, ".aragorn-versions", 0o755, entries)
-        target_fd = _open_directory(versions_fd, target, 0o755, entries)
-        version_fd = _open_directory(target_fd, version_name, 0o555, entries)
-        tree_digest, installed_digest = _measure_tree(version_fd, entries)
-        if tree_digest != transaction["tree_digest"]:
-            raise RuntimeSkillStartupError(
-                "installed tree is unbound to the active record"
-            )
+        transaction = record["transaction"]
+        target = transaction["destination"]["target_name"]
         external_fd = _external_parent(entries)
         external_raw, _ = _read_file(
             external_fd, _EXTERNAL_SOURCE.name, entries, max_bytes=_MAX_SKILL_BYTES

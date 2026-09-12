@@ -16,6 +16,7 @@ from aragorn import runtime_skill_startup as subject
 from aragorn.acquire import inventory_open_directory
 from aragorn.oci_worker_protocol import canonical_digest
 from aragorn.protected_skill_quarantine import publish_quarantine_at
+from aragorn.runtime_action_broker import RuntimeActionBrokerError
 from aragorn.runtime_action_worker import RuntimeActionWorkerBinding
 from aragorn.runtime_active_skill_lineage import ACTIVE_RUNTIME_RECORD
 from tests.test_runtime_active_skill_lineage import (
@@ -115,6 +116,160 @@ def _require_unlocked(root):
 
 
 class RuntimeSkillStartupTests(unittest.TestCase):
+    def test_installed_snapshot_preserves_caller_ex_and_owns_no_lock_or_cleanup(self):
+        with _fixture() as fixture:
+            # A response retry must still measure bytes that are already denied.
+            _publish(fixture)
+            _write(fixture["external"], b"different external bytes")
+            root_fd = subject._open_protected_root(fixture["root"], os.geteuid())
+            entries = []
+            locked = False
+            try:
+                fcntl.flock(root_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked = True
+                entries.append(
+                    subject._HeldEntry(
+                        None, fixture["root"], root_fd, os.fstat(root_fd)
+                    )
+                )
+                with (
+                    mock.patch.object(
+                        fcntl,
+                        "flock",
+                        side_effect=AssertionError("helper changed caller lock"),
+                    ),
+                    mock.patch.object(
+                        subject,
+                        "_release_lock_and_close",
+                        side_effect=AssertionError("helper cleaned caller descriptors"),
+                    ),
+                ):
+                    record, tree, skill, active = subject._installed_snapshot(
+                        root_fd, entries
+                    )
+                self.assertEqual(record["transaction"], fixture["transaction"])
+                self.assertEqual(tree, fixture["transaction"]["tree_digest"])
+                self.assertEqual(skill, _sha(fixture["raw"]))
+                self.assertEqual(
+                    active.st_ino,
+                    (
+                        fixture["root"]
+                        / fixture["transaction"]["destination"]["target_name"]
+                    )
+                    .lstat()
+                    .st_ino,
+                )
+                self.assertGreater(len(entries), 1)
+                subject._check_entries(entries)
+                observer = os.open(fixture["root"], os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    # A second SH would succeed if the helper had downgraded EX.
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(observer, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(observer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                finally:
+                    os.close(observer)
+            finally:
+                self.assertIsNone(
+                    subject._release_lock_and_close(
+                        root_fd,
+                        locked,
+                        *(entry.fd for entry in entries if entry.fd != root_fd),
+                    )
+                )
+            for entry in entries:
+                with self.assertRaises(OSError):
+                    os.fstat(entry.fd)
+            _require_unlocked(fixture["root"])
+
+    def test_installed_snapshot_failures_retain_caller_ex_and_all_open_descriptors(
+        self,
+    ):
+        for mutation in ("record", "no-skill", "unbound-tree"):
+            with self.subTest(mutation=mutation), _fixture() as fixture:
+                if mutation == "record":
+                    _write(fixture["root"] / ACTIVE_RUNTIME_RECORD, b"{")
+                elif mutation == "no-skill":
+                    fixture["version"].chmod(0o755)
+                    fixture["skill"].rename(fixture["version"] / "NOT-SKILL.md")
+                    fixture["version"].chmod(0o555)
+                else:
+                    _write(fixture["skill"], b"changed installed bytes")
+                root_fd = subject._open_protected_root(fixture["root"], os.geteuid())
+                entries = []
+                locked = False
+                try:
+                    fcntl.flock(root_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    locked = True
+                    entries.append(
+                        subject._HeldEntry(
+                            None, fixture["root"], root_fd, os.fstat(root_fd)
+                        )
+                    )
+                    with self.assertRaises(
+                        (subject.RuntimeSkillStartupError, RuntimeActionBrokerError)
+                    ):
+                        subject._installed_snapshot(root_fd, entries)
+                    self.assertGreater(len(entries), 1)
+                    for entry in entries:
+                        os.fstat(entry.fd)
+                    observer = os.open(fixture["root"], os.O_RDONLY | os.O_DIRECTORY)
+                    try:
+                        with self.assertRaises(BlockingIOError):
+                            fcntl.flock(observer, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    finally:
+                        os.close(observer)
+                finally:
+                    self.assertIsNone(
+                        subject._release_lock_and_close(
+                            root_fd,
+                            locked,
+                            *(entry.fd for entry in entries if entry.fd != root_fd),
+                        )
+                    )
+                for entry in entries:
+                    with self.assertRaises(OSError):
+                        os.fstat(entry.fd)
+                _require_unlocked(fixture["root"])
+
+    def test_installed_snapshot_requires_one_fixed_root_named_fd_baseline(self):
+        with _fixture() as fixture:
+            root_fd = subject._open_protected_root(fixture["root"], os.geteuid())
+            try:
+                fcntl.flock(root_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                entry = subject._HeldEntry(
+                    None, fixture["root"], root_fd, os.fstat(root_fd)
+                )
+                for entries in (
+                    [],
+                    [entry, entry],
+                    [replace(entry, name=fixture["external"].parent)],
+                    [replace(entry, parent_fd=root_fd)],
+                ):
+                    with (
+                        self.subTest(entries=entries),
+                        self.assertRaisesRegex(
+                            subject.RuntimeSkillStartupError,
+                            "root baseline is missing or unbound",
+                        ),
+                    ):
+                        subject._installed_snapshot(root_fd, entries)
+                for invalid_fd in (True, -1, str(root_fd)):
+                    with (
+                        self.subTest(root_fd=invalid_fd),
+                        self.assertRaisesRegex(
+                            subject.RuntimeSkillStartupError,
+                            "root descriptor is invalid",
+                        ),
+                    ):
+                        subject._installed_snapshot(invalid_fd, [entry])
+                os.fstat(root_fd)
+            finally:
+                fcntl.flock(root_fd, fcntl.LOCK_UN)
+                os.close(root_fd)
+            _require_unlocked(fixture["root"])
+
     def test_fixed_parent_selection_and_byte_snapshot_have_no_process_authority(self):
         config = json.loads(_PROFILE.read_bytes())
         _, digest = subject._configuration(config)

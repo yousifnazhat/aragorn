@@ -446,11 +446,23 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                     self.assertEqual(subject._processes(_CONTAINER), expected)
 
     def test_native_action_uses_only_fixed_driver_and_private_fixture_token(self):
-        for failure in (None, "environment", "source", "source-drift", "driver"):
+        for failure in (
+            None,
+            "environment",
+            "source",
+            "source-drift",
+            "mode-0644",
+            "mode-0755",
+            "mode-drift",
+            "driver",
+        ):
             with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 root = Path(temporary).resolve()
                 driver = root / "driver.mjs"
                 driver.write_bytes(b"pinned inert source")
+                driver.chmod(
+                    {"mode-0644": 0o644, "mode-0755": 0o755}.get(failure, 0o555)
+                )
                 env = root / "environment"
                 env.write_bytes(
                     b"OPENCLAW_GATEWAY_TOKEN=" + b"a" * 64 + b"\n"
@@ -463,7 +475,11 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                 def run(*args):
                     called.append(args)
                     if failure == "source-drift":
+                        driver.chmod(0o755)
                         driver.write_bytes(b"drift")
+                        driver.chmod(0o555)
+                    if failure == "mode-drift":
+                        driver.chmod(0o755)
                     if failure == "driver":
                         raise RuntimeError("fixed native driver failed")
                     return {"safe": "driver result"}
@@ -493,11 +509,20 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                         ),
                     )
                 )
+                real_read = subject.response._read_regular
+
+                def read(path, uid, modes):
+                    if path == driver:
+                        self.assertEqual(uid, 0)
+                        self.assertEqual(modes, {0o555})
+                        return real_read(path, os.geteuid(), modes)
+                    return path.read_bytes()
+
                 stack.enter_context(
                     patch.object(
                         subject.response,
                         "_read_regular",
-                        side_effect=lambda path, *_: path.read_bytes(),
+                        side_effect=read,
                     )
                 )
                 stack.enter_context(
@@ -855,7 +880,6 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
         ):
             self.assertIs(result[key], False)
         for name in (
-            "_sources",
             "_prepare",
             "_installed",
             "_action",
@@ -871,12 +895,13 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "injected"):
                     subject._run(_CONTAINER)
                 mocks["_stop_fixture"].assert_called_once()
-        with _environment() as mocks:
-            mocks["_require_fixture"].side_effect = RuntimeError("unowned")
-            with self.assertRaisesRegex(RuntimeError, "unowned"):
-                subject._run(_CONTAINER)
-            mocks["_stop_fixture"].assert_not_called()
-            mocks["_prepare"].assert_not_called()
+        for failure in ("_require_fixture", "_sources"):
+            with self.subTest(pre_setup=failure), _environment() as mocks:
+                mocks[failure].side_effect = RuntimeError("pre-setup refusal")
+                with self.assertRaisesRegex(RuntimeError, "pre-setup refusal"):
+                    subject._run(_CONTAINER)
+                mocks["_stop_fixture"].assert_not_called()
+                mocks["_prepare"].assert_not_called()
         with _environment() as mocks:
             mocks["_action"].side_effect = RuntimeError("first failure")
             mocks["_stop_fixture"].side_effect = RuntimeError("cleanup failure")

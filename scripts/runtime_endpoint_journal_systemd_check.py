@@ -503,7 +503,7 @@ def _pairs(captured: dict, processes: dict, refused: dict, proof: dict) -> None:
 
 
 def _action(p37b: Any, setup: dict) -> dict[str, Any]:
-    source = response._read_regular(p37b._DRIVER, 0, {0o644})
+    source = response._read_regular(p37b._DRIVER, 0, {0o555})
     _expect(
         (len(source), _digest(source)) == _DRIVER_PIN,
         "native fixture driver source changed",
@@ -548,7 +548,7 @@ def _action(p37b: Any, setup: dict) -> dict[str, Any]:
         driver, "COMPLETED", {"verdict": "ALLOW", "effect_status": "CREATED"}
     )
     _expect(
-        response._read_regular(p37b._DRIVER, 0, {0o644}) == source,
+        response._read_regular(p37b._DRIVER, 0, {0o555}) == source,
         "native fixture driver changed during invocation",
     )
     return {
@@ -652,8 +652,9 @@ def _proof(p37b: Any, driver: dict, before: dict, after: dict, processes: dict) 
 
 def _run(container: str) -> dict[str, Any]:
     prior._require_fixture(container)
+    # No setup or service effect has happened yet; refusal needs no stack cleanup.
+    sources = _sources()
     try:
-        sources = _sources()
         setup = prior._prepare(publish_revocation=False)
         import runtime_action_worker_openclaw_systemd_probe as p37b
 

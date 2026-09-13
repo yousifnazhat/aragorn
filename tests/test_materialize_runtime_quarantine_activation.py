@@ -32,8 +32,26 @@ _OUTPUTS = {
         "sha256:4572460c7d54e29f8608fa16c9d97e645c2b32ea233377b5ae38e130461817d7",
     ),
     "packaging/activate-runtime-action-worker-host.sh": (
-        34206,
-        "sha256:3d88b892afd373dd30fcc90103b2f6643388e68d944b1b2492e8bcc54e010e88",
+        34705,
+        "sha256:c01ae51517f7d51428dbbf336eee1cb5213d2e5991ea7b3e7ac9cbc2dec8af8d",
+    ),
+}
+_RESPONSE_DEPENDENCIES = {
+    "src/aragorn/runtime_response_service.py": (
+        40085,
+        "sha256:18289bdb705ab62b3b3568d7eded7d030ba38cf7a07b0450183495599c68e780",
+    ),
+    "src/aragorn/runtime_quarantine_response.py": (
+        12423,
+        "sha256:438733d5b17c135d7991810e6a20833e19008024ea134d937b3c70f5096d6d62",
+    ),
+    "src/aragorn/runtime_quarantine_service.py": (
+        2877,
+        "sha256:205aef5538105b8c1b421959d8811fe818b8792c0f705524faf70b784518fdd8",
+    ),
+    "packaging/libexec/aragorn-runtime-quarantine-service.py": (
+        358,
+        "sha256:6f6fb64237518da42aec1def0c9a5d5f41ee666f90844c220ed0de8e7f1a74e7",
     ),
 }
 _OVERRIDES = {
@@ -170,7 +188,11 @@ class RuntimeQuarantineActivationTests(unittest.TestCase):
     def test_exact_flat_readonly_output_manifest_and_explicit_ceilings(self):
         self.assertEqual(subject._SOURCES, _SOURCES)
         self.assertEqual(subject._OUTPUTS, _OUTPUTS)
-        self.assertEqual(len(subject._DEPENDENCIES), 5)
+        self.assertEqual(len(subject._DEPENDENCIES), 9)
+        self.assertEqual(
+            {name: subject._DEPENDENCIES[name] for name in _RESPONSE_DEPENDENCIES},
+            _RESPONSE_DEPENDENCIES,
+        )
         self.assertEqual(len(subject.services._SERVICES), 3)
         original = {name: (_ROOT / name).read_bytes() for name in _SOURCES}
         with tempfile.TemporaryDirectory() as temporary:
@@ -273,12 +295,39 @@ class RuntimeQuarantineActivationTests(unittest.TestCase):
             )
             self.assertEqual(syntax.returncode, 0, syntax.stderr.decode())
 
+    def test_response_inclusion_only_appends_four_pins_to_previous_activator(self):
+        rendered = _render()
+        previous = rendered[subject._ACTIVATOR]
+        for name, (size, digest) in _RESPONSE_DEPENDENCIES.items():
+            raw = (_ROOT / name).read_bytes()
+            self.assertEqual((len(raw), _sha(raw)), (size, digest))
+            if name.startswith("src/aragorn/"):
+                path = "/usr/lib/aragorn/aragorn/" + Path(name).name
+                mode = "644"
+            else:
+                path = "/usr/libexec/aragorn/" + Path(name).name
+                mode = "755"
+            line = f"{mode} {digest[7:]} {path}\n".encode("ascii")
+            self.assertEqual(previous.count(line), 1)
+            previous = previous.replace(line, b"")
+        self.assertEqual(
+            (len(previous), _sha(previous)),
+            (
+                34206,
+                "sha256:3d88b892afd373dd30fcc90103b2f6643388e68d944b1b2492e8bcc54e010e88",
+            ),
+        )
+        self.assertEqual(
+            (len(rendered[subject._UNIT]), _sha(rendered[subject._UNIT])),
+            _OUTPUTS[subject._UNIT],
+        )
+
     def test_all_installed_module_and_unit_pins_match_exact_assembled_inputs(self):
         rendered = _render()
         source = rendered[subject._ACTIVATOR].decode()
         block = source.split("done <<'EOF'\n", 1)[1].split("\nEOF", 1)[0]
         pins = [line.split(" ", 2) for line in block.splitlines()]
-        self.assertEqual(len(pins), 43)  # 36 old local pins + 5 dependencies + 2 tools.
+        self.assertEqual(len(pins), 47)  # 36 old local pins + 9 dependencies + 2 tools.
         self.assertEqual(len({path for _, _, path in pins}), len(pins))
         for mode, digest, path in pins:
             name = Path(path).name

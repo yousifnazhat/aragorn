@@ -455,7 +455,7 @@ It preserves the frozen packaging and generates a new profile, not the distinct
 retained V3 deployment. The generator does not run an installer. A separate
 [staging script](./scripts/stage_runtime_quarantine_profile.py) verifies 47 pinned
 inputs, runs the frozen installers from a private immutable snapshot into a fresh
-caller-owned `DESTDIR`, applies the source overrides, and audits all 50 final
+caller-owned `DESTDIR`, applies the source overrides, and audits all 54 final
 files. It returns a deterministic inventory without activating services or
 deploying to the host. The full producer package, actual runtime credentials,
 root deployment and fresh Linux/systemd validation remain separate. A private
@@ -467,8 +467,9 @@ are held in that order; any failure after publication begins is indeterminate,
 never evidence of rollback. Its uninstalled
 [quarantine entrypoint](./src/aragorn/runtime_quarantine_service.py) accepts only
 the two exact expected digests and preserves indeterminate status if result or
-diagnostic delivery fails after the response. It is not included in the staged
-profile yet. Tests use real denial records and mocked systemd/CAS effects; there
+diagnostic delivery fails after the response. The staged profile includes its
+four-file response closure with exact activation pins. Tests use real denial
+records and mocked systemd/CAS effects; there
 is no deployment hook, process byte-consumption proof, or live quarantine
 qualification. The frozen historical producers are unchanged and
 must not be deployed with denial records. No installed-digest quarantine or
@@ -1136,9 +1137,14 @@ recipe builds the V3 parent from V2. A separate
 [current-parent build-source generator](./scripts/materialize_openclaw_final_v3_plugin_force_current_parent.py)
 now renders a child recipe, collector and Dockerfile that inherit the current V3
 parent without repeating that upgrade. It checks the unchanged seven-file bundle
-and copies only new provenance sources. It has not built an image or captured
-evidence; the child identity, backend wiring and semantic qualification remain
-unavailable.
+and copies only new provenance sources. An isolated, network-disabled build from
+signed checkpoint `a524937` produced child image
+`sha256:afcdb0862ff0a431a0c8f62ff2b12d242603699bd89f46c008e47005117c123f`,
+with the exact current-parent layer prefix and three new layers. All 19 inherited
+file checks and the exact route inventory passed. Directory link counts are
+filesystem-dependent; type, ownership, mode, positive count and exact inventory
+are checked without weakening the regular-file single-link requirement.
+This is build readiness, not fresh route evidence or semantic qualification.
 Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.

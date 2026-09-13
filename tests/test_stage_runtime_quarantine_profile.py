@@ -16,6 +16,24 @@ from unittest import mock
 from scripts import stage_runtime_quarantine_profile as subject
 
 _ROOT = Path(__file__).resolve().parents[1]
+_RESPONSE_FILES = {
+    "/usr/lib/aragorn/aragorn/runtime_response_service.py": (
+        "src/aragorn/runtime_response_service.py",
+        "0644",
+    ),
+    "/usr/lib/aragorn/aragorn/runtime_quarantine_response.py": (
+        "src/aragorn/runtime_quarantine_response.py",
+        "0644",
+    ),
+    "/usr/lib/aragorn/aragorn/runtime_quarantine_service.py": (
+        "src/aragorn/runtime_quarantine_service.py",
+        "0644",
+    ),
+    "/usr/libexec/aragorn/aragorn-runtime-quarantine-service.py": (
+        "packaging/libexec/aragorn-runtime-quarantine-service.py",
+        "0755",
+    ),
+}
 
 
 def _copy_inputs(root):
@@ -30,7 +48,7 @@ def _sha(raw):
 
 
 class RuntimeQuarantineProfileStageTests(unittest.TestCase):
-    def test_exact_fifty_file_modes_inventory_manifest_and_non_deployment_ceiling(self):
+    def test_exact_fifty_four_file_inventory_manifest_and_non_deployment_ceiling(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             output = root / "stage"
@@ -70,9 +88,9 @@ class RuntimeQuarantineProfileStageTests(unittest.TestCase):
                 "phase3_qualification",
             ):
                 self.assertIs(manifest[key], False)
-            self.assertEqual(len(manifest["files"]), 50)
+            self.assertEqual(len(manifest["files"]), 54)
             self.assertEqual(len(manifest["base_inputs"]), 47)
-            self.assertEqual(len(manifest["new_dependencies"]), 5)
+            self.assertEqual(len(manifest["new_dependencies"]), 9)
             self.assertEqual(len(manifest["directories"]), 12)
             self.assertEqual({p.name for p in root.iterdir()}, {"stage"})
             self.assertNotIn(str(root), json.dumps(manifest))
@@ -103,14 +121,26 @@ class RuntimeQuarantineProfileStageTests(unittest.TestCase):
             self.assertFalse((output / "etc").exists())
             self.assertFalse((output / "var").exists())
             self.assertFalse((output / "requirements-worker.lock").exists())
+            items = {item["path"]: item for item in manifest["files"]}
+            self.assertEqual(len(items.keys() - _RESPONSE_FILES.keys()), 50)
+            for name, (source, mode) in _RESPONSE_FILES.items():
+                self.assertEqual(items[name]["source_name"], source)
+                self.assertEqual(items[name]["mode"], mode)
+                self.assertEqual(
+                    (output / name.removeprefix("/")).read_bytes(),
+                    (_ROOT / source).read_bytes(),
+                )
             self.assertFalse(
                 any(
-                    "runtime_response" in item["path"]
-                    or "quarantine_response" in item["path"]
+                    "aragorn-runtime-response-service.py" in item["path"]
+                    or "runtime-health" in item["path"]
+                    or "runtime_health" in item["path"]
                     or "protected-install-broker" in item["path"]
                     for item in manifest["files"]
                 )
             )
+            self.assertIn("response deployment", manifest["missing_inputs"][-1])
+            self.assertNotIn("entrypoint", manifest["missing_inputs"][-1])
             # A second fresh destination yields the same path-independent manifest.
             again = subject.stage_runtime_quarantine_profile(root / "again")
             self.assertEqual(manifest, again)
@@ -336,7 +366,7 @@ class RuntimeQuarantineProfileStageTests(unittest.TestCase):
                 def audit(
                     path, payloads, mutation=mutation, real_audit=real_audit, root=root
                 ):
-                    if len(payloads) == 50:
+                    if len(payloads) == 54:
                         target = (
                             path
                             / "usr/lib/aragorn/aragorn/runtime_skill_startup_service.py"
@@ -551,10 +581,16 @@ from aragorn import runtime_action_observation_publisher_v4 as sensor
 from aragorn import runtime_lineage_capability_issuer as issuer
 from aragorn import runtime_active_skill_lineage_v2 as lineage
 from aragorn import runtime_skill_startup_service as startup
+from aragorn import runtime_quarantine_service as quarantine_service
+from aragorn import runtime_quarantine_response as quarantine
+from aragorn import runtime_response_service as response
 assert broker.hold_runtime_active_skill_lineage is lineage.hold_runtime_active_skill_lineage
 assert sensor.verify_runtime_active_skill_lineage is lineage.verify_runtime_active_skill_lineage
 assert issuer.hold_runtime_active_skill_lineage is lineage.hold_runtime_active_skill_lineage
-for module in (broker, sensor, issuer, lineage, startup):
+assert quarantine_service.response is quarantine
+assert quarantine.response is response
+assert quarantine.startup is startup.startup
+for module in (broker, sensor, issuer, lineage, startup, quarantine_service, quarantine, response):
     assert Path(module.__file__).parent == Path(sys.argv[1]) / 'aragorn'
 """
             result = subprocess.run(
@@ -580,6 +616,25 @@ for module in (broker, sensor, issuer, lineage, startup):
             self.assertEqual(result.returncode, 64, result.stderr.decode())
             self.assertEqual(result.stdout, b"")
             self.assertIn(b"usage: aragorn-runtime-skill-startup", result.stderr)
+            shim = output / "usr/libexec/aragorn/aragorn-runtime-quarantine-service.py"
+            # Argument refusal occurs before platform/root checks or response effects.
+            for arguments, status, diagnostic in (
+                ([], 64, b"usage: aragorn-runtime-quarantine-service"),
+                (["--refuse"], 64, b"usage: aragorn-runtime-quarantine-service"),
+                (["invalid", "invalid"], 126, b"REFUSED"),
+            ):
+                with self.subTest(arguments=arguments):
+                    result = subprocess.run(
+                        [sys.executable, "-I", "-S", "-B", str(shim), *arguments],
+                        cwd="/",
+                        env={"PATH": "/usr/bin:/bin"},
+                        capture_output=True,
+                        timeout=5,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, status, result.stderr.decode())
+                    self.assertEqual(result.stdout, b"")
+                    self.assertIn(diagnostic, result.stderr)
 
 
 if __name__ == "__main__":

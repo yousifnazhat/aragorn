@@ -254,7 +254,7 @@ def _destination(source: str) -> tuple[str, int]:
 def _verified_payloads() -> tuple[
     dict[str, bytes], dict[str, _Payload], dict[str, _Payload]
 ]:
-    if len(_BASE_INPUTS) != 47 or len(activation._DEPENDENCIES) != 5:
+    if len(_BASE_INPUTS) != 47 or len(activation._DEPENDENCIES) != 9:
         raise RuntimeQuarantineStageError("fixed source inventory changed")
     inputs = {
         name: overlay._read_pinned(name, size, digest, root=_ROOT)
@@ -295,7 +295,7 @@ def _verified_payloads() -> tuple[
         if destination in replacements:
             raise RuntimeQuarantineStageError("activation destination collision")
         replacements[destination] = (name, mode, raw)
-    if len(base) != 45 or len(replacements) != 10 or len(base | replacements) != 50:
+    if len(base) != 45 or len(replacements) != 14 or len(base | replacements) != 54:
         raise RuntimeQuarantineStageError("fixed payload inventory changed")
     return inputs, base, replacements
 
@@ -536,7 +536,7 @@ def stage_runtime_quarantine_profile(output: Path) -> dict[str, Any]:
                 "root-owned Linux deployment and actual systemd credential/startup validation",
                 "OpenClaw runtime, protected installed skill, credentials and control state",
                 "producer release, complete analyzer package and requirements-worker.lock identity",
-                "quarantine response entrypoint/deployment and independent campaign qualification",
+                "root-authorized quarantine response deployment and independent campaign qualification",
             ],
         }
     except (OSError, RuntimeError, TypeError, ValueError) as exc:

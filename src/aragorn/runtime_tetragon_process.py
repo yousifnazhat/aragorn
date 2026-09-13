@@ -20,7 +20,7 @@ from .oci_worker_protocol import canonical_json as _canonical
 
 SOURCE_COMMIT = "1de2ed8ebea18e56257dc59597aa13bf8f0e471e"
 SOURCE_LOCK_DIGEST = (
-    "sha256:496236f650da38160a222fc9bca5bd0ceac01b9a0b77e377abc5a044d57539e8"
+    "sha256:b7d69c22590952fbf717fb3c293c5ebff4391c7c02f1787f1e28aa185efcb9b9"
 )
 PROFILE = "tetragon-v1.7.0-restricted-process-json/v1"
 MAX_RECORD_BYTES = 64 * 1024
@@ -80,6 +80,7 @@ _CEILINGS = {
     "semantic_skill_causation_verified": False,
     "continuous_coverage_verified": False,
     "delivery_completeness_verified": False,
+    "wall_time_ordering_verified": False,
     "pre_effect_prevention_verified": False,
     "run_conformance_eligible": False,
     "phase3_eligible": False,
@@ -273,7 +274,7 @@ def _event(raw: bytes) -> dict[str, Any]:
     _text(event["node_name"], 255)
     if "cluster_name" in event:
         _text(event["cluster_name"], 255, empty=True)
-    observed = _time(event["time"])
+    _time(event["time"])
     fields = {"process", "parent", "ancestors"}
     if kind == "process_exit":
         fields |= {"signal", "status", "time"}
@@ -288,24 +289,25 @@ def _event(raw: bytes) -> dict[str, Any]:
     if len({p["exec_id"] for p in all_processes}) != len(all_processes):
         raise TetragonProcessError("duplicate ancestry entry")
     _identities(all_processes)
-    if any(_time(p["start_time"]) > observed for p in all_processes):
-        raise TetragonProcessError("process starts after event")
+    # v1.7.0 independently calls ktime.ToProto for cached process start, outer
+    # event time, and exit-body time. DecodeKtime samples ClockGettime/time.Now
+    # anew, so even equal kernel ktimes can produce reversed wall timestamps.
+    # These values are parsed and retained, not rounded or ordered. Identity
+    # consistency above still requires the exact cached start for each exec_id.
     if parent is not None and process.get("parent_exec_id") != parent["exec_id"]:
         raise TetragonProcessError("immediate parent does not join")
     if "status" in body:
         _uint(body["status"])
     if "signal" in body:
         _text(body["signal"], 64, empty=True)
-    if (
-        "time" in body
-        and not _time(process["start_time"]) <= _time(body["time"]) <= observed
-    ):
-        raise TetragonProcessError("exit time does not join event")
+    if "time" in body:
+        _time(body["time"])
     return {
         "raw_digest": _digest(raw),
         "raw_bytes": len(raw),
         "kind": kind,
         "vendor_record": event,
+        "wall_time_ordering_verified": False,
         "unavailable_attribution": {
             "full_container_id": None,
             "cgroup_path": None,
@@ -441,6 +443,7 @@ def normalize_process_capture(
             "WINDOW_AND_METRICS_ARE_CALLER_REPORTS_NOT_SENSOR_ATTESTATION",
             "VENDOR_EXPORT_COUNTERS_DO_NOT_PROVE_SUCCESSFUL_DELIVERY",
             "VENDOR_EXEC_ID_AND_DEBUG_FLAGS_DO_NOT_PROVE_LIVE_EXEC_OR_CAUSAL_ATTRIBUTION",
+            "INDEPENDENT_KTIME_WALL_CLOCK_CONVERSIONS_DO_NOT_ESTABLISH_CROSS_FIELD_ORDER",
             "HOST_PID_NOT_NAMESPACE_PID_CONTAINER_PREFIX_NOT_FULL_ID",
             "NO_CONTINUOUS_COLLECTION_SEMANTIC_LIFECYCLE_OR_PRE_EFFECT_ENFORCEMENT",
         ],

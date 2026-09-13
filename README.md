@@ -508,11 +508,21 @@ unchanged; offline capture tests do not establish live delivery.
 The [restricted Tetragon process adapter](./src/aragorn/runtime_tetragon_process.py)
 validates bounded offline records against an
 [exact source lock](./benchmark/tetragon-candidate-source-v1.lock.json).
-Fourteen selected upstream source files are byte-bound; no release image or live
+Nineteen selected upstream source files are byte-bound; no release image or live
 sensor is qualified. Host PIDs, container-ID prefixes, namespace inodes, and debug
 flags are not promoted to stronger identities or execution proof. A clean
 caller-reported capture window does not prove authenticity or completeness, and
 returned vendor records still contain their original arguments and paths.
+Independent kernel-to-wall-clock conversions do not establish cross-field timestamp
+ordering; the adapter preserves those values without rounding or a guessed tolerance.
+
+The [native tool receipt core](./src/aragorn/runtime_native_tool_receipts.py) retains
+bounded attempt/terminal chains using the existing CAS and atomic publisher. It
+requires externally bound, preprovisioned worker-owned state, acknowledges only
+after synchronized readback, and refuses uncertain retention or unresolved startup.
+The fixed ceiling is 512 serial calls; duplicate attempts never authorize another
+execution. This core alone supplies no transport, mandatory native hook, effect
+authority, hostile-owner anti-rollback, or RUN qualification.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

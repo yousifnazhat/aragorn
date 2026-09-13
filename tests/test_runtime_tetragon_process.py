@@ -1,4 +1,8 @@
-"""Synthetic-only offline regressions; no live vendor sample is asserted."""
+"""Offline regressions; one timing-only projection is from an owned capture.
+
+Synthetic envelopes around that projection are not retained raw vendor events;
+neither they nor the remaining synthetic cases assert acquisition authority.
+"""
 
 from __future__ import annotations
 
@@ -117,6 +121,16 @@ class TetragonProcessTests(unittest.TestCase):
             hashed.assert_not_called()
         doc = subject.verify_source_lock(self.lock)
         self.assertEqual(doc["commit"], "1de2ed8ebea18e56257dc59597aa13bf8f0e471e")
+        self.assertEqual(len(doc["files"]), 19)
+        self.assertTrue(
+            {
+                "bpf/process/bpf_execve_event.c",
+                "pkg/grpc/exec/exec.go",
+                "pkg/ktime/ktime.go",
+                "pkg/ktime/ktime_linux.go",
+                "pkg/process/process.go",
+            }.issubset({item["path"] for item in doc["files"]})
+        )
         self.assertFalse(doc["verification"]["release_image_signature_verified"])
         self.assertIsNone(doc["verification"]["release_image_digest"])
         self.assertFalse(doc["verification"]["local_tag_signature_verified"])
@@ -277,7 +291,7 @@ class TetragonProcessTests(unittest.TestCase):
                 "UNVERIFIED_VENDOR_RECORD_NOT_PROVEN_LIVE_EXEC",
             )
 
-    def test_ancestry_identity_and_chronology_conflicts(self) -> None:
+    def test_ancestry_identity_and_reported_window_conflicts(self) -> None:
         for mutate in (
             lambda e: e[0]["process_exec"]["process"].update(parent_exec_id="other"),
             lambda e: e[0]["process_exec"]["parent"].update(
@@ -294,8 +308,6 @@ class TetragonProcessTests(unittest.TestCase):
             lambda e: e[0]["process_exec"]["process"].update(
                 start_time="2026-09-13T00:00:03Z"
             ),
-            lambda e: e[1]["process_exit"].update(time="2026-09-13T00:00:00Z"),
-            lambda e: e[1]["process_exit"].update(time="2026-09-13T00:00:04Z"),
             lambda e: e[1]["process_exit"].update(status=False),
             lambda e: e[0].update(node_name="wrong-node"),
             lambda e: e[0].update(time="2026-09-13T00:00:05Z"),
@@ -361,6 +373,97 @@ class TetragonProcessTests(unittest.TestCase):
         ]
         subject._identities(processes)
         self.assertLess(hash_calls, 40 * count)
+
+    def test_observed_timestamp_projection_and_unverified_wall_order(self) -> None:
+        # Exact PID/timestamp projection of six records in owned observation
+        # 189925B sha256:3f64362ab12391e5d44c7ce781e4963c8b37262707ec89095d83e719d1bf17de.
+        # Its 47343B NDJSON digest is
+        # sha256:bfd3a0f1789e2fc8d0d51439b80b4c2ccc345e36ea09683bb5094e2d5ad66ebb.
+        # No arguments or other raw records are copied. The envelopes/exec IDs
+        # below are explicitly synthetic, not a live capture or window proof.
+        rows = (
+            (4873, "012648982", "012648941", "012741732", "012741690"),
+            (4878, "371091035", "371090951", "371179450", "371179368"),
+            (4883, "655008108", "655008025", "655101816", "655101691"),
+        )
+        events = []
+        for pid, start, executed, exited, outer_exit in rows:
+            stamps = [
+                f"2026-09-13T08:18:05.{part}Z"
+                for part in (start, executed, exited, outer_exit)
+            ]
+            process = _process(pid, start=stamps[0])
+            for kind, outer, body_time in (
+                ("process_exec", stamps[1], None),
+                ("process_exit", stamps[3], stamps[2]),
+            ):
+                body = {"process": copy.deepcopy(process)}
+                if body_time is not None:
+                    body.update(time=body_time, status=0)
+                event = {kind: body, "time": outer, "node_name": "synthetic-node"}
+                raw = _raw([event])
+                result = subject._event(raw)
+                self.assertEqual(result["vendor_record"], event)
+                self.assertEqual(result["raw_digest"], subject._digest(raw))
+                self.assertEqual(result["raw_bytes"], len(raw))
+                self.assertIs(result["wall_time_ordering_verified"], False)
+                events.append(event)
+        subject._identities(
+            [
+                e[next(k for k in e if k.startswith("process_"))]["process"]
+                for e in events
+            ]
+        )
+        self.assertEqual(len(events), 6)
+
+        # No guessed nanosecond tolerance: independently converted parent,
+        # ancestor, process, and exit times may also reflect wall-clock steps.
+        for field in ("process", "parent", "ancestor", "exit"):
+            event = _events()[1]
+            body = event["process_exit"]
+            if field == "exit":
+                body["time"] = "2026-09-14T00:00:00Z"
+            elif field == "ancestor":
+                body["ancestors"] = [_process(99, start="2026-09-14T00:00:00Z")]
+            else:
+                body[field]["start_time"] = "2026-09-14T00:00:00Z"
+            result = self.normalize([event])
+            self.assertIs(result["wall_time_ordering_verified"], False)
+            self.assertEqual(result["events"][0]["vendor_record"], event)
+
+        for field in ("outer", "start", "exit"):
+            for invalid in ("2026-02-30T00:00:00Z", "2026-09-13T00:00:00.1Z", True):
+                event = copy.deepcopy(events[1])
+                if field == "outer":
+                    event["time"] = invalid
+                elif field == "start":
+                    event["process_exit"]["process"]["start_time"] = invalid
+                else:
+                    event["process_exit"]["time"] = invalid
+                with (
+                    self.subTest(field=field, invalid=invalid),
+                    self.assertRaises(subject.TetragonProcessError),
+                ):
+                    subject._event(_raw([event]))
+
+        # The actual capture's missing BPF metric and reader exit 1/EOF cannot
+        # be represented as a successful zero-error complete reported window.
+        raw = _raw(events)
+        for failure in ("missing-bpf", "reader-error"):
+            window = _window(raw)
+            window.update(
+                opened_at="2026-09-13T08:18:00Z", closed_at="2026-09-13T08:19:00Z"
+            )
+            if failure == "missing-bpf":
+                for phase in ("metrics_before", "metrics_after"):
+                    window[phase].pop("tetragon_bpf_missed_events_total")
+            else:
+                window["reader_errors"] = 1
+            with (
+                self.subTest(failure=failure),
+                self.assertRaises(subject.TetragonProcessError),
+            ):
+                self.normalize(raw=raw, window=window)
 
     def test_loss_restart_or_incomplete_window_fails_closed(self) -> None:
         raw = _raw(_events())

@@ -635,10 +635,20 @@ def _driver(p37b: Any, kind: str, nonce: str, token: str) -> dict:
             "TZ": "UTC",
         },
     )
-    _expect(
-        completed.returncode == 0 and not completed.stdout and not completed.stderr,
-        "native driver refused",
-    )
+    if completed.returncode != 0 or completed.stdout or completed.stderr:
+        failure = _FixtureRefusal("native driver refused")
+        prior._note(
+            failure,
+            [
+                {
+                    "operation": "native_driver",
+                    "returncode": completed.returncode,
+                    "stderr": prior._diagnostic_bytes(completed.stderr, token),
+                }
+            ],
+        )
+        prior._stack_failure(failure, token)
+        raise failure
     held = []
     try:
         parent = provision._root_directory(output_path.parent, held)
@@ -965,6 +975,11 @@ def main(argv: list[str] | None = None) -> int:
             + (exc.args[0] if type(exc) is _FixtureRefusal else type(exc).__name__),
             file=sys.stderr,
         )
+        if type(exc) is _FixtureRefusal:
+            # Only this checker's fresh refusal receives the bounded, token-redacted
+            # notes above; inherited exceptions and their notes remain suppressed.
+            for note in getattr(exc, "__notes__", ())[:2]:
+                print(note, file=sys.stderr)
         return 126
     print(canonical_json(result).decode("ascii"))
     return 0

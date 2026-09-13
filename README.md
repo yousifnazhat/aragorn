@@ -635,6 +635,13 @@ successor runtime remain unchanged; all owned fixture containers were removed.
 Its source checkpoint passes 2,106 regression tests (one skip) and 169 schema
 checks. This bounded integration is not complete event capture, hostile-process
 causation, health-loss response, performance, RUN or Phase 3 qualification.
+The [accepted-health successor](./scripts/stage_runtime_native_health_profile.py)
+adds six existing publisher/response files and their activator pins, preserving
+the 60-file predecessor. Its 66-file stage leaves the health hook inert. The
+owned capture's explicit `--health` mode runs the native read/create checks first,
+then tests fresh healthy and unhealthy publications on that same runtime.
+This remains a fixture integration, not a detector, stale-health watchdog,
+durable dispatch queue or production activation.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

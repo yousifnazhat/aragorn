@@ -6,6 +6,7 @@ import itertools
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr
@@ -27,6 +28,38 @@ DRIVER = (
 
 
 class NativeReceiptFixtureTests(unittest.TestCase):
+    def test_health_opt_in_cleans_both_stacks_on_failure(self):
+        for extra_fails in (False, True):
+            calls = []
+
+            def extra(calls=calls, extra_fails=extra_fails):
+                calls.append("health")
+                if extra_fails:
+                    raise RuntimeError("PRIVATE_HEALTH_CLEANUP")
+                return {}
+
+            helper = SimpleNamespace(stop_extra_units=extra)
+            with (
+                self.subTest(extra_fails=extra_fails),
+                patch.dict(
+                    sys.modules, {"runtime_native_health_systemd_check": helper}
+                ),
+                patch.object(subject.setup_prior, "_require_fixture"),
+                patch.object(subject, "_sources", return_value={}) as sources,
+                patch.object(
+                    subject, "_prepare", side_effect=ValueError("PRIVATE_SETUP")
+                ),
+                patch.object(
+                    subject.prior,
+                    "_stop_fixture",
+                    side_effect=lambda calls=calls: calls.append("native") or {},
+                ),
+            ):
+                with self.assertRaises(RuntimeError if extra_fails else ValueError):
+                    subject._run("c" * 64, health=True)
+                sources.assert_called_once_with(health=True)
+                self.assertEqual(calls, ["health", "native"])
+
     def test_exact_installed_pins_and_credential_sets(self):
         original, replacements = stage._verified_payloads()
         payloads = original | replacements
@@ -220,16 +253,16 @@ class NativeReceiptFixtureTests(unittest.TestCase):
                 "_stop_fixture",
                 side_effect=RuntimeError("PRIVATE_CLEANUP_DETAIL"),
             ),
-        ):
-            with self.assertRaisesRegex(
+            self.assertRaisesRegex(
                 subject._FixtureRefusal,
                 "cleanup failed after SOURCES; primary=ValueError",
-            ):
-                subject._run("c" * 64)
+            ),
+        ):
+            subject._run("c" * 64)
 
     def test_driver_input_keeps_legacy_newline_and_failure_diagnostics_redact(self):
-        import runtime_action_worker_openclaw_systemd_probe as p37b
         import runtime_action_worker_activation_expiry_systemd_probe as p37c
+        import runtime_action_worker_openclaw_systemd_probe as p37b
 
         with (
             patch.object(

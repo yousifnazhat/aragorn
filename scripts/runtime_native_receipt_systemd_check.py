@@ -129,6 +129,7 @@ def _phase(value: str) -> None:
             "FINAL_RECEIPTS",
             "JOURNAL",
             "FINAL_IDENTITIES",
+            "HEALTH_RESPONSE",
             "CLEANUP",
         },
         "unknown fixture phase",
@@ -136,9 +137,14 @@ def _phase(value: str) -> None:
     _PHASE = value
 
 
-def _sources() -> dict:
+def _sources(*, health: bool = False) -> dict:
+    code = prior._CODE | _EXTRA_CODE
+    if health:
+        import runtime_native_health_systemd_check as health_check
+
+        code.update(health_check._CODE)
     # Replace only the frozen helper's pin inventory for this bounded successor.
-    with patch.object(prior, "_CODE", prior._CODE | _EXTRA_CODE):
+    with patch.object(prior, "_CODE", code):
         result = prior._sources()
     raw = response._read_regular(_DRIVER, 0, {0o444})
     _expect(
@@ -889,11 +895,16 @@ def _journal_proof(
             )
 
 
-def _run(container: str) -> dict:
+def _run(container: str, *, health: bool = False) -> dict:
+    _expect(type(health) is bool, "health fixture selection must be boolean")
+    health_check = None
+    if health:
+        import runtime_native_health_systemd_check as health_check
+
     _phase("PRECHECK")
     setup_prior._require_fixture(container)
     _phase("SOURCES")
-    sources = _sources()
+    sources = _sources(health=True) if health else _sources()
     try:
         setup = _prepare()
         import runtime_action_worker_openclaw_systemd_probe as p37b
@@ -963,7 +974,7 @@ def _run(container: str) -> dict:
         _expect(
             prior._processes(container) == processes
             and prior._boot() == boot
-            and _sources() == sources
+            and (_sources(health=True) if health else _sources()) == sources
             and setup_prior._installed(setup["skill_digest"]) == installed
             and response.broker._file_identity(_READ_PATH.lstat()) == read_identity
             and response._read_regular(_READ_PATH, 0, {0o444}) == _READ_BYTES,
@@ -997,12 +1008,31 @@ def _run(container: str) -> dict:
                 "NO_HOSTILE_OWNER_ROLLBACK_LATENCY_EXTERNAL_COLLECTOR_HEALTH_OR_RUN_QUALIFICATION",
             ],
         }
+        if health_check is not None:
+            _phase("HEALTH_RESPONSE")
+            try:
+                observation["health_response"] = health_check.run_after_native(
+                    container, observation, sys.modules[__name__]
+                )
+            except health_check.HealthFixtureError as exc:
+                if type(exc) is health_check.HealthFixtureError:
+                    raise _FixtureRefusal(str(exc)) from exc
+                raise
     finally:
         previous_phase = _PHASE
         primary_failure = sys.exception()
         _phase("CLEANUP")
         try:
-            cleanup = prior._stop_fixture()
+            try:
+                extra_cleanup = (
+                    health_check.stop_extra_units()
+                    if health_check is not None
+                    else None
+                )
+            finally:
+                cleanup = prior._stop_fixture()
+            if extra_cleanup is not None:
+                cleanup.update(extra_cleanup)
         except Exception as cleanup_error:
             failure = _FixtureRefusal(
                 "cleanup failed after "
@@ -1021,14 +1051,17 @@ def _run(container: str) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    health = len(arguments) == 2 and arguments[1] == "--health"
+    if health:
+        arguments.pop()
     if len(arguments) != 1:
         print(
-            "usage: runtime_native_receipt_systemd_check OWNED_CONTAINER_ID",
+            "usage: runtime_native_receipt_systemd_check OWNED_CONTAINER_ID [--health]",
             file=sys.stderr,
         )
         return 64
     try:
-        result = _run(arguments[0])
+        result = _run(arguments[0], health=True) if health else _run(arguments[0])
     except Exception as exc:  # noqa: BLE001 - never emit arbitrary fixture or credential diagnostics
         print(
             "native receipt fixture not confirmed: "

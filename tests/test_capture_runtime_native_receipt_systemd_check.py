@@ -318,7 +318,7 @@ class NativeReceiptCaptureTests(unittest.TestCase):
                 subject._verify_fixture(bad, CONTAINER, NAME, OWNER, COMMIT)
 
     @contextmanager
-    def capture_fixture(self, failure=None):
+    def capture_fixture(self, failure=None, *, health=False):
         source = {"commit": COMMIT}
         parent = {
             "image_inspect": {"RootFS": {"Layers": ["base"]}},
@@ -340,6 +340,21 @@ class NativeReceiptCaptureTests(unittest.TestCase):
             "phase3_eligible": False,
             "run_conformance_eligible": False,
         }
+        if health:
+            observation["health_response"] = {
+                "schema": "aragorn/native-health-systemd-observation/v1",
+                "status": "OBSERVED",
+                "fixture_container": CONTAINER,
+                "authority": "OWNED_ACCEPTED_HEALTH_RESPONSE_ONLY_NOT_SENSOR_LOSS_OR_RUN_QUALIFICATION",
+                "phase3_eligible": False,
+                "run_conformance_eligible": False,
+                "production_activation_eligible": False,
+                "sensor_loss_detection": False,
+                "watchdog_or_stale_health_coverage": False,
+                "durable_dispatch_queue": False,
+            }
+            if failure == "authority":
+                observation["health_response"]["phase3_eligible"] = True
         calls = []
 
         def docker(*argv):
@@ -450,6 +465,45 @@ class NativeReceiptCaptureTests(unittest.TestCase):
                     "/" + subject.stage._NEW_DIRECTORY, json.loads(verify[-2])
                 )
                 self.assertEqual(json.loads(verify[-1]), [os.geteuid(), os.getegid()])
+
+    def test_health_opt_in_preserves_default_verifier_and_owns_cleanup(self):
+        self.assertEqual(
+            subject._HEALTH_VERIFY.replace(
+                "len(directories)!=16", "len(directories)!=13"
+            ).replace("len(set(directories))!=16", "len(set(directories))!=13"),
+            subject._VERIFY,
+        )
+        for value in (1, "yes", None):
+            with self.assertRaises(RuntimeError):
+                subject._capture(health=value)
+        for failure in (None, "checker", "cleanup", "source", "authority"):
+            with (
+                self.subTest(failure=failure),
+                self.capture_fixture(failure, health=True) as (calls, cleanup, mocks),
+            ):
+                if failure:
+                    with self.assertRaises(RuntimeError):
+                        subject._capture(health=True)
+                else:
+                    result = subject._capture(health=True)
+                    self.assertEqual(
+                        result["schema"],
+                        "aragorn/runtime-native-health-systemd-capture/v1",
+                    )
+                    self.assertEqual(len(result["staged_profile"]["files"]), 66)
+                    self.assertIs(result["production_activation_eligible"], False)
+                cleanup.assert_called_once_with(NAME, OWNER, subject._IMAGE)
+                self.assertEqual(
+                    mocks["_journal_check"].call_args.args[0][-3:],
+                    [subject._FILES[subject._CHECKER], CONTAINER, "--health"],
+                )
+                copies = [argv for argv in calls if argv[0] == "cp"]
+                self.assertEqual(len(copies), 1 + len(subject._HEALTH_FILES))
+                verify = next(argv for argv in calls if subject._HEALTH_VERIFY in argv)
+                self.assertEqual(
+                    len(json.loads(verify[-4])), 66 + len(subject._HEALTH_FILES)
+                )
+                self.assertEqual(len(json.loads(verify[-2])), 16)
 
 
 if __name__ == "__main__":

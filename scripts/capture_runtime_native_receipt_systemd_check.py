@@ -45,6 +45,10 @@ _FILES = {
     _CHECKER: "/opt/aragorn/runtime-native-receipt-systemd-check.py",
     "benchmark/admission/openclaw-v2026.7.1/native-receipt-read-create-driver-v1.mjs": "/opt/aragorn/native-receipt-read-create-driver-v1.mjs",
 }
+_HEALTH_FILES = {
+    **_FILES,
+    "scripts/runtime_native_health_systemd_check.py": "/opt/aragorn/runtime_native_health_systemd_check.py",
+}
 _DIRECTORY_HANDOFF = r"""
 directories=json.loads(sys.argv[3])
 copied_owner=json.loads(sys.argv[4])
@@ -98,6 +102,9 @@ if not expected_names or {p.name for p in client.iterdir()}!=expected_names:
  raise RuntimeError('native client directory inventory changed')
 """
 )
+_HEALTH_VERIFY = _VERIFY.replace(
+    "len(directories)!=13", "len(directories)!=16"
+).replace("len(set(directories))!=13", "len(set(directories))!=16")
 
 
 def _expect(condition: bool, message: str) -> None:
@@ -323,7 +330,17 @@ def _verify_fixture(
     )
 
 
-def _capture() -> dict[str, Any]:
+def _capture(*, health: bool = False) -> dict[str, Any]:
+    _expect(type(health) is bool, "health fixture selection must be boolean")
+    profile, materialize = stage, stage.stage_runtime_native_receipt_profile
+    if health:
+        from scripts import stage_runtime_native_health_profile as profile
+
+        materialize = profile.stage_runtime_native_health_profile
+    files = _HEALTH_FILES if health else _FILES
+    file_count, source_count, dependency_count = (
+        (66, 79, 21) if health else (60, 72, 15)
+    )
     source = existing.existing._source_identity()
     build = _build_binding(source["commit"])
     helpers = {
@@ -332,7 +349,7 @@ def _capture() -> dict[str, Any]:
             "installed_path": target,
             "installed_mode": "0444",
         }
-        for path, target in _FILES.items()
+        for path, target in files.items()
     }
     parent = existing.campaign.current_v3_parent_identity()
     before = snapshot.snapshot_parent(parent)
@@ -350,13 +367,13 @@ def _capture() -> dict[str, Any]:
     name = "aragorn-native-receipt-check-" + owner[:16]
     with TemporaryDirectory(prefix="aragorn-native-receipt-stage-") as temporary:
         output = Path(temporary).resolve() / "stage"
-        manifest = stage.stage_runtime_native_receipt_profile(output)
+        manifest = materialize(output)
         _expect(
-            manifest["schema"] == stage._SCHEMA
-            and manifest["authority"] == stage._AUTHORITY
-            and len(manifest["files"]) == 60
-            and len(manifest["source_inputs"]) == 72
-            and len(manifest["new_dependencies"]) == 15
+            manifest["schema"] == profile._SCHEMA
+            and manifest["authority"] == profile._AUTHORITY
+            and len(manifest["files"]) == file_count
+            and len(manifest["source_inputs"]) == source_count
+            and len(manifest["new_dependencies"]) == dependency_count
             and manifest["required_runtime_not_included"]["tree"] == stage._RUNTIME_TREE
             and all(
                 manifest[key] is False
@@ -373,7 +390,7 @@ def _capture() -> dict[str, Any]:
             ),
             "native stage inventory or authority changed",
         )
-        original, replacements = stage._verified_payloads()
+        original, replacements = profile._verified_payloads()
         stage.base._audit_tree(output, original | replacements)
         payloads = {
             item["path"]: {
@@ -384,7 +401,7 @@ def _capture() -> dict[str, Any]:
             }
             for item in manifest["files"]
         }
-        _expect(len(payloads) == 60, "native stage destinations are not unique")
+        _expect(len(payloads) == file_count, "native stage destinations are not unique")
         started = existing.existing._now()
         try:
             container = (
@@ -402,7 +419,7 @@ def _capture() -> dict[str, Any]:
             # file copies cannot create that destination in the frozen child.
             existing._docker("cp", str(output) + "/.", container + ":/")
             stage.base._audit_tree(output, original | replacements)
-            for path, target in _FILES.items():
+            for path, target in files.items():
                 existing._docker("cp", str(_ROOT / path), container + ":" + target)
             existing._docker("start", container)
             existing._docker(
@@ -413,7 +430,7 @@ def _capture() -> dict[str, Any]:
                 "-S",
                 "-B",
                 "-c",
-                _VERIFY,
+                _HEALTH_VERIFY if health else _VERIFY,
                 json.dumps(payloads | helpers),
                 container,
                 json.dumps(manifest["directories"]),
@@ -426,8 +443,9 @@ def _capture() -> dict[str, Any]:
                 "-I",
                 "-S",
                 "-B",
-                _FILES[_CHECKER],
+                files[_CHECKER],
                 container,
+                *(["--health"] if health else []),
             ]
             raw = previous._journal_check(argv)
             observation = acquisition._load_json(raw, "native fixture observation")
@@ -441,6 +459,28 @@ def _capture() -> dict[str, Any]:
                 and observation["run_conformance_eligible"] is False,
                 "native fixture observation or proof ceiling changed",
             )
+            if health:
+                health_observation = observation["health_response"]
+                _expect(
+                    health_observation["schema"]
+                    == "aragorn/native-health-systemd-observation/v1"
+                    and health_observation["status"] == "OBSERVED"
+                    and health_observation["fixture_container"] == container
+                    and health_observation["authority"]
+                    == "OWNED_ACCEPTED_HEALTH_RESPONSE_ONLY_NOT_SENSOR_LOSS_OR_RUN_QUALIFICATION"
+                    and all(
+                        health_observation[key] is False
+                        for key in (
+                            "phase3_eligible",
+                            "run_conformance_eligible",
+                            "production_activation_eligible",
+                            "sensor_loss_detection",
+                            "watchdog_or_stale_health_coverage",
+                            "durable_dispatch_queue",
+                        )
+                    ),
+                    "native health observation or proof ceiling changed",
+                )
         finally:
             cleanup = snapshot._cleanup_snapshot(name, owner, _IMAGE)
         _expect(
@@ -459,7 +499,9 @@ def _capture() -> dict[str, Any]:
         existing.existing._source_identity() == source, "source changed during capture"
     )
     return {
-        "schema": "aragorn/runtime-native-receipt-systemd-capture/v1",
+        "schema": "aragorn/runtime-native-health-systemd-capture/v1"
+        if health
+        else "aragorn/runtime-native-receipt-systemd-capture/v1",
         "authority": "LOCAL_SUCCESSOR_FIXTURE_NOT_RUN_OR_PHASE3_QUALIFICATION",
         "status": "OBSERVED",
         "source": source,
@@ -489,9 +531,12 @@ def _capture() -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    health = bool(arguments and arguments[0] == "--health")
+    if health:
+        arguments.pop(0)
     if len(arguments) != 1 or arguments[0].startswith("--"):
         print(
-            "usage: capture_runtime_native_receipt_systemd_check ABSENT_OUTPUT_JSON",
+            "usage: capture_runtime_native_receipt_systemd_check [--health] ABSENT_OUTPUT_JSON",
             file=sys.stderr,
         )
         return 64
@@ -500,7 +545,9 @@ def main(argv: list[str] | None = None) -> int:
         output.is_absolute() and not os.path.lexists(output),
         "output must be absent and absolute",
     )
-    raw = acquisition._canonical(_capture()) + b"\n"
+    raw = (
+        acquisition._canonical(_capture(health=True) if health else _capture()) + b"\n"
+    )
     acquisition._write_output(output, raw)
     print(
         json.dumps(

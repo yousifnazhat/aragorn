@@ -485,6 +485,28 @@ and the container removed. Parent snapshots and staged source pins were rechecke
 This is `OBSERVED`, not production deployment, automatic detection dispatch,
 successor producer reinstallation coverage, or RUN/Phase 3 qualification.
 
+The additive [endpoint journal overlay](./scripts/materialize_runtime_endpoint_journal.py)
+instruments the worker, sensor, and broker at their existing peer, validation,
+submission, result, and delivery boundaries. It emits bounded, best-effort records
+without raw requests, credentials, paths, or exception text; transport submission
+and a verified broker result remain distinct. Its
+[55-file profile stager](./scripts/stage_runtime_endpoint_journal_profile.py)
+preserves the quarantine issuer, startup gate, response closure, and unit while
+updating the three module pins and adding the journal helper to the activator.
+Staging does not activate services. Linux helper checks cover nonblocking output
+and descriptor preservation, not live journald retention or complete event capture.
+Mandatory loss enforcement, durable retention, native events, and RUN qualification
+remain separate requirements.
+
+The [restricted Tetragon process adapter](./src/aragorn/runtime_tetragon_process.py)
+validates bounded offline records against an
+[exact source lock](./benchmark/tetragon-candidate-source-v1.lock.json).
+Fourteen selected upstream source files are byte-bound; no release image or live
+sensor is qualified. Host PIDs, container-ID prefixes, namespace inodes, and debug
+flags are not promoted to stronger identities or execution proof. A clean
+caller-reported capture window does not prove authenticity or completeness, and
+returned vendor records still contain their original arguments and paths.
+
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
 transaction record under its exclusive root lock after verifying the active

@@ -486,6 +486,61 @@ class NativeHealthFixtureTests(unittest.TestCase):
                     [("healthy", 6, 1000, 1015), ("unhealthy", 7, 1000, 1015)],
                 )
 
+    def test_hook_reload_only_allows_exact_worker_command_history_reset(self):
+        prefix = "{ path=/usr/bin/python3.12 ; argv[]=/usr/bin/python3.12 fixed ; ignore_errors=no ; "
+        before = {
+            "worker": {
+                "unit": {
+                    "ExecStart": prefix
+                    + "start_time=[Sun 2026-09-13 21:09:32 UTC] ; stop_time=[n/a] ; pid=888 ; code=(null) ; status=0/0 }",
+                    "MainPID": "888",
+                    "InvocationID": "a" * 32,
+                },
+                "process": {"pid": 888, "start_time_ticks": 42},
+            },
+            "sensor": {"unchanged": True},
+        }
+        after = deepcopy(before)
+        after["worker"]["unit"]["ExecStart"] = (
+            prefix
+            + "start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }"
+        )
+        subject._check_hook_processes(before, before)
+        subject._check_hook_processes(before, after)
+        for group, key, value in (
+            (
+                "unit",
+                "ExecStart",
+                after["worker"]["unit"]["ExecStart"].replace(" fixed ", " other "),
+            ),
+            (
+                "unit",
+                "ExecStart",
+                after["worker"]["unit"]["ExecStart"].replace("pid=0", "pid=1"),
+            ),
+            ("unit", "MainPID", "889"),
+            ("unit", "InvocationID", "b" * 32),
+            ("process", "pid", 889),
+            ("process", "start_time_ticks", 43),
+        ):
+            changed = deepcopy(after)
+            changed["worker"][group][key] = value
+            with (
+                self.subTest(group=group, key=key),
+                self.assertRaises(subject.HealthFixtureError),
+            ):
+                subject._check_hook_processes(before, changed)
+        changed = deepcopy(after)
+        changed["sensor"]["unchanged"] = False
+        with self.assertRaises(subject.HealthFixtureError):
+            subject._check_hook_processes(before, changed)
+        changed = deepcopy(before)
+        changed["worker"]["unit"]["ExecStart"] = changed["worker"]["unit"][
+            "ExecStart"
+        ].replace("pid=888", "pid=887")
+        with self.assertRaises(subject.HealthFixtureError):
+            subject._check_hook_processes(changed, after)
+
     def test_cleanup_is_fixed_and_partial_state_refuses(self):
         for active in ("inactive", "active"):
             with (

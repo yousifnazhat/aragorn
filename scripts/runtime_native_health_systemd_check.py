@@ -596,6 +596,43 @@ def _join(
     return {**captured, "document": document, "retention": evidence}
 
 
+def _check_hook_processes(before: dict, after: dict) -> None:
+    if after == before:
+        return
+    worker = before["worker"]
+    prefix, separator, history = worker["unit"]["ExecStart"].partition(
+        " ; ignore_errors=no ; "
+    )
+    pid = worker["process"]["pid"]
+    _expect(
+        bool(separator)
+        and type(pid) is int
+        and pid > 0
+        and re.fullmatch(
+            r"start_time=\[[A-Za-z0-9 :+-]{1,128}\] ; stop_time=\[n/a\] ; pid="
+            + str(pid)
+            + r" ; code=\(null\) ; status=0/0 }",
+            history,
+        )
+        is not None,
+        "hook reload worker command history is unbound",
+    )
+    # systemd reload resets this history; kernel identity and all other fields stay exact.
+    reset = (
+        prefix
+        + separator
+        + "start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }"
+    )
+    _expect(
+        after
+        == {
+            **before,
+            "worker": {**worker, "unit": {**worker["unit"], "ExecStart": reset}},
+        },
+        "hook reload changed native processes",
+    )
+
+
 def run_after_native(container: str, observation: dict, native: Any) -> dict:
     _guard(container)
     import runtime_action_worker_openclaw_systemd_probe as p37b
@@ -621,6 +658,8 @@ def run_after_native(container: str, observation: dict, native: Any) -> dict:
         type(floor) is int and 0 < floor < 2**53 - 2, "health accepted floor is invalid"
     )
     hook = _install_hook()
+    after_hook = native.prior._processes(container)
+    _check_hook_processes(observation["processes"], after_hook)
     invocations = []
     for index, status in enumerate(("healthy", "unhealthy"), 1):
         cursor = native.prior._cursor()
@@ -640,7 +679,7 @@ def run_after_native(container: str, observation: dict, native: Any) -> dict:
         )
         if index == 1:
             _expect(
-                native.prior._processes(container) == observation["processes"]
+                native.prior._processes(container) == after_hook
                 and retained._running(response._identities()) == before,
                 "healthy publication changed running processes",
             )
@@ -692,6 +731,7 @@ def run_after_native(container: str, observation: dict, native: Any) -> dict:
         "authority": "OWNED_ACCEPTED_HEALTH_RESPONSE_ONLY_NOT_SENSOR_LOSS_OR_RUN_QUALIFICATION",
         "installed_sources": sources,
         "hook": hook,
+        "processes_after_hook": after_hook,
         "accepted_floor_before": floor,
         "invocations": invocations,
         "persistent_start_refusal": start,

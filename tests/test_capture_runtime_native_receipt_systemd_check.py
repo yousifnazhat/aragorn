@@ -246,7 +246,7 @@ class NativeReceiptCaptureTests(unittest.TestCase):
             elif mutation == "helper":
                 bad["helper"]["digest"] = "sha256:" + "0" * 64
             else:
-                bad["runtime_tree_before"]["entry_count"] = 31987.0
+                bad["runtime_tree_before"]["entry_count"] = 31988.0
             with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
                 subject._validate_runtime(bad)
         for malformed in (False, True):

@@ -620,8 +620,13 @@ finalization callbacks. Native validation correctly refuses the unattributed
 parameters before retaining a create attempt. The fixed worker plugin now uses
 the existing current-context factory path; other plugins keep their cache path.
 Inert regressions reproduce the original failure and verify that selection fix.
-This additional source overlay still requires a new build and fresh common-profile
-read/create validation; it does not qualify the previously built runtime.
+The [successor build observation](./benchmark/evidence/phase3-native-tool-runtime-build-development-v2-2026-09-13.json)
+retains passing TypeScript, full build, workspace-aware package/import checks,
+fresh offline install, and unchanged read-only runtime measurements. Build
+dependencies remained read-only; packaging used a private temporary namespace.
+The stager and owned capture now bind this successor without changing the earlier
+build record or runtime. Fresh common-profile read/create validation is still
+required; build success does not establish receipt or Phase 3 qualification.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

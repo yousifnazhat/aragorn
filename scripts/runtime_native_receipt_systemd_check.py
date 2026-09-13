@@ -29,7 +29,7 @@ from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 
 response = prior.response
 setup_prior = prior.prior
-_RUNTIME = "sha256:06335e3b80e89aa0157b037b1eea0d4078b40bf35d3c3960640a35a215d5bcd3"
+_RUNTIME = "sha256:4e6e94cf4fb8a2527ec1cd789b20a7ddf6c84f03973b3579ded64ef8e2ef96c3"
 _READ_PATH = Path("/var/lib/aragorn-agent-gateway/workspace/native-receipt-read.txt")
 _READ_BYTES = b"Aragorn inert native receipt read."
 _DRIVER = Path("/opt/aragorn/native-receipt-read-create-driver-v1.mjs")
@@ -39,7 +39,7 @@ _DRIVER_PIN = (
 )
 _ACTIVATOR_PIN = (
     38837,
-    "sha256:d24da2fba266b302da6f633fc0c161513f3e7f2e60f804572a749a3bdce3c1ea",
+    "sha256:dad9cf54d27b50abea74af6159319c2b5d05a12c9cdf74d931b4b105a1b01285",
 )
 _PHASE = "PRECHECK"
 _EXTRA_CODE = {

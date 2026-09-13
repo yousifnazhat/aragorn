@@ -30,7 +30,7 @@ from tests.test_materialize_runtime_quarantine_activation import (
 _GENESIS_PAIR = '"native-tool-genesis" "/etc/aragorn/runtime-native-tool-genesis.json"'
 _ACTIVATOR_PIN = (
     38837,
-    "sha256:d24da2fba266b302da6f633fc0c161513f3e7f2e60f804572a749a3bdce3c1ea",
+    "sha256:dad9cf54d27b50abea74af6159319c2b5d05a12c9cdf74d931b4b105a1b01285",
 )
 
 

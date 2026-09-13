@@ -34,11 +34,11 @@ _AUTHORITY = (
 )
 _RUNTIME_TREE = {
     "algorithm": "aragorn/runtime-tree/v1",
-    "entry_count": 31987,
-    "file_count": 31969,
+    "entry_count": 31988,
+    "file_count": 31970,
     "symlink_count": 18,
-    "total_bytes": 289776214,
-    "tree_digest": "sha256:06335e3b80e89aa0157b037b1eea0d4078b40bf35d3c3960640a35a215d5bcd3",
+    "total_bytes": 289776316,
+    "tree_digest": "sha256:4e6e94cf4fb8a2527ec1cd789b20a7ddf6c84f03973b3579ded64ef8e2ef96c3",
 }
 _ENTRYPOINT = (
     23463,
@@ -86,7 +86,7 @@ _SOURCE_PINS = {
 }
 _ACTIVATOR_PIN = (
     38837,
-    "sha256:d24da2fba266b302da6f633fc0c161513f3e7f2e60f804572a749a3bdce3c1ea",
+    "sha256:dad9cf54d27b50abea74af6159319c2b5d05a12c9cdf74d931b4b105a1b01285",
 )
 _OUTPUT_PINS = {
     **receipts._OUTPUTS,
@@ -107,7 +107,7 @@ _OLD_RUNTIME = (
     + _ENTRYPOINT[1]
 )
 _NEW_RUNTIME = (
-    "31987:31969:18:289776214:" + _RUNTIME_TREE["tree_digest"] + ":" + _ENTRYPOINT[1]
+    "31988:31970:18:289776316:" + _RUNTIME_TREE["tree_digest"] + ":" + _ENTRYPOINT[1]
 )
 _BINDING_CHECK = """def verify_native_sources(worker_uid, worker_gid):
     # Read the fixed root sources, not projected credentials or mutable state.

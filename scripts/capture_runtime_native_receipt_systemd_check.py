@@ -22,21 +22,21 @@ existing = previous.existing
 acquisition = existing.existing.acquisition
 snapshot = existing.parent_snapshot
 _IMAGE = existing._IMAGE
-_VOLUME = "aragorn-native-runtime-4339c83-behwtstv-v1"
+_VOLUME = "aragorn-native-cache-runtime-79ed6eb-v1"
 # Expected provisioning policy, not a previously retained volume-inspect claim.
 _VOLUME_POLICY = {
     "Name": _VOLUME,
     "Driver": "local",
     "Scope": "local",
     "Options": None,
-    "Labels": {"dev.aragorn.capture-owner": "native-build-3f59777-behwtstv"},
+    "Labels": {"dev.aragorn.capture-owner": "native-cache-build-79ed6eb-v1"},
 }
 _BUILD = (
-    "benchmark/evidence/phase3-native-tool-runtime-build-development-v1-2026-09-13.json"
+    "benchmark/evidence/phase3-native-tool-runtime-build-development-v2-2026-09-13.json"
 )
 _BUILD_PIN = (
-    30193,
-    "sha256:af23bde8b997ec4e6e8f18cf05159d6aa6ac8c3e34f4b60e77e81eab43f6405a",
+    40591,
+    "sha256:a1d302431804f760299e1bcbd16aa269214ce0f35e2b8996c9f0cd3d03658877",
 )
 _CHECKER = "scripts/runtime_native_receipt_systemd_check.py"
 _FILES = {

@@ -1061,8 +1061,9 @@ an exclusive parent-volume lease, or independent host attestation. All eligibili
 flags remain false; the 31-case dispatcher remains non-executing with no resume
 support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
-now supports DET-01, archive-source replacement, core-updater replacement, workshop invalidation,
-workshop proposal/apply, curator restore, config-entry activation, plugin enable,
+now supports DET-01, archive-source replacement, core-updater replacement,
+plugin-force reinstall, workshop invalidation, workshop proposal/apply,
+curator restore, config-entry activation, plugin enable,
 fresh-session reset, missing-prompt-blob rebuild, cron rescan, and both chat-session
 and session snapshot consumption.
 Shared native checks bind static process identities, unit restrictions, and

@@ -229,6 +229,24 @@ class NativeReceiptFixtureTests(unittest.TestCase):
 
     def test_driver_input_keeps_legacy_newline_and_failure_diagnostics_redact(self):
         import runtime_action_worker_openclaw_systemd_probe as p37b
+        import runtime_action_worker_activation_expiry_systemd_probe as p37c
+
+        with (
+            patch.object(
+                p37c,
+                "_command",
+                return_value={
+                    "exit_code": 1,
+                    "stderr": p37c._raw_record(b"INERT_SECRET activation refused"),
+                },
+            ),
+            patch.object(subject.prior, "_stack_failure"),
+        ):
+            with self.assertRaises(subject._FixtureRefusal) as failure:
+                subject._activate(p37c, "INERT_SECRET")
+            notes = str(failure.exception.__notes__)
+            self.assertNotIn("INERT_SECRET", notes)
+            self.assertIn("[REDACTED] activation refused", notes)
 
         with (
             tempfile.TemporaryDirectory() as temporary,

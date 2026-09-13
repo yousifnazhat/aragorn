@@ -235,6 +235,36 @@ def _startup() -> dict:
     return {"worker": state, "load_credentials": result}
 
 
+def _fixture_token(p37b: Any) -> str:
+    raw = response._read_regular(p37b._GATEWAY_ENVIRONMENT, 0, {0o400})
+    match = re.fullmatch(rb"OPENCLAW_GATEWAY_TOKEN=([0-9a-f]{64})\n", raw)
+    _expect(match is not None, "fixture token unavailable")
+    return match[1].decode("ascii")
+
+
+def _activate(p37c: Any, token: str) -> None:
+    activation = p37c._command([str(p37c._ACTIVATOR)], timeout=60)
+    if activation["exit_code"] != 0:
+        failure = _FixtureRefusal("native fixture activation failed")
+        prior._note(
+            failure,
+            [
+                {
+                    "operation": "native_activation",
+                    "exit_code": activation["exit_code"],
+                    "stderr": prior._diagnostic_bytes(
+                        p37c._raw_bytes(activation["stderr"]),
+                        token,
+                        tail=True,
+                        limit=1536,
+                    ),
+                }
+            ],
+        )
+        prior._stack_failure(failure, token)
+        raise failure
+
+
 def _prepare() -> dict:
     _phase("FRESH_INPUTS")
     import runtime_action_worker_final_combined_v3_plugin_force_reinstall_systemd_probe as v3
@@ -338,8 +368,7 @@ def _prepare() -> dict:
     finally:
         os.close(read_fd)
     _phase("ACTIVATION")
-    activation = p37c._command([str(p37c._ACTIVATOR)], timeout=60)
-    _expect(activation["exit_code"] == 0, "native fixture activation failed")
+    _activate(p37c, _fixture_token(p37b))
     _phase("STARTUP")
     return {
         "runtime_digest": _RUNTIME,
@@ -878,10 +907,7 @@ def _run(container: str) -> dict:
             "inert read input changed",
         )
         p37b._DRIVER_ROOT.mkdir(mode=0o700)
-        raw = response._read_regular(p37b._GATEWAY_ENVIRONMENT, 0, {0o400})
-        match = re.fullmatch(rb"OPENCLAW_GATEWAY_TOKEN=([0-9a-f]{64})\n", raw)
-        _expect(match is not None, "fixture token unavailable")
-        token = match[1].decode("ascii")
+        token = _fixture_token(p37b)
         cursor, lower, nonce = (
             prior._cursor(),
             time.monotonic_ns() // 1000,

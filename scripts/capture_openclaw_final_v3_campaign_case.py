@@ -20,6 +20,9 @@ sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
 from aragorn import admission_openclaw_final_v3_campaign as campaign
 from aragorn.cas import CAS, CASError
 from scripts import capture_openclaw_final_v3_det01_campaign as det01
+from scripts import (
+    materialize_openclaw_final_v3_plugin_force_current_parent as force_sources,
+)
 from scripts import openclaw_final_v3_archive_replacement_case as archive
 from scripts import openclaw_final_v3_chat_session_snapshot_case as chat_snapshot
 from scripts import openclaw_final_v3_config_entry_case as config_entry
@@ -29,6 +32,7 @@ from scripts import openclaw_final_v3_curator_restore_case as curator
 from scripts import openclaw_final_v3_fresh_session_reset_case as fresh_session
 from scripts import openclaw_final_v3_missing_prompt_blob_case as missing_prompt
 from scripts import openclaw_final_v3_plugin_enable_case as plugin_enable
+from scripts import openclaw_final_v3_plugin_force_case as plugin_force
 from scripts import openclaw_final_v3_session_snapshot_case as session_snapshot
 from scripts import openclaw_final_v3_workshop_invalidation_case as workshop
 from scripts import openclaw_final_v3_workshop_proposal_apply_case as proposal
@@ -40,7 +44,9 @@ _DOCKER = det01.acquisition._DOCKER
 _CORE_CASE = "ADM-02/update/core-updater-plugin-replacement"
 _WORKSHOP_CASE = "ADM-02/reload/workshop-invalidation"
 _ARCHIVE_CASE = "ADM-02/update/archive-source-force-replacement"
+_PLUGIN_FORCE_CASE = "ADM-02/update/plugin-force-reinstall"
 _BACKENDS = {
+    _PLUGIN_FORCE_CASE: (plugin_force, "plugin-force-reinstall"),
     "ADM-02/reload/chat-session-snapshot-consumer": (
         chat_snapshot,
         "chat-session-snapshot-consumer",
@@ -182,12 +188,31 @@ def _namespace_state(*, case_id: str = _CORE_CASE) -> dict[str, Any]:
 def _invoke(output: Path, *, case_id: str = _CORE_CASE) -> dict[str, Any]:
     backend, _ = _BACKENDS[case_id]
     argv = ["/bin/sh", str(_ROOT / backend._RECIPE), str(output)]
+    extra = {}
     started = det01._now()
     with (
         TemporaryDirectory(prefix="aragorn-v3-case-logs-") as temporary,
         (Path(temporary) / "stdout").open("w+b") as stdout,
         (Path(temporary) / "stderr").open("w+b") as stderr,
     ):
+        if case_id == _PLUGIN_FORCE_CASE:
+            build = Path(temporary).resolve() / "build"
+            manifest = (
+                force_sources.materialize_openclaw_final_v3_plugin_force_current_parent(
+                    build
+                )
+            )
+            recipe = build / force_sources._RECIPE
+            record = next(
+                item for item in manifest["files"] if item["name"] == recipe.name
+            )
+            raw = _read_output(recipe)
+            _expect(
+                len(raw) == record["bytes"] and _digest(raw) == record["digest"],
+                "generated recipe bytes changed before launch",
+            )
+            argv = ["/bin/sh", str(recipe), str(_ROOT), str(output)]
+            extra = {"recipe": record}
         process = subprocess.Popen(
             argv,
             cwd=_ROOT,
@@ -199,17 +224,19 @@ def _invoke(output: Path, *, case_id: str = _CORE_CASE) -> dict[str, Any]:
         try:
             process.wait(timeout=240)
         except BaseException:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
             try:
                 process.wait(timeout=30)
             except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                if process.poll() is None:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                 process.wait(timeout=10)
             raise
         completed = det01._now()
@@ -230,6 +257,7 @@ def _invoke(output: Path, *, case_id: str = _CORE_CASE) -> dict[str, Any]:
         "exit_code": process.returncode,
         "stdout": det01.collector._raw(out),
         "stderr": det01.collector._raw(err),
+        **extra,
     }
 
 

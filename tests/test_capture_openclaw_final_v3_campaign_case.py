@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
+import subprocess
 import unittest
 from contextlib import ExitStack
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from aragorn import admission_openclaw_final_v3_campaign as campaign
 from aragorn import admission_openclaw_final_v3_core_updater_qualification as retained
@@ -334,8 +336,113 @@ class CampaignCaseExecutorTests(unittest.TestCase):
                     observation = self.actual_invoke(
                         self.directory / "native.json", case_id=case
                     )
-                self.assertEqual(observation["argv"][1], str(_ROOT / backend._RECIPE))
+                if case == subject._PLUGIN_FORCE_CASE:
+                    recipe = Path(observation["argv"][1])
+                    self.assertEqual(recipe.name, subject.force_sources._RECIPE)
+                    self.assertEqual(recipe.parent.name, "build")
+                    self.assertTrue(
+                        recipe.parent.parent.name.startswith("aragorn-v3-case-logs-")
+                    )
+                    self.assertEqual(
+                        observation["argv"][2:],
+                        [str(_ROOT), str(self.directory / "native.json")],
+                    )
+                    self.assertFalse(recipe.parent.parent.exists())
+                    size, digest = subject.force_sources._OUTPUTS[recipe.name]
+                    self.assertEqual(
+                        observation["recipe"],
+                        {"name": recipe.name, "bytes": size, "digest": digest},
+                    )
+                else:
+                    self.assertEqual(
+                        observation["argv"][1], str(_ROOT / backend._RECIPE)
+                    )
+                    self.assertNotIn("recipe", observation)
                 self.assertEqual(launch.call_args.args[0], observation["argv"])
+
+    def test_generated_recipe_drift_refuses_launch_and_cleans_readonly_context(self):
+        actual_read = subject._read_output
+        paths = []
+
+        def changed(path):
+            paths.append(path)
+            return actual_read(path) + b"changed"
+
+        with (
+            patch.object(subject, "_read_output", side_effect=changed),
+            patch.object(subject.subprocess, "Popen") as launch,
+            self.assertRaises(subject.CaptureError),
+        ):
+            self.actual_invoke(
+                self.directory / "native.json", case_id=subject._PLUGIN_FORCE_CASE
+            )
+        launch.assert_not_called()
+        self.assertEqual(len(paths), 1)
+        self.assertFalse(paths[0].parent.parent.exists())
+
+    def test_interrupted_recipe_only_signals_a_still_running_owned_process(self):
+        for running in (False, True):
+            with (
+                self.subTest(running=running),
+                patch.object(subject.subprocess, "Popen") as launch,
+                patch.object(subject.os, "killpg") as kill,
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                process = launch.return_value
+                process.pid = 1234
+                process.poll.return_value = None if running else 0
+                process.wait.side_effect = [KeyboardInterrupt(), None]
+                self.actual_invoke(
+                    self.directory / "native.json", case_id=subject._PLUGIN_FORCE_CASE
+                )
+            if running:
+                kill.assert_called_once_with(1234, signal.SIGTERM)
+            else:
+                kill.assert_not_called()
+            self.assertFalse(Path(launch.call_args.args[0][1]).parent.parent.exists())
+
+        for running in (False, True):
+            timeout = subprocess.TimeoutExpired("recipe", 240)
+            with (
+                self.subTest(escalation=running),
+                patch.object(subject.subprocess, "Popen") as launch,
+                patch.object(subject.os, "killpg") as kill,
+                self.assertRaises(subprocess.TimeoutExpired) as failure,
+            ):
+                process = launch.return_value
+                process.pid = 1234
+                process.poll.side_effect = [None, None if running else 0]
+                process.wait.side_effect = [
+                    timeout,
+                    subprocess.TimeoutExpired("recipe", 30),
+                    None,
+                ]
+                self.actual_invoke(
+                    self.directory / "native.json", case_id=subject._PLUGIN_FORCE_CASE
+                )
+            self.assertIs(failure.exception, timeout)
+            self.assertEqual(
+                process.wait.call_args_list,
+                [call(timeout=240), call(timeout=30), call(timeout=10)],
+            )
+            expected = [call(1234, signal.SIGTERM)]
+            if running:
+                expected.append(call(1234, signal.SIGKILL))
+            self.assertEqual(kill.call_args_list, expected)
+            self.assertFalse(Path(launch.call_args.args[0][1]).parent.parent.exists())
+
+        with (
+            patch.object(
+                subject.subprocess, "Popen", side_effect=OSError("launch failed")
+            ) as launch,
+            patch.object(subject.os, "killpg") as kill,
+            self.assertRaises(OSError),
+        ):
+            self.actual_invoke(
+                self.directory / "native.json", case_id=subject._PLUGIN_FORCE_CASE
+            )
+        kill.assert_not_called()
+        self.assertFalse(Path(launch.call_args.args[0][1]).parent.parent.exists())
 
     def test_config_entry_selects_only_its_backend_and_cleanup_namespace(self) -> None:
         self._check_selected_backend(
@@ -346,6 +453,9 @@ class CampaignCaseExecutorTests(unittest.TestCase):
         self._check_selected_backend(
             "ADM-02/update/plugin-enable-activation", subject.plugin_enable
         )
+
+    def test_plugin_force_selects_only_its_backend_and_cleanup_namespace(self) -> None:
+        self._check_selected_backend(subject._PLUGIN_FORCE_CASE, subject.plugin_force)
 
     def test_fresh_session_selects_only_its_backend_and_cleanup_namespace(self) -> None:
         self._check_selected_backend(

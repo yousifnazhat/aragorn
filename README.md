@@ -1129,8 +1129,8 @@ signed compiled-render templates with fresh session identities. Fourteen selecte
 compiled modules and their source bridges are verified, not the full transitive
 runtime. These probes do not capture complete entry/store bytes, so reported
 digests do not prove full-session-state equivalence or local replay execution.
-Thirteen development cases are wired; 18 remain unwired: one retained current-V3
-route, 12 V3 ports, and five missing adapters. These are integration counts,
+Fourteen development cases are wired; 17 remain unwired: 12 V3 ports and five
+missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
 Retained status is not fresh execution readiness: the old plugin-force-reinstall
 recipe builds the V3 parent from V2. A separate
@@ -1145,15 +1145,20 @@ file checks and the exact route inventory passed. Directory link counts are
 filesystem-dependent; type, ownership, mode, positive count and exact inventory
 are checked without weakening the regular-file single-link requirement.
 This is build readiness, not fresh route evidence or semantic qualification.
+The [plugin-force backend](./scripts/openclaw_final_v3_plugin_force_case.py)
+binds that child, the signed generated sources, and the unchanged seven-file
+fixture. It rejects the old V2-parent capture and checks the fixed inert policy
+denial, actual host/process/volume joins, and reported SQLite metadata changes.
+Synthetic regression envelopes are not fresh captures; no logical SQLite
+equivalence or independent qualification is inferred.
 Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.
 The [fresh workshop-invalidation development observation](./benchmark/evidence/phase3-openclaw-final-v3-workshop-invalidation-development-case-v1-2026-09-09.json)
 was captured and reverified through this backend, with unchanged parent snapshots,
 exact native evidence, CAS readback, and container/input-volume cleanup.
-The remaining work is implementation, not repeated DET-01 captures: connect the
-remaining current route, complete the 12 V3 ports and five adapters, and implement
-the required RUN event/response coverage,
+The remaining work is implementation, not repeated DET-01 captures: complete the
+12 V3 ports, five adapters, and required RUN event/response coverage,
 then freeze one common deployment. Only after that freeze should the 31 admission
 cases and real 100-attempt/100-pair measurements be captured and independently
 composed into the final exit gate. The current worker mediates file creation;

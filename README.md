@@ -607,6 +607,12 @@ frozen parameters and preserves its actual result through a recording bridge
 test double; this does not exercise credentials or durable receipt transport.
 Complete dynamic import closure, common deployment, mandatory native capture,
 build reproduction, and RUN/Phase 3 qualification remain unverified.
+The [common native-receipt stager](./scripts/stage_runtime_native_receipt_profile.py)
+now assembles the exact 60-file successor around that new runtime identity.
+Its activator checks matching root genesis/binding inputs, exact worker/gateway
+credential sets, and preprovisioned receipt-store ownership before startup.
+Staging never installs the runtime, provisions state, or activates services;
+the absent-only provisioner must run separately before activation.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

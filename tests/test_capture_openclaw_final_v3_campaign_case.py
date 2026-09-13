@@ -267,6 +267,13 @@ class CampaignCaseExecutorTests(unittest.TestCase):
             "ADM-02/reload/chat-session-snapshot-consumer", subject.chat_snapshot
         )
 
+    def test_session_snapshot_selects_only_its_backend_and_cleanup_namespace(
+        self,
+    ) -> None:
+        self._check_selected_backend(
+            "ADM-02/reload/session-snapshot-consumer", subject.session_snapshot
+        )
+
     def test_proposal_selects_only_its_backend_and_cleanup_namespace(self) -> None:
         self._check_selected_backend(
             "ADM-02/update/workshop-proposal-apply", subject.proposal

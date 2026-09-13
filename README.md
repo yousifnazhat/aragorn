@@ -443,9 +443,17 @@ package; it does not install services or enforce startup. The private
 [startup byte verifier](./src/aragorn/runtime_skill_startup.py) checks the actual
 installed tree, fixed external source, worker binding, and V3 gateway selection
 under the shared install lock and rejects a matching denial record. Its bounded
-nonblocking reads and point-in-time snapshot do not prove process consumption or
-mandatory startup enforcement. Authenticated gateway-config delivery and mandatory
-invocation and successor deployment pins remain required. A private
+nonblocking reads and point-in-time snapshot do not prove process consumption.
+The zero-argument [startup service](./src/aragorn/runtime_skill_startup_service.py)
+holds exactly two fixed, read-only systemd credentials through the byte check,
+rechecks their custody, and fails closed on cleanup errors. The pinned
+[activation source generator](./scripts/materialize_runtime_quarantine_activation.py)
+adds the mandatory pre-start command and second credential to a successor worker
+unit, raises its bounded descriptor limit to 128, and verifies both effective
+credentials and the single non-ignored command before starting services.
+It preserves the frozen packaging and generates a new profile, not the distinct
+retained V3 deployment. No installer runs here: frozen installers must precede the
+source overrides, followed by fresh Linux/systemd validation. A private
 [quarantine response composition](./src/aragorn/runtime_quarantine_response.py)
 now joins a current accepted revocation to the measured installed digest and
 running worker binding, publishes the permanent denial first, then stops and masks
@@ -1045,8 +1053,8 @@ support, and this receipt does not promote a campaign result.
 The [one-case development executor](./scripts/capture_openclaw_final_v3_campaign_case.py)
 now supports DET-01, archive-source replacement, core-updater replacement, workshop invalidation,
 workshop proposal/apply, curator restore, config-entry activation, plugin enable,
-fresh-session reset, missing-prompt-blob rebuild, cron rescan, and chat-session
-snapshot consumption.
+fresh-session reset, missing-prompt-blob rebuild, cron rescan, and both chat-session
+and session snapshot consumption.
 Shared native checks bind static process identities, unit restrictions, and
 socket permissions to the signed, hash-pinned V3 parent reference; matching
 same-run copies alone are not accepted as proof of those restrictions.
@@ -1105,16 +1113,23 @@ pre/post session-store bytes while preserving unrelated prior session data.
 SQLite metadata and WAL transitions are checked, not complete database contents;
 the observed model-not-found outcome is not successful model execution.
 The [chat-session snapshot backend](./scripts/openclaw_final_v3_chat_session_snapshot_case.py)
-checks exact protected prompt bytes, reported mutation/recovery joins, and a
-signed compiled-render template with fresh session identities. Fourteen selected
+and [session snapshot backend](./scripts/openclaw_final_v3_session_snapshot_case.py)
+check exact protected prompt bytes, reported mutation/recovery joins, and
+signed compiled-render templates with fresh session identities. Fourteen selected
 compiled modules and their source bridges are verified, not the full transitive
-runtime. This probe does not capture complete entry/store bytes, so reported
+runtime. These probes do not capture complete entry/store bytes, so reported
 digests do not prove full-session-state equivalence or local replay execution.
-Twelve development cases are wired; 19 remain unwired: two retained current-V3
-routes, 12 V3 ports, and five missing adapters. These are integration counts,
+Thirteen development cases are wired; 18 remain unwired: one retained current-V3
+route, 12 V3 ports, and five missing adapters. These are integration counts,
 not final-campaign passes or a Phase 3 completion percentage.
-Retained status is not fresh execution readiness: the plugin-force-reinstall
-recipe builds the V3 parent from V2 and still needs a current-parent-derived case adapter.
+Retained status is not fresh execution readiness: the old plugin-force-reinstall
+recipe builds the V3 parent from V2. A separate
+[current-parent build-source generator](./scripts/materialize_openclaw_final_v3_plugin_force_current_parent.py)
+now renders a child recipe, collector and Dockerfile that inherit the current V3
+parent without repeating that upgrade. It checks the unchanged seven-file bundle
+and copies only new provenance sources. It has not built an image or captured
+evidence; the child identity, backend wiring and semantic qualification remain
+unavailable.
 Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.
@@ -1122,7 +1137,7 @@ The [fresh workshop-invalidation development observation](./benchmark/evidence/p
 was captured and reverified through this backend, with unchanged parent snapshots,
 exact native evidence, CAS readback, and container/input-volume cleanup.
 The remaining work is implementation, not repeated DET-01 captures: connect the
-remaining current routes, complete the 12 V3 ports and five adapters, and implement
+remaining current route, complete the 12 V3 ports and five adapters, and implement
 the required RUN event/response coverage,
 then freeze one common deployment. Only after that freeze should the 31 admission
 cases and real 100-attempt/100-pair measurements be captured and independently

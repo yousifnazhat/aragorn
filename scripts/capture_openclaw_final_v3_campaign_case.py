@@ -29,6 +29,7 @@ from scripts import openclaw_final_v3_curator_restore_case as curator
 from scripts import openclaw_final_v3_fresh_session_reset_case as fresh_session
 from scripts import openclaw_final_v3_missing_prompt_blob_case as missing_prompt
 from scripts import openclaw_final_v3_plugin_enable_case as plugin_enable
+from scripts import openclaw_final_v3_session_snapshot_case as session_snapshot
 from scripts import openclaw_final_v3_workshop_invalidation_case as workshop
 from scripts import openclaw_final_v3_workshop_proposal_apply_case as proposal
 
@@ -43,6 +44,10 @@ _BACKENDS = {
     "ADM-02/reload/chat-session-snapshot-consumer": (
         chat_snapshot,
         "chat-session-snapshot-consumer",
+    ),
+    "ADM-02/reload/session-snapshot-consumer": (
+        session_snapshot,
+        "session-snapshot-consumer",
     ),
     "ADM-02/reload/cron-rescan": (cron, "cron-rescan"),
     _ARCHIVE_CASE: (archive, "archive-source-force-replacement"),

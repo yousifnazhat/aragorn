@@ -541,6 +541,13 @@ marker/process joins, and collector snapshots without executing the
 The missing BPF loss metric remains unknown; reader shutdown returned exit 1/EOF.
 Helper execution, executed binary bytes, complete coverage, release authenticity,
 and RUN/Phase 3 eligibility are not established by these retained artifacts.
+The separate [release-signature check](./benchmark/evidence/tetragon-release-signature-crypto-check-v1-2026-09-13.json)
+retains successful offline signature, certificate-chain, SCT, and Rekor checks
+for the signed image index containing that exact ARM64 child. Trust uses an
+explicit pinned official HTTPS snapshot, not verified TUF updates. Its
+[fixed replay](./tests/test_tetragon_release_signature_retention.py) checks retained
+pins and joins without rerunning cryptography. The older smoke stays unchanged;
+executed-binary binding, build reproduction, and RUN/Phase 3 qualification remain open.
 
 The [native tool receipt core](./src/aragorn/runtime_native_tool_receipts.py) retains
 bounded attempt/terminal chains using the existing CAS and atomic publisher. It

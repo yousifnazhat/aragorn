@@ -21,8 +21,8 @@ _INPUTS = {
         "sha256:71dfcdc6d2f1d51472230e9cda240c25d0b316fee39434e6761bb2e7b411467b",
     ),
     _CLIENT: (
-        11111,
-        "sha256:eec04d3014dfd0d15ebb51acb6a55fde688ad885c33b90ea6b7ddac48350235f",
+        11546,
+        "sha256:59fb37e46ab6635217569ac26698b4d57ed2c44459bcc538691e7ee07e5f1fb7",
     ),
 }
 _DEPENDENCIES = {
@@ -36,8 +36,8 @@ _DEPENDENCIES = {
     ),
 }
 _OUTPUT = (
-    34999,
-    "sha256:fa5dee4cdac24e3f9fb4f77bedb033952b2ab13e003657e47a69ae7d51659ef0",
+    35434,
+    "sha256:193415bea885023664ac44931d9faa096e02b3bc64aafc47113c17aca664566c",
 )
 _REPLACEMENTS = (
     (

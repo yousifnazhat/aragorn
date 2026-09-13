@@ -231,6 +231,17 @@ for(const bad of [getter,cycle,deep,proxy,{toJSON(){effects++;return {}; }},NaN,
 assert.equal(effects,0);
 const special = JSON.parse('{"__proto__":{"safe":true}}');
 assert.equal(nativeSnapshot(special).raw.toString(),JSON.stringify(special));
+const optional = {first:undefined, path:"inert", middle:undefined, nested:{offset:undefined,limit:3},last:undefined};
+const projected = nativeSnapshot(optional);
+assert.equal(projected.raw.toString(),JSON.stringify(optional));
+assert.deepEqual(projected.snapshot,optional);
+assert.equal(Object.hasOwn(projected.snapshot,"first"),true);
+assert.equal(Object.hasOwn(projected.snapshot.nested,"offset"),true);
+assert.equal(Object.isFrozen(projected.snapshot.nested),true);
+assert.equal(nativeSnapshot({details:undefined}).raw.toString(),"{}");
+assert.throws(()=>nativeSnapshot([undefined]),/UNSUPPORTED/);
+const tooMany = {}; for(let i=0;i<100000;i++) tooMany[i]=undefined;
+assert.throws(()=>nativeSnapshot(tooMany),/UNSUPPORTED/);
 """)
 
     def test_detached_final_params_context_create_request_and_exact_terminal(self):
@@ -238,12 +249,14 @@ assert.equal(nativeSnapshot(special).raw.toString(),JSON.stringify(special));
 const entered = later(), release = later();
 const all = [];
 await fixture(async(event,n)=>{ if(n===1){entered.resolve();await release.promise;} return response(event,n); },async(client,events)=>{
-  const params = {path:"original",limit:0.5,nested:{text:"雪"}};
+  const params = {path:"original",offset:undefined,limit:0.5,nested:{text:"雪"}};
   const ctx = context(); const saved = JSON.stringify(params);
   let calls = 0;
-  const result = {content:[{type:"text",text:"inert"}],details:{elapsed:0.125}};
+  // Exact ordinary untruncated read result shape from pinned read.ts:393.
+  const result = {content:[{type:"text",text:"inert"}],details:undefined};
   const pending = client.execute("read",params,ctx,async(actual)=>{
     calls++; assert.equal(JSON.stringify(actual),saved); assert.notEqual(actual,params);
+    assert.equal(Object.hasOwn(actual,"offset"),true); assert.equal(actual.offset,undefined);
     assert.equal(Object.isFrozen(actual.nested),true); return result;
   });
   await entered.promise;

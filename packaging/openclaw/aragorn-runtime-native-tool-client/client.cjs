@@ -22,7 +22,7 @@ function nativeRequire(condition, code = "NATIVE_INPUT_UNSUPPORTED") {
 }
 
 function nativeSnapshot(value) {
-  // Bound the plain JSON graph before JSON.stringify; never evaluate accessors,
+  // Bound the JSON projection before JSON.stringify; never evaluate accessors,
   // toJSON or proxies. Finite fractional numbers are opaque content, not receipt
   // protocol numbers. No hard VM heap/CPU deadline is claimed by this walk.
   // Digests cover JSON.stringify(snapshot) encoded as UTF-8, with no final LF.
@@ -77,15 +77,24 @@ function nativeSnapshot(value) {
         output.push(visit(descriptor.value, depth + 1));
       }
     } else {
+      let emitted = 0;
       for (let i = 0; i < keys.length; i += 1) {
         const key = keys[i];
         const descriptor = Object.getOwnPropertyDescriptor(item, key);
         nativeRequire(descriptor && Object.hasOwn(descriptor, "value") && descriptor.enumerable);
-        if (i) charge(1);
-        quoted(key);
-        charge(1);
+        const omitted = descriptor.value === undefined;
+        if (omitted) {
+          // JSON omits these members; the actual detached arguments retain them.
+          // Normal native read results include an own details: undefined member.
+          nodes += 1;
+          nativeRequire(nodes <= NATIVE_MAX_NODES && depth + 1 <= NATIVE_MAX_DEPTH);
+        } else {
+          if (emitted++) charge(1);
+          quoted(key);
+          charge(1);
+        }
         Object.defineProperty(output, key, {
-          value: visit(descriptor.value, depth + 1), enumerable: true,
+          value: omitted ? undefined : visit(descriptor.value, depth + 1), enumerable: true,
         });
       }
     }

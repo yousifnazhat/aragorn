@@ -209,6 +209,23 @@ class NativeReceiptFixtureTests(unittest.TestCase):
             self.assertEqual(subject.main(["c" * 64]), 126)
         self.assertIn("REDACTED_TEST", output.getvalue())
         self.assertNotIn("PRIVATE_CLEANUP_DETAIL", output.getvalue())
+        with (
+            patch.object(subject.setup_prior, "_require_fixture"),
+            patch.object(subject, "_sources", return_value={}),
+            patch.object(
+                subject, "_prepare", side_effect=ValueError("PRIVATE_SETUP_DETAIL")
+            ),
+            patch.object(
+                subject.prior,
+                "_stop_fixture",
+                side_effect=RuntimeError("PRIVATE_CLEANUP_DETAIL"),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                subject._FixtureRefusal,
+                "cleanup failed after SOURCES; primary=ValueError",
+            ):
+                subject._run("c" * 64)
 
     def test_driver_input_keeps_legacy_newline_and_failure_diagnostics_redact(self):
         import runtime_action_worker_openclaw_systemd_probe as p37b

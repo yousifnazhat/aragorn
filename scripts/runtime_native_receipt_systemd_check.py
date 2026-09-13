@@ -973,8 +973,21 @@ def _run(container: str) -> dict:
         }
     finally:
         previous_phase = _PHASE
+        primary_failure = sys.exception()
         _phase("CLEANUP")
-        cleanup = prior._stop_fixture()
+        try:
+            cleanup = prior._stop_fixture()
+        except Exception as cleanup_error:
+            failure = _FixtureRefusal(
+                "cleanup failed after "
+                + previous_phase
+                + "; primary="
+                + type(primary_failure).__name__
+            )
+            if type(primary_failure) is _FixtureRefusal:
+                for note in getattr(primary_failure, "__notes__", ())[:2]:
+                    failure.add_note(note)
+            raise failure from cleanup_error
         _phase(previous_phase)
     observation["fixture_stack_cleanup"] = cleanup
     return observation

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import unittest
 from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
@@ -209,6 +210,122 @@ def _environment():
 
 
 class RuntimeQuarantineSystemdCheckTests(unittest.TestCase):
+    def test_prepare_opt_out_skips_only_revocation_and_preserves_default(self):
+        import runtime_action_worker_final_combined_v3_plugin_force_reinstall_systemd_probe as v3
+
+        combined, p37c = v3.combined, v3.p37c
+        p37b = p37c.p37b
+        for publish in (False, True):
+            with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+                root = Path(temporary).resolve()
+                skill = root / "SKILL.md"
+                skill.write_bytes(b"fixture skill")
+                digest = p37c._digest(skill.read_bytes())
+                producer = {
+                    "paths": {"skill": skill},
+                    "skill_name": "template-skill",
+                    "transaction": {"fixture": True},
+                }
+                for owner, name in (
+                    (combined, "_reset_transient_request_directory"),
+                    (p37b.prior.lineage, "_reset"),
+                    (p37b, "_reset_action_plane"),
+                    (p37b, "_write_stack_inputs"),
+                ):
+                    stack.enter_context(patch.object(owner, name))
+                stack.enter_context(
+                    patch.object(subject.response, "_EVIDENCE_ROOT", root / "evidence")
+                )
+                stack.enter_context(
+                    patch.object(
+                        subject.response,
+                        "_identities",
+                        return_value=(998, 997, 997, 992, 992, 996, 996),
+                    )
+                )
+                stack.enter_context(
+                    patch.object(p37b.prior, "_prepare_producer", return_value=producer)
+                )
+                stack.enter_context(
+                    patch.object(p37b.prior, "_producer", None, create=True)
+                )
+                stack.enter_context(patch.object(v3, "_SKILL_DIGEST", digest))
+                stack.enter_context(
+                    patch.object(
+                        combined,
+                        "_prepare_gateway",
+                        return_value=({}, {}, None, "private-token"),
+                    )
+                )
+                stack.enter_context(patch.object(p37c.lineage, "_PROTECTED", root))
+                stack.enter_context(
+                    patch.object(p37c, "_action_digests", return_value={})
+                )
+                stack.enter_context(patch.object(p37b, "_PYTHON", Path(sys.executable)))
+                stack.enter_context(
+                    patch.object(p37c, "_file", return_value={"digest": _SKILL})
+                )
+                stack.enter_context(
+                    patch.object(
+                        p37b, "_predicted_service_cgroup", return_value="/fixture"
+                    )
+                )
+                stack.enter_context(
+                    patch.object(
+                        p37b,
+                        "_profile",
+                        return_value=({}, SimpleNamespace(digest=_SKILL)),
+                    )
+                )
+                stack.enter_context(patch.object(p37c, "_grant", return_value={}))
+                stack.enter_context(
+                    patch.object(
+                        p37b,
+                        "_controls",
+                        return_value={
+                            "revocations": {"generation": 1, "skill_digests": []}
+                        },
+                    )
+                )
+                command = stack.enter_context(
+                    patch.object(p37c, "_command", return_value={"exit_code": 0})
+                )
+                write = stack.enter_context(patch.object(p37b, "_write_document"))
+                stack.enter_context(
+                    patch.object(
+                        subject, "_startup_state", return_value={"clean": True}
+                    )
+                )
+                result = (
+                    subject._prepare()
+                    if publish
+                    else subject._prepare(publish_revocation=False)
+                )
+                self.assertEqual(result["skill_digest"], digest)
+                self.assertEqual(
+                    result["producer_transaction"], producer["transaction"]
+                )
+                self.assertNotIn("private-token", repr(result))
+                self.assertEqual(command.call_count, 2 if publish else 1)
+                self.assertEqual(write.call_count, int(publish))
+                self.assertEqual(
+                    result["revocations"]["generation"], 2 if publish else 1
+                )
+                self.assertEqual(
+                    result["revocations"]["skill_digests"], [digest] if publish else []
+                )
+                self.assertEqual(
+                    result["publication"], {"exit_code": 0} if publish else None
+                )
+        for invalid in (None, 0, 1, "false", []):
+            with (
+                self.subTest(invalid=invalid),
+                patch.object(subject.response, "_identities") as identities,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "publication choice"):
+                    subject._prepare(publish_revocation=invalid)
+                identities.assert_not_called()
+
     def test_installed_snapshot_reads_real_transaction_and_immutable_denial(self):
         real_read = subject.read_quarantine_at
 

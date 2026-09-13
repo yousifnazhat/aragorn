@@ -302,7 +302,8 @@ def _counterfactual_start(
         }
 
 
-def _prepare() -> dict[str, Any]:
+def _prepare(*, publish_revocation: bool = True) -> dict[str, Any]:
+    _expect(type(publish_revocation) is bool, "fixture publication choice is invalid")
     # Existing producer/setup primitives operate only after the exact fixture guard.
     import runtime_action_worker_final_combined_v3_plugin_force_reinstall_systemd_probe as v3
 
@@ -384,6 +385,17 @@ def _prepare() -> dict[str, Any]:
     activation = p37c._command([str(p37c._ACTIVATOR)], timeout=60)
     _expect(activation["exit_code"] == 0, "successor fixture activation failed")
     startup = _startup_state(0)
+    prepared = {
+        "runtime_digest": v3._RUNTIME_DIGEST,
+        "configuration_digest": canonical_digest(config),
+        "skill_digest": skill,
+        "producer_transaction": producer["transaction"],
+        "activation": activation,
+        "startup": startup,
+        "producer_authority": "LEGACY_INITIAL_FIXTURE_INSTALL_NOT_SUCCESSOR_PRODUCER_DEPLOYMENT",
+    }
+    if not publish_revocation:
+        return {**prepared, "revocations": controls["revocations"], "publication": None}
     now = int(time.time())
     revocations = {
         **controls["revocations"],
@@ -401,15 +413,9 @@ def _prepare() -> dict[str, Any]:
     )
     _expect(publication["exit_code"] == 0, "fixture revocation publication failed")
     return {
-        "runtime_digest": v3._RUNTIME_DIGEST,
-        "configuration_digest": canonical_digest(config),
-        "skill_digest": skill,
-        "producer_transaction": producer["transaction"],
-        "activation": activation,
-        "startup": startup,
+        **prepared,
         "revocations": revocations,
         "publication": publication,
-        "producer_authority": "LEGACY_INITIAL_FIXTURE_INSTALL_NOT_SUCCESSOR_PRODUCER_DEPLOYMENT",
     }
 
 

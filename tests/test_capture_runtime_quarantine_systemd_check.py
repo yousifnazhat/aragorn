@@ -23,8 +23,22 @@ _CHECKER = "/opt/aragorn/runtime-quarantine-systemd-check.py"
 
 class RuntimeQuarantineCaptureTests(unittest.TestCase):
     @contextmanager
-    def fixture(self, failure: str | None = None):
+    def fixture(self, failure: str | None = None, *, endpoint_journal: bool = False):
         """Exercise host orchestration with every Docker entry point mocked."""
+        profile = "endpoint-journal" if endpoint_journal else "quarantine"
+        name = f"aragorn-runtime-{profile}-check-" + _OWNER[:16]
+        files = subject._JOURNAL_FILES if endpoint_journal else subject._FILES
+        checker = (
+            "/opt/aragorn/runtime-endpoint-journal-systemd-check.py"
+            if endpoint_journal
+            else _CHECKER
+        )
+        stage_module = subject.journal_stage if endpoint_journal else subject.stage
+        stage_name = (
+            "stage_runtime_endpoint_journal_profile"
+            if endpoint_journal
+            else "stage_runtime_quarantine_profile"
+        )
         parent = subject.campaign.current_v3_parent_identity()
         before = {
             "image_inspect": {"id": parent["image_id"]},
@@ -45,14 +59,14 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
         elif failure == "parent_contract":
             after["content"]["contract_files"]["config"]["content_base64"] = "e30K"
         observation = {
-            "schema": "aragorn/runtime-quarantine-systemd-integration-observation/v1",
+            "schema": f"aragorn/runtime-{profile}-systemd-integration-observation/v1",
             "fixture_container": _CONTAINER,
             "status": "OBSERVED",
             "phase3_eligible": False,
             "run_conformance_eligible": False,
         }
         state = {"calls": [], "copies": {}, "stage_paths": [], "source_calls": 0}
-        real_stage = subject.stage.stage_runtime_quarantine_profile
+        real_stage = getattr(stage_module, stage_name)
 
         def source():
             state["source_calls"] += 1
@@ -65,7 +79,7 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
 
         def tree_file(commit, path):
             self.assertEqual(commit, _SOURCE["commit"])
-            self.assertIn(path.as_posix(), subject._FILES)
+            self.assertIn(path.as_posix(), files)
             if failure == "helper_source":
                 raise RuntimeError("helper differs from signed source")
             raw = (subject._ROOT / path).read_bytes()
@@ -88,6 +102,14 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                 manifest["files"][-1] = deepcopy(manifest["files"][0])
             elif failure == "stage_authority":
                 manifest["root_deployment"] = True
+            elif failure == "journal_sources":
+                manifest["source_inputs"].pop()
+            elif failure in (
+                "runtime_journal_deployed",
+                "durable_event_retention",
+                "run_qualification",
+            ):
+                manifest[failure] = True
             state["manifest"] = deepcopy(manifest)
             return manifest
 
@@ -115,7 +137,7 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                     raise RuntimeError("inspect failed")
                 inspected = {
                     "Id": _CONTAINER,
-                    "Name": "/" + _NAME,
+                    "Name": "/" + name,
                     "Image": subject._IMAGE,
                     "Config": {
                         "Image": subject._IMAGE,
@@ -237,7 +259,7 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                 if failure == "verify":
                     raise RuntimeError("root custody verification failed")
                 return b""
-            if argv[0] == "exec" and _CHECKER in argv:
+            if argv[0] == "exec" and checker in argv:
                 self.assertEqual(
                     argv,
                     (
@@ -247,7 +269,7 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                         "-I",
                         "-S",
                         "-B",
-                        _CHECKER,
+                        checker,
                         _CONTAINER,
                     ),
                 )
@@ -273,12 +295,14 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                 return subject.campaign._canonical(value) + b"\n"
             raise AssertionError(f"unexpected mocked Docker call: {argv}")
 
-        def cleanup(name, owner, image):
-            self.assertEqual((name, owner, image), (_NAME, _OWNER, subject._IMAGE))
+        def cleanup(cleanup_name, owner, image):
+            self.assertEqual(
+                (cleanup_name, owner, image), (name, _OWNER, subject._IMAGE)
+            )
             if failure == "cleanup":
                 raise RuntimeError("owned cleanup failed")
             return {
-                "name": name,
+                "name": cleanup_name,
                 "owner": owner,
                 "image": image,
                 "container_name_absent": failure != "cleanup_name",
@@ -325,14 +349,84 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                 )
             )
             stack.enter_context(
-                patch.object(
-                    subject.stage, "stage_runtime_quarantine_profile", side_effect=stage
-                )
+                patch.object(stage_module, stage_name, side_effect=stage)
             )
             stack.enter_context(
                 patch.object(subject.existing, "_docker", side_effect=docker)
             )
             yield state
+
+    def test_journal_profile_reuses_capture_with_exact_55_files_and_three_helpers(self):
+        with self.fixture(endpoint_journal=True) as state:
+            result = subject._capture(endpoint_journal=True)
+        self.assertEqual(
+            result["schema"], "aragorn/runtime-endpoint-journal-systemd-capture/v1"
+        )
+        self.assertEqual(len(state["copies"]), 58)
+        self.assertEqual(len(state["verify_inputs"]), 58)
+        self.assertEqual(set(result["fixture_helpers"]), set(subject._JOURNAL_FILES))
+        self.assertEqual(len(result["staged_profile"]["files"]), 55)
+        self.assertEqual(len(result["staged_profile"]["new_dependencies"]), 10)
+        for item in state["verify_inputs"].values():
+            self.assertEqual(
+                state["copies"][_CONTAINER + ":" + item["installed_path"]],
+                (item["bytes"], item["digest"]),
+            )
+        self.assertEqual(state["source_calls"], 2)
+        self.assertEqual(state["snapshots"].call_count, 2)
+        self.assertIs(result["phase3_eligible"], False)
+        self.assertIs(result["run_conformance_eligible"], False)
+        state["cleanup"].assert_called_once_with(
+            "aragorn-runtime-endpoint-journal-check-" + _OWNER[:16],
+            _OWNER,
+            subject._IMAGE,
+        )
+        self.assertTrue(all(not path.parent.exists() for path in state["stage_paths"]))
+
+    def test_journal_profile_rejects_source_authority_execution_and_cleanup_failures(
+        self,
+    ):
+        before_create = {
+            "source_initial",
+            "helper_source",
+            "stage_count",
+            "stage_duplicate",
+            "journal_sources",
+            "runtime_journal_deployed",
+            "durable_event_retention",
+            "run_qualification",
+        }
+        for failure in sorted(before_create) + [
+            "verify",
+            "check",
+            "observation_schema",
+            "phase3",
+            "run",
+            "cleanup_id",
+            "parent_tree",
+            "source_after",
+        ]:
+            with (
+                self.subTest(failure=failure),
+                self.fixture(failure, endpoint_journal=True) as state,
+            ):
+                with self.assertRaises(RuntimeError):
+                    subject._capture(endpoint_journal=True)
+                if failure in before_create:
+                    self.assertFalse(
+                        any(argv[0] == "create" for argv in state["calls"])
+                    )
+                    state["cleanup"].assert_not_called()
+                else:
+                    state["cleanup"].assert_called_once()
+        for value in (0, 1, None, "true"):
+            with (
+                self.subTest(value=value),
+                patch.object(subject.existing.existing, "_source_identity") as source,
+            ):
+                with self.assertRaises(RuntimeError):
+                    subject._capture(endpoint_journal=value)
+                source.assert_not_called()
 
     def test_fixed_successor_copies_exact_fifty_four_payloads_and_two_helpers(self):
         with self.fixture() as state:
@@ -652,6 +746,8 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                 with redirect_stderr(StringIO()):
                     self.assertEqual(subject.main([]), 64)
                     self.assertEqual(subject.main(["a", "b"]), 64)
+                    self.assertEqual(subject.main(["--endpoint-journal"]), 64)
+                    self.assertEqual(subject.main(["--unknown"]), 64)
                 existing = root / "existing.json"
                 existing.write_bytes(b"untouched")
                 linked = root / "linked.json"
@@ -675,6 +771,15 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(existing.read_bytes(), b"untouched")
+                capture.assert_called_once_with()
+                capture.reset_mock()
+                journal_output = root / "journal.json"
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(
+                        subject.main(["--endpoint-journal", str(journal_output)]), 0
+                    )
+                capture.assert_called_once_with(endpoint_journal=True)
+                self.assertEqual(journal_output.read_bytes(), raw)
             failed = root / "failed.json"
             with (
                 patch.object(

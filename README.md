@@ -497,6 +497,13 @@ Staging does not activate services. Linux helper checks cover nonblocking output
 and descriptor preservation, not live journald retention or complete event capture.
 Mandatory loss enforcement, durable retention, native events, and RUN qualification
 remain separate requirements.
+The existing [owned-fixture capture](./scripts/capture_runtime_quarantine_systemd_check.py)
+accepts `--endpoint-journal` for this profile. Its separate
+[integration checker](./scripts/runtime_endpoint_journal_systemd_check.py)
+requires exact service/process/source custody, an unchanged-state unauthorized
+peer refusal, one native benign create, and eight journal records joined to the
+actual consumed grant and retained result. The default quarantine capture remains
+unchanged; offline capture tests do not establish live delivery.
 
 The [restricted Tetragon process adapter](./src/aragorn/runtime_tetragon_process.py)
 validates bounded offline records against an

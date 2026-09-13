@@ -14,6 +14,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
 
 from scripts import capture_runtime_response_systemd_check as existing
+from scripts import stage_runtime_endpoint_journal_profile as journal_stage
 from scripts import stage_runtime_quarantine_profile as stage
 
 campaign = existing.campaign
@@ -21,6 +22,10 @@ _IMAGE = existing._IMAGE
 _FILES = {
     "scripts/runtime_quarantine_systemd_check.py": "/opt/aragorn/runtime-quarantine-systemd-check.py",
     "scripts/runtime_response_systemd_check.py": "/opt/aragorn/runtime_response_systemd_check.py",
+}
+_JOURNAL_FILES = {
+    **_FILES,
+    "scripts/runtime_endpoint_journal_systemd_check.py": "/opt/aragorn/runtime-endpoint-journal-systemd-check.py",
 }
 _VERIFY = r"""import hashlib,json,os,re,stat,sys,time
 from pathlib import Path
@@ -77,7 +82,16 @@ def _parent_unchanged(before: dict, after: dict) -> bool:
     )
 
 
-def _capture() -> dict[str, Any]:
+def _capture(*, endpoint_journal: bool = False) -> dict[str, Any]:
+    _expect(type(endpoint_journal) is bool, "fixture selection must be boolean")
+    profile = "endpoint-journal" if endpoint_journal else "quarantine"
+    files = _JOURNAL_FILES if endpoint_journal else _FILES
+    checker = (
+        "scripts/runtime_endpoint_journal_systemd_check.py"
+        if endpoint_journal
+        else "scripts/runtime_quarantine_systemd_check.py"
+    )
+    file_count = 55 if endpoint_journal else 54
     source = existing.existing._source_identity()
     helpers = {
         path: {
@@ -85,7 +99,7 @@ def _capture() -> dict[str, Any]:
             "installed_path": target,
             "installed_mode": "0444",
         }
-        for path, target in _FILES.items()
+        for path, target in files.items()
     }
     parent = campaign.current_v3_parent_identity()
     before = existing.parent_snapshot.snapshot_parent(parent)
@@ -101,18 +115,30 @@ def _capture() -> dict[str, Any]:
         "successor fixture is not an extension of the frozen V3 image",
     )
     owner = secrets.token_hex(32)
-    name = "aragorn-runtime-quarantine-check-" + owner[:16]
-    with TemporaryDirectory(prefix="aragorn-runtime-quarantine-stage-") as temporary:
+    name = f"aragorn-runtime-{profile}-check-" + owner[:16]
+    with TemporaryDirectory(prefix=f"aragorn-runtime-{profile}-stage-") as temporary:
         output = Path(temporary).resolve() / "stage"
-        manifest = stage.stage_runtime_quarantine_profile(output)
+        manifest = (
+            journal_stage.stage_runtime_endpoint_journal_profile(output)
+            if endpoint_journal
+            else stage.stage_runtime_quarantine_profile(output)
+        )
         _expect(
-            len(manifest["files"]) == 54
+            len(manifest["files"]) == file_count
             and len(manifest["base_inputs"]) == 47
-            and len(manifest["new_dependencies"]) == 9
+            and len(manifest["new_dependencies"]) == (10 if endpoint_journal else 9)
             and manifest["root_deployment"] is False
             and manifest["phase3_qualification"] is False,
             "successor stage inventory or authority changed",
         )
+        if endpoint_journal:
+            _expect(
+                len(manifest["source_inputs"]) == 62
+                and manifest["runtime_journal_deployed"] is False
+                and manifest["durable_event_retention"] is False
+                and manifest["run_qualification"] is False,
+                "journal stage inputs or authority changed",
+            )
         payloads = {
             item["path"]: {
                 "installed_path": item["path"],
@@ -122,7 +148,7 @@ def _capture() -> dict[str, Any]:
             }
             for item in manifest["files"]
         }
-        _expect(len(payloads) == 54, "successor destinations are not unique")
+        _expect(len(payloads) == file_count, "successor destinations are not unique")
         started = existing.existing._now()
         try:
             container = (
@@ -206,7 +232,7 @@ def _capture() -> dict[str, Any]:
                 existing._docker(
                     "cp", str(output / path.removeprefix("/")), container + ":" + path
                 )
-            for path, target in _FILES.items():
+            for path, target in files.items():
                 existing._docker("cp", str(_ROOT / path), container + ":" + target)
             existing._docker("start", container)
             existing._docker(
@@ -228,7 +254,7 @@ def _capture() -> dict[str, Any]:
                 "-I",
                 "-S",
                 "-B",
-                _FILES["scripts/runtime_quarantine_systemd_check.py"],
+                files[checker],
                 container,
             ]
             raw = existing._docker(*argv)
@@ -236,7 +262,7 @@ def _capture() -> dict[str, Any]:
             _expect(
                 raw == campaign._canonical(observation) + b"\n"
                 and observation["schema"]
-                == "aragorn/runtime-quarantine-systemd-integration-observation/v1"
+                == f"aragorn/runtime-{profile}-systemd-integration-observation/v1"
                 and observation["fixture_container"] == container
                 and observation["status"] == "OBSERVED"
                 and observation["phase3_eligible"] is False
@@ -256,7 +282,7 @@ def _capture() -> dict[str, Any]:
         existing.existing._source_identity() == source, "source changed during check"
     )
     return {
-        "schema": "aragorn/runtime-quarantine-systemd-capture/v1",
+        "schema": f"aragorn/runtime-{profile}-systemd-capture/v1",
         "authority": "LOCAL_SUCCESSOR_FIXTURE_NOT_RUN_OR_PHASE3_QUALIFICATION",
         "status": "OBSERVED",
         "source": source,
@@ -281,9 +307,12 @@ def _capture() -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if len(arguments) != 1:
+    endpoint_journal = len(arguments) == 2 and arguments[0] == "--endpoint-journal"
+    if endpoint_journal:
+        arguments = arguments[1:]
+    if len(arguments) != 1 or arguments[0].startswith("--"):
         print(
-            "usage: capture_runtime_quarantine_systemd_check ABSENT_OUTPUT_JSON",
+            "usage: capture_runtime_quarantine_systemd_check [--endpoint-journal] ABSENT_OUTPUT_JSON",
             file=sys.stderr,
         )
         return 64
@@ -292,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
         output.is_absolute() and not os.path.lexists(output),
         "output must be absent and absolute",
     )
-    result = _capture()
+    result = _capture(endpoint_journal=True) if endpoint_journal else _capture()
     raw = campaign._canonical(result)
     with output.open("xb") as stream:
         stream.write(raw)

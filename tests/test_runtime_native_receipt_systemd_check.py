@@ -266,6 +266,14 @@ const ids = result.turn.identifiers;
 assert.deepEqual(result.native_projection.params,mod.projection({content:scenario.content,target_name:scenario.target_name,
   __aragorn_run_id:"run1",__aragorn_session_id:"session1",__aragorn_session_key_digest:ids.session_key_digest,__aragorn_tool_call_digest:ids.tool_call_digest}));
 assert.deepEqual(result.native_projection.result,mod.projection({content:rpc.content,details:{schema:"aragorn/runtime-action-worker-openclaw-details/v1",status:"completed",source_result:JSON.parse(rpc.content[0].text).result}}));
+provider.errors.push("PRIVATE_FIXTURE_TEST");
+let diagnostic = "";
+const originalWrite = process.stderr.write;
+process.stderr.write = (text)=>{diagnostic += text; return true;};
+try { await assert.rejects(mod.run({...base,gatewayCall:async()=>{throw new Error("PRIVATE_FIXTURE_TEST");}},"create",{scenario})); }
+finally {process.stderr.write = originalWrite;}
+assert.ok(!diagnostic.includes("PRIVATE_FIXTURE_TEST"));
+assert.match(JSON.parse(diagnostic).provider_error_digests[0],/^sha256:[0-9a-f]{64}$/);
 // Only the small transcript function is evaluated with inert I/O bindings.
 const functionSource = source.split("function readTranscript(")[1].split("\nasync function run(")[0];
 const text = JSON.stringify({type:"message",message:{role:"toolResult",toolName:"read",toolCallId:"read1",isError:false,content:[{type:"text",text:"inert"}]}})+"\n";

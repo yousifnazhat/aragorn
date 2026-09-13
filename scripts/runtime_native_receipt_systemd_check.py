@@ -34,8 +34,8 @@ _READ_PATH = Path("/var/lib/aragorn-agent-gateway/workspace/native-receipt-read.
 _READ_BYTES = b"Aragorn inert native receipt read."
 _DRIVER = Path("/opt/aragorn/native-receipt-read-create-driver-v1.mjs")
 _DRIVER_PIN = (
-    13466,
-    "sha256:58545a7412c660235ac38c96b4857637ea311c86a894d0df4ed973201ae5e7b0",
+    13884,
+    "sha256:a34452c8ef7ee1fa9257848759fdb7f3f045b93ac7bc0e59cc5727129b257cbc",
 )
 _ACTIVATOR_PIN = (
     38837,

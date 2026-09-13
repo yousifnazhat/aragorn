@@ -194,6 +194,12 @@ async function run(base, kind, input) {
       relay, read_transcript: readTranscriptProof, raw_callback_projection_is_source_derived: true, native_ack_wire_capture: false,
       phase3_eligible: false, run_conformance_eligible: false,
     };
+  } catch (error) {
+    // Hashes identify fixed provider assertions without retaining model input,
+    // parse-error excerpts, credentials, or arbitrary exception messages.
+    process.stderr.write(JSON.stringify({ provider_error_digests: provider.errors.slice(0, 4).map((message) =>
+      sha(Buffer.from(typeof message === "string" ? message : "UNCLASSIFIED_PROVIDER_ERROR", "utf8"))) }) + "\n");
+    throw error;
   } finally { if (!closed) await provider.close(); }
 }
 

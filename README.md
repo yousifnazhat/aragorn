@@ -1144,7 +1144,7 @@ with the exact current-parent layer prefix and three new layers. All 19 inherite
 file checks and the exact route inventory passed. Directory link counts are
 filesystem-dependent; type, ownership, mode, positive count and exact inventory
 are checked without weakening the regular-file single-link requirement.
-This is build readiness, not fresh route evidence or semantic qualification.
+The build alone is not fresh route evidence or semantic qualification.
 The [plugin-force backend](./scripts/openclaw_final_v3_plugin_force_case.py)
 binds that child, the signed generated sources, and the unchanged seven-file
 fixture. It rejects the old V2-parent capture and checks the fixed inert policy
@@ -1155,8 +1155,10 @@ Unsupported cases fail before execution. Each call checks the signed
 checkout, parent snapshots, native source/action evidence, resource cleanup, and
 CAS readback; it returns `OBSERVED`, never campaign `PASS`.
 The [fresh workshop-invalidation development observation](./benchmark/evidence/phase3-openclaw-final-v3-workshop-invalidation-development-case-v1-2026-09-09.json)
-was captured and reverified through this backend, with unchanged parent snapshots,
-exact native evidence, CAS readback, and container/input-volume cleanup.
+and [fresh plugin-force development observation](./benchmark/evidence/phase3-openclaw-final-v3-plugin-force-development-case-v1-2026-09-13.json)
+were captured and separately reverified through their respective backends, with
+unchanged parent snapshots, exact native evidence, CAS readback, and
+container/input-volume cleanup. Both remain `OBSERVED`, not campaign passes.
 The remaining work is implementation, not repeated DET-01 captures: complete the
 12 V3 ports, five adapters, and required RUN event/response coverage,
 then freeze one common deployment. Only after that freeze should the 31 admission

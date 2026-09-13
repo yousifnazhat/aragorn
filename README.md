@@ -539,6 +539,13 @@ framing, requires externally provisioned genesis/state before listening, and
 exits on uncertain retention. Receipt requests never enter the effect relay;
 ordinary creates are not yet gated to an open attempt. Native hooks, provisioning,
 successor activation, and performance qualification remain required.
+The [native client source successor](./scripts/materialize_runtime_native_tool_client.py)
+reuses the pinned gateway transport. It binds attempt ACKs to external genesis
+and detached final parameters, invokes one selected read/create callback once,
+and awaits its terminal ACK. Duplicate or uncertain retention prevents further
+execution by that client. Frozen-parameter compatibility, native hook reachability,
+gateway credential loading, and worker-side create-to-attempt enforcement are not
+established by its inert client tests.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

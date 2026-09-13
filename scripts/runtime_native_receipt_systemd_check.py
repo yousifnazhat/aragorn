@@ -599,21 +599,24 @@ def _receipt_proof(snapshot: dict, drivers: list[dict]) -> list[dict]:
 def _driver(p37b: Any, kind: str, nonce: str, token: str) -> dict:
     input_path = p37b._DRIVER_ROOT / f"native-{kind}-{nonce}.input.json"
     output_path = p37b._DRIVER_ROOT / f"native-{kind}-{nonce}.output.json"
-    p37b._write_document(
-        input_path,
-        {
-            "schema": "aragorn/openclaw-worker-driver-input/v1",
-            "scenario": {
-                "id": f"native-{kind}-{nonce}",
-                "target_name": p37b._TARGET,
-                "content": p37b._PAYLOAD.decode("ascii"),
-                "expected_result": {
-                    "schema": "aragorn/runtime-action-worker-result/v1",
-                    "status": "COMPLETED",
-                    "broker_result": {"verdict": "ALLOW", "effect_status": "CREATED"},
-                },
+    driver_input = {
+        "schema": "aragorn/openclaw-worker-driver-input/v1",
+        "scenario": {
+            "id": f"native-{kind}-{nonce}",
+            "target_name": p37b._TARGET,
+            "content": p37b._PAYLOAD.decode("ascii"),
+            "expected_result": {
+                "schema": "aragorn/runtime-action-worker-result/v1",
+                "status": "COMPLETED",
+                "broker_result": {"verdict": "ALLOW", "effect_status": "CREATED"},
             },
         },
+    }
+    _expect(not os.path.lexists(input_path), "native driver input already exists")
+    # The legacy driver's input contract requires exactly one final newline;
+    # control documents intentionally use a different, no-newline encoding.
+    p37b.openclaw.profile_prior._write_file(
+        input_path, canonical_json(driver_input) + b"\n", 0, 0, 0o400
     )
     argv = [str(p37b._NODE), str(_DRIVER), kind, str(input_path), str(output_path)]
     completed = p37b.subprocess.run(

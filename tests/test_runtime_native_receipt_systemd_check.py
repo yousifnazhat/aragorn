@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from aragorn.cas import CAS
@@ -196,6 +197,35 @@ class NativeReceiptFixtureTests(unittest.TestCase):
                 self.assertEqual(subject.main(["c" * 64]), 126)
             self.assertIn(visible, output.getvalue())
             self.assertNotIn("SECRET_MUST_NOT_APPEAR", output.getvalue())
+
+    def test_driver_input_keeps_legacy_newline_and_failure_diagnostics_redact(self):
+        import runtime_action_worker_openclaw_systemd_probe as p37b
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(p37b, "_DRIVER_ROOT", Path(temporary)),
+            patch.object(p37b.openclaw.profile_prior, "_write_file") as write,
+            patch.object(subject.prior, "_stack_failure"),
+            patch.object(
+                p37b,
+                "subprocess",
+                SimpleNamespace(
+                    run=lambda *_a, **_kw: SimpleNamespace(
+                        returncode=1, stdout=b"", stderr=b"INERT_SECRET refused"
+                    )
+                ),
+            ),
+        ):
+            with self.assertRaises(subject._FixtureRefusal) as failure:
+                subject._driver(p37b, "read", "a" * 16, "INERT_SECRET")
+            args = write.call_args.args
+            document = json.loads(args[1])
+            self.assertEqual(args[1], canonical_json(document) + b"\n")
+            self.assertEqual(args[2:], (0, 0, 0o400))
+            self.assertEqual(document["scenario"]["id"], "native-read-" + "a" * 16)
+            notes = str(failure.exception.__notes__)
+            self.assertNotIn("INERT_SECRET", notes)
+            self.assertIn("[REDACTED]", notes)
 
     def test_driver_definitions_without_main_or_native_calls(self):
         node = shutil.which("node")

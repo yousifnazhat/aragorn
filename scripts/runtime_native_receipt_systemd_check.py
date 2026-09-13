@@ -679,7 +679,7 @@ def _driver(p37b: Any, kind: str, nonce: str, token: str) -> dict:
                     "--no-pager",
                     "--output=cat",
                     "--lines=4",
-                    "--grep=\\[tools\\]|native|aragorn_runtime_create",
+                    "--grep=\\[tools\\]",
                 ],
                 timeout=3,
             )

@@ -508,10 +508,19 @@ This capture now selects the [bounded broker response profile](./scripts/stage_r
 After successful response delivery and clean connection closure, the broker
 checks its consumed grant and receipt under a read-only lock and uses the
 original grant lifetime for its accept wait. In-flight work and cleanup can
-outlast that window; it is not a hard process-exit deadline. One-shot effect checks and every
-fail-stop service dependency remain unchanged. Startup with a consumed grant
+outlast that window; it is not a hard process-exit deadline. One-shot effect
+checks and every fail-stop service dependency remain unchanged. Startup with a consumed grant
 still refuses; this response window is not a native terminal ACK or completion
 guarantee.
+The [retained journal development observation](./benchmark/evidence/phase3-runtime-endpoint-journal-systemd-development-v1-2026-09-13.json)
+from signed `91c1deb` captures all eight selected records in the disposable
+55-file fixture, including the unchanged-state peer refusal and a native create
+joined to its consumed grant and retained result. The first matching record is
+preserved even when the global baseline cursor is outside the unit filter;
+baseline, process, boot, invocation, time-window, and pair checks still apply.
+All four services were stopped, the owned container removed, and the frozen
+parent rechecked unchanged. This is `OBSERVED`, not durable or complete event
+coverage, native terminal retention, production activation, or RUN/Phase 3 qualification.
 
 The [restricted Tetragon process adapter](./src/aragorn/runtime_tetragon_process.py)
 validates bounded offline records against an

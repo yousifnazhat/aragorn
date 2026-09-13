@@ -546,6 +546,12 @@ and awaits its terminal ACK. Duplicate or uncertain retention prevents further
 execution by that client. Frozen-parameter compatibility, native hook reachability,
 gateway credential loading, and worker-side create-to-attempt enforcement are not
 established by its inert client tests.
+The [worker create gate successor](./scripts/materialize_runtime_native_create_gate.py)
+requires a matching open retained create attempt, holds its existing store lock
+through relay, and consumes one worker-lifetime admission before any sensor
+connection. Duplicate requests cannot retry; an unresolved attempt prevents
+restart-based reset. This is a tested source overlay, not deployed enforcement
+or proof that an authenticated gateway report came from a native tool hook.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

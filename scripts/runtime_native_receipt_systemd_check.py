@@ -998,11 +998,17 @@ def main(argv: list[str] | None = None) -> int:
             + (exc.args[0] if type(exc) is _FixtureRefusal else type(exc).__name__),
             file=sys.stderr,
         )
-        if type(exc) is _FixtureRefusal:
-            # Only this checker's fresh refusal receives the bounded, token-redacted
-            # notes above; inherited exceptions and their notes remain suppressed.
-            for note in getattr(exc, "__notes__", ())[:2]:
-                print(note, file=sys.stderr)
+        cause = exc
+        for _ in range(3):
+            if type(cause) is _FixtureRefusal:
+                # A cleanup error must not hide the primary bounded diagnostics.
+                # Inherited exceptions and their arbitrary notes stay suppressed.
+                for note in getattr(cause, "__notes__", ())[:2]:
+                    print(note, file=sys.stderr)
+                break
+            cause = cause.__context__
+            if cause is None:
+                break
         return 126
     print(canonical_json(result).decode("ascii"))
     return 0

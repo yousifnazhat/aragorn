@@ -197,6 +197,18 @@ class NativeReceiptFixtureTests(unittest.TestCase):
                 self.assertEqual(subject.main(["c" * 64]), 126)
             self.assertIn(visible, output.getvalue())
             self.assertNotIn("SECRET_MUST_NOT_APPEAR", output.getvalue())
+        cleanup_error = RuntimeError("PRIVATE_CLEANUP_DETAIL")
+        primary = subject._FixtureRefusal("native driver refused")
+        primary.add_note("fixture diagnostics: REDACTED_TEST")
+        cleanup_error.__context__ = primary
+        output = io.StringIO()
+        with (
+            patch.object(subject, "_run", side_effect=cleanup_error),
+            redirect_stderr(output),
+        ):
+            self.assertEqual(subject.main(["c" * 64]), 126)
+        self.assertIn("REDACTED_TEST", output.getvalue())
+        self.assertNotIn("PRIVATE_CLEANUP_DETAIL", output.getvalue())
 
     def test_driver_input_keeps_legacy_newline_and_failure_diagnostics_redact(self):
         import runtime_action_worker_openclaw_systemd_probe as p37b

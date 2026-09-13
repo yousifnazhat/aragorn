@@ -1,0 +1,168 @@
+"""One isolated owned-VM exec/exit smoke; not a deployment or health qualifier."""
+
+import hashlib
+import json
+import os
+import selectors
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+PROFILE = "aragorn-tetragon-check-20260913-a7d1148"
+DOCKER = ["docker", "--context", "colima-" + PROFILE]
+SSH = ["colima", "ssh", "--profile", PROFILE, "--"]
+IMAGE = "quay.io/cilium/tetragon@sha256:1bffeee60f1d47e367d237129e576729d14fe8db748440328aded8a6091c4a40"
+NAME = "aragorn-tetragon-candidate-a7d1148"
+BINARY = "/opt/aragorn-tetragon-fixture/a7d1148/true"
+TETRA = ["/usr/bin/tetra", "--server-address", "unix:///var/run/tetragon/tetragon.sock", "--timeout", "5s", "--retries", "1", "--max-recv-size", "65536"]
+ARGS = ["--btf=/var/lib/tetragon/btf", "--procfs=/proc", "--bpf-dir=aragorn-tg-a7d1148", "--server-address=unix:///var/run/tetragon/tetragon.sock", "--health-server-address=", "--metrics-server=127.0.0.1:2112", "--enable-k8s-api=false", "--enable-cri=false", "--enable-process-cred=false", "--enable-process-environment-variables=false", "--enable-process-ns=true", "--enable-ancestors=base", "--export-filename=", "--enable-export-aggregation=false", "--enable-pid-set-filter=false", "--keep-sensors-on-exit=false", "--release-pinned-bpf=true"]
+
+
+def run(argv, timeout=15, allowed=(0,), limit=1048576):
+    p = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout)
+    if p.returncode not in allowed or len(p.stdout) > limit or len(p.stderr) > 65536:
+        raise RuntimeError(f"command failed: {argv[:5]}: {p.returncode}: {p.stderr[:1024]!r}")
+    return {"argv": argv, "exit_code": p.returncode, "stdout": p.stdout.decode(), "stderr": p.stderr.decode()}
+
+
+def inspect(container):
+    d = json.loads(run(DOCKER + ["inspect", container])["stdout"])[0]
+    h = d["HostConfig"]
+    assert d["Id"] == container and d["Name"] == "/" + NAME
+    assert d["Image"] == IMAGE.split("@")[1] and d["Config"]["Image"] == IMAGE
+    assert d["Config"]["Labels"] == {"dev.aragorn.fixture-owner": PROFILE}
+    assert d["Config"]["User"] == "0:0" and d["Config"]["Cmd"] == ARGS
+    assert h["Privileged"] is True and h["NetworkMode"] == "none"
+    assert h["PidMode"] == h["CgroupnsMode"] == "host"
+    assert h["SecurityOpt"] == ["no-new-privileges", "label=disable"]
+    assert h["RestartPolicy"] == {"Name": "no", "MaximumRetryCount": 0}
+    assert h["Memory"] == 768 * 1024**2 and h["NanoCpus"] == 1000000000 and h["PidsLimit"] == 128
+    assert h["IpcMode"] == "private" and h["UsernsMode"] == "" and h["Runtime"] == "runc"
+    assert not h["Binds"] and not h["PortBindings"] and d["RestartCount"] == 0
+    assert d["Mounts"] == [{"Type": "bind", "Source": "/sys/kernel/btf/vmlinux", "Destination": "/var/lib/tetragon/btf", "Mode": "", "RW": False, "Propagation": "rprivate"}]
+    return d
+
+
+def snapshot(container):
+    before = inspect(container)
+    assert before["State"]["Running"] and before["State"]["Pid"] > 0
+    pid = str(before["State"]["Pid"])
+    identity = run(SSH + ["sudo", "python3", "-c", "import json,pathlib,sys; p=pathlib.Path('/proc')/sys.argv[1]; print(json.dumps({'stat':(p/'stat').read_text(),'cgroup':(p/'cgroup').read_text(),'exe':str((p/'exe').resolve()),'boot':pathlib.Path('/proc/sys/kernel/random/boot_id').read_text()}))", pid])
+    info = run(DOCKER + ["exec", container, *TETRA, "info"])
+    health = run(DOCKER + ["exec", container, *TETRA, "status"])
+    metrics = run(SSH + ["sudo", "nsenter", "-t", pid, "-n", "--", "curl", "--fail", "--silent", "--show-error", "--max-time", "5", "--max-filesize", "1048576", "http://127.0.0.1:2112/metrics"])
+    after = inspect(container)
+    assert before["State"] == after["State"]
+    return {"container": before, "process": identity, "info": info, "health": health, "metrics": metrics}
+
+
+def process_key(snapshot):
+    d = json.loads(snapshot["process"]["stdout"])
+    fields = d["stat"][d["stat"].rindex(") ") + 2:].split()
+    return (int(fields[19]), d["cgroup"], d["exe"], d["boot"])
+
+
+def main():
+    output = Path(__file__).with_name("observation.json")
+    assert not output.exists()
+    assert run(DOCKER + ["ps", "-aq"])["stdout"] == ""
+    mounts = run(SSH + ["findmnt", "-rn", "-t", "virtiofs,9p,fuse.sshfs"], allowed=(1,))
+    assert not mounts["stdout"]
+    run(SSH + ["sudo", "install", "-d", "-m", "0755", str(Path(BINARY).parent)])
+    run(SSH + ["sudo", "install", "-m", "0555", "/usr/bin/true", BINARY])
+    binary = run(SSH + ["python3", "-c", "import hashlib,json,os,pathlib,sys; p=pathlib.Path(sys.argv[1]); s=p.stat(); print(json.dumps({'path':str(p),'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'size':s.st_size,'uid':s.st_uid,'gid':s.st_gid,'mode':oct(s.st_mode),'inode':s.st_ino,'nlink':s.st_nlink}))", BINARY])
+    created = run(DOCKER + ["create", "--name", NAME, "--pull=never", "--pid=host", "--cgroupns=host", "--privileged", "--network=none", "--user=0:0", "--restart=no", "--security-opt=no-new-privileges", "--security-opt=label=disable", "--memory=768m", "--cpus=1", "--pids-limit=128", "--label", "dev.aragorn.fixture-owner=" + PROFILE, "--mount", "type=bind,src=/sys/kernel/btf/vmlinux,dst=/var/lib/tetragon/btf,readonly", IMAGE, *ARGS])
+    container = created["stdout"].strip()
+    assert len(container) == 64 and all(c in "0123456789abcdef" for c in container)
+    reader = None
+    selector = selectors.DefaultSelector()
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    try:
+        initial = inspect(container)
+        assert initial["State"]["Status"] == "created"
+        run(DOCKER + ["start", container])
+        deadline = time.monotonic() + 25
+        while True:
+            p = subprocess.run(DOCKER + ["exec", container, *TETRA, "info"], stdin=subprocess.DEVNULL, capture_output=True, timeout=7)
+            if p.returncode == 0 and p.stdout.startswith(b"{"):
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError(f"startup not ready: {p.stdout[:1024]!r} {p.stderr[:1024]!r}")
+            time.sleep(.2)
+        before = snapshot(container)
+        reader_argv = DOCKER + ["exec", container, *TETRA, "getevents", "--output", "json", "--event-types", "PROCESS_EXEC,PROCESS_EXIT", "--process", "^" + BINARY + "$", "--reconnect=false"]
+        reader = subprocess.Popen(reader_argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for name, stream in (("stdout", reader.stdout), ("stderr", reader.stderr)):
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, name)
+
+        def drain(seconds):
+            end = time.monotonic() + seconds
+            while time.monotonic() < end and selector.get_map():
+                for key, _ in selector.select(min(.1, max(0, end - time.monotonic()))):
+                    data = os.read(key.fileobj.fileno(), 65536)
+                    if not data:
+                        selector.unregister(key.fileobj)
+                    else:
+                        buffers[key.data].extend(data)
+                        assert len(buffers[key.data]) <= (4 * 1024**2 if key.data == "stdout" else 65536)
+                        assert all(len(line) <= 65536 for line in buffers["stdout"].split(b"\n"))
+
+        # The first marker establishes only observed readiness after delivery.
+        drain(.5)
+        markers = []
+        for index in range(3):
+            marker = run(SSH + ["python3", "-c", "import json,os,subprocess,sys,time; start=time.time_ns(); p=subprocess.Popen([sys.argv[1]],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); pid=p.pid; status=p.wait(timeout=5); print(json.dumps({'pid':pid,'parent_pid':os.getpid(),'exit_code':status,'before_unix_ns':start,'after_unix_ns':time.time_ns()}))", BINARY])
+            markers.append(json.loads(marker["stdout"]))
+            assert markers[-1]["exit_code"] == 0
+            end = time.monotonic() + 5
+            while buffers["stdout"].count(b"\n") < (index + 1) * 2 and time.monotonic() < end:
+                assert reader.poll() is None
+                drain(.1)
+            assert buffers["stdout"].count(b"\n") == (index + 1) * 2, "missing or additional selected marker records"
+        final = snapshot(container)
+        assert before["container"]["State"] == final["container"]["State"]
+        assert process_key(before) == process_key(final)
+        stop = run(DOCKER + ["stop", "--timeout", "10", container], timeout=15)
+        drain(5)
+        reader.wait(timeout=5)
+        stopped = inspect(container)
+        assert stopped["State"]["Status"] == "exited" and stopped["State"]["ExitCode"] == 0
+        logs = run(DOCKER + ["logs", container])
+        raw = bytes(buffers["stdout"])
+        assert raw.endswith(b"\n") and len(raw.splitlines()) == 6
+        records = [json.loads(line) for line in raw.splitlines()]
+        for marker, pair in zip(markers, [records[n:n+2] for n in range(0, 6, 2)], strict=True):
+            assert set(pair[0]) >= {"process_exec", "node_name", "time"}
+            assert set(pair[1]) >= {"process_exit", "node_name", "time"}
+            first, last = pair[0]["process_exec"], pair[1]["process_exit"]
+            assert first["process"]["pid"] == last["process"]["pid"] == marker["pid"]
+            assert first["process"]["binary"] == last["process"]["binary"] == BINARY
+            assert first["process"]["exec_id"] == last["process"]["exec_id"]
+            assert first["parent"]["pid"] == last["parent"]["pid"] == marker["parent_pid"]
+            assert last.get("status", 0) == 0 and not last.get("signal")
+        result = {"schema":"aragorn/tetragon-isolated-exec-exit-smoke/v1", "authority":"OWNED_VM_SELECTED_MARKERS_ONLY_NOT_CONTINUOUS_COVERAGE_OR_RUN_AUTHORITY", "status":"OBSERVED", "profile":PROFILE, "image":IMAGE, "fixture_binary":binary, "host_folder_mount_check":mounts, "container_initial":initial, "before":before, "markers":markers, "final":final, "reader":{"argv":reader_argv,"stdout":raw.decode(),"stderr":bytes(buffers["stderr"]).decode(),"exit_code":reader.returncode}, "shutdown":{"command":stop,"container":stopped,"logs":logs}, "release_signature_verified":False,"source_to_binary_reproduction_verified":False,"loss_metric_qualification":False,"complete_event_coverage":False,"phase3_eligible":False,"run_conformance_eligible":False}
+    finally:
+        if reader is not None and reader.poll() is None:
+            run(DOCKER + ["stop", "--timeout", "5", container], timeout=10)
+            reader.terminate()
+            reader.wait(timeout=5)
+        selector.close()
+        if reader is not None:
+            reader.stdout.close()
+            reader.stderr.close()
+        owned = inspect(container)
+        if owned["State"]["Running"]:
+            run(DOCKER + ["stop", "--timeout", "5", container], timeout=10)
+        run(DOCKER + ["rm", container])
+        assert run(DOCKER + ["ps", "-aq"])["stdout"] == ""
+    result["owned_container_removed"] = True
+    raw = json.dumps(result, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    with output.open("xb") as stream:
+        stream.write(raw)
+    print(json.dumps({"status":"OBSERVED","path":str(output),"bytes":len(raw),"sha256":hashlib.sha256(raw).hexdigest(),"selected_events":6,"phase3_eligible":False}))
+
+
+if __name__ == "__main__":
+    main()

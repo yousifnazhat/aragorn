@@ -515,6 +515,15 @@ caller-reported capture window does not prove authenticity or completeness, and
 returned vendor records still contain their original arguments and paths.
 Independent kernel-to-wall-clock conversions do not establish cross-field timestamp
 ordering; the adapter preserves those values without rounding or a guessed tolerance.
+The [isolated OS smoke](./benchmark/evidence/tetragon-isolated-exec-exit-smoke-v1-2026-09-13.json)
+retains six original exec/exit records for three inert markers from a dedicated,
+now-deleted VM with no host-folder mounts. Its
+[fixed-artifact replay](./tests/test_tetragon_isolated_smoke.py) checks byte pins,
+marker/process joins, and collector snapshots without executing the
+[inert helper reference](./benchmark/evidence/reference/tetragon-isolated-exec-exit-smoke-v1-2026-09-13.py.txt).
+The missing BPF loss metric remains unknown; reader shutdown returned exit 1/EOF.
+Helper execution, executed binary bytes, complete coverage, release authenticity,
+and RUN/Phase 3 eligibility are not established by these retained artifacts.
 
 The [native tool receipt core](./src/aragorn/runtime_native_tool_receipts.py) retains
 bounded attempt/terminal chains using the existing CAS and atomic publisher. It

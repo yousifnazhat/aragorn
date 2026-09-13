@@ -592,6 +592,15 @@ It validates actual service account identities and never opens the receipt store
 or derives trust from an ACK. Inert tests cover identity, namespace, read-only
 mount, input, and cleanup refusals; native bootstrap, hooks, complete deployment
 pins, and live projection validation are still required.
+The [native hook source overlay](./scripts/materialize_runtime_native_tool_hooks.py)
+now joins both exact OpenClaw caller paths to one fixed-path client, bootstrapped
+by that credential helper. It passes detached final parameters to the selected
+read/create callback, awaits terminal retention, and refuses other tool names.
+Inert tests execute extracted source functions with mocked transport and helper
+launch; they preserve callback arguments, cancellation, and native return/throw.
+Progress, transcripts, and later diagnostics are outside this receipt boundary.
+Full TypeScript/build validation, actual tool compatibility, compiled import
+closure, common deployment, and RUN qualification remain unverified.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

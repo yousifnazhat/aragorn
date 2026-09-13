@@ -569,6 +569,14 @@ through relay, and consumes one worker-lifetime admission before any sensor
 connection. Duplicate requests cannot retry; an unresolved attempt prevents
 restart-based reset. This is a tested source overlay, not deployed enforcement
 or proof that an authenticated gateway report came from a native tool hook.
+The [absent-only receipt provisioner](./src/aragorn/runtime_native_tool_provisioning.py)
+prepares the fixed empty store under the existing activation and broker locks,
+hands its ownership to the worker, and publishes the common root genesis source
+last without replacement. Existing or partial history is never reset or repaired;
+publication, custody, synchronization, or cleanup uncertainty refuses success.
+Its tests use caller-owned files and mocked root/systemd boundaries, including
+acceptance by the unprivileged receipt core. No host provisioning or activation
+has been performed; gateway projection and native hooks remain separate work.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

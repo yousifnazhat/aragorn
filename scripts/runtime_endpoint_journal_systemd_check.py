@@ -533,6 +533,60 @@ def _rows(
     return result
 
 
+def _journal_metadata_failure(exc: BaseException, processes: dict, boot: str) -> None:
+    fields = (
+        "_BOOT_ID",
+        "_SYSTEMD_INVOCATION_ID",
+        "_SYSTEMD_UNIT",
+        "_PID",
+        "_TRANSPORT",
+        "__MONOTONIC_TIMESTAMP",
+    )
+    records = []
+    for role, unit in _ROLES.items():
+        record = {
+            "role": role,
+            "expected_boot": boot,
+            "expected_invocation": processes[role]["unit"]["InvocationID"],
+        }
+        try:
+            raw = response._command(
+                [
+                    "/usr/bin/journalctl",
+                    "--quiet",
+                    "--no-pager",
+                    "--all",
+                    "--output=json",
+                    "--output-fields=" + ",".join(fields),
+                    "--lines=4",
+                    "--unit=" + unit,
+                ],
+                timeout=3,
+            )
+            rows = [
+                json.loads(line, object_pairs_hook=_object) for line in raw.splitlines()
+            ]
+            _expect(
+                len(rows) <= 4 and all(type(row) is dict for row in rows),
+                "metadata query changed",
+            )
+            # Never retain MESSAGE, command lines, arbitrary fields or raw bodies.
+            record["rows"] = [
+                {
+                    name: value
+                    if type(value := row.get(name)) is str
+                    and re.fullmatch(r"[A-Za-z0-9._:/=-]{1,160}", value)
+                    else None
+                    for name in fields
+                }
+                for row in rows
+            ]
+        except BaseException as error:  # noqa: BLE001 - diagnostics cannot replace collection failure
+            record["error_type"] = type(error).__name__
+        records.append(record)
+    _note(exc, [{"operation": "owned_journal_metadata", "units": records}])
+
+
 def _collect(cursor: str, processes: dict, boot: str, lower: int) -> dict[str, Any]:
     deadline = time.monotonic() + 3
     while True:
@@ -566,11 +620,15 @@ def _collect(cursor: str, processes: dict, boot: str, lower: int) -> dict[str, A
         counts = {role: len(value["rows"]) for role, value in captured.items()}
         if counts == {"worker": 4, "sensor": 2, "broker": 2}:
             return captured
-        _expect(
+        if not (
             all(counts[role] <= (4 if role == "worker" else 2) for role in counts)
-            and time.monotonic() < deadline,
-            "expected bounded journal pairs were not observed",
-        )
+            and time.monotonic() < deadline
+        ):
+            failure = RuntimeError(
+                f"expected bounded journal pairs were not observed: {counts}"
+            )
+            _journal_metadata_failure(failure, processes, boot)
+            raise failure
         time.sleep(0.02)
 
 

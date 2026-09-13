@@ -986,6 +986,42 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
         ):
             subject._collect("s=baseline", processes, _BOOT, 100)
 
+    def test_failed_collection_diagnostics_only_retain_bounded_metadata(self):
+        processes = _processes()
+        secret = "never retain the raw journal body"
+        row = {
+            "_BOOT_ID": "d" * 32,
+            "_SYSTEMD_INVOCATION_ID": "e" * 32,
+            "_SYSTEMD_UNIT": subject.prior._WORKER,
+            "_PID": "123",
+            "_TRANSPORT": "stdout",
+            "__MONOTONIC_TIMESTAMP": "1000",
+            "MESSAGE": secret,
+            "_CMDLINE": secret,
+        }
+        failure = RuntimeError("original collection failure")
+        with patch.object(
+            subject.response, "_command", return_value=json.dumps(row).encode() + b"\n"
+        ) as command:
+            subject._journal_metadata_failure(failure, processes, _BOOT)
+        self.assertEqual(command.call_count, 3)
+        for call in command.call_args_list:
+            self.assertIn("--lines=4", call.args[0])
+            self.assertNotIn("--after-cursor=s=baseline", call.args[0])
+            self.assertEqual(call.kwargs["timeout"], 3)
+        note = failure.__notes__[0]
+        self.assertIn("owned_journal_metadata", note)
+        self.assertIn("d" * 32, note)
+        self.assertNotIn(secret, note)
+        self.assertNotIn("MESSAGE", note)
+        self.assertLessEqual(len(note), 4096)
+        with patch.object(
+            subject.response, "_command", side_effect=KeyboardInterrupt()
+        ):
+            subject._journal_metadata_failure(failure, processes, _BOOT)
+        self.assertIn("KeyboardInterrupt", failure.__notes__[1])
+        self.assertEqual(str(failure), "original collection failure")
+
     def test_actual_receipt_grant_target_and_peer_binding_independent_of_journal(self):
         processes = _processes()
         aliases = {

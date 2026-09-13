@@ -138,6 +138,8 @@ class NativeHealthFixtureTests(unittest.TestCase):
             (True, "/lib", "resolved_alias"),
             (True, "/lib", "mode"),
             (True, "/lib", "extra_command"),
+            (True, "/lib", "wrong_signature"),
+            (True, "/lib", "extra_array_entry"),
             (True, "/lib", "missing_empty"),
             (True, "/lib", "extra_property"),
         ):
@@ -174,8 +176,6 @@ class NativeHealthFixtureTests(unittest.TestCase):
                     if publisher
                     else subject._PUBLISHER + " shutdown.target",
                     "After": "local-fs.target nss-user-lookup.target",
-                    "ExecStartPre": "",
-                    "ExecStartPost": "",
                     "ExecStart": "{ path=/usr/bin/python3.12 ; argv[]="
                     + executable
                     + " ; ignore_errors=no ; pid=0 ; code=(null) ; status=0/0 }",
@@ -186,17 +186,23 @@ class NativeHealthFixtureTests(unittest.TestCase):
                 }
                 if failure == "mode":
                     fields["OnSuccessJobMode"] = "replace"
-                if failure == "extra_command":
-                    fields["ExecStartPost"] = "/bin/true"
                 if failure == "missing_empty":
-                    del fields["ExecStartPre"]
+                    del fields["DropInPaths"]
                 if failure == "extra_property":
                     fields["Unexpected"] = "value"
                 return "".join(
                     f"{key}={value}\n" for key, value in fields.items()
                 ).encode()
 
-            def property_value(unit, name):
+            def property_value(unit, name, failure=failure):
+                if name in {"ExecStartPre", "ExecStartPost"}:
+                    if failure == "extra_command":
+                        return ["a(sasbttttuii)", "1"]
+                    if failure == "wrong_signature":
+                        return ["a(ss)", "0"]
+                    if failure == "extra_array_entry":
+                        return ["a(sasbttttuii)", "0", "unexpected"]
+                    return ["a(sasbttttuii)", "0"]
                 if name == "LoadCredential":
                     return (
                         [
@@ -247,6 +253,16 @@ class NativeHealthFixtureTests(unittest.TestCase):
                     )
                     self.assertEqual(
                         result["units"][subject._DISPATCH]["OnSuccessJobMode"], "fail"
+                    )
+                    self.assertEqual(
+                        result["exec_extra"],
+                        {
+                            unit: {
+                                name: ["a(sasbttttuii)", "0"]
+                                for name in ("ExecStartPre", "ExecStartPost")
+                            }
+                            for unit in subject._UNITS
+                        },
                     )
 
     def test_exact_cursor_rows_baseline_and_malformed_output(self):

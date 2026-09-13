@@ -164,7 +164,15 @@ def _show(unit: str, properties: tuple[str, ...] = _STATE) -> dict[str, str]:
 
 def _property(unit: str, name: str) -> list[str]:
     _expect(
-        unit in _UNITS and name in {"LoadCredential", "BindPaths", "BindReadOnlyPaths"},
+        unit in _UNITS
+        and name
+        in {
+            "LoadCredential",
+            "BindPaths",
+            "BindReadOnlyPaths",
+            "ExecStartPre",
+            "ExecStartPost",
+        },
         "unsupported health property selector",
     )
     object_path = "/org/freedesktop/systemd1/unit/" + unit.replace("-", "_2d").replace(
@@ -186,6 +194,7 @@ def _property(unit: str, name: str) -> list[str]:
 
 def _units(*, installed: bool) -> dict:
     result = {}
+    exec_extra = {}
     properties = (
         "Id",
         "LoadState",
@@ -201,8 +210,6 @@ def _units(*, installed: bool) -> dict:
         "Before",
         "After",
         "ExecStart",
-        "ExecStartPre",
-        "ExecStartPost",
         "NoNewPrivileges",
         "PrivateNetwork",
         "PrivateMounts",
@@ -227,8 +234,6 @@ def _units(*, installed: bool) -> dict:
             "RefuseManualStart": "no" if publisher else "yes",
             "OnSuccess": _DISPATCH if publisher and installed else "",
             "OnSuccessJobMode": "fail",
-            "ExecStartPre": "",
-            "ExecStartPost": "",
             "NoNewPrivileges": "yes",
             "PrivateNetwork": "yes",
             "PrivateMounts": "yes",
@@ -258,6 +263,15 @@ def _units(*, installed: bool) -> dict:
                 )
             ),
             "effective health unit contract changed",
+        )
+        exec_extra[unit] = {
+            name: _property(unit, name) for name in ("ExecStartPre", "ExecStartPost")
+        }
+        _expect(
+            all(
+                value == ["a(sasbttttuii)", "0"] for value in exec_extra[unit].values()
+            ),
+            "health unit extra command arrays changed",
         )
         result[unit] = state
     credentials = _property(_PUBLISHER, "LoadCredential")
@@ -291,6 +305,7 @@ def _units(*, installed: bool) -> dict:
     )
     return {
         "units": result,
+        "exec_extra": exec_extra,
         "publisher_credentials": credentials,
         "response_bind_paths": alias,
     }

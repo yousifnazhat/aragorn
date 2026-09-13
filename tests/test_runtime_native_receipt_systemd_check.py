@@ -207,6 +207,9 @@ class NativeReceiptFixtureTests(unittest.TestCase):
             patch.object(p37b.openclaw.profile_prior, "_write_file") as write,
             patch.object(subject.prior, "_stack_failure"),
             patch.object(
+                subject.response, "_command", return_value=b"INERT_SECRET tool refused"
+            ),
+            patch.object(
                 p37b,
                 "subprocess",
                 SimpleNamespace(

@@ -640,6 +640,25 @@ def _driver(p37b: Any, kind: str, nonce: str, token: str) -> dict:
     )
     if completed.returncode != 0 or completed.stdout or completed.stderr:
         failure = _FixtureRefusal("native driver refused")
+        tool_failure = {"operation": "native_tool_failure"}
+        try:
+            raw_failure = response._command(
+                [
+                    "/usr/bin/journalctl",
+                    "--unit=" + setup_prior._GATEWAY,
+                    "--quiet",
+                    "--no-pager",
+                    "--output=cat",
+                    "--lines=4",
+                    "--grep=\\[tools\\]|native|aragorn_runtime_create",
+                ],
+                timeout=3,
+            )
+            tool_failure["body"] = prior._diagnostic_bytes(
+                raw_failure, token, tail=True, limit=768
+            )
+        except Exception as diagnostic_error:  # noqa: BLE001 - diagnostics must not replace refusal
+            tool_failure["error_type"] = type(diagnostic_error).__name__
         prior._note(
             failure,
             [
@@ -647,7 +666,8 @@ def _driver(p37b: Any, kind: str, nonce: str, token: str) -> dict:
                     "operation": "native_driver",
                     "returncode": completed.returncode,
                     "stderr": prior._diagnostic_bytes(completed.stderr, token),
-                }
+                },
+                tool_failure,
             ],
         )
         prior._stack_failure(failure, token)

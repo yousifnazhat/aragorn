@@ -568,7 +568,7 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                         )
                     self.assertIs(p37b.subprocess, subprocess)
                     self.assertEqual(
-                        journal_command.call_count, int(failure == "driver")
+                        journal_command.call_count, 4 * int(failure == "driver")
                     )
 
     def test_failure_diagnostics_are_bounded_redacted_and_never_change_run(self):
@@ -614,29 +614,60 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
             self.assertIs(caught.exception, failure)
             original.run.assert_called_once_with(["fixed"], timeout=45)
             self.assertNotIn(token, repr(diagnostics.records))
-        failure = RuntimeError("original")
-        with patch.object(
-            subject.response, "_command", return_value=b"old\n" + raw
-        ) as command:
-            subject._gateway_failure(failure, token)
-        command.assert_called_once_with(
-            [
-                "/usr/bin/journalctl",
-                "--unit=" + subject.prior._GATEWAY,
-                "--no-pager",
-                "--all",
-                "--output=cat",
-                "--lines=20",
-            ],
-            timeout=3,
-        )
-        self.assertNotIn(token, repr(failure.__notes__))
-        with patch.object(
-            subject.response, "_command", side_effect=OSError("private " + token)
-        ):
-            subject._gateway_failure(failure, token)
-        self.assertNotIn(token, repr(failure.__notes__))
-        self.assertIn("OSError", failure.__notes__[-1])
+        units = (*subject._ROLES.values(), subject.prior._GATEWAY)
+        for failed_unit in (None, *units):
+            failure = RuntimeError("original")
+            bodies = [
+                b"old\n"
+                + b"x" * subject.response._MAX_BYTES
+                + unit.encode()
+                + b"\nRuntimeError: "
+                + token.encode()
+                + b" fixed cause\x1b"
+                for unit in units
+            ]
+            answers = [
+                OSError("private " + token) if unit == failed_unit else body
+                for unit, body in zip(units, bodies, strict=True)
+            ]
+            with patch.object(
+                subject.response, "_command", side_effect=answers
+            ) as command:
+                subject._stack_failure(failure, token)
+            self.assertEqual(
+                command.call_args_list,
+                [
+                    unittest.mock.call(
+                        [
+                            "/usr/bin/journalctl",
+                            "--unit=" + unit,
+                            "--no-pager",
+                            "--all",
+                            "--output=cat",
+                            "--lines=20",
+                        ],
+                        timeout=3,
+                    )
+                    for unit in units
+                ],
+            )
+            note = failure.__notes__[0]
+            self.assertLess(len(note.encode("ascii")), 4096)
+            self.assertNotIn(token, note)
+            self.assertNotIn("\x1b", note)
+            details = json.loads(note.removeprefix("fixture diagnostics: "))[0]
+            self.assertEqual(details["operation"], "owned_stack_journal_tails")
+            self.assertEqual([item["unit"] for item in details["units"]], list(units))
+            for item, body in zip(details["units"], bodies, strict=True):
+                if item["unit"] == failed_unit:
+                    self.assertEqual(item["error_type"], "OSError")
+                else:
+                    self.assertEqual(item["body"]["digest"], subject._digest(body))
+                    self.assertEqual(item["body"]["bytes"], len(body))
+                    self.assertIn(
+                        "RuntimeError: [REDACTED] fixed cause", item["body"]["text"]
+                    )
+                    self.assertTrue(item["body"]["text_truncated"])
 
     def test_cleanup_diagnostics_preserve_command_rejection_offsets_and_reaping(self):
         token = "f" * 64

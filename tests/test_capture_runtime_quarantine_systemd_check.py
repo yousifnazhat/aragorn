@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import subprocess
 import unittest
 from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from copy import deepcopy
@@ -10,7 +11,7 @@ from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from scripts import capture_runtime_quarantine_systemd_check as subject
 
@@ -22,6 +23,53 @@ _CHECKER = "/opt/aragorn/runtime-quarantine-systemd-check.py"
 
 
 class RuntimeQuarantineCaptureTests(unittest.TestCase):
+    def test_journal_diagnostics_preserve_frozen_runner_checks_and_full_safe_error(
+        self,
+    ):
+        acquisition = subject.existing.existing.acquisition
+        argv = ["exec", _CONTAINER, "/fixed-checker"]
+        for status, output, error in (
+            (0, b"safe", b""),
+            (1, b"", b"safe diagnostic " + b"x" * 2000 + b" decisive tail"),
+            (0, b"safe", b"stderr still refuses"),
+            (1, b"", b""),
+            (1, b"", b"x" * 16385),
+            (1, b"x" * (2 * 1024 * 1024 + 1), b"unsafe output bound"),
+        ):
+            completed = subprocess.CompletedProcess(argv, status, output, error)
+            original = SimpleNamespace(run=Mock(return_value=completed))
+            with patch.object(acquisition, "subprocess", original):
+                if status == 0 and not error:
+                    self.assertEqual(subject._journal_check(argv), output)
+                else:
+                    with self.assertRaises(acquisition.CaptureError) as caught:
+                        subject._journal_check(argv)
+                    if len(error) > 16384 or len(output) > 2 * 1024 * 1024:
+                        self.assertEqual(
+                            str(caught.exception),
+                            "acquisition command output exceeded limit",
+                        )
+                    elif error:
+                        self.assertTrue(str(caught.exception).endswith(error.decode()))
+                    else:
+                        self.assertEqual(
+                            str(caught.exception), "acquisition command failed: "
+                        )
+                self.assertIs(acquisition.subprocess, original)
+            original.run.assert_called_once_with(
+                [*acquisition._DOCKER, *argv],
+                capture_output=True,
+                check=False,
+                timeout=120,
+            )
+        failure = subprocess.TimeoutExpired("fixed", 120)
+        original = SimpleNamespace(run=Mock(side_effect=failure))
+        with patch.object(acquisition, "subprocess", original):
+            with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                subject._journal_check(argv)
+            self.assertIs(caught.exception, failure)
+            self.assertIs(acquisition.subprocess, original)
+
     @contextmanager
     def fixture(self, failure: str | None = None, *, endpoint_journal: bool = False):
         """Exercise host orchestration with every Docker entry point mocked."""

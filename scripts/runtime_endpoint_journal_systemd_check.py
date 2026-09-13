@@ -143,7 +143,9 @@ def _digest(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
-def _diagnostic_bytes(raw: bytes, token: str | None, *, tail: bool = False) -> dict:
+def _diagnostic_bytes(
+    raw: bytes, token: str | None, *, tail: bool = False, limit: int = 512
+) -> dict:
     result = {"bytes": len(raw), "digest": _digest(raw)}
     # Never expose a body if the fixture credential cannot be recovered safely.
     if token is None:
@@ -151,8 +153,8 @@ def _diagnostic_bytes(raw: bytes, token: str | None, *, tail: bool = False) -> d
     text = raw.decode("utf-8", errors="replace").replace(token, "[REDACTED]")
     text = text if tail else text.split("\n", 1)[0]
     original_length = len(text)
-    text = text[-512:] if tail else text[:512]
-    while len(json.dumps(text, ensure_ascii=True)) > 514:
+    text = text[-limit:] if tail else text[:limit]
+    while len(json.dumps(text, ensure_ascii=True)) > limit + 2:
         text = text[1:] if tail else text[:-1]
     return {**result, "text": text, "text_truncated": len(text) < original_length}
 
@@ -263,29 +265,30 @@ class _DiagnosticProcess:
         return status
 
 
-def _gateway_failure(exc: BaseException, token: str) -> None:
-    try:
-        raw = response._command(
-            [
-                "/usr/bin/journalctl",
-                "--unit=" + prior._GATEWAY,
-                "--no-pager",
-                "--all",
-                "--output=cat",
-                "--lines=20",
-            ],
-            timeout=3,
-        )
-        record = {
-            "operation": "owned_gateway_journal_tail",
-            "body": _diagnostic_bytes(raw, token, tail=True),
-        }
-    except BaseException as diagnostic_error:  # noqa: BLE001 - preserve the action failure
-        record = {
-            "operation": "owned_gateway_journal_tail",
-            "error_type": type(diagnostic_error).__name__,
-        }
-    _note(exc, [record])
+def _stack_failure(exc: BaseException, token: str) -> None:
+    records = []
+    for unit in (*_ROLES.values(), prior._GATEWAY):
+        try:
+            raw = response._command(
+                [
+                    "/usr/bin/journalctl",
+                    "--unit=" + unit,
+                    "--no-pager",
+                    "--all",
+                    "--output=cat",
+                    "--lines=20",
+                ],
+                timeout=3,
+            )
+            record = {
+                "unit": unit,
+                "body": _diagnostic_bytes(raw, token, tail=True, limit=768),
+            }
+        except BaseException as diagnostic_error:  # noqa: BLE001 - preserve the action failure
+            record = {"unit": unit, "error_type": type(diagnostic_error).__name__}
+        records.append(record)
+    # Fixed four-unit labels plus four escaped 768-character tails fit in 4KiB.
+    _note(exc, [{"operation": "owned_stack_journal_tails", "units": records}])
 
 
 def _stop_fixture() -> dict:
@@ -714,7 +717,7 @@ def _action(p37b: Any, setup: dict) -> dict[str, Any]:
             )
     except BaseException as exc:
         _note(exc, diagnostics.records)
-        _gateway_failure(exc, token)
+        _stack_failure(exc, token)
         raise
     p37b._assert_driver_outcome(
         driver, "COMPLETED", {"verdict": "ALLOW", "effect_status": "CREATED"}

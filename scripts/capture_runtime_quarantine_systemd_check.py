@@ -8,7 +8,9 @@ import secrets
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 _ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
@@ -80,6 +82,34 @@ def _parent_unchanged(before: dict, after: dict) -> bool:
             for name, item in after["content"]["contract_files"].items()
         }
     )
+
+
+def _journal_check(argv: list[str]) -> bytes:
+    """Preserve the frozen runner's checks, but retain its safe diagnostic limit."""
+    acquisition = existing.existing.acquisition
+    original_run = acquisition.subprocess.run
+    completed = None
+
+    def run(*args: Any, **kwargs: Any) -> Any:
+        nonlocal completed
+        completed = original_run(*args, **kwargs)
+        return completed
+
+    try:
+        # Replace only this module binding, never the shared subprocess module.
+        with patch.object(acquisition, "subprocess", SimpleNamespace(run=run)):
+            return existing._docker(*argv)
+    except acquisition.CaptureError as exc:
+        if (
+            completed is not None
+            and len(completed.stdout) <= 2 * 1024 * 1024
+            and 0 < len(completed.stderr) <= 16384
+        ):
+            raise acquisition.CaptureError(
+                "journal fixture command failed: "
+                + completed.stderr.decode("utf-8", "replace")
+            ) from exc
+        raise
 
 
 def _capture(*, endpoint_journal: bool = False) -> dict[str, Any]:
@@ -257,7 +287,7 @@ def _capture(*, endpoint_journal: bool = False) -> dict[str, Any]:
                 files[checker],
                 container,
             ]
-            raw = existing._docker(*argv)
+            raw = _journal_check(argv) if endpoint_journal else existing._docker(*argv)
             observation = json.loads(raw)
             _expect(
                 raw == campaign._canonical(observation) + b"\n"

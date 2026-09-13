@@ -602,7 +602,9 @@ def _collect(cursor: str, processes: dict, boot: str, lower: int) -> dict[str, A
                     "--output=json",
                     "--output-fields=" + ",".join(_JOURNAL_FIELDS),
                     "--lines=9",
-                    "--after-cursor=" + cursor,
+                    # v255 --after-cursor skips the first matching row when the
+                    # global baseline itself does not match these unit filters.
+                    "--cursor=" + cursor,
                     "_SYSTEMD_UNIT=" + unit,
                     "_SYSTEMD_INVOCATION_ID=" + processes[role]["unit"]["InvocationID"],
                     "_BOOT_ID=" + boot,
@@ -617,6 +619,13 @@ def _collect(cursor: str, processes: dict, boot: str, lower: int) -> dict[str, A
                 if raw
                 else [],
             }
+            _expect(
+                all(
+                    row["journal"]["__CURSOR"] != cursor
+                    for row in captured[role]["rows"]
+                ),
+                "journal baseline was returned as an action record",
+            )
         counts = {role: len(value["rows"]) for role, value in captured.items()}
         if counts == {"worker": 4, "sensor": 2, "broker": 2}:
             return captured

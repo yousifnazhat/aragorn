@@ -1,4 +1,4 @@
-"""Stage a pinned, expiry-bounded broker response lifetime; never activate it."""
+"""Stage a pinned broker response wait window; never activate it."""
 
 from __future__ import annotations
 
@@ -250,8 +250,9 @@ def stage_runtime_broker_response_drain_profile(output: Path) -> dict[str, Any]:
     """Stage two overrides over the exact 55-file profile; partial output may remain.
 
     This preserves all fail-stop unit dependencies and one-shot effect authority.
-    The spent broker may stay alive only through the original bounded lifetime,
-    not until an application ACK. It does not guarantee native turn completion.
+    The spent broker uses the original grant lifetime for its accept wait, not
+    an application ACK. In-flight work and cleanup can outlast that window;
+    this is not a hard process-exit deadline or native turn completion guarantee.
     No credentials, grants, state, service, or activator are provisioned or run.
     """
     try:

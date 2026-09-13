@@ -967,7 +967,8 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                 argv,
             )
             self.assertIn("_BOOT_ID=" + _BOOT, argv)
-            self.assertIn("--after-cursor=s=baseline", argv)
+            self.assertIn("--cursor=s=baseline", argv)
+            self.assertNotIn("--after-cursor=s=baseline", argv)
             self.assertIn("--lines=9", argv)
             return captured[role]["raw_jsonl"].encode()
 
@@ -979,6 +980,14 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                 subject._collect("s=baseline", processes, _BOOT, 100), captured
             )
         self.assertEqual(len(calls), 4)
+        changed = deepcopy(captured)
+        changed["worker"]["rows"][0]["journal"]["__CURSOR"] = "s=baseline"
+        with (
+            patch.object(subject.response, "_command", side_effect=command),
+            patch.object(subject, "_rows", return_value=changed["worker"]["rows"]),
+            self.assertRaisesRegex(RuntimeError, "baseline"),
+        ):
+            subject._collect("s=baseline", processes, _BOOT, 100)
         with (
             patch.object(subject.response, "_command", return_value=b""),
             patch.object(subject.time, "monotonic", side_effect=[0, 4]),

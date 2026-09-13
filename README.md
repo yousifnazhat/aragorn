@@ -506,8 +506,9 @@ actual consumed grant and retained result. The default quarantine capture remain
 unchanged; offline capture tests do not establish live delivery.
 This capture now selects the [bounded broker response profile](./scripts/stage_runtime_broker_response_drain_profile.py).
 After successful response delivery and clean connection closure, the broker
-checks its consumed grant and receipt under a read-only lock and stays available
-only within the original grant lifetime. One-shot effect checks and every
+checks its consumed grant and receipt under a read-only lock and uses the
+original grant lifetime for its accept wait. In-flight work and cleanup can
+outlast that window; it is not a hard process-exit deadline. One-shot effect checks and every
 fail-stop service dependency remain unchanged. Startup with a consumed grant
 still refuses; this response window is not a native terminal ACK or completion
 guarantee.

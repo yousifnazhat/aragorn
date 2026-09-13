@@ -101,9 +101,13 @@ _EXTRA_CODE = {
 }
 
 
+class _FixtureRefusal(RuntimeError):
+    """Only fixed checker assertions; never wraps external diagnostic text."""
+
+
 def _expect(condition: bool, message: str) -> None:
     if not condition:
-        raise RuntimeError(message)
+        raise _FixtureRefusal(message)
 
 
 def _phase(value: str) -> None:
@@ -958,7 +962,7 @@ def main(argv: list[str] | None = None) -> int:
             "native receipt fixture not confirmed: "
             + _PHASE
             + ":"
-            + type(exc).__name__,
+            + (exc.args[0] if type(exc) is _FixtureRefusal else type(exc).__name__),
             file=sys.stderr,
         )
         return 126

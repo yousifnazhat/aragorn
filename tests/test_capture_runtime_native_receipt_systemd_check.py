@@ -1,9 +1,13 @@
 """Inert host orchestration checks: every Docker boundary is replaced."""
 
 import json
+import os
+import stat
 import unittest
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import capture_runtime_native_receipt_systemd_check as subject
@@ -86,6 +90,140 @@ def _fixture():
 
 
 class NativeReceiptCaptureTests(unittest.TestCase):
+    def test_exact_directory_owner_handoff_preserves_modes_and_closes_all_fds(self):
+        original, replacements = subject.stage._verified_payloads()
+        expected = {
+            name: {"installed_path": "/" + name} for name in original | replacements
+        }
+        directories = [
+            "/" + name
+            for name in subject.stage.base._directories(original | replacements)
+        ]
+        self.assertLess(
+            subject._VERIFY.index(subject._DIRECTORY_HANDOFF),
+            subject._VERIFY.index(subject._DIRECTORY_ANCHOR),
+        )
+        for failure in (
+            None,
+            "already_root",
+            "mode",
+            "owner",
+            "symlink",
+            "swap",
+            "fsync",
+            "close",
+        ):
+            records = {
+                name: SimpleNamespace(
+                    st_dev=1,
+                    st_ino=index + 1,
+                    st_mode=stat.S_IFDIR | 0o755,
+                    st_uid=0 if name == "/" or failure == "already_root" else 501,
+                    st_gid=0 if name == "/" or failure == "already_root" else 20,
+                    st_nlink=2,
+                    st_size=100,
+                    st_mtime_ns=1,
+                    st_ctime_ns=1,
+                )
+                for index, name in enumerate(["/", *sorted(directories)])
+            }
+            if failure == "mode":
+                records["/usr"].st_mode = stat.S_IFDIR | 0o700
+            if failure == "owner":
+                records["/usr"].st_uid = 999
+            if failure == "symlink":
+                records["/usr"].st_mode = stat.S_IFLNK | 0o755
+            opened, closed, handoffs, stats = {}, [], [], {}
+
+            def named(leaf, parent, opened=opened):
+                return str(Path(opened[parent]) / leaf) if parent is not None else leaf
+
+            def read_stat(
+                leaf,
+                *,
+                dir_fd,
+                follow_symlinks,
+                failure=failure,
+                stats=stats,
+                records=records,
+            ):
+                self.assertIs(follow_symlinks, False)
+                name = named(leaf, dir_fd)
+                stats[name] = stats.get(name, 0) + 1
+                result = deepcopy(records[name])
+                if failure == "swap" and name == "/usr" and stats[name] > 1:
+                    result.st_ino += 100
+                return result
+
+            def open_dir(leaf, flags, *, dir_fd, opened=opened):
+                self.assertTrue(flags & os.O_DIRECTORY and flags & os.O_NOFOLLOW)
+                fd = len(opened) + 1
+                opened[fd] = named(leaf, dir_fd)
+                return fd
+
+            def chown(fd, uid, gid, opened=opened, handoffs=handoffs, records=records):
+                self.assertEqual((uid, gid), (0, 0))
+                name = opened[fd]
+                self.assertIn(name, directories)
+                handoffs.append(name)
+                records[name].st_uid = records[name].st_gid = 0
+                records[name].st_ctime_ns += 1
+
+            def sync(fd, failure=failure):
+                if failure == "fsync":
+                    raise OSError("injected fsync")
+
+            def close(fd, failure=failure, closed=closed):
+                closed.append(fd)
+                if failure == "close":
+                    raise OSError("injected close")
+
+            fake = SimpleNamespace(
+                **{
+                    key: getattr(os, key)
+                    for key in (
+                        "O_RDONLY",
+                        "O_DIRECTORY",
+                        "O_NOFOLLOW",
+                        "O_NONBLOCK",
+                        "O_CLOEXEC",
+                    )
+                },
+                stat=read_stat,
+                open=open_dir,
+                fstat=lambda fd, records=records, opened=opened: deepcopy(
+                    records[opened[fd]]
+                ),
+                fchown=chown,
+                fsync=sync,
+                close=close,
+            )
+            context = {
+                "os": fake,
+                "stat": stat,
+                "Path": Path,
+                "json": json,
+                "expected": expected,
+                "sys": SimpleNamespace(
+                    argv=["", "", "", json.dumps(directories), "[501,20]"]
+                ),
+            }
+            with self.subTest(failure=failure):
+                if failure in (None, "already_root"):
+                    exec(subject._DIRECTORY_HANDOFF, context)  # noqa: S102 - fixed source, fake OS only
+                    self.assertEqual(set(handoffs), set(directories))
+                    self.assertTrue(
+                        all(
+                            (s.st_uid, s.st_gid, stat.S_IMODE(s.st_mode))
+                            == (0, 0, 0o755)
+                            for s in records.values()
+                        )
+                    )
+                else:
+                    with self.assertRaises((RuntimeError, OSError)):
+                        exec(subject._DIRECTORY_HANDOFF, context)  # noqa: S102 - fixed source, fake OS only
+                self.assertEqual(closed, list(reversed(opened)))
+
     def test_runtime_binding_and_snapshot_cleanup_without_native_execution(self):
         content = _content()
         subject._validate_runtime(content)
@@ -307,10 +445,11 @@ class NativeReceiptCaptureTests(unittest.TestCase):
                     f"type=volume,src={subject._VOLUME},dst=/runtime,readonly", create
                 )
                 verify = next(argv for argv in calls if subject._VERIFY in argv)
-                self.assertEqual(len(json.loads(verify[-3])), 60 + len(subject._FILES))
+                self.assertEqual(len(json.loads(verify[-4])), 60 + len(subject._FILES))
                 self.assertIn(
-                    "/" + subject.stage._NEW_DIRECTORY, json.loads(verify[-1])
+                    "/" + subject.stage._NEW_DIRECTORY, json.loads(verify[-2])
                 )
+                self.assertEqual(json.loads(verify[-1]), [os.geteuid(), os.getegid()])
 
 
 if __name__ == "__main__":

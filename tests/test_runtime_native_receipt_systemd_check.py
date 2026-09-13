@@ -1,12 +1,14 @@
 """Inert receipt/projection checks; never activates services or contacts Docker."""
 
 import copy
+import io
 import itertools
 import json
 import shutil
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
@@ -173,6 +175,21 @@ class NativeReceiptFixtureTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "setup"):
                 subject._run("c" * 64)
             stop.assert_called_once_with()
+        for failure, visible in (
+            (
+                subject._FixtureRefusal("native stream already exists"),
+                "native stream already exists",
+            ),
+            (RuntimeError("SECRET_MUST_NOT_APPEAR"), "RuntimeError"),
+        ):
+            output = io.StringIO()
+            with (
+                patch.object(subject, "_run", side_effect=failure),
+                redirect_stderr(output),
+            ):
+                self.assertEqual(subject.main(["c" * 64]), 126)
+            self.assertIn(visible, output.getvalue())
+            self.assertNotIn("SECRET_MUST_NOT_APPEAR", output.getvalue())
 
     def test_driver_definitions_without_main_or_native_calls(self):
         node = shutil.which("node")

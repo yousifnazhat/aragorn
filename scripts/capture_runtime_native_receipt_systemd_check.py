@@ -45,14 +45,53 @@ _FILES = {
     _CHECKER: "/opt/aragorn/runtime-native-receipt-systemd-check.py",
     "benchmark/admission/openclaw-v2026.7.1/native-receipt-read-create-driver-v1.mjs": "/opt/aragorn/native-receipt-read-create-driver-v1.mjs",
 }
-_VERIFY = (
-    previous._VERIFY
-    + r"""
+_DIRECTORY_HANDOFF = r"""
 directories=json.loads(sys.argv[3])
-for name in directories:
- p=Path(name); s=p.lstat()
- if p.resolve(strict=True)!=p or not stat.S_ISDIR(s.st_mode) or s.st_uid!=0 or s.st_gid!=0 or stat.S_IMODE(s.st_mode)!=0o755:
-  raise RuntimeError('staged directory custody changed')
+copied_owner=json.loads(sys.argv[4])
+expected_dirs={str(p) for v in expected.values() if v['installed_path'].startswith('/usr/') for p in Path(v['installed_path']).parents if p!=Path('/')}
+if type(copied_owner) is not list or len(copied_owner)!=2 or any(type(n) is not int or not 0<=n<=0xffffffff for n in copied_owner):
+ raise RuntimeError('invalid copied directory owner')
+if type(directories) is not list or len(directories)!=13 or len(set(directories))!=13 or set(directories)!=expected_dirs:
+ raise RuntimeError('staged directory inventory changed')
+fields=('st_dev','st_ino','st_mode','st_uid','st_gid','st_nlink','st_size','st_mtime_ns','st_ctime_ns')
+identity=lambda s: tuple(getattr(s,k) for k in fields)
+held=[]; parents={}; final=[]
+try:
+ for name in ['/',*sorted(directories,key=lambda n:(len(Path(n).parts),n))]:
+  p=Path(name)
+  if not p.is_absolute() or str(p)!=name or '..' in p.parts:
+   raise RuntimeError('noncanonical staged directory')
+  parent=None if name=='/' else parents[str(p.parent)]
+  leaf='/' if name=='/' else p.name
+  before=os.stat(leaf,dir_fd=parent,follow_symlinks=False)
+  if not stat.S_ISDIR(before.st_mode) or stat.S_IMODE(before.st_mode)!=0o755 or (before.st_uid,before.st_gid) not in ((0,0),tuple(copied_owner)) or (name=='/' and (before.st_uid,before.st_gid)!=(0,0)):
+   raise RuntimeError('staged directory custody changed')
+  fd=os.open(leaf,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC,dir_fd=parent)
+  held.append(fd); parents[name]=fd
+  if identity(before)!=identity(os.fstat(fd)):
+   raise RuntimeError('staged directory changed before handoff')
+  if name!='/': os.fchown(fd,0,0)
+  after=os.fstat(fd)
+  if (after.st_uid,after.st_gid)!=(0,0) or any(getattr(before,k)!=getattr(after,k) for k in ('st_dev','st_ino','st_mode','st_nlink','st_size','st_mtime_ns')):
+   raise RuntimeError('staged directory handoff changed identity')
+  os.fsync(fd)
+  final.append((parent,leaf,fd,identity(after)))
+ for parent,leaf,fd,expected_identity in final:
+  if identity(os.fstat(fd))!=expected_identity or identity(os.stat(leaf,dir_fd=parent,follow_symlinks=False))!=expected_identity:
+   raise RuntimeError('staged directory changed after handoff')
+finally:
+ close_error=None
+ for fd in reversed(held):
+  try: os.close(fd)
+  except OSError as exc: close_error=close_error or exc
+ if close_error is not None: raise RuntimeError('staged directory cleanup failed') from close_error
+"""
+_DIRECTORY_ANCHOR = "for item in expected.values():\n"
+if previous._VERIFY.count(_DIRECTORY_ANCHOR) != 1:
+    raise RuntimeError("fixed file verifier anchor changed")
+_VERIFY = (
+    previous._VERIFY.replace(_DIRECTORY_ANCHOR, _DIRECTORY_HANDOFF + _DIRECTORY_ANCHOR)
+    + r"""
 client=Path('/usr/lib/aragorn/openclaw/aragorn-runtime-native-tool-client')
 expected_names={Path(v['installed_path']).name for v in expected.values() if Path(v['installed_path']).parent==client}
 if not expected_names or {p.name for p in client.iterdir()}!=expected_names:
@@ -378,6 +417,7 @@ def _capture() -> dict[str, Any]:
                 json.dumps(payloads | helpers),
                 container,
                 json.dumps(manifest["directories"]),
+                json.dumps([os.geteuid(), os.getegid()]),
             )
             argv = [
                 "exec",

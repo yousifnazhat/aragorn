@@ -625,8 +625,16 @@ retains passing TypeScript, full build, workspace-aware package/import checks,
 fresh offline install, and unchanged read-only runtime measurements. Build
 dependencies remained read-only; packaging used a private temporary namespace.
 The stager and owned capture now bind this successor without changing the earlier
-build record or runtime. Fresh common-profile read/create validation is still
-required; build success does not establish receipt or Phase 3 qualification.
+build record or runtime.
+The [owned native read/create capture](./benchmark/evidence/phase3-native-receipt-systemd-development-v1-2026-09-13.json)
+now observes real gateway credentials, native hooks and durable worker transport
+on that 60-file profile: the receipt store advances from zero to two to four
+records, one permitted nonexecuting create has matching broker evidence, and
+four ACK digests join fourteen endpoint journal rows. The frozen parent and
+successor runtime remain unchanged; all owned fixture containers were removed.
+Its source checkpoint passes 2,106 regression tests (one skip) and 169 schema
+checks. This bounded integration is not complete event capture, hostile-process
+causation, health-loss response, performance, RUN or Phase 3 qualification.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

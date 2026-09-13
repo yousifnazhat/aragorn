@@ -452,16 +452,25 @@ adds the mandatory pre-start command and second credential to a successor worker
 unit, raises its bounded descriptor limit to 128, and verifies both effective
 credentials and the single non-ignored command before starting services.
 It preserves the frozen packaging and generates a new profile, not the distinct
-retained V3 deployment. No installer runs here: frozen installers must precede the
-source overrides, followed by fresh Linux/systemd validation. A private
+retained V3 deployment. The generator does not run an installer. A separate
+[staging script](./scripts/stage_runtime_quarantine_profile.py) verifies 47 pinned
+inputs, runs the frozen installers from a private immutable snapshot into a fresh
+caller-owned `DESTDIR`, applies the source overrides, and audits all 50 final
+files. It returns a deterministic inventory without activating services or
+deploying to the host. The full producer package, actual runtime credentials,
+root deployment and fresh Linux/systemd validation remain separate. A private
 [quarantine response composition](./src/aragorn/runtime_quarantine_response.py)
 now joins a current accepted revocation to the measured installed digest and
 running worker binding, publishes the permanent denial first, then stops and masks
 the fixed profile and retains its result. Activation, install, and broker locks
 are held in that order; any failure after publication begins is indeterminate,
-never evidence of rollback. Tests use real denial records and mocked systemd/CAS
-effects; there is no CLI, deployment hook, process byte-consumption proof, or live
-quarantine qualification. The frozen historical producers are unchanged and
+never evidence of rollback. Its uninstalled
+[quarantine entrypoint](./src/aragorn/runtime_quarantine_service.py) accepts only
+the two exact expected digests and preserves indeterminate status if result or
+diagnostic delivery fails after the response. It is not included in the staged
+profile yet. Tests use real denial records and mocked systemd/CAS effects; there
+is no deployment hook, process byte-consumption proof, or live quarantine
+qualification. The frozen historical producers are unchanged and
 must not be deployed with denial records. No installed-digest quarantine or
 future-start qualification is claimed by these offline tests alone.
 

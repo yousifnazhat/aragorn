@@ -1,9 +1,10 @@
 """Private installed-digest denial plus fixed-profile stop composition.
 
-No CLI or deployment hook exposes this composition. Successor producers,
-runtime service overlays and mandatory startup enforcement must be deployed
-together before claiming quarantine enforcement. This check measures installed
-bytes and the running worker binding, not bytes consumed by a process.
+An uninstalled exact-digest entrypoint exposes this composition, without a
+deployment hook. Successor producers, runtime service overlays and mandatory
+startup enforcement must be deployed together before claiming quarantine
+enforcement. This check measures installed bytes and the running worker binding,
+not bytes consumed by a process.
 """
 
 from __future__ import annotations

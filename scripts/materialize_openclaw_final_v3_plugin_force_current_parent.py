@@ -163,8 +163,8 @@ _OUTPUTS = {
         "sha256:31d5304939154809ca5a9ac55b55792039f1637db2987386487f01aca9cfafad",
     ),
     "Dockerfile": (
-        9_902,
-        "sha256:bbf0227ab138afa1fe07d8e038c7331f9f8b4903b9394ca6479548b35b23d0bf",
+        10_136,
+        "sha256:33465786db1de0489d22a4a252f687108b779513828138bafdf66799547a0498",
     ),
 }
 _BUILD_CLEANUP = """import os
@@ -314,11 +314,18 @@ def _dockerfile() -> bytes:
             ]
         )
     inventory = ["plugin-force-reinstall:d"]
-    for name, links in (("", 4), ("/baseline-source", 2), ("/candidate-source", 2)):
+    # Directory link counts vary across layered filesystems (including 1 on
+    # overlayfs); the exact inventory below binds topology independently.
+    for name in ("", "/baseline-source", "/candidate-source"):
         path = "/route-input/plugin-force-reinstall" + name
-        lines.append(
-            f"    test ! -L {path}; test \"$(stat -c '%F:%u:%g:%a:%h' {path})\" = "
-            f"'directory:0:0:555:{links}'; \\",
+        lines.extend(
+            [
+                (
+                    f"    test ! -L {path}; test \"$(stat -c '%F:%u:%g:%a' {path})\" = "
+                    "'directory:0:0:555'; \\"
+                ),
+                f"    test \"$(stat -c '%h' {path})\" -gt 0; \\",
+            ]
         )
         if name:
             inventory.append("plugin-force-reinstall" + name + ":d")

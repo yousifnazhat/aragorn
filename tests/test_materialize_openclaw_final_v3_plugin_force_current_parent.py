@@ -19,6 +19,84 @@ _ROOT = Path(__file__).resolve().parents[1]
 
 
 class PluginForceCurrentParentBuildSourceTests(unittest.TestCase):
+    def test_directory_custody_is_independent_of_layered_link_counts(self) -> None:
+        dockerfile = subject._dockerfile().decode()
+        start = dockerfile.index("    test ! -L /route-input/plugin-force-reinstall;")
+        end = dockerfile.index("    chmod 0555", start)
+        fragment = dockerfile[start:end].replace("\\\n", "")
+        inventory = sorted(
+            [
+                "plugin-force-reinstall:d",
+                "plugin-force-reinstall/baseline-source:d",
+                "plugin-force-reinstall/candidate-source:d",
+                *("plugin-force-reinstall/" + name + ":f" for name in subject._BUNDLE),
+            ]
+        )
+        # Run the actual generated directory/inventory checks using bounded
+        # GNU-stat/find output fixtures; the host uses BSD tools, not overlayfs.
+        utilities = """stat() {
+    case "$2" in
+        %F:%u:%g:%a) printf '%s\\n' "$DIRECTORY_METADATA" ;;
+        %h) printf '%s\\n' "$DIRECTORY_LINKS" ;;
+        *) return 2 ;;
+    esac
+}
+find() {
+    case "$*" in
+        *-printf*) printf '%s\\n' "$INVENTORY" ;;
+        *) : ;;
+    esac
+}
+"""
+        for label, metadata, links in (
+            ("overlayfs", "directory:0:0:555", "1"),
+            ("leaf", "directory:0:0:555", "2"),
+            ("parent", "directory:0:0:555", "4"),
+            ("link-zero", "directory:0:0:555", "0"),
+            ("mode", "directory:0:0:755", "1"),
+            ("owner", "directory:1:0:555", "1"),
+            ("group", "directory:0:1:555", "1"),
+            ("type", "regular file:0:0:555", "1"),
+            ("symlink", "directory:0:0:555", "1"),
+            ("inventory", "directory:0:0:555", "1"),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                route = root / "route-input/plugin-force-reinstall"
+                route.mkdir(parents=True)
+                for name in ("baseline-source", "candidate-source"):
+                    (route / name).mkdir()
+                if label == "symlink":
+                    (route / "baseline-source").rmdir()
+                    (route / "baseline-source").symlink_to(
+                        route / "candidate-source", target_is_directory=True
+                    )
+                result = subprocess.run(
+                    [
+                        "/bin/sh",
+                        "-ec",
+                        utilities
+                        + fragment.replace("/route-input", str(root / "route-input")),
+                    ],
+                    env={
+                        **os.environ,
+                        "DIRECTORY_METADATA": metadata,
+                        "DIRECTORY_LINKS": links,
+                        "INVENTORY": "\n".join(
+                            inventory
+                            + (["unexpected:f"] if label == "inventory" else [])
+                        ),
+                    },
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+                self.assertEqual(
+                    result.returncode == 0,
+                    label in {"overlayfs", "leaf", "parent"},
+                    result.stderr.decode(),
+                )
+
     def test_exact_build_sources_and_fail_closed_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

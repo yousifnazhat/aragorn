@@ -798,6 +798,30 @@ class RuntimeQuarantineSystemdCheckTests(unittest.TestCase):
                     )
                     self.assertEqual(len(calls), 6)
 
+    def test_cleanup_without_expected_startup_failure_never_resets_failed(self):
+        def command(argv, *, timeout):
+            if argv[1] == "stop":
+                self.assertEqual(argv[2:], list(subject._ALL_UNITS))
+                self.assertEqual(timeout, 15)
+                return b""
+            self.assertEqual(argv[1], "show")
+            self.assertEqual(timeout, 3)
+            return (
+                f"Id={argv[-1]}\nActiveState=inactive\nMainPID=0\nControlPID=0\n"
+            ).encode("ascii")
+
+        with patch.object(subject.response, "_command", side_effect=command) as run:
+            self.assertEqual(
+                set(subject._stop_fixture(reset_worker_failed=False)),
+                set(subject._ALL_UNITS),
+            )
+            self.assertEqual(run.call_count, 5)
+        for value in (None, 0, 1, "false"):
+            with patch.object(subject.response, "_command") as run:
+                with self.assertRaisesRegex(RuntimeError, "cleanup choice"):
+                    subject._stop_fixture(reset_worker_failed=value)
+                run.assert_not_called()
+
     def test_main_emits_success_only_after_complete_fixture_cleanup(self):
         for arguments in ([], [_CONTAINER, "extra"]):
             with patch.object(subject, "_run") as run, redirect_stderr(StringIO()):

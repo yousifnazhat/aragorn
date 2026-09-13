@@ -777,7 +777,7 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
             patch.object(
                 subject.prior,
                 "_stop_fixture",
-                side_effect=lambda: subject.response._command(
+                side_effect=lambda **_: subject.response._command(
                     ["/usr/bin/systemctl", "stop", *subject.prior._ALL_UNITS],
                     timeout=15,
                 ),
@@ -1102,7 +1102,7 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
         with _environment() as mocks:
             result = subject._run(_CONTAINER)
             mocks["_prepare"].assert_called_once_with(publish_revocation=False)
-            mocks["_stop_fixture"].assert_called_once()
+            mocks["_stop_fixture"].assert_called_once_with(reset_worker_failed=False)
         self.assertEqual(result["status"], "OBSERVED")
         self.assertEqual(result["fixture_container"], _CONTAINER)
         for key in (

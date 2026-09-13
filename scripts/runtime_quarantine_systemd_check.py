@@ -419,11 +419,13 @@ def _prepare(*, publish_revocation: bool = True) -> dict[str, Any]:
     }
 
 
-def _stop_fixture() -> dict[str, Any]:
+def _stop_fixture(*, reset_worker_failed: bool = True) -> dict[str, Any]:
+    _expect(type(reset_worker_failed) is bool, "fixture cleanup choice is invalid")
     response._command(["/usr/bin/systemctl", "stop", *_ALL_UNITS], timeout=15)
     # The expected pre-start denial leaves a failed flag after stop. Its evidence
     # is already recorded above; reset only this doomed fixture's worker state.
-    response._command(["/usr/bin/systemctl", "reset-failed", _WORKER], timeout=3)
+    if reset_worker_failed:
+        response._command(["/usr/bin/systemctl", "reset-failed", _WORKER], timeout=3)
     states = {}
     properties = ("Id", "ActiveState", "MainPID", "ControlPID")
     for unit in _ALL_UNITS:

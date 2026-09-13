@@ -305,7 +305,9 @@ def _stop_fixture() -> dict:
     diagnostics = _SubprocessDiagnostics(response.subprocess, token)
     try:
         with patch.object(response, "subprocess", diagnostics):
-            return prior._stop_fixture()
+            # This flow has no expected pre-start failure. A cleanly stopped
+            # worker may already be unloaded, for which reset-failed is an error.
+            return prior._stop_fixture(reset_worker_failed=False)
     except BaseException as exc:
         _note(exc, diagnostics.records)
         raise

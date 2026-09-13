@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
+import signal
+import subprocess
 import tempfile
 import unittest
 from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
@@ -8,7 +11,7 @@ from copy import deepcopy
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from scripts import runtime_endpoint_journal_systemd_check as subject
@@ -485,6 +488,7 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                     return {"safe": "driver result"}
 
                 p37b = SimpleNamespace(
+                    subprocess=subprocess,
                     _DRIVER=driver,
                     _GATEWAY_ENVIRONMENT=env,
                     _DRIVER_ROOT=root / "driver-output",
@@ -528,6 +532,11 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                 stack.enter_context(
                     patch.object(subject.response, "_identities", return_value=_IDS)
                 )
+                journal_command = stack.enter_context(
+                    patch.object(
+                        subject.response, "_command", return_value=b"gateway failed"
+                    )
+                )
                 with self.subTest(failure=failure):
                     if failure:
                         with self.assertRaises(RuntimeError):
@@ -557,6 +566,199 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                         self.assertEqual(
                             (p37b._DRIVER_ROOT.stat().st_mode & 0o777), 0o700
                         )
+                    self.assertIs(p37b.subprocess, subprocess)
+                    self.assertEqual(
+                        journal_command.call_count, int(failure == "driver")
+                    )
+
+    def test_failure_diagnostics_are_bounded_redacted_and_never_change_run(self):
+        token = "f" * 64
+        raw = (
+            "prefix " + token + "\x1b\r" + "x" * 1000 + "\nprivate second line"
+        ).encode()
+        record = subject._diagnostic_bytes(raw, token)
+        self.assertEqual(record["bytes"], len(raw))
+        self.assertEqual(record["digest"], subject._digest(raw))
+        encoded = json.dumps(record, ensure_ascii=True)
+        self.assertNotIn(token, encoded)
+        self.assertNotIn("private second line", encoded)
+        self.assertIn("[REDACTED]", encoded)
+        self.assertTrue(record["text_truncated"])
+        self.assertLessEqual(len(json.dumps(record["text"])), 514)
+        tail = subject._diagnostic_bytes(
+            b"first\n" + b"y" * 1000 + token.encode(), token, tail=True
+        )
+        self.assertTrue(tail["text"].endswith("[REDACTED]"))
+        self.assertNotIn("first", tail["text"])
+        self.assertIsNone(subject._diagnostic_bytes(raw, None)["text"])
+        for status in (0, 1):
+            completed = subprocess.CompletedProcess(["fixed"], status, b"result", raw)
+            original = SimpleNamespace(
+                run=Mock(return_value=completed), forwarded=object()
+            )
+            diagnostics = subject._SubprocessDiagnostics(original, token)
+            argv, kwargs = ["fixed"], {"timeout": 45, "env": {"TOKEN": token}}
+            self.assertIs(diagnostics.run(argv, **kwargs), completed)
+            original.run.assert_called_once_with(argv, **kwargs)
+            self.assertIs(diagnostics.forwarded, original.forwarded)
+            self.assertNotIn(token, repr(diagnostics.records))
+        for failure in (
+            RuntimeError("run failed"),
+            KeyboardInterrupt(),
+            subprocess.TimeoutExpired("fixed", 45, stderr=raw),
+        ):
+            original = SimpleNamespace(run=Mock(side_effect=failure))
+            diagnostics = subject._SubprocessDiagnostics(original, token)
+            with self.assertRaises(type(failure)) as caught:
+                diagnostics.run(["fixed"], timeout=45)
+            self.assertIs(caught.exception, failure)
+            original.run.assert_called_once_with(["fixed"], timeout=45)
+            self.assertNotIn(token, repr(diagnostics.records))
+        failure = RuntimeError("original")
+        with patch.object(
+            subject.response, "_command", return_value=b"old\n" + raw
+        ) as command:
+            subject._gateway_failure(failure, token)
+        command.assert_called_once_with(
+            [
+                "/usr/bin/journalctl",
+                "--unit=" + subject.prior._GATEWAY,
+                "--no-pager",
+                "--all",
+                "--output=cat",
+                "--lines=20",
+            ],
+            timeout=3,
+        )
+        self.assertNotIn(token, repr(failure.__notes__))
+        with patch.object(
+            subject.response, "_command", side_effect=OSError("private " + token)
+        ):
+            subject._gateway_failure(failure, token)
+        self.assertNotIn(token, repr(failure.__notes__))
+        self.assertIn("OSError", failure.__notes__[-1])
+
+    def test_cleanup_diagnostics_preserve_command_rejection_offsets_and_reaping(self):
+        token = "f" * 64
+        for case in ("success", "status", "stderr", "oversize", "timeout", "spawn"):
+            with self.subTest(case=case), ExitStack() as stack:
+                failure = subprocess.TimeoutExpired("fixed", 3)
+                process = SimpleNamespace(
+                    pid=123,
+                    wait=Mock(
+                        side_effect=[failure, 0] if case == "timeout" else None,
+                        return_value=int(case == "status"),
+                    ),
+                )
+                captured = []
+
+                def popen(
+                    *args, captured=captured, case=case, process=process, **kwargs
+                ):
+                    captured.append((args, kwargs))
+                    if case == "spawn":
+                        raise OSError("spawn failed")
+                    kwargs["stdout"].write(b"safe")
+                    if case in {"stderr", "status", "oversize"}:
+                        kwargs["stderr"].write(
+                            b"failed "
+                            + token.encode()
+                            + (
+                                b"x" * (subject.response._MAX_BYTES + 1)
+                                if case == "oversize"
+                                else b""
+                            )
+                        )
+                    kwargs["stdout"].flush()
+                    kwargs["stderr"].flush()
+                    return process
+
+                original = SimpleNamespace(
+                    Popen=Mock(side_effect=popen),
+                    DEVNULL=subprocess.DEVNULL,
+                    TimeoutExpired=subprocess.TimeoutExpired,
+                )
+                diagnostics = subject._SubprocessDiagnostics(original, token)
+                stack.enter_context(
+                    patch.object(subject.response, "subprocess", diagnostics)
+                )
+                kill = stack.enter_context(patch.object(subject.response.os, "killpg"))
+                argv = ["/usr/bin/systemctl", "reset-failed", subject.prior._WORKER]
+                if case == "success":
+                    self.assertEqual(
+                        subject.response._command(argv, timeout=3), b"safe"
+                    )
+                    self.assertEqual(diagnostics.records, [])
+                else:
+                    with self.assertRaises(
+                        (RuntimeError, OSError, subprocess.TimeoutExpired)
+                    ) as caught:
+                        subject.response._command(argv, timeout=3)
+                    self.assertTrue(diagnostics.records)
+                    self.assertNotIn(token, repr(diagnostics.records))
+                    self.assertEqual(diagnostics.records[0]["argv"], argv)
+                    if case == "timeout":
+                        self.assertIs(caught.exception, failure)
+                        self.assertEqual(
+                            process.wait.call_args_list,
+                            [
+                                unittest.mock.call(timeout=3),
+                                unittest.mock.call(timeout=1),
+                            ],
+                        )
+                        kill.assert_called_once_with(123, signal.SIGTERM)
+                    elif case == "oversize":
+                        self.assertFalse(
+                            diagnostics.records[0]["captured_stderr_complete"]
+                        )
+                        self.assertIsNone(diagnostics.records[0]["stderr"]["text"])
+                if case != "timeout":
+                    kill.assert_not_called()
+                original.Popen.assert_called_once()
+                self.assertEqual(captured[0][0], (argv,))
+                self.assertEqual(
+                    captured[0][1]["env"], {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
+                )
+        with tempfile.TemporaryFile() as stderr:
+            stderr.write(b"failure")
+            stderr.seek(2)
+            diagnostics = subject._SubprocessDiagnostics(SimpleNamespace(), token)
+            process = subject._DiagnosticProcess(
+                SimpleNamespace(wait=lambda **_: 1), diagnostics, ["fixed"], stderr
+            )
+            self.assertEqual(process.wait(timeout=3), 1)
+            self.assertEqual(stderr.tell(), 2)
+            self.assertEqual(
+                diagnostics.records[0]["stderr"]["digest"], subject._digest(b"failure")
+            )
+        original = subject.response.subprocess
+        fake = SimpleNamespace(
+            Popen=Mock(side_effect=OSError("fixed spawn failure")),
+            DEVNULL=subprocess.DEVNULL,
+        )
+        with (
+            patch.object(subject.response, "subprocess", fake),
+            patch.object(
+                subject.response,
+                "_read_regular",
+                return_value=b"OPENCLAW_GATEWAY_TOKEN=" + token.encode() + b"\n",
+            ),
+            patch.object(
+                subject.prior,
+                "_stop_fixture",
+                side_effect=lambda: subject.response._command(
+                    ["/usr/bin/systemctl", "stop", *subject.prior._ALL_UNITS],
+                    timeout=15,
+                ),
+            ),
+        ):
+            with self.assertRaisesRegex(OSError, "fixed spawn failure") as caught:
+                subject._stop_fixture()
+            self.assertIs(subject.response.subprocess, fake)
+            self.assertIn("fixture_cleanup", caught.exception.__notes__[0])
+            self.assertIn("OSError", caught.exception.__notes__[0])
+            fake.Popen.assert_called_once()
+        self.assertIs(subject.response.subprocess, original)
 
     def test_source_catalog_exactly_matches_staged_modules_shims_and_units(self):
         base, replacements = stage._verified_payloads()
@@ -903,10 +1105,21 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
                 mocks["_stop_fixture"].assert_not_called()
                 mocks["_prepare"].assert_not_called()
         with _environment() as mocks:
-            mocks["_action"].side_effect = RuntimeError("first failure")
-            mocks["_stop_fixture"].side_effect = RuntimeError("cleanup failure")
-            with self.assertRaisesRegex(RuntimeError, "first failure.*cleanup failure"):
+            first, cleanup = (
+                RuntimeError("first failure"),
+                RuntimeError("cleanup failure"),
+            )
+            subject._note(first, [{"operation": "native_driver"}])
+            subject._note(cleanup, [{"operation": "fixture_cleanup"}])
+            mocks["_action"].side_effect = first
+            mocks["_stop_fixture"].side_effect = cleanup
+            with self.assertRaisesRegex(
+                RuntimeError, "first failure.*cleanup failure"
+            ) as caught:
                 subject._run(_CONTAINER)
+            self.assertEqual(
+                caught.exception.__notes__, first.__notes__ + cleanup.__notes__
+            )
         for name in ("_sources", "_processes", "_boot", "_installed"):
             with self.subTest(drift=name), _environment() as mocks:
                 initial = mocks[name].return_value
@@ -932,6 +1145,30 @@ class RuntimeEndpointJournalSystemdCheckTests(unittest.TestCase):
         self.assertEqual(output.getvalue(), "")
         self.assertIn("fixed reason", error.getvalue())
         self.assertLess(len(error.getvalue()), 1150)
+        failure = RuntimeError("original refusal")
+        subject._note(
+            failure,
+            [
+                {
+                    "operation": "native_driver",
+                    "stderr": subject._diagnostic_bytes(
+                        b"failed\x1b " + b"f" * 64, "f" * 64
+                    ),
+                }
+            ],
+        )
+        output, error = StringIO(), StringIO()
+        with (
+            patch.object(subject, "_run", side_effect=failure),
+            redirect_stdout(output),
+            redirect_stderr(error),
+        ):
+            self.assertEqual(subject.main([_CONTAINER]), 1)
+        self.assertEqual(output.getvalue(), "")
+        self.assertNotIn("f" * 64, error.getvalue())
+        self.assertNotIn("\x1b", error.getvalue())
+        self.assertIn("native_driver", error.getvalue())
+        self.assertIn("[REDACTED]", error.getvalue())
 
 
 if __name__ == "__main__":

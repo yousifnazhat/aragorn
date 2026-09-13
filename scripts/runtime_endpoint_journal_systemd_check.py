@@ -143,6 +143,171 @@ def _digest(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def _diagnostic_bytes(raw: bytes, token: str | None, *, tail: bool = False) -> dict:
+    result = {"bytes": len(raw), "digest": _digest(raw)}
+    # Never expose a body if the fixture credential cannot be recovered safely.
+    if token is None:
+        return {**result, "text": None, "text_status": "TOKEN_UNAVAILABLE"}
+    text = raw.decode("utf-8", errors="replace").replace(token, "[REDACTED]")
+    text = text if tail else text.split("\n", 1)[0]
+    original_length = len(text)
+    text = text[-512:] if tail else text[:512]
+    while len(json.dumps(text, ensure_ascii=True)) > 514:
+        text = text[1:] if tail else text[:-1]
+    return {**result, "text": text, "text_truncated": len(text) < original_length}
+
+
+def _note(exc: BaseException, records: list[dict]) -> None:
+    try:
+        if records:
+            exc.add_note(
+                "fixture diagnostics: " + json.dumps(records[:4], ensure_ascii=True)
+            )
+    except BaseException:  # noqa: BLE001, S110 - notes must not replace the original failure
+        pass  # Diagnostic failure must never replace the original exception.
+
+
+class _SubprocessDiagnostics:
+    """Module-binding adapter; never modifies the shared subprocess module."""
+
+    def __init__(self, original: Any, token: str | None):
+        self.original, self.token, self.records = original, token, []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.original, name)
+
+    def _record(self, **record: Any) -> None:
+        try:
+            if len(self.records) < 4:
+                if "stderr" in record:
+                    # A bounded prefix can cut through the credential itself.
+                    token = (
+                        self.token
+                        if record.get("captured_stderr_complete", True)
+                        else None
+                    )
+                    record["stderr"] = _diagnostic_bytes(record["stderr"], token)
+                self.records.append(record)
+        except BaseException:  # noqa: BLE001, S110 - diagnostic formatting is best effort
+            pass
+
+    def run(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            result = self.original.run(*args, **kwargs)
+        except BaseException as exc:
+            self._record(
+                operation="native_driver",
+                error_type=type(exc).__name__,
+                stderr=getattr(exc, "stderr", None) or b"",
+            )
+            raise
+        self._record(
+            operation="native_driver",
+            returncode=result.returncode,
+            stderr=result.stderr,
+        )
+        return result
+
+    def Popen(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            process = self.original.Popen(*args, **kwargs)
+        except BaseException as exc:
+            self._record(
+                operation="fixture_cleanup", argv=args[0], error_type=type(exc).__name__
+            )
+            raise
+        return _DiagnosticProcess(process, self, args[0], kwargs["stderr"])
+
+
+class _DiagnosticProcess:
+    def __init__(
+        self,
+        process: Any,
+        diagnostics: _SubprocessDiagnostics,
+        argv: list[str],
+        stderr: Any,
+    ):
+        self.process, self.diagnostics = process, diagnostics
+        self.argv, self.stderr, self.recorded = argv, stderr, False
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.process, name)
+
+    def wait(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            status = self.process.wait(*args, **kwargs)
+        except BaseException as exc:
+            self.diagnostics._record(
+                operation="fixture_cleanup",
+                argv=self.argv,
+                error_type=type(exc).__name__,
+            )
+            raise
+        try:
+            # Observe the already captured stream without changing its offset or
+            # the original command's later size/status/stderr rejection checks.
+            size = os.fstat(self.stderr.fileno()).st_size
+            if not self.recorded and (status != 0 or size):
+                raw = os.pread(self.stderr.fileno(), response._MAX_BYTES + 1, 0)
+                self.diagnostics._record(
+                    operation="fixture_cleanup",
+                    argv=self.argv,
+                    returncode=status,
+                    stderr=raw,
+                    captured_stderr_size=size,
+                    captured_stderr_complete=len(raw) == size,
+                )
+                self.recorded = True
+        except BaseException:  # noqa: BLE001, S110 - preserve the original wait result
+            pass
+        return status
+
+
+def _gateway_failure(exc: BaseException, token: str) -> None:
+    try:
+        raw = response._command(
+            [
+                "/usr/bin/journalctl",
+                "--unit=" + prior._GATEWAY,
+                "--no-pager",
+                "--all",
+                "--output=cat",
+                "--lines=20",
+            ],
+            timeout=3,
+        )
+        record = {
+            "operation": "owned_gateway_journal_tail",
+            "body": _diagnostic_bytes(raw, token, tail=True),
+        }
+    except BaseException as diagnostic_error:  # noqa: BLE001 - preserve the action failure
+        record = {
+            "operation": "owned_gateway_journal_tail",
+            "error_type": type(diagnostic_error).__name__,
+        }
+    _note(exc, [record])
+
+
+def _stop_fixture() -> dict:
+    token = None
+    try:
+        import runtime_action_worker_openclaw_systemd_probe as p37b
+
+        raw = response._read_regular(p37b._GATEWAY_ENVIRONMENT, 0, {0o400})
+        match = re.fullmatch(rb"OPENCLAW_GATEWAY_TOKEN=([0-9a-f]{64})\n", raw)
+        if match is not None:
+            token = match[1].decode("ascii")
+    except BaseException:  # noqa: BLE001, S110 - missing diagnostic token cannot skip cleanup
+        pass
+    diagnostics = _SubprocessDiagnostics(response.subprocess, token)
+    try:
+        with patch.object(response, "subprocess", diagnostics):
+            return prior._stop_fixture()
+    except BaseException as exc:
+        _note(exc, diagnostics.records)
+        raise
+
+
 def _sources() -> dict[str, Any]:
     result = {}
     for name, (size, digest, mode) in _CODE.items():
@@ -537,13 +702,20 @@ def _action(p37b: Any, setup: dict) -> dict[str, Any]:
             response._identities()[2],
             2,
         )
-    driver = p37b._run_driver(
-        "endpoint-journal-allow",
-        "COMPLETED",
-        {"verdict": "ALLOW", "effect_status": "CREATED"},
-        "aragorn/runtime-action-worker-result/v1",
-        {"OPENCLAW_GATEWAY_TOKEN": token, "ARAGORN_MOCK_PROVIDER_TOKEN": token},
-    )
+    diagnostics = _SubprocessDiagnostics(p37b.subprocess, token)
+    try:
+        with patch.object(p37b, "subprocess", diagnostics):
+            driver = p37b._run_driver(
+                "endpoint-journal-allow",
+                "COMPLETED",
+                {"verdict": "ALLOW", "effect_status": "CREATED"},
+                "aragorn/runtime-action-worker-result/v1",
+                {"OPENCLAW_GATEWAY_TOKEN": token, "ARAGORN_MOCK_PROVIDER_TOKEN": token},
+            )
+    except BaseException as exc:
+        _note(exc, diagnostics.records)
+        _gateway_failure(exc, token)
+        raise
     p37b._assert_driver_outcome(
         driver, "COMPLETED", {"verdict": "ALLOW", "effect_status": "CREATED"}
     )
@@ -723,12 +895,16 @@ def _run(container: str) -> dict[str, Any]:
     finally:
         pending = sys.exception()
         try:
-            cleanup = prior._stop_fixture()
+            cleanup = _stop_fixture()
         except (RuntimeError, OSError, ValueError) as exc:
             if pending is not None:
-                raise RuntimeError(
+                combined = RuntimeError(
                     f"journal fixture operation failed: {pending}; cleanup failed: {exc}"
-                ) from exc
+                )
+                for cause in (pending, exc):
+                    for note in getattr(cause, "__notes__", ()):
+                        combined.add_note(note)
+                raise combined from exc
             raise
     observation["fixture_stack_cleanup"] = cleanup
     return observation
@@ -751,6 +927,11 @@ def main(argv: list[str] | None = None) -> int:
             f"endpoint journal fixture not confirmed: {type(exc).__name__}: {reason}",
             file=sys.stderr,
         )
+        for note in getattr(exc, "__notes__", ())[:4]:
+            print(
+                note.encode("ascii", errors="backslashreplace").decode("ascii")[:4096],
+                file=sys.stderr,
+            )
         return 1
     print(canonical_json(result).decode("ascii"))
     return 0

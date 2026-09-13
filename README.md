@@ -532,6 +532,13 @@ after synchronized readback, and refuses uncertain retention or unresolved start
 The fixed ceiling is 512 serial calls; duplicate attempts never authorize another
 execution. This core alone supplies no transport, mandatory native hook, effect
 authority, hostile-owner anti-rollback, or RUN qualification.
+The additive [receipt transport renderer](./scripts/materialize_runtime_native_tool_receipts.py)
+produces four pinned sources: worker dispatch, receipt-aware journal v2, a
+three-credential startup guard, and the worker unit. It reuses authenticated
+framing, requires externally provisioned genesis/state before listening, and
+exits on uncertain retention. Receipt requests never enter the effect relay;
+ordinary creates are not yet gated to an open attempt. Native hooks, provisioning,
+successor activation, and performance qualification remain required.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

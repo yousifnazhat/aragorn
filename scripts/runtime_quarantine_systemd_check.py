@@ -443,7 +443,8 @@ def _stop_fixture() -> dict[str, Any]:
             and item["ControlPID"] == "0"
             for item in states.values()
         ),
-        "fixture stack cleanup was not confirmed",
+        "fixture stack cleanup was not confirmed: "
+        + canonical_json(states).decode("ascii"),
     )
     return states
 
@@ -549,7 +550,15 @@ def _run(container: str) -> dict[str, Any]:
             ],
         }
     finally:
-        cleanup = _stop_fixture()
+        pending = sys.exception()
+        try:
+            cleanup = _stop_fixture()
+        except (RuntimeError, OSError, ValueError) as exc:
+            if pending is not None:
+                raise RuntimeError(
+                    f"fixture operation failed: {pending}; cleanup failed: {exc}"
+                ) from exc
+            raise
     observation["fixture_stack_cleanup"] = cleanup
     return observation
 

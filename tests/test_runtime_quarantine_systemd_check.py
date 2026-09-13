@@ -689,6 +689,14 @@ class RuntimeQuarantineSystemdCheckTests(unittest.TestCase):
             self.assertEqual(subject.main([_CONTAINER]), 1)
         self.assertEqual(output.getvalue(), "")
         self.assertIn("cleanup failed", error.getvalue())
+        with _environment() as env:
+            env["prepare"].side_effect = RuntimeError("initial operation failed")
+            env["stop"].side_effect = RuntimeError("subsequent cleanup failed")
+            with self.assertRaisesRegex(
+                RuntimeError, "initial operation failed.*subsequent cleanup failed"
+            ):
+                subject._run(_CONTAINER)
+            env["stop"].assert_called_once()
 
 
 if __name__ == "__main__":

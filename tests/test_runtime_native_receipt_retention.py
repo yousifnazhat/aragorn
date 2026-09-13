@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import mock_open, patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from scripts import runtime_native_health_systemd_check as health
 from scripts import runtime_native_receipt_systemd_check as subject
 from tests.test_materialize_runtime_native_tool_receipts import _modules
 from tests.test_runtime_native_tool_cache_build_retention import ARTIFACT as BUILD
@@ -24,6 +25,14 @@ PIN = (402783, "8257d73125622c963f82a15fbfb1d992c05a30116e79e9c5a59524ec351dcc5b
 SOURCE = "29c5dc6d84e41f019497dacd3b07e09406117a85"
 VOLUME = "aragorn-native-cache-runtime-79ed6eb-v1"
 IMAGE = "sha256:1c75f0c37070aa5b702e134e6e6c830690f596891ce0f4fa389ea7515300ea17"
+HEALTH_ARTIFACT = (
+    "benchmark/evidence/phase3-native-health-systemd-development-v1-2026-09-13.json"
+)
+HEALTH_PIN = (
+    446323,
+    "d1cb54601571d036ea591c240ae6688b4722e3c710fb16d6efd06044f1dba2fc",
+)
+HEALTH_SOURCE = "94d788a87d765d9eecfc63ca407b0771c4acef0c"
 
 
 def _pin(raw, expected):
@@ -40,8 +49,8 @@ def _read(path, expected):
     return raw
 
 
-def _load(raw):
-    _pin(raw, PIN)
+def _load(raw, expected=None):
+    _pin(raw, PIN if expected is None else expected)
     document = json.loads(raw)
     if canonical_json(document) + b"\n" != raw:
         raise ValueError("fixed canonical JSON and final LF changed")
@@ -119,9 +128,8 @@ class NativeReceiptRetentionTests(unittest.TestCase):
         self.assertEqual(len(stage_flags), 18)
         self.assertTrue(all(value is False for value in stage_flags))
 
-    def test_receipt_ack_journal_effect_source_runtime_and_reported_cleanup_joins(self):
-        d, eq = self.document, self.assertEqual
-        o, setup = d["observation"], d["observation"]["setup"]
+    def _native_joins(self, o):
+        eq, setup = self.assertEqual, o["setup"]
         snapshots = [
             setup["empty_store"],
             o["receipt_store_after_read"],
@@ -222,6 +230,10 @@ class NativeReceiptRetentionTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             subject._receipt_proof(changed, drivers)
 
+    def test_receipt_ack_journal_effect_source_runtime_and_reported_cleanup_joins(self):
+        d, eq = self.document, self.assertEqual
+        o = d["observation"]
+        self._native_joins(o)
         eq(d["source"]["commit"], SOURCE)
         eq(d["source"]["signature"]["status"], "GOOD_LOCAL_VERIFICATION")
         eq(d["build_observation"]["path"], BUILD)
@@ -349,6 +361,296 @@ class NativeReceiptRetentionTests(unittest.TestCase):
                     "ControlPID": "0",
                 },
             )
+
+    def test_retained_health_publications_preserve_native_receipts_and_stop_profile(
+        self,
+    ):
+        raw = _read(HEALTH_ARTIFACT, HEALTH_PIN)
+        with patch.object(json, "loads") as parser, self.assertRaises(ValueError):
+            _load(raw[:-1] + b" ", HEALTH_PIN)
+        parser.assert_not_called()
+        d, eq = _load(raw, HEALTH_PIN), self.assertEqual
+        o = d["observation"]
+        h, setup = o["health_response"], o["setup"]
+        self._native_joins(o)
+        eq(d["schema"], "aragorn/runtime-native-health-systemd-capture/v1")
+        eq(h["schema"], "aragorn/native-health-systemd-observation/v1")
+        eq(d["authority"], self.document["authority"])
+        eq(o["authority"], self.document["observation"]["authority"])
+        eq(o["limitations"], self.document["observation"]["limitations"])
+        eq(
+            h["authority"],
+            "OWNED_ACCEPTED_HEALTH_RESPONSE_ONLY_NOT_SENSOR_LOSS_OR_RUN_QUALIFICATION",
+        )
+        for item in (d, o, h):
+            eq(item["status"], "OBSERVED")
+            for key in ("phase3_eligible", "run_conformance_eligible"):
+                self.assertIs(item[key], False)
+        for key in (
+            "production_activation_eligible",
+            "sensor_loss_detection",
+            "watchdog_or_stale_health_coverage",
+            "durable_dispatch_queue",
+        ):
+            self.assertIs(h[key], False)
+        self.assertIs(d["production_activation_eligible"], False)
+        self.assertIs(o["complete_event_coverage"], False)
+        self.assertIs(o["native_ack_wire_capture"], False)
+        health._check_hook_processes(o["processes"], h["processes_after_hook"])
+        changed = copy.deepcopy(h["processes_after_hook"])
+        changed["worker"]["process"]["pid"] += 1
+        with self.assertRaises(health.HealthFixtureError):
+            health._check_hook_processes(o["processes"], changed)
+        eq(h["accepted_floor_before"], 3)
+        eq(
+            h["native_receipts_retained"],
+            o["receipt_store_after_create"]["state_digest"],
+        )
+        self.assertIs(h["native_target_and_broker_receipt_unchanged"], True)
+        eq(len(h["invocations"]), 2)
+        before = h["invocations"][0]["response"]["result"]["response"]["before"]
+        for role, record in zip(("gateway", "worker"), before, strict=True):
+            native = o["processes"][role]
+            for key in ("pid", "uid", "gid", "cgroup", "start_time_ticks"):
+                eq(record["process"][key], native["process"][key])
+            for key in ("Id", "MainPID", "ControlGroup", "InvocationID"):
+                eq(record["unit"][key], native["unit"][key])
+        invocations, cursors, times = set(), set(), []
+        for epoch, status, record in zip(
+            (4, 5), ("healthy", "unhealthy"), h["invocations"], strict=True
+        ):
+            document, envelope = record["document"], record["response"]["result"]
+            eq(
+                document,
+                {
+                    "schema": "aragorn/runtime-mediator-health/v1",
+                    "runtime_digest": setup["runtime_digest"],
+                    "sensor_digest": setup["policy"]["sensor_digest"],
+                    "epoch": epoch,
+                    "status": status,
+                    "observed_at_unix": document["observed_at_unix"],
+                    "expires_at_unix": document["observed_at_unix"] + 15,
+                },
+            )
+            result = envelope["response"]
+            evidence = {
+                "cas_root": "/var/lib/aragorn-runtime-response",
+                "digest": canonical_digest(result),
+                "bytes": len(canonical_json(result)),
+                "readback_verified": True,
+                "blob_and_directory_chain_fsynced": True,
+            }
+            eq(
+                envelope,
+                {
+                    "schema": "aragorn/retained-runtime-response/v1",
+                    "authority": "LOCAL_ROOT_EVIDENCE_RETENTION_NOT_INDEPENDENT_QUALIFICATION",
+                    "response": result,
+                    "evidence": evidence,
+                },
+            )
+            eq(
+                record["retention"],
+                {
+                    **evidence,
+                    "separate_process_readback": True,
+                    "deduplication_checked": True,
+                },
+            )
+            # Only replay embedded evidence. Never launch the acquisition helper,
+            # read a host CAS, or claim a new readback/fsync occurred in this test.
+            with patch.object(
+                health.retained,
+                "_retained_response",
+                return_value=(result, record["retention"]),
+            ) as replay:
+                eq(
+                    health._join(record, document, setup, before, unhealthy=epoch == 5),
+                    record,
+                )
+                replay.assert_called_once_with(envelope)
+            for part, unit in (
+                ("publication", health._PUBLISHER),
+                ("response", health._DISPATCH),
+            ):
+                item = record[part]
+                journal = item["journal"]
+                eq(journal["MESSAGE"].encode("ascii"), canonical_json(item["result"]))
+                eq(journal["_SYSTEMD_INVOCATION_ID"], item["invocation_id"])
+                eq(journal["_SYSTEMD_UNIT"], unit)
+                eq(journal["_BOOT_ID"], o["boot_id"])
+                times.append(int(journal["__MONOTONIC_TIMESTAMP"]))
+                invocations.add(item["invocation_id"])
+                cursors.add(journal["__CURSOR"])
+                eq(
+                    record["units"][unit],
+                    {
+                        "Id": unit,
+                        "ActiveState": "inactive",
+                        "SubState": "dead",
+                        "MainPID": "0",
+                        "ControlPID": "0",
+                        "ExecMainStatus": "0",
+                        "Result": "success",
+                        "InvocationID": "",
+                    },
+                )
+        eq(len(invocations), 4)
+        eq(len(cursors), 4)
+        self.assertTrue(all(value > 0 for value in times))
+        eq(times, sorted(times))
+        result = h["invocations"][1]["response"]["result"]["response"]
+        for unit, mask in zip(
+            health.response._UNITS, result["future_start_barrier"]["masks"], strict=True
+        ):
+            eq(
+                mask,
+                {
+                    "path": "/etc/systemd/system/" + unit,
+                    "target": "/dev/null",
+                    "unit": {
+                        "Id": unit,
+                        "LoadState": "masked",
+                        "UnitFileState": "masked",
+                        "ActiveState": "inactive",
+                        "SubState": "dead",
+                        "MainPID": "0",
+                        "ControlPID": "0",
+                    },
+                },
+            )
+        refusal = h["persistent_start_refusal"]
+        eq(
+            refusal["argv"],
+            [
+                "/usr/bin/systemctl",
+                "--system",
+                "--no-pager",
+                "--no-ask-password",
+                "start",
+                *health.response._UNITS,
+            ],
+        )
+        eq(refusal["exit_code"], 1)
+        eq(refusal["stdout"], "")
+        eq(
+            refusal["stderr"],
+            "".join(
+                f"Failed to start {unit}: Unit {unit} is masked.\n"
+                for unit in health.response._UNITS
+            ),
+        )
+        hook = h["hook"]
+        eq(hook["hook_digest"], health.canonical_digest_bytes(health._HOOK_RAW))
+        eq(hook["before"]["units"][health._PUBLISHER]["OnSuccess"], "")
+        eq(hook["after"]["units"][health._PUBLISHER]["OnSuccess"], health._DISPATCH)
+        eq(hook["after"]["units"][health._PUBLISHER]["OnSuccessJobMode"], "fail")
+        eq(hook["after"]["units"][health._PUBLISHER]["DropInPaths"], str(health._HOOK))
+
+        eq(d["source"]["commit"], HEALTH_SOURCE)
+        eq(d["source"]["signature"]["status"], "GOOD_LOCAL_VERIFICATION")
+        eq(d["build_observation"], self.document["build_observation"])
+        stage = d["staged_profile"]
+        eq(stage["schema"], "aragorn/runtime-native-health-staged-profile/v1")
+        eq(
+            [len(stage[key]) for key in ("files", "source_inputs", "new_dependencies")],
+            [66, 79, 21],
+        )
+        self.assertTrue(
+            all(value is False for value in stage.values() if type(value) is bool)
+        )
+        eq(stage["required_runtime_not_included"]["tree"], TREE)
+        files = {item["path"]: item for item in stage["files"]}
+        files.update(
+            {item["installed_path"]: item for item in d["fixture_helpers"].values()}
+        )
+        eq(len(h["installed_sources"]), 7)
+        for sources in (o["installed_sources"], h["installed_sources"]):
+            for path, record in sources.items():
+                eq(_record_pin(record), _record_pin(files[path]))
+        sources = {item["path"]: item for item in d["source"]["files"]}
+        selected = [
+            sources[name]
+            for name in (
+                "scripts/stage_runtime_native_health_profile.py",
+                "scripts/capture_runtime_native_receipt_systemd_check.py",
+            )
+        ]
+        selected.extend(d["fixture_helpers"].values())
+        for record in selected:
+            committed = subprocess.run(
+                [
+                    "git",
+                    "--no-replace-objects",
+                    "show",
+                    HEALTH_SOURCE + ":" + record["path"],
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                check=True,
+                timeout=10,
+            ).stdout
+            _pin(committed, _record_pin(record))
+        for key in ("content", "image_inspect", "volume_inspect", "parent"):
+            eq(d["parent_before"][key], d["parent_after"][key])
+        eq(d["parent_identity"], self.document["parent_identity"])
+        eq(d["runtime_before"]["content"], d["runtime_after"]["content"])
+        for snapshot in (d["runtime_before"], d["runtime_after"]):
+            eq(snapshot["content"]["runtime_tree_before"], TREE)
+            eq(snapshot["content"]["runtime_tree_after"], TREE)
+            eq(snapshot["volume_inspect"]["Name"], VOLUME)
+            self.assertIs(snapshot["content"]["mount"]["read_only"], True)
+        container, cleanup = d["fixture_container"], d["cleanup"]
+        eq(o["fixture_container"], container)
+        eq(h["fixture_container"], container)
+        eq(d["fixture_image"]["Id"], IMAGE)
+        eq(d["container_inspect"]["Id"], container)
+        eq(
+            d["invocation"]["argv"],
+            [
+                "docker",
+                "--context",
+                "colima-aragorn-bakeoff",
+                "exec",
+                container,
+                "/usr/bin/python3.12",
+                "-I",
+                "-S",
+                "-B",
+                "/opt/aragorn/runtime-native-receipt-systemd-check.py",
+                container,
+                "--health",
+            ],
+        )
+        eq(cleanup["removed_id"], container)
+        eq(
+            cleanup["owned_container"],
+            {
+                "id": container,
+                "image": IMAGE,
+                "name": "/" + cleanup["name"],
+                "owner": cleanup["owner"],
+            },
+        )
+        eq(
+            d["container_inspect"]["Config"]["Labels"],
+            {
+                "dev.aragorn.snapshot-owner": cleanup["owner"],
+                "dev.aragorn.source-commit": HEALTH_SOURCE,
+            },
+        )
+        for key in ("container_name_absent", "removed_id_absent", "daemon_reachable"):
+            self.assertIs(cleanup[key], True)
+        eq(
+            set(o["fixture_stack_cleanup"]),
+            set(self.document["observation"]["fixture_stack_cleanup"])
+            | set(health._UNITS),
+        )
+        for unit, state in o["fixture_stack_cleanup"].items():
+            eq(state["Id"], unit)
+            eq(state["ActiveState"], "inactive")
+            eq(state["MainPID"], "0")
+            eq(state["ControlPID"], "0")
 
 
 if __name__ == "__main__":

@@ -640,8 +640,16 @@ adds six existing publisher/response files and their activator pins, preserving
 the 60-file predecessor. Its 66-file stage leaves the health hook inert. The
 owned capture's explicit `--health` mode runs the native read/create checks first,
 then tests fresh healthy and unhealthy publications on that same runtime.
-This remains a fixture integration, not a detector, stale-health watchdog,
-durable dispatch queue or production activation.
+The [composed native/health observation](./benchmark/evidence/phase3-native-health-systemd-development-v1-2026-09-13.json)
+from signed `94d788a` retains a healthy no-op followed by unhealthy gateway/worker
+suspension, persistent unit masks, and a refused direct restart. Both responses
+have separate-process evidence readback; the four native receipts and protected
+create remain unchanged, and all six fixture services are stopped before owned
+container removal. The check retains typed empty systemd command arrays and
+allows only the observed worker command-history reset during hook reload while
+preserving exact kernel process identities. This is accepted-health response
+composition, not sensor-loss detection, a stale-health watchdog, a durable dispatch
+queue, complete RUN coverage, production activation or Phase 3 qualification.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

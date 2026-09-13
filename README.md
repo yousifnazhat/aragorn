@@ -504,6 +504,13 @@ requires exact service/process/source custody, an unchanged-state unauthorized
 peer refusal, one native benign create, and eight journal records joined to the
 actual consumed grant and retained result. The default quarantine capture remains
 unchanged; offline capture tests do not establish live delivery.
+This capture now selects the [bounded broker response profile](./scripts/stage_runtime_broker_response_drain_profile.py).
+After successful response delivery and clean connection closure, the broker
+checks its consumed grant and receipt under a read-only lock and stays available
+only within the original grant lifetime. One-shot effect checks and every
+fail-stop service dependency remain unchanged. Startup with a consumed grant
+still refuses; this response window is not a native terminal ACK or completion
+guarantee.
 
 The [restricted Tetragon process adapter](./src/aragorn/runtime_tetragon_process.py)
 validates bounded offline records against an

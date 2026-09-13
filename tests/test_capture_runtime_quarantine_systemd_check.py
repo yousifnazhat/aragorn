@@ -83,7 +83,7 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
         )
         stage_module = subject.journal_stage if endpoint_journal else subject.stage
         stage_name = (
-            "stage_runtime_endpoint_journal_profile"
+            "stage_runtime_broker_response_drain_profile"
             if endpoint_journal
             else "stage_runtime_quarantine_profile"
         )
@@ -152,10 +152,17 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
                 manifest["root_deployment"] = True
             elif failure == "journal_sources":
                 manifest["source_inputs"].pop()
+            elif failure == "drain_schema":
+                manifest["schema"] = "wrong"
+            elif failure == "drain_authority":
+                manifest["authority"] = "wrong"
             elif failure in (
                 "runtime_journal_deployed",
                 "durable_event_retention",
                 "run_qualification",
+                "broker_response_drain_deployed",
+                "native_terminal_retention",
+                "native_turn_completion",
             ):
                 manifest[failure] = True
             state["manifest"] = deepcopy(manifest)
@@ -415,6 +422,10 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
         self.assertEqual(set(result["fixture_helpers"]), set(subject._JOURNAL_FILES))
         self.assertEqual(len(result["staged_profile"]["files"]), 55)
         self.assertEqual(len(result["staged_profile"]["new_dependencies"]), 10)
+        self.assertEqual(len(result["staged_profile"]["source_inputs"]), 63)
+        self.assertEqual(
+            result["staged_profile"]["schema"], subject.journal_stage._SCHEMA
+        )
         for item in state["verify_inputs"].values():
             self.assertEqual(
                 state["copies"][_CONTAINER + ":" + item["installed_path"]],
@@ -443,6 +454,11 @@ class RuntimeQuarantineCaptureTests(unittest.TestCase):
             "runtime_journal_deployed",
             "durable_event_retention",
             "run_qualification",
+            "drain_schema",
+            "drain_authority",
+            "broker_response_drain_deployed",
+            "native_terminal_retention",
+            "native_turn_completion",
         }
         for failure in sorted(before_create) + [
             "verify",

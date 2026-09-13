@@ -16,7 +16,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
 
 from scripts import capture_runtime_response_systemd_check as existing
-from scripts import stage_runtime_endpoint_journal_profile as journal_stage
+from scripts import stage_runtime_broker_response_drain_profile as journal_stage
 from scripts import stage_runtime_quarantine_profile as stage
 
 campaign = existing.campaign
@@ -149,7 +149,7 @@ def _capture(*, endpoint_journal: bool = False) -> dict[str, Any]:
     with TemporaryDirectory(prefix=f"aragorn-runtime-{profile}-stage-") as temporary:
         output = Path(temporary).resolve() / "stage"
         manifest = (
-            journal_stage.stage_runtime_endpoint_journal_profile(output)
+            journal_stage.stage_runtime_broker_response_drain_profile(output)
             if endpoint_journal
             else stage.stage_runtime_quarantine_profile(output)
         )
@@ -163,11 +163,19 @@ def _capture(*, endpoint_journal: bool = False) -> dict[str, Any]:
         )
         if endpoint_journal:
             _expect(
-                len(manifest["source_inputs"]) == 62
+                len(manifest["source_inputs"]) == 63
+                and manifest["schema"] == journal_stage._SCHEMA
+                and manifest["authority"] == journal_stage._AUTHORITY
                 and manifest["runtime_journal_deployed"] is False
                 and manifest["durable_event_retention"] is False
                 and manifest["run_qualification"] is False,
                 "journal stage inputs or authority changed",
+            )
+            _expect(
+                manifest["broker_response_drain_deployed"] is False
+                and manifest["native_terminal_retention"] is False
+                and manifest["native_turn_completion"] is False,
+                "response lifetime stage overclaims runtime authority",
             )
         payloads = {
             item["path"]: {

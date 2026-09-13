@@ -58,8 +58,8 @@ _CODE = {
         0o644,
     ),
     "/usr/lib/aragorn/aragorn/runtime_action_broker_v5.py": (
-        11716,
-        "fe0861eec5a3439b142d81e59d50f02516b8ca346408e18465f5276bc60ec496",
+        14578,
+        "cd7b85e520de7e580d74ffb66c13e67e6984c9f9513c7a7b03c5ebe5416fba6a",
         0o644,
     ),
     "/usr/lib/aragorn/aragorn/runtime_endpoint_journal.py": (
@@ -895,6 +895,7 @@ def _run(container: str) -> dict[str, Any]:
                 "ENDPOINT_LOCAL_STATES_AND_DIGEST_JOINS_NOT_GENERAL_TOOL_OR_SKILL_CAUSATION",
                 "JOURNAL_STREAM_CREDENTIALS_NOT_PER_WRITE_KERNEL_ATTESTATION",
                 "NO_LATENCY_QUALIFICATION_OR_AUTOMATIC_EVENT_LOSS_ENFORCEMENT",
+                "SPENT_BROKER_RESPONSE_LIFETIME_IS_NOT_NATIVE_TERMINAL_ACK_OR_GENERAL_COMPLETION",
             ],
         }
     finally:

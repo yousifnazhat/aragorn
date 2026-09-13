@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from scripts import runtime_endpoint_journal_systemd_check as subject
-from scripts import stage_runtime_endpoint_journal_profile as stage
+from scripts import stage_runtime_broker_response_drain_profile as stage
 
 _CONTAINER = "c" * 64
 _BOOT = "b" * 32

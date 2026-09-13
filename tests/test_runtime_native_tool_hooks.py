@@ -338,6 +338,61 @@ for(const mode of ["duplicate","attempt-uncertain","terminal-uncertain","unsuppo
 }
 """)
 
+    def test_registered_create_preparation_after_completed_read(self):
+        self.node(r"""
+const f=fixture();const c=callers(f);const requests=[];let refusal;
+const {canonicalJson,sha256,parseWorkerResult}=f.plugin.__testing;
+// This test replaces transport only: no sockets, credentials or effects run.
+f.control.transport(async(_config,event,signal,parse)=>{
+  if(event.schema==="aragorn/runtime-action-worker-request/v1"){
+    requests.push(event);assert.equal(f.events.length,3);
+    refusal={schema:"aragorn/runtime-action-worker-result/v1",
+      authority:"WORKER_RELAY_RESULT_ONLY_NOT_EFFECT_OR_RUN_CONFORMANCE_AUTHORITY",
+      request_digest:sha256(Buffer.from(canonicalJson(event),"ascii")),
+      status:"NOT_SUBMITTED",broker_result:null};
+    return parseWorkerResult(Buffer.from(canonicalJson(refusal),"ascii"),event);
+  }
+  f.events.push(event);
+  return parse(Buffer.from(canonicalJson(f.ack(event,f.events.length)),"ascii"),event);
+});
+const readResult={content:[{type:"text",text:"inert"}],details:undefined};
+assert.equal(await f.bridge.execute("read",{path:"inert"},context(),()=>readResult),readResult);
+assert.equal(f.events.length,2);
+let factory;
+f.plugin.register({pluginConfig:config,registerTool(value,options){
+  assert.deepEqual(options,{name:"aragorn_runtime_create",optional:true});factory=value;
+}});
+const ctx={runId:"run-create",sessionId:"session-create",sessionKey:"session:create",toolCallId:"call:create"};
+const tool=factory({sessionId:ctx.sessionId,sessionKey:ctx.sessionKey});
+const counts={prepare:0,finalize:0,execute:0};let finalParams;
+const observed={...tool,
+  prepareBeforeToolCallParams(...args){counts.prepare++;return tool.prepareBeforeToolCallParams(...args);},
+  finalizeBeforeToolCallParams(...args){counts.finalize++;finalParams=tool.finalizeBeforeToolCallParams(...args);return finalParams;},
+  execute(id,params,signal,update){
+    counts.execute++;assert.notEqual(params,finalParams);assert.ok(Object.isFrozen(params));
+    assert.deepEqual(params,finalParams);return tool.execute(id,params,signal,update);
+  }};
+const [definition]=c.adapt([c.wrap(observed,ctx,{emitDiagnostics:false})],ctx);
+const raw={content:"Aragorn P3.7b distinct worker create\n",target_name:"runtime-worker-qualified.txt"};
+const result=await definition.execute(ctx.toolCallId,raw);
+assert.deepEqual(counts,{prepare:1,finalize:1,execute:1},JSON.stringify(result));
+assert.deepEqual(Object.keys(raw),["content","target_name"]);
+assert.equal(requests.length,1);assert.equal(f.events.length,4);
+assert.equal(f.events[2].tool_name,"aragorn_runtime_create");
+assert.equal(f.events[2].params_digest,sha256(Buffer.from(JSON.stringify(finalParams),"utf8")));
+assert.equal(f.events[2].worker_request_digest,refusal.request_digest);
+for(const event of f.events.slice(2)){
+  assert.equal(event.run_id,ctx.runId);assert.equal(event.session_id,ctx.sessionId);
+  assert.equal(event.session_key_digest,sha256(Buffer.from(ctx.sessionKey)));
+  assert.equal(event.tool_call_digest,sha256(Buffer.from(ctx.toolCallId)));
+}
+assert.equal(f.events[3].outcome,"RETURNED");
+assert.equal(f.events[3].result_digest,sha256(Buffer.from(JSON.stringify(result),"utf8")));
+assert.equal(result.details.status,"error");assert.deepEqual(result.details.source_result,refusal);
+assert.equal(JSON.parse(result.content[0].text).result.status,"NOT_SUBMITTED");
+assert.equal(f.spawns.length,1);assert.equal(f.factories(),1);
+""")
+
     def test_source_pin_git_failure_companion_and_publication_refusals(self):
         for name in subject._UPSTREAM_INPUTS:
             raw = subject._upstream_bytes(name)

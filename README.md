@@ -613,6 +613,15 @@ Its activator checks matching root genesis/binding inputs, exact worker/gateway
 credential sets, and preprovisioned receipt-store ownership before startup.
 Staging never installs the runtime, provisions state, or activates services;
 the absent-only provisioner must run separately before activation.
+The [native cache compatibility overlay](./scripts/materialize_runtime_native_tool_cache.py)
+addresses a subsequently reproduced integration failure: after a read warms the
+descriptor cache, the cached create descriptor lacks its private preparation and
+finalization callbacks. Native validation correctly refuses the unattributed
+parameters before retaining a create attempt. The fixed worker plugin now uses
+the existing current-context factory path; other plugins keep their cache path.
+Inert regressions reproduce the original failure and verify that selection fix.
+This additional source overlay still requires a new build and fresh common-profile
+read/create validation; it does not qualify the previously built runtime.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

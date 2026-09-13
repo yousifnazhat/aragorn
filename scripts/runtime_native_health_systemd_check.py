@@ -141,7 +141,13 @@ def canonical_digest_bytes(raw: bytes) -> str:
 def _show(unit: str, properties: tuple[str, ...] = _STATE) -> dict[str, str]:
     _expect(unit in _UNITS, "unsupported health unit selector")
     raw = response._command(
-        ["/usr/bin/systemctl", "show", "--property=" + ",".join(properties), unit],
+        [
+            "/usr/bin/systemctl",
+            "show",
+            "--all",
+            "--property=" + ",".join(properties),
+            unit,
+        ],
         timeout=3,
     )
     pairs = [line.split("=", 1) for line in raw.decode("ascii").splitlines()]
@@ -213,7 +219,6 @@ def _units(*, installed: bool) -> dict:
         )
         expected = {
             "LoadState": "loaded",
-            "FragmentPath": "/usr/lib/systemd/system/" + unit,
             "DropInPaths": str(_HOOK) if publisher and installed else "",
             "User": "aragorn-broker" if publisher else "root",
             "Group": "aragorn-runtime" if publisher else "root",
@@ -221,7 +226,7 @@ def _units(*, installed: bool) -> dict:
             "RemainAfterExit": "no",
             "RefuseManualStart": "no" if publisher else "yes",
             "OnSuccess": _DISPATCH if publisher and installed else "",
-            "OnSuccessJobMode": "fail" if publisher and installed else "replace",
+            "OnSuccessJobMode": "fail",
             "ExecStartPre": "",
             "ExecStartPost": "",
             "NoNewPrivileges": "yes",
@@ -231,6 +236,13 @@ def _units(*, installed: bool) -> dict:
         }
         _expect(
             all(state[key] == value for key, value in expected.items())
+            and state["FragmentPath"]
+            in {
+                "/usr/lib/systemd/system/" + unit,
+                "/lib/systemd/system/" + unit,
+            }
+            and Path(state["FragmentPath"]).resolve(strict=True)
+            == Path("/usr/lib/systemd/system/" + unit)
             and state["ExecStart"].startswith(
                 "{ path=/usr/bin/python3.12 ; argv[]="
                 + command

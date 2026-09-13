@@ -129,6 +129,126 @@ class NativeHealthFixtureTests(unittest.TestCase):
                     function(*arguments)
             command.assert_not_called()
 
+    def test_observed_systemd_empty_fields_usrmerge_and_fail_job_mode(self):
+        for installed, prefix, failure in (
+            (False, "/lib", None),
+            (True, "/lib", None),
+            (True, "/usr/lib", None),
+            (True, "/tmp/lib", "alias"),
+            (True, "/lib", "resolved_alias"),
+            (True, "/lib", "mode"),
+            (True, "/lib", "extra_command"),
+            (True, "/lib", "missing_empty"),
+            (True, "/lib", "extra_property"),
+        ):
+
+            def command(
+                argv, *, timeout, installed=installed, prefix=prefix, failure=failure
+            ):
+                self.assertIn("--all", argv)
+                unit = argv[-1]
+                publisher = unit == subject._PUBLISHER
+                executable = (
+                    "/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-"
+                )
+                executable += (
+                    f"health-service.py /run/credentials/{unit}/runtime-binding /run/credentials/{unit}/health"
+                    if publisher
+                    else "response-service.py --health-dispatch"
+                )
+                fields = {
+                    "Id": unit,
+                    "LoadState": "loaded",
+                    "FragmentPath": prefix + "/systemd/system/" + unit,
+                    "DropInPaths": str(subject._HOOK)
+                    if publisher and installed
+                    else "",
+                    "User": "aragorn-broker" if publisher else "root",
+                    "Group": "aragorn-runtime" if publisher else "root",
+                    "Type": "oneshot",
+                    "RemainAfterExit": "no",
+                    "RefuseManualStart": "no" if publisher else "yes",
+                    "OnSuccess": subject._DISPATCH if publisher and installed else "",
+                    "OnSuccessJobMode": "fail",
+                    "Before": "shutdown.target"
+                    if publisher
+                    else subject._PUBLISHER + " shutdown.target",
+                    "After": "local-fs.target nss-user-lookup.target",
+                    "ExecStartPre": "",
+                    "ExecStartPost": "",
+                    "ExecStart": "{ path=/usr/bin/python3.12 ; argv[]="
+                    + executable
+                    + " ; ignore_errors=no ; pid=0 ; code=(null) ; status=0/0 }",
+                    "NoNewPrivileges": "yes",
+                    "PrivateNetwork": "yes",
+                    "PrivateMounts": "yes",
+                    "ProtectSystem": "strict",
+                }
+                if failure == "mode":
+                    fields["OnSuccessJobMode"] = "replace"
+                if failure == "extra_command":
+                    fields["ExecStartPost"] = "/bin/true"
+                if failure == "missing_empty":
+                    del fields["ExecStartPre"]
+                if failure == "extra_property":
+                    fields["Unexpected"] = "value"
+                return "".join(
+                    f"{key}={value}\n" for key, value in fields.items()
+                ).encode()
+
+            def property_value(unit, name):
+                if name == "LoadCredential":
+                    return (
+                        [
+                            "a(ss)",
+                            "2",
+                            "runtime-binding",
+                            "/etc/aragorn/runtime-action-runtime.json",
+                            "health",
+                            str(subject._PUBLICATION),
+                        ]
+                        if unit == subject._PUBLISHER
+                        else ["a(ss)", "0"]
+                    )
+                if name == "BindPaths":
+                    return [
+                        "a(ssbt)",
+                        "1",
+                        "/run/credentials/aragorn-runtime-action-worker.service",
+                        "/run/aragorn-runtime-response-worker-credential",
+                        "true",
+                        "16384",
+                    ]
+                self.assertEqual(name, "BindReadOnlyPaths")
+                return ["a(ssbt)", "0"]
+
+            def resolve(path, *, strict, failure=failure):
+                self.assertIs(strict, True)
+                return subject.Path("/usr/lib/systemd/system") / (
+                    "other.service" if failure == "resolved_alias" else path.name
+                )
+
+            with (
+                self.subTest(installed=installed, prefix=prefix, failure=failure),
+                patch.object(subject.response, "_command", side_effect=command),
+                patch.object(subject, "_property", side_effect=property_value),
+                patch.object(
+                    subject.Path, "resolve", autospec=True, side_effect=resolve
+                ),
+            ):
+                if failure:
+                    with self.assertRaises(subject.HealthFixtureError):
+                        subject._units(installed=installed)
+                else:
+                    result = subject._units(installed=installed)
+                    self.assertEqual(
+                        result["units"][subject._PUBLISHER]["FragmentPath"],
+                        prefix + "/systemd/system/" + subject._PUBLISHER,
+                    )
+                    self.assertEqual(
+                        result["units"][subject._DISPATCH]["OnSuccessJobMode"], "fail"
+                    )
+
     def test_exact_cursor_rows_baseline_and_malformed_output(self):
         for rows, count in (
             ([], 0),

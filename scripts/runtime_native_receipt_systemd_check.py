@@ -941,7 +941,7 @@ def _run(container: str) -> dict:
     finally:
         previous_phase = _PHASE
         _phase("CLEANUP")
-        cleanup = setup_prior._stop_fixture()
+        cleanup = prior._stop_fixture()
         _phase(previous_phase)
     observation["fixture_stack_cleanup"] = cleanup
     return observation

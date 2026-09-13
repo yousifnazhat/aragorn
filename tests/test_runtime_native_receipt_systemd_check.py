@@ -170,11 +170,17 @@ class NativeReceiptFixtureTests(unittest.TestCase):
             patch.object(subject.setup_prior, "_require_fixture"),
             patch.object(subject, "_sources", return_value={}),
             patch.object(subject, "_prepare", side_effect=RuntimeError("setup")),
-            patch.object(subject.setup_prior, "_stop_fixture", return_value={}) as stop,
+            patch.object(subject.prior, "_stop_fixture", return_value={}) as stop,
         ):
             with self.assertRaisesRegex(RuntimeError, "setup"):
                 subject._run("c" * 64)
             stop.assert_called_once_with()
+        with (
+            patch.object(subject.response, "_read_regular", side_effect=OSError),
+            patch.object(subject.setup_prior, "_stop_fixture", return_value={}) as stop,
+        ):
+            subject.prior._stop_fixture()
+            stop.assert_called_once_with(reset_worker_failed=False)
         for failure, visible in (
             (
                 subject._FixtureRefusal("native stream already exists"),

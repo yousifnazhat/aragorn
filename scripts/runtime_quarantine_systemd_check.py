@@ -415,6 +415,9 @@ def _prepare() -> dict[str, Any]:
 
 def _stop_fixture() -> dict[str, Any]:
     response._command(["/usr/bin/systemctl", "stop", *_ALL_UNITS], timeout=15)
+    # The expected pre-start denial leaves a failed flag after stop. Its evidence
+    # is already recorded above; reset only this doomed fixture's worker state.
+    response._command(["/usr/bin/systemctl", "reset-failed", _WORKER], timeout=3)
     states = {}
     properties = ("Id", "ActiveState", "MainPID", "ControlPID")
     for unit in _ALL_UNITS:

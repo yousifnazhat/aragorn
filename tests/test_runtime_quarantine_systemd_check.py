@@ -640,7 +640,7 @@ class RuntimeQuarantineSystemdCheckTests(unittest.TestCase):
                 subject._invoke(_SKILL, _SNAPSHOT)
 
     def test_fixed_four_unit_cleanup_parses_bound_states_and_refuses_partial_stop(self):
-        for failure in (None, "running", "wrong-id", "duplicate", "command"):
+        for failure in (None, "running", "wrong-id", "duplicate", "command", "reset"):
             calls = []
 
             def command(argv, *, timeout, calls=calls, failure=failure):
@@ -649,6 +649,12 @@ class RuntimeQuarantineSystemdCheckTests(unittest.TestCase):
                     self.assertEqual(argv[2:], list(subject._ALL_UNITS))
                     if failure == "command":
                         raise RuntimeError("stop failed")
+                    return b""
+                if argv[1] == "reset-failed":
+                    self.assertEqual(argv[2:], [subject._WORKER])
+                    self.assertEqual(timeout, 3)
+                    if failure == "reset":
+                        raise RuntimeError("reset failed")
                     return b""
                 unit = argv[-1]
                 state = {
@@ -673,7 +679,7 @@ class RuntimeQuarantineSystemdCheckTests(unittest.TestCase):
                     self.assertEqual(
                         set(subject._stop_fixture()), set(subject._ALL_UNITS)
                     )
-                    self.assertEqual(len(calls), 5)
+                    self.assertEqual(len(calls), 6)
 
     def test_main_emits_success_only_after_complete_fixture_cleanup(self):
         for arguments in ([], [_CONTAINER, "extra"]):

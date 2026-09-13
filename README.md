@@ -458,7 +458,7 @@ inputs, runs the frozen installers from a private immutable snapshot into a fres
 caller-owned `DESTDIR`, applies the source overrides, and audits all 54 final
 files. It returns a deterministic inventory without activating services or
 deploying to the host. The full producer package, actual runtime credentials,
-root deployment and fresh Linux/systemd validation remain separate. A private
+and root deployment remain separate. A private
 [quarantine response composition](./src/aragorn/runtime_quarantine_response.py)
 now joins a current accepted revocation to the measured installed digest and
 running worker binding, publishes the permanent denial first, then stops and masks
@@ -474,6 +474,16 @@ is no deployment hook, process byte-consumption proof, or live quarantine
 qualification. The frozen historical producers are unchanged and
 must not be deployed with denial records. No installed-digest quarantine or
 future-start qualification is claimed by these offline tests alone.
+The [fresh quarantine/systemd development observation](./benchmark/evidence/phase3-runtime-quarantine-systemd-development-v1-2026-09-13.json)
+from signed `c9a5d4e` exercises the 54-file successor profile in one disposable
+Linux fixture. It records clean pre-start exit 0, wrong-digest refusal without
+changes, permanent denial publication, stop-and-mask response, and separate-process
+CAS readback. After removing only that fixture's response-created masks, a new
+worker pre-start exits 126 with denial and startup inputs unchanged. The expected
+failed flag is reset only during fixture cleanup; all four services are stopped
+and the container removed. Parent snapshots and staged source pins were rechecked.
+This is `OBSERVED`, not production deployment, automatic detection dispatch,
+successor producer reinstallation coverage, or RUN/Phase 3 qualification.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

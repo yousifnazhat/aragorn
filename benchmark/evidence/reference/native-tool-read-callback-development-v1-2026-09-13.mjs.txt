@@ -1,0 +1,178 @@
+// Owned inert-file compatibility check, not credentials, receipts or admission.
+// The sole CJS integration dependency is replaced by a recording test double.
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdtemp, open, readFile, rm, stat, writeFile } from "node:fs/promises";
+import Module, { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+const INTEGRATION = "/usr/lib/aragorn/openclaw/aragorn-runtime-native-tool-client/integration.cjs";
+const PUBLIC_EXPORT = "openclaw/plugin-sdk/agent-harness";
+const TEXT = "Aragorn inert native read compatibility.";
+const digest = (raw) => `sha256:${createHash("sha256").update(raw).digest("hex")}`;
+
+async function boundedSource(file) {
+  const handle = await open(file, "r");
+  try {
+    const info = await handle.stat();
+    assert.ok(info.isFile() && info.size > 0 && info.size <= 1024 * 1024);
+    const raw = Buffer.alloc(info.size + 1);
+    let count = 0;
+    while (count < raw.length) {
+      const { bytesRead } = await handle.read(raw, count, raw.length - count, count);
+      if (!bytesRead) break;
+      count += bytesRead;
+    }
+    assert.equal(count, info.size);
+    return raw.subarray(0, count);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function main() {
+  assert.equal(process.argv.length, 3, "one absolute installed package root is required");
+  const packageRoot = process.argv[2];
+  assert.ok(path.isAbsolute(packageRoot) && path.resolve(packageRoot) === packageRoot);
+  const packagePath = path.join(packageRoot, "package.json");
+  const packageBytes = await boundedSource(packagePath);
+  const packageInfo = JSON.parse(packageBytes.toString("utf8"));
+  assert.equal(packageInfo.name, "openclaw");
+  assert.equal(packageInfo.version, "2026.7.1");
+  const require = createRequire(packagePath);
+  const entry = require.resolve(PUBLIC_EXPORT);
+  assert.equal(entry, path.join(packageRoot, "dist/plugin-sdk/agent-harness.js"));
+  const entryBytes = await boundedSource(entry);
+
+  const workspace = await mkdtemp(path.join(tmpdir(), "aragorn-inert-native-read-"));
+  const target = path.join(workspace, "inert-read.txt");
+  const context = Object.freeze({
+    runId: `inert-read-${randomUUID()}`,
+    sessionId: randomUUID(),
+    sessionKey: "agent:main:inert-native-read-check",
+    toolCallId: "inert-read-call-1",
+  });
+  let observation;
+  try {
+    await writeFile(target, TEXT, { encoding: "utf8", flag: "wx", mode: 0o400 });
+    const before = await stat(target);
+    assert.ok(before.isFile() && before.nlink === 1 && (before.mode & 0o777) === 0o400);
+    let integrationLoads = 0;
+    let calls = 0;
+    let recordedResult;
+    let recordedParams;
+    const recordingDouble = Object.freeze({
+      async execute(name, finalParams, receivedContext, invoke, signal) {
+        assert.equal(name, "read");
+        assert.equal(++calls, 1);
+        assert.deepEqual(finalParams, { path: target });
+        assert.deepEqual(receivedContext, context);
+        assert.equal(signal, undefined);
+        assert.equal(typeof invoke, "function");
+        // Match the independently checked client's detached, frozen parameter
+        // shape, without pretending to perform its authentication or receipts.
+        recordedParams = Object.freeze({ path: finalParams.path });
+        recordedResult = await invoke(recordedParams);
+        return recordedResult;
+      },
+    });
+
+    const originalLoad = Module._load;
+    let createOpenClawCodingTools;
+    // This process-local test substitution is removed immediately after import.
+    // No production source, credential, socket, or installed file is changed.
+    Module._load = function recordingIntegrationLoad(specifier, ...args) {
+      if (specifier === INTEGRATION) {
+        integrationLoads += 1;
+        return recordingDouble;
+      }
+      return Reflect.apply(originalLoad, this, [specifier, ...args]);
+    };
+    try {
+      ({ createOpenClawCodingTools } = await import(pathToFileURL(entry).href));
+    } finally {
+      Module._load = originalLoad;
+    }
+    assert.equal(Module._load, originalLoad);
+    assert.ok(integrationLoads > 0);
+    assert.equal(typeof createOpenClawCodingTools, "function");
+    const tools = createOpenClawCodingTools({
+      agentId: "main",
+      agentDir: workspace,
+      cwd: workspace,
+      workspaceDir: workspace,
+      runId: context.runId,
+      sessionId: context.sessionId,
+      sessionKey: context.sessionKey,
+      includeToolSearchControls: false,
+      emitBeforeToolCallDiagnostics: false,
+      toolPolicyAuditLogLevel: "debug",
+      config: {
+        agents: { defaults: { workspace } },
+        plugins: { enabled: false },
+        tools: { allow: ["read"], fs: { workspaceOnly: true } },
+      },
+      toolConstructionPlan: {
+        includeBaseCodingTools: true,
+        includeShellTools: false,
+        includeChannelTools: false,
+        includeOpenClawTools: false,
+        includePluginTools: false,
+      },
+    });
+    assert.deepEqual(
+      tools.map((tool) => tool.name),
+      ["read"],
+    );
+    // The public factory already installs the compiled mandatory hook.
+    // Wrapping this tool again would invalidate the one-call reachability check.
+    const result = await tools[0].execute(context.toolCallId, { path: target });
+    assert.equal(calls, 1);
+    assert.ok(Object.isFrozen(recordedParams));
+    assert.equal(result, recordedResult);
+    assert.deepEqual(result, { content: [{ type: "text", text: TEXT }], details: undefined });
+    assert.ok(Object.hasOwn(result, "details"));
+    const resultBytes = Buffer.from(JSON.stringify(result), "utf8");
+    assert.equal(
+      resultBytes.toString("utf8"),
+      JSON.stringify({ content: [{ type: "text", text: TEXT }] }),
+    );
+    assert.equal(await readFile(target, "utf8"), TEXT);
+    const after = await stat(target);
+    for (const key of ["dev", "ino", "mode", "nlink", "size", "mtimeMs"]) {
+      assert.equal(after[key], before[key]);
+    }
+    observation = {
+      schema: "aragorn/inert-native-read-callback-check/v1",
+      authority: "RECORDING_TEST_DOUBLE_CALLBACK_COMPATIBILITY_ONLY",
+      public_export: PUBLIC_EXPORT,
+      entrypoint: { path: entry, bytes: entryBytes.length, digest: digest(entryBytes) },
+      package_json: { bytes: packageBytes.length, digest: digest(packageBytes) },
+      integration_test_double_loads: integrationLoads,
+      callback_count: calls,
+      frozen_detached_params_accepted: true,
+      result_owns_undefined_details: true,
+      result: { bytes: resultBytes.length, digest: digest(resultBytes) },
+      owned_text_file_unchanged: true,
+      complete_import_closure_verified: false,
+      real_native_client_exercised: false,
+      credentials_or_socket_exercised: false,
+      receipt_retention_verified: false,
+      production_activation_eligible: false,
+      native_causation_verified: false,
+      run_eligible: false,
+      phase3_eligible: false,
+    };
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+  await assert.rejects(stat(workspace), { code: "ENOENT" });
+  console.log(JSON.stringify({ ...observation, owned_temp_removed: true }));
+}
+
+main().catch((error) => {
+  console.error("Inert native read compatibility check failed:", error);
+  process.exitCode = 1;
+});

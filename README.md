@@ -599,8 +599,14 @@ read/create callback, awaits terminal retention, and refuses other tool names.
 Inert tests execute extracted source functions with mocked transport and helper
 launch; they preserve callback arguments, cancellation, and native return/throw.
 Progress, transcripts, and later diagnostics are outside this receipt boundary.
-Full TypeScript/build validation, actual tool compatibility, compiled import
-closure, common deployment, and RUN qualification remain unverified.
+The [isolated Linux build observation](./benchmark/evidence/phase3-native-tool-runtime-build-development-v1-2026-09-13.json)
+now retains passing core TypeScript, full build, workspace-aware package/import
+checks, and a fresh offline install. The new runtime tree is unchanged before
+and after CLI and inert read checks. The compiled public read factory accepts
+frozen parameters and preserves its actual result through a recording bridge
+test double; this does not exercise credentials or durable receipt transport.
+Complete dynamic import closure, common deployment, mandatory native capture,
+build reproduction, and RUN/Phase 3 qualification remain unverified.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

@@ -577,6 +577,14 @@ publication, custody, synchronization, or cleanup uncertainty refuses success.
 Its tests use caller-owned files and mocked root/systemd boundaries, including
 acceptance by the unprivileged receipt core. No host provisioning or activation
 has been performed; gateway projection and native hooks remain separate work.
+The [gateway credential renderer](./scripts/materialize_runtime_native_gateway_credentials.py)
+adds the same root genesis source to the gateway's read-only systemd credentials.
+Its fixed helper reuses the existing held-descriptor custody checks and emits only
+bounded canonical worker configuration plus the externally supplied genesis digest.
+It validates actual service account identities and never opens the receipt store
+or derives trust from an ACK. Inert tests cover identity, namespace, read-only
+mount, input, and cleanup refusals; native bootstrap, hooks, complete deployment
+pins, and live projection validation are still required.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

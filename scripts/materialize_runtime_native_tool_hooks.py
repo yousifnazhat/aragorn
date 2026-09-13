@@ -65,26 +65,36 @@ _CREDENTIAL_PINS = {
 }
 _OUTPUTS = {
     "agent-tools.before-tool-call.ts": (
-        72248,
-        "sha256:8ece0ba86f866785eba4e428c4e1bfcc77c9875edbb770df8b2aa64532de710c",
+        72258,
+        "sha256:5171c9d332d132ead4e86916108cbe10aec8d37d21a753ce7e14a887e90173ff",
     ),
     "agent-tool-definition-adapter.ts": (
-        19495,
-        "sha256:abaa8182f04ee4470e1a30eecfe6c6b9dc513a7a9812a1b7e36ebc8263702b71",
+        19600,
+        "sha256:6e4f45ded2f835c2ae366c4282a1db04bdffa2aae13691b902f79140ee63687c",
     ),
     "aragorn-native-tool-execution.ts": (
-        877,
-        "sha256:a5cbe4197f06dba313a5823c7cbcc3f9fc16f37cdd5ba8362075f92291207d45",
+        913,
+        "sha256:b0e4316eea304a40e7a31b7c26a0dfc33f85a17152e32632a0ad344e17d0f0a4",
     ),
     "integration.cjs": _INTEGRATION_PIN,
 }
 _BRIDGE = b"""// Private fixed-profile bridge. No optional hooks or caller-selected loader.
 import { createRequire } from "node:module";
 
-type NativeContext = { runId: unknown; sessionId: unknown; sessionKey: unknown; toolCallId: unknown };
+type NativeContext = {
+  runId: unknown;
+  sessionId: unknown;
+  sessionKey: unknown;
+  toolCallId: unknown;
+};
 type Bridge = {
-  execute<T>(name: string, params: unknown, context: NativeContext,
-    invoke: (detached: unknown) => T | Promise<T>, signal?: AbortSignal): Promise<T>;
+  execute<T>(
+    name: string,
+    params: unknown,
+    context: NativeContext,
+    invoke: (detached: unknown) => T | Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T>;
 };
 // Absolute CJS resolution gives every compiled caller the same cached client.
 const bridge = createRequire(import.meta.url)(
@@ -92,8 +102,11 @@ const bridge = createRequire(import.meta.url)(
 ) as Bridge;
 
 export function executeAragornNativeTool<T>(
-  name: string, params: unknown, context: NativeContext,
-  invoke: (detached: unknown) => T | Promise<T>, signal?: AbortSignal,
+  name: string,
+  params: unknown,
+  context: NativeContext,
+  invoke: (detached: unknown) => T | Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
   return bridge.execute(name, params, context, invoke, signal);
 }
@@ -103,11 +116,16 @@ _IMPORT = (
 )
 _REPLACEMENTS = {
     _WRAPPER: (
-        ('import os from "node:os";\n', _IMPORT + 'import os from "node:os";\n'),
+        (
+            'import { normalizeFileToolPathParam } from "./agent-tools.params.js";\n',
+            'import { normalizeFileToolPathParam } from "./agent-tools.params.js";\n'
+            + _IMPORT,
+        ),
         (
             "        const result = await execute(toolCallId, executeParams, signal, onUpdate);\n",
             """        const result = await executeAragornNativeTool(
-          toolName, executeParams,
+          toolName,
+          executeParams,
           { runId: ctx?.runId, sessionId: ctx?.sessionId, sessionKey: ctx?.sessionKey, toolCallId },
           (detachedParams) => execute(toolCallId, detachedParams, signal, onUpdate),
           signal,
@@ -117,16 +135,23 @@ _REPLACEMENTS = {
     ),
     _ADAPTER: (
         (
-            'import { createHash } from "node:crypto";\n',
-            _IMPORT + 'import { createHash } from "node:crypto";\n',
+            '  runBeforeToolCallHook,\n} from "./agent-tools.before-tool-call.js";\n',
+            '  runBeforeToolCallHook,\n} from "./agent-tools.before-tool-call.js";\n'
+            + _IMPORT,
         ),
         (
             "          const rawResult = await tool.execute(toolCallId, executeParams, signal, onUpdate);\n",
             """          const rawResult = beforeHookWrapped
             ? await tool.execute(toolCallId, executeParams, signal, onUpdate)
             : await executeAragornNativeTool(
-                name, executeParams,
-                { runId: hookContext?.runId, sessionId: hookContext?.sessionId, sessionKey: hookContext?.sessionKey, toolCallId },
+                name,
+                executeParams,
+                {
+                  runId: hookContext?.runId,
+                  sessionId: hookContext?.sessionId,
+                  sessionKey: hookContext?.sessionKey,
+                  toolCallId,
+                },
                 (detachedParams) => tool.execute(toolCallId, detachedParams, signal, onUpdate),
                 signal,
               );

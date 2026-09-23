@@ -49,6 +49,9 @@ _HEALTH_FILES = {
     **_FILES,
     "scripts/runtime_native_health_systemd_check.py": "/opt/aragorn/runtime_native_health_systemd_check.py",
 }
+_CONFIG_FILES = {
+    "scripts/runtime_native_config_denial_check.py": "/opt/aragorn/runtime_native_config_denial_check.py",
+}
 _DIRECTORY_HANDOFF = r"""
 directories=json.loads(sys.argv[3])
 copied_owner=json.loads(sys.argv[4])
@@ -330,14 +333,17 @@ def _verify_fixture(
     )
 
 
-def _capture(*, health: bool = False) -> dict[str, Any]:
+def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, Any]:
     _expect(type(health) is bool, "health fixture selection must be boolean")
+    _expect(type(config_denial) is bool, "config fixture selection must be boolean")
     profile, materialize = stage, stage.stage_runtime_native_receipt_profile
     if health:
         from scripts import stage_runtime_native_health_profile as profile
 
         materialize = profile.stage_runtime_native_health_profile
     files = _HEALTH_FILES if health else _FILES
+    if config_denial:
+        files = files | _CONFIG_FILES
     file_count, source_count, dependency_count = (
         (66, 79, 21) if health else (60, 72, 15)
     )
@@ -446,6 +452,7 @@ def _capture(*, health: bool = False) -> dict[str, Any]:
                 files[_CHECKER],
                 container,
                 *(["--health"] if health else []),
+                *(["--config-denial"] if config_denial else []),
             ]
             raw = previous._journal_check(argv)
             observation = acquisition._load_json(raw, "native fixture observation")
@@ -459,6 +466,10 @@ def _capture(*, health: bool = False) -> dict[str, Any]:
                 and observation["run_conformance_eligible"] is False,
                 "native fixture observation or proof ceiling changed",
             )
+            if config_denial:
+                from scripts import runtime_native_config_denial_check as config_check
+
+                config_check.validate(observation["config_denial"], observation)
             if health:
                 health_observation = observation["health_response"]
                 _expect(
@@ -499,7 +510,9 @@ def _capture(*, health: bool = False) -> dict[str, Any]:
         existing.existing._source_identity() == source, "source changed during capture"
     )
     return {
-        "schema": "aragorn/runtime-native-health-systemd-capture/v1"
+        "schema": "aragorn/runtime-native-config-denial-systemd-capture/v1"
+        if config_denial
+        else "aragorn/runtime-native-health-systemd-capture/v1"
         if health
         else "aragorn/runtime-native-receipt-systemd-capture/v1",
         "authority": "LOCAL_SUCCESSOR_FIXTURE_NOT_RUN_OR_PHASE3_QUALIFICATION",
@@ -531,23 +544,25 @@ def _capture(*, health: bool = False) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    health = bool(arguments and arguments[0] == "--health")
-    if health:
-        arguments.pop(0)
-    if len(arguments) != 1 or arguments[0].startswith("--"):
+    flags = arguments[:-1]
+    if (
+        not arguments
+        or arguments[-1].startswith("--")
+        or len(flags) != len(set(flags))
+        or not set(flags) <= {"--health", "--config-denial"}
+    ):
         print(
-            "usage: capture_runtime_native_receipt_systemd_check [--health] ABSENT_OUTPUT_JSON",
+            "usage: capture_runtime_native_receipt_systemd_check [--health] [--config-denial] ABSENT_OUTPUT_JSON",
             file=sys.stderr,
         )
         return 64
-    output = Path(arguments[0])
+    output = Path(arguments[-1])
     _expect(
         output.is_absolute() and not os.path.lexists(output),
         "output must be absent and absolute",
     )
-    raw = (
-        acquisition._canonical(_capture(health=True) if health else _capture()) + b"\n"
-    )
+    options = {flag[2:].replace("-", "_"): True for flag in flags}
+    raw = acquisition._canonical(_capture(**options)) + b"\n"
     acquisition._write_output(output, raw)
     print(
         json.dumps(

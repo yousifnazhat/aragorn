@@ -318,7 +318,7 @@ class NativeReceiptCaptureTests(unittest.TestCase):
                 subject._verify_fixture(bad, CONTAINER, NAME, OWNER, COMMIT)
 
     @contextmanager
-    def capture_fixture(self, failure=None, *, health=False):
+    def capture_fixture(self, failure=None, *, health=False, config_denial=False):
         source = {"commit": COMMIT}
         parent = {
             "image_inspect": {"RootFS": {"Layers": ["base"]}},
@@ -340,6 +340,15 @@ class NativeReceiptCaptureTests(unittest.TestCase):
             "phase3_eligible": False,
             "run_conformance_eligible": False,
         }
+        if config_denial:
+            from tests.test_runtime_native_config_denial_check import _example
+
+            config, predecessor = _example()
+            observation.update(predecessor, fixture_container=CONTAINER)
+            config["fixture_container"] = CONTAINER
+            observation["config_denial"] = config
+            if failure == "config_authority":
+                config["successful_reload_observed"] = True
         if health:
             observation["health_response"] = {
                 "schema": "aragorn/native-health-systemd-observation/v1",
@@ -504,6 +513,42 @@ class NativeReceiptCaptureTests(unittest.TestCase):
                     len(json.loads(verify[-4])), 66 + len(subject._HEALTH_FILES)
                 )
                 self.assertEqual(len(json.loads(verify[-2])), 16)
+
+    def test_config_denial_opt_in_replays_joins_and_preserves_cleanup(self):
+        for value in (1, "yes", None):
+            with self.assertRaises(RuntimeError):
+                subject._capture(config_denial=value)
+        for health in (False, True):
+            for failure in (None, "checker", "cleanup", "source", "config_authority"):
+                with (
+                    self.subTest(health=health, failure=failure),
+                    self.capture_fixture(
+                        failure, health=health, config_denial=True
+                    ) as (calls, cleanup, mocks),
+                ):
+                    if failure:
+                        with self.assertRaises(RuntimeError):
+                            subject._capture(health=health, config_denial=True)
+                    else:
+                        result = subject._capture(health=health, config_denial=True)
+                        self.assertEqual(
+                            result["schema"],
+                            "aragorn/runtime-native-config-denial-systemd-capture/v1",
+                        )
+                        self.assertEqual(
+                            len(result["staged_profile"]["files"]), 66 if health else 60
+                        )
+                    cleanup.assert_called_once_with(NAME, OWNER, subject._IMAGE)
+                    self.assertEqual(
+                        mocks["_journal_check"].call_args.args[0][-1], "--config-denial"
+                    )
+                    copies = [argv for argv in calls if argv[0] == "cp"]
+                    self.assertEqual(
+                        len(copies),
+                        1
+                        + len(subject._HEALTH_FILES if health else subject._FILES)
+                        + len(subject._CONFIG_FILES),
+                    )
 
 
 if __name__ == "__main__":

@@ -650,6 +650,14 @@ allows only the observed worker command-history reset during hook reload while
 preserving exact kernel process identities. This is accepted-health response
 composition, not sensor-loss detection, a stale-health watchdog, a durable dispatch
 queue, complete RUN coverage, production activation or Phase 3 qualification.
+The same owned capture now accepts `--config-denial` (optionally with `--health`)
+to submit one fixed native `skills.update` request with `enabled=false`. It
+requires the exact read-only configuration denial and unchanged configuration
+identity, installed skill, gateway processes, broker result bytes, full controls,
+and four native receipts. Native CLI discovery remains eligible before and after;
+this is not observation of the gateway's live skill cache or a successful reload.
+This bounded successor check does not wire another frozen V3 admission case or
+change the 14/31 campaign count.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

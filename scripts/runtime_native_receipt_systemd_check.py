@@ -129,6 +129,7 @@ def _phase(value: str) -> None:
             "FINAL_RECEIPTS",
             "JOURNAL",
             "FINAL_IDENTITIES",
+            "CONFIG_DENIAL",
             "HEALTH_RESPONSE",
             "CLEANUP",
         },
@@ -895,8 +896,9 @@ def _journal_proof(
             )
 
 
-def _run(container: str, *, health: bool = False) -> dict:
+def _run(container: str, *, health: bool = False, config_denial: bool = False) -> dict:
     _expect(type(health) is bool, "health fixture selection must be boolean")
+    _expect(type(config_denial) is bool, "config fixture selection must be boolean")
     health_check = None
     if health:
         import runtime_native_health_systemd_check as health_check
@@ -1008,6 +1010,22 @@ def _run(container: str, *, health: bool = False) -> dict:
                 "NO_HOSTILE_OWNER_ROLLBACK_LATENCY_EXTERNAL_COLLECTOR_HEALTH_OR_RUN_QUALIFICATION",
             ],
         }
+        if config_denial:
+            import runtime_native_config_denial_check as config_check
+
+            _phase("CONFIG_DENIAL")
+            try:
+                observation["config_denial"] = config_check.run_after_native(
+                    container, observation, sys.modules[__name__]
+                )
+            except config_check.ConfigDenialError as exc:
+                if type(exc) is config_check.ConfigDenialError:
+                    raise _FixtureRefusal(str(exc)) from exc
+                raise
+            _expect(
+                (_sources(health=True) if health else _sources()) == sources,
+                "config denial changed native sources",
+            )
         if health_check is not None:
             _phase("HEALTH_RESPONSE")
             try:
@@ -1051,17 +1069,21 @@ def _run(container: str, *, health: bool = False) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    health = len(arguments) == 2 and arguments[1] == "--health"
-    if health:
-        arguments.pop()
-    if len(arguments) != 1:
+    flags = arguments[1:]
+    if (
+        not arguments
+        or arguments[0].startswith("--")
+        or len(flags) != len(set(flags))
+        or not set(flags) <= {"--health", "--config-denial"}
+    ):
         print(
-            "usage: runtime_native_receipt_systemd_check OWNED_CONTAINER_ID [--health]",
+            "usage: runtime_native_receipt_systemd_check OWNED_CONTAINER_ID [--health] [--config-denial]",
             file=sys.stderr,
         )
         return 64
     try:
-        result = _run(arguments[0], health=True) if health else _run(arguments[0])
+        options = {flag[2:].replace("-", "_"): True for flag in flags}
+        result = _run(arguments[0], **options)
     except Exception as exc:  # noqa: BLE001 - never emit arbitrary fixture or credential diagnostics
         print(
             "native receipt fixture not confirmed: "

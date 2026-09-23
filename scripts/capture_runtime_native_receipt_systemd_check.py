@@ -343,6 +343,10 @@ def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, 
         materialize = profile.stage_runtime_native_health_profile
     files = _HEALTH_FILES if health else _FILES
     if config_denial:
+        # The signed identity includes imported repository dependencies. Load the
+        # replay helper before freezing that closure, not after the live run.
+        from scripts import runtime_native_config_denial_check as config_check
+
         files = files | _CONFIG_FILES
     file_count, source_count, dependency_count = (
         (66, 79, 21) if health else (60, 72, 15)
@@ -467,8 +471,6 @@ def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, 
                 "native fixture observation or proof ceiling changed",
             )
             if config_denial:
-                from scripts import runtime_native_config_denial_check as config_check
-
                 config_check.validate(observation["config_denial"], observation)
             if health:
                 health_observation = observation["health_response"]

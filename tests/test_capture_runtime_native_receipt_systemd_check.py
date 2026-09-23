@@ -3,6 +3,8 @@
 import json
 import os
 import stat
+import subprocess
+import sys
 import unittest
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
@@ -549,6 +551,50 @@ class NativeReceiptCaptureTests(unittest.TestCase):
                         + len(subject._HEALTH_FILES if health else subject._FILES)
                         + len(subject._CONFIG_FILES),
                     )
+
+    def test_cold_config_helper_loads_before_signed_source_identity(self):
+        program = """
+import sys
+from pathlib import Path
+from unittest.mock import patch
+root = Path(sys.argv[1])
+sys.path[:0] = [str(root / "src"), str(root)]
+from scripts import capture_runtime_native_receipt_systemd_check as subject
+helper = "scripts.runtime_native_config_denial_check"
+assert helper not in sys.modules, "test host must start without the config helper"
+class IdentityReached(Exception):
+    pass
+def freeze_identity():
+    assert helper in sys.modules, "config helper imported after source identity"
+    raise IdentityReached
+with (
+    patch.object(subject.existing.existing, "_source_identity", side_effect=freeze_identity) as identity,
+    patch.object(subject.existing, "_docker", side_effect=AssertionError("Docker must not run")) as docker,
+):
+    try:
+        subject._capture(config_denial=True)
+    except IdentityReached:
+        pass
+    else:
+        raise AssertionError("source identity boundary was not reached")
+    identity.assert_called_once_with()
+    docker.assert_not_called()
+"""
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-B",
+                "-c",
+                program,
+                str(Path(__file__).resolve().parents[1]),
+            ],
+            capture_output=True,
+            check=False,
+            timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(result.stdout, b"")
 
 
 if __name__ == "__main__":

@@ -658,6 +658,16 @@ and four native receipts. Native CLI discovery remains eligible before and after
 this is not observation of the gateway's live skill cache or a successful reload.
 This bounded successor check does not wire another frozen V3 admission case or
 change the 14/31 campaign count.
+The [retained configuration-denial composition](./benchmark/evidence/phase3-native-config-denial-systemd-development-v1-2026-09-22.json)
+from signed `7dad4d4` observes that denial followed by the existing healthy no-op,
+unhealthy suspension, and persistent restart refusal on the same native runtime.
+All six services were stopped and the owned container removed; source, runtime,
+and parent checks passed. Two earlier attempts were not retained as successes:
+one exposed a late-import source-inventory bug (now regression-tested), and one
+failed credential setup with a worker-cgroup process-limit refusal. The worker's
+inherited `TasksMax=2` remains unchanged. A successful fresh-VM run does not repair
+that intermittent startup issue; measuring credential-setup task demand and
+validating a separately pinned finite-budget successor remain open work.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

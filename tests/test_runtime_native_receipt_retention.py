@@ -10,6 +10,8 @@ from pathlib import Path
 from unittest.mock import mock_open, patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from scripts import openclaw_final_v3_parent_snapshot as parent_snapshot
+from scripts import runtime_native_config_denial_check as config_denial
 from scripts import runtime_native_health_systemd_check as health
 from scripts import runtime_native_receipt_systemd_check as subject
 from tests.test_materialize_runtime_native_tool_receipts import _modules
@@ -33,6 +35,12 @@ HEALTH_PIN = (
     "d1cb54601571d036ea591c240ae6688b4722e3c710fb16d6efd06044f1dba2fc",
 )
 HEALTH_SOURCE = "94d788a87d765d9eecfc63ca407b0771c4acef0c"
+CONFIG_ARTIFACT = "benchmark/evidence/phase3-native-config-denial-systemd-development-v1-2026-09-22.json"
+CONFIG_PIN = (
+    485205,
+    "a66d351fb9599dfbea04f1645bcfd54934b0c07d9baa09932cb74abb6b9f7a7a",
+)
+CONFIG_SOURCE = "7dad4d495eb665b06c198361dda71f413fdce72b"
 
 
 def _pin(raw, expected):
@@ -369,11 +377,36 @@ class NativeReceiptRetentionTests(unittest.TestCase):
         with patch.object(json, "loads") as parser, self.assertRaises(ValueError):
             _load(raw[:-1] + b" ", HEALTH_PIN)
         parser.assert_not_called()
-        d, eq = _load(raw, HEALTH_PIN), self.assertEqual
+        self._health_joins(_load(raw, HEALTH_PIN), HEALTH_SOURCE)
+
+    def test_retained_config_denial_joins_native_health_without_reload_authority(self):
+        d = _load(_read(CONFIG_ARTIFACT, CONFIG_PIN), CONFIG_PIN)
+        self._health_joins(d, CONFIG_SOURCE, with_config=True)
+        o = d["observation"]
+        config_denial.validate(o["config_denial"], o)
+        helper = "scripts/runtime_native_config_denial_check.py"
+        self.assertIn(helper, d["fixture_helpers"])
+        self.assertIn(helper, {item["path"] for item in d["source"]["files"]})
+        changed = copy.deepcopy(o["config_denial"])
+        changed["after"]["effects"]["target_digest"] = "sha256:" + "0" * 64
+        with self.assertRaises(config_denial.ConfigDenialError):
+            config_denial.validate(changed, o)
+        content = copy.deepcopy(d["parent_after"]["content"])
+        next(iter(content["contract_files"].values()))["stat_after"]["device"] += 1
+        with self.assertRaises(parent_snapshot.campaign.CampaignContractError):
+            parent_snapshot._validate_content(content, d["parent_identity"])
+
+    def _health_joins(self, d, source, *, with_config=False):
+        eq = self.assertEqual
         o = d["observation"]
         h, setup = o["health_response"], o["setup"]
         self._native_joins(o)
-        eq(d["schema"], "aragorn/runtime-native-health-systemd-capture/v1")
+        eq(
+            d["schema"],
+            "aragorn/runtime-native-config-denial-systemd-capture/v1"
+            if with_config
+            else "aragorn/runtime-native-health-systemd-capture/v1",
+        )
         eq(h["schema"], "aragorn/native-health-systemd-observation/v1")
         eq(d["authority"], self.document["authority"])
         eq(o["authority"], self.document["observation"]["authority"])
@@ -547,7 +580,7 @@ class NativeReceiptRetentionTests(unittest.TestCase):
         eq(hook["after"]["units"][health._PUBLISHER]["OnSuccessJobMode"], "fail")
         eq(hook["after"]["units"][health._PUBLISHER]["DropInPaths"], str(health._HOOK))
 
-        eq(d["source"]["commit"], HEALTH_SOURCE)
+        eq(d["source"]["commit"], source)
         eq(d["source"]["signature"]["status"], "GOOD_LOCAL_VERIFICATION")
         eq(d["build_observation"], self.document["build_observation"])
         stage = d["staged_profile"]
@@ -583,7 +616,7 @@ class NativeReceiptRetentionTests(unittest.TestCase):
                     "git",
                     "--no-replace-objects",
                     "show",
-                    HEALTH_SOURCE + ":" + record["path"],
+                    source + ":" + record["path"],
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -591,8 +624,21 @@ class NativeReceiptRetentionTests(unittest.TestCase):
                 timeout=10,
             ).stdout
             _pin(committed, _record_pin(record))
-        for key in ("content", "image_inspect", "volume_inspect", "parent"):
+        for key in ("image_inspect", "volume_inspect", "parent"):
             eq(d["parent_before"][key], d["parent_after"][key])
+        contents = []
+        for key in ("parent_before", "parent_after"):
+            content = d[key]["content"]
+            parent_snapshot._validate_content(content, d["parent_identity"])
+            # Separate overlay mounts may have different st_dev. Each snapshot
+            # must still hold its own exact before/after custody; all other
+            # metadata and bytes remain equal across the two captures.
+            projection = copy.deepcopy(content)
+            for record in projection["contract_files"].values():
+                for name in ("stat_before", "stat_after"):
+                    record[name].pop("device")
+            contents.append(projection)
+        eq(*contents)
         eq(d["parent_identity"], self.document["parent_identity"])
         eq(d["runtime_before"]["content"], d["runtime_after"]["content"])
         for snapshot in (d["runtime_before"], d["runtime_after"]):
@@ -620,6 +666,7 @@ class NativeReceiptRetentionTests(unittest.TestCase):
                 "/opt/aragorn/runtime-native-receipt-systemd-check.py",
                 container,
                 "--health",
+                *(["--config-denial"] if with_config else []),
             ],
         )
         eq(cleanup["removed_id"], container)
@@ -636,7 +683,7 @@ class NativeReceiptRetentionTests(unittest.TestCase):
             d["container_inspect"]["Config"]["Labels"],
             {
                 "dev.aragorn.snapshot-owner": cleanup["owner"],
-                "dev.aragorn.source-commit": HEALTH_SOURCE,
+                "dev.aragorn.source-commit": source,
             },
         )
         for key in ("container_name_absent", "removed_id_absent", "daemon_reachable"):

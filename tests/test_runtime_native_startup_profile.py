@@ -59,7 +59,9 @@ class NativeStartupProfileTests(unittest.TestCase):
             self.assertEqual(script.count(line), 1)
             script = script.replace(line, b"")
         self.assertEqual(
-            script.replace(stage._CHECK, b"").replace(
+            script.replace(stage._CHECK, b"")
+            .replace(stage._POST_CHECK, b"")
+            .replace(
                 stage.base.overlay._digest(after)[7:].encode(),
                 stage.base.overlay._digest(before)[7:].encode(),
             ),

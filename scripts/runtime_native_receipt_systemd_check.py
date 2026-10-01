@@ -107,7 +107,7 @@ _STARTUP_CODE = {
     ),
     "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh": (
         40211,
-        "9497c1d0a3d9df0d55307c9f2dec1cf98b195556e96d236f298e0ef7a23e7920",
+        "dd0e98b17de104eb0ce15a4fc086098ed8816e254b190423e481957aa3472d2a",
         0o755,
     ),
     "/usr/lib/aragorn/aragorn/runtime_health_watchdog.py": (

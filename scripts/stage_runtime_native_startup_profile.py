@@ -44,10 +44,9 @@ _WORKER = "packaging/systemd/aragorn-runtime-action-worker.service"
 _ACTIVATOR = health._ACTIVATOR
 _TASKS_MAX = 8
 _ANCHOR = b'require_unit_value "$worker_unit" PrivateNetwork yes\n'
-_CHECK = (
-    b'require_unit_value "$worker_unit" TasksMax 8\n'
-    b'require_unit_value "$worker_unit" EffectiveTasksMax 8\n'
-)
+_CHECK = b'require_unit_value "$worker_unit" TasksMax 8\n'
+_POST_ANCHOR = b'require_unit_value "$worker_unit" ActiveState active\n'
+_POST_CHECK = b'require_unit_value "$worker_unit" EffectiveTasksMax 8\n'
 
 
 class RuntimeNativeStartupStageError(ValueError):
@@ -83,9 +82,15 @@ def _verified_payloads():
     script = original[activator][2]
     old_digest = base.overlay._digest(before)[7:].encode()
     new_digest = base.overlay._digest(after)[7:].encode()
-    if script.count(old_digest) != 1 or script.count(_ANCHOR) != 1:
+    if (
+        script.count(old_digest) != 1
+        or script.count(_ANCHOR) != 1
+        or script.count(_POST_ANCHOR) != 1
+    ):
         raise RuntimeNativeStartupStageError("activator task budget anchors changed")
     rendered = script.replace(old_digest, new_digest).replace(_ANCHOR, _CHECK + _ANCHOR)
+    # EffectiveTasksMax reads the realized cgroup; it is not valid before start.
+    rendered = rendered.replace(_POST_ANCHOR, _POST_ANCHOR + _POST_CHECK)
     lines = "".join(
         f"{_destination(name)[1]:o} {pin[1][7:]} /{_destination(name)[0]}\n"
         for name, pin in sorted(_ADDED_PINS.items())

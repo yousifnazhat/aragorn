@@ -1144,6 +1144,20 @@ def _run(
                 if type(exc) is watchdog_check.WatchdogFixtureError:
                     raise _FixtureRefusal(str(exc)) from exc
                 raise
+            except Exception as exc:
+                # Source location only, never arbitrary exception text or locals.
+                location = "unknown"
+                trace = exc.__traceback__
+                while trace is not None:
+                    if (
+                        Path(trace.tb_frame.f_code.co_filename).name
+                        == "runtime_native_watchdog_check.py"
+                    ):
+                        location = "watchdog:" + str(trace.tb_lineno)
+                    trace = trace.tb_next
+                raise _FixtureRefusal(
+                    "watchdog helper " + type(exc).__name__ + " at " + location
+                ) from exc
             _expect(
                 sources_now() == sources, "watchdog response changed native sources"
             )

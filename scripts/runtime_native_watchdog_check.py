@@ -58,6 +58,38 @@ def _show(unit: str, properties: tuple[str, ...]) -> dict[str, str]:
         and state["Id"] == unit,
         "incomplete watchdog unit state",
     )
+    # systemctl may format *USec properties as durations; use typed D-Bus values
+    # for comparisons with the journal's integer microsecond timestamps.
+    for name in set(properties) & {
+        "LastTriggerUSecMonotonic",
+        "ExecMainStartTimestampMonotonic",
+        "ExecMainExitTimestampMonotonic",
+    }:
+        interface = "Timer" if unit == _TIMER else "Service"
+        object_path = "/org/freedesktop/systemd1/unit/" + unit.replace(
+            "-", "_2d"
+        ).replace(".", "_2e")
+        value = (
+            response._command(
+                [
+                    "/usr/bin/busctl",
+                    "get-property",
+                    "org.freedesktop.systemd1",
+                    object_path,
+                    "org.freedesktop.systemd1." + interface,
+                    name,
+                ],
+                timeout=3,
+            )
+            .decode("ascii")
+            .strip()
+        )
+        match = re.fullmatch(r"t ([0-9]{1,20})", value)
+        _expect(
+            match is not None and int(match[1]) < 2**64,
+            "watchdog monotonic timestamp is not a typed uint64",
+        )
+        state[name] = match[1]
     return state
 
 

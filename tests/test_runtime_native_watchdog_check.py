@@ -43,6 +43,21 @@ def _expiry():
 
 
 class NativeWatchdogFixtureTests(unittest.TestCase):
+    def test_timestamps_use_typed_microseconds_not_systemctl_duration_display(self):
+        raw = f"Id={subject._TIMER}\nLastTriggerUSecMonotonic=2.5s\n".encode()
+        with patch.object(
+            subject.response, "_command", side_effect=[raw, b"t 2500000\n"]
+        ):
+            result = subject._show(subject._TIMER, ("Id", "LastTriggerUSecMonotonic"))
+        self.assertEqual(result["LastTriggerUSecMonotonic"], "2500000")
+        with (
+            patch.object(
+                subject.response, "_command", side_effect=[raw, b"s 2500000\n"]
+            ),
+            self.assertRaises(subject.WatchdogFixtureError),
+        ):
+            subject._show(subject._TIMER, ("Id", "LastTriggerUSecMonotonic"))
+
     def test_guard_is_first_and_selectors_are_fixed(self):
         with (
             patch.object(

@@ -5,7 +5,6 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import materialize_native_plugin_package_fixture as fixture
@@ -73,6 +72,8 @@ class NativePluginPackageFixtureTests(unittest.TestCase):
                 "state_invariants": {"catalog": True},
             },
         }
+        base = adapter._base()
+        base.run_observation = lambda: action
         with (
             patch.object(adapter.sys, "platform", "linux"),
             patch.object(adapter.os, "geteuid", return_value=992),
@@ -82,7 +83,7 @@ class NativePluginPackageFixtureTests(unittest.TestCase):
             patch.object(
                 adapter,
                 "_base",
-                return_value=SimpleNamespace(run_observation=lambda: action),
+                return_value=base,
             ),
         ):
             observed = adapter.observe()

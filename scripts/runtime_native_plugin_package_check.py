@@ -22,14 +22,61 @@ _PLUGIN = "aragorn-plugin-skill-replacement-fixture"
 _SCHEMA = "aragorn/runtime-native-plugin-package-observation/v1"
 _AUTHORITY = "OWNED_INERT_PLUGIN_PACKAGE_DENIAL_NOT_ADMISSION_OR_RUN_QUALIFICATION"
 _PHASE = "PRECHECK"
+_DIAGNOSTIC_SCHEMA = "aragorn/native-plugin-package-denial-diagnostic/v1"
+_DIAGNOSTIC_REASONS = {
+    "IDENTITY": {"GATEWAY_IDENTITY_REFUSED"},
+    "HELPER": {"HELPER_REFUSED"},
+    "PREREQUISITES": {"OBSERVATION_FAILED", "PREREQUISITE_MISSING"},
+    "DENIAL": {"POLICY_DENIAL_NOT_ESTABLISHED"},
+    "BOUNDARY": {"DECLARED_SKILL_CHANGED"},
+    "INVARIANTS": {"PROTECTED_STATE_CHANGED"},
+    "INTERNAL": {"INTERNAL_ERROR"},
+}
+_DIAGNOSTIC_CHECKS = {
+    "version_match",
+    "config_match",
+    "config_custody",
+    "config_mount",
+    "config_lock_absent",
+    "install_policy_match",
+    "plugin_policy",
+    "discovery_roots",
+    "state_store",
+    "baseline_source",
+    "candidate_source",
+    "target_baseline",
+    "target_not_candidate",
+    "target_metadata",
+    "target_writable",
+    "input_mount",
+    "policy_command",
+    "entrypoint_match",
+    "gateway_identity",
+    "system_info_pid",
+    "skills_status",
+    "plugin_disabled",
+    "policy_denial",
+    "state_unchanged",
+    "commands_clean",
+}
+_DIAGNOSTIC_EXITS = {
+    "version",
+    "system_info_before",
+    "skills_before",
+    "plugin_before",
+    "force",
+    "plugin_after",
+    "skills_after",
+    "system_info_after",
+}
 _BUNDLE = {
     "adapter/protected-plugin-force-reinstall-v3-probe.py": (
         30362,
         "sha256:58ba8c44ef474588dd48c8afaca01681c26d8a0b45c153994463c87e719f115a",
     ),
     "adapter/" + _PROBE: (
-        8604,
-        "sha256:7fbfa06cd524e736b0d536537b752a275d2d739235274d42a6d42d477ede750f",
+        17008,
+        "sha256:7dee1ce9f0fd591a1c3ab03e31a8baf7f87dca27092166dbaeaf81085f0d320e",
     ),
     "baseline-source/SKILL.md": (
         154,
@@ -319,6 +366,48 @@ def _deny_constant(value: str) -> None:
     raise ValueError("nonfinite JSON number")
 
 
+def _decode_diagnostic(raw: bytes, token: str) -> dict:
+    _expect(
+        len(raw) <= 4096 and token.encode("ascii") not in raw,
+        "adapter diagnostic unsafe",
+    )
+    try:
+        value = json.loads(
+            raw, object_pairs_hook=_unique_pairs, parse_constant=_deny_constant
+        )
+    except (ValueError, UnicodeError) as exc:
+        raise PluginFixtureError("adapter diagnostic malformed") from exc
+    _expect(
+        type(value) is dict
+        and set(value) == {"schema", "phase", "reason", "checks", "exit_codes"}
+        and value["schema"] == _DIAGNOSTIC_SCHEMA
+        and type(value["phase"]) is str
+        and value["phase"] in _DIAGNOSTIC_REASONS
+        and type(value["reason"]) is str
+        and value["reason"] in _DIAGNOSTIC_REASONS[value["phase"]]
+        and type(value["checks"]) is dict
+        and set(value["checks"]) == _DIAGNOSTIC_CHECKS
+        and all(type(item) is bool for item in value["checks"].values())
+        and type(value["exit_codes"]) is dict
+        and set(value["exit_codes"]) == _DIAGNOSTIC_EXITS
+        and all(
+            item is None or (type(item) is int and -255 <= item <= 255)
+            for item in value["exit_codes"].values()
+        )
+        and raw
+        == json.dumps(
+            value,
+            sort_keys=True,
+            ensure_ascii=True,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("ascii")
+        + b"\n",
+        "adapter diagnostic schema refused",
+    )
+    return value
+
+
 def _invoke(p37b, gateway_pid: int, token: str) -> dict:
     _expect(
         type(gateway_pid) is int
@@ -367,6 +456,13 @@ def _invoke(p37b, gateway_pid: int, token: str) -> dict:
         capture_output=True,
         timeout=120,
     )
+    if result.returncode == 126 and not result.stderr:
+        diagnostic = _decode_diagnostic(result.stdout, token)
+        failure = PluginFixtureError(
+            "adapter " + diagnostic["phase"] + "/" + diagnostic["reason"]
+        )
+        failure.add_note(json.dumps(diagnostic, sort_keys=True, separators=(",", ":")))
+        raise failure
     _expect(
         result.returncode == 0
         and len(result.stdout) <= 2 * 1024 * 1024

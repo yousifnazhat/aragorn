@@ -1450,6 +1450,15 @@ Its owned container was removed, with all 78 pre-existing containers non-running
 The corrected path stages the exact new bundle separately and bind-mounts it
 readonly over `/route-input`; it never deletes inherited inputs, and verifies
 their metadata inventory is restored after unmounting.
+The second attempt from `b270489` reached the native adapter but refused its
+prerequisites; its owned container was also removed. The retained native build
+records exactly `OpenClaw 2026.7.1\n`, whereas the predecessor helper requires a
+commit suffix in that display string. The new adapter now rebinds only that
+single exact-version predicate, records its derived-definition digest and build
+record binding, and preserves the independent source, entrypoint and
+configuration checks. It never rewrites the captured CLI output. Bounded failure
+diagnostics contain only fixed reason codes, prerequisite booleans and exit codes;
+they do not forward native output or credentials.
 
 Startup-reserve captures now inspect PID-controller delegation before activation
 and retain bounded hierarchy diagnostics if worker controller files later vanish.

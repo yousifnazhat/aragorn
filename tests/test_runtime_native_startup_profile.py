@@ -114,7 +114,6 @@ class NativeStartupProfileTests(unittest.TestCase):
         state = {
             "Id": checker.setup_prior._WORKER,
             "TasksMax": "8",
-            "EffectiveTasksMax": "8",
             "ControlGroup": cgroup,
         }
         with tempfile.TemporaryDirectory() as temporary:
@@ -157,7 +156,7 @@ class NativeStartupProfileTests(unittest.TestCase):
                     with self.assertRaises(checker._FixtureRefusal):
                         checker._startup_budget()
                     path.write_text(before)
-                state["EffectiveTasksMax"] = "7"
+                (leaf.parent / "pids.max").write_text("7\n")
                 with self.assertRaises(checker._FixtureRefusal):
                     checker._startup_budget()
 

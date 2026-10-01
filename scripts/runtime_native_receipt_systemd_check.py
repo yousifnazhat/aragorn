@@ -106,8 +106,8 @@ _STARTUP_CODE = {
         0o644,
     ),
     "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh": (
-        40211,
-        "dd0e98b17de104eb0ce15a4fc086098ed8816e254b190423e481957aa3472d2a",
+        41003,
+        "14ffb65763714aea3ee7f5c3e2acb476888d4c71020cd6e86c32ed8740cb349b",
         0o755,
     ),
     "/usr/lib/aragorn/aragorn/runtime_health_watchdog.py": (
@@ -279,12 +279,10 @@ def _startup() -> dict:
 
 def _startup_budget() -> dict:
     """Bind the finite effective limit to kernel counters, including ancestors."""
-    state = response._show_unit(
-        setup_prior._WORKER, ("Id", "TasksMax", "EffectiveTasksMax", "ControlGroup")
-    )
+    state = response._show_unit(setup_prior._WORKER, ("Id", "TasksMax", "ControlGroup"))
     cgroup = state["ControlGroup"]
     _expect(
-        state["TasksMax"] == state["EffectiveTasksMax"] == "8"
+        state["TasksMax"] == "8"
         and re.fullmatch(
             r"/docker/[0-9a-f]{64}/system\.slice/aragorn-runtime-action-worker\.service",
             cgroup,
@@ -317,6 +315,13 @@ def _startup_budget() -> dict:
         and 1 <= int(leaf["pids.current"]) <= 8
         and leaf["pids.events"] == "max 0",
         "native worker exhausted its finite task budget",
+    )
+    _expect(
+        all(
+            row["pids.max"] == "max" or int(row["pids.max"]) >= 8
+            for row in counters.values()
+        ),
+        "ancestor task budget is smaller than the worker budget",
     )
     return {"effective_unit": state, "cgroup_counters": counters}
 

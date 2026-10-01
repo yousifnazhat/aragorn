@@ -46,7 +46,29 @@ _TASKS_MAX = 8
 _ANCHOR = b'require_unit_value "$worker_unit" PrivateNetwork yes\n'
 _CHECK = b'require_unit_value "$worker_unit" TasksMax 8\n'
 _POST_ANCHOR = b'require_unit_value "$worker_unit" ActiveState active\n'
-_POST_CHECK = b'require_unit_value "$worker_unit" EffectiveTasksMax 8\n'
+_POST_CHECK = b"""if ! /usr/bin/python3.12 -I -S -B - "$(unit_property "$worker_unit" ControlGroup)" <<'PY'
+import re
+import sys
+from pathlib import Path
+group = Path(sys.argv[1])
+if (not group.is_absolute() or str(group) != sys.argv[1] or ".." in group.parts
+    or group.name != "aragorn-runtime-action-worker.service"):
+    raise SystemExit("worker cgroup identity is invalid")
+root = Path("/sys/fs/cgroup")
+leaf = current = root / str(group)[1:]
+while current != root:
+    with (current / "pids.max").open("rb") as stream:
+        raw = stream.read(65)
+    if (current == leaf and raw != b"8\\n") or (
+        raw != b"max\\n" and (re.fullmatch(rb"[0-9]{1,20}\\n", raw) is None or int(raw) < 8)
+    ):
+        raise SystemExit("worker kernel task limit is unsafe")
+    current = current.parent
+PY
+then
+    fail_activation "worker kernel task budget is unsafe"
+fi
+"""
 
 
 class RuntimeNativeStartupStageError(ValueError):
@@ -89,7 +111,7 @@ def _verified_payloads():
     ):
         raise RuntimeNativeStartupStageError("activator task budget anchors changed")
     rendered = script.replace(old_digest, new_digest).replace(_ANCHOR, _CHECK + _ANCHOR)
-    # EffectiveTasksMax reads the realized cgroup; it is not valid before start.
+    # Read the realized kernel limit; systemd 252 has no EffectiveTasksMax property.
     rendered = rendered.replace(_POST_ANCHOR, _POST_ANCHOR + _POST_CHECK)
     lines = "".join(
         f"{_destination(name)[1]:o} {pin[1][7:]} /{_destination(name)[0]}\n"

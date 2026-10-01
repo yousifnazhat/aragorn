@@ -149,6 +149,7 @@ def _phase(value: str) -> None:
         in {
             "PRECHECK",
             "SOURCES",
+            "CGROUP_PREREQUISITES",
             "FRESH_INPUTS",
             "PROVISION",
             "ACTIVATION",
@@ -324,6 +325,22 @@ def _startup_budget() -> dict:
         "ancestor task budget is smaller than the worker budget",
     )
     return {"effective_unit": state, "cgroup_counters": counters}
+
+
+def _checked_startup_budget(container: str, prerequisite: Any) -> dict:
+    try:
+        return _startup_budget()
+    except OSError as exc:
+        failure = _FixtureRefusal(
+            "native worker task-controller interfaces unavailable"
+        )
+        try:
+            prior._note(
+                failure, [prerequisite.observe(container, after_activation=True)]
+            )
+        except Exception:  # noqa: BLE001 - fixed diagnostic failure must not hide refusal
+            failure.add_note("cgroup prerequisite diagnostics unavailable")
+        raise failure from exc
 
 
 def _fixture_token(p37b: Any) -> str:
@@ -995,6 +1012,9 @@ def _run(
     _expect(type(watchdog) is bool, "watchdog fixture selection must be boolean")
     _expect(not watchdog or startup_reserve, "watchdog requires startup reserve")
     watchdog_check = None
+    cgroup_check = None
+    if startup_reserve:
+        import runtime_native_cgroup_prerequisite as cgroup_check
     if watchdog:
         import runtime_native_watchdog_check as watchdog_check
     health_check = None
@@ -1012,9 +1032,22 @@ def _run(
 
     sources = sources_now()
     try:
+        prerequisites = None
+        if cgroup_check is not None:
+            _phase("CGROUP_PREREQUISITES")
+            prerequisites = cgroup_check.observe(container)
+            if prerequisites["status"] != "READY":
+                failure = _FixtureRefusal(
+                    "host PID controller is not delegated to the owned fixture"
+                )
+                prior._note(failure, [prerequisites])
+                raise failure
         setup = _prepare()
         if startup_reserve:
-            setup["startup_task_budget"] = _startup_budget()
+            setup["cgroup_prerequisites"] = prerequisites
+            setup["startup_task_budget"] = _checked_startup_budget(
+                container, cgroup_check
+            )
         import runtime_action_worker_openclaw_systemd_probe as p37b
 
         processes, boot = prior._processes(container), prior._boot()
@@ -1117,7 +1150,9 @@ def _run(
             ],
         }
         if startup_reserve:
-            observation["startup_task_budget_after_actions"] = _startup_budget()
+            observation["startup_task_budget_after_actions"] = _checked_startup_budget(
+                container, cgroup_check
+            )
         if config_denial:
             import runtime_native_config_denial_check as config_check
 

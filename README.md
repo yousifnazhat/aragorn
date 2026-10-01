@@ -1402,6 +1402,59 @@ whole-schema sweeps are not on this completion path. Use focused acceptance for
 changed behavior and the required final campaign. All admission, `RUN-01`, `RUN-02`, Phase 3, EDR,
 installer, and release eligibility remains false.
 
+### Completion implementation (2026-10-01)
+
+The shared-deployment and qualification path now has executable library APIs:
+
+- [`phase3_deployment.py`](./src/aragorn/phase3_deployment.py) binds all seven
+  required deployment dimensions to resolved content-addressed identity
+  artifacts. It does not equate the old V3 runtime with the native successor or
+  attest a live environment by itself.
+- [`phase3_measurement_collector.py`](./src/aragorn/phase3_measurement_collector.py)
+  commits the 100-attempt/100-pair schedule before execution, records Linux
+  `CLOCK_BOOTTIME` boundaries, retains bounded raw receipts, requires separate
+  source-pinned execution and verification modules, checks deployment identity
+  between samples, and recomputes metrics. It has no arbitrary command runner,
+  automatic retries, or synthetic fallback measurements. Concrete trusted
+  runtime adapters and independent semantic qualification are still required.
+- [`phase3_measurement_replay.py`](./src/aragorn/phase3_measurement_replay.py)
+  independently reconstructs the metrics document from retained requests,
+  receipts and the committed schedule using a caller-selected read-only semantic
+  verifier. It does not execute the measured tasks again or trust retained
+  arithmetic/semantic verdicts. Replay still depends on the correctness of the
+  reviewed runtime-specific verifier; source-file hashes alone do not prove it.
+- [`phase3_exit_qualification.py`](./src/aragorn/phase3_exit_qualification.py)
+  composes 31 admission cases, 15 RUN properties/event classes/responses, the
+  external-broker/out-of-process-sensor boundary, and independently verified
+  measurement semantics. It checks the fixed manifest and exact deployment,
+  campaign and schedule joins before recomputing thresholds. Missing verifier or
+  evidence entries cannot become `PASS`; a mandatory `FAIL` or `NOT_TESTED`
+  keeps the result ineligible. There is no default verifier that trusts recorded
+  verdicts. Verifiers receive a read-only CAS view for resolving related evidence.
+  The complete production semantic-verifier registry is not yet wired.
+
+An inert plugin-package skill replacement adapter and ten-file readonly fixture
+bundle are implemented separately from the frozen V3 dispatcher. They exercise
+ordinary package installation with distinct baseline/candidate `SKILL.md` files
+and require explicit policy denial with unchanged protected state. New owned
+captures use the native successor, not another replay of the old force-reinstall
+case. The [standalone native capture](./scripts/capture_runtime_native_plugin_package_check.py)
+performs only this new route, with a readonly input mount, a fresh dormant
+baseline, explicit namespace/UID separation, unchanged empty native receipts and
+broker effects, and owned-fixture cleanup; it does not run read/create, watchdog,
+or configuration-denial scenarios. This does not qualify the remaining reload routes or increase the frozen
+dispatcher's 14/31 count by itself.
+
+Startup-reserve captures now inspect PID-controller delegation before activation
+and retain bounded hierarchy diagnostics if worker controller files later vanish.
+The preflight never enables controllers, changes limits, or retries. The earlier
+intermittent missing `pids.max` cause remains unconfirmed; a preflight is not proof
+that the underlying environment has been repaired.
+
+Only first-run focused checks of these new components are part of this slice;
+historical captures, the full regression suite, and whole-schema sweeps are not
+rerun. No final 31-case/100-attempt/100-pair qualification result exists yet.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

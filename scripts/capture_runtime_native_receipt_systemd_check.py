@@ -16,6 +16,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
 
 from scripts import capture_runtime_quarantine_systemd_check as previous
+from scripts import runtime_native_cgroup_prerequisite as cgroup_prerequisite
 from scripts import stage_runtime_native_receipt_profile as stage
 
 existing = previous.existing
@@ -54,6 +55,9 @@ _CONFIG_FILES = {
 }
 _WATCHDOG_FILES = {
     "scripts/runtime_native_watchdog_check.py": "/opt/aragorn/runtime_native_watchdog_check.py",
+}
+_STARTUP_FILES = {
+    cgroup_prerequisite._SOURCE: "/opt/aragorn/runtime_native_cgroup_prerequisite.py",
 }
 _DIRECTORY_HANDOFF = r"""
 directories=json.loads(sys.argv[3])
@@ -359,6 +363,8 @@ def _capture(
 
         materialize = profile.stage_runtime_native_startup_profile
     files = _HEALTH_FILES if health else _FILES
+    if startup_reserve:
+        files = files | _STARTUP_FILES
     if watchdog:
         files = files | _WATCHDOG_FILES
     if config_denial:

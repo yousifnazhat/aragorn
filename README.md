@@ -1444,6 +1444,12 @@ baseline, explicit namespace/UID separation, unchanged empty native receipts and
 broker effects, and owned-fixture cleanup; it does not run read/create, watchdog,
 or configuration-denial scenarios. This does not qualify the remaining reload routes or increase the frozen
 dispatcher's 14/31 count by itself.
+The first live attempt from `93fef32` refused before activation because copying
+into `/route-input` merged the new bundle with inherited force-reinstall inputs.
+Its owned container was removed, with all 78 pre-existing containers non-running.
+The corrected path stages the exact new bundle separately and bind-mounts it
+readonly over `/route-input`; it never deletes inherited inputs, and verifies
+their metadata inventory is restored after unmounting.
 
 Startup-reserve captures now inspect PID-controller delegation before activation
 and retain bounded hierarchy diagnostics if worker controller files later vanish.

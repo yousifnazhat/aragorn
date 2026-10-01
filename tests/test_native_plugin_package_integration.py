@@ -82,12 +82,24 @@ class NativePluginPackageIntegrationTests(unittest.TestCase):
             if "remount,bind,ro,nosuid,nodev,noexec" in argv:
                 raise guest.PluginFixtureError("fixed input mount operation failed")
 
-        with (
-            patch.object(guest, "_mount_record", return_value=None),
-            patch.object(guest, "_mount_command", side_effect=command),
-            self.assertRaises(guest.PluginFixtureError),
-        ):
-            guest._mount_input()
+        with tempfile.TemporaryDirectory() as temporary:
+            staged = Path(temporary).resolve() / "native-plugin-package-input"
+            staged.mkdir()
+            inherited = {"old-fixture": [1, 2, 3]}
+            with (
+                patch.object(guest, "_STAGED", staged),
+                patch.object(
+                    guest, "_underlying_input", return_value=inherited
+                ) as underlying,
+                patch.object(guest, "_mount_record", return_value=None),
+                patch.object(guest, "_mount_command", side_effect=command),
+                self.assertRaises(guest.PluginFixtureError),
+            ):
+                guest._mount_input()
+            self.assertEqual(underlying.call_count, 2)
+            self.assertEqual(
+                calls[0], ["/usr/bin/mount", "--bind", str(staged), "/route-input"]
+            )
         self.assertEqual(calls[-1], ["/usr/bin/umount", "/route-input"])
 
     def test_only_plugin_scenario_and_seed_before_activation(self):
@@ -136,8 +148,11 @@ class NativePluginPackageIntegrationTests(unittest.TestCase):
             patch.object(
                 guest,
                 "_mount_input",
-                side_effect=lambda: events.append("mount") or mount,
+                side_effect=lambda: (
+                    events.append("mount") or {"mounted": mount, "inherited_input": {}}
+                ),
             ),
+            patch.object(guest, "_underlying_input", return_value={}),
             patch.object(guest, "_mount_record", side_effect=[mount, None]),
             patch.object(
                 guest, "_mount_command", side_effect=lambda _: events.append("unmount")

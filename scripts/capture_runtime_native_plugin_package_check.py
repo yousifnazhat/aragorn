@@ -169,7 +169,7 @@ def _capture() -> dict:
             for item in manifest["files"]
         }
         _expect(len(payloads) == 70, "native destinations are not unique")
-        inputs = work / "route-input"
+        inputs = work / guest._STAGED.name
         inputs.mkdir(mode=0o755)
         bundle_manifest = fixture.materialize(
             inputs / "plugin-package-skill-replacement"
@@ -195,7 +195,7 @@ def _capture() -> dict:
             native.stage.base._audit_tree(output, original | replacements)
             for path, target in _FILES.items():
                 existing._docker("cp", str(_ROOT / path), container + ":" + target)
-            existing._docker("cp", str(inputs), container + ":/")
+            existing._docker("cp", str(inputs), container + ":/opt/aragorn/")
             _audit_bundle(inputs, bundle_manifest)
             existing._docker("start", container)
             existing._docker(
@@ -234,6 +234,8 @@ def _capture() -> dict:
                 and observation["fixture_container"] == container
                 and observation["status"] == "OBSERVED"
                 and observation["input_mount_removed"] is True
+                and observation["inherited_input_restored"] is True
+                and observation["input_mount_source"] == str(guest._STAGED)
                 and all(
                     observation[key] is False
                     for key in (

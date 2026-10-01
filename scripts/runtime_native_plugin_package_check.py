@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 _ROOT = Path("/route-input")
+_STAGED = Path("/opt/aragorn/native-plugin-package-input")
 _INPUT = _ROOT / "plugin-package-skill-replacement"
 _PROBE = "protected-plugin-package-skill-replacement-probe.py"
 _ROUTE = "ADM-02/update/plugin-package-skill-replacement"
@@ -93,17 +94,25 @@ def _identity(value: os.stat_result) -> tuple:
     return tuple(getattr(value, key) for key in _FIELDS)
 
 
-def _bundle(*, copied_owner: tuple[int, int] | None = None) -> dict:
+def _bundle(
+    *, copied_owner: tuple[int, int] | None = None, staged: bool = False
+) -> dict:
     """Verify fixed bytes/inventory and optionally hand copied custody to root."""
+    _expect(type(staged) is bool, "invalid input location selection")
+    root = _STAGED if staged else _ROOT
+    package = root / "plugin-package-skill-replacement"
     directories = {
-        _ROOT,
-        _INPUT,
-        *(_INPUT / name for name in ("adapter", "baseline-source", "candidate-source")),
+        root,
+        package,
+        *(
+            package / name
+            for name in ("adapter", "baseline-source", "candidate-source")
+        ),
     }
-    paths = {_INPUT / name for name in _BUNDLE}
-    _expect(_ROOT.resolve(strict=True) == _ROOT, "input root is not canonical")
+    paths = {package / name for name in _BUNDLE}
+    _expect(root.resolve(strict=True) == root, "input root is not canonical")
     _expect(
-        set(_ROOT.rglob("*")) == (directories - {_ROOT}) | paths,
+        set(root.rglob("*")) == (directories - {root}) | paths,
         "input inventory changed",
     )
     records = {}
@@ -138,7 +147,7 @@ def _bundle(*, copied_owner: tuple[int, int] | None = None) -> dict:
                 "input changed before custody check",
             )
             if not directory:
-                expected = _BUNDLE[str(path.relative_to(_INPUT))]
+                expected = _BUNDLE[str(path.relative_to(package))]
                 raw = os.read(fd, expected[0] + 1)
                 _expect((len(raw), _digest(raw)) == expected, "input bytes changed")
             if copied_owner is not None:
@@ -199,9 +208,28 @@ def _mount_command(arguments: list[str]) -> None:
     )
 
 
+def _underlying_input() -> dict:
+    """Metadata only; never open, modify, or remove inherited fixture inputs."""
+    _expect(_ROOT.resolve(strict=True) == _ROOT, "input mount target not canonical")
+    root = _ROOT.lstat()
+    _expect(
+        stat.S_ISDIR(root.st_mode)
+        and (root.st_uid, root.st_gid) == (0, 0)
+        and not stat.S_IMODE(root.st_mode) & 0o022,
+        "inherited input root custody changed",
+    )
+    result = {".": list(_identity(root))}
+    for path in _ROOT.rglob("*"):
+        _expect(len(result) < 256, "inherited input inventory exceeds bound")
+        result[str(path.relative_to(_ROOT))] = list(_identity(path.lstat()))
+    return result
+
+
 def _mount_input() -> dict:
     _expect(_mount_record() is None, "input mount was not fresh")
-    _mount_command(["/usr/bin/mount", "--bind", str(_ROOT), str(_ROOT)])
+    inherited = _underlying_input()
+    source_identity = _identity(_STAGED.lstat())
+    _mount_command(["/usr/bin/mount", "--bind", str(_STAGED), str(_ROOT)])
     try:
         _mount_command(
             ["/usr/bin/mount", "-o", "remount,bind,ro,nosuid,nodev,noexec", str(_ROOT)]
@@ -209,12 +237,16 @@ def _mount_input() -> dict:
         result = _mount_record()
         _expect(
             result is not None
-            and {"ro", "nosuid", "nodev", "noexec"} <= set(result["options"]),
+            and {"ro", "nosuid", "nodev", "noexec"} <= set(result["options"])
+            and _identity(_ROOT.lstat()) == source_identity,
             "input readonly mount not established",
         )
-        return result
+        return {"mounted": result, "inherited_input": inherited}
     except BaseException:
         _mount_command(["/usr/bin/umount", str(_ROOT)])
+        _expect(
+            _underlying_input() == inherited, "inherited input restoration unconfirmed"
+        )
         raise
 
 
@@ -423,8 +455,9 @@ def _run(container: str, copied_owner: tuple[int, int]) -> dict:
             )
             raise failure
         _PHASE = "INPUT_CUSTODY"
-        _bundle(copied_owner=copied_owner)
-        mount = _mount_input()
+        staged_bundle = _bundle(copied_owner=copied_owner, staged=True)
+        overlay = _mount_input()
+        mount = overlay["mounted"]
         mounted = True
         bundle = _bundle()
         baseline = None
@@ -462,6 +495,7 @@ def _run(container: str, copied_owner: tuple[int, int]) -> dict:
             and native._sources(health=True, startup_reserve=True) == sources
             and native.setup_prior._installed(setup["skill_digest"]) == installed
             and _bundle() == bundle
+            and _bundle(staged=True) == staged_bundle
             and _mount_record() == mount,
             "native identity or protected state changed during plugin denial",
         )
@@ -482,6 +516,7 @@ def _run(container: str, copied_owner: tuple[int, int]) -> dict:
             "boot_id": boot,
             "input_bundle": bundle,
             "input_mount": mount,
+            "input_mount_source": str(_STAGED),
             "baseline": baseline,
             "plugin_package": invocation,
             "empty_receipt_store_after": receipts,
@@ -499,9 +534,20 @@ def _run(container: str, copied_owner: tuple[int, int]) -> dict:
             if mounted:
                 _mount_command(["/usr/bin/umount", str(_ROOT)])
                 _expect(_mount_record() is None, "input mount cleanup unconfirmed")
+                inherited_after = _underlying_input()
+                _expect(
+                    inherited_after == overlay["inherited_input"],
+                    "inherited input restoration unconfirmed",
+                )
         _PHASE = previous_phase
     observation["fixture_stack_cleanup"] = cleanup
     observation["input_mount_removed"] = True
+    observation["inherited_input_restored"] = True
+    observation["inherited_input_restoration"] = {
+        "authority": "BOUNDED_METADATA_AND_INVENTORY_ONLY_NOT_CONTENT_HASHES",
+        "before": overlay["inherited_input"],
+        "after": inherited_after,
+    }
     return observation
 
 

@@ -52,6 +52,9 @@ _HEALTH_FILES = {
 _CONFIG_FILES = {
     "scripts/runtime_native_config_denial_check.py": "/opt/aragorn/runtime_native_config_denial_check.py",
 }
+_WATCHDOG_FILES = {
+    "scripts/runtime_native_watchdog_check.py": "/opt/aragorn/runtime_native_watchdog_check.py",
+}
 _DIRECTORY_HANDOFF = r"""
 directories=json.loads(sys.argv[3])
 copied_owner=json.loads(sys.argv[4])
@@ -333,15 +336,31 @@ def _verify_fixture(
     )
 
 
-def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, Any]:
+def _capture(
+    *,
+    health: bool = False,
+    config_denial: bool = False,
+    startup_reserve: bool = False,
+    watchdog: bool = False,
+) -> dict[str, Any]:
     _expect(type(health) is bool, "health fixture selection must be boolean")
     _expect(type(config_denial) is bool, "config fixture selection must be boolean")
+    _expect(type(startup_reserve) is bool, "startup fixture selection must be boolean")
+    _expect(not startup_reserve or health, "startup reserve requires health")
+    _expect(type(watchdog) is bool, "watchdog fixture selection must be boolean")
+    _expect(not watchdog or startup_reserve, "watchdog requires startup reserve")
     profile, materialize = stage, stage.stage_runtime_native_receipt_profile
     if health:
         from scripts import stage_runtime_native_health_profile as profile
 
         materialize = profile.stage_runtime_native_health_profile
+    if startup_reserve:
+        from scripts import stage_runtime_native_startup_profile as profile
+
+        materialize = profile.stage_runtime_native_startup_profile
     files = _HEALTH_FILES if health else _FILES
+    if watchdog:
+        files = files | _WATCHDOG_FILES
     if config_denial:
         # The signed identity includes imported repository dependencies. Load the
         # replay helper before freezing that closure, not after the live run.
@@ -349,7 +368,7 @@ def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, 
 
         files = files | _CONFIG_FILES
     file_count, source_count, dependency_count = (
-        (66, 79, 21) if health else (60, 72, 15)
+        (70, 84, 25) if startup_reserve else (66, 79, 21) if health else (60, 72, 15)
     )
     source = existing.existing._source_identity()
     build = _build_binding(source["commit"])
@@ -457,6 +476,8 @@ def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, 
                 container,
                 *(["--health"] if health else []),
                 *(["--config-denial"] if config_denial else []),
+                *(["--startup-reserve"] if startup_reserve else []),
+                *(["--watchdog"] if watchdog else []),
             ]
             raw = previous._journal_check(argv)
             observation = acquisition._load_json(raw, "native fixture observation")
@@ -472,7 +493,26 @@ def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, 
             )
             if config_denial:
                 config_check.validate(observation["config_denial"], observation)
-            if health:
+            if watchdog:
+                watchdog_observation = observation["watchdog_response"]
+                _expect(
+                    watchdog_observation["schema"]
+                    == "aragorn/native-watchdog-systemd-observation/v1"
+                    and watchdog_observation["status"] == "OBSERVED"
+                    and watchdog_observation["fixture_container"] == container
+                    and watchdog_observation["authority"]
+                    == "OWNED_ACCEPTED_HEALTH_EXPIRY_RESPONSE_ONLY_NOT_SENSOR_HEARTBEAT_OR_RUN_QUALIFICATION"
+                    and all(
+                        watchdog_observation[key] is False
+                        for key in (
+                            "phase3_eligible",
+                            "run_conformance_eligible",
+                            "production_activation_eligible",
+                        )
+                    ),
+                    "native watchdog observation or proof ceiling changed",
+                )
+            elif health:
                 health_observation = observation["health_response"]
                 _expect(
                     health_observation["schema"]
@@ -512,7 +552,11 @@ def _capture(*, health: bool = False, config_denial: bool = False) -> dict[str, 
         existing.existing._source_identity() == source, "source changed during capture"
     )
     return {
-        "schema": "aragorn/runtime-native-config-denial-systemd-capture/v1"
+        "schema": "aragorn/runtime-native-watchdog-systemd-capture/v1"
+        if watchdog
+        else "aragorn/runtime-native-startup-systemd-capture/v1"
+        if startup_reserve
+        else "aragorn/runtime-native-config-denial-systemd-capture/v1"
         if config_denial
         else "aragorn/runtime-native-health-systemd-capture/v1"
         if health
@@ -551,10 +595,13 @@ def main(argv: list[str] | None = None) -> int:
         not arguments
         or arguments[-1].startswith("--")
         or len(flags) != len(set(flags))
-        or not set(flags) <= {"--health", "--config-denial"}
+        or not set(flags)
+        <= {"--health", "--config-denial", "--startup-reserve", "--watchdog"}
+        or ("--startup-reserve" in flags and "--health" not in flags)
+        or ("--watchdog" in flags and "--startup-reserve" not in flags)
     ):
         print(
-            "usage: capture_runtime_native_receipt_systemd_check [--health] [--config-denial] ABSENT_OUTPUT_JSON",
+            "usage: capture_runtime_native_receipt_systemd_check [--health [--startup-reserve [--watchdog]]] [--config-denial] ABSENT_OUTPUT_JSON",
             file=sys.stderr,
         )
         return 64

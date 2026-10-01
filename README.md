@@ -665,9 +665,22 @@ All six services were stopped and the owned container removed; source, runtime,
 and parent checks passed. Two earlier attempts were not retained as successes:
 one exposed a late-import source-inventory bug (now regression-tested), and one
 failed credential setup with a worker-cgroup process-limit refusal. The worker's
-inherited `TasksMax=2` remains unchanged. A successful fresh-VM run does not repair
-that intermittent startup issue; measuring credential-setup task demand and
-validating a separately pinned finite-budget successor remain open work.
+inherited `TasksMax=2` remains unchanged in that retained profile. A successful
+fresh-VM run does not repair that intermittent startup issue.
+The [startup/watchdog successor](./scripts/stage_runtime_native_startup_profile.py)
+preserves that frozen predecessor and stages a finite `TasksMax=8` worker, with
+activation checks for both configured and effective limits. Its owned capture
+also reads the worker and ancestor cgroup task counters. The same stage packages
+an opt-in one-second [accepted-health expiry watchdog](./src/aragorn/runtime_health_watchdog.py).
+Fresh accepted health is a no-op; expired or unhealthy accepted health triggers
+fixed gateway/worker suspension and persistent restart masks. Exact accepted
+epoch, runtime, policy, sensor, process and custody checks remain mandatory.
+Partial response or retention failure stays indeterminate until root repair;
+healthy timer ticks do not accumulate CAS records. This is wall-clock expiry
+handling, not sensor-heartbeat or hung-sensor detection. The timer is not enabled
+by staging. The owned capture selects this path explicitly with
+`--health --startup-reserve --watchdog`; no historical fixture is upgraded.
+This successor does not add admission cases or establish RUN/Phase 3 completion.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active
@@ -1354,16 +1367,24 @@ and [fresh plugin-force development observation](./benchmark/evidence/phase3-ope
 were captured and separately reverified through their respective backends, with
 unchanged parent snapshots, exact native evidence, CAS readback, and
 container/input-volume cleanup. Both remain `OBSERVED`, not campaign passes.
-The remaining work is implementation, not repeated DET-01 captures: complete the
-12 V3 ports, five adapters, and required RUN event/response coverage,
-then freeze one common deployment. Only after that freeze should the 31 admission
+The remaining work is implementation, not repeated DET-01 captures: use one
+shared successor deployment target for the 12 ports, five adapters, and required
+RUN event/response coverage, reusing the 14 existing semantic checks. The old V3
+campaign parent and the native receipt runtime have different runtime digests;
+finishing ports on the old parent and immediately rebinding them would duplicate
+work. Freeze the common deployment only after those implementations are complete.
+Only after that freeze should the 31 admission
 cases and real 100-attempt/100-pair measurements be captured and independently
 composed into the final exit gate. The current worker mediates file creation;
 that alone does not cover the manifest's seven event classes and six responses.
 A separate fail-closed metrics qualifier
 recomputes the 100-attempt attribution and latency rules plus 100
 caller-bound baseline/instrumented pairs. No complete campaign or metrics evidence
-set has been captured and composed, so all admission, `RUN-01`, `RUN-02`, Phase 3, EDR,
+set has been captured and composed. An exit composer also needs independently
+verified admission/RUN semantics; the arithmetic metrics leaf alone is not that
+authority. Broad regression runs, repeated historical observations and per-wave
+whole-schema sweeps are not on this completion path. Use focused acceptance for
+changed behavior and the required final campaign. All admission, `RUN-01`, `RUN-02`, Phase 3, EDR,
 installer, and release eligibility remains false.
 
 ## What works now

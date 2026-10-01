@@ -99,6 +99,38 @@ _EXTRA_CODE = {
         0o755,
     ),
 }
+_STARTUP_CODE = {
+    "/usr/lib/systemd/system/aragorn-runtime-action-worker.service": (
+        2946,
+        "4be030dbc98d9564b7c860482e0934c4a62cb6bdd5e0f22dedd7add3fa978bfc",
+        0o644,
+    ),
+    "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh": (
+        40211,
+        "9497c1d0a3d9df0d55307c9f2dec1cf98b195556e96d236f298e0ef7a23e7920",
+        0o755,
+    ),
+    "/usr/lib/aragorn/aragorn/runtime_health_watchdog.py": (
+        11136,
+        "cfa9c0a9f8cc52224f3b84fe4b8d1f4f8b8577d0317e8392778d02f271ea55e5",
+        0o644,
+    ),
+    "/usr/libexec/aragorn/aragorn-runtime-health-watchdog.py": (
+        347,
+        "632056e88d3b8ed3f09462a3c1fac5e97165bb36acadd1804731ef7bd382ecea",
+        0o755,
+    ),
+    "/usr/lib/systemd/system/aragorn-runtime-health-watchdog.service": (
+        1756,
+        "4a17aa69014b5ab14b4f2213bdef2f278f0a7acbc28878dec1e4df4a3bf1a852",
+        0o644,
+    ),
+    "/usr/lib/systemd/system/aragorn-runtime-health-watchdog.timer": (
+        245,
+        "aa70491ff496a1ab1788d47097f7a8d57a51704bcb29e2e09c3c478356ba23f0",
+        0o644,
+    ),
+}
 
 
 class _FixtureRefusal(RuntimeError):
@@ -138,12 +170,15 @@ def _phase(value: str) -> None:
     _PHASE = value
 
 
-def _sources(*, health: bool = False) -> dict:
+def _sources(*, health: bool = False, startup_reserve: bool = False) -> dict:
     code = prior._CODE | _EXTRA_CODE
     if health:
         import runtime_native_health_systemd_check as health_check
 
         code.update(health_check._CODE)
+    if startup_reserve:
+        _expect(health, "startup reserve requires the health successor")
+        code.update(_STARTUP_CODE)
     # Replace only the frozen helper's pin inventory for this bounded successor.
     with patch.object(prior, "_CODE", code):
         result = prior._sources()
@@ -240,6 +275,50 @@ def _startup() -> dict:
         "mandatory native startup check changed",
     )
     return {"worker": state, "load_credentials": result}
+
+
+def _startup_budget() -> dict:
+    """Bind the finite effective limit to kernel counters, including ancestors."""
+    state = response._show_unit(
+        setup_prior._WORKER, ("Id", "TasksMax", "EffectiveTasksMax", "ControlGroup")
+    )
+    cgroup = state["ControlGroup"]
+    _expect(
+        state["TasksMax"] == state["EffectiveTasksMax"] == "8"
+        and re.fullmatch(
+            r"/docker/[0-9a-f]{64}/system\.slice/aragorn-runtime-action-worker\.service",
+            cgroup,
+        )
+        is not None,
+        "native worker effective task budget changed",
+    )
+    current = Path("/sys/fs/cgroup" + cgroup)
+    boundary = Path("/sys/fs/cgroup")
+    counters = {}
+    while current != boundary:
+        row = {}
+        for name in ("pids.current", "pids.max", "pids.events"):
+            with (current / name).open("rb") as stream:
+                raw = stream.read(129)
+            _expect(
+                0 < len(raw) <= 128,
+                "native worker task counter is unbounded",
+            )
+            text = raw.decode("ascii").strip()
+            pattern = r"max [0-9]+" if name == "pids.events" else r"(?:max|[0-9]+)"
+            _expect(re.fullmatch(pattern, text) is not None, "invalid task counter")
+            row[name] = text
+        counters[str(current.relative_to(boundary))] = row
+        current = current.parent
+    leaf = counters[cgroup[1:]]
+    _expect(
+        leaf["pids.max"] == "8"
+        and leaf["pids.current"] != "max"
+        and 1 <= int(leaf["pids.current"]) <= 8
+        and leaf["pids.events"] == "max 0",
+        "native worker exhausted its finite task budget",
+    )
+    return {"effective_unit": state, "cgroup_counters": counters}
 
 
 def _fixture_token(p37b: Any) -> str:
@@ -896,9 +975,23 @@ def _journal_proof(
             )
 
 
-def _run(container: str, *, health: bool = False, config_denial: bool = False) -> dict:
+def _run(
+    container: str,
+    *,
+    health: bool = False,
+    config_denial: bool = False,
+    startup_reserve: bool = False,
+    watchdog: bool = False,
+) -> dict:
     _expect(type(health) is bool, "health fixture selection must be boolean")
     _expect(type(config_denial) is bool, "config fixture selection must be boolean")
+    _expect(type(startup_reserve) is bool, "startup fixture selection must be boolean")
+    _expect(not startup_reserve or health, "startup reserve requires health")
+    _expect(type(watchdog) is bool, "watchdog fixture selection must be boolean")
+    _expect(not watchdog or startup_reserve, "watchdog requires startup reserve")
+    watchdog_check = None
+    if watchdog:
+        import runtime_native_watchdog_check as watchdog_check
     health_check = None
     if health:
         import runtime_native_health_systemd_check as health_check
@@ -906,9 +999,17 @@ def _run(container: str, *, health: bool = False, config_denial: bool = False) -
     _phase("PRECHECK")
     setup_prior._require_fixture(container)
     _phase("SOURCES")
-    sources = _sources(health=True) if health else _sources()
+
+    def sources_now():
+        if startup_reserve:
+            return _sources(health=health, startup_reserve=True)
+        return _sources(health=True) if health else _sources()
+
+    sources = sources_now()
     try:
         setup = _prepare()
+        if startup_reserve:
+            setup["startup_task_budget"] = _startup_budget()
         import runtime_action_worker_openclaw_systemd_probe as p37b
 
         processes, boot = prior._processes(container), prior._boot()
@@ -976,7 +1077,7 @@ def _run(container: str, *, health: bool = False, config_denial: bool = False) -
         _expect(
             prior._processes(container) == processes
             and prior._boot() == boot
-            and (_sources(health=True) if health else _sources()) == sources
+            and sources_now() == sources
             and setup_prior._installed(setup["skill_digest"]) == installed
             and response.broker._file_identity(_READ_PATH.lstat()) == read_identity
             and response._read_regular(_READ_PATH, 0, {0o444}) == _READ_BYTES,
@@ -1010,6 +1111,8 @@ def _run(container: str, *, health: bool = False, config_denial: bool = False) -
                 "NO_HOSTILE_OWNER_ROLLBACK_LATENCY_EXTERNAL_COLLECTOR_HEALTH_OR_RUN_QUALIFICATION",
             ],
         }
+        if startup_reserve:
+            observation["startup_task_budget_after_actions"] = _startup_budget()
         if config_denial:
             import runtime_native_config_denial_check as config_check
 
@@ -1023,15 +1126,38 @@ def _run(container: str, *, health: bool = False, config_denial: bool = False) -
                     raise _FixtureRefusal(str(exc)) from exc
                 raise
             _expect(
-                (_sources(health=True) if health else _sources()) == sources,
+                sources_now() == sources,
                 "config denial changed native sources",
             )
-        if health_check is not None:
+        if watchdog_check is not None:
             _phase("HEALTH_RESPONSE")
             try:
-                observation["health_response"] = health_check.run_after_native(
+                observation["watchdog_response"] = watchdog_check.run_after_native(
                     container, observation, sys.modules[__name__]
                 )
+            except watchdog_check.WatchdogFixtureError as exc:
+                if type(exc) is watchdog_check.WatchdogFixtureError:
+                    raise _FixtureRefusal(str(exc)) from exc
+                raise
+            _expect(
+                sources_now() == sources, "watchdog response changed native sources"
+            )
+        elif health_check is not None:
+            _phase("HEALTH_RESPONSE")
+            try:
+                health_pins = dict(health_check._CODE)
+                if startup_reserve:
+                    health_pins.update(
+                        {
+                            key: pin
+                            for key, pin in _STARTUP_CODE.items()
+                            if key in health_pins
+                        }
+                    )
+                with patch.object(health_check, "_CODE", health_pins):
+                    observation["health_response"] = health_check.run_after_native(
+                        container, observation, sys.modules[__name__]
+                    )
             except health_check.HealthFixtureError as exc:
                 if type(exc) is health_check.HealthFixtureError:
                     raise _FixtureRefusal(str(exc)) from exc
@@ -1042,15 +1168,24 @@ def _run(container: str, *, health: bool = False, config_denial: bool = False) -
         _phase("CLEANUP")
         try:
             try:
-                extra_cleanup = (
-                    health_check.stop_extra_units()
-                    if health_check is not None
-                    else None
-                )
+                try:
+                    watchdog_cleanup = (
+                        watchdog_check.stop_extra_units()
+                        if watchdog_check is not None
+                        else None
+                    )
+                finally:
+                    extra_cleanup = (
+                        health_check.stop_extra_units()
+                        if health_check is not None
+                        else None
+                    )
             finally:
                 cleanup = prior._stop_fixture()
             if extra_cleanup is not None:
                 cleanup.update(extra_cleanup)
+            if watchdog_cleanup is not None:
+                cleanup.update(watchdog_cleanup)
         except Exception as cleanup_error:
             failure = _FixtureRefusal(
                 "cleanup failed after "
@@ -1074,10 +1209,13 @@ def main(argv: list[str] | None = None) -> int:
         not arguments
         or arguments[0].startswith("--")
         or len(flags) != len(set(flags))
-        or not set(flags) <= {"--health", "--config-denial"}
+        or not set(flags)
+        <= {"--health", "--config-denial", "--startup-reserve", "--watchdog"}
+        or ("--startup-reserve" in flags and "--health" not in flags)
+        or ("--watchdog" in flags and "--startup-reserve" not in flags)
     ):
         print(
-            "usage: runtime_native_receipt_systemd_check OWNED_CONTAINER_ID [--health] [--config-denial]",
+            "usage: runtime_native_receipt_systemd_check OWNED_CONTAINER_ID [--health [--startup-reserve [--watchdog]]] [--config-denial]",
             file=sys.stderr,
         )
         return 64

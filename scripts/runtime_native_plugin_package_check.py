@@ -17,7 +17,7 @@ _ROOT = Path("/route-input")
 _STAGED = Path("/opt/aragorn/native-plugin-package-input")
 _INPUT = _ROOT / "plugin-package-skill-replacement"
 _PROBE = "protected-plugin-package-skill-replacement-probe.py"
-_ROUTE = "ADM-02/update/plugin-package-skill-replacement"
+_ROUTE = "VARIANT/plugin-package-skill-forced-install-denial"
 _PLUGIN = "aragorn-plugin-skill-replacement-fixture"
 _SCHEMA = "aragorn/runtime-native-plugin-package-observation/v1"
 _AUTHORITY = "OWNED_INERT_PLUGIN_PACKAGE_DENIAL_NOT_ADMISSION_OR_RUN_QUALIFICATION"
@@ -27,7 +27,8 @@ _DIAGNOSTIC_REASONS = {
     "IDENTITY": {"GATEWAY_IDENTITY_REFUSED"},
     "HELPER": {"HELPER_REFUSED"},
     "PREREQUISITES": {"OBSERVATION_FAILED", "PREREQUISITE_MISSING"},
-    "DENIAL": {"POLICY_DENIAL_NOT_ESTABLISHED"},
+    "DENIAL": {"POLICY_DENIAL_NOT_ESTABLISHED", "PROTECTED_BOUNDARY_CHANGED"},
+    "SQLITE": {"SQLITE_DELTA_UNRECOGNIZED"},
     "BOUNDARY": {"DECLARED_SKILL_CHANGED"},
     "INVARIANTS": {"PROTECTED_STATE_CHANGED"},
     "INTERNAL": {"INTERNAL_ERROR"},
@@ -69,14 +70,29 @@ _DIAGNOSTIC_EXITS = {
     "skills_after",
     "system_info_after",
 }
+_DIAGNOSTIC_INVARIANTS = {
+    "baseline_source",
+    "candidate_source",
+    "config",
+    "config_lock",
+    "discovery_roots",
+    "gateway_process",
+    "install_policy_command",
+    "openclaw",
+    "plugin_inspection",
+    "route_input_mount",
+    "skills_status",
+    "state_store",
+    "target_plugin",
+}
 _BUNDLE = {
     "adapter/protected-plugin-force-reinstall-v3-probe.py": (
         30362,
         "sha256:58ba8c44ef474588dd48c8afaca01681c26d8a0b45c153994463c87e719f115a",
     ),
     "adapter/" + _PROBE: (
-        17008,
-        "sha256:7dee1ce9f0fd591a1c3ab03e31a8baf7f87dca27092166dbaeaf81085f0d320e",
+        26494,
+        "sha256:d4e7c4bc2408045aab6702a8e2877916241ad372d917aaf8d5e62a289caf5a4e",
     ),
     "baseline-source/SKILL.md": (
         154,
@@ -366,9 +382,12 @@ def _deny_constant(value: str) -> None:
     raise ValueError("nonfinite JSON number")
 
 
-def _decode_diagnostic(raw: bytes, token: str) -> dict:
+def _decode_diagnostic(raw: bytes, token: str | None) -> dict:
     _expect(
-        len(raw) <= 4096 and token.encode("ascii") not in raw,
+        len(raw) <= 4096
+        and (
+            token is None or (type(token) is str and token.encode("ascii") not in raw)
+        ),
         "adapter diagnostic unsafe",
     )
     try:
@@ -379,7 +398,8 @@ def _decode_diagnostic(raw: bytes, token: str) -> dict:
         raise PluginFixtureError("adapter diagnostic malformed") from exc
     _expect(
         type(value) is dict
-        and set(value) == {"schema", "phase", "reason", "checks", "exit_codes"}
+        and set(value)
+        == {"schema", "phase", "reason", "checks", "exit_codes", "invariant_checks"}
         and value["schema"] == _DIAGNOSTIC_SCHEMA
         and type(value["phase"]) is str
         and value["phase"] in _DIAGNOSTIC_REASONS
@@ -388,6 +408,9 @@ def _decode_diagnostic(raw: bytes, token: str) -> dict:
         and type(value["checks"]) is dict
         and set(value["checks"]) == _DIAGNOSTIC_CHECKS
         and all(type(item) is bool for item in value["checks"].values())
+        and type(value["invariant_checks"]) is dict
+        and set(value["invariant_checks"]) == _DIAGNOSTIC_INVARIANTS
+        and all(type(item) is bool for item in value["invariant_checks"].values())
         and type(value["exit_codes"]) is dict
         and set(value["exit_codes"]) == _DIAGNOSTIC_EXITS
         and all(
@@ -487,6 +510,11 @@ def _invoke(p37b, gateway_pid: int, token: str) -> dict:
         and document["authority"]
         == "FIXED_INERT_PACKAGE_POLICY_DENIAL_NOT_ADMISSION_OR_CAMPAIGN_QUALIFICATION"
         and document["route_id"] == _ROUTE
+        and document["intended_inventory_route_id"]
+        == "ADM-02/update/plugin-package-skill-replacement"
+        and document["inventory_route_executed"] is False
+        and document["inventory_route_coverage"] is False
+        and document["plugin_update_lifecycle_executed"] is False
         and document["status"] == "OBSERVED"
         and document["implementation_digest"] == _BUNDLE["adapter/" + _PROBE][1]
         and document["decision"]

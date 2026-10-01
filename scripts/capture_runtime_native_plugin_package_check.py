@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -31,13 +32,87 @@ _FIXTURE_SOURCES = (
     "benchmark/admission/openclaw-v2026.7.1/" + fixture._PROBE,
     "benchmark/admission/openclaw-v2026.7.1/protected-plugin-force-reinstall-v3-probe.py",
 )
-_SCHEMA = "aragorn/runtime-native-plugin-package-capture/v1"
+_SCHEMA = "aragorn/runtime-native-plugin-package-capture/v2"
 _AUTHORITY = (
     "LOCAL_SUCCESSOR_PLUGIN_PACKAGE_DENIAL_NOT_ADMISSION_OR_PHASE3_QUALIFICATION"
 )
 acquisition = native.acquisition
 existing = native.existing
 _expect = native._expect
+
+
+def _invoke_guest(argv: list[str], container: str) -> dict:
+    """Retain only a canonical observation or a whitelisted controlled refusal.
+
+    Refusals are not observations of successful policy denial. The outer capture
+    still requires exact owned-container cleanup and unchanged source/parent
+    identities before publishing either outcome. Arbitrary stderr is discarded.
+    """
+    result = subprocess.run(
+        [*acquisition._DOCKER, *argv],
+        capture_output=True,
+        check=False,
+        timeout=240,
+    )
+    _expect(
+        len(result.stdout) <= 2 * 1024 * 1024 and len(result.stderr) <= 8192,
+        "plugin guest output exceeded its accepted bound",
+    )
+    if result.returncode == 126 and not result.stdout:
+        lines = result.stderr.splitlines(keepends=True)
+        _expect(len(lines) == 2, "plugin guest refusal is not a bounded diagnostic")
+        # The guest already checked its real token. At this host boundary the
+        # exact schema admits only fixed strings, booleans and bounded integers.
+        diagnostic = guest._decode_diagnostic(lines[1], None)
+        expected = (
+            "native plugin package fixture refused: PLUGIN_PACKAGE_DENIAL: adapter "
+            + diagnostic["phase"]
+            + "/"
+            + diagnostic["reason"]
+            + "\n"
+        ).encode("ascii")
+        _expect(lines[0] == expected, "plugin guest refusal envelope changed")
+        return {
+            "schema": "aragorn/runtime-native-plugin-package-refusal/v1",
+            "authority": "CONTROLLED_DIAGNOSTIC_ONLY_NOT_POLICY_DENIAL_OR_QUALIFICATION",
+            "route_id": guest._ROUTE,
+            "fixture_container": container,
+            "status": "REFUSED",
+            "exit_code": 126,
+            "diagnostic": diagnostic,
+            "stderr_bytes": len(result.stderr),
+            "stderr_digest": acquisition._digest(result.stderr),
+            "guest_cleanup_authority": "NOT_ESTABLISHED_BY_DIAGNOSTIC",
+            "phase3_eligible": False,
+            "run_conformance_eligible": False,
+            "production_activation_eligible": False,
+        }
+    _expect(
+        result.returncode == 0 and not result.stderr,
+        "plugin guest did not return an accepted observation or controlled refusal",
+    )
+    observation = acquisition._load_json(result.stdout, "plugin package observation")
+    _expect(
+        result.stdout == acquisition._canonical(observation) + b"\n"
+        and observation["schema"] == guest._SCHEMA
+        and observation["authority"] == guest._AUTHORITY
+        and observation["route_id"] == guest._ROUTE
+        and observation["fixture_container"] == container
+        and observation["status"] == "OBSERVED"
+        and observation["input_mount_removed"] is True
+        and observation["inherited_input_restored"] is True
+        and observation["input_mount_source"] == str(guest._STAGED)
+        and all(
+            observation[key] is False
+            for key in (
+                "phase3_eligible",
+                "run_conformance_eligible",
+                "production_activation_eligible",
+            )
+        ),
+        "plugin package observation or proof ceiling changed",
+    )
+    return observation
 
 
 def _source() -> dict:
@@ -224,28 +299,7 @@ def _capture() -> dict:
                 str(os.geteuid()),
                 str(os.getegid()),
             ]
-            raw = native.previous._journal_check(argv)
-            observation = acquisition._load_json(raw, "plugin package observation")
-            _expect(
-                raw == acquisition._canonical(observation) + b"\n"
-                and observation["schema"] == guest._SCHEMA
-                and observation["authority"] == guest._AUTHORITY
-                and observation["route_id"] == guest._ROUTE
-                and observation["fixture_container"] == container
-                and observation["status"] == "OBSERVED"
-                and observation["input_mount_removed"] is True
-                and observation["inherited_input_restored"] is True
-                and observation["input_mount_source"] == str(guest._STAGED)
-                and all(
-                    observation[key] is False
-                    for key in (
-                        "phase3_eligible",
-                        "run_conformance_eligible",
-                        "production_activation_eligible",
-                    )
-                ),
-                "plugin package observation or proof ceiling changed",
-            )
+            observation = _invoke_guest(argv, container)
         finally:
             cleanup = native.snapshot._cleanup_snapshot(name, owner, native._IMAGE)
         _expect(
@@ -265,7 +319,7 @@ def _capture() -> dict:
     return {
         "schema": _SCHEMA,
         "authority": _AUTHORITY,
-        "status": "OBSERVED",
+        "status": observation["status"],
         "route_id": guest._ROUTE,
         "source": source,
         "build_observation": build,
@@ -306,18 +360,19 @@ def main(argv: list[str] | None = None) -> int:
         output.is_absolute() and not os.path.lexists(output),
         "output must be absent and absolute",
     )
-    raw = acquisition._canonical(_capture()) + b"\n"
+    document = _capture()
+    raw = acquisition._canonical(document) + b"\n"
     acquisition._write_output(output, raw)
     print(
         json.dumps(
             {
-                "status": "OBSERVED",
+                "status": document["status"],
                 "path": str(output),
                 "digest": acquisition._digest(raw),
             }
         )
     )
-    return 0
+    return 0 if document["status"] == "OBSERVED" else 2
 
 
 if __name__ == "__main__":

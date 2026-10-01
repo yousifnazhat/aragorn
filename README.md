@@ -1433,17 +1433,20 @@ The shared-deployment and qualification path now has executable library APIs:
   verdicts. Verifiers receive a read-only CAS view for resolving related evidence.
   The complete production semantic-verifier registry is not yet wired.
 
-An inert plugin-package skill replacement adapter and ten-file readonly fixture
+An inert plugin-package forced-install variant and ten-file readonly fixture
 bundle are implemented separately from the frozen V3 dispatcher. They exercise
-ordinary package installation with distinct baseline/candidate `SKILL.md` files
-and require explicit policy denial with unchanged protected state. New owned
-captures use the native successor, not another replay of the old force-reinstall
-case. The [standalone native capture](./scripts/capture_runtime_native_plugin_package_check.py)
-performs only this new route, with a readonly input mount, a fresh dormant
+ordinary package installation with distinct baseline/candidate `SKILL.md` files.
+This is **not** the inventory's plugin-update lifecycle: the distinct variant ID
+and explicit false inventory-execution/coverage flags prevent it from being
+counted as that route. New owned captures use the native successor, not another
+replay of the old three-file force-reinstall case. The
+[standalone native capture](./scripts/capture_runtime_native_plugin_package_check.py)
+performs only this variant, with a readonly input mount, a fresh dormant
 baseline, explicit namespace/UID separation, unchanged empty native receipts and
 broker effects, and owned-fixture cleanup; it does not run read/create, watchdog,
-or configuration-denial scenarios. This does not qualify the remaining reload routes or increase the frozen
-dispatcher's 14/31 count by itself.
+or configuration-denial scenarios. It does not close the plugin-update adapter
+gap, qualify remaining reload routes, or increase the frozen dispatcher's 14/31
+integration count.
 The first live attempt from `93fef32` refused before activation because copying
 into `/route-input` merged the new bundle with inherited force-reinstall inputs.
 Its owned container was removed, with all 78 pre-existing containers non-running.
@@ -1459,6 +1462,25 @@ record binding, and preserves the independent source, entrypoint and
 configuration checks. It never rewrites the captured CLI output. Bounded failure
 diagnostics contain only fixed reason codes, prerequisite booleans and exit codes;
 they do not forward native output or credentials.
+The next attempt from `706ce8a` passed all startup prerequisites but refused
+`DENIAL/POLICY_DENIAL_NOT_ESTABLISHED`: the force command exited 1 and the other
+seven commands exited 0, while aggregate state equality and the helper's combined
+denial predicate were false. No success evidence was emitted. The owned fixture
+was removed and the VM was restored to its prior stopped state. The bounded
+diagnostics did not retain individual changed invariants, so this attempt cannot
+be retroactively promoted to a successful denial observation.
+The v2 host capture can retain a future controlled refusal as `REFUSED` (CLI exit
+2), using only the guest's fixed diagnostic schema. It emits that record only
+after owned-container cleanup and source/parent/runtime-volume integrity checks;
+arbitrary stderr is discarded. This is failure evidence, not a successful denial
+or proof of guest-stack cleanup.
+The corrected variant retains the predecessor's raw state-equality and denial
+fields unchanged. Its separate observation requires exact policy-denial output
+and all twelve non-SQLite invariants, while independently checking SQLite file
+custody and the established WAL growth shape. Native database opens can update
+housekeeping metadata, including on inspection; physical WAL growth is not proof
+that only housekeeping changed. Logical database equality and housekeeping
+causation remain unverified, and no admission-route qualification is granted.
 
 Startup-reserve captures now inspect PID-controller delegation before activation
 and retain bounded hierarchy diagnostics if worker controller files later vanish.

@@ -681,6 +681,21 @@ handling, not sensor-heartbeat or hung-sensor detection. The timer is not enable
 by staging. The owned capture selects this path explicitly with
 `--health --startup-reserve --watchdog`; no historical fixture is upgraded.
 This successor does not add admission cases or establish RUN/Phase 3 completion.
+The [retained watchdog acceptance](./benchmark/evidence/phase3-native-watchdog-systemd-development-v1-2026-10-01.json)
+from signed `800ad8a` observes kernel `pids.max=8`, one worker task and no PID-limit
+rejections before/after native read/create; the four receipts remain unchanged
+through timer-driven expiry suspension. A healthy timer invocation precedes
+expiry; the subsequent retained response stops both services, drains their
+cgroups, persists restart masks and clears the pending marker only after evidence
+retention. Direct restart is refused. All eight fixture units are inactive and
+the owned container is removed; the 78 pre-existing containers remain stopped.
+Only focused changed-behavior checks were run, not the broad regression suite.
+Earlier attempts were refused rather than retained as successes: systemd 252
+lacks the newer `EffectiveTasksMax` property (the successor now checks kernel
+limits directly), and timer timestamps required typed D-Bus reads. Another run
+refused a missing worker `pids.max`; a clean-VM attempt passed without changing
+source. That intermittent controller-availability issue remains open: this
+single successful capture is not startup-reliability or Phase 3 qualification.
 
 P3.6a adds a live protected-install lineage gate to the one-shot capability
 route. The protected-install primitive now publishes a canonical active

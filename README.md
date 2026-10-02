@@ -1595,6 +1595,19 @@ Terminal state is retained before narrow fixture cleanup. Endpoint path absence
 is not a general network-namespace reachability proof; hung/stale sensors,
 in-flight actions and full RUN-02/Phase 3 qualification remain out of scope.
 
+The adapter's first live capture from signed source `6e94b21` retained
+[`OBSERVED` idle sensor-exit evidence](./benchmark/evidence/phase3-native-idle-sensor-loss-systemd-development-v1-2026-10-01.json)
+(`sha256:3ee4ec99840e1f639b58465b8d36f363d0cc1c389a330ba5230dd17931720101`).
+The first terminal snapshot was observed about 216 ms after the PIDFD signal,
+followed by more than two seconds of stable observation. This single observed
+interval is not a latency percentile or performance qualification. The gateway
+and worker were inactive, the sensor was failed without restart, the broker
+identity stayed unchanged, both fixed endpoint paths were absent, and receipts
+and protected effects were unchanged. All four services were then stopped and
+the exact owned container's removal was confirmed. All qualification flags
+remain false. The eight new focused unit tests ran once; no historical campaign
+or regression suite was rerun for this adapter.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

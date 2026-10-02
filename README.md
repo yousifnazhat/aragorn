@@ -1582,6 +1582,19 @@ growth, and confirmed owned-container removal. Whole-database logical equality
 is not established. This is a bounded local-marketplace denial observation;
 inventory-route, aggregate admission, RUN and Phase 3 qualification remain false.
 
+A separate [idle sensor-exit adapter](./scripts/capture_runtime_native_sensor_loss_check.py)
+targets the current 70-file native startup profile in a fresh owned container.
+It provisions an idle stack without invoking the historical read/create drivers,
+then uses a PID file descriptor after rechecking the sensor's service invocation,
+process start time and exact owned cgroup. The observation requires the gateway
+and worker to stop, no sensor restart, unchanged broker identity, empty native
+receipts, unchanged protected effects, and disappearance of the two fixed
+worker/sensor endpoint paths. The watchdog must remain inactive and never
+triggered, separating process-exit shutdown from health-expiry behavior.
+Terminal state is retained before narrow fixture cleanup. Endpoint path absence
+is not a general network-namespace reachability proof; hung/stale sensors,
+in-flight actions and full RUN-02/Phase 3 qualification remain out of scope.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

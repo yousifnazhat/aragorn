@@ -26,8 +26,8 @@ _BUNDLE = {
         "sha256:58ba8c44ef474588dd48c8afaca01681c26d8a0b45c153994463c87e719f115a",
     ),
     "adapter/protected-plugin-marketplace-update-probe.py": (
-        14622,
-        "sha256:4396ab676084c72ea54c010f063104d9b12b37c78d72a1eaafd1a9130eb1a6f4",
+        15068,
+        "sha256:c00a1fd7b4071e7f6c621d78151323e3ee5be95d88ba7c3a93d736463fa95860",
     ),
     "adapter/protected-plugin-package-skill-replacement-probe.py": (
         26494,

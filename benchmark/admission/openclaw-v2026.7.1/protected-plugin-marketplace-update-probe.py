@@ -219,7 +219,12 @@ def validate(action, base, prior, records_before, records_after, checks):
         "UPDATE_COMMAND",
     )
     update = commands[4]
+    # The native policy logger writes its context before the update summary.
+    # Both logger.warn and the outcome logger use defaultRuntime.log (stdout).
     expected = (
+        f"Install policy target=plugin:{PLUGIN_ID} request=plugin-dir/update "
+        "origin=plugin-package pathKind=directory source=local-path/user: "
+        f"blocked by install policy: {base.EXPECTED_BLOCK_REASON}\n"
         f"Failed to update {PLUGIN_ID}: blocked by install policy: {base.EXPECTED_BLOCK_REASON} "
         f"(marketplace plugin {PLUGIN_ID} from {ROOT / 'marketplace.json'}).\n"
     ).encode("ascii")
@@ -392,6 +397,7 @@ def observe():
                 "src/plugins/update.ts:192-202,2110-2120",
                 "src/plugins/marketplace.ts:672-678,1294-1318",
                 "src/plugins/install-security-scan.runtime.ts:997-1043",
+                "src/security/install-policy.ts:721-726,827-846",
             ],
             "policy_failure_channel": "stdout",
         },

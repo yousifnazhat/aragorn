@@ -1535,8 +1535,16 @@ The independent read-only
 [`runtime_broker_decision_measurement_verify.py`](./src/aragorn/runtime_broker_decision_measurement_verify.py)
 checks the completion, pending, consumed-grant, profile, native-request and result
 joins against operator-held pins. It also requires the original profiled
-submission to be retained separately; the 73-file profile alone does not retain
-that additional artifact. Its result establishes receipt-chain consistency and
+submission; the original 73-file timing profile does not retain that additional
+artifact. The separate
+[`stage_runtime_broker_measurement_receipt_profile.py`](./scripts/stage_runtime_broker_measurement_receipt_profile.py)
+successor now stages that retention. It changes only the helper and its outer
+activator pin, keeping the 73-file inventory and frozen predecessors intact.
+Canonical submission bytes are detached and digest-checked before a pending
+latch can be published, then retained after grant consumption and included in
+the final custody check before completion. A post-effect retention failure stays
+indeterminate. This successor has not been activated or live-qualified.
+The verifier's result establishes receipt-chain consistency and
 one broker-process interval, not policy correctness, physical residue, causal
 attribution, full request latency or Phase 3 metrics. These timestamps are not
 inserted into the generic collector as full-request boundaries. Cross-process
@@ -1552,6 +1560,17 @@ reach a registry, modify the frozen predecessor, or qualify npm/Git/ClawHub upda
 branches. Source implementation and focused checks do not constitute a live
 denial observation or admission-route qualification; all qualification flags
 remain false until the applicable evidence and independent verification exist.
+
+The first actual update capture from signed source `1e07b8d` retained
+[`REFUSED` evidence](./benchmark/evidence/phase3-native-plugin-update-systemd-development-v1-2026-10-01.json),
+not a denial pass. Startup prerequisites and the unchanged tracked-record check
+passed; the update command exited 1 while the other seven commands exited 0.
+The exact denial-output predicate failed, so later protected-boundary and SQLite
+checks did not establish success. The owned container was removed. Source review
+then identified a policy logger warning on stdout before the terminal update
+failure line; the adapter's original expected output omitted that first line.
+This is an explanation for a predicate correction, not retroactive qualification
+of the refused run.
 
 ## What works now
 

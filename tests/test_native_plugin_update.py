@@ -82,6 +82,9 @@ class NativePluginUpdateTests(unittest.TestCase):
             for key in ("baseline_source", "candidate_source"):
                 action[side]["boundary"][key]["manifest"]["skills"] = ["."]
         output = (
+            f"Install policy target=plugin:{adapter.PLUGIN_ID} request=plugin-dir/update "
+            "origin=plugin-package pathKind=directory source=local-path/user: "
+            f"blocked by install policy: {base.EXPECTED_BLOCK_REASON}\n"
             f"Failed to update {adapter.PLUGIN_ID}: blocked by install policy: {base.EXPECTED_BLOCK_REASON} "
             f"(marketplace plugin {adapter.PLUGIN_ID} from {adapter.ROOT / 'marketplace.json'}).\n"
         ).encode()
@@ -102,7 +105,14 @@ class NativePluginUpdateTests(unittest.TestCase):
         self.assertTrue(result["tracked_record_unchanged"])
         self.assertFalse(result["logical_database_unchanged_verified"])
         self.assertFalse(result["qualification_eligible"])
-        for mutation in ("record", "argv", "config", "channel"):
+        for mutation in (
+            "record",
+            "argv",
+            "config",
+            "channel",
+            "omitted_prefix",
+            "extra_line",
+        ):
             changed = copy.deepcopy(action)
             after_records = copy.deepcopy(records)
             if mutation == "record":
@@ -113,8 +123,19 @@ class NativePluginUpdateTests(unittest.TestCase):
                 changed["after"]["boundary"]["config"]["canonical_digest"] = (
                     "sha256:" + "0" * 64
                 )
-            else:
+            elif mutation == "channel":
                 changed["commands"][4]["stderr_bytes"] = 1
+            else:
+                changed_output = (
+                    output.split(b"\n", 1)[1]
+                    if mutation == "omitted_prefix"
+                    else output + b"unexpected\n"
+                )
+                changed["commands"][4].update(
+                    stdout_excerpt=changed_output.decode(),
+                    stdout_bytes=len(changed_output),
+                    stdout_digest=adapter.digest(changed_output),
+                )
             with self.subTest(mutation=mutation), self.assertRaises(adapter.Refusal):
                 adapter.validate(
                     changed,

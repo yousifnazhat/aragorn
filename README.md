@@ -1572,6 +1572,16 @@ failure line; the adapter's original expected output omitted that first line.
 This is an explanation for a predicate correction, not retroactive qualification
 of the refused run.
 
+With the exact two-line predicate corrected, the changed-code capture from
+signed source `85d59fd` retained
+[`OBSERVED` evidence](./benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json)
+(`sha256:42acdf26c128c4d7ecdfd740ac04b17509e9e17e0b799e7d4a870bf5e82a9e12`).
+It records the actual plugin-update lifecycle, exact policy denial, unchanged
+tracked record and non-SQLite protected boundary, separately classified WAL
+growth, and confirmed owned-container removal. Whole-database logical equality
+is not established. This is a bounded local-marketplace denial observation;
+inventory-route, aggregate admission, RUN and Phase 3 qualification remain false.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

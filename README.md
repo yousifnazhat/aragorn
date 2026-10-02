@@ -1488,7 +1488,29 @@ The preflight never enables controllers, changes limits, or retries. The earlier
 intermittent missing `pids.max` cause remains unconfirmed; a preflight is not proof
 that the underlying environment has been repaired.
 
-Only first-run focused checks of these new components are part of this slice;
+A separate [73-file measured-broker staging profile](./scripts/stage_runtime_broker_decision_measurement_profile.py)
+adds [broker-owned decision timestamps](./src/aragorn/runtime_broker_decision_measurement.py)
+through exact, reversible [successor source rendering](./scripts/materialize_runtime_broker_decision_measurement.py).
+The existing broker sources and 70-file native profile are unchanged. An explicit
+operator credential binds one grant and permitted action to a deployment,
+precommitted schedule and measurement request. The measured interval begins at
+validated V4 grant redemption and ends at the effective final allow/block
+decision, including final pre-link reevaluation. It is not gateway-to-decision
+latency and does not cover requests rejected before V4 validation.
+The final-decision hook performs no filesystem work. After the original grant is
+consumed, the helper joins the consumed state, profile receipt and result into a
+bounded content-addressed record. Pending and completion latches prohibit
+automatic reuse; failed retention after a created effect remains indeterminate.
+The inherited grant/profile receipt contract cannot complete replay blocks or
+certain broker-only blocks whose nested policy verdict/reasons differ. Those
+paths retain the pending latch and cannot count as completed measurement samples.
+The profile preserves `ProcSubset=pid` and exposes only a separate read-only
+kernel boot-ID bind. This successor is staged source, not a deployed or
+live-qualified measurement adapter. It still needs explicit provisioning,
+independent semantics and collector integration, protected-sink residue evidence,
+and baseline/instrumented task timing before the quantitative campaign can run.
+
+Only focused checks of new or changed behavior are part of this slice;
 historical captures, the full regression suite, and whole-schema sweeps are not
 rerun. No final 31-case/100-attempt/100-pair qualification result exists yet.
 

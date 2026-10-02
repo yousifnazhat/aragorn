@@ -1514,6 +1514,45 @@ Only focused checks of new or changed behavior are part of this slice;
 historical captures, the full regression suite, and whole-schema sweeps are not
 rerun. No final 31-case/100-attempt/100-pair qualification result exists yet.
 
+### Completion follow-through (2026-10-01)
+
+The collector now exposes `prepare_phase3_measurement_collection(...)` separately
+from execution. It binds the imported callback sources and seven deployment
+artifacts, records actual Linux preparation/readback times, and invokes no
+callbacks. Collection uses the same preparation path and rechecks every retained
+sample, verifier result, and metrics blob before publishing a collection.
+
+[`runtime_broker_measurement_plan.py`](./src/aragorn/runtime_broker_measurement_plan.py)
+copies one existing committed attempt, raw grant, protected-path descriptor and
+identity artifacts into a fresh private staging CAS and constructs the exact
+broker credential binding. It does not invent a measurement time, activate a
+service, check grant liveness, or reset existing runtime state. Installation of
+the root-owned credential and broker-owned input store remains explicit. The
+unattributed negative control is refused because this V4-only profile cannot
+measure that path.
+
+The independent read-only
+[`runtime_broker_decision_measurement_verify.py`](./src/aragorn/runtime_broker_decision_measurement_verify.py)
+checks the completion, pending, consumed-grant, profile, native-request and result
+joins against operator-held pins. It also requires the original profiled
+submission to be retained separately; the 73-file profile alone does not retain
+that additional artifact. Its result establishes receipt-chain consistency and
+one broker-process interval, not policy correctness, physical residue, causal
+attribution, full request latency or Phase 3 metrics. These timestamps are not
+inserted into the generic collector as full-request boundaries. Cross-process
+timing needs a verified clock domain; a shared boot ID alone is insufficient.
+
+A separate [tracked marketplace update adapter](./scripts/capture_runtime_native_plugin_update_check.py)
+now implements the actual native `plugins update` lifecycle for one fixed inert
+local-marketplace package. Its 13-file readonly bundle and pinned native record
+writer prepare a fresh owned fixture before activation. The adapter then checks
+the exact update-denial output, unchanged tracked record and protected package,
+and separately bounded SQLite physical changes. It does not use `install --force`,
+reach a registry, modify the frozen predecessor, or qualify npm/Git/ClawHub update
+branches. Source implementation and focused checks do not constitute a live
+denial observation or admission-route qualification; all qualification flags
+remain false until the applicable evidence and independent verification exist.
+
 ## What works now
 
 - Bounded, symlink-safe inventory of a local Agent Skill directory.

@@ -26,7 +26,7 @@ from types import FunctionType
 from typing import Any
 
 from . import phase3_quantitative_metrics as metrics
-from .cas import CAS
+from .cas import CAS, CASError
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .phase3_deployment import resolve_phase3_deployment_identity
 
@@ -148,7 +148,7 @@ def _schedule(value: dict) -> tuple[dict, dict]:
     return json.loads(canonical_json(rebuilt)), json.loads(canonical_json(arguments))
 
 
-def collect_phase3_measurements(
+def prepare_phase3_measurement_collection(
     schedule: dict,
     *,
     deployment: dict,
@@ -158,19 +158,13 @@ def collect_phase3_measurements(
     identity_reader: Callable,
     source_pins: dict[str, str],
 ) -> dict[str, Any]:
-    """Execute exactly 100 local attempts and 100 paired local tasks, without retries.
+    """Retain the exact collection commitment without invoking any callback.
 
-    Requests contain only committed identifiers/digests and a fresh collection
-    identity, never commands or targets. ``execute`` returns <=64 KiB canonical
-    receipt bytes with schema, request_digest, deployment_digest, boundaries and
-    observation. ``verify`` returns the matching receipt_digest, request_digest,
-    deployment_digest and semantics. Attempt semantics are the three booleans
-    attributed/blocked_pre_effect/residue_detected; task semantics are completed.
-    A false completed result aborts collection. Threshold failures are retained
-    as failures, never repaired or replaced by generated measurements.
-
-    Boundary placement, inertness, callback termination and receipt truth remain
-    the embedding adapter's responsibility; source pins do not establish them.
+    The imported functions are inspected only to verify their source identities.
+    In particular, ``identity_reader`` is not called: resolving the supplied
+    deployment artifacts is not live deployment attestation. Linux
+    CLOCK_BOOTTIME records preparation and readback, not action execution.
+    The returned detached context is not execution or qualification authority.
     """
     schedule, arguments = _schedule(schedule)
     deployment_raw = canonical_json(deployment)
@@ -216,6 +210,107 @@ def collect_phase3_measurements(
         evidence_cas, commitment_raw, metrics._MAX_DOCUMENT_BYTES
     )
     committed_at = _boottime_ns()
+    _expect(
+        type(commitment["prepared_boottime_ns"]) is int
+        and type(committed_at) is int
+        and 0 <= commitment["prepared_boottime_ns"] <= committed_at < 2**63,
+        "preparation CLOCK_BOOTTIME chronology is invalid",
+    )
+    _expect(
+        {name: _source(fn, source_pins[name]) for name, fn in callbacks.items()}
+        == sources
+        and metrics.metrics_implementation_digest() == implementation
+        and "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        == collector_digest,
+        "preparation source identities changed",
+    )
+    resolve_phase3_deployment_identity(
+        deployment_raw,
+        expected_digest=schedule["bindings"]["runtime_identity_digest"],
+        evidence_cas=evidence_cas,
+    )
+    _expect(
+        evidence_cas.read(schedule_digest, max_bytes=metrics._MAX_DOCUMENT_BYTES)
+        == schedule_raw
+        and evidence_cas.read(commitment_digest, max_bytes=metrics._MAX_DOCUMENT_BYTES)
+        == commitment_raw,
+        "prepared schedule or commitment left custody",
+    )
+    return json.loads(
+        canonical_json(
+            {
+                "schema": "aragorn/phase3-measurement-preparation/v1",
+                "authority": "COMMITMENT_PREPARATION_ONLY_NOT_EXECUTION_LIVE_IDENTITY_OR_QUALIFICATION",
+                "commitment_digest": commitment_digest,
+                "commitment_readback_boottime_ns": committed_at,
+                "commitment": commitment,
+                "schedule": schedule,
+                "schedule_digest": schedule_digest,
+                "arguments": arguments,
+                "deployment": deployment,
+                "sources": sources,
+                "collector_digest": collector_digest,
+                "metrics_implementation_digest": implementation,
+                "decision": {
+                    "measurement_collected": False,
+                    "phase3_exit_eligible": False,
+                    "quantitative_metrics_eligible": False,
+                },
+            }
+        )
+    )
+
+
+def collect_phase3_measurements(
+    schedule: dict,
+    *,
+    deployment: dict,
+    evidence_cas: CAS,
+    execute: Callable,
+    verify: Callable,
+    identity_reader: Callable,
+    source_pins: dict[str, str],
+) -> dict[str, Any]:
+    """Execute exactly 100 local attempts and 100 paired local tasks, without retries.
+
+    Requests contain only committed identifiers/digests and a fresh collection
+    identity, never commands or targets. ``execute`` returns <=64 KiB canonical
+    receipt bytes with schema, request_digest, deployment_digest, boundaries and
+    observation. ``verify`` returns the matching receipt_digest, request_digest,
+    deployment_digest and semantics. Attempt semantics are the three booleans
+    attributed/blocked_pre_effect/residue_detected; task semantics are completed.
+    A false completed result aborts collection. Threshold failures are retained
+    as failures, never repaired or replaced by generated measurements.
+
+    Boundary placement, inertness, callback termination and receipt truth remain
+    the embedding adapter's responsibility; source pins do not establish them.
+    """
+    prepared = prepare_phase3_measurement_collection(
+        schedule,
+        deployment=deployment,
+        evidence_cas=evidence_cas,
+        execute=execute,
+        verify=verify,
+        identity_reader=identity_reader,
+        source_pins=source_pins,
+    )
+    schedule = prepared["schedule"]
+    arguments = prepared["arguments"]
+    deployment = prepared["deployment"]
+    deployment_raw = canonical_json(deployment)
+    callbacks = {
+        "execute": execute,
+        "verify": verify,
+        "identity_reader": identity_reader,
+    }
+    sources = prepared["sources"]
+    implementation = prepared["metrics_implementation_digest"]
+    collector_digest = prepared["collector_digest"]
+    schedule_raw = canonical_json(schedule)
+    schedule_digest = prepared["schedule_digest"]
+    commitment_raw = canonical_json(prepared["commitment"])
+    commitment_digest = prepared["commitment_digest"]
+    committed_at = prepared["commitment_readback_boottime_ns"]
     evidence = {
         "schema": metrics.INPUT_SCHEMA,
         "bindings": {
@@ -396,6 +491,17 @@ def collect_phase3_measurements(
         == commitment_raw,
         "committed schedule or collection identity left custody",
     )
+    try:
+        evidence_cas.verify(evidence_digest, max_bytes=metrics._MAX_DOCUMENT_BYTES)
+        for entry in provenance:
+            evidence_cas.verify(entry["receipt_digest"], max_bytes=_RECEIPT_LIMIT)
+            evidence_cas.verify(
+                entry["verified_observation_digest"], max_bytes=_RECEIPT_LIMIT
+            )
+    except CASError as exc:
+        raise Phase3MeasurementCollectionError(
+            "collected evidence or sample receipt left custody"
+        ) from exc
     result = {
         "schema": "aragorn/phase3-measurement-collection/v1",
         "authority": "LOCAL_ADAPTER_MEASUREMENTS_AND_ARITHMETIC_ONLY_NOT_SOURCE_SEMANTIC_OR_PHASE3_QUALIFICATION",

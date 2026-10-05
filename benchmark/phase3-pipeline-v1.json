@@ -2,6 +2,111 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "native-measurement-inputs",
+      "description": "Verify only new read-only prepared measurement plan, exact retained closure and final reread joins using real temporary CAS; no clock, activation or qualification.",
+      "tests": [
+        "test_runtime_native_measurement_inputs"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "src/aragorn/phase3_quantitative_metrics.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_broker_v2.py",
+        "src/aragorn/runtime_action_broker_v3.py",
+        "src/aragorn/runtime_action_broker_v4.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_broker_decision_measurement.py",
+        "src/aragorn/runtime_broker_decision_measurement_verify.py",
+        "src/aragorn/runtime_broker_measurement_plan.py",
+        "src/aragorn/runtime_capability_grant.py",
+        "src/aragorn/runtime_native_measurement_inputs.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_runtime_broker_measurement_plan.py",
+        "tests/test_runtime_native_measurement_inputs.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-common-identity",
+      "description": "Verify only new common three-credential broker identity and seven process-root module joins using inert kernel/unit doubles; not a live observation or whole deployment attestation.",
+      "tests": [
+        "test_native_phase3_common_identity"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_common_identity.py",
+        "src/aragorn/native_phase3_live_identity.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "src/aragorn/phase3_quantitative_metrics.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_broker_v2.py",
+        "src/aragorn/runtime_action_broker_v3.py",
+        "src/aragorn/runtime_action_broker_v4.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_broker_decision_measurement_verify.py",
+        "src/aragorn/runtime_capability_grant.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_common_identity.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-measurement-provisioning",
+      "description": "Verify only new absent-only input provisioning and credential-last publication with real temporary filesystem custody and CAS, mocked root/accounts/systemd/locks; no activation, measurement or acceptance.",
+      "tests": [
+        "test_runtime_native_measurement_provisioning"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/acquire.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "src/aragorn/phase3_quantitative_metrics.py",
+        "src/aragorn/protected_skill_quarantine.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_broker_v2.py",
+        "src/aragorn/runtime_action_broker_v3.py",
+        "src/aragorn/runtime_action_broker_v4.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_action_service.py",
+        "src/aragorn/runtime_action_worker.py",
+        "src/aragorn/runtime_active_skill_lineage.py",
+        "src/aragorn/runtime_broker_decision_measurement.py",
+        "src/aragorn/runtime_broker_decision_measurement_verify.py",
+        "src/aragorn/runtime_broker_measurement_plan.py",
+        "src/aragorn/runtime_capability_grant.py",
+        "src/aragorn/runtime_native_measurement_inputs.py",
+        "src/aragorn/runtime_native_measurement_provisioning.py",
+        "src/aragorn/runtime_native_tool_provisioning.py",
+        "src/aragorn/runtime_native_tool_receipts.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_response_service.py",
+        "src/aragorn/runtime_skill_startup.py",
+        "src/aragorn/runtime_skill_startup_service.py",
+        "tests/test_runtime_broker_measurement_plan.py",
+        "tests/test_runtime_native_measurement_provisioning.py"
+      ],
+      "needs": [
+        "native-measurement-inputs"
+      ],
+      "timeout_seconds": 120
+    },
+    {
       "id": "broker-effective-receipt-profile",
       "description": "Verify only the new inert effective-BLOCK/replay receipt successor, actual consumed-state/retention joins and failure preservation; no broker effect, service activation or qualification.",
       "tests": [

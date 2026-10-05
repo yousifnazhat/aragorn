@@ -966,3 +966,55 @@ activation check. Continue A1/A2/A3 admission ports and RUN/sensor semantics on
 that one successor. Full REQUEST_ACCEPTED timing, real workload/negative-control
 and sink/attribution verification, the complete verifier inventory and final
 frozen acceptance remain required. No Phase 3 exit gate closed in this batch.
+
+**Common measurement provisioning and identity boundary (2026-10-05):** the
+[new read-only input consumer](src/aragorn/runtime_native_measurement_inputs.py)
+resolves the existing prepared-plan contract into its exact retained input
+closure. It joins the schedule, commitment, deployment, grant and protected-path
+descriptor, rejects extra or missing blobs, and rereads every retained byte. It
+does not create replacement samples, check current grant liveness or execute
+collection callbacks. The payload digest remains an expectation, not payload
+content verification.
+
+The [fixed root provisioner](src/aragorn/runtime_native_measurement_provisioning.py)
+adds a read-only unused-state guard that must run before inherited fixture setup
+can reset control files. It refuses prior input/evidence/pending/completed paths
+and retained grant/profile history, and requires all four fixed units and their
+kernel cgroups to be stopped/empty. Provisioning separately takes the existing
+activation and broker locks, checks actual protected grant/policy/runtime/worker
+bytes, boot, seven module pins and protected device/inode, and installs only the
+validated closure. New private CAS entries transfer ownership children-first;
+the third root credential is published last with absent-only semantics. Final
+raw readbacks, grant liveness, source-CAS reads and target absence must still
+hold. Any failure preserves partial outputs and prevents reuse or activation.
+
+The [common identity reader](src/aragorn/native_phase3_common_identity.py) adds
+the actual three-credential broker contract and seven installed measurement
+modules to the fixed protected-file inventory. It holds all four process PIDFDs,
+reads each loaded credential through its process root, and independently rereads
+the seven broker-root module files. These are local point-in-time observations,
+not loaded-Python provenance, application acknowledgement, whole-profile
+attestation or quantitative acceptance. Frozen identity contracts stay intact.
+
+Next: connect these prerequisites to the common 73-file guest setup, one-request
+handoff and host capture contract. Both independently acquired process-observer
+contracts and the outer replay consumer must understand the third credential;
+do not synthesize a second observation or relabel the retained 70-file intent.
+After those joins are reviewed, perform only one newly necessary guarded owned-
+fixture activation check. Remaining A1/A2/A3 routes, RUN/sensor coverage, full
+REQUEST_ACCEPTED timing, real workload/negative-control/sink verification and
+the complete verifier inventory still precede frozen final acceptance.
+
+Validation: 28 newly added focused methods passed across three registered stages.
+The unchanged pipeline prerequisite was reused throughout. The first provisioning
+fingerprint failed because the macOS temporary ancestry did not model protected
+root custody. Only that fixture was repaired: its owned group is normalized and
+the ancestry double still checks every actual ancestor through its private root.
+Failure-point assertions prevent unrelated setup rejection from passing negative
+cases. The changed provisioning stage passed once; the two other successful new
+stages did not rerun. All failed records remain retained. No production guard was
+weakened, no live capture or performance sample ran, and no exit gate closed.
+Root/account/systemd/lock and kernel observations remain explicitly doubled;
+actual distinct root-to-broker ownership has not yet been observed live. The
+[batch checkpoint](benchmark/evidence/phase3-native-measurement-provisioning-identity-implementation-v1-2026-10-05.json)
+records exact fingerprints, evidence ceilings and the signed-commit handoff.

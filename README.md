@@ -19,6 +19,13 @@ now connects provisioning-time pins and before/after process/file readbacks to
 the existing adapter, with an [independent offline join consumer](src/aragorn/native_phase3_plugin_update_live_binding.py).
 It preserves the frozen captures and does not yet establish a fresh live run,
 complete common-deployment verification or any additional Phase 3 gate closure.
+The [offline pin preparer](scripts/prepare_native_plugin_update_identity_pins.py)
+now derives caller expectations from two fixed historical records, and the
+existing [collection CLI](scripts/native_plugin_update_collection.py) exposes
+`retain-live`/`replay-live` for exact-input retention and independent replay.
+The [sensor source supplement](benchmark/tetragon-program-map-source-v1/README.md)
+pins the selected producer/loader and Linux query contracts; it is not a live
+sensor-health or complete loss-accounting result.
 
 Separate signed current-V3 subfixtures now qualify
 [DET-01](./benchmark/receipts/phase3-openclaw-final-v3-det01-dedicated-qualification-v1-2026-09-06.json)

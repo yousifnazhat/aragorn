@@ -38,11 +38,13 @@
         "src/aragorn/cas.py",
         "src/aragorn/native_phase3_plugin_update_binding.py",
         "src/aragorn/native_phase3_plugin_update_collection.py",
+        "src/aragorn/native_phase3_plugin_update_live_binding.py",
         "src/aragorn/oci_worker_protocol.py",
         "src/aragorn/phase3_deployment.py",
-        "tests/test_native_phase3_plugin_update_collection.py"
+        "tests/test_native_phase3_plugin_update_collection.py",
+        "tests/test_native_phase3_plugin_update_live_binding.py"
       ],
-      "needs": ["native-plugin-update-binding"],
+      "needs": ["native-plugin-update-binding", "native-plugin-update-live-binding"],
       "timeout_seconds": 120
     },
     {
@@ -56,8 +58,10 @@
         "src/aragorn/cas.py",
         "src/aragorn/native_phase3_plugin_update_binding.py",
         "src/aragorn/native_phase3_plugin_update_collection.py",
+        "src/aragorn/native_phase3_plugin_update_live_binding.py",
         "src/aragorn/oci_worker_protocol.py",
         "src/aragorn/phase3_deployment.py",
+        "tests/test_native_phase3_plugin_update_live_binding.py",
         "tests/test_native_plugin_update_collection_cli.py"
       ],
       "needs": ["native-plugin-update-collection"],
@@ -275,6 +279,53 @@
         "native-plugin-update-binding",
         "native-plugin-update-identity-host"
       ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-plugin-update-identity-pins",
+      "description": "Verify fixed historical binary/profile expectations and absent-only offline pin preparation; no live readback or image attestation.",
+      "tests": ["test_native_plugin_update_identity_pins"],
+      "inputs": [
+        "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
+        "benchmark/evidence/runtime-action-worker-final-combined-v3-route-core-updater-plugin-replacement-systemd-p3-final-2026-09-03.json",
+        "scripts/prepare_native_plugin_update_identity_pins.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_plugin_update_binding.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "tests/test_native_plugin_update_identity_pins.py"
+      ],
+      "needs": ["native-plugin-update-binding"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "tetragon-program-map-source",
+      "description": "Verify new pinned producer, loader, program/map/perf-link and PIDFD source custody and explicit evidence limits; no runtime operations.",
+      "tests": ["test_tetragon_program_map_source"],
+      "inputs": [
+        "benchmark/tetragon-program-map-source-v1.lock.json",
+        "benchmark/tetragon-program-map-source-v1/bpf/process/bpf_execve_event.c",
+        "benchmark/tetragon-program-map-source-v1/bpf/process/bpf_exit.c",
+        "benchmark/tetragon-program-map-source-v1/bpf/process/bpf_exit.h",
+        "benchmark/tetragon-program-map-source-v1/linux-v6.8-program-map-excerpts.json",
+        "benchmark/tetragon-program-map-source-v1/pkg/config/config_linux.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/base/base.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/base/base_linux.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/exec/exec_linux.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/load_linux.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/program/loader.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/program/loader_linux.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/program/program.go",
+        "benchmark/tetragon-program-map-source-v1/pkg/sensors/sensor_types_linux.go",
+        "benchmark/tetragon-program-map-source-v1/vendor/github.com/cilium/ebpf/link/kprobe.go",
+        "benchmark/tetragon-program-map-source-v1/vendor/github.com/cilium/ebpf/link/perf_event.go",
+        "benchmark/tetragon-program-map-source-v1/vendor/github.com/cilium/ebpf/link/tracepoint.go",
+        "benchmark/tetragon-stats-map-source-v1.lock.json",
+        "benchmark/tetragon-stats-map-source-v1/bpf/lib/process.h",
+        "tests/test_tetragon_program_map_source.py"
+      ],
+      "needs": ["tetragon-stats-map"],
       "timeout_seconds": 120
     }
   ]

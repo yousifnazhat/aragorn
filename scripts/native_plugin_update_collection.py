@@ -6,7 +6,10 @@ does not write and is only a post-observation identity projection, not a prior
 commitment or live measurement. Its raw byte fields are displayed as explicit
 UTF-8 text wrappers; extract ``result.deployment_raw.text`` without adding a
 newline when separately reviewing/supplying deployment bytes to ``retain``.
-Only retain writes, exclusively through the supplied CAS. No capture execution,
+``retain-live`` additionally retains the exact static manifest and three named
+helper sources; ``replay-live`` resolves them read-only and recomputes the live
+consumer's bounded joins. Both require separately held live/source/static pins.
+Only retain/retain-live write, exclusively through the supplied CAS. No capture execution,
 activation, network, dynamic imports, repair, or qualification is provided.
 """
 
@@ -18,7 +21,7 @@ import os
 import re
 import stat
 import sys
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from aragorn import native_phase3_plugin_update_collection as collection
@@ -28,6 +31,11 @@ _CAPTURE_LIMIT = 2 * 1024 * 1024
 _DEPLOYMENT_LIMIT = 4096
 _FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 _SCHEMA = "aragorn/native-plugin-update-collection-cli/v1"
+_LIVE_SOURCE_ROLES = dict(
+    zip(("host", "guest", "reader"), collection.live_binding.SOURCE_PATHS, strict=True)
+)
+_SOURCE_LIMIT = 1024 * 1024
+_STATIC_LIMIT = 16384
 
 
 class CollectionCLIError(ValueError):
@@ -171,24 +179,47 @@ def _parser():
         ("prepare", "Read-only reported identity projection for separate review"),
         ("retain", "Retain exact capture and separately reviewed deployment in CAS"),
         ("replay", "Read-only replay of a caller-pinned retained collection"),
+        (
+            "retain-live",
+            "Retain fixed local readback sources and independently verify their joins",
+        ),
+        (
+            "replay-live",
+            "Read-only independent replay of a pinned live collection; no live execution",
+        ),
     ):
         command = commands.add_parser(name, help=help_text)
         command.add_argument("--expected-capture-digest", type=_pin, required=True)
         command.add_argument("--expected-source-digest", type=_pin, required=True)
         command.add_argument("--expected-source-commit", type=_commit, required=True)
-        if name != "replay":
+        if name not in ("replay", "replay-live"):
             command.add_argument("--capture", required=True)
         if name != "prepare":
             command.add_argument(
                 "--expected-deployment-digest", type=_pin, required=True
             )
             command.add_argument("--cas", required=True)
-        if name == "retain":
+        if name in ("retain", "retain-live"):
             command.add_argument("--deployment", required=True)
-        if name == "replay":
+        if name in ("replay", "replay-live"):
             command.add_argument(
                 "--expected-collection-digest", type=_pin, required=True
             )
+        if name in ("retain-live", "replay-live"):
+            command.add_argument(
+                "--expected-live-identity-digest", type=_pin, required=True
+            )
+            command.add_argument(
+                "--expected-static-pin-manifest-digest", type=_pin, required=True
+            )
+            for role in _LIVE_SOURCE_ROLES:
+                command.add_argument(
+                    f"--expected-live-{role}-source-digest", type=_pin, required=True
+                )
+                if name == "retain-live":
+                    command.add_argument(f"--live-{role}-source", required=True)
+            if name == "retain-live":
+                command.add_argument("--static-pin-manifest", required=True)
     return parser
 
 
@@ -209,6 +240,55 @@ def _run(args):
         "expected_source_digest": args.expected_source_digest,
         "expected_source_commit": args.expected_source_commit,
     }
+    if args.command in ("retain-live", "replay-live"):
+        pins.update(
+            {
+                "expected_live_identity_digest": args.expected_live_identity_digest,
+                "expected_static_pin_manifest_digest": args.expected_static_pin_manifest_digest,
+                "expected_live_source_digests": {
+                    path: getattr(args, f"expected_live_{role}_source_digest")
+                    for role, path in _LIVE_SOURCE_ROLES.items()
+                },
+            }
+        )
+        if args.command == "replay-live":
+            with _store(args.cas, read_only=True) as store:
+                result = collection.replay_native_plugin_update_live_collection(
+                    **pins,
+                    expected_collection_digest=args.expected_collection_digest,
+                    expected_deployment_digest=args.expected_deployment_digest,
+                    evidence_cas=store,
+                )
+            return result
+        with ExitStack() as inputs:
+            capture = inputs.enter_context(
+                _input_bytes(args.capture, limit=_CAPTURE_LIMIT)
+            )
+            deployment = inputs.enter_context(
+                _input_bytes(args.deployment, limit=_DEPLOYMENT_LIMIT)
+            )
+            static_raw = inputs.enter_context(
+                _input_bytes(args.static_pin_manifest, limit=_STATIC_LIMIT)
+            )
+            source_raws = {
+                path: inputs.enter_context(
+                    _input_bytes(
+                        getattr(args, f"live_{role}_source"), limit=_SOURCE_LIMIT
+                    )
+                )
+                for role, path in _LIVE_SOURCE_ROLES.items()
+            }
+            store = inputs.enter_context(_store(args.cas, read_only=False))
+            result = collection.collect_native_plugin_update_live_observation(
+                capture,
+                **pins,
+                deployment_raw=deployment,
+                expected_deployment_digest=args.expected_deployment_digest,
+                static_pin_manifest_raw=static_raw,
+                live_source_raws=source_raws,
+                evidence_cas=store,
+            )
+        return result
     if args.command == "replay":
         with _store(args.cas, read_only=True) as store:
             result = collection.replay_native_plugin_update_collection(

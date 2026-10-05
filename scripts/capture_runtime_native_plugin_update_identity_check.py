@@ -273,6 +273,44 @@ def _capture(pin_raw: bytes, pin_digest: str) -> dict:
     return value
 
 
+def _failure_location(error: Exception) -> dict:
+    """Retain only bounded repository code locations, never exception text.
+
+    A failed one-shot capture must be diagnosable without executing it again.
+    Local variable values, argv, outputs and credentials are never inspected.
+    """
+    frames = []
+    current = error.__traceback__
+    while current is not None:
+        code = current.tb_frame.f_code
+        try:
+            source = Path(code.co_filename).resolve().relative_to(_ROOT)
+        except (OSError, ValueError):
+            current = current.tb_next
+            continue
+        name = code.co_name
+        if (
+            source.suffix == ".py"
+            and source.parts[0] in {"scripts", "src"}
+            and re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]{0,127}", name)
+        ):
+            frames.append(
+                {
+                    "source": source.as_posix(),
+                    "line": current.tb_lineno,
+                    "function": name,
+                }
+            )
+        current = current.tb_next
+    return {
+        "schema": "aragorn/native-identity-capture-failure-location/v1",
+        "repository_frames": frames[-8:],
+        "exception_text_retained": False,
+        "locals_retained": False,
+        "retry_performed": False,
+    }
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -302,13 +340,14 @@ def main(argv=None) -> int:
             )
         )
         return 0 if document["status"] == "OBSERVED" else 2
-    except Exception:
+    except Exception as error:
         # Never echo a helper exception, fixture token, command output or path.
         print(
             json.dumps(
                 {
                     "status": "REFUSED",
                     "reason": "CAPTURE_PREREQUISITE_OR_EXECUTION_FAILED",
+                    "diagnostic": _failure_location(error),
                 }
             )
         )

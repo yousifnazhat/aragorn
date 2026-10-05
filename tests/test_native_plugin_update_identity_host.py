@@ -209,15 +209,30 @@ class NativePluginUpdateIdentityHostTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(code, 2)
+            result = json.loads(output.getvalue())
+            self.assertEqual(result["status"], "REFUSED")
             self.assertEqual(
-                json.loads(output.getvalue()),
-                {
-                    "status": "REFUSED",
-                    "reason": "CAPTURE_PREREQUISITE_OR_EXECUTION_FAILED",
-                },
+                result["reason"], "CAPTURE_PREREQUISITE_OR_EXECUTION_FAILED"
             )
+            self.assertTrue(result["diagnostic"]["repository_frames"])
+            self.assertFalse(result["diagnostic"]["exception_text_retained"])
+            self.assertFalse(result["diagnostic"]["locals_retained"])
             capture.assert_not_called()
             self.assertFalse((root / "out").exists())
+
+    def test_failure_location_omits_exception_text_locals_and_external_paths(self):
+        try:
+            subject._expect(False, "secret credential must not be retained")
+        except Exception as error:
+            result = subject._failure_location(error)
+        self.assertNotIn("secret", json.dumps(result))
+        self.assertTrue(result["repository_frames"])
+        self.assertLessEqual(len(result["repository_frames"]), 8)
+        for frame in result["repository_frames"]:
+            self.assertEqual(set(frame), {"source", "line", "function"})
+            self.assertTrue(frame["source"].startswith(("scripts/", "src/")))
+            self.assertGreater(frame["line"], 0)
+        self.assertFalse(result["retry_performed"])
 
     def test_help_has_explicit_capture_command_without_live_operation(self):
         with (

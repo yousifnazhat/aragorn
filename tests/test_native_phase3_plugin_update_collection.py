@@ -11,6 +11,7 @@ from unittest.mock import patch
 from aragorn import native_phase3_plugin_update_collection as subject
 from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_json
+import test_native_phase3_plugin_update_live_binding as live_fixture
 
 _PATH = (
     Path(__file__).resolve().parents[1]
@@ -247,6 +248,142 @@ class NativePluginUpdateCollectionTests(unittest.TestCase):
             if path.is_file():
                 value = json.loads(path.read_bytes())
                 self.assertNotEqual(value.get("schema"), subject.SCHEMA)
+
+    def live_inputs(self):
+        capture = json.loads(self.raw)
+        sources = live_fixture._fixture(capture)
+        raw = canonical_json(capture) + b"\n"
+        base_pins = {**self.pins, "expected_capture_digest": _digest(raw)}
+        prepared = subject.prepare_native_plugin_update_collection(raw, **base_pins)
+        static_raw = canonical_json(capture["live_identity"]["static_pin_manifest"])
+        pins = {
+            **base_pins,
+            "expected_deployment_digest": prepared["deployment_digest"],
+            "expected_live_identity_digest": _digest(
+                canonical_json(capture["live_identity"])
+            ),
+            "expected_static_pin_manifest_digest": _digest(static_raw),
+            "expected_live_source_digests": {
+                path: _digest(value) for path, value in sources.items()
+            },
+        }
+        inputs = {
+            "deployment_raw": prepared["deployment_raw"],
+            "static_pin_manifest_raw": static_raw,
+            "live_source_raws": sources,
+        }
+        return raw, pins, inputs
+
+    def test_live_collection_reuses_original_manifest_and_replays_without_writes(self):
+        raw, pins, inputs = self.live_inputs()
+        retained = subject.collect_native_plugin_update_live_observation(
+            raw, **pins, **inputs, evidence_cas=self.cas
+        )
+        manifest = retained["collection"]
+        self.assertEqual(manifest["schema"], subject.LIVE_SCHEMA)
+        self.assertTrue(
+            all(manifest[name] is False for name in subject._LIVE_FALSE_FLAGS)
+        )
+        original = json.loads(
+            self.readonly.read(manifest["reported_collection"]["digest"])
+        )
+        self.assertEqual(original["schema"], subject.SCHEMA)
+        self.assertNotIn("live_sources", original)
+        self.assertEqual(self.readonly.read(original["capture"]["digest"]), raw)
+        before = self.inventory()
+        with patch.object(
+            CAS, "put_expected", side_effect=AssertionError("live replay wrote")
+        ):
+            replayed = subject.replay_native_plugin_update_live_collection(
+                expected_collection_digest=retained["collection_digest"],
+                **pins,
+                evidence_cas=self.readonly,
+            )
+        self.assertEqual(replayed, retained)
+        self.assertEqual(before, self.inventory())
+        self.assertEqual(
+            retained["verification"]["live_deployment_dimensions_verified"], []
+        )
+        self.assertFalse(retained["verification"]["metrics_eligible"])
+
+    def test_live_wrong_pins_missing_children_and_forged_verdict_refuse(self):
+        raw, pins, inputs = self.live_inputs()
+        before = self.inventory()
+        for override in (
+            {"expected_live_identity_digest": "sha256:" + "0" * 64},
+            {"expected_static_pin_manifest_digest": "sha256:" + "0" * 64},
+            {"expected_live_source_digests": {}},
+            {
+                "live_source_raws": {
+                    **inputs["live_source_raws"],
+                    subject.live_binding.SOURCE_PATHS[0]: b"wrong",
+                }
+            },
+        ):
+            with (
+                self.subTest(override=tuple(override)),
+                self.assertRaises(subject.NativePluginUpdateCollectionError),
+            ):
+                subject.collect_native_plugin_update_live_observation(
+                    raw, **{**pins, **inputs, **override}, evidence_cas=self.cas
+                )
+            self.assertEqual(before, self.inventory())
+        retained = subject.collect_native_plugin_update_live_observation(
+            raw, **pins, **inputs, evidence_cas=self.cas
+        )
+        original_read = CAS.read
+        references = (
+            retained["collection"]["reported_collection"]["digest"],
+            retained["collection"]["live_identity"]["digest"],
+            pins["expected_static_pin_manifest_digest"],
+            *pins["expected_live_source_digests"].values(),
+        )
+        for missing in references:
+
+            def read(store, digest, *, max_bytes=None):
+                if digest == missing:
+                    raise CASError("inert missing live child")
+                return original_read(store, digest, max_bytes=max_bytes)
+
+            with (
+                self.subTest(missing=missing),
+                patch.object(CAS, "read", read),
+                self.assertRaises(subject.NativePluginUpdateCollectionError),
+            ):
+                subject.replay_native_plugin_update_live_collection(
+                    expected_collection_digest=retained["collection_digest"],
+                    **pins,
+                    evidence_cas=self.readonly,
+                )
+        forged = json.loads(canonical_json(retained["collection"]))
+        verification_raw = canonical_json(
+            {**retained["verification"], "route_qualified": True}
+        )
+        forged["verification"] = {
+            "digest": self.cas.put(
+                BytesIO(verification_raw), max_bytes=len(verification_raw)
+            ),
+            "bytes": len(verification_raw),
+        }
+        forged_raw = canonical_json(forged)
+        forged_pin = self.cas.put(BytesIO(forged_raw), max_bytes=len(forged_raw))
+        with self.assertRaises(subject.NativePluginUpdateCollectionError):
+            subject.replay_native_plugin_update_live_collection(
+                expected_collection_digest=forged_pin,
+                **pins,
+                evidence_cas=self.readonly,
+            )
+        with (
+            patch.object(
+                subject.live_binding,
+                "verify_native_plugin_update_live_binding",
+                side_effect=ValueError("inert semantic refusal"),
+            ),
+            self.assertRaises(subject.NativePluginUpdateCollectionError),
+        ):
+            subject.collect_native_plugin_update_live_observation(
+                raw, **pins, **inputs, evidence_cas=self.cas
+            )
 
 
 if __name__ == "__main__":

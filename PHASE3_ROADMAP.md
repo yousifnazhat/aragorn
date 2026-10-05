@@ -449,9 +449,10 @@ remain intact. The wrapper freezes seven hashes from actual provisioning writer
 arguments before activation, then brackets exactly one update-adapter invocation
 with live reads. Eleven static file pins must be supplied independently; eight
 are cross-checked against the staged profile and the entrypoint against the
-existing runtime pin. Python/Node pins still require independent image/binary
-provenance before a live run. Never learn those expectations from the same
-readback being verified.
+existing runtime pin. The new offline preparer derives Python/Node expectations
+from the fixed September 3 record for the exact fixture image, cross-joining
+Python to the native update record. These historical expectations are not a
+current image attestation. Never learn them from the same readback being verified.
 
 The [independent live-binding consumer](src/aragorn/native_phase3_plugin_update_live_binding.py)
 consumes the entire successor capture, retaining the original reported-identity
@@ -460,8 +461,11 @@ requires a read-only CAS containing the seven deployment artifacts, three exact
 helper source blobs and canonical static-pin manifest at caller-held digests.
 It does not import the reader or capture code, trust a recorded comparison/PASS,
 or make any deployment dimension fully live-attested. The existing offline
-collection CLI still replays reported identities only; it does not invoke this
-new consumer automatically.
+collection CLI now adds `retain-live` and `replay-live`: these retain the
+original reported-identity collection plus the live envelope, static manifest,
+exact three helper sources and independent consumer result. Replay recomputes
+both consumers and rereads the complete closure; no recorded PASS is authority.
+Original `prepare`/`retain`/`replay` behavior and formats remain unchanged.
 
 The repo-local CLI uses the existing Python 3.12/standard-library toolchain:
 
@@ -479,16 +483,48 @@ The pin document has exactly `schema` (the fixed
 eleven exact static paths), canonical JSON without a newline. No credentials or
 global installation are required. Success stdout is a JSON object with `status`,
 `path` and exact output `digest`; controlled execution refusal returns status
-`REFUSED` and exit 2. Unexpected failures emit only a redacted fixed reason.
+`REFUSED` and exit 2. Unexpected failures emit a fixed reason plus bounded
+repository-relative Python frame locations, never exception text or locals.
 There are no effect retries. Six observer monotonic stamps bracket the adapter;
 they are not the required end-to-end decision latency measurement.
 
-**Next integration batch:** establish the independent binary-pin provenance,
-then retain one newly necessary successor identity capture after fixture review.
+**Offline preparation and retention:** use the existing Python 3.12 toolchain:
+
+```sh
+/opt/homebrew/bin/python3.12 -S -B scripts/prepare_native_plugin_update_identity_pins.py prepare \
+  --out "$ABSENT_ABSOLUTE_STATIC_PINS" --provenance-out "$ABSENT_ABSOLUTE_PROVENANCE"
+```
+
+Both output paths must be absent and direct (no symlink ancestry). Preparation
+writes provenance first and the canonical eleven-file manifest last; partial
+output on refusal is preserved and never treated as success. No VM, network,
+credentials, installation, or capture execution is involved.
+
+After a fresh reviewed successor capture, `retain-live` takes all original
+capture/source/deployment pins plus `--expected-live-identity-digest`,
+`--expected-static-pin-manifest-digest` and the exact three
+`--expected-live-{host,guest,reader}-source-digest` pins. Supply direct files with
+`--static-pin-manifest` and `--live-{host,guest,reader}-source` and the chosen
+`--cas`. `replay-live` takes the same caller pins plus
+`--expected-collection-digest`, without direct input files, and opens CAS
+read-only. These are offline operations, not authorization for live execution.
+
+The focused reviewed batch passed **36 new/affected unit checks**, including
+12 new methods, on first attempt through the pipeline. Five unchanged dependency
+stages reused their exact recorded passes. No live capture or final acceptance
+was performed by those checks; no Phase 3 exit entry closed.
+
+**Next integration batch:** retain one newly necessary successor identity
+capture after fixture review using the independently prepared binary pins.
 Complete Tetragon program/map/sensor applicability and join actual readback to
 raw scrape accounting before one guarded native OS-event integration check.
 The map/program association requires pinned producer/loader and Linux
-program/link/PIDFD ABI source. Some retained Tetragon event-output paths do not
+program/link/PIDFD ABI source, now retained in the
+[new source supplement](benchmark/tetragon-program-map-source-v1/README.md).
+The source confirms that `used_maps` may include explicitly bound maps unused by
+instructions, and perf-link info lacks enabled-state/responsiveness evidence.
+Linux 6.8 name queries require a bounded input buffer, not inferred size discovery.
+Some retained Tetragon event-output paths do not
 update the selected stats map, so map membership alone cannot prove complete
 event-loss accounting. Unsupported attachment/tail-call paths remain unresolved.
 Do not create another offline collection abstraction or recapture only to

@@ -15,6 +15,7 @@ from unittest import mock
 from aragorn.cas import CAS
 from aragorn.oci_worker_protocol import canonical_json
 from scripts import native_plugin_update_collection as cli
+import test_native_phase3_plugin_update_live_binding as live_fixture
 
 _ROOT = Path(__file__).resolve().parents[1]
 _FIXTURE = (
@@ -190,6 +191,151 @@ class NativePluginUpdateCollectionCLITests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("input bytes or identity changed", result["error"])
         self.assertFalse((self.root / "cas").exists())
+
+    def live_arguments(self):
+        raw = _FIXTURE.read_bytes()
+        self.assertEqual(_digest(raw), _CAPTURE_PIN)
+        capture = json.loads(raw)
+        sources = live_fixture._fixture(capture)
+        raw = canonical_json(capture) + b"\n"
+        source = capture["source"]
+        base_pins = {
+            "expected_capture_digest": _digest(raw),
+            "expected_source_digest": _digest(canonical_json(source)),
+            "expected_source_commit": source["commit"],
+        }
+        prepared = cli.collection.prepare_native_plugin_update_collection(
+            raw, **base_pins
+        )
+        static_raw = canonical_json(capture["live_identity"]["static_pin_manifest"])
+        paths = {
+            name: self.root / (name + ".json")
+            for name in ("capture", "deployment", "static")
+        }
+        paths["capture"].write_bytes(raw)
+        paths["deployment"].write_bytes(prepared["deployment_raw"])
+        paths["static"].write_bytes(static_raw)
+        shared = []
+        for name, pin in base_pins.items():
+            shared.extend(("--" + name.replace("_", "-"), pin))
+        shared.extend(
+            (
+                "--expected-deployment-digest",
+                prepared["deployment_digest"],
+                "--expected-live-identity-digest",
+                _digest(canonical_json(capture["live_identity"])),
+                "--expected-static-pin-manifest-digest",
+                _digest(static_raw),
+                "--cas",
+                str(self.root / "live-cas"),
+            )
+        )
+        files = [
+            "--capture",
+            str(paths["capture"]),
+            "--deployment",
+            str(paths["deployment"]),
+            "--static-pin-manifest",
+            str(paths["static"]),
+        ]
+        for role, name in cli._LIVE_SOURCE_ROLES.items():
+            path = self.root / (role + ".py")
+            path.write_bytes(sources[name])
+            files.extend((f"--live-{role}-source", str(path)))
+            shared.extend(
+                (f"--expected-live-{role}-source-digest", _digest(sources[name]))
+            )
+        return shared, files
+
+    def test_retain_live_and_module_replay_live_preserve_json_and_readonly_contract(
+        self,
+    ):
+        shared, files = self.live_arguments()
+        code, retained = self.invoke("retain-live", *files, *shared)
+        self.assertEqual(code, 0, retained)
+        self.assertEqual(
+            retained["result"]["collection"]["schema"], cli.collection.LIVE_SCHEMA
+        )
+        store = self.root / "live-cas"
+        before = {
+            str(path): path.read_bytes() for path in store.rglob("*") if path.is_file()
+        }
+        process = subprocess.run(
+            [
+                sys.executable,
+                "-S",
+                "-B",
+                "-m",
+                "scripts.native_plugin_update_collection",
+                "replay-live",
+                "--expected-collection-digest",
+                retained["result"]["collection_digest"],
+                *shared,
+            ],
+            cwd=_ROOT,
+            env={
+                **os.environ,
+                "PYTHONPATH": str(_ROOT / "src"),
+                "PYTHONDONTWRITEBYTECODE": "1",
+            },
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr or process.stdout)
+        replayed = json.loads(process.stdout)
+        self.assertEqual(replayed["result"], retained["result"])
+        self.assertFalse(
+            replayed["result"]["verification"]["common_deployment_fully_verified"]
+        )
+        self.assertEqual(
+            before,
+            {
+                str(path): path.read_bytes()
+                for path in store.rglob("*")
+                if path.is_file()
+            },
+        )
+
+    def test_live_fixed_inputs_missing_pins_symlinks_and_postread_changes_refuse(self):
+        shared, files = self.live_arguments()
+        pin_index = shared.index("--expected-live-reader-source-digest")
+        for args in (
+            ["retain-live", *files, *shared[:pin_index], *shared[pin_index + 2 :]],
+            ["retain-live", *files, *shared, "--live-arbitrary-source", "unused"],
+            ["replay-live", *shared],
+        ):
+            with self.subTest(args=args[-2:]), mock.patch.object(cli, "_run") as run:
+                code, output = self.invoke(*args)
+            self.assertEqual(code, 2, output)
+            run.assert_not_called()
+        source_path = self.root / "reader.py"
+        linked = self.root / "linked-reader.py"
+        linked.symlink_to(source_path)
+        linked_files = list(files)
+        linked_files[linked_files.index("--live-reader-source") + 1] = str(linked)
+        with mock.patch.object(
+            cli.collection, "collect_native_plugin_update_live_observation"
+        ) as collect:
+            code, output = self.invoke("retain-live", *linked_files, *shared)
+        self.assertEqual(code, 2, output)
+        collect.assert_not_called()
+        self.assertFalse((self.root / "live-cas").exists())
+
+        def mutate_source(*_args, **_kwargs):
+            source_path.write_bytes(b"replaced during offline retention")
+            return {"inert": True}
+
+        with mock.patch.object(
+            cli.collection,
+            "collect_native_plugin_update_live_observation",
+            side_effect=mutate_source,
+        ):
+            code, output = self.invoke("retain-live", *files, *shared)
+        self.assertEqual(code, 2, output)
+        self.assertIn("input bytes or identity changed", output["error"])
 
 
 if __name__ == "__main__":

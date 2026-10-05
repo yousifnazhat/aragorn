@@ -24,6 +24,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
 
 from scripts import capture_runtime_native_plugin_update_identity_check as prior
+from scripts import prepare_native_plugin_update_identity_pins as pin_preparation
 from aragorn import native_phase3_plugin_update_case as case
 from aragorn import native_phase3_plugin_update_collection as collection
 from aragorn.cas import CAS
@@ -109,14 +110,18 @@ def _bundle(inspected: dict, intent_pin: str) -> bytes:
     return raw
 
 
-def _source_guard(inspected: dict) -> dict:
-    intent = inspected["intent"]
+def _current_source() -> dict:
     # Match the inherited source recorder's fixed update probe inventory before
     # any parent snapshot, Docker call, fixture creation or activation.
     with patch.object(
         prior.prior.prior, "_FIXTURE_SOURCES", prior.prior._FIXTURE_SOURCES
     ):
-        source = prior.prior.prior._source()
+        return prior.prior.prior._source()
+
+
+def _source_guard(inspected: dict) -> dict:
+    intent = inspected["intent"]
+    source = _current_source()
     case._require(
         source["commit"] == intent["source_commit"]
         and canonical_json(source)
@@ -133,6 +138,98 @@ def _source_guard(inspected: dict) -> dict:
             )
             _source_bytes(_ROOT / path, raw)
     return source
+
+
+def _prepare(store: CAS, nonce: str) -> dict:
+    """Construct expectations offline; this does not measure the live runtime."""
+    case._require(
+        type(nonce) is str and re.fullmatch(r"[0-9a-f]{64}", nonce) is not None,
+        "caller nonce must be 64 lowercase hex characters",
+    )
+    source = _current_source()
+    capture_raw = pin_preparation._read_fixed(
+        _ROOT / pin_preparation._CAPTURE, pin_preparation._CAPTURE_PIN
+    )
+    image_raw = pin_preparation._read_fixed(
+        _ROOT / pin_preparation._IMAGE_RECORD, pin_preparation._IMAGE_PIN
+    )
+    static, provenance = pin_preparation.prepare_pin_documents(capture_raw, image_raw)
+    sources = {}
+    for path in (*case.CONTROLLER_SOURCE_PATHS, *case.LIVE_SOURCE_PATHS):
+        entry = prior._api._tree_file(source["commit"], Path(path))
+        sources[path] = pin_preparation._read_fixed(
+            _ROOT / path, (entry["bytes"], entry["digest"])
+        )
+    # Use the real existing stager and its audits, never manufacture a profile
+    # from the old observation. The temporary tree is inert and removed here.
+    with TemporaryDirectory(prefix="aragorn-native-case-prepare-") as temporary:
+        staged = prior.prior.prior.profile.stage_runtime_native_startup_profile(
+            Path(temporary).resolve() / "stage"
+        )
+        prepared = case.build_native_plugin_update_case_intent(
+            nonce=nonce,
+            source_record_raw=canonical_json(source),
+            controller_source_raws={
+                path: sources[path] for path in case.CONTROLLER_SOURCE_PATHS
+            },
+            live_source_raws={path: sources[path] for path in case.LIVE_SOURCE_PATHS},
+            static_pin_manifest_raw=canonical_json(static),
+            staged_profile=staged,
+            baseline_capture_raw=capture_raw,
+        )
+        inspected = {
+            "intent": case._parse(prepared["intent_raw"]),
+            "input_blobs": prepared["input_blobs"],
+        }
+        _stage_guard(staged, inspected)
+        prior._stage_pins(staged, static["file_digests"])
+    _source_guard(inspected)
+    intent_pin = prepared["intent_digest"]
+    # Children first, intent last; a partial failed publication is not success.
+    for pin, raw in prepared["input_blobs"].items():
+        if pin != intent_pin:
+            store.put_expected(BytesIO(raw), expected_digest=pin, max_bytes=len(raw))
+    store.put_expected(
+        BytesIO(prepared["intent_raw"]), expected_digest=intent_pin, max_bytes=16384
+    )
+    verified = _inspect(CAS(store.root, read_only=True), intent_pin)
+    case._require(
+        verified == inspected, "retained preparation differs from constructed inputs"
+    )
+    _source_guard(verified)
+    return {
+        "schema": "aragorn/native-plugin-update-case-preparation/v1",
+        "status": "PREPARED_EXPECTATIONS_ONLY",
+        "authority": "SIGNED_HOST_INPUTS_AND_HISTORICAL_EXPECTATIONS_NOT_LIVE_OR_ORDERING_ATTESTATION",
+        "intent_digest": intent_pin,
+        "deployment_digest": verified["intent"]["deployment_digest"],
+        "source_commit": source["commit"],
+        "source_record_digest": verified["intent"]["source_record_digest"],
+        "input_blobs": {pin: len(raw) for pin, raw in verified["input_blobs"].items()},
+        "static_pin_provenance": provenance,
+        "limitations": [
+            "OLD_CONFIGURATION_WORKER_POLICY_AND_RUNTIME_ARTIFACTS_ARE_EXPECTATIONS_ONLY",
+            "FRESH_PROVISIONING_WRITER_JOINS_STILL_REQUIRED_BEFORE_ACTIVATION",
+            "NO_CAPTURE_OR_SERVICE_ACTIVATION_OR_LIVE_IDENTITY_READ_PERFORMED",
+        ],
+        **dict.fromkeys(_FALSE, False),
+    }
+
+
+def _preparation_destination(path: Path) -> None:
+    case._require(
+        path.is_absolute() and ".." not in path.parts,
+        "preparation destination must be direct and absolute",
+    )
+    if path.is_relative_to(_ROOT):
+        # New untracked files would invalidate the exact clean signed source
+        # record needed by capture. External paths are also allowed.
+        relative = path.relative_to(_ROOT)
+        case._require(
+            relative.parts and relative.parts[0] == ".aragorn",
+            "in-checkout preparation must use ignored .aragorn state",
+        )
+        prior._api.shared._git(["check-ignore", "-q", "--", relative.as_posix()])
 
 
 def _source_bytes(path: Path, expected: bytes) -> None:
@@ -450,11 +547,14 @@ def _retain(store: CAS, intent_pin: str, executed: dict) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("inspect", "capture", "replay"):
+    for name in ("prepare", "inspect", "capture", "replay"):
         command = commands.add_parser(name)
         command.add_argument("--cas", required=True, type=Path)
-        command.add_argument("--expected-intent-digest", required=True)
-        if name == "capture":
+        if name == "prepare":
+            command.add_argument("--nonce", required=True)
+        else:
+            command.add_argument("--expected-intent-digest", required=True)
+        if name in {"prepare", "capture"}:
             command.add_argument("--out", required=True, type=Path)
         if name == "replay":
             command.add_argument("--expected-request-digest", required=True)
@@ -462,6 +562,36 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         case._require(args.cas.is_absolute(), "CAS must be absolute")
+        if args.command == "prepare":
+            _preparation_destination(args.cas)
+            _preparation_destination(args.out)
+            # Hold no-follow ancestry for both destinations before CAS may
+            # create anything. Lexical containment alone cannot reject an
+            # external symlink alias into an unignored checkout directory.
+            with (
+                pin_preparation._parent(args.cas) as (_, cas_guard),
+                pin_preparation._parent(args.out) as (parent, guard),
+            ):
+                pin_preparation._absent(parent, args.out.name)
+                value = _prepare(CAS(args.cas), args.nonce)
+                cas_guard()
+                guard()
+                raw = canonical_json(value) + b"\n"
+                pin_preparation._write_new(parent, args.out.name, raw)
+                pin_preparation._read_fixed(args.out, (len(raw), case._digest(raw)))
+            print(
+                json.dumps(
+                    {
+                        "status": value["status"],
+                        "intent_digest": value["intent_digest"],
+                        "deployment_digest": value["deployment_digest"],
+                        "path": str(args.out),
+                        "digest": case._digest(raw),
+                    },
+                    sort_keys=True,
+                )
+            )
+            return 0
         readonly = CAS(args.cas, read_only=True)
         if args.command == "inspect":
             inspected = _inspect(readonly, args.expected_intent_digest)

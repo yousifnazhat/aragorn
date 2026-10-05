@@ -147,6 +147,155 @@ class NativePluginUpdateCaseTests(unittest.TestCase):
             prepared["request_raw"], **arguments
         )
 
+    def builder_arguments(self):
+        source = copy.deepcopy(self.capture["source"])
+        source["commit"] = (
+            "c" * 40
+        )  # Inert caller assertion, not a verified Git commit.
+        return {
+            "nonce": "d" * 64,
+            "source_record_raw": canonical_json(source),
+            "controller_source_raws": {
+                path: self.readonly.read(pin, max_bytes=subject._MAX_ARTIFACT)
+                for path, pin in self.intent["controller_source_digests"].items()
+            },
+            "live_source_raws": {
+                path: self.readonly.read(pin, max_bytes=subject._MAX_ARTIFACT)
+                for path, pin in self.intent["live_source_digests"].items()
+            },
+            "static_pin_manifest_raw": canonical_json(
+                self.capture["live_identity"]["static_pin_manifest"]
+            ),
+            "staged_profile": copy.deepcopy(self.capture["staged_profile"]),
+            "baseline_capture_raw": fixture._CAPTURE.read_bytes(),
+        }
+
+    def test_offline_intent_builder_returns_complete_inputs_without_writes_or_live_claims(
+        self,
+    ):
+        arguments = self.builder_arguments()
+        before = sorted(self.cas.root.rglob("*"))
+        with patch.object(
+            CAS, "put_expected", side_effect=AssertionError("constructor wrote CAS")
+        ):
+            built = subject.build_native_plugin_update_case_intent(**arguments)
+            repeated = subject.build_native_plugin_update_case_intent(**arguments)
+        self.assertEqual(built, repeated)
+        self.assertEqual(sorted(self.cas.root.rglob("*")), before)
+        self.assertEqual(set(built), {"intent_raw", "intent_digest", "input_blobs"})
+        intent = json.loads(built["intent_raw"])
+        self.assertEqual(subject._digest(built["intent_raw"]), built["intent_digest"])
+        self.assertEqual(intent["source_commit"], "c" * 40)
+        self.assertEqual(intent["nonce"], "d" * 64)
+        self.assertEqual(
+            intent["source_record_digest"],
+            subject._digest(arguments["source_record_raw"]),
+        )
+        self.assertNotIn(subject._BASELINE_DIGEST, built["input_blobs"])
+        deployment = json.loads(built["input_blobs"][intent["deployment_digest"]])
+        for name in (
+            "runtime_commit_or_image",
+            "configuration",
+            "worker",
+            "os_profile",
+            "policy",
+        ):
+            self.assertEqual(
+                built["input_blobs"][deployment["bindings"][name]], self.artifacts[name]
+            )
+        common_adapter = json.loads(
+            built["input_blobs"][deployment["bindings"]["adapter"]]
+        )
+        self.assertEqual(
+            common_adapter["identity"]["case_adapters"],
+            {
+                subject.ROUTE: {
+                    "branch": subject.BRANCH,
+                    "artifact_digest": intent["case_adapter_digest"],
+                },
+            },
+        )
+        version = json.loads(
+            built["input_blobs"][deployment["bindings"]["aragorn_version"]]
+        )
+        self.assertEqual(
+            version["identity"],
+            {
+                "source_commit": "c" * 40,
+                "source_record_digest": subject._digest(arguments["source_record_raw"]),
+            },
+        )
+        for pin, raw in built["input_blobs"].items():
+            self.assertEqual(
+                self.put(raw), pin
+            )  # Test-only retention, after the pure constructor.
+        inspected = subject.validate_native_plugin_update_case_intent(
+            built["intent_raw"],
+            expected_intent_digest=built["intent_digest"],
+            evidence_cas=self.readonly,
+        )
+        self.assertEqual(inspected["input_blobs"], built["input_blobs"])
+        self.assertEqual(inspected["intent"], intent)
+        self.assertNotIn("prepared_before_activation", intent)
+        self.assertFalse(set(subject._FALSE_FLAGS) & set(built))
+
+    def test_offline_intent_builder_refuses_changed_baseline_source_inventory_and_stage(
+        self,
+    ):
+        arguments = self.builder_arguments()
+        stage = arguments["staged_profile"]
+        changed_files = copy.deepcopy(stage)
+        changed_files["files"][0]["digest"] = "sha256:" + "0" * 64
+        changed_runtime = copy.deepcopy(stage)
+        changed_runtime["required_runtime_not_included"]["entrypoint_digest"] = (
+            "sha256:" + "0" * 64
+        )
+        static = json.loads(arguments["static_pin_manifest_raw"])
+        changed_static = copy.deepcopy(static)
+        changed_static["file_digests"][subject.live._WORKER_CODE] = "sha256:" + "0" * 64
+        missing = dict(arguments["controller_source_raws"])
+        missing.pop(subject.CONTROLLER_SOURCE_PATHS[0])
+        mutations = (
+            {"nonce": True},
+            {"baseline_capture_raw": arguments["baseline_capture_raw"] + b"\n"},
+            {"baseline_capture_raw": canonical_json(self.capture) + b"\n"},
+            {"source_record_raw": b'{"commit":'},
+            {"source_record_raw": canonical_json({"commit": True})},
+            {"source_record_raw": arguments["source_record_raw"] + b"\n"},
+            {"controller_source_raws": missing},
+            {
+                "controller_source_raws": {
+                    **arguments["controller_source_raws"],
+                    "/unexpected": b"source",
+                }
+            },
+            {"live_source_raws": {}},
+            {
+                "live_source_raws": {
+                    **arguments["live_source_raws"],
+                    subject.LIVE_SOURCE_PATHS[0]: b"\xff",
+                }
+            },
+            {"staged_profile": {**stage, "schema": "other"}},
+            {"staged_profile": changed_files},
+            {"staged_profile": changed_runtime},
+            {"static_pin_manifest_raw": canonical_json(changed_static)},
+            {"static_pin_manifest_raw": arguments["static_pin_manifest_raw"] + b"\n"},
+        )
+        with patch.object(
+            CAS,
+            "put_expected",
+            side_effect=AssertionError("refused constructor wrote CAS"),
+        ):
+            for mutation in mutations:
+                with (
+                    self.subTest(field=next(iter(mutation))),
+                    self.assertRaises(subject.NativePluginUpdateCaseError),
+                ):
+                    subject.build_native_plugin_update_case_intent(
+                        **{**arguments, **mutation}
+                    )
+
     def test_preparation_hashes_actual_writer_inputs_without_writes_or_secret_output(
         self,
     ):

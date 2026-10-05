@@ -5,7 +5,7 @@ import io
 import json
 import os
 import unittest
-from contextlib import redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -95,6 +95,209 @@ class NativePluginUpdateCaseHostTests(unittest.TestCase):
                 ]
             )
         return code, json.loads(output.getvalue())
+
+    @contextmanager
+    def offline_preparation(self):
+        arguments = self.data.builder_arguments()
+        sources = arguments["controller_source_raws"] | arguments["live_source_raws"]
+        original_read = subject.pin_preparation._read_fixed
+
+        def read(path, expected):
+            relative = (
+                path.relative_to(subject._ROOT).as_posix()
+                if path.is_relative_to(subject._ROOT)
+                else None
+            )
+            if relative in sources:
+                raw = sources[relative]
+                self.assertEqual(expected, (len(raw), subject.case._digest(raw)))
+                return raw
+            return original_read(path, expected)
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch.object(
+                    subject,
+                    "_current_source",
+                    return_value=json.loads(arguments["source_record_raw"]),
+                )
+            )
+            guard = stack.enter_context(patch.object(subject, "_source_guard"))
+            stack.enter_context(
+                patch.object(subject.pin_preparation, "_read_fixed", side_effect=read)
+            )
+            stack.enter_context(
+                patch.object(
+                    subject.prior._api,
+                    "_tree_file",
+                    side_effect=lambda commit, path: {
+                        "bytes": len(sources[str(path)]),
+                        "digest": subject.case._digest(sources[str(path)]),
+                    },
+                )
+            )
+            stage = stack.enter_context(
+                patch.object(
+                    subject.prior.prior.prior.profile,
+                    "stage_runtime_native_startup_profile",
+                    return_value=arguments["staged_profile"],
+                )
+            )
+            yield guard, stage
+
+    def test_prepare_retains_children_before_intent_and_never_captures(self):
+        root = Path(self.data.temporary.name).resolve()
+        store, out = root / "prepared-cas", root / "preparation.json"
+        publications = []
+        original_put = subject.CAS.put_expected
+
+        def publish(cas, stream, **kwargs):
+            publications.append(kwargs["expected_digest"])
+            return original_put(cas, stream, **kwargs)
+
+        with (
+            self.offline_preparation() as (guard, stage),
+            patch.object(
+                subject.CAS, "put_expected", autospec=True, side_effect=publish
+            ),
+            patch.object(
+                subject, "_capture", side_effect=AssertionError("preparation captured")
+            ),
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            code = subject.main(
+                ["prepare", "--cas", str(store), "--nonce", "f" * 64, "--out", str(out)]
+            )
+        self.assertEqual(code, 0, output.getvalue())
+        summary, report = json.loads(output.getvalue()), json.loads(out.read_bytes())
+        self.assertEqual(report["status"], "PREPARED_EXPECTATIONS_ONLY")
+        self.assertEqual(summary["intent_digest"], publications[-1])
+        self.assertEqual(len(publications), len(set(publications)))
+        self.assertEqual(set(publications), set(report["input_blobs"]))
+        self.assertEqual(summary["digest"], subject.case._digest(out.read_bytes()))
+        self.assertEqual(out.stat().st_mode & 0o777, 0o600)
+        self.assertTrue(all(report[key] is False for key in subject._FALSE))
+        inspected = subject._inspect(
+            subject.CAS(store, read_only=True), summary["intent_digest"]
+        )
+        self.assertEqual(inspected["intent"]["nonce"], "f" * 64)
+        self.assertEqual(
+            report["input_blobs"],
+            {pin: len(raw) for pin, raw in inspected["input_blobs"].items()},
+        )
+        self.assertEqual(guard.call_count, 2)
+        stage.assert_called_once()
+        self.assertFalse(stage.call_args.args[0].parent.exists())
+        with (
+            patch.object(subject, "_prepare") as prepare,
+            redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(
+                subject.main(
+                    [
+                        "prepare",
+                        "--cas",
+                        str(store),
+                        "--nonce",
+                        "f" * 64,
+                        "--out",
+                        str(out),
+                    ]
+                ),
+                2,
+            )
+        prepare.assert_not_called()
+
+    def test_preparation_refusals_do_not_publish_an_intent_or_invoke_capture(self):
+        store = subject.CAS(Path(self.data.temporary.name).resolve() / "refused-cas")
+        for boundary in ("source", "stage", "publication"):
+            with (
+                self.subTest(boundary=boundary),
+                self.offline_preparation() as (guard, stage),
+                patch.object(subject.CAS, "put_expected") as put,
+            ):
+                if boundary == "source":
+                    guard.side_effect = subject.case.NativePluginUpdateCaseError(
+                        "inert changed source"
+                    )
+                elif boundary == "stage":
+                    stage.return_value = {"schema": "changed"}
+                else:
+                    put.side_effect = OSError("inert disk failure")
+                with self.assertRaises(
+                    (subject.case.NativePluginUpdateCaseError, OSError)
+                ):
+                    subject._prepare(store, "f" * 64)
+                if boundary != "publication":
+                    put.assert_not_called()
+                else:
+                    put.assert_called_once()  # Stops on the first child; no retry or intent.
+        with (
+            patch.object(subject, "_current_source") as source,
+            self.assertRaises(subject.case.NativePluginUpdateCaseError),
+        ):
+            subject._prepare(store, "invalid nonce")
+        source.assert_not_called()
+
+    def test_preparation_destinations_preserve_clean_checkout_and_ignore_contract(self):
+        external = Path(self.data.temporary.name).resolve() / "output.json"
+        subject._preparation_destination(external)
+        with patch.object(subject.prior._api.shared, "_git") as git:
+            subject._preparation_destination(subject._ROOT / ".aragorn" / "new-inputs")
+            git.assert_called_once_with(
+                ["check-ignore", "-q", "--", ".aragorn/new-inputs"]
+            )
+        for path in (
+            Path("relative"),
+            external / ".." / "other",
+            subject._ROOT / "benchmark" / "untracked.json",
+        ):
+            with (
+                self.subTest(path=path),
+                self.assertRaises(subject.case.NativePluginUpdateCaseError),
+            ):
+                subject._preparation_destination(path)
+        with (
+            patch.object(
+                subject.prior._api.shared,
+                "_git",
+                side_effect=RuntimeError("not ignored"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            subject._preparation_destination(subject._ROOT / ".aragorn" / "new-inputs")
+
+    def test_prepare_rejects_cas_ancestor_alias_before_creating_storage(self):
+        root = Path(self.data.temporary.name).resolve()
+        alias = root / "checkout-alias"
+        alias.symlink_to(subject._ROOT / "benchmark", target_is_directory=True)
+        for destination in (
+            alias / "unrequested-case-cas",
+            root / "missing-parent" / "cas",
+        ):
+            with (
+                self.subTest(destination=destination),
+                patch.object(subject, "CAS") as cas,
+                patch.object(subject, "_prepare") as prepare,
+                redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(
+                    subject.main(
+                        [
+                            "prepare",
+                            "--cas",
+                            str(destination),
+                            "--nonce",
+                            "f" * 64,
+                            "--out",
+                            str(root / "new-report.json"),
+                        ]
+                    ),
+                    2,
+                )
+            cas.assert_not_called()
+            prepare.assert_not_called()
+        self.assertFalse((root / "missing-parent").exists())
 
     def test_offline_inspect_and_replay_use_caller_pins_without_capture(self):
         prepared = self.data.prepare()

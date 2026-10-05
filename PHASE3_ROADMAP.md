@@ -661,6 +661,52 @@ Do not create another offline collection abstraction or recapture only to
 exercise retention. Then advance admission ports and measurement callbacks in
 the order above. Final acceptance remains blocked.
 
+**Offline intent preparation (2026-10-05):** the existing fixed host entrypoint
+now also provides `prepare`. It constructs the current signed-source intent,
+retains every public input child before the intent, and reads the complete
+closure back without starting the VM, invoking an adapter, or activating any
+service. The same entrypoint eagerly imports the same helpers for preparation
+and capture, preserving the inherited source recorder's repository-file closure.
+An absent-only private JSON preparation report retains the resulting pins and
+the existing static-binary pin provenance.
+
+```text
+python3.12 -S -B scripts/capture_native_phase3_plugin_update_case.py prepare --cas ABS_CAS --nonce CALLER_64_LOWERCASE_HEX --out ABSENT_ABS_REPORT
+```
+
+Repository-local outputs must be under ignored `.aragorn` state so preparation
+does not dirty the exact signed checkout required by capture; external absolute
+paths are also accepted. Both parents must already exist with direct no-follow
+ancestry, held across publication; an external symlink cannot redirect creation
+into an unignored checkout directory. The preparer uses the real inert 70-file stager and the
+two existing pinned historical records. Historical runtime/configuration/worker/
+policy/profile artifacts remain **expectations only**, not new observations.
+Current Aragorn source and common-controller artifacts are regenerated; the
+case-specific adapter remains separate. All nine qualification flags stay false.
+The old protected-root policy includes device/inode identity. Oct1 and Oct5
+records happen to match that policy and worker binding; this is not a universal
+identity guarantee. A future mismatch must refuse before activation, not silently
+replace the caller's pinned deployment or weaken equality.
+
+This completes construction of the caller-held inputs for the selected case,
+not admission dispatcher integration or any Phase 3 exit gate. The next step is
+one new preactivation-boundary check from a clean signed source, if all exact
+fixture prerequisites hold. Failed effects cannot be automatically retried.
+The [preparation implementation checkpoint](benchmark/evidence/phase3-native-intent-preparation-implementation-v1-2026-10-05.json)
+records 30 passing affected checks (six new methods), eight exact unchanged
+prerequisite stages reused, 2.814 seconds summed stage wall time, and no live
+capture, VM action, performance measurement or newly qualified gate.
+
+The parallel sensor review identified the smallest useful progress join:
+protected matching exec/exit delivery, bracketing program/map/link association,
+and raw per-CPU counter changes must remain separate findings. Process events
+contain no program/link/map ID, so delivery cannot prove that the selected link
+emitted an event or that its map accounts for all losses. The existing native
+lineage publisher is not Tetragon. A concrete Tetragon reader endpoint, exact
+sensor/process namespace custody and a newly bound common deployment remain
+prerequisites; sparse/missing scrape metrics remain unresolved. No additional
+sensor live check or generic collection framework is justified by this review.
+
 Progress updates should report: closed gate entries, entries still needing
 implementation, changed-behavior checks performed, active engineering time,
 machine time, and the next dependency. Do not report an unsupported overall

@@ -18,7 +18,11 @@ from . import native_phase3_plugin_update_binding as reported
 from . import native_phase3_plugin_update_live_binding as live
 from .cas import CAS, CASError
 from .oci_worker_protocol import canonical_json
-from .phase3_deployment import BINDING_DIMENSIONS, resolve_phase3_deployment_identity
+from .phase3_deployment import (
+    BINDING_DIMENSIONS,
+    build_phase3_deployment_identity,
+    resolve_phase3_deployment_identity,
+)
 
 INTENT_SCHEMA = "aragorn/native-plugin-update-case-intent/v1"
 REQUEST_SCHEMA = "aragorn/native-plugin-update-case-request/v1"
@@ -34,6 +38,14 @@ _IDENTITY_SCHEMA = "aragorn/native-phase3-report-identity/v1"
 _CONFIG_PIN = "sha256:dcb02812b2d531f62079ca6a6a66800659635459f9b21432cf4b5d093d6b586c"
 _WORKER_PIN = "sha256:df55f788ed29d188c71ca201d5778e7bff734b9a2f09445d8247c4ab6f40cd32"
 _WORKER_BYTES = 46629
+_BASELINE_BYTES = 422631
+_BASELINE_DIGEST = (
+    "sha256:42acdf26c128c4d7ecdfd740ac04b17509e9e17e0b799e7d4a870bf5e82a9e12"
+)
+_BASELINE_SOURCE_COMMIT = "85d59fd39ab8ccc2d74a6ab4ca8de029ed1fdd5d"
+_BASELINE_SOURCE_DIGEST = (
+    "sha256:1ae8f8739a59318b6b4fcc8b5c58c468aeaad151208c3562a8b6f4ec667b961a"
+)
 _MAX_INPUT = 2 * 1024 * 1024
 _MAX_ARTIFACT = 1024 * 1024
 _MAX_DOCUMENT = 16384
@@ -139,6 +151,177 @@ def _intent(raw: bytes, expected: str) -> dict:
     _pins(value["controller_source_digests"], CONTROLLER_SOURCE_PATHS)
     _pins(value["live_source_digests"], LIVE_SOURCE_PATHS)
     return value
+
+
+def build_native_plugin_update_case_intent(
+    *,
+    nonce: str,
+    source_record_raw: bytes,
+    controller_source_raws: dict[str, bytes],
+    live_source_raws: dict[str, bytes],
+    static_pin_manifest_raw: bytes,
+    staged_profile: dict,
+    baseline_capture_raw: bytes,
+) -> dict[str, Any]:
+    """Construct fixed caller expectations without files, CAS writes or execution.
+
+    The one pinned historical capture supplies expected runtime, configuration,
+    worker, policy, OS-profile and case-adapter bytes. It is not a new run or a
+    claim that fresh per-fixture inputs will match: preparation must still check
+    their actual writer bytes before activation. Current controller/source bytes
+    replace only the common adapter and Aragorn identities. The host separately
+    verifies the signed checkout, source record and actual stage; this constructor
+    neither verifies a Git signature nor attests a deployment. Python/Node pins
+    require the caller's existing independently reviewed pin provenance.
+    """
+    try:
+        _require(
+            type(baseline_capture_raw) is bytes
+            and len(baseline_capture_raw) == _BASELINE_BYTES
+            and _digest(baseline_capture_raw) == _BASELINE_DIGEST,
+            "fixed baseline capture changed",
+        )
+        artifacts = reported.native_plugin_update_identity_artifacts(
+            baseline_capture_raw,
+            expected_capture_digest=_BASELINE_DIGEST,
+            expected_source_digest=_BASELINE_SOURCE_DIGEST,
+            expected_source_commit=_BASELINE_SOURCE_COMMIT,
+        )
+        baseline = reported._parse(baseline_capture_raw, newline=True)
+        _require(type(staged_profile) is dict, "stage must be a bounded object")
+        stage = _parse(canonical_json(staged_profile), _MAX_ARTIFACT)
+        historical_stage = baseline["staged_profile"]
+        _require(
+            stage["schema"] == historical_stage["schema"]
+            and type(stage["files"]) is list
+            and len(stage["files"]) == 70
+            and canonical_json(stage["files"])
+            == canonical_json(historical_stage["files"])
+            and stage["required_runtime_not_included"]
+            == historical_stage["required_runtime_not_included"],
+            "current stage differs from fixed native profile",
+        )
+        source = _parse(source_record_raw, _MAX_ARTIFACT)
+        _require(
+            type(source.get("commit")) is str
+            and re.fullmatch(r"[0-9a-f]{40}", source["commit"]) is not None,
+            "current source commit is invalid",
+        )
+        static = _parse(static_pin_manifest_raw)
+        _require(
+            set(static) == {"schema", "file_digests"}
+            and static["schema"]
+            == "aragorn/native-plugin-update-identity-static-pins/v1",
+            "static manifest contract changed",
+        )
+        static_pins = _pins(static["file_digests"], live.STATIC_PATHS)
+        files = {item["path"]: item for item in stage["files"]}
+        _require(
+            all(
+                static_pins[path] == files[path]["digest"]
+                for path in live._PROFILE_PATHS
+            )
+            and static_pins[live._WORKER_CODE] == _WORKER_PIN
+            and static_pins[live._ENTRY]
+            == stage["required_runtime_not_included"]["entrypoint_digest"]
+            and static_pins[live._PYTHON]
+            == baseline["observation"]["setup"]["runtime_profile"]["executable_digest"],
+            "static pins differ from fixed code or runtime expectations",
+        )
+        blobs = {}
+
+        def retain(raw, limit=_MAX_ARTIFACT):
+            _require(
+                type(raw) is bytes and 0 < len(raw) <= limit, "unbounded public input"
+            )
+            raw.decode("utf-8")  # The fixed guest bundle transports UTF-8 bytes only.
+            pin = _digest(raw)
+            _require(
+                pin not in blobs or blobs[pin] == raw, "public input digest collision"
+            )
+            blobs[pin] = raw
+            return pin
+
+        source_digest = retain(source_record_raw)
+        static_digest = retain(static_pin_manifest_raw, _MAX_DOCUMENT)
+
+        def source_pins(raws, paths):
+            _require(
+                type(raws) is dict and set(raws) == set(paths),
+                "source inventory changed",
+            )
+            return {path: retain(raws[path]) for path in paths}
+
+        controllers = source_pins(controller_source_raws, CONTROLLER_SOURCE_PATHS)
+        live_sources = source_pins(live_source_raws, LIVE_SOURCE_PATHS)
+        case_adapter_digest = retain(artifacts["adapter"])
+        artifacts["adapter"] = _artifact(
+            "adapter",
+            {
+                "controller_source_digests": controllers,
+                "case_adapters": {
+                    ROUTE: {
+                        "branch": BRANCH,
+                        "artifact_digest": case_adapter_digest,
+                    }
+                },
+            },
+        )
+        artifacts["aragorn_version"] = _artifact(
+            "aragorn_version",
+            {
+                "source_commit": source["commit"],
+                "source_record_digest": source_digest,
+            },
+        )
+        deployment = build_phase3_deployment_identity(
+            {name: retain(raw) for name, raw in artifacts.items()}
+        )
+        intent = {
+            "schema": INTENT_SCHEMA,
+            "case_id": ROUTE,
+            "branch": BRANCH,
+            "nonce": nonce,
+            "deployment_digest": retain(canonical_json(deployment), 4096),
+            "case_adapter_digest": case_adapter_digest,
+            "source_commit": source["commit"],
+            "source_record_digest": source_digest,
+            "static_pin_manifest_digest": static_digest,
+            "controller_source_digests": controllers,
+            "live_source_digests": live_sources,
+        }
+        intent_raw = canonical_json(intent)
+        intent_digest = retain(intent_raw, _MAX_DOCUMENT)
+        _intent(intent_raw, intent_digest)
+        bundle = canonical_json(
+            {
+                "schema": "aragorn/native-plugin-update-case-inputs/v1",
+                "intent_digest": intent_digest,
+                "blobs": {pin: raw.decode("utf-8") for pin, raw in blobs.items()},
+            }
+        )
+        _require(
+            len(blobs) <= 32 and len(bundle) <= _MAX_INPUT,
+            "case input bundle exceeds bound",
+        )
+        return {
+            "intent_raw": intent_raw,
+            "intent_digest": intent_digest,
+            "input_blobs": blobs,
+        }
+    except NativePluginUpdateCaseError:
+        raise
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        IndexError,
+        OverflowError,
+        RecursionError,
+    ) as exc:
+        raise NativePluginUpdateCaseError(
+            "native case intent construction refused"
+        ) from exc
 
 
 def _inputs(raw: bytes, expected: str, store: CAS) -> dict:

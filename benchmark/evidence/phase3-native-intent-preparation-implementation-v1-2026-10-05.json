@@ -1,0 +1,54 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "9fda4c7f994c691ab3222c1619966888d5fcd963",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T05:00:33.965Z",
+    "validation_recorded": "2026-10-05T06:25:06Z",
+    "meaning": "Session wall window includes parallel review and an execution-context continuation; active engineering time is not separately instrumented."
+  },
+  "implementation": [
+    "Pure fixed-baseline intent constructor regenerates current source and common-controller identities while preserving historical expectation ceilings",
+    "Existing fixed host CLI prepare command stages the actual inert native profile, checks the signed source and six helper byte inventories, and retains all public children before the intent",
+    "Read-only complete input closure verification and absent-only private preparation report with static-pin provenance",
+    "No-follow held destination ancestry prevents external CAS aliases from bypassing ignored checkout state"
+  ],
+  "review_findings": [
+    "Using the same host entrypoint for prepare and capture preserves the inherited imported-repository source closure",
+    "Fixed CAS API and extra guest module import closure are compatible with the frozen native profile",
+    "Historical policy depends on protected-root device/inode; prior Oct1 and Oct5 records match but a new mismatch must refuse before activation",
+    "Sensor association and marker progress must remain separate findings; concrete Tetragon reader custody and a bound deployment are still required"
+  ],
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-plugin-update-case-host",
+  "registry": "benchmark/phase3-pipeline-v1.json",
+  "passed_stages": [
+    {"id": "native-plugin-update-case", "tests": 9, "new_tests": 2, "fingerprint": "sha256:eec1b43cd2181d165e7d30f99a1888e83b04ea64a3f762312b26e10bda41c86b", "result_wall_seconds": 1.087655936},
+    {"id": "native-plugin-update-case-guest", "tests": 10, "new_tests": 0, "fingerprint": "sha256:cc274a21ebff32d734d9bb023ade69f27a9f1ef919c341c0e2123016b02a5b71", "result_wall_seconds": 0.12727808},
+    {"id": "native-plugin-update-case-host", "tests": 11, "new_tests": 4, "fingerprint": "sha256:a980295e80d69900540195777650bde725a2d641534f3813422c8fdcaf1f8080", "result_wall_seconds": 1.59944192}
+  ],
+  "unchanged_stages_reused": [
+    {"id": "pipeline-unit", "fingerprint": "sha256:72eb97083794bbf8387875cc050255c7c39d8c27a18864b7ffdfe16bc028016f"},
+    {"id": "native-plugin-update-binding", "fingerprint": "sha256:bab1c5be52f3c3c955571b20bff53aafe949f3228e6c39f1a9297812d4e31a80"},
+    {"id": "native-live-identity", "fingerprint": "sha256:3c74eb3418dfed86ac9832ef50287f253ba9d653b54b6e550aeaa3a70655a986"},
+    {"id": "native-plugin-update-identity-guest", "fingerprint": "sha256:a469edf2d20a0b0c0029c6a13bf340cd1d85dd9bab3389c54aaf123224f874e6"},
+    {"id": "native-plugin-update-identity-host", "fingerprint": "sha256:987bb10d998c040a3e4e84d3c946d630874e70f9838a93eb5843f3b0c288efe3"},
+    {"id": "native-plugin-update-live-binding", "fingerprint": "sha256:c8da4dbb72aaf7d3ba295cbf7272b6db0477742b0aeeb3c2c135468925233838"},
+    {"id": "native-plugin-update-collection", "fingerprint": "sha256:56ceceb14f15754319e27a1196056bac79833dfbe4b58f8136534542b57e734f"},
+    {"id": "native-plugin-update-identity-pins", "fingerprint": "sha256:911173806a28daeb838f3ea710f097660f0bd80997905d3868ac29e447ea810a"}
+  ],
+  "tests_passed": 30,
+  "new_test_methods": 6,
+  "sum_passed_stage_wall_seconds": 2.814375936,
+  "unchanged_failed_fingerprint_retries": 0,
+  "live_captures": 0,
+  "vm_actions": [],
+  "performance_measurements": 0,
+  "broad_regression_runs": 0,
+  "newly_closed_exit_gate_entries": 0,
+  "phase3_complete": false,
+  "automatic_push_performed": false,
+  "next_dependency": "Use the new prepare command from a clean signed source, then perform one newly necessary preactivation-boundary check only if exact fixture prerequisites hold. Continue admission ports and actual sensor/timing integration afterward.",
+  "remaining_acceptance": "Final 31-case and 100-attempt/100-pair acceptance remains blocked by shared deployment/full independent verifier inventory and real workload/timing prerequisites."
+}

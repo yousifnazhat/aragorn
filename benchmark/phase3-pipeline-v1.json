@@ -19,12 +19,14 @@
     },
     {
       "id": "native-plugin-update-case-host",
-      "description": "Verify fixed inspect/capture/replay CLI, pre-effect signed source and profile guards, sealed bounded guest handoff, unchanged native cleanup composition and offline failure retention; no Docker or capture.",
+      "description": "Verify fixed prepare/inspect/capture/replay CLI, offline child-first intent construction, pre-effect signed source and profile guards, sealed bounded guest handoff, unchanged native cleanup composition and offline failure retention; no Docker or capture.",
       "tests": ["test_native_plugin_update_case_host"],
       "inputs": [
         "scripts/capture_native_phase3_plugin_update_case.py",
         "scripts/capture_runtime_native_plugin_update_identity_check.py",
+        "scripts/prepare_native_plugin_update_identity_pins.py",
         "scripts/runtime_native_plugin_update_case.py",
+        "benchmark/evidence/runtime-action-worker-final-combined-v3-route-core-updater-plugin-replacement-systemd-p3-final-2026-09-03.json",
         "src/aragorn/__init__.py",
         "src/aragorn/cas.py",
         "src/aragorn/native_phase3_plugin_update_case.py",
@@ -33,7 +35,7 @@
         "tests/test_native_phase3_plugin_update_case.py",
         "tests/test_native_plugin_update_case_host.py"
       ],
-      "needs": ["native-plugin-update-case-guest", "native-plugin-update-identity-host"],
+      "needs": ["native-plugin-update-case-guest", "native-plugin-update-identity-host", "native-plugin-update-identity-pins"],
       "timeout_seconds": 120
     },
     {

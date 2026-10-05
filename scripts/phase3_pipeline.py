@@ -234,6 +234,7 @@ def _environment(root):
 
 def fingerprint(root, stage, dependency_pins):
     executable = Path(sys.executable).resolve(strict=True)
+    host = os.uname()
     # -S excludes site packages. Standard-library/toolchain identity is recorded,
     # not claimed to be a complete attestation of every interpreter dependency.
     toolchain = {
@@ -242,9 +243,12 @@ def fingerprint(root, stage, dependency_pins):
         "version": sys.version,
         "cache_tag": sys.implementation.cache_tag,
         "stdlib": sysconfig.get_path("stdlib"),
-        # os.uname is a direct system query. platform.uname lazily launches
-        # an untracked `uname -p` child on macOS when its tuple is materialized.
-        "platform": list(os.uname()),
+        # Direct query, without platform.uname's untracked `uname -p` child.
+        # A DHCP/network nodename is not toolchain identity. Including it
+        # invalidated unchanged local results whenever the network renamed
+        # this Mac. OS, release, kernel and architecture remain bound; this
+        # developer cache does not attest host or deployment identity.
+        "platform": [host.sysname, host.release, host.version, host.machine],
     }
     argv = [str(executable), "-S", "-B", "-m", "unittest", *stage["tests"], "-v"]
     paths = sorted(set(stage["inputs"]) | {RUNNER, "requirements-worker.lock"})

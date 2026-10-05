@@ -209,7 +209,10 @@ erase an attempt, or blindly retry the same fingerprint.
 
 The fingerprint covers declared source/test/fixture inputs, prerequisite stage
 fingerprints, runner, interpreter/toolchain identity and controlled execution
-settings. Input lists require review when imports, fixtures or dependencies change;
+settings. OS, release, kernel and architecture are bound, but the volatile
+network hostname is not: an observed hostname-only change previously invalidated
+otherwise identical results. This is still not host/deployment attestation.
+Input lists require review when imports, fixtures or dependencies change;
 the runner does not claim automatic complete dependency discovery. Its local cache
 is a development scheduling aid, not tamper-proof evidence, a semantic verifier or
 Phase 3 qualification. Do not erase state, alter irrelevant inputs, or widen
@@ -917,3 +920,49 @@ Validation: all 62 focused methods passed in the single selected pipeline run,
 including 18 new methods. The three exact unchanged prerequisite stages were
 reused; no failed fingerprint or effect was retried. Summed stage wall time was
 4.821 seconds, not engineering time or an acceptance performance measurement.
+
+**Effective BLOCK receipts and common measured profile (2026-10-05):** the
+[new receipt successor](scripts/stage_runtime_broker_effective_receipt_profile.py)
+fixes the inherited equality assumption between policy and effective broker
+verdicts. A policy ALLOW followed by a bounded broker BLOCK, or an exact replay
+BLOCK with no evaluated policy decision, can now produce a consumed grant and
+retained measurement receipt. The original policy result is never rewritten.
+Only the existing canonical mismatch vectors and final singleton reasons are
+accepted; absent policy is allowed only for exact replay/NOT_PERFORMED. Unsupported
+relations still refuse. Failed consumption stays CLAIMED/PENDING; failed retention
+stays CONSUMED/PENDING, with a CREATED effect classified indeterminate, never retried.
+
+The [independent read-only verifier](src/aragorn/runtime_broker_effective_receipt_verify.py)
+reconstructs the v2 receipt, grant-state and final-decision joins from retained CAS
+bytes. It reuses prior custody/native-input readers, not the producer's new
+decision validator. Pending/binding contracts and the narrow V4 acceptance
+boundary remain v1. Broker reason and policy/effect causality are explicitly
+unproven; this does not provide full ingress latency or quantitative acceptance.
+
+The [common 73-file stager](scripts/stage_runtime_phase3_common_profile.py)
+combines the admission read-only seals with the receipt-complete measured broker
+in one successor. It preserves the seven binding-source names and exact staged
+pins, audits the composed tree, and retains all frozen predecessor bytes. It is
+inert staging, not an activated second runtime. Existing 70-file capture intents
+must not be relabelled as this deployment.
+
+Validation: 32 focused methods passed once, including 23 new methods. Only the
+three new stages and the affected pipeline stage ran. The latter changed to fix
+a diagnosed network-hostname cache-key defect; the old successful key was exactly
+reconstructed by changing only that hostname in a read-only diagnostic contract.
+No records were erased or relabelled, and no historical stage was selected merely
+because this runner correction changes its key. An unchanged failed/interrupted
+attempt still requires an actual relevant fix before any later execution.
+
+A prepared 70-file direct-write intent remains retained locally. Its VM-start
+permission review timed out before execution; the VM remained stopped and the
+Docker context remained `default`. No live capture or performance sample ran.
+The [batch checkpoint](benchmark/evidence/phase3-effective-receipt-common-profile-implementation-v1-2026-10-05.json)
+records pins, exact checks, that pre-execution refusal and the signed-commit handoff.
+
+Next: connect common-profile measurement credential/input-CAS provisioning,
+request handoff and installed-identity verification before one guarded isolated
+activation check. Continue A1/A2/A3 admission ports and RUN/sensor semantics on
+that one successor. Full REQUEST_ACCEPTED timing, real workload/negative-control
+and sink/attribution verification, the complete verifier inventory and final
+frozen acceptance remain required. No Phase 3 exit gate closed in this batch.

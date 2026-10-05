@@ -82,6 +82,24 @@ class PipelineTests(unittest.TestCase):
         launch.assert_not_called()
         self.assertEqual(second["one"]["status"], "BLOCKED_FAIL")
 
+    def test_network_nodename_does_not_invalidate_toolchain_fingerprint(self):
+        original = os.uname()
+        expected, _ = pipeline.fingerprint(self.root, self.stages[0], {})
+        with mock.patch.object(pipeline.subprocess, "Popen") as launch:
+            for field in range(5):
+                values = list(original)
+                values[field] += "-changed"
+                with mock.patch.object(
+                    pipeline.os, "uname", return_value=os.uname_result(values)
+                ):
+                    actual, _ = pipeline.fingerprint(self.root, self.stages[0], {})
+                with self.subTest(field=field):
+                    if field == 1:
+                        self.assertEqual(actual, expected)
+                    else:
+                        self.assertNotEqual(actual, expected)
+        launch.assert_not_called()
+
     def test_denied_group_control_retains_refusal_without_product_launch(self):
         helper = mock.Mock(pid=123456789, returncode=None)
         with (

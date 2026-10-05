@@ -2,6 +2,107 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "native-clock-domain",
+      "description": "Verify the new fixed collector/worker/broker active-time-namespace observer with inert kernel, descriptor and clock doubles; no actual Linux readback, timing measurement or qualification.",
+      "tests": [
+        "test_native_phase3_clock_domain"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_clock_domain.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_clock_domain.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-clock-domain-verify",
+      "description": "Verify the new independent consumer of pinned canonical clock-domain records, exact process/boot/active-namespace joins and strict false claim ceilings; inert retained records only, not event timing or live attestation.",
+      "tests": [
+        "test_native_phase3_clock_domain_verify"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_clock_domain_verify.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_clock_domain_verify.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-common-clock-observer",
+      "description": "Verify only the new owned-fixture clock wrapper using the existing process-observer fixture, inert unit/kernel/clock doubles and real local descriptor lifetimes; no actual clock observation, service action or acceptance.",
+      "tests": [
+        "test_runtime_phase3_common_clock_observer"
+      ],
+      "inputs": [
+        "scripts/runtime_action_openclaw_systemd_probe.py",
+        "scripts/runtime_action_systemd_probe.py",
+        "scripts/runtime_action_worker_activation_expiry_systemd_probe.py",
+        "scripts/runtime_action_worker_final_combined_systemd_probe.py",
+        "scripts/runtime_action_worker_final_combined_v2_systemd_probe.py",
+        "scripts/runtime_action_worker_final_combined_v3_plugin_force_reinstall_systemd_probe.py",
+        "scripts/runtime_action_worker_final_route_systemd_probe.py",
+        "scripts/runtime_action_worker_openclaw_systemd_probe.py",
+        "scripts/runtime_active_lineage_openclaw_systemd_probe.py",
+        "scripts/runtime_capability_openclaw_systemd_probe.py",
+        "scripts/runtime_endpoint_journal_systemd_check.py",
+        "scripts/runtime_native_cgroup_prerequisite.py",
+        "scripts/runtime_native_config_denial_check.py",
+        "scripts/runtime_native_health_systemd_check.py",
+        "scripts/runtime_native_receipt_systemd_check.py",
+        "scripts/runtime_native_watchdog_check.py",
+        "scripts/runtime_phase3_common_process_observer.py",
+        "scripts/runtime_process_profile_openclaw_systemd_probe.py",
+        "scripts/runtime_process_profile_systemd_probe.py",
+        "scripts/runtime_producer_lineage_openclaw_systemd_probe.py",
+        "scripts/runtime_quarantine_systemd_check.py",
+        "scripts/runtime_response_systemd_check.py",
+        "scripts/runtime_revocation_openclaw_systemd_probe.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/acquire.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_clock_domain.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/protected_skill_quarantine.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_broker_v2.py",
+        "src/aragorn/runtime_action_broker_v3.py",
+        "src/aragorn/runtime_action_broker_v4.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_action_service.py",
+        "src/aragorn/runtime_action_worker.py",
+        "src/aragorn/runtime_active_skill_lineage.py",
+        "src/aragorn/runtime_capability_grant.py",
+        "src/aragorn/runtime_endpoint_journal.py",
+        "src/aragorn/runtime_health_watchdog.py",
+        "src/aragorn/runtime_native_tool_provisioning.py",
+        "src/aragorn/runtime_native_tool_receipts.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_quarantine_response.py",
+        "src/aragorn/runtime_response_service.py",
+        "src/aragorn/runtime_skill_startup.py",
+        "src/aragorn/runtime_skill_startup_service.py",
+        "tests/test_runtime_phase3_common_clock_observer.py",
+        "tests/test_runtime_phase3_common_process_observer.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
       "id": "prepared-measurement-execution",
       "description": "Verify new exact-preparation single-attempt consumption, durable local no-retry claims, retained evidence and the affected shared sampler; inert callbacks and clock doubles only, no live or final acceptance execution.",
       "tests": [

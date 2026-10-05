@@ -1130,3 +1130,60 @@ synthetic replacement acceptance campaign. No failed fingerprint was retried,
 no live/performance sample ran, and no Phase 3 gate closed. The
 [batch checkpoint](benchmark/evidence/phase3-prepared-measurement-execution-implementation-v1-2026-10-05.json)
 retains the exact pipeline fingerprint and reviewed eight-file input closure.
+
+**Common clock-domain prerequisite (2026-10-05):** the next measurement slice
+checks the actual active time namespace of the collector, worker and broker.
+Linux virtualizes `CLOCK_BOOTTIME` per time namespace, so matching boot IDs alone
+does not make cross-process timestamps comparable. The first supported mode
+requires exactly the same active namespace; it does not translate offsets or
+accept different namespaces with apparently equal clock values. See the
+[Linux time-namespace contract](https://man7.org/linux/man-pages/man7/time_namespaces.7.html).
+In particular, the kernel's
+[offset reader](https://github.com/torvalds/linux/blob/v6.18/kernel/time/namespace.c#L347-L359)
+uses the children namespace, which need not be the calling process's active
+namespace. This slice avoids that ambiguity by not using offsets at all.
+
+Keep event instrumentation separate from this comparability check. The rendered
+worker handles native ATTEMPT/TERMINAL receipt messages before actual creates;
+an ingress latch must not be consumed by those receipt-only requests. A future
+hook can sample after authenticated frame receipt but retain only the actual
+create path joined to the held native attempt and forwarded action request.
+It must preserve the existing once-only relay gate. The worker's `ProcSubset=pid`
+also prevents directly reading `/proc/sys` inside that unit, so the external
+root observer must not be advertised as a drop-in in-process timing hook.
+
+The common preparation's inherited provisioning checks still pin the old worker
+artifact independently of the common stage report. A rendered worker migration
+therefore requires honest successor provisioning joins and updated installed
+source inventories, not just replacing a stage digest or fabricating the old
+artifact. Preserve the current common73 profile until that entire change is ready.
+The broker final-decision hook must remain free of filesystem reads. Full ingress
+and effective-decision event joins, concrete workload callbacks and final
+acceptance remain blocked behind these implementation steps.
+
+Implemented: the external root clock observer now holds three PIDFDs and three
+active time-namespace descriptors, verifies process epochs and all four account
+IDs, and brackets both clock samples with collector-domain readbacks. The
+independent retained-record consumer requires pinned canonical bytes, exact
+schemas, one shared active namespace and unchanged collector/worker/broker
+identities across two ordered observations. It never translates offsets or
+produces latency. The common process observer now has a wrapper that derives
+worker/broker pins from the owned fixture, checks the entire four-role fixture
+again after the clock read, and returns the clock record without relabelling it.
+
+Validation: 28 new methods passed on the first selected pipeline run (10 observer,
+11 consumer, seven wrapper); the exact unchanged pipeline prerequisite was reused.
+The producer tests mock kernel, descriptor and clock APIs; wrapper tests reuse
+inert unit/kernel doubles with real local descriptor lifetimes. None are Linux
+clock-domain observations, acceptance samples or performance measurements.
+The [batch checkpoint](benchmark/evidence/phase3-native-clock-domain-implementation-v1-2026-10-05.json)
+retains the reviewed 8/4/50-file input closures and successful fingerprints.
+No failed fingerprint, historical test or effect was retried, and no gate closed.
+
+Next: integrate authenticated create-ingress and effective final-decision hooks
+through honest successor provisioning, installed-helper inventories and the
+shared controller. Invoke both clock observations from the same collector process
+and retain them independently; do not invoke two short-lived collector processes
+and claim a stable collector epoch. These point-in-time namespace observations
+do not establish continuous namespace immutability or hostile-root resistance.
+The common73 profile, frozen predecessors and final acceptance remain unchanged.

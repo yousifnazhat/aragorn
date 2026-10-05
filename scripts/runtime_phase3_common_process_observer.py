@@ -260,3 +260,57 @@ def _observe(container: str) -> dict:
             **dict.fromkeys(_FALSE, False),
         }
     return result
+
+
+def observe_common_clock_domain(*, expected_container_id: str) -> dict:
+    """Read the fixed worker/broker clocks between independent fixture checks.
+
+    The clock reader owns its PIDFD/namespace descriptors. These separate process
+    observations bind its targets to the existing owned-fixture unit contracts;
+    they do not turn a clock-domain observation into a request timing event.
+    The unmodified result still needs the independent clock consumer and caller
+    pins from the common live identity observation before any cross-read claim.
+    """
+    from aragorn.native_phase3_clock_domain import observe_native_common_clock_domain
+    from aragorn.oci_worker_protocol import canonical_json
+
+    try:
+        before = observe_common_processes(expected_container_id=expected_container_id)
+        fields = ("pid", "start_time_ticks", "uid", "gid")
+        expected = {
+            role: {key: before["processes"][role]["process"][key] for key in fields}
+            for role in ("worker", "broker")
+        }
+        observation = observe_native_common_clock_domain(
+            expected_worker=expected["worker"], expected_broker=expected["broker"]
+        )
+        after = observe_common_processes(expected_container_id=expected_container_id)
+        _require(
+            canonical_json(before) == canonical_json(after),
+            "common fixture changed across clock observation",
+        )
+        _require(
+            type(observation) is dict
+            and type(observation.get("boot_id")) is str
+            and re.fullmatch(
+                r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}",
+                observation["boot_id"],
+            )
+            is not None
+            and observation["boot_id"].replace("-", "") == before["boot_id"]
+            and all(
+                canonical_json(
+                    {key: observation["processes"][role][key] for key in fields}
+                )
+                == canonical_json(expected[role])
+                for role in expected
+            ),
+            "clock targets or boot differ from owned fixture observations",
+        )
+        return observation
+    except CommonProcessObservationError:
+        raise
+    except Exception as exc:
+        raise CommonProcessObservationError(
+            "common fixture clock observation refused"
+        ) from exc

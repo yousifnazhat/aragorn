@@ -1,0 +1,67 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "0aa1cf78bf5541cd5e95788591974edd6abec032",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T07:43:55.483Z",
+    "validation_recorded": "2026-10-05T08:04:08Z",
+    "meaning": "Session wall window includes parallel implementation and review; active engineering time is not separately instrumented."
+  },
+  "implementation": [
+    "Successor-only native profile preserves 70 files and 16 staging directories, changing only the rendered gateway unit and activator",
+    "Five required discovery read-only namespace paths, including both .agents parents, with absent-only ordered directory provisioning and pre-start effective-unit checks",
+    "Fixed ADM-02/direct-write nonroot leaf with owned container, gateway PIDFD/cgroup/mount namespace, source-pin and read-only-root guards before seven single attempts",
+    "Independent retained-byte consumer joins exact mutation errors, admitted bytes, discovery inventories and actual CLI/authenticated gateway catalog outputs",
+    "Failure observations retain completed command prefixes and partial mutations; no automatic cleanup mutation or effect retry in the leaf"
+  ],
+  "source_digests": {
+    "scripts/stage_runtime_native_admission_profile.py": "sha256:793a3de2765c0cc3f9592f777fe2cc93de714a9d95a1a392130d29958d124591",
+    "scripts/runtime_native_admission_direct_write.py": "sha256:2e3b6e4b1eef56b0de5b2d4bef1ad5271b8c56f91e0fe62bfe0c53a2f4acbc7d",
+    "src/aragorn/native_phase3_admission_direct_write.py": "sha256:a5b3ffd0a39d859fddc686c330af5a956a3414cdff500dbfbcff2fc63d5ce8ba",
+    "tests/test_runtime_native_admission_profile.py": "sha256:79d62d53ad5a2b8e50abf794a5c7c170b2a98cd87be25deecd337302c27d0cea",
+    "tests/test_native_admission_direct_write.py": "sha256:281cbc62c4cdd49350df4cb912e5f02e000435f8726e171e37fdb771ca76f58e"
+  },
+  "review_findings": [
+    "Current native predecessor's mutable discovery roots are a real direct-write gap; old contained-profile observations do not cover it",
+    "Frozen source chain, all other rendered files, writable plugin lifecycle area and existing runtime/template seals remain unchanged",
+    "Retained native gateway and upstream CLI shapes reviewed; skills.list is not treated as admitted filePath evidence",
+    "Fixed command-list assignment could lose completed prefix evidence on a later failure; changed to incremental append and covered before first validation",
+    "Catalog state is not active prompt/session consumption; local observer/source readback is not external deployment attestation",
+    "Parallel measurement review found effective broker BLOCK receipts need successor-specific treatment before full ingress timing integration"
+  ],
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-profile",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-direct-write"
+  ],
+  "registry": "benchmark/phase3-pipeline-v1.json",
+  "reviewed_input_closure": {
+    "native-admission-profile": 87,
+    "native-admission-direct-write": 5,
+    "meaning": "Explicit stage inputs; runner and requirements-worker.lock are also fingerprinted by the existing pipeline."
+  },
+  "passed_stages": [
+    {"id": "pipeline-unit", "tests": 9, "new_tests": 0, "fingerprint": "sha256:1d95aeb81b5ec64368ac2ac1c8eaa6c802732a45de08d82c1fb99c34c44a7f51", "result_wall_seconds": 1.959699},
+    {"id": "native-admission-profile", "tests": 5, "new_tests": 5, "fingerprint": "sha256:53b64574f46d11332db9cb9521fc59d342ac27943335a93875466ad83dd8e670", "result_wall_seconds": 0.746554},
+    {"id": "native-admission-direct-write", "tests": 9, "new_tests": 9, "fingerprint": "sha256:8f040321677f87e2bf55a0f4fe47e129920d5427490a894d3e523bf87f4314a7", "result_wall_seconds": 0.081615}
+  ],
+  "unchanged_stages_reused": [
+    {"id": "pipeline-unit", "fingerprint": "sha256:1d95aeb81b5ec64368ac2ac1c8eaa6c802732a45de08d82c1fb99c34c44a7f51", "when": "second selected stage"}
+  ],
+  "cache_note": "The first command found a new pipeline-unit fingerprint, different from the earlier 72eb9708 result, and ran its nine checks once. The second command reused that exact success. The pipeline source, prerequisite test source and requirements lock were not changed by this batch; earlier cache records do not retain the full fingerprint contract, so the exact environment/toolchain delta is not established here. No record or irrelevant input was changed to force a retry.",
+  "tests_passed": 23,
+  "new_test_methods": 14,
+  "sum_passed_stage_wall_seconds": 2.787868,
+  "failed_stage_fingerprints": [],
+  "unchanged_failed_fingerprint_retries": 0,
+  "live_captures": 0,
+  "vm_actions": [],
+  "performance_measurements": 0,
+  "broad_regression_runs": 0,
+  "newly_closed_exit_gate_entries": 0,
+  "phase3_complete": false,
+  "automatic_push_performed": false,
+  "next_dependency": "Integrate the successor gateway/activator identities and fixed leaf into the existing common native provisioning/request/identity path and concrete dispatcher. Old prepared-case pins must continue to reject the changed deployment. Only then perform the newly necessary owned-fixture changed-behavior check with verified cleanup.",
+  "remaining_acceptance": "Final 31-case and 100-attempt/100-pair acceptance remains blocked until common deployment, complete independent semantic verifiers and real workload/timing prerequisites are ready."
+}

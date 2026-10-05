@@ -740,3 +740,59 @@ Progress updates should report: closed gate entries, entries still needing
 implementation, changed-behavior checks performed, active engineering time,
 machine time, and the next dependency. Do not report an unsupported overall
 percentage or an arbitrary number of equal-sized waves remaining.
+
+**A1 direct-write implementation (2026-10-05):** inspection of the actual native
+startup profile found five gateway-owned writable discovery roots. The old
+contained-profile denial cannot establish native direct-write protection.
+The [admission successor stager](scripts/stage_runtime_native_admission_profile.py)
+preserves all frozen sources and changes only the rendered gateway unit and its
+activator. It adds required read-only namespace paths for `state/skills`,
+`state/plugin-skills`, `workspace/skills`, `workspace/.agents` and `home/.agents`.
+The latter two seal the parent directory, not just its `skills` child. Existing
+runtime/template seals remain; `state/extensions` stays writable so the distinct
+plugin-update policy boundary remains meaningful. Startup creates only absent
+fixed directories while services are stopped, checks exact metadata in parent
+order, and checks the effective unit paths before gateway start. Existing state
+is never repaired by changing ownership or permissions.
+
+These are staged bytes, not observed mount enforcement. The systemd namespace
+semantics and host-mount propagation limitation are documented in the
+[pinned-version upstream manual](https://raw.githubusercontent.com/systemd/systemd/v252/man/systemd.exec.xml).
+The successor does not claim protection against privileged host mount changes.
+
+The [fixed direct-write leaf](scripts/runtime_native_admission_direct_write.py)
+and [independent retained-byte consumer](src/aragorn/native_phase3_admission_direct_write.py)
+implement `ADM-02/direct-write`: six discovery-root create attempts plus one
+admitted-file overwrite. Execution requires an exact owned container, live
+gateway PIDFD/cgroup/mount namespace, UID/GID/groups 992 with no capabilities,
+caller-pinned root-owned sources, and observed read-only roots. Each mutation is
+attempted once; partial creation stops the remaining attempts and is retained.
+Before/after filesystem inventories, admitted bytes, CLI discovery and the
+authenticated gateway catalog are compared. Catalog identity is not proof of
+prompt or active-session consumption; every qualification flag stays false.
+
+Next dependency-ready work, in order:
+
+1. Extend the existing common native provisioning/request/identity path for the
+   successor's two changed installed identities and fixed direct-write leaf.
+   Preserve the prepared plugin-update seam; do not weaken its old exact pins
+   or re-run the unchanged predecessor capture. Connect concrete dispatcher and
+   independent consumer entries before one necessary owned-fixture check.
+2. Continue the remaining A1 ports, A2 reload triggers and distinct A3 ClawHub
+   lifecycle on that same successor, with actual protected consumer joins.
+3. In parallel, finish RUN event/response and meaningful sensor-progress/loss
+   coverage. The native lineage publisher is not the external Tetragon sensor.
+4. Repair the measured-broker successor's effective-BLOCK receipt path before
+   wiring full worker-ingress-to-decision timing. Frozen V3/V4 receipt validation
+   currently requires the provisional policy verdict to equal the effective
+   broker verdict, so a broker BLOCK over policy ALLOW or replay rejection cannot
+   simply be represented as an ordinary completed measurement. Preserve those
+   predecessors and keep indeterminate effects non-retryable.
+5. Complete all semantic verifiers and real workload/timing prerequisites, freeze
+   one deployment, then perform the required fresh acceptance and offline replay.
+
+Automatic signed local commits remain required after each reviewed, checked
+batch; this implementation does not authorize automatic pushes. The
+[batch checkpoint](benchmark/evidence/phase3-native-admission-direct-write-implementation-v1-2026-10-05.json)
+records the affected checks and exact proof limits. No Phase 3 gate is closed by
+inert staging or fabricated unit-test observations.

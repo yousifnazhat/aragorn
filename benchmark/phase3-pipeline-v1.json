@@ -1,0 +1,32 @@
+{
+  "schema": "aragorn/phase3-pipeline/v1",
+  "stages": [
+    {
+      "id": "pipeline-unit",
+      "description": "Verify the new local pipeline's fingerprint, skip, lock and refusal behavior; no historical product suite.",
+      "tests": ["test_phase3_pipeline"],
+      "inputs": [
+        "scripts/phase3_pipeline.py",
+        "tests/test_phase3_pipeline.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-plugin-update-binding",
+      "description": "Verify the new read-only native update observation/deployment binding using retained evidence, without Docker or a new capture.",
+      "tests": ["test_native_phase3_plugin_update_binding"],
+      "inputs": [
+        "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_plugin_update_binding.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "tests/test_native_phase3_plugin_update_binding.py"
+      ],
+      "needs": ["pipeline-unit"],
+      "timeout_seconds": 120
+    }
+  ]
+}

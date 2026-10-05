@@ -73,6 +73,18 @@ There is substantial implementation left; skipping acceptance cannot remove it.
    viable existing sensor, binary identity, loss accounting and attribution path.
    Surface missing capability now, not after every easy port is finished.
 
+   Initial read-only risk finding: the retained Tetragon v1.7.0 scrapes lack
+   `tetragon_bpf_missed_events_total`, which the existing process adapter requires.
+   Other missed-link/prog-probe counters are not automatically equivalent. The
+   next loss-accounting implementation must establish coverage against the exact
+   pinned sensor source; absent loss metrics remain unknown, never synthetic zero.
+   The local source lock has hashes, not the metric implementation bytes. Acquire
+   its already-pinned `pkg/observer/observer_stats.go`, `pkg/observer/metrics.go`
+   and `pkg/metrics/errormetrics/errormetrics.go` at commit
+   `1de2ed8ebea18e56257dc59597aa13bf8f0e471e`; verify their existing byte/digest/Git-blob
+   pins with `verify_upstream_source_file`. Inspect and retain any additional
+   defining files from that exact upstream tree before changing the contract.
+
 F0 first deliverable: one existing native case connected through the shared
 request/evidence contract and a real independent consumer. Start with the
 already-built plugin-update adapter. Reuse retained observations for development
@@ -145,9 +157,11 @@ collection is impossible.
 
 ## Small-wave execution and concurrency policy
 
-- Use 30–90-minute work segments and a checkpoint after 2–4 focused hours on one
-  package. A checkpoint records a closed requirement, a concrete code delta, or
-  an exact blocker and next diagnostic—not another general reassessment.
+- Continue through dependency-ready implementation batches automatically; do not
+  stop for a user prompt or run checks merely because a time interval elapsed.
+  Use internal 30–90-minute work segments and a checkpoint after 2–4 focused hours
+  on one package. A checkpoint records a closed requirement, a concrete code delta,
+  or an exact blocker and next diagnostic—not another general reassessment.
 - After F0, run admission, runtime and measurement engineering in parallel, with
   the integration lead owning shared interfaces. Avoid concurrent edits to common
   files; verifier authors may review another lane's implementation read-only.
@@ -159,6 +173,65 @@ collection is impossible.
   Build once per changed image; never reuse consumed grants to save time.
 - Preserve cleanup, signed-source checks and before/after deployment identity.
   These are execution safeguards, not redundant regression tests.
+
+### Activated local verification pipeline
+
+The local [pipeline runner](scripts/phase3_pipeline.py) uses the reviewed
+[stage registry](benchmark/phase3-pipeline-v1.json). It starts with only the new
+pipeline checks and native plugin-update binding checks; it does not populate its
+cache by rerunning the historical suite. Run from the repository root:
+
+```sh
+/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py status
+/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run
+```
+
+`status` plans without executing tests. `run` batches registered checks in
+dependency order. An exact unchanged successful fingerprint is reused. An
+unchanged failed, timed-out or interrupted attempt blocks instead of retrying.
+The private ignored `.aragorn/phase3-pipeline` directory retains attempt state and
+logs; a lock prevents overlapping runs. Source changes during execution prevent
+a result from being reused as a success. Documentation-only changes do not
+invalidate unrelated checks.
+
+The runner needs permission to terminate its own child process groups. The first
+attempt exposed a macOS cleanup bug: signaling a group whose leader has exited
+but is not yet reaped can return `EPERM`. A separate ready-confirmed inert helper
+accepted `SIGTERM`, then returned `EPERM` for the later signal; this was not proof
+of missing execution permission. The failed test attempt and subsequent preflight
+refusal remain retained; the dependent binding tests did not launch in either.
+Cleanup must hold the leader identity while signaling, reap it, then confirm the
+group is absent with a read-only probe. Never signal after reaping. Genuine
+permission refusal remains a prerequisite failure, not grounds to disable cleanup,
+erase an attempt, or blindly retry the same fingerprint.
+
+The fingerprint covers declared source/test/fixture inputs, prerequisite stage
+fingerprints, runner, interpreter/toolchain identity and controlled execution
+settings. Input lists require review when imports, fixtures or dependencies change;
+the runner does not claim automatic complete dependency discovery. Its local cache
+is a development scheduling aid, not tamper-proof evidence, a semantic verifier or
+Phase 3 qualification. Do not erase state, alter irrelevant inputs, or widen
+timeouts merely to bypass a recorded failure.
+
+Future implementation batches add only their affected checks and full declared
+input closure to this registry, then invoke the pipeline once after code review.
+Do not register historical full suites or live side-effectful campaigns here.
+Final acceptance remains a separately frozen operation behind the checklist below;
+the local unit runner cannot enable it. A recurring continuation in this chat
+advances implementation between batches; a cache hit means move to the next
+unfinished dependency, not wait for another testing interval.
+
+Activation checkpoint, 2026-10-04: nine new pipeline checks passed in 1.851 seconds
+and five new plugin-update binding checks passed in 0.124 seconds (unittest's
+reported execution times, not whole-turn time). Read-only `status` then returned
+`SKIP_PASS` for both; it executed no tests. Pipeline fingerprints are
+`72eb97083794bbf8387875cc050255c7c39d8c27a18864b7ffdfe16bc028016f`
+and `bab1c5be52f3c3c955571b20bff53aafe949f3228e6c39f1a9297812d4e31a80`,
+respectively; their local attempt directories retain the logs. Earlier runner
+failures were preserved and only relevant fixes were reverified, including removal
+of an unintended `platform.uname()` helper subprocess. No historical product
+suite or live capture was rerun. No admission, RUN or final exit gate closed in
+this automation/binding slice.
 
 ## Machine-runtime budget
 
@@ -239,10 +312,18 @@ general-purpose runner rewrites and public-release work. If a required path cann
 be supported safely, report the precise blocker; do not quietly delete it from
 the gate or replace implementation with another planning document.
 
-**Next operation:** implement F0's common-deployment request/evidence interface
-and connect the existing native plugin-update case plus its independent consumer.
-In parallel, perform the bounded OS-coverage feasibility investigation. This
-produces immediate integration progress while exposing the largest schedule risk.
+**Activated F0 slice:** the new
+[read-only plugin-update consumer](src/aragorn/native_phase3_plugin_update_binding.py)
+joins the retained v2 observation to all seven reported-identity artifacts in the
+existing deployment envelope. It recomputes bounded record-level predicates;
+it does not attest a live deployment or close an admission/RUN gate.
+
+**Next implementation batch:** connect fresh native collection to the common
+deployment request/evidence contract and its consumer; do not recapture merely
+to exercise the new offline binding. In parallel, resolve the pinned Tetragon
+loss-counter coverage and implement a bounded raw-scrape/identity adapter before
+one newly necessary native OS-event integration check. Then advance the admission
+ports and measurement callbacks in the dependency order above.
 
 Progress updates should report: closed gate entries, entries still needing
 implementation, changed-behavior checks performed, active engineering time,

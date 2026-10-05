@@ -9,6 +9,10 @@ Current status: **private qualified Phase 0 validation milestone complete; the b
 The [Phase 3 completion roadmap](PHASE3_ROADMAP.md) orders the remaining work by
 dependency and reuse, separates engineering effort from machine-runtime budgets,
 and defines the no-redundant-testing policy and final acceptance gates.
+The [activated local pipeline](PHASE3_ROADMAP.md#activated-local-verification-pipeline)
+batches new changed-behavior checks, reuses exact unchanged results, and blocks
+unchanged failed/interrupted attempts without automatic retries. It is development
+automation, not a Phase 3 qualification result.
 
 Separate signed current-V3 subfixtures now qualify
 [DET-01](./benchmark/receipts/phase3-openclaw-final-v3-det01-dedicated-qualification-v1-2026-09-06.json)
@@ -1585,6 +1589,17 @@ tracked record and non-SQLite protected boundary, separately classified WAL
 growth, and confirmed owned-container removal. Whole-database logical equality
 is not established. This is a bounded local-marketplace denial observation;
 inventory-route, aggregate admission, RUN and Phase 3 qualification remain false.
+
+A new [read-only binding consumer](./src/aragorn/native_phase3_plugin_update_binding.py)
+replays that retained v2 observation and joins dimension-specific identity
+artifacts through the existing seven-dimension Phase 3 deployment envelope.
+It independently checks recorded command denial, selected protected-state joins,
+bounded SQLite physical custody and owned-cleanup records without importing or
+executing the capture probes. These are reported-identity joins, not live
+deployment attestation, signature verification, logical database equality or
+independent policy correctness. The consumer cannot return route qualification
+or a Phase 3 semantic PASS; production collection and final-deployment binding
+still need implementation.
 
 A separate [idle sensor-exit adapter](./scripts/capture_runtime_native_sensor_loss_check.py)
 targets the current 70-file native startup profile in a fresh owned container.

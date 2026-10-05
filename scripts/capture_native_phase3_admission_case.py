@@ -2,8 +2,8 @@
 
 Preparation is offline. Capture only uses the already-owned native disposable
 fixture primitives; it never starts a VM or activates a service on the host.
-Plugin-update intent preparation shares this deployment, but its successor
-execution is deliberately unavailable until its original adapter is connected.
+Both fixed cases share this deployment. The existing plugin-update adapter and
+its exact inert input bundle are reused without changing frozen predecessors.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from scripts import prepare_native_plugin_update_identity_pins as pins
 from scripts import runtime_native_admission_case as guest
 from scripts import stage_runtime_native_admission_profile as profile
 from aragorn import native_phase3_admission_case as case
+from aragorn import native_phase3_admission_capture as replay
 from aragorn.cas import CAS
 from aragorn.oci_worker_protocol import canonical_json
 
@@ -46,6 +47,7 @@ _AUTHORITY = (
 )
 _LIMIT = 4 * 1024 * 1024
 _API = native.acquisition
+_UPDATE = legacy.prior.prior
 
 # One fixed public bundle, handed off only after exact owned-fixture checks.
 _SEAL = """import hashlib,os,stat,sys
@@ -205,7 +207,7 @@ def _prepare(store: CAS, selected_case: str, nonce: str) -> dict:
         "limitations": [
             "HISTORICAL_EXPECTATIONS_NOT_FRESH_WRITER_OR_LIVE_IDENTITY",
             "SUCCESSOR_PROFILE_IS_INERT_STAGING_ONLY",
-            "PLUGIN_UPDATE_EXECUTION_NOT_YET_CONNECTED",
+            "TWO_FIXED_CASES_NOT_COMPLETE_ADMISSION_INVENTORY",
         ],
         **dict.fromkeys(_FALSE, False),
     }
@@ -294,8 +296,8 @@ def _invoke(container: str, inspected: dict, intent_pin: str) -> dict:
 def _capture(store: CAS, intent_pin: str) -> dict:
     inspected = _inspect(CAS(store.root, read_only=True), intent_pin)
     case._require(
-        inspected["intent"]["case_id"] == _DIRECT,
-        "plugin-update successor execution is not yet connected",
+        inspected["intent"]["case_id"] in case.CASE_BRANCHES,
+        "unsupported fixed successor case",
     )
     source = _source_guard(inspected)
     build = native._build_binding(source["commit"])
@@ -327,7 +329,7 @@ def _capture(store: CAS, intent_pin: str) -> dict:
         "authority": _AUTHORITY,
         "status": "REFUSED",
         "intent_digest": intent_pin,
-        "case_id": _DIRECT,
+        "case_id": inspected["intent"]["case_id"],
         "source": source,
         "build_observation": build,
         "fixture_helpers": helpers,
@@ -340,6 +342,7 @@ def _capture(store: CAS, intent_pin: str) -> dict:
         "fixture_container": None,
         "container_inspect": None,
         "staged_profile": None,
+        "plugin_input_bundle": None,
         "guest": None,
         "cleanup": None,
         "refusal": None,
@@ -368,6 +371,21 @@ def _capture(store: CAS, intent_pin: str) -> dict:
                 }
                 for item in manifest["files"]
             }
+            inputs = None
+            if inspected["intent"]["case_id"] == case.UPDATE_CASE:
+                phase = "PLUGIN_INPUTS"
+                inputs = Path(temporary).resolve() / _UPDATE.guest._STAGED.name
+                inputs.mkdir(mode=0o755)
+                # macOS can inherit /private/tmp's group instead of the
+                # caller's effective group. Establish custody on this newly
+                # owned directory before children are materialized; keep the
+                # frozen bundle auditor's exact uid/gid requirement unchanged.
+                os.chown(inputs, os.geteuid(), os.getegid(), follow_symlinks=False)
+                result["plugin_input_bundle"] = _UPDATE.fixture.materialize(
+                    inputs / "plugin-package-skill-replacement"
+                )
+                inputs.chmod(0o555)
+                _UPDATE._audit_bundle(inputs, result["plugin_input_bundle"])
             phase = "OWNED_FIXTURE"
             result["fixture_creation_attempted"] = True
             try:
@@ -394,6 +412,11 @@ def _capture(store: CAS, intent_pin: str) -> dict:
                     native.existing._docker(
                         "cp", str(_ROOT / path), container + ":" + target
                     )
+                if inputs is not None:
+                    native.existing._docker(
+                        "cp", str(inputs), container + ":/opt/aragorn/"
+                    )
+                    _UPDATE._audit_bundle(inputs, result["plugin_input_bundle"])
                 native.existing._docker("start", container)
                 native.existing._docker(
                     "exec",
@@ -413,9 +436,18 @@ def _capture(store: CAS, intent_pin: str) -> dict:
                 _source_guard(inspected)
                 result["guest"] = _invoke(container, inspected, intent_pin)
             finally:
-                result["cleanup"] = native.snapshot._cleanup_snapshot(
-                    name, owner, native._IMAGE
-                )
+                try:
+                    result["cleanup"] = native.snapshot._cleanup_snapshot(
+                        name, owner, native._IMAGE
+                    )
+                finally:
+                    if inputs is not None:
+                        try:
+                            _UPDATE._audit_bundle(inputs, result["plugin_input_bundle"])
+                        except Exception:
+                            result["postcondition_failures"].append(
+                                "PLUGIN_INPUT_READBACK_REFUSED"
+                            )
             phase = "CLEANUP"
             case._require(
                 result["cleanup"]["container_name_absent"] is True
@@ -472,6 +504,17 @@ def _capture(store: CAS, intent_pin: str) -> dict:
     return result
 
 
+def _verified_summary(value: object) -> dict:
+    case._require(
+        type(value) is dict
+        and value.get("status") == "BOUNDED_CAPTURE_REPLAY_VERIFIED"
+        and value.get("independent_capture_replay_complete") is True
+        and all(value.get(key) is False for key in _FALSE),
+        "independent capture replay result or proof ceiling changed",
+    )
+    return value
+
+
 def _retain(store: CAS, value: dict) -> dict:
     readonly = CAS(store.root, read_only=True)
     inspected = _inspect(readonly, value["intent_digest"])
@@ -502,19 +545,53 @@ def _retain(store: CAS, value: dict) -> dict:
     case._require(
         readonly.read(pin, max_bytes=_LIMIT) == raw, "retained capture bytes changed"
     )
-    return {
+    summary = {
         "status": value["status"],
         "capture_digest": pin,
         "intent_digest": value["intent_digest"],
         "independent_capture_replay_complete": False,
         **dict.fromkeys(_FALSE, False),
     }
+    if value["status"] == "OBSERVED":
+        # The original capture remains immutable and makes no replay claim.
+        # A verifier error must never cause another effect or erase that capture.
+        try:
+            verification = replay.verify_native_admission_capture(
+                raw,
+                expected_capture_digest=pin,
+                expected_intent_digest=value["intent_digest"],
+                evidence_cas=readonly,
+            )
+            _verified_summary(verification)
+        except Exception:
+            verification = {
+                "schema": "aragorn/native-admission-capture-replay-refusal/v1",
+                "status": "REFUSED",
+                "reason": "INDEPENDENT_CAPTURE_REPLAY_REFUSED",
+                "capture_digest": pin,
+                "intent_digest": value["intent_digest"],
+                "independent_capture_replay_complete": False,
+                **dict.fromkeys(_FALSE, False),
+            }
+            summary["status"] = "REFUSED"
+        else:
+            summary["independent_capture_replay_complete"] = True
+        verification_raw = canonical_json(verification)
+        verification_pin = store.put(BytesIO(verification_raw), max_bytes=262144)
+        case._require(
+            readonly.read(verification_pin, max_bytes=262144) == verification_raw
+            and readonly.read(pin, max_bytes=_LIMIT) == raw
+            and _inspect(readonly, value["intent_digest"]) == inspected,
+            "capture, verification or input closure changed after replay",
+        )
+        summary["verification_digest"] = verification_pin
+    return summary
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("prepare", "inspect", "capture"):
+    for name in ("prepare", "inspect", "capture", "verify"):
         command = commands.add_parser(name, allow_abbrev=False)
         command.add_argument("--cas", required=True, type=Path)
         if name == "prepare":
@@ -524,12 +601,26 @@ def main(argv=None) -> int:
             command.add_argument("--nonce", required=True)
         else:
             command.add_argument("--expected-intent-digest", required=True)
-        if name != "inspect":
+        if name == "verify":
+            command.add_argument("--expected-capture-digest", required=True)
+        if name in ("prepare", "capture"):
             command.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
         case._require(args.cas.is_absolute(), "CAS must be absolute")
-        if args.command == "inspect":
+        if args.command == "verify":
+            readonly = CAS(args.cas, read_only=True)
+            raw = readonly.read(
+                case._pin(args.expected_capture_digest), max_bytes=_LIMIT
+            )
+            value = replay.verify_native_admission_capture(
+                raw,
+                expected_capture_digest=args.expected_capture_digest,
+                expected_intent_digest=args.expected_intent_digest,
+                evidence_cas=readonly,
+            )
+            _verified_summary(value)
+        elif args.command == "inspect":
             inspected = _inspect(
                 CAS(args.cas, read_only=True), args.expected_intent_digest
             )
@@ -570,6 +661,8 @@ def main(argv=None) -> int:
                             "intent_digest",
                             "deployment_digest",
                             "capture_digest",
+                            "verification_digest",
+                            "independent_capture_replay_complete",
                         )
                         if key in value
                     },

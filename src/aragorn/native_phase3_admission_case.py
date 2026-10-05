@@ -32,6 +32,7 @@ CONTROLLER_SOURCE_PATHS = (
     "scripts/capture_native_phase3_admission_case.py",
     "scripts/runtime_native_admission_case.py",
     "src/aragorn/native_phase3_admission_case.py",
+    "src/aragorn/native_phase3_admission_capture.py",
 )
 LIVE_SOURCE_PATHS = ("src/aragorn/native_phase3_live_identity.py",)
 CASE_SOURCE_PATHS = (

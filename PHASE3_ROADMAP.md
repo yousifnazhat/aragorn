@@ -835,3 +835,47 @@ The [common-controller batch checkpoint](benchmark/evidence/phase3-native-admiss
 records the selected checks, cache reuse and proof limits. Automatic signed
 local commits remain required per completed batch; automatic pushes remain
 unauthorized.
+
+**Shared plugin-update execution and retained replay (2026-10-05):** the common
+admission host/guest now select either direct-write or the existing fixed
+tracked-marketplace update adapter on the same successor. The update path
+retains the original 13-file read-only input bundle and exact adapter/helper
+pins. It seeds the fixed baseline before request publication/readback, activates
+once, invokes once with held gateway identity checks, and retains independent
+post-readbacks on failure. Owned service cleanup, input unmount and inherited
+input restoration remain separate required observations; no effect is retried.
+Both paths now retain native process and boot records before and after the
+invocation to support the independent reader joins.
+
+The [outer capture consumer](src/aragorn/native_phase3_admission_capture.py)
+replays retained successor evidence without executing the adapter, importing a
+capture controller, or rewriting a predecessor envelope. Its source is included
+in the common controller-source inventory. The host publishes and reads back
+the prepared request and original capture before replay, then retains a separate
+verification result. An exception or non-success verifier return cannot count
+as replay success and cannot trigger recapture. The `verify` subcommand reads
+only caller-pinned retained evidence.
+
+This is still an offline implementation milestone, not a fresh native
+observation or an exit-gate pass. Reported source, cleanup and readback joins do
+not establish external execution attestation, whole-database logical equality,
+the complete 31-case inventory or real latency/performance results. All admission,
+RUN, production and Phase 3 qualification flags remain false.
+
+Next: review the completed composition for a newly necessary serial owned-fixture
+changed-behavior check, then continue the remaining admission consumers/families,
+RUN/sensor coverage and measured-broker timing prerequisites on this successor.
+Final acceptance remains blocked. The
+[plugin/replay implementation checkpoint](benchmark/evidence/phase3-native-admission-plugin-replay-implementation-v1-2026-10-05.json)
+records affected checks and unchanged-result reuse; signed local batch commits
+continue without automatic pushes.
+
+Validation: 44 distinct focused methods passed (22 newly added). The pipeline's
+root fingerprint changed during the batch, so additional prerequisites executed
+under new keys; this is recorded as extra execution, not cache reuse. Both failed
+host fingerprints remain retained. After correcting the CAS test fixture and
+the new bundle root's inherited macOS group, the host stage passed and all six
+successful prerequisites were reused. No unchanged failed fingerprint reran.
+Positive consumer orchestration checks isolate the outer/live/branch readers;
+separate plugin and file-join primitives use explicitly inert data. A complete
+fresh successor observation has not yet passed the new consumer.

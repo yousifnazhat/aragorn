@@ -1,8 +1,8 @@
 """New host composition only; Docker, subprocesses and VM effects are mocked."""
 
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, redirect_stdout
 from copy import deepcopy
-from io import BytesIO
+from io import BytesIO, StringIO
 import json
 from pathlib import Path
 from subprocess import CompletedProcess, TimeoutExpired
@@ -348,9 +348,9 @@ class NativeAdmissionHostTests(unittest.TestCase):
                 self.assertFalse(value["independent_capture_replay_complete"])
                 self.assertTrue(all(value[key] is False for key in subject._FALSE))
 
-    def test_plugin_update_successor_refuses_before_source_or_docker(self):
+    def test_unknown_successor_refuses_before_source_or_docker(self):
         altered = deepcopy(self.inspected)
-        altered["intent"]["case_id"] = subject.case.UPDATE_CASE
+        altered["intent"]["case_id"] = "not-a-registered-case"
         with (
             patch.object(subject, "_inspect", return_value=altered),
             patch.object(subject, "_source_guard") as source,
@@ -358,6 +358,67 @@ class NativeAdmissionHostTests(unittest.TestCase):
         ):
             subject._capture(self.store, self.intent_pin)
         source.assert_not_called()
+
+    def test_plugin_input_bundle_is_staged_once_and_rechecked_after_timeout(self):
+        self.arguments["case_id"] = subject.case.UPDATE_CASE
+        self.built = subject.case.build_native_admission_case_intent(**self.arguments)
+        for pin, raw in self.built["input_blobs"].items():
+            self.store.put_expected(
+                BytesIO(raw), expected_digest=pin, max_bytes=len(raw)
+            )
+        self.intent_pin = self.built["intent_digest"]
+        self.inspected = subject._inspect(
+            CAS(self.store.root, read_only=True), self.intent_pin
+        )
+        original_audit = subject._UPDATE._audit_bundle
+        for timeout, changed in ((False, False), (True, False), (False, True)):
+            calls = []
+            audit_errors = []
+
+            def audit(path, manifest):
+                calls.append(path)
+                try:
+                    original_audit(path, manifest)
+                except Exception as error:
+                    audit_errors.append((type(error).__name__, str(error)))
+                    raise
+                if changed and len(calls) == 3:
+                    raise ValueError("inert input replacement")
+
+            with (
+                self.subTest(timeout=timeout, changed=changed),
+                self.capture_mocks(invocation_failure=timeout) as mocks,
+                patch.object(subject._UPDATE, "_audit_bundle", side_effect=audit),
+                patch.object(
+                    subject._UPDATE.fixture,
+                    "materialize",
+                    wraps=subject._UPDATE.fixture.materialize,
+                ) as materialize,
+            ):
+                value = subject._capture(self.store, self.intent_pin)
+                _, _, _, invoke, cleanup, docker = mocks
+                self.assertEqual(audit_errors, [], "real inert bundle audit refused")
+                self.assertEqual(
+                    value["status"], "REFUSED" if timeout or changed else "OBSERVED"
+                )
+                self.assertEqual(value["case_id"], subject.case.UPDATE_CASE)
+                self.assertEqual(len(value["plugin_input_bundle"]["files"]), 13)
+                self.assertEqual(len(calls), 3)
+                materialize.assert_called_once()
+                invoke.assert_called_once()
+                cleanup.assert_called_once()
+                copies = [
+                    call.args
+                    for call in docker.call_args_list
+                    if call.args[0] == "cp"
+                    and call.args[-1] == self.container + ":/opt/aragorn/"
+                ]
+                self.assertEqual(len(copies), 1)
+                self.assertTrue(copies[0][1].endswith("/native-plugin-update-input"))
+                self.assertEqual(
+                    value["postcondition_failures"],
+                    ["PLUGIN_INPUT_READBACK_REFUSED"] if changed else [],
+                )
 
     def test_fixed_guest_invocation_and_proof_ceiling(self):
         envelope = self.envelope()
@@ -436,6 +497,128 @@ class NativeAdmissionHostTests(unittest.TestCase):
         ):
             subject._retain(self.store, value)
         publish.assert_not_called()
+
+    def test_replay_is_offline_after_capture_retention_and_failure_keeps_evidence(self):
+        prepared = subject.case.prepare_native_admission_case(
+            self.built["intent_raw"],
+            expected_intent_digest=self.intent_pin,
+            evidence_cas=CAS(self.store.root, read_only=True),
+            provisioning_inputs=provisioning_inputs(),
+        )
+        value = {
+            "intent_digest": self.intent_pin,
+            "status": "OBSERVED",
+            "guest": {
+                "prepared_case": {
+                    "request": prepared["request"],
+                    "request_digest": prepared["request_digest"],
+                }
+            },
+            "independent_capture_replay_complete": False,
+        }
+        raw = canonical_json(value) + b"\n"
+        pin = subject.case._digest(raw)
+        for failed in (False, True):
+
+            def verify(observed, **kwargs):
+                self.assertEqual(observed, raw)
+                self.assertEqual(kwargs["expected_capture_digest"], pin)
+                self.assertTrue(kwargs["evidence_cas"].read_only)
+                self.assertEqual(kwargs["evidence_cas"].read(pin), raw)
+                self.assertEqual(
+                    kwargs["evidence_cas"].read(prepared["request_digest"]),
+                    prepared["request_raw"],
+                )
+                if failed:
+                    raise ValueError("inert semantic mismatch")
+                return {
+                    "status": "BOUNDED_CAPTURE_REPLAY_VERIFIED",
+                    "independent_capture_replay_complete": True,
+                    **dict.fromkeys(subject._FALSE, False),
+                }
+
+            with (
+                self.subTest(failed=failed),
+                patch.object(
+                    subject.replay,
+                    "verify_native_admission_capture",
+                    side_effect=verify,
+                ) as verifier,
+                patch.object(subject, "_capture") as capture,
+            ):
+                retained = subject._retain(self.store, value)
+                verifier.assert_called_once()
+                capture.assert_not_called()
+                self.assertEqual(
+                    retained["status"], "REFUSED" if failed else "OBSERVED"
+                )
+                self.assertIs(
+                    retained["independent_capture_replay_complete"], not failed
+                )
+                self.assertEqual(self.store.read(pin), raw)
+                verification = json.loads(
+                    self.store.read(retained["verification_digest"])
+                )
+                self.assertEqual(
+                    verification["status"],
+                    "REFUSED" if failed else "BOUNDED_CAPTURE_REPLAY_VERIFIED",
+                )
+                self.assertTrue(all(retained[key] is False for key in subject._FALSE))
+
+    def test_verify_command_only_reads_caller_pinned_capture(self):
+        raw = b'{"inert_cli_routing_only":true}\n'
+        pin = self.store.put(BytesIO(raw), max_bytes=len(raw))
+        expected = {
+            "status": "BOUNDED_CAPTURE_REPLAY_VERIFIED",
+            "independent_capture_replay_complete": True,
+            **dict.fromkeys(subject._FALSE, False),
+        }
+        output = StringIO()
+        with (
+            patch.object(
+                subject.replay, "verify_native_admission_capture", return_value=expected
+            ) as verifier,
+            patch.object(subject, "_capture") as capture,
+            patch.object(CAS, "put") as put,
+            patch.object(CAS, "put_expected") as put_expected,
+            redirect_stdout(output),
+        ):
+            code = subject.main(
+                [
+                    "verify",
+                    "--cas",
+                    str(self.store.root),
+                    "--expected-intent-digest",
+                    self.intent_pin,
+                    "--expected-capture-digest",
+                    pin,
+                ]
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output.getvalue()), expected)
+        verifier.assert_called_once()
+        self.assertEqual(verifier.call_args.args, (raw,))
+        self.assertTrue(verifier.call_args.kwargs["evidence_cas"].read_only)
+        self.assertEqual(verifier.call_args.kwargs["expected_capture_digest"], pin)
+        capture.assert_not_called()
+        put.assert_not_called()
+        put_expected.assert_not_called()
+
+    def test_normal_verifier_return_cannot_promote_refusal_or_qualification(self):
+        baseline = {
+            "status": "BOUNDED_CAPTURE_REPLAY_VERIFIED",
+            "independent_capture_replay_complete": True,
+            **dict.fromkeys(subject._FALSE, False),
+        }
+        self.assertEqual(subject._verified_summary(baseline), baseline)
+        for changes in (
+            {"status": "REFUSED"},
+            {"independent_capture_replay_complete": False},
+            {"route_qualified": True},
+            {"live_deployment_attested": True},
+        ):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                subject._verified_summary(baseline | changes)
 
 
 if __name__ == "__main__":

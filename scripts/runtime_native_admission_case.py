@@ -1,8 +1,8 @@
-"""Prepare and dispatch one direct-write case in the owned admission successor.
+"""Prepare and dispatch one selected case in the owned admission successor.
 
-The old plugin-update entrypoints and frozen setup remain unchanged. This guest
-only accepts the new direct-write intent; other admitted inventory entries are
-not executable here. The host owns creation, isolation, teardown and VM state.
+The old plugin-update entrypoints and frozen setup remain unchanged. Their fixed
+input, seed and invocation primitives compose with the common request boundary;
+no predecessor observation envelope is manufactured. The host owns the fixture.
 """
 
 from __future__ import annotations
@@ -20,11 +20,13 @@ from unittest.mock import patch
 
 if __package__:
     from scripts import runtime_native_plugin_package_check as package
+    from scripts import runtime_native_plugin_update_check as update
     from scripts import runtime_native_plugin_update_case as storage
     from scripts import runtime_native_plugin_update_identity_check as writer_parent
 else:
     sys.path[:0] = ["/usr/lib/aragorn", str(Path(__file__).resolve().parent)]
     import runtime_native_plugin_package_check as package
+    import runtime_native_plugin_update_check as update
     import runtime_native_plugin_update_case as storage
     import runtime_native_plugin_update_identity_check as writer_parent
 
@@ -145,6 +147,91 @@ def _pin_sources(bound: dict, native) -> dict:
         _require(raw == bound["input_blobs"][expected[source]], "LEAF_SOURCE_CHANGED")
         result[installed] = {"bytes": len(raw), "digest": direct.digest(raw)}
     return result
+
+
+def _update_sources(native) -> dict:
+    """Pin the unchanged installed adapter and package helper with root custody."""
+    result = {}
+    for module, installed, size, pin in (
+        (
+            update,
+            "/opt/aragorn/runtime_native_plugin_update_check.py",
+            *writer_parent._UPDATE_PIN,
+        ),
+        (
+            package,
+            "/opt/aragorn/runtime_native_plugin_package_check.py",
+            24331,
+            update._HELPER_PIN,
+        ),
+    ):
+        path = Path(module.__file__)
+        _require(
+            str(path) == installed,
+            "PLUGIN_UPDATE_SOURCE_LOCATION_CHANGED",
+        )
+        raw = native.response._read_regular(path, 0, {0o444})
+        _require(
+            (len(raw), direct.digest(raw)) == (size, pin),
+            "PLUGIN_UPDATE_SOURCE_CHANGED",
+        )
+        result[str(path)] = {"bytes": len(raw), "digest": pin}
+    return result
+
+
+@contextmanager
+def _adapter_inputs(selected: str):
+    # These are only fixed input identities, never predecessor envelope fields.
+    with ExitStack() as held:
+        if selected == case.UPDATE_CASE:
+            held.enter_context(
+                patch.multiple(package, _BUNDLE=update._BUNDLE, _STAGED=update._STAGED)
+            )
+        yield
+
+
+def _invoke_update(p37b, before: dict, token: str) -> dict:
+    """Call the unchanged adapter once while holding and checking its gateway."""
+    gateway = before["processes"]["gateway"]
+    with ExitStack() as held:
+        pidfd = identity._open_pidfd(gateway)
+        held.callback(os.close, pidfd)
+        namespace = os.open(
+            f"/proc/{gateway['pid']}/ns/mnt", os.O_RDONLY | os.O_CLOEXEC
+        )
+        held.callback(os.close, namespace)
+
+        def check():
+            identity.process.require_live_pidfd(pidfd)
+            metadata = os.stat(f"/proc/{gateway['pid']}/ns/mnt")
+            pinned = os.fstat(namespace)
+            _require(
+                {"device": metadata.st_dev, "inode": metadata.st_ino}
+                == {"device": pinned.st_dev, "inode": pinned.st_ino}
+                == gateway["mount_namespace"]
+                and identity.process._process_start_time(gateway["pid"])
+                == gateway["start_time_ticks"]
+                and identity.process._process_cgroup(gateway["pid"])
+                == gateway["cgroup"],
+                "PLUGIN_UPDATE_GATEWAY_CHANGED",
+            )
+
+        check()
+        invocation_error = None
+        try:
+            observation = update._invoke(p37b, gateway["pid"], token)
+        except Exception as error:
+            invocation_error = error
+        try:
+            check()
+        except Exception:
+            if invocation_error is None:
+                raise
+        if invocation_error is not None:
+            # Keep the primary failure; the common controller independently
+            # attempts and retains all bounded post-invocation identity reads.
+            raise invocation_error
+        return observation
 
 
 def _prepare(native, before_activation, *, state=None):
@@ -411,6 +498,10 @@ def _run(
         "setup": None,
         "installed_sources": None,
         "installed_sources_after": None,
+        "processes": None,
+        "processes_after": None,
+        "boot_id": None,
+        "boot_id_after": None,
         "live_identity": {
             "before": None,
             "after": None,
@@ -423,6 +514,7 @@ def _run(
             "boundaries_monotonic_ns": dict.fromkeys(_STAMPS),
         },
         "leaf": None,
+        "plugin_update": None,
         "fixture_stack_cleanup": None,
         "refusal": None,
         "post_observation": {},
@@ -432,6 +524,8 @@ def _run(
     phase = "ENVIRONMENT"
     native = None
     cleanup_required = False
+    mounted = False
+    overlay = None
     try:
         _environment(container, copied_owner)
         phase = "BUNDLE_INPUT"
@@ -439,10 +533,13 @@ def _run(
         intent_raw = blobs[expected_intent_digest]
         selected = direct.parse(intent_raw)
         _require(
-            selected.get("case_id") == case.DIRECT_WRITE_CASE,
+            selected.get("case_id") in case.CASE_BRANCHES,
             "SELECTED_CASE_NOT_EXECUTABLE_BY_THIS_GUEST",
         )
-        with _fresh_store() as (writer, reader, guard):
+        with (
+            _fresh_store() as (writer, reader, guard),
+            _adapter_inputs(selected["case_id"]),
+        ):
             for pin, raw in blobs.items():
                 if pin != expected_intent_digest:
                     writer.put_expected(
@@ -461,6 +558,9 @@ def _run(
                 evidence_cas=reader,
             )
             _require(bound["input_blobs"] == blobs, "BUNDLE_INPUT_CLOSURE_CHANGED")
+            result["case_id"] = bound["intent"]["case_id"]
+            result["branch"] = bound["intent"]["branch"]
+            is_update = result["case_id"] == case.UPDATE_CASE
             static_pin = bound["intent"]["static_pin_manifest_digest"]
             static = writer_parent._parse_static_manifest(blobs[static_pin], static_pin)
             result["static_pin_manifest_digest"] = static_pin
@@ -483,6 +583,29 @@ def _run(
                 _require(
                     prerequisites["status"] == "READY", "CGROUP_PREREQUISITE_REFUSED"
                 )
+                p37b = writer_parent._p37b()
+                if is_update:
+                    phase = "PLUGIN_UPDATE_INPUT_CUSTODY"
+                    plugin = result["plugin_update"] = {
+                        "invocation": None,
+                        "installed_sources": _update_sources(native),
+                        "installed_sources_after": None,
+                        "staged_input_bundle": None,
+                        "input_bundle": None,
+                        "input_mount": None,
+                        "input_mount_source": str(update._STAGED),
+                        "baseline": None,
+                        "input_mount_removed": False,
+                        "inherited_input_restored": False,
+                        "inherited_input_restoration": None,
+                    }
+                    plugin["staged_input_bundle"] = package._bundle(
+                        copied_owner=copied_owner, staged=True
+                    )
+                    overlay = package._mount_input()
+                    mounted = True
+                    plugin["input_mount"] = overlay["mounted"]
+                    plugin["input_bundle"] = package._bundle()
                 callback_calls = 0
 
                 def commit_before_activation(inputs, state):
@@ -499,6 +622,10 @@ def _run(
                         "LIVE_PIN_INVENTORY_CHANGED",
                     )
                     result["live_identity"]["expected_file_digests"] = expected
+                    if is_update:
+                        phase = "PLUGIN_UPDATE_PREACTIVATION_SEED"
+                        plugin["baseline"] = update._seed(p37b)
+                        phase = "PREACTIVATION_PREPARATION"
                     prepared = case.prepare_native_admission_case(
                         intent_raw,
                         expected_intent_digest=expected_intent_digest,
@@ -548,7 +675,12 @@ def _run(
                 budget = native._checked_startup_budget(container, cgroup)
                 installed = native.setup_prior._installed(setup["skill_digest"])
                 _require(installed["denial"] is None, "ADMITTED_SKILL_NOT_ACTIVE")
-                p37b = writer_parent._p37b()
+                _require(
+                    not is_update or plugin["baseline"] is not None,
+                    "PLUGIN_UPDATE_BASELINE_NOT_PREPARED",
+                )
+                result["processes"] = native.prior._processes(container)
+                result["boot_id"] = native.prior._boot()
                 effects = p37b._snapshot_effects()
                 live, stamps = (
                     result["live_identity"],
@@ -562,18 +694,31 @@ def _run(
                 stamps["before_read_started_ns"] = time.monotonic_ns()
                 live["before"] = identity.read_native_live_identity(**read_args)
                 stamps["before_read_finished_ns"] = time.monotonic_ns()
-                phase = "LEAF_INVOCATION"
+                _require(
+                    result["processes"]["gateway"]["process"]["pid"]
+                    == live["before"]["processes"]["gateway"]["pid"],
+                    "INVOKED_GATEWAY_DIFFERS_FROM_PROCESS_READ",
+                )
+                invocation_phase = (
+                    "PLUGIN_UPDATE_INVOCATION" if is_update else "LEAF_INVOCATION"
+                )
+                phase = invocation_phase
                 live["invocation_count"] += 1
                 stamps["invocation_started_ns"] = time.monotonic_ns()
                 invocation_error = None
                 try:
-                    result["leaf"] = _invoke_leaf(
-                        container,
-                        live["before"],
-                        setup,
-                        bound,
-                        native._fixture_token(p37b),
-                    )
+                    if is_update:
+                        plugin["invocation"] = _invoke_update(
+                            p37b, live["before"], native._fixture_token(p37b)
+                        )
+                    else:
+                        result["leaf"] = _invoke_leaf(
+                            container,
+                            live["before"],
+                            setup,
+                            bound,
+                            native._fixture_token(p37b),
+                        )
                 except Exception as error:
                     invocation_error = error
                 finally:
@@ -609,6 +754,15 @@ def _run(
                             live["before"], live["after"]
                         ),
                     )
+                result["processes_after"] = readback(
+                    "PROCESSES_AFTER",
+                    lambda: native.prior._processes(container),
+                    result["processes"],
+                    compare=True,
+                )
+                result["boot_id_after"] = readback(
+                    "BOOT_ID_AFTER", native.prior._boot, result["boot_id"], compare=True
+                )
                 result["installed_sources_after"] = readback(
                     "INSTALLED_SOURCES_AFTER",
                     lambda: native._sources(health=True, startup_reserve=True),
@@ -621,6 +775,31 @@ def _run(
                     leaf_sources,
                     compare=True,
                 )
+                if is_update:
+                    plugin["installed_sources_after"] = readback(
+                        "PLUGIN_UPDATE_SOURCES_AFTER",
+                        lambda: _update_sources(native),
+                        plugin["installed_sources"],
+                        compare=True,
+                    )
+                    readback(
+                        "PLUGIN_INPUT_BUNDLE_AFTER",
+                        package._bundle,
+                        plugin["input_bundle"],
+                        compare=True,
+                    )
+                    readback(
+                        "PLUGIN_STAGED_INPUT_BUNDLE_AFTER",
+                        lambda: package._bundle(staged=True),
+                        plugin["staged_input_bundle"],
+                        compare=True,
+                    )
+                    readback(
+                        "PLUGIN_INPUT_MOUNT_AFTER",
+                        package._mount_record,
+                        plugin["input_mount"],
+                        compare=True,
+                    )
                 readback(
                     "INSTALLED_SKILL_AFTER",
                     lambda: native.setup_prior._installed(setup["skill_digest"]),
@@ -656,29 +835,30 @@ def _run(
                     "leaf_sources": leaf_sources,
                 }
                 if invocation_error is not None:
-                    phase = "LEAF_INVOCATION"
+                    phase = invocation_phase
                     raise invocation_error
                 _require(not failures, "POST_INVOCATION_READBACK_REFUSED")
-                phase = "LEAF_SEMANTIC_REPLAY"
-                leaf = result["leaf"]["document"]
-                _require(leaf["status"] == "OBSERVED", "DIRECT_WRITE_LEAF_REFUSED")
-                joins = _leaf_live_joins(leaf, live)
-                leaf_raw = canonical_json(leaf)
-                source_pins = bound["intent"]["case_source_digests"]
-                result["leaf"]["verification"] = (
-                    direct.verify_native_admission_direct_write(
-                        leaf_raw,
-                        expected_raw_digest=direct.digest(leaf_raw),
-                        expected_container=container,
-                        expected_gateway_pid=live["before"]["processes"]["gateway"][
-                            "pid"
-                        ],
-                        expected_admitted_digest=setup["skill_digest"],
-                        expected_probe_digest=source_pins[_LEAF_SOURCE],
-                        expected_verifier_digest=source_pins[_VERIFIER_SOURCE],
+                if not is_update:
+                    phase = "LEAF_SEMANTIC_REPLAY"
+                    leaf = result["leaf"]["document"]
+                    _require(leaf["status"] == "OBSERVED", "DIRECT_WRITE_LEAF_REFUSED")
+                    joins = _leaf_live_joins(leaf, live)
+                    leaf_raw = canonical_json(leaf)
+                    source_pins = bound["intent"]["case_source_digests"]
+                    result["leaf"]["verification"] = (
+                        direct.verify_native_admission_direct_write(
+                            leaf_raw,
+                            expected_raw_digest=direct.digest(leaf_raw),
+                            expected_container=container,
+                            expected_gateway_pid=live["before"]["processes"]["gateway"][
+                                "pid"
+                            ],
+                            expected_admitted_digest=setup["skill_digest"],
+                            expected_probe_digest=source_pins[_LEAF_SOURCE],
+                            expected_verifier_digest=source_pins[_VERIFIER_SOURCE],
+                        )
                     )
-                )
-                result["leaf"]["verification"]["native_live_identity_joins"] = joins
+                    result["leaf"]["verification"]["native_live_identity_joins"] = joins
                 phase = "FINAL_REQUEST_READBACK"
                 committed = result["prepared_case"]
                 _require(
@@ -714,6 +894,45 @@ def _run(
                     "reason": "OWNED_SERVICE_CLEANUP_UNCONFIRMED",
                     "preceding_refusal": result["refusal"],
                 }
+            finally:
+                if mounted:
+                    plugin = result["plugin_update"]
+                    try:
+                        package._mount_command(["/usr/bin/umount", str(package._ROOT)])
+                        _require(
+                            package._mount_record() is None,
+                            "PLUGIN_INPUT_MOUNT_CLEANUP_UNCONFIRMED",
+                        )
+                        plugin["input_mount_removed"] = True
+                    except Exception:
+                        result["status"] = "REFUSED"
+                        result["refusal"] = {
+                            "phase": "CLEANUP",
+                            "reason": "PLUGIN_INPUT_MOUNT_CLEANUP_UNCONFIRMED",
+                            "preceding_refusal": result["refusal"],
+                        }
+                    # Independent metadata readback is attempted even if service
+                    # shutdown or unmount failed; no setup/mutation is retried.
+                    try:
+                        inherited_after = package._underlying_input()
+                        plugin["inherited_input_restoration"] = {
+                            "authority": "BOUNDED_METADATA_AND_INVENTORY_ONLY_NOT_CONTENT_HASHES",
+                            "before": overlay["inherited_input"],
+                            "after": inherited_after,
+                        }
+                        _require(
+                            plugin["input_mount_removed"]
+                            and inherited_after == overlay["inherited_input"],
+                            "INHERITED_INPUT_RESTORATION_UNCONFIRMED",
+                        )
+                        plugin["inherited_input_restored"] = True
+                    except Exception:
+                        result["status"] = "REFUSED"
+                        result["refusal"] = {
+                            "phase": "CLEANUP",
+                            "reason": "INHERITED_INPUT_RESTORATION_UNCONFIRMED",
+                            "preceding_refusal": result["refusal"],
+                        }
     return result
 
 

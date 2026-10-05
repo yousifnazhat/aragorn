@@ -208,8 +208,8 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
                 self.assertEqual(detached, [{}])
                 self.assertIs(native._activate, activate)
 
-    def test_unsupported_update_refused_before_store_or_bootstrap(self):
-        intent = self.intent | {"case_id": guest.case.UPDATE_CASE}
+    def test_unknown_case_refused_before_store_or_bootstrap(self):
+        intent = self.intent | {"case_id": "ADM-02/unknown"}
         raw = guest.canonical_json(intent)
         with (
             patch.object(guest, "_environment"),
@@ -225,7 +225,18 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
         store.assert_not_called()
         native.assert_not_called()
 
-    def _run_inert(self, mode="success"):
+    def _run_inert(self, mode="success", *, update_case=False):
+        if update_case:
+            self.intent.update(
+                case_id=guest.case.UPDATE_CASE, branch=guest.case.UPDATE_BRANCH
+            )
+            del self.blobs[self.intent_pin]
+            self.intent_raw = guest.canonical_json(self.intent)
+            self.intent_pin = pin(self.intent_raw)
+            self.blobs[self.intent_pin] = self.intent_raw
+            self.request["intent_digest"] = self.intent_pin
+            self.request_raw = guest.canonical_json(self.request)
+            self.request_pin = pin(self.request_raw)
         events, retained = [], {}
         sources = {"inert": {"digest": pin(b"installed")}}
         setup = {
@@ -243,7 +254,9 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
             _snapshot=Mock(return_value=setup["empty_store"]),
             _fixture_token=Mock(return_value="f" * 64),
             prior=SimpleNamespace(
-                _stop_fixture=Mock(return_value={"units_inactive": True})
+                _stop_fixture=Mock(return_value={"units_inactive": True}),
+                _processes=Mock(return_value={"gateway": {"process": {"pid": 42}}}),
+                _boot=Mock(return_value="inert-boot"),
             ),
         )
         old_code = deepcopy(native._STARTUP_CODE)
@@ -288,6 +301,12 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
             "execution": {"inert": True},
             "verification": None,
         }
+        staged_bundle = {"staged": "exact-inert-input"}
+        mounted_bundle = {"mounted": "exact-inert-input"}
+        mount = {"mount_id": "17", "mountpoint": "/route-input", "options": ["ro"]}
+        inherited = {".": [1, 2, 3]}
+        plugin_sources = {"inert_plugin": {"bytes": 1, "digest": pin(b"fixed")}}
+        plugin_invocation = {"document": {"status": "OBSERVED"}, "execution": {}}
         with tempfile.TemporaryDirectory() as temporary, ExitStack() as patches:
             writer = CAS(Path(temporary).resolve() / "cas")
             reader = CAS(writer.root, read_only=True)
@@ -386,6 +405,54 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
             invoke = patches.enter_context(
                 patch.object(guest, "_invoke_leaf", return_value=leaf)
             )
+            update_invoke = patches.enter_context(
+                patch.object(guest, "_invoke_update", return_value=plugin_invocation)
+            )
+            update_sources = patches.enter_context(
+                patch.object(guest, "_update_sources", return_value=plugin_sources)
+            )
+
+            def bundle(*, copied_owner=None, staged=False):
+                self.assertEqual(guest.package._BUNDLE, guest.update._BUNDLE)
+                self.assertEqual(guest.package._STAGED, guest.update._STAGED)
+                if copied_owner is not None:
+                    self.assertEqual(copied_owner, (501, 20))
+                    self.assertTrue(staged)
+                return staged_bundle if staged else mounted_bundle
+
+            bundle_read = patches.enter_context(
+                patch.object(guest.package, "_bundle", side_effect=bundle)
+            )
+            patches.enter_context(
+                patch.object(
+                    guest.package,
+                    "_mount_input",
+                    return_value={"mounted": mount, "inherited_input": inherited},
+                )
+            )
+            mount_read = patches.enter_context(
+                patch.object(
+                    guest.package,
+                    "_mount_record",
+                    side_effect=lambda: None if unmount.called else mount,
+                )
+            )
+            unmount = patches.enter_context(
+                patch.object(guest.package, "_mount_command")
+            )
+            underlying = patches.enter_context(
+                patch.object(guest.package, "_underlying_input", return_value=inherited)
+            )
+
+            def seed(_):
+                events.append("seed")
+                if mode == "seed-refusal":
+                    raise RuntimeError("private seed diagnostic")
+                return {"path": "inert-plugin", "tracked_record_seed": {}}
+
+            seed_call = patches.enter_context(
+                patch.object(guest.update, "_seed", side_effect=seed)
+            )
             patches.enter_context(
                 patch.object(
                     guest.direct,
@@ -406,6 +473,19 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
                         sources,
                         RuntimeError("private source diagnostic"),
                     ]
+            if mode.startswith("update-timeout"):
+                update_invoke.side_effect = guest.subprocess.TimeoutExpired(
+                    "fixed", 120
+                )
+                if mode == "update-timeout-postread-refusal":
+                    live_reader.side_effect = [live, RuntimeError("private postread")]
+                    update_sources.side_effect = [
+                        plugin_sources,
+                        RuntimeError("private source"),
+                    ]
+                    mount_read.side_effect = [RuntimeError("private mount read"), None]
+            if mode == "unmount-refusal":
+                unmount.side_effect = RuntimeError("private unmount diagnostic")
             if mode == "cleanup-refusal":
                 native.prior._stop_fixture.side_effect = RuntimeError(
                     "private cleanup diagnostic"
@@ -421,11 +501,32 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
                 b"private store",
                 b"private postread",
                 b"private source",
+                b"private seed",
+                b"private mount",
+                b"private unmount",
             ):
                 self.assertNotIn(secret, guest.canonical_json(result))
             self.assertEqual(native._STARTUP_CODE, old_code)
             native.prior._stop_fixture.assert_called_once_with()
-            if mode.startswith("leaf-timeout"):
+            if update_case:
+                invoke.assert_not_called()
+                seed_call.assert_called_once()
+                unmount.assert_called_once_with(["/usr/bin/umount", "/route-input"])
+                underlying.assert_called_once()
+                if mode not in {
+                    "request-refusal",
+                    "seed-refusal",
+                    "activation-refusal",
+                }:
+                    self.assertEqual(bundle_read.call_count, 4)
+                    self.assertEqual(update_sources.call_count, 2)
+            else:
+                update_invoke.assert_not_called()
+                update_sources.assert_not_called()
+                bundle_read.assert_not_called()
+                seed_call.assert_not_called()
+                unmount.assert_not_called()
+            if mode.startswith(("leaf-timeout", "update-timeout")):
                 self.assertEqual(live_reader.call_count, 2)
                 self.assertEqual(native._sources.call_count, 2)
                 self.assertEqual(pin_sources.call_count, 2)
@@ -433,7 +534,14 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
                 native._snapshot.assert_called_once()
                 self.assertEqual(p37b._snapshot_effects.call_count, 2)
                 self.assertEqual(native._checked_startup_budget.call_count, 2)
-            return result, events, retained, invoke.call_count
+                self.assertEqual(native.prior._processes.call_count, 2)
+                self.assertEqual(native.prior._boot.call_count, 2)
+            return (
+                result,
+                events,
+                retained,
+                (update_invoke if update_case else invoke).call_count,
+            )
 
     def test_leaf_timeout_retains_independent_postreadbacks_and_original_failure(self):
         for mode in ("leaf-timeout", "leaf-timeout-postread-refusal"):
@@ -476,7 +584,213 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
         self.assertEqual(result["live_identity"]["activation_count"], 1)
         self.assertEqual(result["live_identity"]["invocation_count"], 1)
         self.assertEqual(result["fixture_stack_cleanup"], {"units_inactive": True})
+        self.assertIsNone(result["plugin_update"])
+        self.assertEqual(result["processes"], result["processes_after"])
+        self.assertEqual(result["boot_id"], result["boot_id_after"])
         self.assertTrue(all(result[key] is False for key in guest._FALSE_FLAGS))
+
+    def test_update_uses_common_request_one_selected_invocation_and_owned_cleanup(self):
+        old_bundle, old_staged = guest.package._BUNDLE, guest.package._STAGED
+        result, events, retained, calls = self._run_inert(update_case=True)
+        self.assertEqual(result["status"], "OBSERVED")
+        self.assertEqual(result["case_id"], guest.case.UPDATE_CASE)
+        self.assertEqual(result["branch"], guest.case.UPDATE_BRANCH)
+        self.assertIsNone(result["leaf"])
+        self.assertEqual(calls, 1)
+        self.assertLess(events.index("seed"), events.index("request"))
+        self.assertLess(events.index("request"), events.index("activate"))
+        self.assertEqual(retained["request"], self.request_raw)
+        self.assertEqual(result["live_identity"]["activation_count"], 1)
+        self.assertEqual(result["live_identity"]["invocation_count"], 1)
+        plugin = result["plugin_update"]
+        self.assertEqual(plugin["invocation"]["document"]["status"], "OBSERVED")
+        self.assertTrue(plugin["input_mount_removed"])
+        self.assertTrue(plugin["inherited_input_restored"])
+        self.assertEqual(
+            plugin["inherited_input_restoration"]["before"],
+            plugin["inherited_input_restoration"]["after"],
+        )
+        self.assertEqual(plugin["installed_sources"], plugin["installed_sources_after"])
+        self.assertIs(guest.package._BUNDLE, old_bundle)
+        self.assertIs(guest.package._STAGED, old_staged)
+        self.assertTrue(all(result[key] is False for key in guest._FALSE_FLAGS))
+
+    def test_update_failure_keeps_independent_postreadbacks_without_retry(self):
+        for mode in ("update-timeout", "update-timeout-postread-refusal"):
+            with self.subTest(mode=mode):
+                result, _, retained, calls = self._run_inert(mode, update_case=True)
+                self.assertEqual(result["status"], "REFUSED")
+                self.assertEqual(calls, 1)
+                self.assertEqual(result["refusal"]["phase"], "PLUGIN_UPDATE_INVOCATION")
+                self.assertEqual(retained["request"], self.request_raw)
+                self.assertTrue(result["plugin_update"]["input_mount_removed"])
+                self.assertTrue(result["plugin_update"]["inherited_input_restored"])
+                self.assertEqual(
+                    result["postcondition_failures"],
+                    [
+                        "LIVE_IDENTITY_AFTER",
+                        "PLUGIN_UPDATE_SOURCES_AFTER",
+                        "PLUGIN_INPUT_MOUNT_AFTER",
+                    ]
+                    if mode.endswith("postread-refusal")
+                    else [],
+                )
+                for name in (
+                    "PROCESSES_AFTER",
+                    "BOOT_ID_AFTER",
+                    "INSTALLED_SOURCES_AFTER",
+                    "PLUGIN_INPUT_BUNDLE_AFTER",
+                    "PLUGIN_STAGED_INPUT_BUNDLE_AFTER",
+                    "RECEIPT_STORE_AFTER",
+                    "PROTECTED_EFFECTS_AFTER",
+                    "STARTUP_BUDGET_AFTER",
+                ):
+                    self.assertIn(name, result["post_observation"])
+
+    def test_update_preactivation_and_cleanup_refusals_never_repeat_effects(self):
+        for mode in (
+            "seed-refusal",
+            "request-refusal",
+            "activation-refusal",
+            "cleanup-refusal",
+            "unmount-refusal",
+            "store-exit-refusal",
+        ):
+            with self.subTest(mode=mode):
+                result, _, _, calls = self._run_inert(mode, update_case=True)
+                self.assertEqual(result["status"], "REFUSED")
+                self.assertEqual(
+                    calls,
+                    0
+                    if mode in {"seed-refusal", "request-refusal", "activation-refusal"}
+                    else 1,
+                )
+                self.assertEqual(
+                    result["live_identity"]["activation_count"],
+                    0 if mode in {"seed-refusal", "request-refusal"} else 1,
+                )
+                self.assertIsNotNone(
+                    result["plugin_update"]["inherited_input_restoration"]
+                )
+                if mode == "unmount-refusal":
+                    self.assertFalse(result["plugin_update"]["input_mount_removed"])
+                    self.assertFalse(
+                        result["plugin_update"]["inherited_input_restored"]
+                    )
+                else:
+                    self.assertTrue(result["plugin_update"]["input_mount_removed"])
+                    self.assertTrue(result["plugin_update"]["inherited_input_restored"])
+
+    def test_update_installed_helper_pins_enforce_custody_and_exact_bytes(self):
+        update_raw = Path(guest.update.__file__).read_bytes()
+        package_raw = Path(guest.package.__file__).read_bytes()
+        native = SimpleNamespace(response=SimpleNamespace(_read_regular=Mock()))
+        for changed in (False, True):
+            native.response._read_regular.reset_mock()
+            native.response._read_regular.side_effect = [
+                update_raw + (b" " if changed else b""),
+                package_raw,
+            ]
+            with (
+                self.subTest(changed=changed),
+                patch.object(
+                    guest.update,
+                    "__file__",
+                    "/opt/aragorn/runtime_native_plugin_update_check.py",
+                ),
+                patch.object(
+                    guest.package,
+                    "__file__",
+                    "/opt/aragorn/runtime_native_plugin_package_check.py",
+                ),
+            ):
+                if changed:
+                    with self.assertRaises(guest.NativeAdmissionCaseGuestError):
+                        guest._update_sources(native)
+                else:
+                    value = guest._update_sources(native)
+                    self.assertEqual(len(value), 2)
+                    self.assertEqual(native.response._read_regular.call_count, 2)
+                    for call in native.response._read_regular.call_args_list:
+                        self.assertEqual(call.args[1:], (0, {0o444}))
+
+    def test_update_original_adapter_is_called_once_with_held_live_identity(self):
+        gateway = {
+            "pid": 42,
+            "start_time_ticks": 17,
+            "cgroup": "/docker/" + self.container,
+            "mount_namespace": {"device": 4, "inode": 5},
+        }
+        for failure in (
+            "none",
+            "timeout",
+            "changed-before",
+            "changed-after",
+            "timeout-changed-after",
+        ):
+            events = []
+            with (
+                self.subTest(failure=failure),
+                patch.object(guest.identity, "_open_pidfd", return_value=91),
+                patch.object(guest.os, "open", return_value=92),
+                patch.object(guest.os, "close") as close,
+                patch.object(
+                    guest.os, "fstat", return_value=SimpleNamespace(st_dev=4, st_ino=5)
+                ),
+                patch.object(
+                    guest.os, "stat", return_value=SimpleNamespace(st_dev=4, st_ino=5)
+                ),
+                patch.object(
+                    guest.identity.process,
+                    "_process_start_time",
+                    side_effect=[
+                        18 if failure == "changed-before" else 17,
+                        18 if failure.endswith("changed-after") else 17,
+                    ],
+                ),
+                patch.object(
+                    guest.identity.process,
+                    "_process_cgroup",
+                    return_value=gateway["cgroup"],
+                ),
+                patch.object(
+                    guest.identity.process,
+                    "require_live_pidfd",
+                    side_effect=lambda _: events.append("live"),
+                ),
+                patch.object(
+                    guest.update,
+                    "_invoke",
+                    side_effect=lambda *args: (
+                        events.append("invoke") or {"actual": "adapter"}
+                    ),
+                ) as invoke,
+            ):
+                if failure.startswith("timeout"):
+                    invoke.side_effect = guest.subprocess.TimeoutExpired("fixed", 120)
+                if failure == "none":
+                    self.assertEqual(
+                        guest._invoke_update(
+                            "inert-p37b", {"processes": {"gateway": gateway}}, "f" * 64
+                        ),
+                        {"actual": "adapter"},
+                    )
+                else:
+                    with self.assertRaises(
+                        guest.subprocess.TimeoutExpired
+                        if failure.startswith("timeout")
+                        else guest.NativeAdmissionCaseGuestError
+                    ):
+                        guest._invoke_update(
+                            "inert-p37b", {"processes": {"gateway": gateway}}, "f" * 64
+                        )
+                self.assertEqual(
+                    invoke.call_count, 0 if failure == "changed-before" else 1
+                )
+                self.assertEqual(close.call_count, 2)
+                self.assertEqual(
+                    events.count("live"), 1 if failure == "changed-before" else 2
+                )
 
     def test_refusals_preserve_partial_evidence_and_cleanup_without_retry(self):
         for mode in (

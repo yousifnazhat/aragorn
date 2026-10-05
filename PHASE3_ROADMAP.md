@@ -1187,3 +1187,45 @@ and retain them independently; do not invoke two short-lived collector processes
 and claim a stable collector epoch. These point-in-time namespace observations
 do not establish continuous namespace immutability or hostile-root resistance.
 The common73 profile, frozen predecessors and final acceptance remain unchanged.
+
+**Stage-bound worker provisioning (2026-10-05):** remove the common preparation's
+redundant historical worker pin before installing a real ingress successor.
+Worker size and digest must come from the unique worker row in the exact reviewed
+stage report and agree with the static manifest. The full report pin remains the
+trust boundary; this is not a caller-selected worker override. Common preparation
+must build and validate the real worker artifact, never pass a fabricated old
+artifact to the frozen plugin-update validator or temporarily change its globals.
+
+The common successor keeps the seven-writer document, policy, capability, native
+genesis, process-profile and configuration checks. It reuses the frozen canonical
+parser, digest and artifact primitives but owns the narrow stage-bound semantic
+validator. Existing retained-CAS reconstruction replays the same preparation API,
+so there is no new replay framework. Neither the current common73 report nor its
+worker payload changes in this batch.
+
+Implemented and reviewed: `_worker_code` derives the exact source/mode/size/digest
+row and static join; common `_provisioning` preserves all predecessor semantic
+obligations with that actual pair. Independent review and a normalised AST
+comparison found only the intended worker-artifact substitution in those
+obligations. There is no frozen-validator delegation or public worker override.
+
+Validation: nine new methods passed in one selected pipeline run; the exact
+unchanged pipeline prerequisite was reused. The actual current stage succeeds
+with its unmodified report pin. Explicitly inert future-worker fixtures exercise
+the reviewed-full-report boundary, unchanged writer hashes, exact artifact joins,
+retained reconstruction, rehashed historical-worker substitution refusal and
+preserved schema/policy/grant/genesis/profile bounds. These fixtures are not
+deployable workers or replacement acceptance samples. The
+[batch checkpoint](benchmark/evidence/phase3-native-common-worker-provisioning-implementation-v1-2026-10-05.json)
+retains the 111-file reviewed closure and first-pass fingerprint. No live capture,
+performance sample, frozen-source edit or exit-gate promotion occurred.
+
+The next timing implementation can now use a truthful staged worker artifact.
+It must capture only after authenticated frame receipt and receipt-only dispatch,
+then retain the actual worker-request, held attempt and forwarded action-request
+joins before sensor connection. Use a separate fixed worker-owned private evidence
+directory, a durable startup claim and immutable records; do not add files to the
+native receipt store's exact inventory. Retention errors must stop the worker,
+not become an ordinary `NOT_SUBMITTED` reply that allows another attempt. A full
+reviewed worker/helper/unit/activator successor and installed-source inventories
+are still required before common activation. Final acceptance remains blocked.

@@ -1,0 +1,77 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "512a0dbb7075e2fe448d6226397b8edc3e0bdcf2",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T23:00:06.264Z",
+    "validation_recorded": "2026-10-05 23:07:53 UTC",
+    "meaning": "Parallel source implementation, focused semantic review and inert checks; not runtime or acceptance performance."
+  },
+  "implementation": [
+    "Common preparation derives the exact worker byte count and digest from one source/mode/type-checked row in the full pinned common stage report and joins its static manifest pin.",
+    "The worker deployment artifact combines that real stage pair with actual worker-binding writer bytes. There is no public worker override, fabricated predecessor artifact or frozen validator/global mutation.",
+    "A local common provisioning validator preserves the frozen seven-writer semantic obligations while reusing existing pure canonical parsing, digest and artifact primitives.",
+    "Existing retained-CAS reconstruction replays the same preparation API, rejecting stale or rehashed historical worker artifacts. No second replay framework is introduced.",
+    "The exact common73 stage pin, current worker payload, public preparation APIs, source inventories and qualification ceilings remain unchanged."
+  ],
+  "review_findings_resolved": [
+    "The frozen plugin-update validator hardcodes historical worker bytes independently of the full common stage pin. A real future worker could not pass honestly; common preparation now owns its stage-derived worker validation.",
+    "Independent review and a normalised AST comparison verified the same document inventories, configuration pin, policy/profile/grant/genesis checks, digest bounds and cross-document obligations. The only changed frozen semantic expression is the worker artifact pair.",
+    "Nine focused methods cover an unpatched actual current stage, explicitly inert reviewed future-worker data, static/artifact mismatches, retained reconstruction and rehashed historical-worker replacement refusal; no historical test discovery."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:1ce64eed780bac69c707f63e19c2e3b74be4f1fe1eb835ccf04c6bad32bf5e52",
+    "benchmark/phase3-pipeline-v1.json": "sha256:94dd17514c6f0562583bc6d2597c62db5fbc2791361970470780ba656ebd1afd",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "src/aragorn/native_phase3_common_preparation.py": "sha256:34874af8663288bbd8d9c522229368be3ab6c2496c722b2504aebc7e0dc73a66",
+    "tests/test_native_phase3_common_worker_provisioning.py": "sha256:9d6e75f9019fdf14bd12a6d6d3202697bcb69ee91d2eabb97b7cf8867cc8c425"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-worker-provisioning",
+      "status": "PASS",
+      "fingerprint": "sha256:1e2da3c39368881aa667232bf85684aac6bf562ef5f2ae9c07cc9773f1f6f199",
+      "tests": 9,
+      "wall_seconds": 1.502245,
+      "unittest_seconds": 1.305,
+      "stderr_digest": "sha256:97b39e68fa49f7232260a076811c93c2f8c6bcc1c7917af68260a28fa4052094"
+    }
+  ],
+  "test_count": 9,
+  "new_test_methods": 9,
+  "selected_pipeline_runs": 1,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-common-worker-provisioning",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "native-common-worker-provisioning": 111,
+    "meaning": "Previously reviewed common preparation closure plus the new test: transitive Python imports, inert stager source/payload inputs and fixed baseline/configuration data. Local AST import closure has no missing files; historical test methods are not discovered. Runner, interpreter/platform, requirements and prerequisite fingerprint are separately bound."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "This change removes a preparation incompatibility; it does not instrument or install a new worker, invoke a service, publish a request, run a workload, observe clocks or prove runtime behavior.",
+    "Future-worker test records are explicitly inert and patch only the complete reviewed stage pin inside test scope. They are not deployable worker artifacts or replacement acceptance samples.",
+    "Full-profile and installed-source inventory migration still requires its own reviewed successor. The current common73 stage report and frozen predecessor sources remain unchanged.",
+    "Actual authenticated ingress, effective decision, independent sink/attribution and concrete callback wiring remain incomplete. Final31 and100-attempt/100-pair acceptance remains blocked, along with remaining admission and RUN/sensor implementation."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Implement the actual authenticated non-receipt frame ingress hook, held attempt and forwarded action joins in a separate private worker evidence directory. Use a permanent startup claim, immutable records and fatal retention failure; preserve receipt-store inventory and one-shot relay semantics. Introduce a reviewed worker/helper/unit/activator successor, update exact stage and installed-source inventories, and join one-collector clock-domain observations through the independent consumer before real prepared-attempt execution.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and clean tree, and retain its hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

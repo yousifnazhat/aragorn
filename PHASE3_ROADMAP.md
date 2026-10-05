@@ -1072,3 +1072,61 @@ with exact installed helper roles (the staged phase3_deployment module must not
 also be copied as a helper). Only then consider one bounded owned-fixture check.
 Remaining admission families, full RUN/sensor semantics, real timing/workload/
 negative-control/sink verification and final acceptance remain open.
+
+**Prepared measurement consumption (2026-10-05):** implementation review found
+another concrete handoff defect: the existing full collector always prepares a
+new random commitment. Calling it after installing a broker credential bound to
+an earlier commitment produces requests for a different collection. The bounded
+successor must consume the exact retained preparation instead of regenerating it.
+One attributed attempt is sufficient to exercise that handoff; it is not the
+100-attempt/100-pair campaign and must never publish a quantitative qualification.
+
+`collect_prepared_phase3_attempt` now consumes that exact caller-pinned report,
+after rechecking its canonical shape, original commitment, schedule, seven
+deployment artifacts and actual callback source files. It accepts only one
+attributed scheduled request. Before any callback, it durably creates an
+exclusive commitment-keyed claim in the caller's private evidence store. Success,
+failure, partial writes and interruption do not remove that claim or allow a
+different request to reuse the commitment. The guard is local to that store; it
+is not hostile-owner-resistant or cross-store replay protection. Caller-held
+sources and all retained outputs are reread before successful return.
+
+The existing preparation and full collector APIs remain available; only the
+sampler is shared. Its verifier result is now detached before a later identity
+callback can mutate it. Review also closed a post-identity input-custody gap and
+made descriptor cleanup attempt every close while preserving the primary error.
+The new bounded result has no metrics qualifier and all four eligibility flags
+remain false. It still needs trusted, deadline-bounded real callbacks, and v1
+preparation has no same-boot or time-namespace proof. It cannot consume historical
+broker timestamps as if they were current collector callback marks.
+
+The remaining native timing boundary is distinct from this collector fix. The
+existing native read/create driver sends a real gateway request but fixes the
+expected result to `ALLOW`/`CREATED`. It has no full request timing markers.
+The effective broker receipt starts after lineage and issued-submission
+validation; wrapping the driver with collector timestamps would not repair that
+semantic gap. Its independent verifier explicitly refuses generic collector
+semantics. Next runtime wiring must retain the actual authenticated ingress and
+effective final-decision boundaries with a verified common clock domain, then
+join independent attribution and protected-sink observations. A shared boot ID
+alone does not establish time-namespace offsets. The existing physical create
+sink check is reusable for that exact target, not exfiltration or general tasks.
+
+Reuse points: the [native driver](benchmark/admission/openclaw-v2026.7.1/native-receipt-read-create-driver-v1.mjs),
+the [bounded guest wrapper](scripts/runtime_native_receipt_systemd_check.py),
+the [worker ingress](src/aragorn/runtime_action_worker.py),
+the [broker transport](src/aragorn/runtime_action_broker_v5.py),
+the [effective receipt consumer](src/aragorn/runtime_broker_effective_receipt_verify.py)
+and the [physical create sink check](scripts/runtime_endpoint_journal_systemd_check.py).
+Do not create an admission-only synthetic schedule to activate the measured
+profile, or export the bounded collector result as final campaign evidence.
+
+Validation: 14 new focused methods passed on the first selected pipeline run;
+the exact unchanged pipeline prerequisite was reused. Thirteen methods cover
+the new prepared-attempt path and its refusal/custody/cleanup boundaries; one
+new compatibility method covers the affected shared sampler's original attempt
+and task branches with inert callbacks. Those unit fixtures are not a live or
+synthetic replacement acceptance campaign. No failed fingerprint was retried,
+no live/performance sample ran, and no Phase 3 gate closed. The
+[batch checkpoint](benchmark/evidence/phase3-prepared-measurement-execution-implementation-v1-2026-10-05.json)
+retains the exact pipeline fingerprint and reviewed eight-file input closure.

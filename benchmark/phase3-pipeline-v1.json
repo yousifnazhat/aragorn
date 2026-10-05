@@ -2,6 +2,27 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "prepared-measurement-execution",
+      "description": "Verify new exact-preparation single-attempt consumption, durable local no-retry claims, retained evidence and the affected shared sampler; inert callbacks and clock doubles only, no live or final acceptance execution.",
+      "tests": [
+        "test_phase3_prepared_measurement_execution"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "src/aragorn/phase3_measurement_collector.py",
+        "src/aragorn/phase3_quantitative_metrics.py",
+        "tests/test_phase3_measurement_collector.py",
+        "tests/test_phase3_prepared_measurement_execution.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-common-preparation",
       "description": "Verify only new actual-writer-derived common deployment and one-request measurement joins, including changed inode/policy closure and retained source readbacks; inert staging/data fixtures, no live custody, collector execution or acceptance.",
       "tests": [

@@ -796,3 +796,42 @@ batch; this implementation does not authorize automatic pushes. The
 [batch checkpoint](benchmark/evidence/phase3-native-admission-direct-write-implementation-v1-2026-10-05.json)
 records the affected checks and exact proof limits. No Phase 3 gate is closed by
 inert staging or fabricated unit-test observations.
+
+**Common admission controller implementation (2026-10-05):** the
+[successor request helper](src/aragorn/native_phase3_admission_case.py) now binds
+the exact 70-file admission profile and both the direct-write and retained
+plugin-update adapter identities into one deployment. Selecting either case
+changes the case intent/request, not that deployment. All seven actual native
+provisioning outputs must join the retained expectations before the request is
+published and read back, before the single activation. This is guest-local
+preactivation commitment, not a host acknowledgment or external attestation.
+
+The new [host controller](scripts/capture_native_phase3_admission_case.py) and
+[guest controller](scripts/runtime_native_admission_case.py) reuse the existing
+owned-container, native startup, identity-reader and cleanup primitives. They
+stage the actual successor bytes, retain the two exact startup identity
+overrides, and dispatch the direct-write leaf once through a held gateway mount
+namespace descriptor. Leaf process/configuration observations must join the
+root live readings. Failure paths attempt bounded independent post-readbacks
+and owned cleanup without retrying the mutation. Retention publishes and reads
+back the request before its enclosing capture and rechecks the input closure.
+
+This batch is offline implementation only. The new common deployment includes
+the plugin-update adapter identity, but successor plugin-update execution is
+explicitly refused before effects until the existing adapter is connected.
+The direct-write leaf has its retained-byte consumer; independent semantic
+replay of the complete new outer capture is still missing and explicitly false.
+No new live observation, performance sample, admission entry or Phase 3 exit
+gate is established by these mocked integration checks.
+
+Next dependency-ready work is to connect the existing plugin-update execution
+and outer capture consumer on this same successor, then review the complete
+composition before one necessary owned-fixture changed-behavior check. The
+remaining A1/A2/A3 families, RUN/sensor coverage, measured-broker effective-BLOCK
+successor and final acceptance prerequisites above remain unchanged. Preserve
+the old plugin-update capture and its exact successful pipeline results.
+
+The [common-controller batch checkpoint](benchmark/evidence/phase3-native-admission-controller-implementation-v1-2026-10-05.json)
+records the selected checks, cache reuse and proof limits. Automatic signed
+local commits remain required per completed batch; automatic pushes remain
+unauthorized.

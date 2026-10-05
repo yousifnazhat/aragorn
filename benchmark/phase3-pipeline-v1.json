@@ -2,6 +2,78 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "native-plugin-update-case-guest",
+      "description": "Verify absent-only guest CAS custody, fixed sealed input closure and request readback before the existing activation hook; inert fixtures only, no Linux effects.",
+      "tests": ["test_runtime_native_plugin_update_case"],
+      "inputs": [
+        "scripts/runtime_native_plugin_update_case.py",
+        "scripts/runtime_native_plugin_update_identity_check.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_plugin_update_case.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_runtime_native_plugin_update_case.py"
+      ],
+      "needs": ["native-plugin-update-case", "native-plugin-update-identity-guest"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-plugin-update-case-host",
+      "description": "Verify fixed inspect/capture/replay CLI, pre-effect signed source and profile guards, sealed bounded guest handoff, unchanged native cleanup composition and offline failure retention; no Docker or capture.",
+      "tests": ["test_native_plugin_update_case_host"],
+      "inputs": [
+        "scripts/capture_native_phase3_plugin_update_case.py",
+        "scripts/capture_runtime_native_plugin_update_identity_check.py",
+        "scripts/runtime_native_plugin_update_case.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_plugin_update_case.py",
+        "src/aragorn/native_phase3_plugin_update_collection.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_plugin_update_case.py",
+        "tests/test_native_plugin_update_case_host.py"
+      ],
+      "needs": ["native-plugin-update-case-guest", "native-plugin-update-identity-host"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-plugin-update-case",
+      "description": "Verify the fixed caller-retained native case intent, fresh preactivation writer joins and read-only request/collection replay using inert data; not live ordering or qualification.",
+      "tests": ["test_native_phase3_plugin_update_case"],
+      "inputs": [
+        "benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v3.json",
+        "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_plugin_update_binding.py",
+        "src/aragorn/native_phase3_plugin_update_case.py",
+        "src/aragorn/native_phase3_plugin_update_collection.py",
+        "src/aragorn/native_phase3_plugin_update_live_binding.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "tests/test_native_phase3_plugin_update_case.py",
+        "tests/test_native_phase3_plugin_update_live_binding.py"
+      ],
+      "needs": ["native-plugin-update-collection"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "tetragon-program-map",
+      "description": "Verify bounded INFO-only selected sensor FD program/map/perf-link association with inert syscall doubles; no attachment, event, health or live observation claim.",
+      "tests": ["test_runtime_tetragon_program_map"],
+      "inputs": [
+        "benchmark/tetragon-program-map-source-v1.lock.json",
+        "benchmark/tetragon-program-map-source-v1/linux-v6.8-program-map-excerpts.json",
+        "benchmark/tetragon-stats-map-source-v1.lock.json",
+        "src/aragorn/__init__.py",
+        "src/aragorn/runtime_tetragon_program_map.py",
+        "src/aragorn/runtime_tetragon_stats_map.py",
+        "tests/test_runtime_tetragon_program_map.py"
+      ],
+      "needs": ["tetragon-program-map-source"],
+      "timeout_seconds": 120
+    },
+    {
       "id": "pipeline-unit",
       "description": "Verify the new local pipeline's fingerprint, skip, lock and refusal behavior; no historical product suite.",
       "tests": ["test_phase3_pipeline"],

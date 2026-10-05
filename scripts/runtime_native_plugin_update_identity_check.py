@@ -187,8 +187,17 @@ def _p37b():
 
 
 def _run(
-    container: str, copied_owner: tuple[int, int], expected_static_manifest_digest: str
+    container: str,
+    copied_owner: tuple[int, int],
+    expected_static_manifest_digest: str,
+    *,
+    before_activation=None,
 ) -> dict:
+    """Run once; an optional trusted internal hook may commit frozen writer inputs.
+
+    The hook is not configurable through the CLI. Its detached mapping is cleared
+    on return or refusal; without a hook, raw provisioning inputs are not retained.
+    """
     result = {
         "schema": SCHEMA,
         "authority": AUTHORITY,
@@ -216,6 +225,7 @@ def _run(
     phase = "PIN_INPUT"
     original_native, original_invoke = update.prior._native, update._invoke
     loaded = False
+    provisioning_inputs = {} if before_activation is not None else None
 
     def record(path: str, raw: bytes) -> None:
         if path not in DYNAMIC_PATHS:
@@ -230,6 +240,8 @@ def _run(
             "DUPLICATE_PROVISIONING_WRITE",
         )
         result["provisioning_file_digests"][path] = _digest(raw)
+        if provisioning_inputs is not None:
+            provisioning_inputs[path] = raw
 
     def invoke(p37b, gateway_pid, token):
         nonlocal phase
@@ -272,6 +284,10 @@ def _run(
 
     try:
         _require(
+            before_activation is None or callable(before_activation),
+            "INVALID_TRUSTED_PREACTIVATION_CALLBACK",
+        )
+        _require(
             type(container) is str
             and re.fullmatch(r"[0-9a-f]{64}", container) is not None
             and type(copied_owner) is tuple
@@ -313,6 +329,23 @@ def _run(
                     )
                     result["expected_file_digests"] = expected
                     result["pins_frozen_before_activation"] = True
+                    if before_activation is not None:
+                        phase = "PRE_ACTIVATION_CALLBACK"
+                        detached = dict(provisioning_inputs)
+                        try:
+                            _require(
+                                set(detached) == set(DYNAMIC_PATHS)
+                                and {
+                                    path: _digest(raw) for path, raw in detached.items()
+                                }
+                                == result["provisioning_file_digests"],
+                                "PREACTIVATION_CALLBACK_INPUTS_CHANGED",
+                            )
+                            before_activation(detached)
+                        finally:
+                            detached.clear()
+                            provisioning_inputs.clear()
+                        phase = "ACTIVATION"
                     result["activation_count"] += 1
                     value = activate(*args, **kwargs)
                     phase = "NATIVE_STARTUP"
@@ -409,6 +442,9 @@ def _run(
             else "GUEST_EXECUTION_REFUSED",
             "diagnostic": _refusal_location(exc),
         }
+    finally:
+        if provisioning_inputs is not None:
+            provisioning_inputs.clear()
     return result
 
 

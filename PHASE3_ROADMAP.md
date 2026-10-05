@@ -567,21 +567,77 @@ records four inactive fixture services, removal of owned containers, unchanged
 stopped. The guest window was 26.50 seconds, including the two identity reads;
 it is not end-to-end decision latency. No live replay was used for retention.
 
-**Next integration batch:** add a narrow native one-case request/execution
-connection around the existing identity host `_capture` and live collection.
+**Native prepared-case implementation (2026-10-05):** the new fixed
+`capture_native_phase3_plugin_update_case.py` entrypoint exposes `inspect`,
+`capture`, and read-only `replay`. It composes the existing owned native fixture
+and live collection. The caller retains a canonical fixed-route intent and its
+complete CAS input closure; the host compares the signed source record, all six
+controller/live helper sources, and the exact staged 70-file profile before the
+guest operation. Shared controller identity and the case-specific four-probe
+adapter remain separate artifacts. Only this one marketplace branch is wired;
+the adapter map is not an inventory of all 31 cases.
+
+The guest uses the existing identity wrapper's trusted internal preactivation
+hook. After all seven writer inputs are frozen, it validates their cross-document
+joins against the caller's deployment, publishes a nonsecret request to an
+absent-only root-owned guest CAS, and reads it back **before** the activation
+counter advances. Failure in that hook prevents activation. Raw provisioning
+inputs stay in memory and are cleared; neither the gateway token environment
+nor configuration bytes enter the request. This is guest-local custody, not a
+host ACK or independent proof of execution ordering. Offline replay recomputes
+both existing consumers and rechecks the complete nested evidence closure.
+
+Repository-local command surface (existing Python 3.12, no installation or auth
+configuration; uppercase arguments below are operator-supplied absolute paths
+or `sha256:` pins, not ready-to-run values):
+
+```text
+python3.12 -S -B scripts/capture_native_phase3_plugin_update_case.py inspect --cas ABS_CAS --expected-intent-digest INTENT_PIN
+python3.12 -S -B scripts/capture_native_phase3_plugin_update_case.py capture --cas ABS_CAS --expected-intent-digest INTENT_PIN --out ABSENT_ABS_OUTPUT
+python3.12 -S -B scripts/capture_native_phase3_plugin_update_case.py replay --cas ABS_CAS --expected-intent-digest INTENT_PIN --expected-request-digest REQUEST_PIN --expected-collection-digest COLLECTION_PIN
+```
+
+`inspect` checks only the read-only input closure and reports
+`INPUT_CLOSURE_VERIFIED`; it is not a live-readiness verdict. `capture` is the only
+effecting command and requires the already running authorized isolated VM and
+all inherited fixture guards; it never starts the VM or retries an effect.
+It saves the raw capture/guest envelope to the absent output before offline
+retention, so consumer refusal does not discard the executed observation.
+`replay` is read-only and recomputes the retained request/collection joins.
+All outputs are JSON envelopes. Refusals return code 2 and fixed reason/location
+metadata, not raw exception messages or credentials. No generic command/route
+escape hatch is exposed. Input-intent construction for the current signed
+controller remains the next integration step.
+
+Source review corrected the previous credential concern: the canonical gateway
+configuration and worker binding are stable; the random token is written to a
+separate environment file. Runtime/profile cgroups, grants and genesis remain
+per-run inputs. Their **fresh writer bytes**, not v2 readback, determine the
+request's seven provisioning hashes. The shared configuration/worker/policy
+artifacts must still match those fresh inputs before activation.
+
+No new live case capture, sensor observation or acceptance run was performed
+for this implementation batch. Inert tests cannot establish deployment,
+preactivation ordering in a real fixture, admission semantics, or any exit gate.
+The [implementation checkpoint](benchmark/evidence/phase3-native-prepared-case-implementation-v1-2026-10-05.json)
+records 69 passing new/affected tests (34 new methods), five unchanged prerequisite
+stages reused, and 3.144 seconds summed stage wall time. The approximately
+26.5-minute session window includes parallel implementation and review, not just
+test runtime. The earlier registry preflight refusal occurred while a declared
+host test file was still being authored; no stage started and no fingerprint
+record was removed or retried. Zero exit-gate entries were newly qualified.
+
+**Next integration batch:** construct the caller-held intent with the current
+signed controller closure and existing pinned artifacts, then review the exact
+owned fixture prerequisites for one newly necessary preactivation-boundary
+check. Do not relabel v2 evidence as execution of this new request protocol.
 The old `capture_openclaw_final_v3_campaign_case.capture_case` is only an API-shape
 reference: its frozen-parent validator rejects the native target and must not be
-weakened. Keep common suite/controller adapter identity distinct from this
-collection's route-specific adapter artifact. Fresh configuration/worker inputs
-must be bound at the trusted preparation-before-activation boundary; do not
-expect v2's random credentials to match a fresh fixture, learn expectations after
-execution, or relabel a post-observation collection as a precommitted campaign.
-Use a fixed request (no arbitrary command/route dispatch), existing CAS,
-deployment APIs, cleanup and independent consumers, not another generic
-framework. Preserve `OBSERVED`/`REFUSED` and qualification ceilings until the
-actual admission semantics are complete. Reuse v2 for offline development; do
-not recapture this unchanged branch just to exercise another consumer. Then
-continue the dependency-ready admission family ports.
+weakened. The new request connection is not yet in the complete admission
+dispatcher/verifier inventory. Preserve `OBSERVED`/`REFUSED` and qualification
+ceilings until actual admission semantics are complete. Do not recapture this
+branch just to exercise retention. Continue the dependency-ready admission
+family ports after this common native seam is joined.
 Complete Tetragon program/map/sensor applicability and join actual readback to
 raw scrape accounting before one guarded native OS-event integration check.
 The map/program association requires pinned producer/loader and Linux
@@ -593,6 +649,14 @@ Linux 6.8 name queries require a bounded input buffer, not inferred size discove
 Some retained Tetragon event-output paths do not
 update the selected stats map, so map membership alone cannot prove complete
 event-loss accounting. Unsupported attachment/tail-call paths remain unresolved.
+The new `runtime_tetragon_program_map.py` reader observes only a caller-selected
+sensor-held exit-program/map/perf-link association. It uses bounded INFO queries,
+checks held duplicates and fresh duplicates of the original sensor FD slots,
+and closes every observer FD before returning. Duplicating descriptors extends
+object lifetime; before/after checks do not prove continuous slot custody. The
+reader does not claim program execution, enabled attachment, responsive sensor,
+or loss completeness. Its eight new inert tests passed; three exact unchanged
+prerequisite stages were reused from cache.
 Do not create another offline collection abstraction or recapture only to
 exercise retention. Then advance admission ports and measurement callbacks in
 the order above. Final acceptance remains blocked.

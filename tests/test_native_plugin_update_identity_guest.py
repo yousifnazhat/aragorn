@@ -55,6 +55,7 @@ class NativePluginUpdateIdentityGuestTests(unittest.TestCase):
         changed_after=False,
         twice=False,
         manifest=None,
+        before_activation=None,
     ):
         events, writes, reads = [], [], []
         supplied = self.manifest if manifest is None else manifest
@@ -147,6 +148,11 @@ class NativePluginUpdateIdentityGuestTests(unittest.TestCase):
 
         real_invoke = subject.update._invoke
         real_factory = subject.update.prior._native
+
+        def callback(inputs):
+            events.append("before_activation")
+            before_activation(inputs)
+
         with ExitStack() as stack:
             for item in (
                 patch.object(
@@ -166,7 +172,12 @@ class NativePluginUpdateIdentityGuestTests(unittest.TestCase):
                 ),
             ):
                 stack.enter_context(item)
-            result = subject._run(self.container, (100, 200), self.manifest_digest)
+            result = subject._run(
+                self.container,
+                (100, 200),
+                self.manifest_digest,
+                before_activation=callback if before_activation is not None else None,
+            )
             self.assertIs(native._prepare, prepare)
             self.assertIs(native._activate, activate)
             self.assertIs(p37b._write_document, write_document)
@@ -369,6 +380,51 @@ class NativePluginUpdateIdentityGuestTests(unittest.TestCase):
         stamps = [result["boundaries_monotonic_ns"][name] for name in subject._STAMPS]
         self.assertEqual(stamps, sorted(stamps))
         self.assertTrue(all(result[name] is False for name in subject._FALSE_FLAGS))
+
+    def test_trusted_callback_gets_detached_exact_writer_bytes_before_activation(self):
+        held = []
+
+        def callback(inputs):
+            self.assertEqual(
+                inputs,
+                {
+                    path: subject.canonical_json(value)
+                    for path, value in self.documents.items()
+                },
+            )
+            held.append(inputs)
+            inputs.clear()  # Cannot alter the already frozen digest inventory.
+            inputs["inert callback mutation"] = b"not retained"
+
+        result, events, _, _ = self.run_guest(before_activation=callback)
+        self.assertEqual(result["status"], "OBSERVED")
+        self.assertEqual(result["provisioning_file_digests"], self.provisioned)
+        self.assertEqual(held, [{}])
+        self.assertLess(events.index("seed"), events.index("before_activation"))
+        self.assertLess(events.index("before_activation"), events.index("activate"))
+        self.assertEqual(events.count("before_activation"), 1)
+        self.assertNotIn("inert callback mutation", json.dumps(result))
+        self.assertNotIn("before_activation", result)
+
+    def test_trusted_callback_refusal_never_activates_and_clears_raw_inputs(self):
+        held = []
+
+        def callback(inputs):
+            held.append(inputs)
+            raise RuntimeError("inert private callback text")
+
+        result, events, _, reads = self.run_guest(before_activation=callback)
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertEqual(result["refusal"]["phase"], "PRE_ACTIVATION_CALLBACK")
+        self.assertEqual(held, [{}])
+        self.assertEqual(
+            (result["activation_count"], result["invocation_count"]), (0, 0)
+        )
+        self.assertNotIn("activate", events)
+        self.assertNotIn("invoke", events)
+        self.assertEqual(events.count("cleanup"), 1)
+        self.assertEqual(reads, [])
+        self.assertNotIn("inert private callback text", json.dumps(result))
 
     def test_missing_or_duplicate_writer_input_prevents_activation(self):
         for arguments in (

@@ -27,6 +27,64 @@
       ],
       "needs": ["pipeline-unit"],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-plugin-update-collection",
+      "description": "Verify new exact-byte native observation retention and read-only independent replay; no live capture.",
+      "tests": ["test_native_phase3_plugin_update_collection"],
+      "inputs": [
+        "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_plugin_update_binding.py",
+        "src/aragorn/native_phase3_plugin_update_collection.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "tests/test_native_phase3_plugin_update_collection.py"
+      ],
+      "needs": ["native-plugin-update-binding"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-plugin-update-collection-cli",
+      "description": "Verify the new offline prepare/retain/replay CLI and bounded direct input reads.",
+      "tests": ["test_native_plugin_update_collection_cli"],
+      "inputs": [
+        "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
+        "scripts/native_plugin_update_collection.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_plugin_update_binding.py",
+        "src/aragorn/native_phase3_plugin_update_collection.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "tests/test_native_plugin_update_collection_cli.py"
+      ],
+      "needs": ["native-plugin-update-collection"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "tetragon-loss-window",
+      "description": "Verify the new bounded raw-scrape loss accounting and retained selected upstream source bytes; never infer zero from absence.",
+      "tests": ["test_runtime_tetragon_loss"],
+      "inputs": [
+        "benchmark/evidence/tetragon-isolated-exec-exit-smoke-v1-2026-09-13.json",
+        "benchmark/tetragon-candidate-source-v1.lock.json",
+        "benchmark/tetragon-loss-source-v1.lock.json",
+        "benchmark/tetragon-loss-source-v1/pkg/metrics/eventmetrics/bpfcollector.go",
+        "benchmark/tetragon-loss-source-v1/pkg/metrics/eventmetrics/eventmetrics.go",
+        "benchmark/tetragon-loss-source-v1/pkg/metrics/kprobemetrics/collector.go",
+        "benchmark/tetragon-loss-source-v1/pkg/metrics/kprobemetrics/kprobemetrics.go",
+        "benchmark/tetragon-loss-source-v1/pkg/metrics/kprobemetrics/missed.go",
+        "benchmark/tetragon-loss-source-v1/pkg/metricsconfig/healthmetrics.go",
+        "src/aragorn/__init__.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_tetragon_loss.py",
+        "src/aragorn/runtime_tetragon_process.py",
+        "tests/test_runtime_tetragon_loss.py"
+      ],
+      "needs": ["pipeline-unit"],
+      "timeout_seconds": 120
     }
   ]
 }

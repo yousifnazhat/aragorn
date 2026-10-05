@@ -76,14 +76,16 @@ There is substantial implementation left; skipping acceptance cannot remove it.
    Initial read-only risk finding: the retained Tetragon v1.7.0 scrapes lack
    `tetragon_bpf_missed_events_total`, which the existing process adapter requires.
    Other missed-link/prog-probe counters are not automatically equivalent. The
-   next loss-accounting implementation must establish coverage against the exact
-   pinned sensor source; absent loss metrics remain unknown, never synthetic zero.
-   The local source lock has hashes, not the metric implementation bytes. Acquire
-   its already-pinned `pkg/observer/observer_stats.go`, `pkg/observer/metrics.go`
-   and `pkg/metrics/errormetrics/errormetrics.go` at commit
-   `1de2ed8ebea18e56257dc59597aa13bf8f0e471e`; verify their existing byte/digest/Git-blob
-   pins with `verify_upstream_source_file`. Inspect and retain any additional
-   defining files from that exact upstream tree before changing the contract.
+   exact pinned sensor source was investigated without a live recapture. Three
+   originally selected observer/error-metric files matched their existing size,
+   SHA-256 and Git-blob pins. The subsequently identified definitions/collectors
+   are retained in a [six-file source slice](benchmark/tetragon-loss-source-v1/README.md).
+   `eventmetrics/bpfcollector.go` emits only positive `SentFailed` counts and
+   silently omits them on map-open/lookup failure. Thus absence is ambiguous,
+   not evidence of zero. The link/program counters measure other failures.
+   The new [raw-scrape adapter](src/aragorn/runtime_tetragon_loss.py) preserves
+   that unknown and refuses counter resets or changed series inventories.
+   Source inspection does not establish live map availability or sensor identity.
 
 F0 first deliverable: one existing native case connected through the shared
 request/evidence contract and a real independent consumer. Start with the
@@ -233,6 +235,24 @@ of an unintended `platform.uname()` helper subprocess. No historical product
 suite or live capture was rerun. No admission, RUN or final exit gate closed in
 this automation/binding slice.
 
+Follow-on checkpoint, 2026-10-04: all three new stages passed on their first
+pipeline run; the two unchanged stages returned `SKIP_PASS`.
+
+| New stage | Focused tests | Unittest time |
+|---|---:|---:|
+| Native observation collection/replay | 9 | 0.263 s |
+| Offline collection CLI | 3 | 0.080 s |
+| Raw loss-window accounting and new source custody | 7 | 0.009 s |
+
+The complete five-stage pipeline invocation took 0.844 seconds as reported by
+the command runner, excluding approval/tool overhead. Its new stage fingerprints
+are `0885631e616695890d39bedeac1fee7a1f09f0d3288987e60baadf7df4dc1806`,
+`5afbd750771f4f7ff3cea04e5c42b51d689a9ff51507ef8ccee17e1893268a58` and
+`5aebfd2536889f409f1846ea2ef5840c36a0e1d5f8afff4d55be3b812cb7dff4`,
+respectively. No old check ran, no VM was started, and no live capture or final
+acceptance was attempted. The code/source-custody gaps narrowed; live native
+identity, sensor-map availability, attribution and qualification remain open.
+
 ## Machine-runtime budget
 
 Two retained native observation windows were about 15 seconds (idle sensor exit)
@@ -318,12 +338,39 @@ joins the retained v2 observation to all seven reported-identity artifacts in th
 existing deployment envelope. It recomputes bounded record-level predicates;
 it does not attest a live deployment or close an admission/RUN gate.
 
-**Next implementation batch:** connect fresh native collection to the common
-deployment request/evidence contract and its consumer; do not recapture merely
-to exercise the new offline binding. In parallel, resolve the pinned Tetragon
-loss-counter coverage and implement a bounded raw-scrape/identity adapter before
-one newly necessary native OS-event integration check. Then advance the admission
-ports and measurement callbacks in the dependency order above.
+The [collection seam](src/aragorn/native_phase3_plugin_update_collection.py) and
+[offline CLI](scripts/native_plugin_update_collection.py) now prepare a reported
+identity proposal, retain caller-pinned capture/source/deployment bytes and
+independently replay the complete CAS collection. Retention publishes its manifest
+after checking child references; a manifest alone never proves successful replay.
+This connects capture *output* to the common envelope, not the live execution
+boundary. It imports no capture scripts and performs no live operations.
+
+Invoke from the repository root using the capture producer's caller-held pins:
+
+```sh
+PYTHONPATH=src /opt/homebrew/bin/python3.12 -S -B -m scripts.native_plugin_update_collection prepare \
+  --capture "$CAPTURE" --expected-capture-digest "$CAPTURE_DIGEST" \
+  --expected-source-digest "$SOURCE_DIGEST" --expected-source-commit "$SOURCE_COMMIT"
+```
+
+Review the returned reported-identity proposal. `retain` uses the same flags plus
+`--deployment`, `--expected-deployment-digest` and `--cas`; supply the exact UTF-8
+bytes displayed in `result.deployment_raw.text`, without adding a newline.
+`replay` takes the caller-held capture/source/deployment pins, `--cas` and
+`--expected-collection-digest`, with no capture/deployment file arguments.
+Replay opens the store read-only. Preparation does not write; retention writes
+only to the selected CAS. These commands neither execute nor authorize a fresh
+capture, and must not be used to approve a live deployment merely from its report.
+
+**Next implementation batch:** bind that same envelope to trusted native
+before/after execution identity and the required semantic consumer inventory.
+Do not create another offline collection abstraction or recapture only to exercise
+retention. In parallel, implement source-bound availability/identity/readback of
+the actual Tetragon `tg_stats_map` with its pinned type/layout and sensor instance;
+join it to raw scrape accounting before one newly necessary native OS-event
+integration check. Absent scrape counters alone cannot close this prerequisite.
+Then advance admission ports and measurement callbacks in the order above.
 
 Progress updates should report: closed gate entries, entries still needing
 implementation, changed-behavior checks performed, active engineering time,

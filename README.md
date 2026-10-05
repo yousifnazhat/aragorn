@@ -1601,6 +1601,23 @@ independent policy correctness. The consumer cannot return route qualification
 or a Phase 3 semantic PASS; production collection and final-deployment binding
 still need implementation.
 
+The [offline collection API](./src/aragorn/native_phase3_plugin_update_collection.py)
+and [prepare/retain/replay CLI](./scripts/native_plugin_update_collection.py)
+connect that consumer to exact capture output and the common deployment envelope.
+They preserve caller-held capture/source/deployment pins, retain the raw evidence
+and identity artifacts in CAS, and recompute verification on read-only replay.
+Preparation is a reported-identity proposal, not a pre-execution commitment;
+retention is not live deployment attestation or qualification.
+
+The [selected Tetragon loss adapter](./src/aragorn/runtime_tetragon_loss.py)
+now parses bounded raw scrapes, preserves exact label-series identities and
+nonzero baselines, and refuses duplicates, resets and inventory changes. The
+[retained upstream source slice](./benchmark/tetragon-loss-source-v1/README.md)
+shows why absent `tetragon_bpf_missed_events_total` cannot be treated as zero:
+the collector emits only positive counts and also omits data on BPF-map read
+failure. The original smoke therefore remains unresolved. Link/program probe
+counters are not replacements; live map and sensor identity still need binding.
+
 A separate [idle sensor-exit adapter](./scripts/capture_runtime_native_sensor_loss_check.py)
 targets the current 70-file native startup profile in a fresh owned container.
 It provisions an idle stack without invoking the historical read/create drivers,

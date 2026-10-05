@@ -88,7 +88,9 @@ class NativeLiveIdentityTests(unittest.TestCase):
             os.chown(path, uid, gid)
         args = {"credential_owner": uid, "credential_gid": gid}
         with (
-            patch.object(subject.os, "fstatvfs", return_value=SimpleNamespace(f_flag=0)),
+            patch.object(
+                subject.os, "fstatvfs", return_value=SimpleNamespace(f_flag=0)
+            ),
             self.assertRaises(subject.NativeLiveIdentityError),
         ):
             self.read(**args)
@@ -132,6 +134,88 @@ class NativeLiveIdentityTests(unittest.TestCase):
         path.symlink_to("/usr/local/bin/other-python")
         with self.assertRaises(subject.NativeLiveIdentityError):
             subject._python_link(self.fd, uid=os.getuid(), gid=os.getgid())
+
+    def systemd_alias(self):
+        target = self.root / "usr" / "lib" / "systemd" / "system"
+        target.mkdir(parents=True)
+        (self.root / "lib").symlink_to("usr/lib")
+        return target
+
+    def alias_guard(self):
+        return subject._systemd_library_alias(self.fd, uid=os.getuid(), gid=os.getgid())
+
+    def test_merged_usr_alias_retains_exact_link_and_holds_target_ancestry(self):
+        self.systemd_alias()
+        opened = []
+        original = os.open
+
+        def tracked(*args, **kwargs):
+            fd = original(*args, **kwargs)
+            opened.append(fd)
+            return fd
+
+        with patch.object(subject.os, "open", side_effect=tracked):
+            with self.alias_guard() as record:
+                self.assertEqual(record["path"], "/lib")
+                self.assertEqual(record["target"], "usr/lib")
+                self.assertEqual(
+                    record["canonical_unit_directory"], "/usr/lib/systemd/system"
+                )
+                self.assertEqual(
+                    record["identity"],
+                    list(subject.broker._file_identity((self.root / "lib").lstat())),
+                )
+                self.assertEqual(len(opened), 4)
+                self.assertEqual(
+                    record["target_ancestry_identities"],
+                    [
+                        list(subject.broker._directory_identity(os.fstat(fd)))
+                        for fd in opened
+                    ],
+                )
+        for fd in opened:
+            with self.assertRaises(OSError):
+                os.fstat(fd)
+
+    def test_merged_usr_alias_rejects_other_targets_and_target_symlink(self):
+        target = self.systemd_alias()
+        alias = self.root / "lib"
+        for destination in ("/usr/lib", "./usr/lib", "usr/other"):
+            with self.subTest(destination=destination):
+                alias.unlink()
+                alias.symlink_to(destination)
+                with self.assertRaises(subject.NativeLiveIdentityError):
+                    with self.alias_guard():
+                        self.fail("unexpected alias target accepted")
+        alias.unlink()
+        alias.symlink_to("usr/lib")
+        target.rename(target.with_name("real-system"))
+        target.symlink_to("real-system")
+        with self.assertRaises(OSError):
+            with self.alias_guard():
+                self.fail("symlink in target ancestry accepted")
+
+    def test_merged_usr_alias_rechecks_link_identity_and_target_custody(self):
+        target = self.systemd_alias()
+        alias = self.root / "lib"
+        with self.assertRaisesRegex(subject.NativeLiveIdentityError, "custody changed"):
+            with self.alias_guard():
+                alias.rename(self.root / "original-lib")
+                alias.symlink_to("usr/lib")
+        with self.assertRaisesRegex(
+            subject.NativeLiveIdentityError, "ancestry changed"
+        ):
+            with self.alias_guard():
+                target.rename(target.with_name("original-system"))
+                target.mkdir()
+        with self.assertRaisesRegex(
+            subject.NativeLiveIdentityError, "ancestry changed"
+        ):
+            with self.alias_guard():
+                target.chmod(0o777)
+        with self.assertRaises(subject.broker._ProtectedFileError):
+            with self.alias_guard():
+                self.fail("writable target ancestry accepted")
 
     def test_launch_identity_matches_four_shipped_native_unit_contracts(self):
         root = Path(__file__).resolve().parents[1] / "packaging" / "systemd"
@@ -238,6 +322,21 @@ class NativeLiveIdentityTests(unittest.TestCase):
                 stack.enter_context(item)
             result = subject._process(role, container, accounts)
             self.assertEqual(result["argv"], ["openclaw-gateway"])
+            state["FragmentPath"] = "/lib/systemd/system/" + unit
+            with self.assertRaises(subject.NativeLiveIdentityError):
+                subject._process(role, container, accounts)
+            alias_guard = MagicMock()
+            result = subject._process(role, container, accounts, alias_guard)
+            alias_guard.assert_called_once_with()
+            self.assertEqual(
+                result["unit"]["FragmentPath"], "/lib/systemd/system/" + unit
+            )
+            alias_guard.side_effect = subject.NativeLiveIdentityError("alias refused")
+            with self.assertRaisesRegex(
+                subject.NativeLiveIdentityError, "alias refused"
+            ):
+                subject._process(role, container, accounts, alias_guard)
+            state["FragmentPath"] = "/usr/lib/systemd/system/" + unit
             command = b"different-title\0"
             with self.assertRaises(subject.NativeLiveIdentityError):
                 subject._process(role, container, accounts)
@@ -344,7 +443,15 @@ class NativeLiveIdentityTests(unittest.TestCase):
                 with self.assertRaises(subject.NativeLiveIdentityError):
                     subject._process(role, container, accounts)
 
-    def harness(self, stack, *, fail_pidfd=None, mutate_read=None, mutate_process=None):
+    def harness(
+        self,
+        stack,
+        *,
+        fail_pidfd=None,
+        mutate_read=None,
+        mutate_process=None,
+        fragment_alias=False,
+    ):
         raw = self.documents()
         pins = {path: subject._digest(content) for path, content in raw.items()}
         roles = list(subject._UNITS)
@@ -391,6 +498,11 @@ class NativeLiveIdentityTests(unittest.TestCase):
         def measurement(role, *args):
             process_counts[role] = process_counts.get(role, 0) + 1
             result = copy.deepcopy(records[role])
+            if fragment_alias:
+                args[-1]()
+                result["unit"] = {
+                    "FragmentPath": "/lib/systemd/system/" + subject._UNITS[role]
+                }
             if mutate_process:
                 result = mutate_process(role, process_counts[role], result)
             return result
@@ -438,6 +550,7 @@ class NativeLiveIdentityTests(unittest.TestCase):
         self.assertNotIn("no credential output", str(result))
         self.assertFalse(result["common_deployment_fully_verified"])
         self.assertFalse(result["live_deployment_attested"])
+        self.assertNotIn("fixed_systemd_library_alias", result)
         self.assertEqual(
             subject.compare_native_live_identity(result, copy.deepcopy(result))[
                 "status"
@@ -447,6 +560,47 @@ class NativeLiveIdentityTests(unittest.TestCase):
         for fd in opened:
             with self.assertRaises(OSError):
                 os.fstat(fd)
+
+    def test_measurement_retains_alias_provenance_and_refuses_final_custody_change(
+        self,
+    ):
+        target = self.systemd_alias()
+        guard = subject._systemd_library_alias
+
+        def owned_guard(root):
+            return guard(self.fd, uid=os.getuid(), gid=os.getgid())
+
+        def change_custody(role, count, value):
+            if role == "broker" and count == 3:
+                target.chmod(0o777)
+            return value
+
+        for mutate in (None, change_custody):
+            with self.subTest(changed=mutate is not None), ExitStack() as stack:
+                args, _ = self.harness(
+                    stack, fragment_alias=True, mutate_process=mutate
+                )
+                factory = stack.enter_context(
+                    patch.object(
+                        subject, "_systemd_library_alias", side_effect=owned_guard
+                    )
+                )
+                if mutate is None:
+                    result = subject.read_native_live_identity(**args)
+                    self.assertEqual(
+                        result["fixed_systemd_library_alias"]["target"], "usr/lib"
+                    )
+                    for role in subject._UNITS:
+                        self.assertEqual(
+                            result["processes"][role]["unit"]["FragmentPath"],
+                            "/lib/systemd/system/" + subject._UNITS[role],
+                        )
+                else:
+                    with self.assertRaisesRegex(
+                        subject.NativeLiveIdentityError, "ancestry changed"
+                    ):
+                        subject.read_native_live_identity(**args)
+                factory.assert_called_once()
 
     def test_partial_pidfd_open_failure_closes_prior_handles(self):
         with ExitStack() as stack:

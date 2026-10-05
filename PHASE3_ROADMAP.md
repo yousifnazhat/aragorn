@@ -283,6 +283,37 @@ Next is the concrete outer capture integration and sensor/program/map applicabil
 join described below, not another verification-only wave. The final acceptance
 campaign remains blocked and the implementation heartbeat remains active.
 
+Successor-integration checkpoint, 2026-10-05 UTC: implemented the concrete
+host/guest capture path and its separate independent readback consumer, preserving
+all frozen predecessors and retained evidence. Review corrected a genuine
+merged-`/usr` unit-path mismatch using a held/rechecked exact `/lib -> usr/lib`
+alias guard; it does not normalize away the original systemd readback. Review
+also removed atime-sensitive custody comparisons and restored every inherited
+observation/cleanup/claim-ceiling acceptance predicate in the new host wrapper.
+
+One selected pipeline invocation passed all four affected/new stages on their
+first attempts. It reused unchanged `pipeline-unit` and
+`native-plugin-update-binding` results without executing them. The registry
+declares the reviewed source/import/writer-contract input closure for each stage.
+
+| Stage | Tests | Unittest time | Fingerprint |
+|---|---:|---:|---|
+| Native identity with merged-`/usr` guard | 18 | 0.017 s | `d41456699438f22162de1f8737c83e6da4bf49e5472b6f278d3fb5bf3ef9e792` |
+| Provisioning-pin/update guest | 9 | 0.033 s | `af75f2cdf8b29b281f78a625c487dbdb1f04ca8c0d6932f26877d3a86c798b00` |
+| Successor capture host | 8 | 0.003 s | `047a339224f90d3535994e06607a07765e4f9cc09740d0fd726f920da58534e7` |
+| Independent local readback binding | 4 | 0.229 s | `c6aeef57f3fbdb34e5d11344f93248f9848ca1ea08fae87536e22c7429e9eeec` |
+
+These are 25 new tests plus 14 affected reader tests, not 39 newly closed gates.
+The verifier's constructed records are explicitly unit-contract data in memory,
+not replacement acceptance samples or a rewritten historical capture. No broad
+suite, historical recapture, VM/service activation, actual BPF syscall, live
+update, performance measurement or final acceptance ran. Engineering wall time
+was not separately instrumented; unittest time is not implementation runtime.
+Zero admission/RUN/final gates closed in this batch. The next dependency is
+independent Python/Node binary-pin provenance and one guarded successor capture,
+alongside the pinned-source sensor/program/attachment applicability work. Local
+signed checkpoint only; no additional automatic push authorization was received.
+
 ## Machine-runtime budget
 
 Two retained native observation windows were about 15 seconds (idle sensor exit)
@@ -409,12 +440,57 @@ selected map's 256-by-7 u64 layout and sequential per-CPU copy ABI, not the runn
 sensor's image or program-map ownership. A successful map read does not turn an
 absent Prometheus counter into qualifying zero-loss evidence.
 
-**Next integration batch:** connect these readers to a successor of the existing
-native plugin-update capture, preserving frozen predecessors and the shared
-runtime line. Reuse the outer adapter's actual runtime-tree/image/profile/source
-measurements to bind the common deployment before and after execution. Complete
-Tetragon program/map/sensor applicability and join actual readback to raw scrape
-accounting before one newly necessary, guarded native OS-event integration check.
+**Successor capture integration:** the new
+[host entrypoint](scripts/capture_runtime_native_plugin_update_identity_check.py)
+and [guest wrapper](scripts/runtime_native_plugin_update_identity_check.py)
+reuse the unchanged native update adapter and its owned cleanup. The original
+observation, 13-file input bundle and outer runtime/image/profile/source guards
+remain intact. The wrapper freezes seven hashes from actual provisioning writer
+arguments before activation, then brackets exactly one update-adapter invocation
+with live reads. Eleven static file pins must be supplied independently; eight
+are cross-checked against the staged profile and the entrypoint against the
+existing runtime pin. Python/Node pins still require independent image/binary
+provenance before a live run. Never learn those expectations from the same
+readback being verified.
+
+The [independent live-binding consumer](src/aragorn/native_phase3_plugin_update_live_binding.py)
+consumes the entire successor capture, retaining the original reported-identity
+verification and adding selected file/process/credential/provisioning joins. It
+requires a read-only CAS containing the seven deployment artifacts, three exact
+helper source blobs and canonical static-pin manifest at caller-held digests.
+It does not import the reader or capture code, trust a recorded comparison/PASS,
+or make any deployment dimension fully live-attested. The existing offline
+collection CLI still replays reported identities only; it does not invoke this
+new consumer automatically.
+
+The repo-local CLI uses the existing Python 3.12/standard-library toolchain:
+
+```sh
+/opt/homebrew/bin/python3.12 -B scripts/capture_runtime_native_plugin_update_identity_check.py --help
+/opt/homebrew/bin/python3.12 -B scripts/capture_runtime_native_plugin_update_identity_check.py capture \
+  --static-pins "$ABSOLUTE_CANONICAL_STATIC_PINS" \
+  --expected-static-pins-digest "$STATIC_PINS_DIGEST" --out "$ABSENT_ABSOLUTE_OUTPUT"
+```
+
+`--help` is read-only; `capture` is the explicit live operation and must not run
+until the owned-fixture prerequisites and independently sourced pins are ready.
+The pin document has exactly `schema` (the fixed
+`aragorn/native-plugin-update-identity-static-pins/v1`) and `file_digests` (the
+eleven exact static paths), canonical JSON without a newline. No credentials or
+global installation are required. Success stdout is a JSON object with `status`,
+`path` and exact output `digest`; controlled execution refusal returns status
+`REFUSED` and exit 2. Unexpected failures emit only a redacted fixed reason.
+There are no effect retries. Six observer monotonic stamps bracket the adapter;
+they are not the required end-to-end decision latency measurement.
+
+**Next integration batch:** establish the independent binary-pin provenance,
+then retain one newly necessary successor identity capture after fixture review.
+Complete Tetragon program/map/sensor applicability and join actual readback to
+raw scrape accounting before one guarded native OS-event integration check.
+The map/program association requires pinned producer/loader and Linux
+program/link/PIDFD ABI source. Some retained Tetragon event-output paths do not
+update the selected stats map, so map membership alone cannot prove complete
+event-loss accounting. Unsupported attachment/tail-call paths remain unresolved.
 Do not create another offline collection abstraction or recapture only to
 exercise retention. Then advance admission ports and measurement callbacks in
 the order above. Final acceptance remains blocked.

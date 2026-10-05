@@ -22,7 +22,7 @@ import stat
 import subprocess
 import sys
 import time
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -394,6 +394,81 @@ def _python_link(root: int, *, uid: int = 0, gid: int = 0) -> dict:
         }
 
 
+@contextmanager
+def _systemd_library_alias(root: int, *, uid: int = 0, gid: int = 0):
+    """Hold only the fixed merged-/usr target; never resolve arbitrary aliases."""
+
+    def link_identity():
+        before = os.stat("lib", dir_fd=root, follow_symlinks=False)
+        _require(
+            stat.S_ISLNK(before.st_mode)
+            and before.st_uid == uid
+            and before.st_gid == gid
+            and before.st_nlink == 1
+            and os.readlink("lib", dir_fd=root) == "usr/lib",
+            "fixed systemd library alias changed",
+        )
+        identity = broker._file_identity(before)
+        _require(
+            identity
+            == broker._file_identity(
+                os.stat("lib", dir_fd=root, follow_symlinks=False)
+            ),
+            "fixed systemd library alias changed while read",
+        )
+        return identity
+
+    with ExitStack() as stack:
+        metadata = broker.require_owned_directory(
+            root, expected_uid=uid, require_owner_write=False, label="alias root"
+        )
+        _require(metadata.st_gid == gid, "fixed systemd alias root group changed")
+        root_identity = broker._directory_identity(metadata)
+        identity = link_identity()
+        parent, ancestors, provenance = root, [], []
+        for name in ("usr", "lib", "systemd", "system"):
+            before = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            fd = os.open(
+                name,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=parent,
+            )
+            stack.callback(os.close, fd)
+            metadata = broker.require_owned_directory(
+                fd, expected_uid=uid, require_owner_write=False, label="alias target"
+            )
+            prior = broker._directory_identity(metadata)
+            _require(
+                metadata.st_gid == gid and prior == broker._directory_identity(before),
+                "fixed systemd alias target ancestry changed",
+            )
+            ancestors.append((parent, name, fd, prior))
+            provenance.append(list(prior))
+            parent = fd
+        _require(link_identity() == identity, "fixed systemd library alias changed")
+        yield {
+            "path": "/lib",
+            "target": "usr/lib",
+            "canonical_unit_directory": "/usr/lib/systemd/system",
+            "identity": list(identity),
+            "target_ancestry_identities": provenance,
+        }
+        _require(
+            link_identity() == identity
+            and broker._directory_identity(os.fstat(root)) == root_identity,
+            "fixed systemd library alias custody changed during measurement",
+        )
+        for directory, name, fd, prior in ancestors:
+            _require(
+                prior
+                == broker._directory_identity(os.fstat(fd))
+                == broker._directory_identity(
+                    os.stat(name, dir_fd=directory, follow_symlinks=False)
+                ),
+                "fixed systemd alias target ancestry changed during measurement",
+            )
+
+
 def _executable_path(role: str) -> str:
     return "/usr/local/bin/node" if role == "gateway" else _PYTHON
 
@@ -454,7 +529,9 @@ def _groups(role: str, accounts: dict) -> list[int]:
     return [accounts[role][1]]
 
 
-def _process(role: str, container: str, accounts: dict) -> dict:
+def _process(
+    role: str, container: str, accounts: dict, fragment_alias_guard=None
+) -> dict:
     unit, argv = _UNITS[role], _argv(role)
     # The frozen gateway consumers observe Node's rewritten process title.
     # ExecStart remains separately constrained to the full launcher command.
@@ -478,7 +555,13 @@ def _process(role: str, container: str, accounts: dict) -> dict:
         and re.fullmatch(r"[0-9a-f]{32}", state["InvocationID"]) is not None
         and state["InvocationID"] != "0" * 32
         and state["DropInPaths"] == ""
-        and state["FragmentPath"] == "/usr/lib/systemd/system/" + unit
+        and (
+            state["FragmentPath"] == "/usr/lib/systemd/system/" + unit
+            or (
+                state["FragmentPath"] == "/lib/systemd/system/" + unit
+                and fragment_alias_guard is not None
+            )
+        )
         and state["ExecStart"].startswith(
             "{ path="
             + argv[0]
@@ -489,6 +572,8 @@ def _process(role: str, container: str, accounts: dict) -> dict:
         and state["ExecStart"].count("argv[]=") == 1,
         "fixed unit identity differs from native contract",
     )
+    if state["FragmentPath"] == "/lib/systemd/system/" + unit:
+        fragment_alias_guard()
     started = process._process_start_time(pid)
     raw = process._read_virtual_file(Path(f"/proc/{pid}/status"), 16384)
     fields = _pairs(
@@ -638,8 +723,18 @@ def read_native_live_identity(
                 root, expected_uid=0, require_owner_write=False, label="observer root"
             )
             launcher = _python_link(root)
+            fragment_alias = None
+
+            def guard_fragment_alias():
+                nonlocal fragment_alias
+                if fragment_alias is None:
+                    fragment_alias = stack.enter_context(_systemd_library_alias(root))
+
             processes = {
-                role: _process(role, expected_container_id, accounts) for role in _UNITS
+                role: _process(
+                    role, expected_container_id, accounts, guard_fragment_alias
+                )
+                for role in _UNITS
             }
             _require(
                 len({record["pid"] for record in processes.values()}) == 4,
@@ -653,7 +748,9 @@ def read_native_live_identity(
             _require(
                 processes
                 == {
-                    role: _process(role, expected_container_id, accounts)
+                    role: _process(
+                        role, expected_container_id, accounts, guard_fragment_alias
+                    )
                     for role in _UNITS
                 },
                 "native identity changed after PIDFD open",
@@ -779,7 +876,10 @@ def read_native_live_identity(
             for role, fd in pidfds.items():
                 process.require_live_pidfd(fd)
                 _require(
-                    _process(role, expected_container_id, accounts) == processes[role],
+                    _process(
+                        role, expected_container_id, accounts, guard_fragment_alias
+                    )
+                    == processes[role],
                     "native process changed during byte measurement",
                 )
             _require(
@@ -797,6 +897,11 @@ def read_native_live_identity(
                 "boot_id": boot,
                 "files": files,
                 "fixed_python_launcher": launcher,
+                **(
+                    {"fixed_systemd_library_alias": fragment_alias}
+                    if fragment_alias is not None
+                    else {}
+                ),
                 "processes": processes,
                 "loaded_process_views": credentials,
                 "measured_joins": joins,

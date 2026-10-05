@@ -14,6 +14,12 @@ batches new changed-behavior checks, reuses exact unchanged results, and blocks
 unchanged failed/interrupted attempts without automatic retries. It is development
 automation, not a Phase 3 qualification result.
 
+A [successor native update capture](scripts/capture_runtime_native_plugin_update_identity_check.py)
+now connects provisioning-time pins and before/after process/file readbacks to
+the existing adapter, with an [independent offline join consumer](src/aragorn/native_phase3_plugin_update_live_binding.py).
+It preserves the frozen captures and does not yet establish a fresh live run,
+complete common-deployment verification or any additional Phase 3 gate closure.
+
 Separate signed current-V3 subfixtures now qualify
 [DET-01](./benchmark/receipts/phase3-openclaw-final-v3-det01-dedicated-qualification-v1-2026-09-06.json)
 at decision-case level and

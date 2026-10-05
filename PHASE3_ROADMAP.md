@@ -1018,3 +1018,57 @@ Root/account/systemd/lock and kernel observations remain explicitly doubled;
 actual distinct root-to-broker ownership has not yet been observed live. The
 [batch checkpoint](benchmark/evidence/phase3-native-measurement-provisioning-identity-implementation-v1-2026-10-05.json)
 records exact fingerprints, evidence ceilings and the signed-commit handoff.
+
+**Actual-writer common request and independent process joins (2026-10-05):**
+the [new pure preparation boundary](src/aragorn/native_phase3_common_preparation.py)
+fixes a concrete ordering problem in the shared deployment. Setup creates the
+protected inode and includes its path digest in the policy, which changes the
+worker binding and deployment identity. A historical policy/worker identity
+cannot be reused for those fresh inputs. The successor derives those artifacts
+from the seven supplied writer documents, applies the existing exact native
+provisioning joins, and binds the supplied container's process profile. All four
+current admission selections share one adapter/deployment identity when the
+actual writer inputs are unchanged. Configuration bytes are not retained.
+
+The 73-file common stage is now pinned as exactly 50,029 canonical bytes with
+digest `sha256:4c5e4f131f493d7de2a32cac5764fa7bf4ffb83fe46c4a55d600013a0ab9b65e`.
+Its inventory is 73 files, 93 source inputs, 29 new dependencies and 16
+directories. New preparation uses 18 static pins and seven actual writer pins;
+the final request adds the measurement credential for exactly 26 file pins.
+It reconstructs the retained preparation, consumes an already prepared measurement
+plan, and joins deployment, grant, policy, action, module sources, expected boot,
+protected descriptor and supplied payload bytes before final CAS rereads. It
+never rewrites a schedule/commitment to match a fresh deployment. Fixed sensor
+and revocation-source identities are checked as well as internal consistency.
+
+The [independent second observer](scripts/runtime_phase3_common_process_observer.py)
+reads the exact broker three-credential command, the original gateway/worker/
+sensor contracts, boot and process epochs while holding all four PIDFDs. It does
+not call the common identity reader or change frozen observer dictionaries. The
+[separate offline consumer](src/aragorn/native_phase3_common_process_verifier.py)
+joins both independently acquired record pairs, their exact inventories, unit/
+kernel epochs, loaded credentials and seven module views against caller pins.
+It does not import either producer validator. Root/mount/group observations
+remain first-reader-only where the second observer has no corresponding field;
+retained records are not proof that either observer actually executed.
+
+Validation: all 24 new methods passed in one selected pipeline run. Both exact
+unchanged prerequisites were reused, no failed fingerprint or effect was retried,
+and frozen predecessor files were not edited. Fixtures use inert structural
+records and temporary data, not synthetic acceptance replacements. No live
+capture, VM action or performance sample ran, and no Phase 3 exit gate closed.
+The [batch checkpoint](benchmark/evidence/phase3-native-common-handoff-process-implementation-v1-2026-10-05.json)
+records reviewed input closure, fingerprints and the signed-commit handoff.
+
+Next dependency: the actual shared host/guest controller must guard unused state,
+run setup once, derive this fresh deployment, prepare a genuine collection with
+real pinned workload/independent-verifier/identity callbacks and Linux clock,
+then prepare/provision the measurement binding and retain/read back one final
+request before activation. Repository inspection found no non-test caller of the
+existing measurement collection/preparation APIs yet. Do not substitute an
+admission CLI denial for a scheduled broker workload, invent a commitment, or
+relabel a 70-file intent. Wire both observers and this consumer into outer capture
+with exact installed helper roles (the staged phase3_deployment module must not
+also be copied as a helper). Only then consider one bounded owned-fixture check.
+Remaining admission families, full RUN/sensor semantics, real timing/workload/
+negative-control/sink verification and final acceptance remain open.

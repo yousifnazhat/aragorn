@@ -1,0 +1,120 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "ec510d9edad6ec87fc33f744c0b0febfcc4a5eaf",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T20:03:36.117Z",
+    "validation_recorded": "2026-10-05 20:16:28 UTC",
+    "meaning": "Implementation, parallel source review, one inert profile derivation and focused offline tests; not separately instrumented engineering time or acceptance performance."
+  },
+  "implementation": [
+    "Pure common deployment preparation derives configuration, worker and policy artifacts from seven supplied setup writer documents rather than retaining historical dynamic policy/worker identity. Existing fixed native provisioning semantic checks are reused against those actual-derived artifacts.",
+    "All four currently implemented admission selections retain one common adapter/deployment identity for unchanged writer inputs. The supplied container must match the actual process-profile cgroup; fixed sensor and revocation-source expectations are joined separately.",
+    "One measured-case request reconstructs the retained preparation closure and joins an already prepared measurement plan to deployment/grant/policy/action, seven staged broker source pins, caller boot/protected descriptor and supplied payload bytes. It never creates, rewrites or substitutes a collection commitment or scheduled workload.",
+    "Preparation uses exact common73 stage and 18 static pins. Final request contains eight dynamic credential/policy pins and exactly26 expected protected files; configuration raw bytes are never copied into retained preparation blobs.",
+    "New independent local observer reads the three-credential broker plus frozen gateway/worker/sensor process contracts, holds four PIDFDs, and independently rereads process/boot/account/owned-init identity. It does not invoke the common identity reader or mutate predecessor contracts.",
+    "Separate read-only consumer, importing neither new producer validator, checks canonical before/after pairs, exact independent unit/kernel/boot overlaps and common26 caller pins, credential views and seven broker module views."
+  ],
+  "review_findings_resolved": [
+    "Setup's freshly created protected inode changes path_digest, policy_digest, worker binding and deployment; a pre-setup historical deployment identity cannot truthfully be retained. New preparation derives identity after supplied setup bytes without a measurement-digest cycle.",
+    "Coherent sensor/revocation substitutions were initially internally consistent; new fixed-profile joins reject both after rehashing policy/worker/grant/genesis. Added focused tamper cases before first validation.",
+    "Independent observer schema/fields were reviewed against actual frozen helper output and common identity producer, including gateway14 versus endpoint13 unit fields and three broker credential order.",
+    "Offline verifier explicitly does not manufacture second-observer root/mount/group fields or claim proof of PIDFD use, callback execution, source signatures, raw provisioning closure or application acknowledgement.",
+    "Pure input tests use existing data constructors without discovering historical methods; no behavioral broad suite or historical live recapture was selected."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:25656f9e6abf24abf96c13c6cb84592f31cfd7f1c8d1dcbe100813d4e36143b5",
+    "benchmark/phase3-pipeline-v1.json": "sha256:fc503c004daf3f5653b768f4681a05d43482234cc3d28441960a252bb5ab55fb",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/runtime_phase3_common_process_observer.py": "sha256:b07e05dc651399d6817a21fcdaef60ff7a0164ecc5e7eb2b6c417e8ad3ce5845",
+    "src/aragorn/native_phase3_common_preparation.py": "sha256:78e24312bc8d1687d0c2f964e62a31d151113df62c724b7eb01eb7fc56581711",
+    "src/aragorn/native_phase3_common_process_verifier.py": "sha256:30c43bd5a2ac0046f05d979c08c6d139f9868d21ffdceed39fd3161e105ffb2c",
+    "tests/test_native_phase3_common_preparation.py": "sha256:8d1b330bc1d0784d836048e5d0c936b4115c6ad0a81c0fe42be042fad1ad65b2",
+    "tests/test_native_phase3_common_process_verifier.py": "sha256:ca6c6be0c860a797c7beab0c1c5fa4493d17555565faf25e866ea8942f1335ba",
+    "tests/test_runtime_phase3_common_process_observer.py": "sha256:fdfec8a95d680c80825b9ea8b4fe4ab9f1ecdf42281aab691c1068a33bc748f3"
+  },
+  "common_stage": {
+    "bytes": 50029,
+    "digest": "sha256:4c5e4f131f493d7de2a32cac5764fa7bf4ffb83fe46c4a55d600013a0ab9b65e",
+    "files": 73,
+    "source_inputs": 93,
+    "new_dependencies": 29,
+    "directories": 16,
+    "authority": "INERT_STAGED_BYTES_NOT_ACTIVATION",
+    "derivation": "One successful inert temporary stage to derive the exact new contract pin; the earlier command stopped on missing src import path before invoking the stager. No test fingerprint or effect was retried."
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-preparation",
+      "status": "PASS",
+      "fingerprint": "sha256:381363c664fc068208c1466cc537170a11c040804922586042c059b938fcb348",
+      "tests": 8,
+      "wall_seconds": 1.799422,
+      "stderr_digest": "sha256:928fb0d0f67bc6b48e933b5081168e8c27cb08857549547fefb2e3410bb2087e"
+    },
+    {
+      "stage_id": "native-common-process-observer",
+      "status": "PASS",
+      "fingerprint": "sha256:7d32cbc2c3e97ea4bca2deae0a0a9191d25d19f596c82de69a704038143574d0",
+      "tests": 7,
+      "wall_seconds": 0.113535,
+      "stderr_digest": "sha256:ddf4c025180c6fc6e8e703f892c23735d5870ab07f33147f5dd740f43bb48f1c"
+    },
+    {
+      "stage_id": "native-common-process-verifier",
+      "status": "PASS",
+      "fingerprint": "sha256:2c778dce82773379675911dee50b4a850c652009c84a2fdc7ceea67df288e97f",
+      "tests": 9,
+      "wall_seconds": 0.115364,
+      "stderr_digest": "sha256:c20f2bea5d411505d1d623d2edc7df9557fcf7bf64fc4f90d1a4e95ff9eda2c0"
+    }
+  ],
+  "test_count": 24,
+  "new_test_methods": 24,
+  "selected_pipeline_runs": 1,
+  "sum_stage_wall_seconds": 2.028321,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-common-preparation native-common-process-observer native-common-process-verifier",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    },
+    {
+      "stage_id": "native-measurement-inputs",
+      "fingerprint": "sha256:3af475b99a20a10ff967c18ff10dbda9000f34d98efa352c2e3e8a7ade2e4d88"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "native-common-preparation": 110,
+    "native-common-process-observer": 48,
+    "native-common-process-verifier": 8,
+    "meaning": "Explicit transitive Python sources, common staged payload/source inventory, retained baseline/config data and inert fixture helpers. Runner, requirements, interpreter/platform and prerequisites are separately bound."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "Pure preparation consumes supplied writer bytes and caller boot/protected descriptor expectations; it does not establish actual filesystem custody, grant liveness, source signatures, publication or activation order.",
+    "The request verifies supplied payload bytes only, not an executed workload, protected sink, policy-effect causality, full REQUEST_ACCEPTED latency or negative-control attribution.",
+    "New process-observer tests use real inert descriptor lifetimes but kernel/unit/account doubles. Gateway helper internals and actual Linux/systemd/PIDFD behavior are not newly exercised.",
+    "New consumer tests use explicitly inert structural records, not producer execution or fabricated host capture envelopes. Retained identity joins do not prove observer execution.",
+    "The full common host/guest capture controller and outer replay integration are still pending, including exact installed helper roles and avoiding phase3_deployment helper/staged destination overlap.",
+    "Inspection found no non-test invocation of existing measurement collection or preparation APIs. Genuine pinned execute/independent-verify/identity callbacks and real collection preparation remain required before shared measured activation.",
+    "Prior VM/Docker state was not refreshed and the previous pre-execution VM permission timeout was not retried. No VM operation was attempted in this batch.",
+    "Final31 and100-attempt/100-pair acceptance remains blocked; remaining admission families, RUN/sensor semantics, workload/timing/sink/negative-control verification and full independent verifier inventory remain open."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Connect the existing setup's one preactivation seam to actual common deployment derivation, genuine real-callback collection preparation, measurement provisioning and one retained/readback request; wire independent observers and exact installed-source roles into shared host/guest and outer capture. Do not invent a commitment for a smoke test or substitute an admission CLI mutation for a broker workload.",
+  "checkpoint_commit": "Create one signed local commit for this reviewed checked batch, verify signature and clean working tree, and retain the hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

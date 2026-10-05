@@ -359,6 +359,47 @@ class NativeAdmissionHostTests(unittest.TestCase):
             subject._capture(self.store, self.intent_pin)
         source.assert_not_called()
 
+    def test_path_cases_dispatch_once_without_plugin_input_on_common_fixture(self):
+        for selected in subject.case.MUTATION_CASE_BRANCHES:
+            with self.subTest(case_id=selected):
+                self.arguments["case_id"] = selected
+                self.built = subject.case.build_native_admission_case_intent(
+                    **self.arguments
+                )
+                for pin, raw in self.built["input_blobs"].items():
+                    self.store.put_expected(
+                        BytesIO(raw), expected_digest=pin, max_bytes=len(raw)
+                    )
+                self.intent_pin = self.built["intent_digest"]
+                self.inspected = subject._inspect(
+                    CAS(self.store.root, read_only=True), self.intent_pin
+                )
+                with (
+                    self.capture_mocks() as mocks,
+                    patch.object(subject._UPDATE.fixture, "materialize") as materialize,
+                    patch.object(subject._UPDATE, "_audit_bundle") as audit,
+                ):
+                    value = subject._capture(self.store, self.intent_pin)
+                self.assertEqual(value["status"], "OBSERVED")
+                self.assertEqual(value["case_id"], selected)
+                self.assertIsNone(value["plugin_input_bundle"])
+                mocks[3].assert_called_once()
+                mocks[4].assert_called_once()
+                materialize.assert_not_called()
+                audit.assert_not_called()
+                self.assertEqual(
+                    sum(call.args[0] == "create" for call in mocks[5].call_args_list), 1
+                )
+        for source, target in zip(
+            subject.case.MUTATION_SOURCE_PATHS,
+            (
+                "/opt/aragorn/runtime_native_admission_path_mutation.py",
+                "/usr/lib/aragorn/aragorn/native_phase3_admission_path_mutation.py",
+            ),
+            strict=True,
+        ):
+            self.assertEqual(subject._FILES[source], target)
+
     def test_plugin_input_bundle_is_staged_once_and_rechecked_after_timeout(self):
         self.arguments["case_id"] = subject.case.UPDATE_CASE
         self.built = subject.case.build_native_admission_case_intent(**self.arguments)

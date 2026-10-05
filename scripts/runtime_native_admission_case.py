@@ -32,6 +32,7 @@ else:
 
 from aragorn import native_phase3_admission_case as case
 from aragorn import native_phase3_admission_direct_write as direct
+from aragorn import native_phase3_admission_path_mutation as mutation
 from aragorn import native_phase3_live_identity as identity
 from aragorn.oci_worker_protocol import canonical_json
 
@@ -52,6 +53,7 @@ _OVERRIDE_PATHS = (
 )
 _LEAF_SOURCE = "scripts/runtime_native_admission_direct_write.py"
 _VERIFIER_SOURCE = "src/aragorn/native_phase3_admission_direct_write.py"
+_MUTATION_SOURCE, _MUTATION_VERIFIER_SOURCE = case.MUTATION_SOURCE_PATHS
 _STAMPS = writer_parent._STAMPS
 
 
@@ -142,6 +144,8 @@ def _pin_sources(bound: dict, native) -> dict:
     for source, installed in (
         (_LEAF_SOURCE, direct.PROBE),
         (_VERIFIER_SOURCE, direct.VERIFIER),
+        (_MUTATION_SOURCE, mutation.PROBE),
+        (_MUTATION_VERIFIER_SOURCE, mutation.VERIFIER),
     ):
         raw = native.response._read_regular(Path(installed), 0, {0o444})
         _require(raw == bound["input_blobs"][expected[source]], "LEAF_SOURCE_CHANGED")
@@ -329,6 +333,18 @@ def _invoke_leaf(
 ) -> dict:
     gateway = before["processes"]["gateway"]
     pins = bound["intent"]["case_source_digests"]
+    selected = bound["intent"]["case_id"]
+    _require(
+        selected in (case.DIRECT_WRITE_CASE, *case.MUTATION_CASE_BRANCHES),
+        "UNREGISTERED_LEAF_CASE",
+    )
+    is_mutation = selected in case.MUTATION_CASE_BRANCHES
+    leaf = mutation if is_mutation else direct
+    source, verifier_source = (
+        (_MUTATION_SOURCE, _MUTATION_VERIFIER_SOURCE)
+        if is_mutation
+        else (_LEAF_SOURCE, _VERIFIER_SOURCE)
+    )
     _require(re.fullmatch(r"[0-9a-f]{64}", token) is not None, "FIXTURE_TOKEN_REQUIRED")
     with ExitStack() as held:
         pidfd = identity._open_pidfd(gateway)
@@ -362,7 +378,7 @@ def _invoke_leaf(
             "-I",
             "-S",
             "-B",
-            direct.PROBE,
+            leaf.PROBE,
             "--container",
             container,
             "--gateway-pid",
@@ -370,10 +386,21 @@ def _invoke_leaf(
             "--admitted-digest",
             setup["skill_digest"],
             "--probe-digest",
-            pins[_LEAF_SOURCE],
+            pins[source],
             "--verifier-digest",
-            pins[_VERIFIER_SOURCE],
+            pins[verifier_source],
         ]
+        if is_mutation:
+            argv.extend(
+                [
+                    "--case-id",
+                    selected,
+                    "--shared-probe-digest",
+                    pins[_LEAF_SOURCE],
+                    "--shared-verifier-digest",
+                    pins[_VERIFIER_SOURCE],
+                ]
+            )
         environment = {
             "OPENCLAW_GATEWAY_TOKEN": token,
             "PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -409,16 +436,24 @@ def _invoke_leaf(
     value = direct.parse(result.stdout)
     _require(
         canonical_json(value) + b"\n" == result.stdout
-        and value["schema"] == direct.SCHEMA
-        and value["authority"] == direct.AUTHORITY
-        and value["case_id"] == direct.CASE_ID
+        and value["schema"] == leaf.SCHEMA
+        and value["authority"] == leaf.AUTHORITY
+        and value["case_id"] == selected
         and value["fixture_container"] == container
         and value["gateway_pid"] == gateway["pid"]
         and value["admitted_digest"] == setup["skill_digest"]
         and value["source_pins"]
-        == {direct.PROBE: pins[_LEAF_SOURCE], direct.VERIFIER: pins[_VERIFIER_SOURCE]}
+        == {leaf.PROBE: pins[source], leaf.VERIFIER: pins[verifier_source]}
+        and (
+            not is_mutation
+            or value["shared_source_pins"]
+            == {
+                direct.PROBE: pins[_LEAF_SOURCE],
+                direct.VERIFIER: pins[_VERIFIER_SOURCE],
+            }
+        )
         and value["status"] == ("OBSERVED" if result.returncode == 0 else "REFUSED")
-        and all(value[key] is False for key in direct.FALSE_FLAGS),
+        and all(value[key] is False for key in leaf.FALSE_FLAGS),
         "LEAF_ENVELOPE_CHANGED",
     )
     return {
@@ -841,22 +876,44 @@ def _run(
                 if not is_update:
                     phase = "LEAF_SEMANTIC_REPLAY"
                     leaf = result["leaf"]["document"]
-                    _require(leaf["status"] == "OBSERVED", "DIRECT_WRITE_LEAF_REFUSED")
+                    _require(
+                        leaf["status"] == "OBSERVED", "NATIVE_ADMISSION_LEAF_REFUSED"
+                    )
                     joins = _leaf_live_joins(leaf, live)
                     leaf_raw = canonical_json(leaf)
                     source_pins = bound["intent"]["case_source_digests"]
-                    result["leaf"]["verification"] = (
-                        direct.verify_native_admission_direct_write(
-                            leaf_raw,
-                            expected_raw_digest=direct.digest(leaf_raw),
-                            expected_container=container,
-                            expected_gateway_pid=live["before"]["processes"]["gateway"][
-                                "pid"
+                    is_mutation = result["case_id"] in case.MUTATION_CASE_BRANCHES
+                    verify = (
+                        mutation.verify_native_admission_path_mutation
+                        if is_mutation
+                        else direct.verify_native_admission_direct_write
+                    )
+                    verification_args = {
+                        "expected_raw_digest": direct.digest(leaf_raw),
+                        "expected_container": container,
+                        "expected_gateway_pid": live["before"]["processes"]["gateway"][
+                            "pid"
+                        ],
+                        "expected_admitted_digest": setup["skill_digest"],
+                        "expected_probe_digest": source_pins[
+                            _MUTATION_SOURCE if is_mutation else _LEAF_SOURCE
+                        ],
+                        "expected_verifier_digest": source_pins[
+                            _MUTATION_VERIFIER_SOURCE
+                            if is_mutation
+                            else _VERIFIER_SOURCE
+                        ],
+                    }
+                    if is_mutation:
+                        verification_args.update(
+                            expected_case_id=result["case_id"],
+                            expected_shared_probe_digest=source_pins[_LEAF_SOURCE],
+                            expected_shared_verifier_digest=source_pins[
+                                _VERIFIER_SOURCE
                             ],
-                            expected_admitted_digest=setup["skill_digest"],
-                            expected_probe_digest=source_pins[_LEAF_SOURCE],
-                            expected_verifier_digest=source_pins[_VERIFIER_SOURCE],
                         )
+                    result["leaf"]["verification"] = verify(
+                        leaf_raw, **verification_args
                     )
                     result["leaf"]["verification"]["native_live_identity_joins"] = joins
                 phase = "FINAL_REQUEST_READBACK"

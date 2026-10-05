@@ -1,6 +1,6 @@
 """Fixed native admission successor expectations and preactivation request joins.
 
-Both case adapters share one deployment identity. Selecting a case changes its
+All four case adapters share one deployment identity. Selecting a case changes its
 intent/request, never the common adapter inventory. Historical records remain
 expectations; actual writer bytes must join before activation. No files, CAS
 writes, services, callbacks or live measurements are performed by this module.
@@ -24,9 +24,14 @@ REQUEST_SCHEMA = "aragorn/native-admission-case-request/v1"
 DIRECT_WRITE_CASE = "ADM-02/direct-write"
 DIRECT_WRITE_BRANCH = "DIRECT_WRITE_SIX_ROOTS_AND_ADMITTED_FILE"
 UPDATE_CASE, UPDATE_BRANCH = old.ROUTE, old.BRANCH
+MUTATION_CASE_BRANCHES = {
+    "ADM-02/rename": "RENAME_SIX_ROOT_INSERTIONS_AND_FIVE_MOUNT_RETARGETS",
+    "ADM-02/symlink": "SYMLINK_SIX_ROOT_INSERTIONS",
+}
 CASE_BRANCHES = {
     DIRECT_WRITE_CASE: DIRECT_WRITE_BRANCH,
     UPDATE_CASE: UPDATE_BRANCH,
+    **MUTATION_CASE_BRANCHES,
 }
 CONTROLLER_SOURCE_PATHS = (
     "scripts/capture_native_phase3_admission_case.py",
@@ -35,10 +40,15 @@ CONTROLLER_SOURCE_PATHS = (
     "src/aragorn/native_phase3_admission_capture.py",
 )
 LIVE_SOURCE_PATHS = ("src/aragorn/native_phase3_live_identity.py",)
-CASE_SOURCE_PATHS = (
+DIRECT_SOURCE_PATHS = (
     "scripts/runtime_native_admission_direct_write.py",
     "src/aragorn/native_phase3_admission_direct_write.py",
 )
+MUTATION_SOURCE_PATHS = (
+    "scripts/runtime_native_admission_path_mutation.py",
+    "src/aragorn/native_phase3_admission_path_mutation.py",
+)
+CASE_SOURCE_PATHS = (*DIRECT_SOURCE_PATHS, *MUTATION_SOURCE_PATHS)
 PROVISIONING_PATHS = old.PROVISIONING_PATHS
 STAGED_SCHEMA = "aragorn/runtime-native-admission-staged-profile/v1"
 # Derived once from the actual inert, reviewed admission stager at 7fff0bc.
@@ -222,10 +232,25 @@ def _artifacts(
                 "probe_sources": {
                     path: {"bytes": len(raw), "digest": _digest(raw)}
                     for path, raw in case_sources.items()
+                    if path in DIRECT_SOURCE_PATHS
                 },
             },
         ),
     }
+    for selected, branch in MUTATION_CASE_BRANCHES.items():
+        adapters[selected] = _artifact(
+            "adapter",
+            {
+                "route_id": selected,
+                "branch": branch,
+                # Both new leaves reuse the frozen direct readers/commands;
+                # those dependencies remain explicitly pinned in each adapter.
+                "probe_sources": {
+                    path: {"bytes": len(raw), "digest": _digest(raw)}
+                    for path, raw in case_sources.items()
+                },
+            },
+        )
     artifacts = dict(baseline_artifacts)
     artifacts["adapter"] = _artifact(
         "adapter",
@@ -281,7 +306,7 @@ def build_native_admission_case_intent(
     staged_profile: dict,
     baseline_capture_raw: bytes,
 ) -> dict[str, Any]:
-    """Build one fixed selection over a two-case common deployment, without writes.
+    """Build one fixed selection over a four-case common deployment, without writes.
 
     The caller must first update exactly the gateway static pin from the reviewed
     stager. Historical input bytes are retained as expectations, not fresh evidence.

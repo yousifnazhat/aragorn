@@ -1,0 +1,138 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "d79731254ffe580a998e2779c6f30702c7c53fc5",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T16:52:35.206Z",
+    "validation_recorded": "2026-10-05 17:17:59 UTC",
+    "meaning": "Wall window includes implementation, delegation and review; active engineering time was not separately instrumented."
+  },
+  "implementation": [
+    "Ported ADM-02/rename and ADM-02/symlink into the same common successor; four case adapters now share one deployment without changing the existing 70-file profile or frozen predecessors.",
+    "Rename preserves six directory insertions and five mount-root retargets, including the two .agents parents and excluding the runtime tree; symlink preserves six insertions.",
+    "Fixed exclusive gateway-owned scratch outside discovery roots contains exact inert candidate bytes; container, privilege, PIDFD, namespace and four source pins precede preparation.",
+    "One syscall per operation, held operand directory descriptors, stop on unexpected success or readback drift, independent post-readbacks and no effect retry or local undo.",
+    "Read-only consumer distinguishes structural EXDEV/EBUSY from permission/readonly denial and joins all source/scratch/candidate bytes, operands, overlapping protected root identities and candidate-free unchanged CLI/gateway catalogs.",
+    "Common intent, installed source inventory, held namespace launcher and outer capture replay bind the selected case, own and shared source pins, exact 32-argument invocation and root process/credential observations."
+  ],
+  "review_findings_resolved": [
+    "Isolated -I/-S Python omits the script directory: fixed explicit /usr/lib/aragorn and /opt/aragorn import roots; source-only bootstrap check added.",
+    "Shared direct command semantics only excluded the old candidate: new wrapper explicitly excludes each selected path-mutation candidate, with unchanged-before/after contamination checks.",
+    "Retarget identities now independently join the three overlapping shared discovery-root identities, not only self-equal retarget snapshots.",
+    "Added direct syscall-double coverage for existing-scratch refusal, exact modes/dir_fd operations and short-write evidence retention without retries.",
+    "Independent read-only review found no remaining blocking findings; its scratch-coverage suggestion was implemented before execution."
+  ],
+  "source_digests": {
+    "benchmark/phase3-pipeline-v1.json": "sha256:d482b66f190c9aaf88dddb2b397fd8d656746f4181149bb4c0765722a38895ca",
+    "scripts/capture_native_phase3_admission_case.py": "sha256:a2faa57e95c079af060db5fada82b4900d20332f0c6c0a025fa10bc70bd7f4df",
+    "scripts/runtime_native_admission_case.py": "sha256:ed1afddef88d63181b893be4917cf6a155742f91d06a5e56cb5054ceee35562d",
+    "scripts/runtime_native_admission_path_mutation.py": "sha256:0ad0cfa4169bf0a84b8715e82572ea52ef02951cb8092eba41e38e8001a726c9",
+    "src/aragorn/native_phase3_admission_capture.py": "sha256:bb04fc7dc57594e154a4768a379a7c4674357a788d6033bfe3c618614f082537",
+    "src/aragorn/native_phase3_admission_case.py": "sha256:823dcc0a4cb468ebdbd10eed3b41bc013519a650b5c93b82040d08a7c969c0ba",
+    "src/aragorn/native_phase3_admission_path_mutation.py": "sha256:174c9cb0489d8d554f77b904aec572c9104469cb21b5e8b91ae6038a8f45fb77",
+    "tests/test_native_admission_case_host.py": "sha256:8064e8bd2a03ad3e6890142f4786dfe56c6a93f39df116364b6fbd7d48173d3b",
+    "tests/test_native_admission_path_mutation.py": "sha256:de11292ea1b56a830b09ed279babf6f4dd302db584d7fe1d2702a4fc5c0e9b9f",
+    "tests/test_native_phase3_admission_capture.py": "sha256:37ba6d8d63246d64a744f41815064152af508727c2484eff40925df190702c76",
+    "tests/test_native_phase3_admission_case.py": "sha256:342b22d7ba9e4acdc0c192710a22c1f99099476f4ac7648bc05aff5eac2a214b",
+    "tests/test_runtime_native_admission_case.py": "sha256:4e5ebf5a99a410ed07ca4022bba70a7f300163076f678cede9e02ff7c410986b"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-admission-case",
+      "status": "PASS",
+      "fingerprint": "sha256:c10d62f5a49c23d65dd00b7616c51aefef356e351b9db7a9d919118b04936fca",
+      "tests": 7,
+      "wall_seconds": 1.198055,
+      "stderr_digest": "sha256:571645f660468ff757719049d617b60d921c55843fa947b8299888dc94deb4d2"
+    },
+    {
+      "stage_id": "native-admission-path-mutation",
+      "status": "PASS",
+      "fingerprint": "sha256:5445ebf1af58aaf6c052a5e5663d8de82ac4310e8da2492d72129145ccd04498",
+      "tests": 13,
+      "wall_seconds": 0.140159,
+      "stderr_digest": "sha256:58ff441100cb0b9d59ad930f60b102d8a97f58a5b2f5a3488b1ac17adbdf1807"
+    },
+    {
+      "stage_id": "native-admission-case-guest",
+      "status": "PASS",
+      "fingerprint": "sha256:2945f786c1102c1d23b58436e0934d1160a595b5980bb95dfc02083b6faa85ea",
+      "tests": 16,
+      "wall_seconds": 0.258667,
+      "stderr_digest": "sha256:4edf529402a34a1a1c72cfeca74277739efbaaa2982b919657ef60794c01e415"
+    },
+    {
+      "stage_id": "native-admission-capture",
+      "status": "PASS",
+      "fingerprint": "sha256:864399776679e3b118c15869cd65c2f73f9f7e3d0ca72fadcd3277767b074ad5",
+      "tests": 14,
+      "wall_seconds": 1.955598,
+      "stderr_digest": "sha256:1920d419c23f30ebd29be7f3d09712a97ae3ad59924a31171adc74e4f899ebb3"
+    },
+    {
+      "stage_id": "native-admission-case-host",
+      "status": "PASS",
+      "fingerprint": "sha256:b02335ace68abf92a12f4c987f180b588f2642558fad48fb401fc16d6a3b6db6",
+      "tests": 12,
+      "wall_seconds": 1.268144,
+      "stderr_digest": "sha256:bbb1a0e65e98eb24e20918e36a45a0a9c8d5c697d52938e7ec0962364e1c725d"
+    }
+  ],
+  "test_count": 62,
+  "sum_stage_wall_seconds": 4.820623,
+  "new_test_methods": 18,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-case-host",
+  "selected_pipeline_runs": 1,
+  "failed_or_retried_fingerprints": [],
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:9d2c2943d8e3c3c79f2741eb56d3fb00c8d33e2d630889a9ecba91f9271d0a05",
+      "status": "SKIP_PASS"
+    },
+    {
+      "stage_id": "native-admission-profile",
+      "fingerprint": "sha256:808faeccf20027628c339482e5a3c9050f797196e7ef430f3f6fb63de5570d13",
+      "status": "SKIP_PASS"
+    },
+    {
+      "stage_id": "native-admission-direct-write",
+      "fingerprint": "sha256:8328397ccc9d7a7c5ac809e29372e1081091b02dc5dfe82bc0c05c313d1885bb",
+      "status": "SKIP_PASS"
+    }
+  ],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "native-admission-case": 95,
+    "native-admission-path-mutation": 8,
+    "native-admission-case-guest": 44,
+    "native-admission-capture": 105,
+    "native-admission-case-host": 165,
+    "meaning": "Explicit inputs include transitive source and data-only helper files. No historical helper test module was selected for execution. Runner/toolchain/requirements and dependency fingerprints are also bound."
+  },
+  "new_live_captures": 0,
+  "vm_actions": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "preserved": "All frozen implementations, retained observations and prior pipeline records are unchanged.",
+  "limitations": [
+    "All positive unit observations are explicitly inert data, not replacement acceptance evidence.",
+    "Catalog identity is not prompt or active-session consumption.",
+    "Point-in-time and reported source/readback joins do not establish continuous custody or external execution attestation.",
+    "Complete four-case successor capture has not yet been freshly observed and replayed.",
+    "Remaining admission families, RUN/sensor semantics, real timing/workload callbacks and full verifier inventory still block final31/100attempt/100pair acceptance."
+  ],
+  "next_dependency": "Review one newly necessary serial exact owned network-isolated disposable successor changed-behavior capture with prior-VM-state guards, bounded execution and verified cleanup; then continue remaining A1/A2/A3, RUN/sensor and measured-broker timing integration. Preserve failed effects without retry.",
+  "commit_handoff": "After signing and verifying this batch, record its final hash in an ignored .aragorn/phase3-batch-<short>-checkpoint.json and the chat milestone; no automatic push authority.",
+  "route_qualified": false,
+  "phase3_eligible": false,
+  "run_conformance_eligible": false,
+  "production_activation_eligible": false,
+  "common_deployment_fully_verified": false,
+  "live_deployment_attested": false,
+  "metrics_eligible": false,
+  "fresh_campaign_execution": false,
+  "preactivation_commit_verified": false
+}

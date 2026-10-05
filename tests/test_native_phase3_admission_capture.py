@@ -18,6 +18,8 @@ from aragorn import native_phase3_admission_capture as subject
 from aragorn import native_phase3_admission_case as case
 from aragorn.cas import CAS
 from aragorn.oci_worker_protocol import canonical_json
+from test_native_admission_direct_write import _fixture as inert_direct_fixture
+from test_native_admission_path_mutation import _fixture as inert_mutation_fixture
 from test_native_phase3_admission_case import builder_arguments, provisioning_inputs
 from test_native_phase3_plugin_update_live_binding import _fixture as inert_live_fixture
 
@@ -81,7 +83,7 @@ class NativeAdmissionCaptureTests(unittest.TestCase):
             "case_id": selected,
             "fixture_container": "a" * 64,
             "fixture_creation_attempted": True,
-            "plugin_input_bundle": None if selected == case.DIRECT_WRITE_CASE else {},
+            "plugin_input_bundle": {} if selected == case.UPDATE_CASE else None,
             "source": json.loads(self.arguments["source_record_raw"]),
             "staged_profile": deepcopy(self.arguments["staged_profile"]),
             "refusal": None,
@@ -110,7 +112,7 @@ class NativeAdmissionCaptureTests(unittest.TestCase):
                         self.prepared["provisioning_file_digests"]
                     )
                 },
-                "leaf": {} if selected == case.DIRECT_WRITE_CASE else None,
+                "leaf": None if selected == case.UPDATE_CASE else {},
                 "plugin_update": {} if selected == case.UPDATE_CASE else None,
                 "refusal": None,
                 "postcondition_failures": [],
@@ -127,7 +129,7 @@ class NativeAdmissionCaptureTests(unittest.TestCase):
                 name: stack.enter_context(
                     patch.object(subject, name, return_value={"inert_join": name})
                 )
-                for name in ("_outer", "_live", "_direct", "_plugin")
+                for name in ("_outer", "_live", "_leaf", "_plugin")
             }
             stack.enter_context(
                 patch("subprocess.run", side_effect=AssertionError("live effect"))
@@ -165,8 +167,8 @@ class NativeAdmissionCaptureTests(unittest.TestCase):
                 self.assertEqual(self.value, before)
                 readers["_outer"].assert_called_once()
                 readers["_live"].assert_called_once()
-                chosen = "_direct" if selected == case.DIRECT_WRITE_CASE else "_plugin"
-                other = "_plugin" if chosen == "_direct" else "_direct"
+                chosen = "_plugin" if selected == case.UPDATE_CASE else "_leaf"
+                other = "_leaf" if chosen == "_plugin" else "_plugin"
                 readers[chosen].assert_called_once()
                 readers[other].assert_not_called()
 
@@ -282,11 +284,11 @@ class NativeAdmissionCaptureTests(unittest.TestCase):
                         expected_intent_digest=self.intent_pin,
                         evidence_cas=CAS(incomplete.root, read_only=True),
                     )
-                readers["_direct"].assert_not_called()
+                readers["_leaf"].assert_not_called()
                 readers["_plugin"].assert_not_called()
 
     def test_failed_join_stops_once_without_fallback_or_second_branch(self):
-        for failed in ("_outer", "_live", "_direct"):
+        for failed in ("_outer", "_live", "_leaf"):
             events = []
             with self.subTest(failed=failed), self.isolated_readers() as readers:
                 for name, mocked in readers.items():
@@ -300,9 +302,192 @@ class NativeAdmissionCaptureTests(unittest.TestCase):
                     mocked.side_effect = observe
                 with self.assertRaises(subject.NativeAdmissionCaptureError):
                     self.verify()
-                expected = ["_outer", "_live", "_direct"]
+                expected = ["_outer", "_live", "_leaf"]
                 self.assertEqual(events, expected[: expected.index(failed) + 1])
                 readers["_plugin"].assert_not_called()
+
+    def leaf_fixture(self, selected):
+        """Fabricated leaf/root joins only; not a full successful capture."""
+        is_mutation = selected in case.MUTATION_CASE_BRANCHES
+        contract = subject.mutation if is_mutation else subject.direct
+        document, bindings = (
+            inert_mutation_fixture(selected) if is_mutation else inert_direct_fixture()
+        )
+        pins = dict(
+            zip(
+                case.DIRECT_SOURCE_PATHS,
+                (
+                    bindings["expected_shared_probe_digest"]
+                    if is_mutation
+                    else bindings["expected_probe_digest"],
+                    bindings["expected_shared_verifier_digest"]
+                    if is_mutation
+                    else bindings["expected_verifier_digest"],
+                ),
+                strict=True,
+            )
+        )
+        if is_mutation:
+            pins.update(
+                zip(
+                    case.MUTATION_SOURCE_PATHS,
+                    (
+                        bindings["expected_probe_digest"],
+                        bindings["expected_verifier_digest"],
+                    ),
+                    strict=True,
+                )
+            )
+        raw = canonical_json(document)
+        verify = (
+            contract.verify_native_admission_path_mutation
+            if is_mutation
+            else contract.verify_native_admission_direct_write
+        )
+        replay = verify(raw, expected_raw_digest=case._digest(raw), **bindings)
+        snapshot = {}
+        for side in ("before", "after"):
+            observed = document[side]
+            process = observed["gateway"]
+            snapshot[side] = {
+                "processes": {
+                    "gateway": {
+                        "pid": process["pid"],
+                        "start_time_ticks": process["start_time_ticks"],
+                        "cgroup": process["cgroup"][3:].rstrip("\n"),
+                        "mount_namespace": {
+                            "device": 4,
+                            "inode": process["mount_namespace"],
+                        },
+                        "uids": process["uid"],
+                        "gids": process["gid"],
+                    }
+                },
+                "loaded_process_views": {
+                    "gateway": {
+                        "openclaw-config": {
+                            key: deepcopy(observed["config"][key])
+                            for key in ("identity", "bytes", "digest")
+                        }
+                    }
+                },
+            }
+        argv = [
+            "/usr/bin/nsenter",
+            "--mount=/proc/self/fd/92",
+            "--",
+            "/usr/bin/setpriv",
+            "--reuid=992",
+            "--regid=992",
+            "--groups=992",
+            "--inh-caps=-all",
+            "--ambient-caps=-all",
+            "--bounding-set=-all",
+            "--no-new-privs",
+            "/usr/bin/python3.12",
+            "-I",
+            "-S",
+            "-B",
+            contract.PROBE,
+            "--container",
+            bindings["expected_container"],
+            "--gateway-pid",
+            str(bindings["expected_gateway_pid"]),
+            "--admitted-digest",
+            bindings["expected_admitted_digest"],
+            "--probe-digest",
+            bindings["expected_probe_digest"],
+            "--verifier-digest",
+            bindings["expected_verifier_digest"],
+        ]
+        if is_mutation:
+            argv.extend(
+                [
+                    "--case-id",
+                    selected,
+                    "--shared-probe-digest",
+                    bindings["expected_shared_probe_digest"],
+                    "--shared-verifier-digest",
+                    bindings["expected_shared_verifier_digest"],
+                ]
+            )
+        guest = {
+            "plugin_update": None,
+            "fixture_container": bindings["expected_container"],
+            "setup": {"skill_digest": bindings["expected_admitted_digest"]},
+            "live_identity": snapshot,
+            "leaf": {
+                "document": document,
+                "verification": replay | {"native_live_identity_joins": self.flags},
+                "execution": {
+                    "argv": argv,
+                    "exit_code": 0,
+                    "stdout": (raw + b"\n").decode("ascii"),
+                    "stdout_bytes": len(raw) + 1,
+                    "stdout_digest": case._digest(raw + b"\n"),
+                    "stderr_bytes": 0,
+                    "effective_identity": {"uid": 992, "gid": 992, "groups": [992]},
+                    "environment_names": [
+                        "LANG",
+                        "LC_ALL",
+                        "NO_COLOR",
+                        "OPENCLAW_GATEWAY_TOKEN",
+                        "PATH",
+                    ],
+                },
+            },
+        }
+        return guest, {"case_id": selected, "case_source_digests": pins}
+
+    def test_leaf_branch_replays_real_semantics_and_joins_cli_and_root_observations(
+        self,
+    ):
+        for selected in (case.DIRECT_WRITE_CASE, *case.MUTATION_CASE_BRANCHES):
+            with self.subTest(case_id=selected):
+                guest, intent = self.leaf_fixture(selected)
+                before = deepcopy(guest)
+                result = subject._leaf(guest, intent)
+                self.assertEqual(result["case_id"], selected)
+                self.assertEqual(
+                    result["status"], guest["leaf"]["verification"]["status"]
+                )
+                self.assertEqual(guest, before)
+                faults = (
+                    "argv",
+                    "root-process",
+                    "root-credential",
+                    "reported-replay",
+                    "source-pin",
+                    "case",
+                ) + (("shared-pin",) if selected in case.MUTATION_CASE_BRANCHES else ())
+                for fault in faults:
+                    changed, altered_intent = deepcopy(guest), deepcopy(intent)
+                    if fault == "argv":
+                        changed["leaf"]["execution"]["argv"][-1] = "substitution"
+                    elif fault == "root-process":
+                        changed["live_identity"]["after"]["processes"]["gateway"][
+                            "start_time_ticks"
+                        ] += 1
+                    elif fault == "root-credential":
+                        changed["live_identity"]["before"]["loaded_process_views"][
+                            "gateway"
+                        ]["openclaw-config"]["identity"][1] += 1
+                    elif fault == "reported-replay":
+                        changed["leaf"]["verification"]["attempts"] += 1
+                    elif fault in ("source-pin", "shared-pin"):
+                        paths = (
+                            case.MUTATION_SOURCE_PATHS
+                            if selected in case.MUTATION_CASE_BRANCHES
+                            and fault == "source-pin"
+                            else case.DIRECT_SOURCE_PATHS
+                        )
+                        altered_intent["case_source_digests"][paths[0]] = (
+                            "sha256:" + "0" * 64
+                        )
+                    else:
+                        altered_intent["case_id"] = case.UPDATE_CASE
+                    with self.subTest(fault=fault), self.assertRaises(ValueError):
+                        subject._leaf(changed, altered_intent)
 
     def plugin_fixture(self):
         """Translate old data only for a branch unit; never relabel it as evidence."""

@@ -3,7 +3,7 @@
   "stages": [
     {
       "id": "native-admission-case",
-      "description": "Verify only the fixed two-case shared successor intent, exact 70-file profile and seven-writer request joins with inert data; no activation or qualification.",
+      "description": "Verify only the fixed four-case shared successor intent, exact 70-file profile and seven-writer request joins with inert data; no activation or qualification.",
       "tests": [
         "test_native_phase3_admission_case"
       ],
@@ -127,6 +127,7 @@
         "scripts/runtime_capability_openclaw_systemd_probe.py",
         "scripts/runtime_native_admission_case.py",
         "scripts/runtime_native_admission_direct_write.py",
+        "scripts/runtime_native_admission_path_mutation.py",
         "scripts/runtime_native_cgroup_prerequisite.py",
         "scripts/runtime_native_plugin_package_check.py",
         "scripts/runtime_native_plugin_update_case.py",
@@ -142,6 +143,7 @@
         "src/aragorn/cas.py",
         "src/aragorn/native_phase3_admission_case.py",
         "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_path_mutation.py",
         "src/aragorn/native_phase3_live_identity.py",
         "src/aragorn/native_phase3_plugin_update_binding.py",
         "src/aragorn/native_phase3_plugin_update_case.py",
@@ -161,7 +163,7 @@
       ],
       "needs": [
         "native-admission-case",
-        "native-admission-direct-write"
+        "native-admission-path-mutation"
       ],
       "timeout_seconds": 120
     },
@@ -214,6 +216,7 @@
         "scripts/materialize_runtime_quarantine_activation.py",
         "scripts/materialize_runtime_quarantine_services.py",
         "scripts/runtime_native_admission_direct_write.py",
+        "scripts/runtime_native_admission_path_mutation.py",
         "scripts/stage_runtime_broker_response_drain_profile.py",
         "scripts/stage_runtime_endpoint_journal_profile.py",
         "scripts/stage_runtime_native_admission_profile.py",
@@ -227,6 +230,7 @@
         "src/aragorn/native_phase3_admission_capture.py",
         "src/aragorn/native_phase3_admission_case.py",
         "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_path_mutation.py",
         "src/aragorn/native_phase3_live_identity.py",
         "src/aragorn/native_phase3_plugin_update_binding.py",
         "src/aragorn/native_phase3_plugin_update_case.py",
@@ -270,19 +274,21 @@
         "src/aragorn/runtime_revocation_service.py",
         "src/aragorn/runtime_skill_startup.py",
         "src/aragorn/runtime_skill_startup_service.py",
+        "tests/test_native_admission_direct_write.py",
+        "tests/test_native_admission_path_mutation.py",
         "tests/test_native_phase3_admission_capture.py",
         "tests/test_native_phase3_admission_case.py",
         "tests/test_native_phase3_plugin_update_live_binding.py"
       ],
       "needs": [
         "native-admission-case",
-        "native-admission-direct-write"
+        "native-admission-path-mutation"
       ],
       "timeout_seconds": 120
     },
     {
       "id": "native-admission-case-host",
-      "description": "Verify fixed two-case successor host handoff, exact inert plugin bundle custody, failure retention, independent replay ordering and read-only verify CLI using mocked Docker and subprocesses; no live capture.",
+      "description": "Verify fixed four-case successor host handoff, exact inert plugin bundle custody, failure retention, independent replay ordering and read-only verify CLI using mocked Docker and subprocesses; no live capture.",
       "tests": [
         "test_native_admission_case_host"
       ],
@@ -359,6 +365,7 @@
         "scripts/runtime_capability_openclaw_systemd_probe.py",
         "scripts/runtime_native_admission_case.py",
         "scripts/runtime_native_admission_direct_write.py",
+        "scripts/runtime_native_admission_path_mutation.py",
         "scripts/runtime_native_cgroup_prerequisite.py",
         "scripts/runtime_native_config_denial_check.py",
         "scripts/runtime_native_plugin_package_check.py",
@@ -404,6 +411,7 @@
         "src/aragorn/native_phase3_admission_capture.py",
         "src/aragorn/native_phase3_admission_case.py",
         "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_path_mutation.py",
         "src/aragorn/native_phase3_live_identity.py",
         "src/aragorn/native_phase3_plugin_update_binding.py",
         "src/aragorn/native_phase3_plugin_update_case.py",
@@ -554,6 +562,27 @@
       ],
       "needs": [
         "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-admission-path-mutation",
+      "description": "Verify the fixed rename and symlink leaves, scratch and operand custody, structural errno distinctions and independent retained-byte replay with inert data and syscall doubles only; no effects or qualification.",
+      "tests": [
+        "test_native_admission_path_mutation"
+      ],
+      "inputs": [
+        "scripts/runtime_native_admission_direct_write.py",
+        "scripts/runtime_native_admission_path_mutation.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_path_mutation.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_admission_direct_write.py",
+        "tests/test_native_admission_path_mutation.py"
+      ],
+      "needs": [
+        "native-admission-direct-write"
       ],
       "timeout_seconds": 120
     },

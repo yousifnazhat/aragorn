@@ -195,6 +195,36 @@ class NativeAdmissionCaseTests(unittest.TestCase):
                 inspected, {"intent": intent, "input_blobs": built["input_blobs"]}
             )
 
+    def test_path_cases_share_target_but_bind_distinct_case_and_shared_readers(self):
+        all_built = [self.build(case_id=selected) for selected in subject.CASE_BRANCHES]
+        intents = [json.loads(built["intent_raw"]) for built in all_built]
+        self.assertEqual(len({intent["deployment_digest"] for intent in intents}), 1)
+        self.assertEqual(len({intent["case_adapter_digest"] for intent in intents}), 4)
+        for built, intent in zip(all_built, intents, strict=True):
+            with self.subTest(case_id=intent["case_id"]):
+                self.assertLessEqual(len(built["input_blobs"]), 32)
+                self.retain(built)
+                self.assertEqual(
+                    self.prepare(built)["request"]["case_id"], intent["case_id"]
+                )
+                adapter = json.loads(
+                    built["input_blobs"][intent["case_adapter_digest"]]
+                )
+                if intent["case_id"] in subject.MUTATION_CASE_BRANCHES:
+                    self.assertEqual(
+                        set(adapter["identity"]["probe_sources"]),
+                        set(subject.CASE_SOURCE_PATHS),
+                    )
+                    self.assertEqual(
+                        adapter["identity"]["branch"],
+                        subject.MUTATION_CASE_BRANCHES[intent["case_id"]],
+                    )
+                elif intent["case_id"] == subject.DIRECT_WRITE_CASE:
+                    self.assertEqual(
+                        set(adapter["identity"]["probe_sources"]),
+                        set(subject.DIRECT_SOURCE_PATHS),
+                    )
+
     def test_exact_two_successor_outputs_and_unchanged_historical_expectations(self):
         built = self.build()
         intent = json.loads(built["intent_raw"])

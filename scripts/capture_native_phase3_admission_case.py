@@ -2,7 +2,7 @@
 
 Preparation is offline. Capture only uses the already-owned native disposable
 fixture primitives; it never starts a VM or activates a service on the host.
-Both fixed cases share this deployment. The existing plugin-update adapter and
+All four fixed cases share this deployment. The existing plugin-update adapter and
 its exact inert input bundle are reused without changing frozen predecessors.
 """
 
@@ -38,6 +38,8 @@ _FILES = legacy._FILES | {
     "scripts/runtime_native_admission_direct_write.py": "/opt/aragorn/runtime_native_admission_direct_write.py",
     "src/aragorn/native_phase3_admission_case.py": "/usr/lib/aragorn/aragorn/native_phase3_admission_case.py",
     "src/aragorn/native_phase3_admission_direct_write.py": "/usr/lib/aragorn/aragorn/native_phase3_admission_direct_write.py",
+    "scripts/runtime_native_admission_path_mutation.py": "/opt/aragorn/runtime_native_admission_path_mutation.py",
+    "src/aragorn/native_phase3_admission_path_mutation.py": "/usr/lib/aragorn/aragorn/native_phase3_admission_path_mutation.py",
 }
 _FALSE = legacy._FALSE
 _DIRECT = "ADM-02/direct-write"
@@ -207,7 +209,7 @@ def _prepare(store: CAS, selected_case: str, nonce: str) -> dict:
         "limitations": [
             "HISTORICAL_EXPECTATIONS_NOT_FRESH_WRITER_OR_LIVE_IDENTITY",
             "SUCCESSOR_PROFILE_IS_INERT_STAGING_ONLY",
-            "TWO_FIXED_CASES_NOT_COMPLETE_ADMISSION_INVENTORY",
+            "FOUR_FIXED_CASES_NOT_COMPLETE_ADMISSION_INVENTORY",
         ],
         **dict.fromkeys(_FALSE, False),
     }

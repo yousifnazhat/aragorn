@@ -879,3 +879,41 @@ successful prerequisites were reused. No unchanged failed fingerprint reran.
 Positive consumer orchestration checks isolate the outer/live/branch readers;
 separate plugin and file-join primitives use explicitly inert data. A complete
 fresh successor observation has not yet passed the new consumer.
+
+**A1 rename and symlink ports (2026-10-05):** the common successor now selects
+four fixed cases without changing the 70-file runtime profile or frozen direct
+and plugin implementations. The [new fixed leaf](scripts/runtime_native_admission_path_mutation.py)
+adds six symlink insertions and, separately, six directory renames plus the five
+required mount-root retargets. The `.agents` targets are the sealed parents;
+the runtime tree is not an additional retarget. Scratch is exclusively created
+at a fixed gateway-owned location outside the discovery roots, with exact inert
+candidate bytes, after container, privilege, PIDFD, namespace and source guards.
+
+Every operation is attempted once. Unexpected success, operand drift or a
+readback failure stops later mutations while independent post-readbacks are
+retained. Scratch is not undone locally; destruction belongs to the outer owned
+fixture. `EXDEV` (cross-mount rename) and `EBUSY` (mountpoint busy) remain structural
+outcomes, not policy-denial evidence. No successful result is inferred merely
+from an errno or from an unchanged catalog.
+
+The [read-only leaf consumer](src/aragorn/native_phase3_admission_path_mutation.py)
+joins exact source and scratch bytes, all operands, protected inventories,
+overlapping retarget identities and the original CLI/gateway readbacks. It
+explicitly excludes each new candidate from the catalogs. The common outer
+consumer additionally binds the selected leaf, four source pins, isolated
+invocation arguments and process/configuration records to the root observations.
+These are bounded observation contracts, not external observer attestation,
+active-session consumption, admission acceptance or RUN qualification.
+
+The [path-mutation batch checkpoint](benchmark/evidence/phase3-native-admission-path-mutation-implementation-v1-2026-10-05.json)
+records focused validation, exact unchanged-result reuse and the signed local
+checkpoint handoff. No live capture or performance campaign was run in this
+implementation batch, and no exit gate closed. Final acceptance remains blocked.
+Next: review the four-case composition for one necessary owned-fixture check,
+then continue the remaining A1/A2/A3 routes, RUN/sensor coverage and real
+measurement/verifier wiring on the same successor.
+
+Validation: all 62 focused methods passed in the single selected pipeline run,
+including 18 new methods. The three exact unchanged prerequisite stages were
+reused; no failed fingerprint or effect was retried. Summed stage wall time was
+4.821 seconds, not engineering time or an acceptance performance measurement.

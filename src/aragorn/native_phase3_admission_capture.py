@@ -1,4 +1,4 @@
-"""Read-only replay of the two-case native admission successor.
+"""Read-only replay of the four-case native admission successor.
 
 This consumes the successor's own envelope, never a relabelled predecessor.
 Caller-pinned CAS closure, reported process/credential joins, branch semantics
@@ -15,6 +15,7 @@ import stat
 
 from . import native_phase3_admission_case as case
 from . import native_phase3_admission_direct_write as direct
+from . import native_phase3_admission_path_mutation as mutation
 from . import native_phase3_live_identity as reader
 from . import native_phase3_plugin_update_binding as reported
 from . import native_phase3_plugin_update_live_binding as live
@@ -38,7 +39,7 @@ LIMITATIONS = (
     "REPORTED_PREACTIVATION_ORDER_NOT_INDEPENDENT_HOST_ACK_OR_TIMING_PROOF",
     "SELECTED_PROTECTED_BOUNDARIES_NOT_ALL_SIDE_EFFECTS_OR_WHOLE_DATABASE_EQUALITY",
     "INHERITED_INPUT_RESTORATION_METADATA_ONLY_NOT_CONTENT_HASHES",
-    "TWO_FIXED_CASES_NOT_COMPLETE_ADMISSION_OR_RUN_INVENTORY",
+    "FOUR_FIXED_CASES_NOT_COMPLETE_ADMISSION_OR_RUN_INVENTORY",
     "NO_PERFORMANCE_OR_PHASE3_QUALIFICATION",
 )
 _digest = case._digest
@@ -554,6 +555,8 @@ def _live(capture: dict, bound: dict) -> None:
     leaf_paths = {
         "scripts/runtime_native_admission_direct_write.py": direct.PROBE,
         "src/aragorn/native_phase3_admission_direct_write.py": direct.VERIFIER,
+        "scripts/runtime_native_admission_path_mutation.py": mutation.PROBE,
+        "src/aragorn/native_phase3_admission_path_mutation.py": mutation.VERIFIER,
     }
     _require(
         set(admission["leaf_sources"]) == set(leaf_paths.values()),
@@ -568,7 +571,11 @@ def _live(capture: dict, bound: dict) -> None:
         )
 
 
-def _direct(guest: dict, intent: dict) -> dict:
+def _leaf(guest: dict, intent: dict) -> dict:
+    _require(
+        intent["case_id"] in (case.DIRECT_WRITE_CASE, *case.MUTATION_CASE_BRANCHES),
+        "unregistered leaf case",
+    )
     _require(guest["plugin_update"] is None, "unexpected plugin invocation")
     leaf = guest["leaf"]
     document, execution = leaf["document"], leaf["execution"]
@@ -576,23 +583,41 @@ def _direct(guest: dict, intent: dict) -> dict:
     pins = intent["case_source_digests"]
     snapshot = guest["live_identity"]
     gateway = snapshot["before"]["processes"]["gateway"]
-    result = direct.verify_native_admission_direct_write(
+    is_mutation = intent["case_id"] in case.MUTATION_CASE_BRANCHES
+    contract = mutation if is_mutation else direct
+    source, verifier_source = (
+        case.MUTATION_SOURCE_PATHS if is_mutation else case.DIRECT_SOURCE_PATHS
+    )
+    verify = (
+        mutation.verify_native_admission_path_mutation
+        if is_mutation
+        else direct.verify_native_admission_direct_write
+    )
+    extra = (
+        {
+            "expected_case_id": intent["case_id"],
+            "expected_shared_probe_digest": pins[case.DIRECT_SOURCE_PATHS[0]],
+            "expected_shared_verifier_digest": pins[case.DIRECT_SOURCE_PATHS[1]],
+        }
+        if is_mutation
+        else {}
+    )
+    result = verify(
         raw,
         expected_raw_digest=_digest(raw),
         expected_container=guest["fixture_container"],
         expected_gateway_pid=gateway["pid"],
         expected_admitted_digest=guest["setup"]["skill_digest"],
-        expected_probe_digest=pins["scripts/runtime_native_admission_direct_write.py"],
-        expected_verifier_digest=pins[
-            "src/aragorn/native_phase3_admission_direct_write.py"
-        ],
+        expected_probe_digest=pins[source],
+        expected_verifier_digest=pins[verifier_source],
+        **extra,
     )
     argv = execution["argv"]
     _require(
         type(argv) is list
-        and len(argv) == 26
+        and len(argv) == (32 if is_mutation else 26)
         and re.fullmatch(r"--mount=/proc/self/fd/[0-9]+", argv[1]) is not None,
-        "direct leaf mount descriptor changed",
+        "leaf mount descriptor changed",
     )
     expected = [
         "/usr/bin/nsenter",
@@ -610,7 +635,7 @@ def _direct(guest: dict, intent: dict) -> dict:
         "-I",
         "-S",
         "-B",
-        direct.PROBE,
+        contract.PROBE,
         "--container",
         guest["fixture_container"],
         "--gateway-pid",
@@ -618,10 +643,21 @@ def _direct(guest: dict, intent: dict) -> dict:
         "--admitted-digest",
         guest["setup"]["skill_digest"],
         "--probe-digest",
-        pins["scripts/runtime_native_admission_direct_write.py"],
+        pins[source],
         "--verifier-digest",
-        pins["src/aragorn/native_phase3_admission_direct_write.py"],
+        pins[verifier_source],
     ]
+    if is_mutation:
+        expected.extend(
+            [
+                "--case-id",
+                intent["case_id"],
+                "--shared-probe-digest",
+                pins[case.DIRECT_SOURCE_PATHS[0]],
+                "--shared-verifier-digest",
+                pins[case.DIRECT_SOURCE_PATHS[1]],
+            ]
+        )
     _require(
         argv == expected
         and type(execution["exit_code"]) is int
@@ -633,7 +669,7 @@ def _direct(guest: dict, intent: dict) -> dict:
         and execution["effective_identity"] == {"uid": 992, "gid": 992, "groups": [992]}
         and execution["environment_names"]
         == ["LANG", "LC_ALL", "NO_COLOR", "OPENCLAW_GATEWAY_TOKEN", "PATH"],
-        "direct leaf execution binding changed",
+        "leaf execution binding changed",
     )
     for side in ("before", "after"):
         observed = document[side]
@@ -646,7 +682,7 @@ def _direct(guest: dict, intent: dict) -> dict:
             and subject["mount_namespace"] == process["mount_namespace"]["inode"]
             and subject["uid"] == process["uids"]
             and subject["gid"] == process["gids"],
-            "direct leaf process does not join root readback",
+            "leaf process does not join root readback",
         )
         credential = snapshot[side]["loaded_process_views"]["gateway"][
             "openclaw-config"
@@ -657,7 +693,7 @@ def _direct(guest: dict, intent: dict) -> dict:
                 key: observed["config"][key] for key in ("identity", "bytes", "digest")
             }
             == credential,
-            "direct leaf credential does not join root readback",
+            "leaf credential does not join root readback",
         )
     claimed = leaf["verification"]
     _require(
@@ -667,12 +703,12 @@ def _direct(guest: dict, intent: dict) -> dict:
             if key != "native_live_identity_joins"
         }
         == result,
-        "retained direct replay differs from recomputation",
+        "retained leaf replay differs from recomputation",
     )
     _false(claimed["native_live_identity_joins"])
     return {
         "case_id": intent["case_id"],
-        "status": "BOUNDED_DIRECT_WRITE_JOINS_VERIFIED",
+        "status": result["status"],
     }
 
 
@@ -965,9 +1001,9 @@ def verify_native_admission_capture(
         _false(prepared)
         _outer(capture, bound)
         _live(capture, bound)
-        if intent["case_id"] == case.DIRECT_WRITE_CASE:
+        if intent["case_id"] != case.UPDATE_CASE:
             _require(capture["plugin_input_bundle"] is None, "unexpected plugin bundle")
-            branch = _direct(guest, intent)
+            branch = _leaf(guest, intent)
         else:
             baseline = reported._parse(
                 bound["retained"][case.old._BASELINE_DIGEST], newline=True

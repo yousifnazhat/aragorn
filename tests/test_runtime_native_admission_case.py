@@ -64,6 +64,8 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
             "case_source_digests": {
                 guest._LEAF_SOURCE: pin(b"leaf"),
                 guest._VERIFIER_SOURCE: pin(b"verifier"),
+                guest._MUTATION_SOURCE: pin(b"mutation leaf"),
+                guest._MUTATION_VERIFIER_SOURCE: pin(b"mutation verifier"),
             },
         }
         self.intent_raw = guest.canonical_json(self.intent)
@@ -74,6 +76,8 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
             pin(self.profile_raw): self.profile_raw,
             pin(b"leaf"): b"leaf",
             pin(b"verifier"): b"verifier",
+            pin(b"mutation leaf"): b"mutation leaf",
+            pin(b"mutation verifier"): b"mutation verifier",
         }
         self.bundle_raw = guest.canonical_json(
             {
@@ -225,10 +229,11 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
         store.assert_not_called()
         native.assert_not_called()
 
-    def _run_inert(self, mode="success", *, update_case=False):
-        if update_case:
+    def _run_inert(self, mode="success", *, update_case=False, selected_case=None):
+        selected_case = guest.case.UPDATE_CASE if update_case else selected_case
+        if selected_case is not None:
             self.intent.update(
-                case_id=guest.case.UPDATE_CASE, branch=guest.case.UPDATE_BRANCH
+                case_id=selected_case, branch=guest.case.CASE_BRANCHES[selected_case]
             )
             del self.blobs[self.intent_pin]
             self.intent_raw = guest.canonical_json(self.intent)
@@ -460,6 +465,13 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
                     return_value={"bounded": True},
                 )
             )
+            mutation_verify = patches.enter_context(
+                patch.object(
+                    guest.mutation,
+                    "verify_native_admission_path_mutation",
+                    return_value={"bounded": True},
+                )
+            )
             if mode == "leaf-refusal":
                 leaf["document"]["status"] = "REFUSED"
             if mode.startswith("leaf-timeout"):
@@ -493,6 +505,20 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
             result = guest._run(
                 self.container, (501, 20), self.bundle_pin, self.intent_pin
             )
+            if selected_case in guest.case.MUTATION_CASE_BRANCHES and mode == "success":
+                mutation_verify.assert_called_once()
+                args = mutation_verify.call_args.kwargs
+                self.assertEqual(args["expected_case_id"], selected_case)
+                self.assertEqual(
+                    args["expected_probe_digest"],
+                    self.intent["case_source_digests"][guest._MUTATION_SOURCE],
+                )
+                self.assertEqual(
+                    args["expected_shared_probe_digest"],
+                    self.intent["case_source_digests"][guest._LEAF_SOURCE],
+                )
+            else:
+                mutation_verify.assert_not_called()
             for secret in (
                 b"inert-never-publish",
                 b"private callback",
@@ -588,6 +614,42 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
         self.assertEqual(result["processes"], result["processes_after"])
         self.assertEqual(result["boot_id"], result["boot_id_after"])
         self.assertTrue(all(result[key] is False for key in guest._FALSE_FLAGS))
+
+    def test_mutation_cases_use_common_request_single_leaf_and_own_consumer(self):
+        for selected in guest.case.MUTATION_CASE_BRANCHES:
+            for mode in ("success", "leaf-timeout-postread-refusal"):
+                with self.subTest(case_id=selected, mode=mode):
+                    result, events, retained, calls = self._run_inert(
+                        mode, selected_case=selected
+                    )
+                    self.assertEqual(
+                        result["status"], "OBSERVED" if mode == "success" else "REFUSED"
+                    )
+                    self.assertEqual(result["case_id"], selected)
+                    self.assertEqual(calls, 1)
+                    self.assertLess(events.index("request"), events.index("activate"))
+                    self.assertEqual(retained["request"], self.request_raw)
+                    self.assertIsNone(result["plugin_update"])
+                    self.assertEqual(result["live_identity"]["invocation_count"], 1)
+                    self.assertTrue(
+                        all(result[key] is False for key in guest._FALSE_FLAGS)
+                    )
+
+    def test_pin_sources_checks_both_new_and_frozen_leaf_pairs(self):
+        paths = {
+            guest.direct.PROBE: b"leaf",
+            guest.direct.VERIFIER: b"verifier",
+            guest.mutation.PROBE: b"mutation leaf",
+            guest.mutation.VERIFIER: b"mutation verifier",
+        }
+        reader = Mock(side_effect=lambda path, *_: paths[str(path)])
+        native = SimpleNamespace(response=SimpleNamespace(_read_regular=reader))
+        result = guest._pin_sources(self.bound, native)
+        self.assertEqual(set(result), set(paths))
+        self.assertEqual(reader.call_count, 4)
+        paths[guest.mutation.VERIFIER] = b"changed"
+        with self.assertRaises(guest.NativeAdmissionCaseGuestError):
+            guest._pin_sources(self.bound, native)
 
     def test_update_uses_common_request_one_selected_invocation_and_owned_cleanup(self):
         old_bundle, old_staged = guest.package._BUNDLE, guest.package._STAGED
@@ -844,6 +906,22 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
                 guest._leaf_live_joins(leaf, modified)
 
     def test_fixed_leaf_uses_held_namespace_fd_and_accepts_secret_safe_refusal(self):
+        for selected in (
+            guest.case.DIRECT_WRITE_CASE,
+            *guest.case.MUTATION_CASE_BRANCHES,
+        ):
+            with self.subTest(case_id=selected):
+                self._assert_fixed_leaf_invocation(selected)
+
+    def _assert_fixed_leaf_invocation(self, selected):
+        self.intent["case_id"] = selected
+        is_mutation = selected in guest.case.MUTATION_CASE_BRANCHES
+        contract = guest.mutation if is_mutation else guest.direct
+        paths = (
+            guest.case.MUTATION_SOURCE_PATHS
+            if is_mutation
+            else guest.case.DIRECT_SOURCE_PATHS
+        )
         gateway = {
             "pid": 42,
             "start_time_ticks": 17,
@@ -853,19 +931,24 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
         setup = {"skill_digest": pin(b"skill")}
         source_pins = self.intent["case_source_digests"]
         document = {
-            "schema": guest.direct.SCHEMA,
-            "authority": guest.direct.AUTHORITY,
-            "case_id": guest.direct.CASE_ID,
+            "schema": contract.SCHEMA,
+            "authority": contract.AUTHORITY,
+            "case_id": selected,
             "fixture_container": self.container,
             "gateway_pid": 42,
             "admitted_digest": setup["skill_digest"],
             "status": "REFUSED",
             "source_pins": {
-                guest.direct.PROBE: source_pins[guest._LEAF_SOURCE],
-                guest.direct.VERIFIER: source_pins[guest._VERIFIER_SOURCE],
+                contract.PROBE: source_pins[paths[0]],
+                contract.VERIFIER: source_pins[paths[1]],
             },
             **dict.fromkeys(guest.direct.FALSE_FLAGS, False),
         }
+        if is_mutation:
+            document["shared_source_pins"] = {
+                guest.direct.PROBE: source_pins[guest._LEAF_SOURCE],
+                guest.direct.VERIFIER: source_pins[guest._VERIFIER_SOURCE],
+            }
         raw = guest.canonical_json(document) + b"\n"
         with (
             patch.object(guest.identity, "_open_pidfd", return_value=91),
@@ -906,6 +989,22 @@ class NativeAdmissionCaseGuestTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["pass_fds"], (92,))
         self.assertEqual(run.call_args.kwargs["timeout"], 150)
         self.assertNotIn("f" * 64, str(value))
+        self.assertEqual(len(argv), 32 if is_mutation else 26)
+        self.assertEqual(argv[15], contract.PROBE)
+        self.assertEqual(argv[23], source_pins[paths[0]])
+        self.assertEqual(argv[25], source_pins[paths[1]])
+        if is_mutation:
+            self.assertEqual(
+                argv[26:],
+                [
+                    "--case-id",
+                    selected,
+                    "--shared-probe-digest",
+                    source_pins[guest._LEAF_SOURCE],
+                    "--shared-verifier-digest",
+                    source_pins[guest._VERIFIER_SOURCE],
+                ],
+            )
 
 
 if __name__ == "__main__":

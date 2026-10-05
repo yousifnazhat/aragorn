@@ -85,6 +85,43 @@
       ],
       "needs": ["pipeline-unit"],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-live-identity",
+      "description": "Verify new read-only native process/file identity guards with controlled doubles; no service activation or live fixture.",
+      "tests": ["test_native_phase3_live_identity"],
+      "inputs": [
+        "packaging/systemd/aragorn-agent-gateway.service",
+        "packaging/systemd/aragorn-runtime-action-worker.service",
+        "packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service",
+        "packaging/systemd/aragorn-runtime-lineage-capability-observation-publisher.service",
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_live_identity.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_live_identity.py"
+      ],
+      "needs": ["pipeline-unit"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "tetragon-stats-map",
+      "description": "Verify the new fixed read-only BPF syscall/map contract, bounded per-CPU decoding, continuity guards and selected source custody; no actual BPF operations.",
+      "tests": ["test_runtime_tetragon_stats_map"],
+      "inputs": [
+        "benchmark/tetragon-stats-map-source-v1.lock.json",
+        "benchmark/tetragon-stats-map-source-v1/bpf/lib/process.h",
+        "benchmark/tetragon-stats-map-source-v1/linux-v6.8-abi-excerpts.json",
+        "benchmark/tetragon-stats-map-source-v1/pkg/api/processapi/processapi.go",
+        "src/aragorn/__init__.py",
+        "src/aragorn/runtime_tetragon_stats_map.py",
+        "tests/test_runtime_tetragon_stats_map.py"
+      ],
+      "needs": ["pipeline-unit"],
+      "timeout_seconds": 120
     }
   ]
 }

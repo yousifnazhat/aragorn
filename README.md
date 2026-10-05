@@ -1618,6 +1618,22 @@ the collector emits only positive counts and also omits data on BPF-map read
 failure. The original smoke therefore remains unresolved. Link/program probe
 counters are not replacements; live map and sensor identity still need binding.
 
+Two read-only Linux readers now supply concrete integration building blocks:
+[native service identity](./src/aragorn/native_phase3_live_identity.py) measures
+selected protected files, running executables, systemd/process identities and
+loaded credentials through PIDFD-pinned process roots; the
+[Tetragon stats-map reader](./src/aragorn/runtime_tetragon_stats_map.py) opens an
+exact caller-pinned map read-only and checks its layout before key-zero per-CPU
+readback. Neither starts services or changes BPF state. The
+[layout source slice](./benchmark/tetragon-stats-map-source-v1/README.md) retains
+the exact Tetragon map definitions and pinned Linux ABI excerpts.
+
+These readers are not yet integrated into a fresh owned-fixture capture. Selected
+native files do not attest the whole runtime image/profile, and readable map
+counters plus sensor continuity do not prove the sensor's programs use that map.
+Per-CPU copying is sequential, not an atomic snapshot. Sparse metric absence stays
+unknown; no admission, RUN, health or Phase 3 gate is closed by these readers alone.
+
 A separate [idle sensor-exit adapter](./scripts/capture_runtime_native_sensor_loss_check.py)
 targets the current 70-file native startup profile in a fresh owned container.
 It provisions an idle stack without invoking the historical read/create drivers,

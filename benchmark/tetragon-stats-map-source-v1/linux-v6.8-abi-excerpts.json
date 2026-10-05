@@ -1,0 +1,176 @@
+{
+  "schema": "aragorn/linux-bpf-abi-excerpts/v1",
+  "repository": "https://github.com/torvalds/linux",
+  "tag": "v6.8",
+  "commit": "e8f897f4afef0031fe618a8e94127a0934896aba",
+  "authority": "SELECTED_EXCERPTS_NOT_FULL_SOURCE_OR_RUNNING_KERNEL_ATTESTATION",
+  "verification": "Whole fetched files were checked against GitHub contents API Git blob SHA and byte size during collection. Only listed line excerpts are retained; offline whole-file Git blob verification is not possible from these excerpts. Tag signature was not verified.",
+  "files": [
+    {
+      "path": "include/uapi/linux/bpf.h",
+      "git_blob": "754e68ca8744cc5db4416ef4fc37fcef4d5ae5bc",
+      "size": 274787,
+      "sha256": "c6726e54670db2c651f4321cd6b9f526d4a0c026ebe001511315155fec79845b",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/include/uapi/linux/bpf.h",
+      "excerpts": [
+        {
+          "start_line": 861,
+          "end_line": 918,
+          "text": " *\n *\tAn eBPF object is deallocated only after all file descriptors referring\n *\tto the object have been closed and no references remain pinned to the\n *\tfilesystem or attached (for example, bound to a program or device).\n */\nenum bpf_cmd {\n\tBPF_MAP_CREATE,\n\tBPF_MAP_LOOKUP_ELEM,\n\tBPF_MAP_UPDATE_ELEM,\n\tBPF_MAP_DELETE_ELEM,\n\tBPF_MAP_GET_NEXT_KEY,\n\tBPF_PROG_LOAD,\n\tBPF_OBJ_PIN,\n\tBPF_OBJ_GET,\n\tBPF_PROG_ATTACH,\n\tBPF_PROG_DETACH,\n\tBPF_PROG_TEST_RUN,\n\tBPF_PROG_RUN = BPF_PROG_TEST_RUN,\n\tBPF_PROG_GET_NEXT_ID,\n\tBPF_MAP_GET_NEXT_ID,\n\tBPF_PROG_GET_FD_BY_ID,\n\tBPF_MAP_GET_FD_BY_ID,\n\tBPF_OBJ_GET_INFO_BY_FD,\n\tBPF_PROG_QUERY,\n\tBPF_RAW_TRACEPOINT_OPEN,\n\tBPF_BTF_LOAD,\n\tBPF_BTF_GET_FD_BY_ID,\n\tBPF_TASK_FD_QUERY,\n\tBPF_MAP_LOOKUP_AND_DELETE_ELEM,\n\tBPF_MAP_FREEZE,\n\tBPF_BTF_GET_NEXT_ID,\n\tBPF_MAP_LOOKUP_BATCH,\n\tBPF_MAP_LOOKUP_AND_DELETE_BATCH,\n\tBPF_MAP_UPDATE_BATCH,\n\tBPF_MAP_DELETE_BATCH,\n\tBPF_LINK_CREATE,\n\tBPF_LINK_UPDATE,\n\tBPF_LINK_GET_FD_BY_ID,\n\tBPF_LINK_GET_NEXT_ID,\n\tBPF_ENABLE_STATS,\n\tBPF_ITER_CREATE,\n\tBPF_LINK_DETACH,\n\tBPF_PROG_BIND_MAP,\n};\n\nenum bpf_map_type {\n\tBPF_MAP_TYPE_UNSPEC,\n\tBPF_MAP_TYPE_HASH,\n\tBPF_MAP_TYPE_ARRAY,\n\tBPF_MAP_TYPE_PROG_ARRAY,\n\tBPF_MAP_TYPE_PERF_EVENT_ARRAY,\n\tBPF_MAP_TYPE_PERCPU_HASH,\n\tBPF_MAP_TYPE_PERCPU_ARRAY,\n\tBPF_MAP_TYPE_STACK_TRACE,\n\tBPF_MAP_TYPE_CGROUP_ARRAY,\n\tBPF_MAP_TYPE_LRU_HASH,\n\tBPF_MAP_TYPE_LRU_PERCPU_HASH,\n\tBPF_MAP_TYPE_LPM_TRIE,\n"
+        },
+        {
+          "start_line": 1298,
+          "end_line": 1305,
+          "text": "\tBPF_F_NO_COMMON_LRU\t= (1U << 1),\n/* Specify numa node during map creation */\n\tBPF_F_NUMA_NODE\t\t= (1U << 2),\n\n/* Flags for accessing BPF object from syscall side. */\n\tBPF_F_RDONLY\t\t= (1U << 3),\n\tBPF_F_WRONLY\t\t= (1U << 4),\n\n"
+        },
+        {
+          "start_line": 1374,
+          "end_line": 1417,
+          "text": "\n#define BPF_OBJ_NAME_LEN 16U\n\nunion bpf_attr {\n\tstruct { /* anonymous struct used by BPF_MAP_CREATE command */\n\t\t__u32\tmap_type;\t/* one of enum bpf_map_type */\n\t\t__u32\tkey_size;\t/* size of key in bytes */\n\t\t__u32\tvalue_size;\t/* size of value in bytes */\n\t\t__u32\tmax_entries;\t/* max number of entries in a map */\n\t\t__u32\tmap_flags;\t/* BPF_MAP_CREATE related\n\t\t\t\t\t * flags defined above.\n\t\t\t\t\t */\n\t\t__u32\tinner_map_fd;\t/* fd pointing to the inner map */\n\t\t__u32\tnuma_node;\t/* numa node (effective only if\n\t\t\t\t\t * BPF_F_NUMA_NODE is set).\n\t\t\t\t\t */\n\t\tchar\tmap_name[BPF_OBJ_NAME_LEN];\n\t\t__u32\tmap_ifindex;\t/* ifindex of netdev to create on */\n\t\t__u32\tbtf_fd;\t\t/* fd pointing to a BTF type data */\n\t\t__u32\tbtf_key_type_id;\t/* BTF type_id of the key */\n\t\t__u32\tbtf_value_type_id;\t/* BTF type_id of the value */\n\t\t__u32\tbtf_vmlinux_value_type_id;/* BTF type_id of a kernel-\n\t\t\t\t\t\t   * struct stored as the\n\t\t\t\t\t\t   * map value\n\t\t\t\t\t\t   */\n\t\t/* Any per-map-type extra fields\n\t\t *\n\t\t * BPF_MAP_TYPE_BLOOM_FILTER - the lowest 4 bits indicate the\n\t\t * number of hash functions (if 0, the bloom filter will default\n\t\t * to using 5 hash functions).\n\t\t */\n\t\t__u64\tmap_extra;\n\t};\n\n\tstruct { /* anonymous struct used by BPF_MAP_*_ELEM commands */\n\t\t__u32\t\tmap_fd;\n\t\t__aligned_u64\tkey;\n\t\tunion {\n\t\t\t__aligned_u64 value;\n\t\t\t__aligned_u64 next_key;\n\t\t};\n\t\t__u64\t\tflags;\n\t};\n\n"
+        },
+        {
+          "start_line": 1476,
+          "end_line": 1488,
+          "text": "\n\tstruct { /* anonymous struct used by BPF_OBJ_* commands */\n\t\t__aligned_u64\tpathname;\n\t\t__u32\t\tbpf_fd;\n\t\t__u32\t\tfile_flags;\n\t\t/* Same as dirfd in openat() syscall; see openat(2)\n\t\t * manpage for details of path FD and pathname semantics;\n\t\t * path_fd should accompanied by BPF_F_PATH_FD flag set in\n\t\t * file_flags field, otherwise it should be set to zero;\n\t\t * if BPF_F_PATH_FD flag is not set, AT_FDCWD is assumed.\n\t\t */\n\t\t__s32\t\tpath_fd;\n\t};\n"
+        },
+        {
+          "start_line": 1542,
+          "end_line": 1547,
+          "text": "\tstruct { /* anonymous struct used by BPF_OBJ_GET_INFO_BY_FD */\n\t\t__u32\t\tbpf_fd;\n\t\t__u32\t\tinfo_len;\n\t\t__aligned_u64\tinfo;\n\t} info;\n\n"
+        },
+        {
+          "start_line": 6475,
+          "end_line": 6496,
+          "text": "struct bpf_map_info {\n\t__u32 type;\n\t__u32 id;\n\t__u32 key_size;\n\t__u32 value_size;\n\t__u32 max_entries;\n\t__u32 map_flags;\n\tchar  name[BPF_OBJ_NAME_LEN];\n\t__u32 ifindex;\n\t__u32 btf_vmlinux_value_type_id;\n\t__u64 netns_dev;\n\t__u64 netns_ino;\n\t__u32 btf_id;\n\t__u32 btf_key_type_id;\n\t__u32 btf_value_type_id;\n\t__u32 :32;\t/* alignment pad */\n\t__u64 map_extra;\n} __attribute__((aligned(8)));\n\nstruct bpf_btf_info {\n\t__aligned_u64 btf;\n\t__u32 btf_size;\n"
+        }
+      ]
+    },
+    {
+      "path": "include/uapi/asm-generic/unistd.h",
+      "git_blob": "75f00965ab1586cd64d00928217596de5034bd25",
+      "size": 31189,
+      "sha256": "2807c5c2e1ad8128b37438f81cf9776b52fb664b48d93e2ea8edb06846eda90d",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/include/uapi/asm-generic/unistd.h",
+      "excerpts": [
+        {
+          "start_line": 673,
+          "end_line": 678,
+          "text": "#define __NR_getrandom 278\n__SYSCALL(__NR_getrandom, sys_getrandom)\n#define __NR_memfd_create 279\n__SYSCALL(__NR_memfd_create, sys_memfd_create)\n#define __NR_bpf 280\n__SYSCALL(__NR_bpf, sys_bpf)\n"
+        }
+      ]
+    },
+    {
+      "path": "arch/x86/entry/syscalls/syscall_64.tbl",
+      "git_blob": "7e8d46f4147f574111962c214119af2dd2b62b4a",
+      "size": 15278,
+      "sha256": "4c30abea9a4b69f3409bea7a0c910a8c8feb9a44b22a448b5c82f2bfdd8249c8",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/arch/x86/entry/syscalls/syscall_64.tbl",
+      "excerpts": [
+        {
+          "start_line": 327,
+          "end_line": 333,
+          "text": "316\tcommon\trenameat2\t\tsys_renameat2\n317\tcommon\tseccomp\t\t\tsys_seccomp\n318\tcommon\tgetrandom\t\tsys_getrandom\n319\tcommon\tmemfd_create\t\tsys_memfd_create\n320\tcommon\tkexec_file_load\t\tsys_kexec_file_load\n321\tcommon\tbpf\t\t\tsys_bpf\n322\t64\texecveat\t\tsys_execveat\n"
+        }
+      ]
+    },
+    {
+      "path": "arch/arm64/include/uapi/asm/unistd.h",
+      "git_blob": "ce2ee8f1e361091e462cd658257709bf09fc9c84",
+      "size": 912,
+      "sha256": "a1d29b1442eab1f7fc50184df7ad7271c9d48fa1dabd0e413e88017a26a245cc",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/arch/arm64/include/uapi/asm/unistd.h",
+      "excerpts": [
+        {
+          "start_line": 20,
+          "end_line": 25,
+          "text": "#define __ARCH_WANT_SET_GET_RLIMIT\n#define __ARCH_WANT_TIME32_SYSCALLS\n#define __ARCH_WANT_SYS_CLONE3\n#define __ARCH_WANT_MEMFD_SECRET\n\n#include <asm-generic/unistd.h>\n"
+        }
+      ]
+    },
+    {
+      "path": "kernel/bpf/syscall.c",
+      "git_blob": "a1f18681721c7eb18e43ce40d409823901fba31a",
+      "size": 145318,
+      "sha256": "cde893c570a0d505f03d811c6be27f6e001198b7daa728a30b9962a3db211d4e",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/kernel/bpf/syscall.c",
+      "excerpts": [
+        {
+          "start_line": 131,
+          "end_line": 141,
+          "text": "{\n\tif (map->map_type == BPF_MAP_TYPE_PERCPU_HASH ||\n\t    map->map_type == BPF_MAP_TYPE_LRU_PERCPU_HASH ||\n\t    map->map_type == BPF_MAP_TYPE_PERCPU_ARRAY ||\n\t    map->map_type == BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE)\n\t\treturn round_up(map->value_size, 8) * num_possible_cpus();\n\telse if (IS_FD_MAP(map))\n\t\treturn sizeof(u32);\n\telse\n\t\treturn  map->value_size;\n}\n"
+        },
+        {
+          "start_line": 219,
+          "end_line": 227,
+          "text": "\tbpf_disable_instrumentation();\n\tif (map->map_type == BPF_MAP_TYPE_PERCPU_HASH ||\n\t    map->map_type == BPF_MAP_TYPE_LRU_PERCPU_HASH) {\n\t\terr = bpf_percpu_hash_copy(map, key, value);\n\t} else if (map->map_type == BPF_MAP_TYPE_PERCPU_ARRAY) {\n\t\terr = bpf_percpu_array_copy(map, key, value);\n\t} else if (map->map_type == BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE) {\n\t\terr = bpf_percpu_cgroup_storage_copy(map, key, value);\n\t} else if (map->map_type == BPF_MAP_TYPE_STACK_TRACE) {\n"
+        },
+        {
+          "start_line": 963,
+          "end_line": 972,
+          "text": "int bpf_get_file_flag(int flags)\n{\n\tif ((flags & BPF_F_RDONLY) && (flags & BPF_F_WRONLY))\n\t\treturn -EINVAL;\n\tif (flags & BPF_F_RDONLY)\n\t\treturn O_RDONLY;\n\tif (flags & BPF_F_WRONLY)\n\t\treturn O_WRONLY;\n\treturn O_RDWR;\n}\n"
+        },
+        {
+          "start_line": 1486,
+          "end_line": 1512,
+          "text": "\t}\n\n\terr = bpf_map_copy_value(map, key, value, attr->flags);\n\tif (err)\n\t\tgoto free_value;\n\n\terr = -EFAULT;\n\tif (copy_to_user(uvalue, value, value_size) != 0)\n\t\tgoto free_value;\n\n\terr = 0;\n\nfree_value:\n\tkvfree(value);\nfree_key:\n\tkvfree(key);\nerr_put:\n\tfdput(f);\n\treturn err;\n}\n\n\n#define BPF_MAP_UPDATE_ELEM_LAST_FIELD flags\n\nstatic int map_update_elem(union bpf_attr *attr, bpfptr_t uattr)\n{\n\tbpfptr_t ukey = make_bpfptr(attr->key, uattr.is_kernel);\n"
+        }
+      ]
+    },
+    {
+      "path": "kernel/bpf/arraymap.c",
+      "git_blob": "0bdbbbeab1550746ede893f1a69bc1f4c2a7c0a9",
+      "size": 37364,
+      "sha256": "ca9f7d8ebca5ec33704640382f6af42f156f43988c48f2d1f1f0ae728e9577ef",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/kernel/bpf/arraymap.c",
+      "excerpts": [
+        {
+          "start_line": 263,
+          "end_line": 288,
+          "text": "int bpf_percpu_array_copy(struct bpf_map *map, void *key, void *value)\n{\n\tstruct bpf_array *array = container_of(map, struct bpf_array, map);\n\tu32 index = *(u32 *)key;\n\tvoid __percpu *pptr;\n\tint cpu, off = 0;\n\tu32 size;\n\n\tif (unlikely(index >= array->map.max_entries))\n\t\treturn -ENOENT;\n\n\t/* per_cpu areas are zero-filled and bpf programs can only\n\t * access 'value_size' of them, so copying rounded areas\n\t * will not leak any kernel data\n\t */\n\tsize = array->elem_size;\n\trcu_read_lock();\n\tpptr = array->pptrs[index & array->index_mask];\n\tfor_each_possible_cpu(cpu) {\n\t\tcopy_map_value_long(map, value + off, per_cpu_ptr(pptr, cpu));\n\t\tcheck_and_init_map_value(map, value + off);\n\t\toff += size;\n\t}\n\trcu_read_unlock();\n\treturn 0;\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "kernel/bpf/inode.c",
+      "git_blob": "41e0a55c35f5d19ccfc44d6978215c14e0590c9e",
+      "size": 18354,
+      "sha256": "736ed57054c5c9e4341eb4671e2d8413116f5ac5dd3993a05583d14f25b6aacd",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/kernel/bpf/inode.c",
+      "excerpts": [
+        {
+          "start_line": 526,
+          "end_line": 553,
+          "text": "int bpf_obj_get_user(int path_fd, const char __user *pathname, int flags)\n{\n\tenum bpf_type type = BPF_TYPE_UNSPEC;\n\tint f_flags;\n\tvoid *raw;\n\tint ret;\n\n\tf_flags = bpf_get_file_flag(flags);\n\tif (f_flags < 0)\n\t\treturn f_flags;\n\n\traw = bpf_obj_do_get(path_fd, pathname, &type, f_flags);\n\tif (IS_ERR(raw))\n\t\treturn PTR_ERR(raw);\n\n\tif (type == BPF_TYPE_PROG)\n\t\tret = bpf_prog_new_fd(raw);\n\telse if (type == BPF_TYPE_MAP)\n\t\tret = bpf_map_new_fd(raw, f_flags);\n\telse if (type == BPF_TYPE_LINK)\n\t\tret = (f_flags != O_RDWR) ? -EINVAL : bpf_link_new_fd(raw);\n\telse\n\t\treturn -ENOENT;\n\n\tif (ret < 0)\n\t\tbpf_any_put(raw, type);\n\treturn ret;\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "Documentation/core-api/cpu_hotplug.rst",
+      "git_blob": "dcb0e379e5e8fbb5293d2be94cf8361be0c5c5e6",
+      "size": 30219,
+      "sha256": "da301fa2a784e42803ed2b15b12843f00f5abae2fc30f5b934d6f9c8fe528655",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/Documentation/core-api/cpu_hotplug.rst",
+      "excerpts": [
+        {
+          "start_line": 53,
+          "end_line": 79,
+          "text": "CPU maps\n========\n\n``cpu_possible_mask``\n  Bitmap of possible CPUs that can ever be available in the\n  system. This is used to allocate some boot time memory for per_cpu variables\n  that aren't designed to grow/shrink as CPUs are made available or removed.\n  Once set during boot time discovery phase, the map is static, i.e no bits\n  are added or removed anytime. Trimming it accurately for your system needs\n  upfront can save some boot time memory.\n\n``cpu_online_mask``\n  Bitmap of all CPUs currently online. Its set in ``__cpu_up()``\n  after a CPU is available for kernel scheduling and ready to receive\n  interrupts from devices. Its cleared when a CPU is brought down using\n  ``__cpu_disable()``, before which all OS services including interrupts are\n  migrated to another target CPU.\n\n``cpu_present_mask``\n  Bitmap of CPUs currently present in the system. Not all\n  of them may be online. When physical hotplug is processed by the relevant\n  subsystem (e.g ACPI) can change and new bit either be added or removed\n  from the map depending on the event is hot-add/hot-remove. There are currently\n  no locking rules as of now. Typical usage is to init topology during boot,\n  at which time hotplug is disabled.\n\nYou really don't need to manipulate any of the system CPU maps. They should\n"
+        }
+      ]
+    },
+    {
+      "path": "drivers/base/cpu.c",
+      "git_blob": "47de0f140ba65e0b9cfbff8574a8adeec69e471d",
+      "size": 16491,
+      "sha256": "8d99f2cefe5f0613c9badf7862491134010ef321def3a4ffe29f61df68479137",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/drivers/base/cpu.c",
+      "excerpts": [
+        {
+          "start_line": 210,
+          "end_line": 233,
+          "text": "\tstruct device_attribute attr;\n\tconst struct cpumask *const map;\n};\n\nstatic ssize_t show_cpus_attr(struct device *dev,\n\t\t\t      struct device_attribute *attr,\n\t\t\t      char *buf)\n{\n\tstruct cpu_attr *ca = container_of(attr, struct cpu_attr, attr);\n\n\treturn cpumap_print_to_pagebuf(true, buf, ca->map);\n}\n\n#define _CPU_ATTR(name, map) \\\n\t{ __ATTR(name, 0444, show_cpus_attr, NULL), map }\n\n/* Keep in sync with cpu_subsys_attrs */\nstatic struct cpu_attr cpu_attrs[] = {\n\t_CPU_ATTR(online, &__cpu_online_mask),\n\t_CPU_ATTR(possible, &__cpu_possible_mask),\n\t_CPU_ATTR(present, &__cpu_present_mask),\n};\n\n/*\n"
+        }
+      ]
+    }
+  ]
+}

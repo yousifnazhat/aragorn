@@ -253,6 +253,36 @@ respectively. No old check ran, no VM was started, and no live capture or final
 acceptance was attempted. The code/source-custody gaps narrowed; live native
 identity, sensor-map availability, attribution and qualification remain open.
 
+Live-reader checkpoint, 2026-10-05 UTC (2026-10-04 local): the new native identity
+reader and read-only Tetragon stats-map reader are implemented and independently
+code-reviewed. They do not modify frozen capture scripts or activate a deployment.
+Source review caught the fixed Python launcher symlink, OpenClaw's rewritten
+process title and the worker's supplementary gateway group before live use.
+The BPF lookup's no-length buffer contract required an additional real-sysfs
+mount/namespace guard, backed by retained boot-static possible-CPU-mask source.
+
+- Native identity: 14 focused tests passed in 0.011 seconds, fingerprint
+  `ccff9cca7bdab10620bfeb33b7c36f7b6f546084e969d0efaab8810b27bb32ed`.
+- Stats-map readback: eight focused tests passed on their first pipeline run in
+  0.010 seconds, fingerprint
+  `fc30e36cb6e1e8b3fd3fa162b8d49cddf9fe7cd5e89f86fb25e4b923ff08abf0`.
+- The initial native fingerprint
+  `d9761eeb499a968b5246bbe72c61fae03d25a6c492c251d51b1554ec3646fb8a`
+  remains a retained failure: macOS `/tmp` inherited GID 0 under the pipeline's
+  clean environment, while the test assumed process GID 20. Only the shared
+  temporary-fixture setup was corrected to establish its exact group; production
+  custody checks were not weakened. The changed fingerprint was then verified.
+- All seven current stages now report `SKIP_PASS` on read-only status. No old
+  product check, historical capture, VM activation or actual BPF syscall ran.
+  The three test invocations together used about 0.890 seconds of command-runner
+  wall time, excluding approval/tool overhead; active engineering time was not
+  separately instrumented and must not be equated to these runtimes.
+
+Zero admission/RUN/final gate entries closed in this building-block batch.
+Next is the concrete outer capture integration and sensor/program/map applicability
+join described below, not another verification-only wave. The final acceptance
+campaign remains blocked and the implementation heartbeat remains active.
+
 ## Machine-runtime budget
 
 Two retained native observation windows were about 15 seconds (idle sensor exit)
@@ -363,14 +393,31 @@ Replay opens the store read-only. Preparation does not write; retention writes
 only to the selected CAS. These commands neither execute nor authorize a fresh
 capture, and must not be used to approve a live deployment merely from its report.
 
-**Next implementation batch:** bind that same envelope to trusted native
-before/after execution identity and the required semantic consumer inventory.
-Do not create another offline collection abstraction or recapture only to exercise
-retention. In parallel, implement source-bound availability/identity/readback of
-the actual Tetragon `tg_stats_map` with its pinned type/layout and sensor instance;
-join it to raw scrape accounting before one newly necessary native OS-event
-integration check. Absent scrape counters alone cannot close this prerequisite.
-Then advance admission ports and measurement callbacks in the order above.
+The next F0 implementation slice adds concrete
+[native identity readback](src/aragorn/native_phase3_live_identity.py) and a
+[read-only stats-map reader](src/aragorn/runtime_tetragon_stats_map.py).
+The native reader checks selected fixed files and loaded credentials through
+PIDFD-pinned process roots, bracketed by kernel/systemd identity checks. Whole
+runtime-tree/image, complete installed profile and signed-source bindings still
+belong to the existing outer fixture adapter. It must not infer executed script
+provenance merely from the gateway's rewritten process title.
+
+The map reader uses only read-only OBJ_GET, GET_INFO_BY_FD and key-zero LOOKUP_ELEM,
+with exact caller-held expectations and before/after continuity checks. Its
+[source slice](benchmark/tetragon-stats-map-source-v1/README.md) establishes the
+selected map's 256-by-7 u64 layout and sequential per-CPU copy ABI, not the running
+sensor's image or program-map ownership. A successful map read does not turn an
+absent Prometheus counter into qualifying zero-loss evidence.
+
+**Next integration batch:** connect these readers to a successor of the existing
+native plugin-update capture, preserving frozen predecessors and the shared
+runtime line. Reuse the outer adapter's actual runtime-tree/image/profile/source
+measurements to bind the common deployment before and after execution. Complete
+Tetragon program/map/sensor applicability and join actual readback to raw scrape
+accounting before one newly necessary, guarded native OS-event integration check.
+Do not create another offline collection abstraction or recapture only to
+exercise retention. Then advance admission ports and measurement callbacks in
+the order above. Final acceptance remains blocked.
 
 Progress updates should report: closed gate entries, entries still needing
 implementation, changed-behavior checks performed, active engineering time,

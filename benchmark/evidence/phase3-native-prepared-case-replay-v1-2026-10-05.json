@@ -1,0 +1,29 @@
+{
+  "bindings": {
+    "case_adapter_digest": "sha256:972ee00396241c2066d21db0ba7d5ba4ce5b09bd31b4cea106f78ed2f8a1cbbb",
+    "collection_digest": "sha256:9699c251c716635f231d73fbcea857f339c87262ce5ee5ff9260358d7c73ee84",
+    "deployment_digest": "sha256:da629feceee100627bed3c55620304f078fd54f3d870f4b9d061bc7ec68200ff",
+    "intent_digest": "sha256:8e79eaedccd26ef3d632e06eb083d96e0862ee8c73538eea12cf2394e4ea7713",
+    "request_digest": "sha256:6780860189768e3935e81cf076a0738aabb3c1d1662d0c09808af908da6e4f97"
+  },
+  "branch": "TRACKED_LOCAL_MARKETPLACE_DIRECTORY_UPDATE",
+  "case_id": "ADM-02/update/plugin-package-skill-replacement",
+  "common_deployment_fully_verified": false,
+  "fresh_campaign_execution": false,
+  "limitations": [
+    "PURE_REQUEST_PREPARATION_NOT_DURABLE_PREACTIVATION_COMMIT_PROOF",
+    "LOCAL_READBACK_JOINS_NOT_EXTERNAL_ATTESTATION_OR_POLICY_SEMANTICS",
+    "SINGLE_MARKETPLACE_BRANCH_NOT_COMPLETE_ADMISSION_ROUTE",
+    "CONTROLLER_SOURCE_CUSTODY_NOT_PROOF_OF_EXECUTION",
+    "NO_ADMISSION_RUN_METRICS_OR_PHASE3_QUALIFICATION"
+  ],
+  "live_deployment_attested": false,
+  "metrics_eligible": false,
+  "phase3_eligible": false,
+  "preactivation_commit_verified": false,
+  "production_activation_eligible": false,
+  "route_qualified": false,
+  "run_conformance_eligible": false,
+  "schema": "aragorn/native-plugin-update-case-verification/v1",
+  "status": "BOUNDED_PREPARED_CASE_READBACK_JOINS_VERIFIED"
+}

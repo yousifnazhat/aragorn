@@ -697,6 +697,35 @@ records 30 passing affected checks (six new methods), eight exact unchanged
 prerequisite stages reused, 2.814 seconds summed stage wall time, and no live
 capture, VM action, performance measurement or newly qualified gate.
 
+**Prepared-case live connection (2026-10-05):** signed implementation `7d4f9ae`
+produced the first [current-source prepared-case capture](benchmark/evidence/phase3-native-prepared-case-capture-v1-2026-10-05.json).
+The caller-held 18-blob input closure joined the actual seven provisioning writer
+digests, guest-local request publication/readback, one activation and one existing
+marketplace adapter invocation. The complete 26-blob CAS is retained in the
+[transport](benchmark/evidence/phase3-native-prepared-case-cas-v1-2026-10-05.tar.gz).
+Read-only [replay](benchmark/evidence/phase3-native-prepared-case-replay-v1-2026-10-05.json)
+from a fresh extraction returned `BOUNDED_PREPARED_CASE_READBACK_JOINS_VERIFIED`.
+Request `sha256:6780860189768e3935e81cf076a0738aabb3c1d1662d0c09808af908da6e4f97`
+is bound to common deployment
+`sha256:da629feceee100627bed3c55620304f078fd54f3d870f4b9d061bc7ec68200ff`.
+This is not a host ACK or independent proof of preactivation ordering; all nine
+qualification flags, including `preactivation_commit_verified`, remain false.
+
+The [operation checkpoint](benchmark/evidence/phase3-native-prepared-case-operation-v1-2026-10-05.json)
+records cleanup of the owned fixture and four snapshot helpers, four inactive
+fixture services, unchanged inventories of all 78 pre-existing containers,
+unchanged `default` context and restoration of `aragorn-bakeoff` to stopped.
+Two permission-review timeouts delayed read-only cleanup/status checks; neither
+caused a repeated capture. The wrapper invocation window was 46.339 seconds,
+not end-to-end decision latency or an acceptance performance sample. No gate
+entry closed. Do not run this unchanged case again merely for retention.
+
+**Next implementation:** reuse this bounded seam to connect the complete native
+admission dispatcher and its independent semantic consumers while porting the
+A1 protected-fixture family; complete runtime telemetry/health and real timing
+callbacks in parallel. The first case's retained request is not the final frozen
+deployment or a complete 31-case adapter inventory. Final acceptance stays blocked.
+
 The parallel sensor review identified the smallest useful progress join:
 protected matching exec/exit delivery, bracketing program/map/link association,
 and raw per-CPU counter changes must remain separate findings. Process events

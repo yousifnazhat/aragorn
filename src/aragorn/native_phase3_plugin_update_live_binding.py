@@ -534,11 +534,21 @@ def _files(snapshot: dict, envelope: dict, capture: dict, accounts: dict) -> Non
         "measured file inventory changed",
     )
     for path, record in files.items():
-        owner = accounts["broker"] if path == _POLICY else (0, 0)
+        owner = (
+            accounts["broker"]
+            if path == _POLICY
+            else (1000, 1000)
+            if path == _ENTRY
+            else (0, 0)
+        )
         _metadata(
             record,
             owners={owner},
-            modes={0o400} if path in DYNAMIC_PATHS else {0o644, 0o755},
+            modes={0o400}
+            if path in DYNAMIC_PATHS
+            else {0o755}
+            if path == _ENTRY
+            else {0o644, 0o755},
         )
         _require(
             record["digest"] == pins[path],
@@ -666,11 +676,35 @@ def _files(snapshot: dict, envelope: dict, capture: dict, accounts: dict) -> Non
             if role == "worker"
             else _SHIMS[role]
         )
-        view = _metadata(views["code_view"], owners={(0, 0)}, modes={0o644, 0o755})
+        view = _metadata(
+            views["code_view"],
+            owners={(1000, 1000)} if role == "gateway" else {(0, 0)},
+            modes={0o755} if role == "gateway" else {0o644, 0o755},
+        )
         _require(
             view["bytes"] == files[code]["bytes"]
             and view["digest"] == files[code]["digest"],
             "process code view differs from measured source",
+        )
+    # The fixed runtime volume is not root-owned. The original consumer already
+    # checks its fixed volume root and read-only mount options on both sides;
+    # join that reported custody to the selected source and service-view file.
+    # This is not proof of whole-tree ownership or independently attested mounts.
+    for side in ("runtime_before", "runtime_after"):
+        mount = capture[side]["content"]["mount"]
+        entry = mount["entry"]
+        _require(
+            mount["path"] == mount["records"][0]["mount_point"] == "/runtime"
+            and mount["read_only"] is True
+            and entry["path"] == "/runtime"
+            and entry["exists"] is True
+            and entry["type"] == "directory"
+            and int(entry["mode"], 8) == 0o755
+            and [entry["uid"], entry["gid"]]
+            == files[_ENTRY]["identity"][3:5]
+            == loaded["gateway"]["code_view"]["identity"][3:5]
+            == [1000, 1000],
+            "runtime mount custody differs from entrypoint source or gateway view",
         )
     # The adapter also measured the gateway credential independently while doing
     # its before/after protected-boundary snapshots. Join all overlapping fields.

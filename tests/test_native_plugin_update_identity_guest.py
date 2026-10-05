@@ -429,11 +429,35 @@ class NativePluginUpdateIdentityGuestTests(unittest.TestCase):
         ):
             result = subject._run(self.container, (100, 200), self.manifest_digest)
         native.assert_not_called()
-        self.assertEqual(
-            result["refusal"],
-            {"phase": "PIN_INPUT", "reason": "GUEST_EXECUTION_REFUSED"},
-        )
+        self.assertEqual(result["refusal"]["phase"], "PIN_INPUT")
+        self.assertEqual(result["refusal"]["reason"], "GUEST_EXECUTION_REFUSED")
+        self.assertFalse(result["refusal"]["diagnostic"]["retry_performed"])
         self.assertNotIn("do not expose this", json.dumps(result))
+
+    def test_refusal_locations_include_reader_cause_without_messages_or_locals(self):
+        try:
+            try:
+                subject.identity._require(False, "credential-never-emit")
+            except subject.identity.NativeLiveIdentityError as cause:
+                raise subject.identity.NativeLiveIdentityError(
+                    "secret-wrapper"
+                ) from cause
+        except subject.identity.NativeLiveIdentityError as error:
+            result = subject._refusal_location(error)
+            # A forged explicit cycle must not turn diagnostics into a hang.
+            error.__cause__.__cause__ = error
+            self.assertEqual(subject._refusal_location(error), result)
+        self.assertEqual(len(result["source_frames"]), 1)
+        self.assertEqual(
+            result["source_frames"][0]["source"],
+            "src/aragorn/native_phase3_live_identity.py",
+        )
+        self.assertEqual(result["source_frames"][0]["function"], "_require")
+        self.assertGreater(result["source_frames"][0]["line"], 0)
+        for key in ("exception_text_retained", "locals_retained", "retry_performed"):
+            self.assertIs(result[key], False)
+        self.assertNotIn("credential-never-emit", json.dumps(result))
+        self.assertNotIn("secret-wrapper", json.dumps(result))
 
     def test_cli_emits_structured_refusal_and_no_retry(self):
         value = {"schema": subject.SCHEMA, "status": "REFUSED"}

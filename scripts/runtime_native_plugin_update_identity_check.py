@@ -140,6 +140,47 @@ def _verify_predecessor() -> None:
     _require((len(raw), _digest(raw)) == _UPDATE_PIN, "UPDATE_PREDECESSOR_CHANGED")
 
 
+def _refusal_location(error: Exception) -> dict:
+    """Only exact installed source locations, including bounded explicit causes.
+
+    Reader errors deliberately hide their messages. Preserve enough fixed code
+    locations to diagnose a one-shot refusal without exposing inputs or locals.
+    """
+    sources = {
+        __file__: "scripts/runtime_native_plugin_update_identity_check.py",
+        identity.__file__: "src/aragorn/native_phase3_live_identity.py",
+    }
+    frames, seen = [], set()
+    current = error
+    for _ in range(4):
+        if current is None or id(current) in seen:
+            break
+        seen.add(id(current))
+        trace = current.__traceback__
+        while trace is not None:
+            code = trace.tb_frame.f_code
+            source = sources.get(code.co_filename)
+            if source is not None and re.fullmatch(
+                r"[A-Za-z_][A-Za-z_0-9]{0,127}", code.co_name
+            ):
+                frames.append(
+                    {
+                        "source": source,
+                        "line": trace.tb_lineno,
+                        "function": code.co_name,
+                    }
+                )
+            trace = trace.tb_next
+        current = current.__cause__
+    return {
+        "schema": "aragorn/native-identity-guest-refusal-location/v1",
+        "source_frames": frames[-8:],
+        "exception_text_retained": False,
+        "locals_retained": False,
+        "retry_performed": False,
+    }
+
+
 def _p37b():
     # Already imported by the inherited package runner before native._prepare.
     return importlib.import_module("runtime_action_worker_openclaw_systemd_probe")
@@ -366,6 +407,7 @@ def _run(
             "reason": str(exc)
             if type(exc) is NativeIdentityGuestError
             else "GUEST_EXECUTION_REFUSED",
+            "diagnostic": _refusal_location(exc),
         }
     return result
 

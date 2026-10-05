@@ -17,7 +17,7 @@ automation, not a Phase 3 qualification result.
 A [successor native update capture](scripts/capture_runtime_native_plugin_update_identity_check.py)
 now connects provisioning-time pins and before/after process/file readbacks to
 the existing adapter, with an [independent offline join consumer](src/aragorn/native_phase3_plugin_update_live_binding.py).
-It preserves the frozen captures and does not yet establish a fresh live run,
+It preserves the frozen captures and does not yet establish successful live readback,
 complete common-deployment verification or any additional Phase 3 gate closure.
 The [offline pin preparer](scripts/prepare_native_plugin_update_identity_pins.py)
 now derives caller expectations from two fixed historical records, and the
@@ -26,6 +26,11 @@ existing [collection CLI](scripts/native_plugin_update_collection.py) exposes
 The [sensor source supplement](benchmark/tetragon-program-map-source-v1/README.md)
 pins the selected producer/loader and Linux query contracts; it is not a live
 sensor-health or complete loss-accounting result.
+The first [successor capture](benchmark/evidence/phase3-native-plugin-update-identity-development-v1-2026-10-05.json)
+refused at `BEFORE_READ` before the update adapter ran; cleanup and prior VM state
+restoration are retained in the [operation checkpoint](benchmark/evidence/phase3-native-plugin-update-identity-operation-v1-2026-10-05.json).
+Offline diagnosis found a deterministic reader mismatch with the fixed runtime's
+UID/GID 1000 read-only volume. This is failed development evidence, not coverage.
 
 Separate signed current-V3 subfixtures now qualify
 [DET-01](./benchmark/receipts/phase3-openclaw-final-v3-det01-dedicated-qualification-v1-2026-09-06.json)

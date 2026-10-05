@@ -146,7 +146,10 @@ def _fixture(capture):
     }
     entry = capture["staged_profile"]["required_runtime_not_included"]
     files[subject._ENTRY] = _file(
-        entry["entrypoint_digest"], entry["entrypoint_bytes"], mode=0o644
+        entry["entrypoint_digest"],
+        entry["entrypoint_bytes"],
+        owner=(1000, 1000),
+        mode=0o755,
     )
     files[subject._PYTHON] = _file(
         setup["runtime_profile"]["executable_digest"], 4096, mode=0o755
@@ -370,6 +373,51 @@ class NativePluginUpdateLiveBindingTests(unittest.TestCase):
         self.assertTrue(all(result[name] is False for name in subject._FLAGS))
         self.assertFalse(result["metrics_eligible"])
         self.assertEqual(before, sorted(str(path) for path in self.cas.root.rglob("*")))
+
+    def test_runtime_entry_and_gateway_view_require_fixed_readonly_volume_custody(self):
+        snapshot = self.capture["live_identity"]["before"]
+        for record in (
+            snapshot["files"][subject._ENTRY],
+            snapshot["loaded_process_views"]["gateway"]["code_view"],
+        ):
+            self.assertEqual(record["identity"][3:5], [1000, 1000])
+            self.assertEqual(stat.S_IMODE(record["identity"][2]), 0o755)
+        self.assertFalse(self.verify()["live_deployment_attested"])
+        for target in ("source", "gateway"):
+            for changed in ((3, 0), (4, 0), (3, 1001), (2, stat.S_IFREG | 0o644)):
+                capture = copy.deepcopy(self.capture)
+                envelope = capture["live_identity"]
+                record = (
+                    envelope["before"]["files"][subject._ENTRY]
+                    if target == "source"
+                    else envelope["before"]["loaded_process_views"]["gateway"][
+                        "code_view"
+                    ]
+                )
+                record["identity"][changed[0]] = changed[1]
+                envelope["after"] = copy.deepcopy(envelope["before"])
+                envelope["comparison"]["snapshot_digest"] = _digest(
+                    canonical_json(envelope["before"])
+                )
+                with (
+                    self.subTest(target=target, changed=changed),
+                    self.assertRaises(subject.NativePluginUpdateLiveBindingError),
+                ):
+                    self.verify(capture)
+        for side in ("runtime_before", "runtime_after"):
+            for mutation in (
+                lambda mount: mount["entry"].update(uid=0, gid=0),
+                lambda mount: mount["records"][0].update(mount_options=["rw"]),
+                lambda mount: mount["records"][0].update(mount_point="/other"),
+                lambda mount: mount.update(read_only=False),
+            ):
+                capture = copy.deepcopy(self.capture)
+                mutation(capture[side]["content"]["mount"])
+                with (
+                    self.subTest(side=side, mutation=mutation),
+                    self.assertRaises(subject.NativePluginUpdateLiveBindingError),
+                ):
+                    self.verify(capture)
 
     def test_rehashed_equal_snapshots_cannot_hide_mixed_epochs_files_credentials_or_aliases(
         self,

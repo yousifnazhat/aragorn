@@ -101,6 +101,152 @@ class NativeLiveIdentityTests(unittest.TestCase):
             with self.assertRaises(subject.NativeLiveIdentityError):
                 self.read(**{**args, "credential_gid": gid + 1})
 
+    def test_fixed_runtime_entrypoint_requires_exact_owner_and_readonly_ancestry(self):
+        path = self.root / subject._ENTRY.lstrip("/")
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"inert entrypoint")
+        path.chmod(0o755)
+        for ancestor in path.parents:
+            if ancestor == self.root:
+                break
+            ancestor.chmod(0o755)
+        real_stat, real_fstat = os.stat, os.fstat
+        owners = {"directory": (1000, 1000), "file": (1000, 1000)}
+
+        def projected(info):
+            # Inert host fixture: simulate only retained Linux ownership, never
+            # chown host files to UID1000 or remount a filesystem in a unit test.
+            fields = (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_uid",
+                "st_gid",
+                "st_nlink",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+            result = {name: getattr(info, name) for name in fields}
+            uid, gid = owners["directory" if stat.S_ISDIR(info.st_mode) else "file"]
+            result.update(st_uid=uid, st_gid=gid)
+            return SimpleNamespace(**result)
+
+        args = {
+            "owner": 1000,
+            "owner_gid": 1000,
+            "modes": {0o755},
+            "require_read_only": True,
+        }
+        with (
+            patch.object(
+                subject.os,
+                "stat",
+                side_effect=lambda *a, **kw: projected(real_stat(*a, **kw)),
+            ),
+            patch.object(
+                subject.os, "fstat", side_effect=lambda fd: projected(real_fstat(fd))
+            ),
+            patch.object(
+                subject.os,
+                "fstatvfs",
+                return_value=SimpleNamespace(f_flag=os.ST_RDONLY),
+            ) as mount,
+        ):
+            for directory_owner in ((1000, 1000), (0, 0)):
+                owners["directory"] = directory_owner
+                raw, metadata = subject._read_at(self.fd, subject._ENTRY, **args)
+                self.assertEqual(raw, b"inert entrypoint")
+                self.assertEqual(metadata["identity"][3:5], [1000, 1000])
+                self.assertEqual(set(metadata), {"bytes", "digest", "identity"})
+            self.assertEqual(
+                mount.call_count, 20
+            )  # Four ancestors + leaf, before/after twice.
+            for key, wrong in (
+                ("directory", (1001, 1001)),
+                ("directory", (1000, 0)),
+                ("directory", (0, 1000)),
+                ("file", (0, 0)),
+                ("file", (1000, 0)),
+            ):
+                owners.update(directory=(1000, 1000), file=(1000, 1000))
+                owners[key] = wrong
+                with (
+                    self.subTest(key=key, wrong=wrong),
+                    self.assertRaises(subject.NativeLiveIdentityError),
+                ):
+                    subject._read_at(self.fd, subject._ENTRY, **args)
+
+    def test_runtime_readonly_exception_refuses_other_paths_and_mount_transitions(self):
+        self.file()
+        for path, overrides in (
+            ("/file", {}),
+            (subject._ENTRY, {"owner": 0}),
+            (subject._ENTRY, {"owner_gid": 0}),
+            (subject._ENTRY, {"modes": {0o644}}),
+        ):
+            args = {
+                "owner": 1000,
+                "owner_gid": 1000,
+                "modes": {0o755},
+                "require_read_only": True,
+                **overrides,
+            }
+            with (
+                self.subTest(path=path, overrides=overrides),
+                self.assertRaises(subject.NativeLiveIdentityError),
+            ):
+                subject._read_at(self.fd, path, **args)
+        path = self.root / subject._ENTRY.lstrip("/")
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"inert entrypoint")
+        path.chmod(0o755)
+        real_stat, real_fstat = os.stat, os.fstat
+
+        def projected(info):
+            fields = (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_nlink",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+            return SimpleNamespace(
+                **{name: getattr(info, name) for name in fields},
+                st_uid=1000,
+                st_gid=1000,
+            )
+
+        with (
+            patch.object(
+                subject.os,
+                "stat",
+                side_effect=lambda *a, **kw: projected(real_stat(*a, **kw)),
+            ),
+            patch.object(
+                subject.os, "fstat", side_effect=lambda fd: projected(real_fstat(fd))
+            ),
+        ):
+            # Check every ancestor and leaf both before and after its held read.
+            for writable_at in range(10):
+                flags = [SimpleNamespace(f_flag=os.ST_RDONLY) for _ in range(10)]
+                flags[writable_at] = SimpleNamespace(f_flag=0)
+                with (
+                    self.subTest(writable_at=writable_at),
+                    patch.object(subject.os, "fstatvfs", side_effect=flags),
+                    self.assertRaises(subject.NativeLiveIdentityError),
+                ):
+                    subject._read_at(
+                        self.fd,
+                        subject._ENTRY,
+                        owner=1000,
+                        owner_gid=1000,
+                        modes={0o755},
+                        require_read_only=True,
+                    )
+
     def test_fixed_unit_output_overflow_kills_only_own_reader_child(self):
         child = MagicMock()
         child.stdout.fileno.return_value = 41
@@ -485,11 +631,25 @@ class NativeLiveIdentityTests(unittest.TestCase):
             counters[path] = counters.get(path, 0) + 1
             if mutate_read is not None:
                 content = mutate_read(path, counters[path], content)
-            mode = stat.S_IFREG | (0o400 if source not in subject._CODE else 0o644)
+            if path == subject._ENTRY:
+                self.assertEqual(kwargs["owner"], 1000)
+                self.assertEqual(kwargs["owner_gid"], 1000)
+                self.assertEqual(kwargs["modes"], {0o755})
+                self.assertIs(kwargs["require_read_only"], True)
+            else:
+                self.assertFalse(kwargs.get("require_read_only", False))
+            mode = stat.S_IFREG | (
+                0o755
+                if source == subject._ENTRY
+                else 0o400
+                if source not in subject._CODE
+                else 0o644
+            )
+            owner, group = (1000, 1000) if source == subject._ENTRY else (0, 0)
             record = {
                 "bytes": len(content),
                 "digest": subject._digest(content),
-                "identity": [1, 2, mode, 0, 0, 1, len(content), 3, 4],
+                "identity": [1, 2, mode, owner, group, 1, len(content), 3, 4],
             }
             return content, record
 

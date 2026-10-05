@@ -514,6 +514,34 @@ The focused reviewed batch passed **36 new/affected unit checks**, including
 stages reused their exact recorded passes. No live capture or final acceptance
 was performed by those checks; no Phase 3 exit entry closed.
 
+**First successor identity attempt (2026-10-05):** signed source `01b6673`
+produced retained [v1 refusal evidence](benchmark/evidence/phase3-native-plugin-update-identity-development-v1-2026-10-05.json),
+digest `sha256:dcd90962a80d36a63b5f5200c5db4db2fa188dffe9af486e856a523d65750afa`.
+All seven writer pins froze before one activation, but `BEFORE_READ` refused
+before any update-adapter invocation. The old guest erased the reader's failure
+location, so the first thrown check cannot be reconstructed. Offline inspection
+did identify a deterministic blocker: the reader required a root-owned runtime
+entrypoint although the fixed read-only runtime volume and entrypoint are owned
+by UID/GID 1000. The successor fix must retain exact ownership, digest and
+read-only mount checks, not accept arbitrary ownership or writable runtime data.
+No unchanged capture retry is permitted. Future refusal diagnostics retain only
+bounded fixed-source locations, never exception text, credentials or locals.
+The reviewed correction now enforces exact entrypoint ownership/mode and
+before/after `ST_RDONLY` checks on the held file and all runtime ancestors in
+both observer and gateway views. The independent consumer checks matching
+ownership against both retained runtime mount snapshots. Its **60 new/affected
+checks** (four new methods) passed on their first pipeline attempt; two unchanged
+dependency stages reused their recorded passes. The failed v1 bytes remain
+unchanged. A corrected-source capture is a distinct changed-behavior operation,
+not an automatic retry or qualification sample.
+
+The [operation checkpoint](benchmark/evidence/phase3-native-plugin-update-identity-operation-v1-2026-10-05.json)
+records removal of the exact owned fixture and four snapshot helpers, unchanged
+ID/name/state inventories for all 78 pre-existing containers, unchanged `default`
+Docker context and restoration of `aragorn-bakeoff` to stopped. The guest window
+was 16.34 seconds; this is neither total VM/capture runtime nor decision latency.
+Active engineering time is not separately instrumented. No Phase 3 gate closed.
+
 **Next integration batch:** retain one newly necessary successor identity
 capture after fixture review using the independently prepared binary pins.
 Complete Tetragon program/map/sensor applicability and join actual readback to

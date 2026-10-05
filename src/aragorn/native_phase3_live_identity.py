@@ -176,12 +176,27 @@ def _read_at(
     credential_owner: int | None = None,
     credential_gid: int | None = None,
     owner_gid: int = 0,
+    require_read_only: bool = False,
 ) -> tuple[bytes, dict]:
     """Hold each no-follow ancestor until named identities are rechecked."""
     value = Path(path)
     _require(
         value.is_absolute() and str(value) == path and ".." not in value.parts,
         "invalid fixed measurement path",
+    )
+    _require(
+        type(require_read_only) is bool
+        and (
+            not require_read_only
+            or (
+                path == _ENTRY
+                and owner == owner_gid == 1000
+                and modes == {0o755}
+                and credential_owner is None
+                and credential_gid is None
+            )
+        ),
+        "read-only ownership exception is only for the fixed runtime entrypoint",
     )
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
     with ExitStack() as stack:
@@ -203,6 +218,15 @@ def _read_at(
                 == broker._directory_identity(after),
                 "protected ancestor changed or is writable",
             )
+            if require_read_only:
+                # These are only /runtime and its fixed descendants. Retained
+                # native build ownership is 1000:1000; root-owned descendants
+                # are also protected, but no other or mixed owner pair is valid.
+                _require(
+                    (after.st_uid, after.st_gid) in {(0, 0), (1000, 1000)}
+                    and bool(os.fstatvfs(child).f_flag & os.ST_RDONLY),
+                    "fixed runtime ancestor is not protected and read-only",
+                )
             if credential_owner is not None and after.st_uid == credential_owner:
                 _require(
                     bool(os.fstatvfs(child).f_flag & os.ST_RDONLY),
@@ -240,6 +264,11 @@ def _read_at(
             )
         else:
             _require(before.st_gid == owner_gid, "protected file group is unsafe")
+        if require_read_only:
+            _require(
+                bool(os.fstatvfs(fd).f_flag & os.ST_RDONLY),
+                "fixed runtime entrypoint is not read-only",
+            )
         raw = bytearray()
         while chunk := os.read(fd, min(1024 * 1024, limit + 1 - len(raw))):
             raw.extend(chunk)
@@ -254,6 +283,11 @@ def _read_at(
             ),
             "protected file changed while measured",
         )
+        if require_read_only:
+            _require(
+                bool(os.fstatvfs(fd).f_flag & os.ST_RDONLY),
+                "fixed runtime entrypoint became writable while measured",
+            )
         for directory, name, child, previous in ancestors:
             _require(
                 previous
@@ -263,6 +297,11 @@ def _read_at(
                 ),
                 "protected ancestor changed while measured",
             )
+            if require_read_only:
+                _require(
+                    bool(os.fstatvfs(child).f_flag & os.ST_RDONLY),
+                    "fixed runtime ancestor became writable while measured",
+                )
         return bytes(raw), {
             "bytes": len(raw),
             "digest": _digest(raw),
@@ -757,9 +796,17 @@ def read_native_live_identity(
             )
             raw, files = {}, {}
             for path in FILE_PATHS:
-                owner = accounts["broker"][0] if path == _POLICY else 0
+                owner = (
+                    1000
+                    if path == _ENTRY
+                    else accounts["broker"][0]
+                    if path == _POLICY
+                    else 0
+                )
                 modes = (
-                    {0o644, 0o755}
+                    {0o755}
+                    if path == _ENTRY
+                    else {0o644, 0o755}
                     if path in _CODE or path in (_PYTHON, "/usr/local/bin/node")
                     else {0o400}
                 )
@@ -774,7 +821,12 @@ def read_native_live_identity(
                     owner=owner,
                     modes=modes,
                     limit=limit,
-                    owner_gid=accounts["broker"][1] if path == _POLICY else 0,
+                    owner_gid=1000
+                    if path == _ENTRY
+                    else accounts["broker"][1]
+                    if path == _POLICY
+                    else 0,
+                    require_read_only=path == _ENTRY,
                 )
                 _require(
                     files[path]["digest"] == pins[path],
@@ -828,7 +880,17 @@ def read_native_live_identity(
                     if role == "worker"
                     else "/usr/libexec/aragorn/" + _SHIMS[role]
                 )
-                content, metadata = _read_at(fd, target, owner=0, modes={0o644, 0o755})
+                code_arguments = (
+                    {
+                        "owner": 1000,
+                        "owner_gid": 1000,
+                        "modes": {0o755},
+                        "require_read_only": True,
+                    }
+                    if target == _ENTRY
+                    else {"owner": 0, "modes": {0o644, 0o755}}
+                )
+                content, metadata = _read_at(fd, target, **code_arguments)
                 _require(
                     content == raw[target],
                     "running process code view differs from observer",
@@ -838,7 +900,7 @@ def read_native_live_identity(
                     (
                         fd,
                         target,
-                        {"owner": 0, "modes": {0o644, 0o755}},
+                        code_arguments,
                         content,
                         metadata,
                     )
@@ -851,7 +913,13 @@ def read_native_live_identity(
                 credentials[role] = measured
             joins = _joins(raw)
             for path in FILE_PATHS:
-                owner = accounts["broker"][0] if path == _POLICY else 0
+                owner = (
+                    1000
+                    if path == _ENTRY
+                    else accounts["broker"][0]
+                    if path == _POLICY
+                    else 0
+                )
                 modes = {stat.S_IMODE(files[path]["identity"][2])}
                 # Re-read source bytes; a pathname digest alone is not a stability claim.
                 content, metadata = _read_at(
@@ -862,7 +930,12 @@ def read_native_live_identity(
                     limit=_EXECUTABLE_LIMIT
                     if path in (_PYTHON, "/usr/local/bin/node")
                     else _LIMIT,
-                    owner_gid=accounts["broker"][1] if path == _POLICY else 0,
+                    owner_gid=1000
+                    if path == _ENTRY
+                    else accounts["broker"][1]
+                    if path == _POLICY
+                    else 0,
+                    require_read_only=path == _ENTRY,
                 )
                 _require(
                     content == raw[path] and metadata == files[path],

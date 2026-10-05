@@ -17,8 +17,12 @@ automation, not a Phase 3 qualification result.
 A [successor native update capture](scripts/capture_runtime_native_plugin_update_identity_check.py)
 now connects provisioning-time pins and before/after process/file readbacks to
 the existing adapter, with an [independent offline join consumer](src/aragorn/native_phase3_plugin_update_live_binding.py).
-It preserves the frozen captures and does not yet establish successful live readback,
-complete common-deployment verification or any additional Phase 3 gate closure.
+It preserves the frozen captures. The corrected
+[live capture](benchmark/evidence/phase3-native-plugin-update-identity-development-v2-2026-10-05.json)
+now joins eighteen selected files and four process epochs around one update
+adapter invocation. [Independent offline replay](benchmark/evidence/phase3-native-plugin-update-identity-replay-v2-2026-10-05.json)
+from the retained 19-blob transport verifies those bounded joins, not complete
+common-deployment attestation or any additional Phase 3 gate closure.
 The [offline pin preparer](scripts/prepare_native_plugin_update_identity_pins.py)
 now derives caller expectations from two fixed historical records, and the
 existing [collection CLI](scripts/native_plugin_update_collection.py) exposes
@@ -30,7 +34,9 @@ The first [successor capture](benchmark/evidence/phase3-native-plugin-update-ide
 refused at `BEFORE_READ` before the update adapter ran; cleanup and prior VM state
 restoration are retained in the [operation checkpoint](benchmark/evidence/phase3-native-plugin-update-identity-operation-v1-2026-10-05.json).
 Offline diagnosis found a deterministic reader mismatch with the fixed runtime's
-UID/GID 1000 read-only volume. This is failed development evidence, not coverage.
+UID/GID 1000 read-only volume. The corrected source enforces that exact owner,
+mode and before/after read-only custody. Both attempts and their cleanup evidence
+remain retained; the failed first attempt is not coverage.
 
 Separate signed current-V3 subfixtures now qualify
 [DET-01](./benchmark/receipts/phase3-openclaw-final-v3-det01-dedicated-qualification-v1-2026-09-06.json)

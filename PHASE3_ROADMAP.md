@@ -542,8 +542,46 @@ Docker context and restoration of `aragorn-bakeoff` to stopped. The guest window
 was 16.34 seconds; this is neither total VM/capture runtime nor decision latency.
 Active engineering time is not separately instrumented. No Phase 3 gate closed.
 
-**Next integration batch:** retain one newly necessary successor identity
-capture after fixture review using the independently prepared binary pins.
+**Corrected successor identity integration (2026-10-05):** signed source
+`dbffea9` produced [v2 live evidence](benchmark/evidence/phase3-native-plugin-update-identity-development-v2-2026-10-05.json),
+digest `sha256:9c892c8d1ca42e9c7632c4feff511f8941725416c0d14a81c047faf5eb1e0f63`.
+All eighteen selected file pins and four process epochs were read successfully;
+the snapshots matched around exactly one existing local-marketplace update
+adapter invocation. This exercised the real ownership fix, not another historical
+recapture. The original denial result, frozen predecessors and failed v1 remain.
+
+`retain-live` verified and retained the 19-blob closure, then `replay-live`
+independently replayed a fresh CAS extracted from the
+[transport](benchmark/evidence/phase3-native-plugin-update-identity-cas-v2-2026-10-05.tar.gz).
+The [replay report](benchmark/evidence/phase3-native-plugin-update-identity-replay-v2-2026-10-05.json)
+records `BOUNDED_LOCAL_READBACK_JOINS_VERIFIED`; collection digest
+`sha256:15180762e874d2e01feddd915633a3a4a80dcfd7380898c484eb6e6ddadad9f4`,
+verification digest `sha256:499421dd6d07ba42f694413c533424ff129a7905e5eeb10954698714b5f0c55d`.
+This completes the selected F0 case's live-readback/retention connection, not F0's
+entire deployment/telemetry contract or an admission/RUN/metrics exit entry.
+All full-attestation and qualification flags remain false.
+
+The [v2 operation checkpoint](benchmark/evidence/phase3-native-plugin-update-identity-operation-v2-2026-10-05.json)
+records four inactive fixture services, removal of owned containers, unchanged
+78-container inventories and `default` context, and restoration of the VM to
+stopped. The guest window was 26.50 seconds, including the two identity reads;
+it is not end-to-end decision latency. No live replay was used for retention.
+
+**Next integration batch:** add a narrow native one-case request/execution
+connection around the existing identity host `_capture` and live collection.
+The old `capture_openclaw_final_v3_campaign_case.capture_case` is only an API-shape
+reference: its frozen-parent validator rejects the native target and must not be
+weakened. Keep common suite/controller adapter identity distinct from this
+collection's route-specific adapter artifact. Fresh configuration/worker inputs
+must be bound at the trusted preparation-before-activation boundary; do not
+expect v2's random credentials to match a fresh fixture, learn expectations after
+execution, or relabel a post-observation collection as a precommitted campaign.
+Use a fixed request (no arbitrary command/route dispatch), existing CAS,
+deployment APIs, cleanup and independent consumers, not another generic
+framework. Preserve `OBSERVED`/`REFUSED` and qualification ceilings until the
+actual admission semantics are complete. Reuse v2 for offline development; do
+not recapture this unchanged branch just to exercise another consumer. Then
+continue the dependency-ready admission family ports.
 Complete Tetragon program/map/sensor applicability and join actual readback to
 raw scrape accounting before one guarded native OS-event integration check.
 The map/program association requires pinned producer/loader and Linux

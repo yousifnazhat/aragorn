@@ -1229,3 +1229,56 @@ native receipt store's exact inventory. Retention errors must stop the worker,
 not become an ordinary `NOT_SUBMITTED` reply that allows another attempt. A full
 reviewed worker/helper/unit/activator successor and installed-source inventories
 are still required before common activation. Final acceptance remains blocked.
+
+**Authenticated worker ingress (2026-10-06):** implement the actual source hook on
+the existing create-gated worker, without editing that frozen predecessor. The
+boundary is after authenticated complete-frame receipt and receipt-only dispatch,
+before the held native-attempt gate. It is not socket acceptance, the native tool
+call's start, validated broker admission, or a final decision. Retain the actual
+worker request, open attempt/state and constructed action request, not a rebuilt
+substitute envelope. Bind the action record before the first sensor connection.
+
+This bounded source successor uses one fixed private worker evidence directory
+with a permanent startup claim and four ordered immutable records. A partial
+write remains evidence and prevents reuse; no reset, repair, deletion or automatic
+retry is allowed. It does not write into the native receipt store. The independent
+consumer must verify canonical pinned bytes, chain links, worker/binding/genesis
+identity, event/action associations and strict clock ordering without importing
+the producer. A matching recorded path digest is not a protected inode observation,
+and a receipt-prefix digest inventory is not verification of the whole history.
+
+The common73 deployment stays unchanged until a complete reviewed helper, worker,
+unit, activator and installed-source inventory transition is ready. Raw ingress
+records still need the external boot/active-namespace observations and effective
+broker final-decision evidence; they must not be exported as full request latency,
+causal attribution, sink outcome or final acceptance.
+
+Implemented: the helper permanently claims the separately provisioned private
+directory before socket publication, samples the ingress clock at the specified
+boundary and retains full joined documents as direct final-name `O_EXCL` files.
+It checks held/named file identities and bytes, its own process accounts and
+active time namespace. It has no caller-selected path, clock, reset or resume
+API. Retention failure is fatal through gate, relay and service cleanup; every
+helper descriptor close is attempted while preserving the primary failure.
+The renderer pins and reversibly transforms only the existing worker source;
+it does not install the helper or make the deployment ready.
+
+Validation: 34 new methods passed once through four selected pipeline stages
+(15 retention, 9 independent-consumer, 8 rendered-worker boundary/failure-path,
+2 producer-to-consumer contract checks). Exact unchanged pipeline-unit success
+was reused. The explicit reviewed input closures contain 10, 4, 69 and 12 files,
+respectively. Tests use inert kernel, accounts, namespace, clocks, receipts and
+transports; they are not native measurement or substitute acceptance samples.
+The source-only overlay is 49,327 bytes, pinned as
+`sha256:1ba2bc446b0561d992ef800d324269ab6a428b2cb3449109fe771029317f850a`.
+The [batch checkpoint](benchmark/evidence/phase3-worker-ingress-implementation-v1-2026-10-06.json)
+retains source pins, first-pass fingerprints and claim limits. No frozen source,
+live runtime, performance sample or Phase 3 exit gate changed.
+
+Next dependency: migrate the helper/worker, private state-directory provisioning,
+unit, activator and installed-source inventory together in the same common
+successor. Preserve the frozen predecessor and truthful stage-derived worker
+artifact. Then bind retained ingress records to the one-collector boot/namespace
+observations and broker final-decision record in the existing independent
+measurement path. Real prepared-attempt/workload callbacks and remaining
+admission/RUN/sensor-health work still precede the single final acceptance freeze.

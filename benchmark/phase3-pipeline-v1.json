@@ -2,6 +2,153 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "worker-ingress-renderer",
+      "description": "Verify only the exact reversible source-only ingress successor and real handler/gate/relay placement and fatal cleanup using inert transports and receipts; payload pins are read but no services, live captures, deployment migration or acceptance run.",
+      "tests": [
+        "test_materialize_runtime_worker_ingress_measurement"
+      ],
+      "inputs": [
+        "packaging/activate-runtime-action-worker-host.sh",
+        "packaging/activate-runtime-capability-host.sh",
+        "packaging/install-runtime-action-worker-host.sh",
+        "packaging/install-runtime-capability-host.sh",
+        "packaging/libexec/aragorn-runtime-action-service-v5.py",
+        "packaging/libexec/aragorn-runtime-action-worker-service.py",
+        "packaging/libexec/aragorn-runtime-observation-service-v4.py",
+        "packaging/libexec/aragorn-runtime-quarantine-service.py",
+        "packaging/libexec/aragorn-runtime-revocation-service.py",
+        "packaging/libexec/aragorn-runtime-skill-startup-service.py",
+        "packaging/openclaw/aragorn-runtime-action-worker/index.js",
+        "packaging/openclaw/aragorn-runtime-action-worker/openclaw.plugin.json",
+        "packaging/openclaw/aragorn-runtime-action-worker/package.json",
+        "packaging/systemd/aragorn-agent-gateway.service",
+        "packaging/systemd/aragorn-gateway.sysusers",
+        "packaging/systemd/aragorn-runtime-action-worker.service",
+        "packaging/systemd/aragorn-runtime-action-worker.sysusers",
+        "packaging/systemd/aragorn-runtime-action.tmpfiles",
+        "packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service",
+        "packaging/systemd/aragorn-runtime-lineage-capability-observation-publisher.service",
+        "packaging/systemd/aragorn-runtime-revocation-publisher.service",
+        "scripts/materialize_protected_install_quarantine_producers.py",
+        "scripts/materialize_runtime_endpoint_journal.py",
+        "scripts/materialize_runtime_native_create_gate.py",
+        "scripts/materialize_runtime_native_tool_receipts.py",
+        "scripts/materialize_runtime_quarantine_activation.py",
+        "scripts/materialize_runtime_quarantine_services.py",
+        "scripts/materialize_runtime_worker_ingress_measurement.py",
+        "scripts/stage_runtime_endpoint_journal_profile.py",
+        "scripts/stage_runtime_quarantine_profile.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/acquire.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/protected_skill_quarantine.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_broker_v2.py",
+        "src/aragorn/runtime_action_broker_v3.py",
+        "src/aragorn/runtime_action_broker_v4.py",
+        "src/aragorn/runtime_action_broker_v5.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_action_observation_publisher_v2.py",
+        "src/aragorn/runtime_action_observation_publisher_v3.py",
+        "src/aragorn/runtime_action_observation_publisher_v4.py",
+        "src/aragorn/runtime_action_service.py",
+        "src/aragorn/runtime_action_service_v2.py",
+        "src/aragorn/runtime_action_service_v4.py",
+        "src/aragorn/runtime_action_service_v5.py",
+        "src/aragorn/runtime_action_worker.py",
+        "src/aragorn/runtime_active_skill_lineage.py",
+        "src/aragorn/runtime_active_skill_lineage_v2.py",
+        "src/aragorn/runtime_capability_grant.py",
+        "src/aragorn/runtime_endpoint_journal.py",
+        "src/aragorn/runtime_lineage_capability_issuer.py",
+        "src/aragorn/runtime_native_tool_receipts.py",
+        "src/aragorn/runtime_observation_service.py",
+        "src/aragorn/runtime_observation_service_v2.py",
+        "src/aragorn/runtime_observation_service_v3.py",
+        "src/aragorn/runtime_observation_service_v4.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_quarantine_response.py",
+        "src/aragorn/runtime_quarantine_service.py",
+        "src/aragorn/runtime_response_service.py",
+        "src/aragorn/runtime_revocation_service.py",
+        "src/aragorn/runtime_skill_startup.py",
+        "src/aragorn/runtime_skill_startup_service.py",
+        "src/aragorn/runtime_worker_ingress_measurement.py",
+        "tests/test_materialize_runtime_worker_ingress_measurement.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "worker-ingress-retention",
+      "description": "Verify only new permanent startup and one-shot worker ingress retention, actual request-attempt-action joins and fail-stop custody/cleanup with explicit inert kernel/account/clock doubles; no native readback, timing sample or deployment.",
+      "tests": [
+        "test_runtime_worker_ingress_measurement"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_native_tool_receipts.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_worker_ingress_measurement.py",
+        "tests/test_runtime_worker_ingress_measurement.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "worker-ingress-verifier",
+      "description": "Verify only the new independent canonical retained ingress-chain consumer and caller-pinned identity/document joins; no producer import, live attestation, full receipt-history verification or elapsed-time derivation.",
+      "tests": [
+        "test_runtime_worker_ingress_verify"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_worker_ingress_verify.py",
+        "tests/test_runtime_worker_ingress_verify.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "worker-ingress-integration",
+      "description": "Join actual bytes emitted by the new helper under explicit inert kernel/account/clock doubles to the independent consumer; no real worker, deployment, clock attestation, latency or acceptance samples.",
+      "tests": [
+        "test_runtime_worker_ingress_integration"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_native_tool_receipts.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_worker_ingress_measurement.py",
+        "src/aragorn/runtime_worker_ingress_verify.py",
+        "tests/test_runtime_worker_ingress_integration.py",
+        "tests/test_runtime_worker_ingress_measurement.py"
+      ],
+      "needs": [
+        "pipeline-unit"
+      ],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-common-worker-provisioning",
       "description": "Verify only new stage-bound worker artifact and successor seven-writer validation, retained reconstruction and preserved semantic refusal checks; inert reviewed-stage fixtures, no profile migration, live runtime or acceptance.",
       "tests": [

@@ -1,0 +1,128 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "58c4131ee1b3456244ef2428d2adfb05bd6280e9",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-06T00:15:34.604Z",
+    "validation_recorded": "2026-10-06 01:31:21 UTC",
+    "meaning": "Parallel source implementation, source/payload pin review and focused inert checks; not runtime or acceptance performance."
+  },
+  "implementation": [
+    "One fixed private worker-owned ingress store creates a permanent startup claim before listener publication; immutable startup, ingress, attempt and action records use direct final-name O_EXCL publication, fsync and retained held/named byte/identity checks.",
+    "Actual CLOCK_BOOTTIME is sampled at authenticated non-receipt complete-frame ingress before the native-attempt gate. The source hook retains the actual request, held open attempt/state and constructed forwarded action before any sensor connection.",
+    "The helper observes its own main-thread process identity, all four process accounts and active time namespace; no caller-selected root, clock, retry, repair, reset or resume API exists. Partial named writes remain evidence and refuse restart.",
+    "Fatal retention errors escape ordinary NOT_SUBMITTED and connection-loop handling. The permanent relay-consumption set is not reset; helper descriptor cleanup attempts all closes and preserves the primary failure.",
+    "The independent consumer verifies canonical caller-pinned bytes, ordered hash links, stable worker/binding/namespace identity, strict timestamps, receipt-tail/genesis/event joins and actual request/action payload and operation associations without importing the producer.",
+    "The source-only renderer pins the frozen create-gated worker and reviewed helper, applies reversible exact transforms, and publishes only the worker source. Common73, deployment units, activators, installed inventories and frozen predecessors remain unchanged."
+  ],
+  "review_findings_resolved": [
+    "Cleanup originally chained a secondary close error instead of the primary retention cause; the helper now retains the original cause, notes secondary cleanup failure, and attempts every close. A partial-write plus close-failure check covers this.",
+    "Gate post-read/unlock and relay/service cleanup must not turn a fatal retention failure into ordinary cancellation or another accepted operation. Exact rendered-source checks cover failure identity, once-only consumption, descriptor cleanup and stopped acceptance.",
+    "Producer/consumer contract review and actual emitted-byte integration checks distinguish retained document associations from complete receipt history, protected path observation, source/placement attestation, clock-domain proof and qualification."
+  ],
+  "rendered_worker": {
+    "predecessor_bytes": 46629,
+    "predecessor_digest": "sha256:df55f788ed29d188c71ca201d5778e7bff734b9a2f09445d8247c4ab6f40cd32",
+    "successor_bytes": 49327,
+    "successor_digest": "sha256:1ba2bc446b0561d992ef800d324269ab6a428b2cb3449109fe771029317f850a",
+    "helper_bytes": 20731,
+    "helper_digest": "sha256:aba3d6b705f9b147fdf89f083ec6edcde7d3165ba1a8008cf4bcdcaee88fe17e",
+    "deployment_ready": false
+  },
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:25c2d09d0ed7f2cf552f9140644e46e8ee266348d6c3e1067573a70fd50ef2c0",
+    "benchmark/phase3-pipeline-v1.json": "sha256:d8d8c1afb280b8becd544a79297351e657ba484c4c9f9bb89a573099d68162ae",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/materialize_runtime_worker_ingress_measurement.py": "sha256:91d65053a6590fe773eaac21db65b0ccbb3a26aff5a35259e8559556b8afe5cc",
+    "src/aragorn/runtime_worker_ingress_measurement.py": "sha256:aba3d6b705f9b147fdf89f083ec6edcde7d3165ba1a8008cf4bcdcaee88fe17e",
+    "src/aragorn/runtime_worker_ingress_verify.py": "sha256:e99f84c0f412b2b2fdec5cca17e438cb6108d85eb3026a528b7b72d8fe8c7252",
+    "tests/test_materialize_runtime_worker_ingress_measurement.py": "sha256:328e960c8ea6a1869d18cee86ea066b31f18be1aacb0d39b0a3c8ec18983adc1",
+    "tests/test_runtime_worker_ingress_measurement.py": "sha256:02a0d89dbb6dd1a795e90f0b455cc01aeabbaab19ce96e42e6b874251fb231a6",
+    "tests/test_runtime_worker_ingress_verify.py": "sha256:a37e0eacc774f6ce3a888f372a177c35e30a36235b4e86817f63243c849630bd",
+    "tests/test_runtime_worker_ingress_integration.py": "sha256:f3b33055de9eb9bf8d0a6eace5404f93a02ef2b502c2382630154d9869960a5a"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "worker-ingress-retention",
+      "status": "PASS",
+      "fingerprint": "sha256:32965301a06a264229c0ee786901cf95bb79c355758cda7c7eae48cd78aa2faa",
+      "tests": 15,
+      "wall_seconds": 0.260181,
+      "unittest_seconds": 0.09,
+      "stderr_digest": "sha256:7c6a7d2382f5c5312fdec5a565af06a381a2b3c643550abd005e3c1c2a81d06e",
+      "reviewed_inputs": 10
+    },
+    {
+      "stage_id": "worker-ingress-verifier",
+      "status": "PASS",
+      "fingerprint": "sha256:651a0f519183975d5998ae9db33d65b1d1f646ef0932db39c30a01e1dcc127f5",
+      "tests": 9,
+      "wall_seconds": 0.201618,
+      "unittest_seconds": 0.063,
+      "stderr_digest": "sha256:585fafa3910f28ea87eeed655743bdb45a5aa3a48fd207ac6e5d525e045f549f",
+      "reviewed_inputs": 4
+    },
+    {
+      "stage_id": "worker-ingress-renderer",
+      "status": "PASS",
+      "fingerprint": "sha256:e813a85bf5f9822fedd4b8a916c4056ad58e2722efbd4b67a563e2fd4afa2bae",
+      "tests": 8,
+      "wall_seconds": 0.50499,
+      "unittest_seconds": 0.273,
+      "stderr_digest": "sha256:1fa285ec59d07d8b3649089596103438f1a3624e8ca6ac80734b37260e6a33b4",
+      "reviewed_inputs": 69
+    },
+    {
+      "stage_id": "worker-ingress-integration",
+      "status": "PASS",
+      "fingerprint": "sha256:5e24002d0ed404854d7622b518c390f769a9d48e330ae4d459657d1004750478",
+      "tests": 2,
+      "wall_seconds": 0.182069,
+      "unittest_seconds": 0.015,
+      "stderr_digest": "sha256:f12bb8c68e4ab7f6faa75a90cb40fc028cb479132875502a0bd40eb259e7a94b",
+      "reviewed_inputs": 12
+    }
+  ],
+  "test_count": 34,
+  "new_test_methods": 34,
+  "selected_pipeline_runs": 1,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run worker-ingress-retention worker-ingress-verifier worker-ingress-renderer worker-ingress-integration",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "worker-ingress-retention": 10,
+    "worker-ingress-verifier": 4,
+    "worker-ingress-renderer": 69,
+    "worker-ingress-integration": 12,
+    "meaning": "Explicit transitive local imports plus precisely read pinned source/payload inputs. Renderer closure includes complete predecessor quarantine payload and journal source even though inert execution replaces its journal import. Unused protected-install producer maps, broader common preparation, full native-receipt stager and historical test modules are excluded. Imported InertStore is a fixture, not historical test discovery. Runner, interpreter/platform, requirements and prerequisite fingerprint are separately bound."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "All new behavioral checks use explicit inert kernel/account/namespace/clock/receipt/transport doubles and temporary data-only stores. These records are not real native observations, performance samples or replacement acceptance evidence.",
+    "The worker source overlay alone is not deployable. No helper installation, state-directory provisioning, unit/activator migration or common installed-source inventory change was made.",
+    "Ingress occurs after authenticated complete-frame receipt and receipt-only dispatch, not at native tool-call start or socket acceptance. The one-shot store may be consumed by a malformed non-receipt frame and cannot be reset for another attempt.",
+    "Custody and active-namespace checks are point-in-time and local worker-owned, not continuous immutability or hostile-owner/root anti-rollback. Synchronous retention has unqualified overhead and no hard deadline.",
+    "The retained consumer does not establish actual gateway authentication, running-source/placement attestation, full receipt-prefix verification, protected path/parameter identity, boot or cross-process clock comparability, broker final decision, elapsed time, sink acknowledgment, effect or causal attribution.",
+    "External one-collector clock-domain observations, effective broker final-decision joins and concrete real attempt/workload callbacks remain required. Remaining admission and RUN/sensor-health implementation and final31 plus100-attempt/100-pair acceptance remain blocked."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Migrate the ingress helper and pinned worker with private state-directory provisioning, unit, activator and installed-source inventory together in the existing common successor. Preserve frozen predecessors and truthful stage-derived worker artifacts. Then join retained ingress, one-collector boot/active-time-namespace observations and effective broker final-decision evidence through the existing independent measurement path before real prepared-attempt/workload callback execution.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and clean tree, and retain its hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

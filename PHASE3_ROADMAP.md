@@ -7,16 +7,15 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Queue base: signed `06a047e` (worker ingress hook, permanent records and
-independent consumer). The current batch adds the reviewed common74 packaging
-and identity migration documented below; actual common activation is still
-outstanding. The older counts and effort
+Current queue base: signed `ebc4767` (common74 packaging and v2 identity migration).
+The S2 setup-only handoff and interval verifier are documented below; actual
+common activation and workload collection are still outstanding. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / dependent | Real common host/guest execution and measurement wiring | Original prepared request/commitment consumed once; ingress, clock-domain and broker-final records independently joined; real workload, sink/attribution and cleanup callbacks connected |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Setup-only seven-writer handoff and independent retained interval joins implemented; host dispatch, original commitment/request consumption, actual activation/workload, sink/attribution and cleanup collection remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -1353,3 +1352,54 @@ sink/attribution and cleanup callbacks. The older controller target must not be
 relabeled as common74. Remaining admission and RUN/sensor-health implementations
 can proceed in separate source ownership lanes, but all must converge on this
 same deployment before final freeze and required acceptance.
+
+**Common setup handoff and independent interval joins (2026-10-06):** signed
+`ebc4767` is the packaging/identity base. The new fixed common guest setup path
+reuses the frozen seven-document writer hook, the v2 preparation API and existing
+CAS custody. It derives exactly 13 changed/added source overrides from the pinned
+common74 report; the predecessor's other source expectations and driver pin stay
+in force. Installed implementation/setup source readbacks are separately bound;
+they are not a loaded-code or signed-host execution attestation.
+
+Before any legacy reset or setup write, it requires the exact owned Linux guest,
+unchanged sources, four stopped services, unused broker measurement state and an
+absent fixed worker ingress root. Caller documents and source sizes are bounded
+before mutation. The actual seven writer documents are reread under protected
+file custody, converted to common preparation, retained children-first and
+reconstructed from retained bytes. Raw writer credentials are not exported or
+retained as public blobs. The private stop sentinel prevents the first activation;
+source/CAS/absence postconditions and owned four-service cleanup are checked.
+Partial evidence remains; cleanup errors preserve the primary failure. This
+setup-only result is deliberately not resumable authority or a measured request.
+
+The new independent interval consumer composes the existing worker-ingress,
+clock-domain and effective broker-receipt verifiers. It joins byte-identical action
+requests, the worker process epoch and broker attribution/peer, broker boot and
+external active time namespace, and event order within the two external read
+brackets. Provided records, binding and the existing broker closure must remain
+in read-only CAS custody. Only the recorded authenticated non-receipt frame to
+effective final-verdict interval is derived. It includes retention/dispatch
+overhead and excludes native-call start, final-record persistence, response
+delivery and sink acknowledgment. Startup may precede the first clock read.
+
+Validation: 20 new methods passed once through two selected pipeline stages
+(nine setup/handoff/cleanup; 11 cross-record interval/identity/chronology/custody).
+The exact unchanged pipeline-unit success was reused. Explicit reviewed closures
+contain 133 and 23 inputs, including only data-constructor fixture imports rather
+than historical test discovery. Kernel, writer, service and filesystem-custody
+effects are inert doubles; CAS and profile staging use temporary local stores.
+The [batch checkpoint](benchmark/evidence/phase3-common-setup-interval-implementation-v1-2026-10-06.json)
+retains source pins and successful fingerprints. No live fixture, VM, service,
+performance sample, frozen predecessor or Phase 3 exit gate changed.
+
+Next S2 slice: bind this common74 guest integration to signed host source/copy
+inventory and outer retained replay, then implement the fixed real workload and
+independent sink/attribution paths. Connect actual measurement commitment and
+broker-input provisioning before the first activator, with both clock reads in
+the same collector process. Do not create the ingress directory before broker
+inputs are ready. The old generic collector's `mark()` timestamps its own callback
+invocations; it cannot be fed retained worker/broker timestamps or called around
+the driver and presented as the native ingress interval. The existing create
+driver expects `ALLOW/CREATED`, not a verified blocked attempt. These concrete
+execution contracts still require implementation before any live timing or final
+acceptance. Remaining admission and RUN/sensor-health lanes remain open.

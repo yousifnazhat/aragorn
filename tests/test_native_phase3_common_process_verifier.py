@@ -31,7 +31,7 @@ def _fixture():
             0o400
             if path in {*old.DYNAMIC_PATHS, subject.MEASUREMENT_BINDING}
             else 0o755
-            if path == old._ENTRY
+            if path in (old._ENTRY, subject.ACTIVATOR)
             else 0o644
         )
         uid, gid = (
@@ -181,6 +181,10 @@ def _fixture():
             name: deepcopy(files[path])
             for name, path in subject.MEASUREMENT_SOURCES.items()
         },
+        "worker_module_views": {
+            name: deepcopy(files[path])
+            for name, path in subject.WORKER_INGRESS_SOURCES.items()
+        },
         "measured_joins": joins,
         "unresolved_dimensions": deepcopy(subject._UNRESOLVED),
         "limitations": list(subject.IDENTITY_LIMITATIONS),
@@ -225,7 +229,11 @@ class NativeCommonProcessVerifierTests(unittest.TestCase):
         before = deepcopy((self.identity, self.observer, self.pins))
         result = self.verify()
         self.assertEqual(result["status"], "BOUNDED_COMMON_PROCESS_JOINS_VERIFIED")
-        self.assertEqual(result["caller_pinned_files"], 26)
+        self.assertEqual(result["caller_pinned_files"], 28)
+        self.assertEqual(
+            result["schema"], "aragorn/native-phase3-common-process-verification/v2"
+        )
+        self.assertEqual(len(subject.MEASUREMENT_SOURCES), 7)
         self.assertEqual(
             set(result["joined_processes"]), {"gateway", "worker", "sensor", "broker"}
         )
@@ -297,6 +305,7 @@ class NativeCommonProcessVerifierTests(unittest.TestCase):
             ("identity", "phase3_eligible", 0),
             ("observer", "metrics_eligible", True),
             ("observer", "schema", subject.IDENTITY_SCHEMA),
+            ("identity", "schema", "aragorn/native-phase3-common-live-identity/v1"),
             ("identity", "extra", True),
             ("observer", "boot_id", "0" * 32),
         ):
@@ -315,7 +324,7 @@ class NativeCommonProcessVerifierTests(unittest.TestCase):
         with self.assertRaises(subject.NativeCommonProcessVerificationError):
             self.verify(observer=observer)
 
-    def test_file_pins_metadata_and_common26_inventory_are_checked(self):
+    def test_file_pins_metadata_and_common28_inventory_are_checked(self):
         bad_pins = dict(self.pins)
         bad_pins[subject.MEASUREMENT_BINDING] = subject.frozen._digest(b"other")
         with self.assertRaises(subject.NativeCommonProcessVerificationError):
@@ -336,6 +345,62 @@ class NativeCommonProcessVerifierTests(unittest.TestCase):
         del identity["files"][subject.MEASUREMENT_BINDING]
         with self.assertRaises(subject.NativeCommonProcessVerificationError):
             self.verify(identity=identity)
+
+    def test_ingress_helper_activator_and_worker_view_require_exact_inventory_and_modes(
+        self,
+    ):
+        helper_name, helper_path = next(iter(subject.WORKER_INGRESS_SOURCES.items()))
+        for path in (subject.ACTIVATOR, helper_path):
+            identity = deepcopy(self.identity)
+            identity["files"].pop(path)
+            with (
+                self.subTest(path=path, change="missing"),
+                self.assertRaises(subject.NativeCommonProcessVerificationError),
+            ):
+                self.verify(identity=identity)
+            pins = dict(self.pins)
+            pins.pop(path)
+            with (
+                self.subTest(path=path, change="missing-pin"),
+                self.assertRaises(subject.NativeCommonProcessVerificationError),
+            ):
+                self.verify(expected_file_digests=pins)
+            for mode in (0o400, 0o644 if path == subject.ACTIVATOR else 0o755, 0o666):
+                identity = deepcopy(self.identity)
+                identity["files"][path]["identity"][2] = stat.S_IFREG | mode
+                with (
+                    self.subTest(path=path, mode=mode),
+                    self.assertRaises(subject.NativeCommonProcessVerificationError),
+                ):
+                    self.verify(identity=identity)
+            identity = deepcopy(self.identity)
+            identity["files"][path]["identity"][3] = 997
+            with (
+                self.subTest(path=path, change="owner"),
+                self.assertRaises(subject.NativeCommonProcessVerificationError),
+            ):
+                self.verify(identity=identity)
+        for change in ("missing", "extra", "digest", "bytes", "mode", "owner"):
+            identity = deepcopy(self.identity)
+            view = identity["worker_module_views"][helper_name]
+            if change == "missing":
+                identity["worker_module_views"].pop(helper_name)
+            elif change == "extra":
+                identity["worker_module_views"]["unreviewed.py"] = deepcopy(view)
+            elif change == "digest":
+                view["digest"] = subject.frozen._digest(b"substituted worker helper")
+            elif change == "bytes":
+                view["bytes"] += 1
+                view["identity"][6] += 1
+            elif change == "mode":
+                view["identity"][2] = stat.S_IFREG | 0o755
+            else:
+                view["identity"][3] = 997
+            with (
+                self.subTest(change=change),
+                self.assertRaises(subject.NativeCommonProcessVerificationError),
+            ):
+                self.verify(identity=identity)
 
     def test_loaded_measurement_credential_and_module_views_cannot_be_substituted(self):
         for container, key in (

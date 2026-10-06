@@ -23,14 +23,19 @@ from .runtime_native_measurement_inputs import (
 
 old = admission.old
 CASE_BRANCHES = admission.CASE_BRANCHES
-STAGED_SCHEMA = "aragorn/runtime-phase3-common-staged-profile/v1"
-# Derived from the actual reviewed common stager at ec510d9; inert bytes only.
+STAGED_SCHEMA = "aragorn/runtime-phase3-ingress-staged-profile/v1"
+# Derived from the reviewed ingress74 successor report; inert bytes only.
 STAGED_PROFILE_PIN = (
-    50029,
-    "sha256:4c5e4f131f493d7de2a32cac5764fa7bf4ffb83fe46c4a55d600013a0ab9b65e",
+    51756,
+    "sha256:0fcd6cb67ac2721122c72ebe6bb6973a1a15f57444a8e8107d618add74677d4e",
 )
-STATIC_SCHEMA = "aragorn/native-common-static-pins/v1"
-STATIC_PATHS = (*old.live.STATIC_PATHS, *common_identity.MEASUREMENT_SOURCES.values())
+STATIC_SCHEMA = "aragorn/native-common-static-pins/v2"
+STATIC_PATHS = (
+    *old.live.STATIC_PATHS,
+    *common_identity.MEASUREMENT_SOURCES.values(),
+    *common_identity.WORKER_INGRESS_SOURCES.values(),
+    common_identity.ACTIVATOR,
+)
 IMPLEMENTATION_SOURCE_PATHS = (
     "src/aragorn/native_phase3_common_preparation.py",
     "src/aragorn/native_phase3_common_identity.py",
@@ -40,9 +45,9 @@ IMPLEMENTATION_SOURCE_PATHS = (
     "scripts/runtime_phase3_common_process_observer.py",
     *admission.CASE_SOURCE_PATHS,
 )
-PREPARATION_SCHEMA = "aragorn/native-common-deployment-preparation/v1"
+PREPARATION_SCHEMA = "aragorn/native-common-deployment-preparation/v2"
 PREPARATION_AUTHORITY = "CALLER_SUPPLIED_WRITER_BYTES_NOT_DEPLOYMENT_OR_ACTIVATION"
-REQUEST_SCHEMA = "aragorn/native-common-measured-case-request/v1"
+REQUEST_SCHEMA = "aragorn/native-common-measured-case-request/v2"
 REQUEST_AUTHORITY = (
     "PURE_COMMON_REQUEST_BYTES_NOT_PUBLICATION_ACTIVATION_OR_MEASUREMENT"
 )
@@ -88,13 +93,24 @@ def _stage(raw: bytes, baseline: dict) -> dict:
         and value["admission_qualified"] is False
         and value["common_deployment_activated"] is False
         and value["phase3_qualification"] is False
+        and all(
+            value[key] is False
+            for key in (
+                "worker_ingress_deployed",
+                "worker_ingress_directory_provisioned",
+                "worker_ingress_collected",
+                "clock_domain_verified",
+                "elapsed_time_derived",
+                "metrics_eligible",
+            )
+        )
         and (
             len(value["files"]),
             len(value["source_inputs"]),
             len(value["new_dependencies"]),
             len(value["directories"]),
         )
-        == (73, 93, 29, 16)
+        == (74, 96, 30, 16)
         and value["directories"] == baseline["staged_profile"]["directories"]
         and value["required_runtime_not_included"]
         == baseline["staged_profile"]["required_runtime_not_included"],
@@ -112,12 +128,14 @@ def _static(raw: bytes, stage: dict, baseline: dict) -> dict:
     pins = old._pins(value["file_digests"], STATIC_PATHS)
     files = {row["path"]: row for row in stage["files"]}
     _require(
-        len(files) == 73
+        len(files) == 74
         and all(
             pins[path] == files[path]["digest"]
             for path in (
                 *old.live._PROFILE_PATHS,
                 *common_identity.MEASUREMENT_SOURCES.values(),
+                *common_identity.WORKER_INGRESS_SOURCES.values(),
+                common_identity.ACTIVATOR,
             )
         )
         and pins[old.live._ENTRY]
@@ -764,7 +782,7 @@ def _prepare_request(
     _require(
         set(expected_files) == set(common_identity.FILE_PATHS)
         and len(hashes) == 8
-        and len(expected_files) == 26,
+        and len(expected_files) == 28,
         "common request file inventory changed",
     )
     retained = dict(prepared["input_blobs"])

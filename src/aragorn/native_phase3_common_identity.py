@@ -22,7 +22,7 @@ from . import runtime_broker_decision_measurement_verify as measurement
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .runtime_capability_grant import parse_runtime_capability_grant
 
-SCHEMA = "aragorn/native-phase3-common-live-identity/v1"
+SCHEMA = "aragorn/native-phase3-common-live-identity/v2"
 AUTHORITY = "LOCAL_COMMON_KERNEL_AND_PROTECTED_BYTES_NOT_DEPLOYMENT_ATTESTATION"
 MEASUREMENT_BINDING = "/etc/aragorn/runtime-broker-decision-measurement.json"
 MEASUREMENT_SOURCES = {
@@ -37,14 +37,24 @@ MEASUREMENT_SOURCES = {
         "phase3_quantitative_metrics.py",
     )
 }
-FILE_PATHS = (*prior.FILE_PATHS, MEASUREMENT_BINDING, *MEASUREMENT_SOURCES.values())
+ACTIVATOR = "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh"
+WORKER_INGRESS_SOURCES = {
+    "runtime_worker_ingress_measurement.py": "/usr/lib/aragorn/aragorn/runtime_worker_ingress_measurement.py",
+}
+FILE_PATHS = (
+    *prior.FILE_PATHS,
+    MEASUREMENT_BINDING,
+    *MEASUREMENT_SOURCES.values(),
+    ACTIVATOR,
+    *WORKER_INGRESS_SOURCES.values(),
+)
 CREDENTIALS = {role: dict(values) for role, values in prior._CREDENTIALS.items()}
 CREDENTIALS["broker"]["decision-measurement-binding"] = MEASUREMENT_BINDING
 LIMITATIONS = (
     "POINT_IN_TIME_BEFORE_AFTER_READS_NOT_CONTINUOUS_IMMUTABILITY",
     "CALLER_FILE_PINS_REQUIRE_OUTER_COMMON_STAGED_PROFILE_BINDING",
-    "SELECTED_MODULE_AND_UNIT_BYTES_NOT_WHOLE_73_FILE_PROFILE_OR_RUNTIME_TREE",
-    "BROKER_ROOT_MODULE_BYTES_NOT_LOADED_PYTHON_MODULE_PROVENANCE",
+    "SELECTED_MODULE_UNIT_AND_ACTIVATOR_BYTES_NOT_WHOLE_74_FILE_PROFILE_OR_RUNTIME_TREE",
+    "PROCESS_ROOT_MODULE_BYTES_NOT_LOADED_PYTHON_MODULE_PROVENANCE",
     "LOADED_CREDENTIAL_BYTES_NOT_APPLICATION_ACK_OR_POLICY_SEMANTICS",
     "MEASUREMENT_BINDING_DIGESTS_NOT_INPUT_CAS_OR_DEPLOYMENT_CLOSURE_READBACK",
     "GRANT_STRUCTURE_AND_BINDING_JOINS_NOT_CURRENT_LIVENESS_OR_AUTHORIZATION",
@@ -53,7 +63,7 @@ LIMITATIONS = (
 )
 UNRESOLVED_DIMENSIONS = {
     **{key: list(value) for key, value in prior.UNRESOLVED_DIMENSIONS.items()},
-    "os_profile": ["complete_installed_73_file_profile", "image_and_kernel_provenance"],
+    "os_profile": ["complete_installed_74_file_profile", "image_and_kernel_provenance"],
     "configuration": [
         "application_use_of_measured_loaded_configuration",
         "measurement_input_cas_and_deployment_closure",
@@ -258,9 +268,9 @@ def _file_arguments(path: str, accounts: dict) -> dict:
         "owner": 1000 if runtime else accounts["broker"][0] if policy else 0,
         "owner_gid": 1000 if runtime else accounts["broker"][1] if policy else 0,
         "modes": {0o644}
-        if path in MEASUREMENT_SOURCES.values()
+        if path in (*MEASUREMENT_SOURCES.values(), *WORKER_INGRESS_SOURCES.values())
         else {0o755}
-        if runtime
+        if runtime or path == ACTIVATOR
         else {0o644, 0o755}
         if path in prior._CODE or path in (prior._PYTHON, "/usr/local/bin/node")
         else {0o400},
@@ -276,7 +286,7 @@ def _file_arguments(path: str, accounts: dict) -> dict:
 def read_native_common_identity(
     *, expected_container_id: str, expected_file_digests: dict[str, str]
 ) -> dict[str, Any]:
-    """Measure the fixed26 files and actual process views, without returning raw bytes."""
+    """Measure the fixed28 files and actual process views, without returning raw bytes."""
     try:
         return _read(expected_container_id, expected_file_digests)
     except NativeCommonIdentityError:
@@ -354,7 +364,7 @@ def _read(container: str, expected: dict) -> dict:
             )
             raw[path], files[path] = content, metadata
             root_reads.append((root, path, args, content, metadata))
-        loaded, module_views, view_reads = {}, {}, []
+        loaded, module_views, worker_module_views, view_reads = {}, {}, {}, []
         for role, record in records.items():
             process.require_live_pidfd(pidfds[role])
             fd = os.open(
@@ -417,6 +427,13 @@ def _read(container: str, expected: dict) -> dict:
                     name: view(path, path, {"owner": 0, "modes": {0o644}})
                     for name, path in MEASUREMENT_SOURCES.items()
                 }
+            if role == "worker":
+                worker_module_views = {
+                    name: view(
+                        path, path, {"owner": 0, "owner_gid": 0, "modes": {0o644}}
+                    )
+                    for name, path in WORKER_INGRESS_SOURCES.items()
+                }
             _require(
                 process._executable_digest(record["pid"])
                 == pins[prior._executable_path(role)],
@@ -457,6 +474,7 @@ def _read(container: str, expected: dict) -> dict:
             "processes": records,
             "loaded_process_views": loaded,
             "broker_module_views": module_views,
+            "worker_module_views": worker_module_views,
             "measured_joins": joins,
             "unresolved_dimensions": {
                 key: list(value) for key, value in UNRESOLVED_DIMENSIONS.items()
@@ -468,9 +486,29 @@ def _read(container: str, expected: dict) -> dict:
 
 def compare_native_common_identity(before: dict, after: dict) -> dict:
     """Compare two retained observations without claiming another independent read."""
+    fields = {
+        "schema",
+        "authority",
+        "status",
+        "container_id",
+        "boot_id",
+        "files",
+        "fixed_python_launcher",
+        "processes",
+        "loaded_process_views",
+        "broker_module_views",
+        "worker_module_views",
+        "measured_joins",
+        "unresolved_dimensions",
+        "limitations",
+        *_FALSE,
+    }
+    if type(before) is dict and "fixed_systemd_library_alias" in before:
+        fields.add("fixed_systemd_library_alias")
     _require(
         type(before) is dict
         and type(after) is dict
+        and set(before) == fields
         and before == after
         and before.get("schema") == SCHEMA
         and before.get("authority") == AUTHORITY
@@ -481,6 +519,8 @@ def compare_native_common_identity(before: dict, after: dict) -> dict:
         and set(before["files"]) == set(FILE_PATHS)
         and type(before.get("broker_module_views")) is dict
         and set(before["broker_module_views"]) == set(MEASUREMENT_SOURCES)
+        and type(before.get("worker_module_views")) is dict
+        and set(before["worker_module_views"]) == set(WORKER_INGRESS_SOURCES)
         and type(before.get("processes")) is dict
         and set(before["processes"]) == set(prior._UNITS)
         and all(type(record) is dict for record in before["processes"].values())

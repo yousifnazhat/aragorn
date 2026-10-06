@@ -1,4 +1,4 @@
-"""Bounded cross-observation joins for the common26 identity boundary.
+"""Bounded cross-observation joins for the ingress common28 identity boundary.
 
 Only retained dictionaries and caller-held file pins are consumed. Neither the
 common identity producer nor the independent process observer is imported. The
@@ -14,9 +14,9 @@ import stat
 from . import native_phase3_plugin_update_live_binding as frozen
 from .oci_worker_protocol import canonical_json
 
-SCHEMA = "aragorn/native-phase3-common-process-verification/v1"
+SCHEMA = "aragorn/native-phase3-common-process-verification/v2"
 AUTHORITY = "RETAINED_INDEPENDENT_OBSERVER_JOINS_NOT_LIVE_ATTESTATION"
-IDENTITY_SCHEMA = "aragorn/native-phase3-common-live-identity/v1"
+IDENTITY_SCHEMA = "aragorn/native-phase3-common-live-identity/v2"
 IDENTITY_AUTHORITY = (
     "LOCAL_COMMON_KERNEL_AND_PROTECTED_BYTES_NOT_DEPLOYMENT_ATTESTATION"
 )
@@ -37,7 +37,17 @@ MEASUREMENT_SOURCES = {
         "phase3_quantitative_metrics.py",
     )
 }
-FILE_PATHS = (*frozen.FILE_PATHS, MEASUREMENT_BINDING, *MEASUREMENT_SOURCES.values())
+ACTIVATOR = "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh"
+WORKER_INGRESS_SOURCES = {
+    "runtime_worker_ingress_measurement.py": "/usr/lib/aragorn/aragorn/runtime_worker_ingress_measurement.py",
+}
+FILE_PATHS = (
+    *frozen.FILE_PATHS,
+    MEASUREMENT_BINDING,
+    *MEASUREMENT_SOURCES.values(),
+    ACTIVATOR,
+    *WORKER_INGRESS_SOURCES.values(),
+)
 CREDENTIALS = {role: dict(values) for role, values in frozen._CREDENTIALS.items()}
 CREDENTIALS["broker"]["decision-measurement-binding"] = MEASUREMENT_BINDING
 FALSE_FLAGS = (
@@ -51,8 +61,8 @@ FALSE_FLAGS = (
 IDENTITY_LIMITATIONS = (
     "POINT_IN_TIME_BEFORE_AFTER_READS_NOT_CONTINUOUS_IMMUTABILITY",
     "CALLER_FILE_PINS_REQUIRE_OUTER_COMMON_STAGED_PROFILE_BINDING",
-    "SELECTED_MODULE_AND_UNIT_BYTES_NOT_WHOLE_73_FILE_PROFILE_OR_RUNTIME_TREE",
-    "BROKER_ROOT_MODULE_BYTES_NOT_LOADED_PYTHON_MODULE_PROVENANCE",
+    "SELECTED_MODULE_UNIT_AND_ACTIVATOR_BYTES_NOT_WHOLE_74_FILE_PROFILE_OR_RUNTIME_TREE",
+    "PROCESS_ROOT_MODULE_BYTES_NOT_LOADED_PYTHON_MODULE_PROVENANCE",
     "LOADED_CREDENTIAL_BYTES_NOT_APPLICATION_ACK_OR_POLICY_SEMANTICS",
     "MEASUREMENT_BINDING_DIGESTS_NOT_INPUT_CAS_OR_DEPLOYMENT_CLOSURE_READBACK",
     "GRANT_STRUCTURE_AND_BINDING_JOINS_NOT_CURRENT_LIVENESS_OR_AUTHORIZATION",
@@ -67,7 +77,7 @@ OBSERVER_LIMITATIONS = (
 )
 _UNRESOLVED = {
     **{name: list(parts) for name, parts in frozen._UNRESOLVED.items()},
-    "os_profile": ["complete_installed_73_file_profile", "image_and_kernel_provenance"],
+    "os_profile": ["complete_installed_74_file_profile", "image_and_kernel_provenance"],
     "configuration": [
         "application_use_of_measured_loaded_configuration",
         "measurement_input_cas_and_deployment_closure",
@@ -190,6 +200,7 @@ def _envelopes(identity: dict, observer: dict, container: str) -> str:
         "processes",
         "loaded_process_views",
         "broker_module_views",
+        "worker_module_views",
         "measured_joins",
         "unresolved_dimensions",
         "limitations",
@@ -379,7 +390,7 @@ def _processes(identity: dict, observer: dict, container: str) -> dict:
 
 def _files(identity: dict, pins: dict, accounts: dict) -> None:
     files = identity["files"]
-    _exact(files, set(FILE_PATHS), "common26 file inventory changed")
+    _exact(files, set(FILE_PATHS), "common28 file inventory changed")
     dynamic = {*frozen.DYNAMIC_PATHS, MEASUREMENT_BINDING}
     for path, record in files.items():
         owner = (
@@ -393,9 +404,9 @@ def _files(identity: dict, pins: dict, accounts: dict) -> None:
             {0o400}
             if path in dynamic
             else {0o644}
-            if path in MEASUREMENT_SOURCES.values()
+            if path in (*MEASUREMENT_SOURCES.values(), *WORKER_INGRESS_SOURCES.values())
             else {0o755}
-            if path == frozen._ENTRY
+            if path in (frozen._ENTRY, ACTIVATOR)
             else {0o644, 0o755}
         )
         frozen._metadata(record, owners={owner}, modes=modes)
@@ -454,6 +465,18 @@ def _files(identity: dict, pins: dict, accounts: dict) -> None:
         _require(
             view["bytes"] == files[path]["bytes"] and view["digest"] == pins[path],
             "broker module view differs",
+        )
+    worker_modules = identity["worker_module_views"]
+    _exact(
+        worker_modules,
+        set(WORKER_INGRESS_SOURCES),
+        "common worker module inventory changed",
+    )
+    for name, path in WORKER_INGRESS_SOURCES.items():
+        view = frozen._metadata(worker_modules[name], owners={(0, 0)}, modes={0o644})
+        _require(
+            view["bytes"] == files[path]["bytes"] and view["digest"] == pins[path],
+            "worker ingress module view differs",
         )
     joins = identity["measured_joins"]
     declared = {

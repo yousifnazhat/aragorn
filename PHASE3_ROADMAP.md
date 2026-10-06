@@ -5,6 +5,35 @@ Planning date: 2026-10-04. Assessed implementation: `0a51326` on
 or a qualification result. The fixed [exit manifest](benchmark/phase3-exit-gate-manifest-v1.json)
 remains authoritative; this roadmap does not weaken or expand it.
 
+## Current sprint queue (2026-10-06)
+
+Queue base: signed `06a047e` (worker ingress hook, permanent records and
+independent consumer). The current batch adds the reviewed common74 packaging
+and identity migration documented below; actual common activation is still
+outstanding. The older counts and effort
+allowances below are planning history, not a current completion percentage.
+
+| Priority | Missing deliverable | Sprint completion evidence |
+|---|---|---|
+| S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
+| S2 / dependent | Real common host/guest execution and measurement wiring | Original prepared request/commitment consumed once; ingress, clock-domain and broker-final records independently joined; real workload, sink/attribution and cleanup callbacks connected |
+| S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
+| S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
+| S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
+
+These are dependency stages, **not a promise of five equal-sized sprints**.
+Use 30–90-minute implementation segments, split only at a reviewed interface or
+working end-to-end boundary, and record the exact remaining integration rather
+than renaming the same blocker. S2–S4 may require multiple segments. Do not widen
+scope into another framework or begin final acceptance to fill an idle interval.
+
+Every completed batch gets one automatic signed local Git commit containing only
+its implementation, applicable checks and checkpoint. Verify its signature and
+working-tree state before starting the next batch. Reuse exact successful test
+fingerprints; never rerun unchanged failures. A clock interval is not a reason
+to test or commit, and incomplete changes are not represented as a completed
+batch. Automatic pushes remain unauthorized.
+
 ## Outcome and current position
 
 Finish one exact native runtime deployment with independently verified admission,
@@ -1282,3 +1311,45 @@ artifact. Then bind retained ingress records to the one-collector boot/namespace
 observations and broker final-decision record in the existing independent
 measurement path. Real prepared-attempt/workload callbacks and remaining
 admission/RUN/sensor-health work still precede the single final acceptance freeze.
+
+**Common ingress packaging and identity migration (2026-10-06):** the ingress
+worker and helper now have one reviewed 74-file staged successor, preserving the
+frozen common73 parent. The exact canonical report binds 96 source inputs,
+30 new dependencies and 16 directories. Preparation requires its real full-report
+pin and the actual stage-derived worker artifact; the seven-writer provisioning
+contract and seven broker measurement sources remain unchanged.
+
+The worker unit adds only the fixed private ingress root to `ReadWritePaths`;
+it does not add a systemd-managed state directory that could repair old evidence.
+The activator verifies loaded restrictions and that all four relevant services
+are inactive before absent-only directory provisioning. Root-owned ancestry,
+held/named inode joins, bounded emptiness checks, exact worker ownership and
+descriptor cleanup protect that one operation. Existing or partially created
+directories are retained and refused, never reset or retried. This is reviewed
+activation code, not an executed activation or a successful guest observation.
+
+Current static/preparation/request and identity/verification envelopes move to
+v2 so frozen v1 records cannot be presented as current evidence. The selected
+inventory grows from 26 to 28 files: the helper is independently joined through
+the actual worker process root as well as the protected filesystem; the
+activator is root-only source evidence. Neither reader claims that these bytes
+prove loaded Python code or complete measurement of all 74 installed files.
+
+Validation: six selected pipeline stages passed on their first execution,
+covering 54 methods (17 new and 37 affected). Exact unchanged pipeline-unit and
+measurement-input results were reused. The reviewed explicit closures contain
+98, 114, 113, 114, 17 and eight inputs for profile, migration, preparation,
+worker provisioning, identity and independent verification respectively.
+The [batch checkpoint](benchmark/evidence/phase3-common-ingress-migration-implementation-v1-2026-10-06.json)
+retains the pins, successful fingerprints and review limits. No live capture,
+host/guest service action, performance sample or Phase 3 exit-gate promotion
+occurred. Frozen predecessors and retained evidence are unchanged.
+
+Next implementation sprint (S2): reuse the existing common host/guest controller
+and independent measurement path to consume the v2 prepared request once on the
+common74 deployment. Join actual ingress, both boot/active-namespace observations
+from one collector, and effective broker-final records; wire real workload,
+sink/attribution and cleanup callbacks. The older controller target must not be
+relabeled as common74. Remaining admission and RUN/sensor-health implementations
+can proceed in separate source ownership lanes, but all must converge on this
+same deployment before final freeze and required acceptance.

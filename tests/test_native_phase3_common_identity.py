@@ -183,11 +183,24 @@ class NativeCommonIdentityTests(unittest.TestCase):
                 else:
                     self.assertEqual(kwargs["credential_owner"], accounts["broker"][0])
                     self.assertEqual(kwargs["credential_gid"], accounts["broker"][1])
-            if source in subject.MEASUREMENT_SOURCES.values():
+            if source in (
+                *subject.MEASUREMENT_SOURCES.values(),
+                *subject.WORKER_INGRESS_SOURCES.values(),
+            ):
                 self.assertEqual(kwargs["owner"], 0)
                 self.assertEqual(kwargs["modes"], {0o644})
+            if source in subject.WORKER_INGRESS_SOURCES.values():
+                self.assertEqual(kwargs["owner_gid"], 0)
+            if source == subject.ACTIVATOR:
+                self.assertEqual(kwargs["owner"], 0)
+                self.assertEqual(kwargs["owner_gid"], 0)
+                self.assertEqual(kwargs["modes"], {0o755})
             mode = stat.S_IFREG | (
-                0o400 if source == subject.MEASUREMENT_BINDING else 0o644
+                0o400
+                if source == subject.MEASUREMENT_BINDING
+                else 0o755
+                if source == subject.ACTIVATOR
+                else 0o644
             )
             metadata = {
                 "bytes": len(content),
@@ -251,9 +264,13 @@ class NativeCommonIdentityTests(unittest.TestCase):
             arguments, opened, reads = self.harness(stack)
             result = subject.read_native_common_identity(**arguments)
         self.assertEqual(result["schema"], subject.SCHEMA)
-        self.assertEqual(len(result["files"]), 26)
+        self.assertEqual(len(result["files"]), 28)
         self.assertEqual(
             set(result["broker_module_views"]), set(subject.MEASUREMENT_SOURCES)
+        )
+        self.assertEqual(len(subject.MEASUREMENT_SOURCES), 7)
+        self.assertEqual(
+            set(result["worker_module_views"]), set(subject.WORKER_INGRESS_SOURCES)
         )
         self.assertIn(
             "decision-measurement-binding", result["loaded_process_views"]["broker"]
@@ -263,6 +280,24 @@ class NativeCommonIdentityTests(unittest.TestCase):
         for path in subject.MEASUREMENT_SOURCES.values():
             self.assertIn((("observer", path), 2), reads)
             self.assertIn((("broker", path), 2), reads)
+        for name, path in subject.WORKER_INGRESS_SOURCES.items():
+            self.assertIn((("observer", path), 2), reads)
+            self.assertIn((("worker", path), 2), reads)
+            self.assertEqual(
+                result["worker_module_views"][name]["digest"],
+                result["files"][path]["digest"],
+            )
+            self.assertNotIn((("broker", path), 1), reads)
+        self.assertIn((("observer", subject.ACTIVATOR), 2), reads)
+        self.assertEqual(
+            stat.S_IMODE(result["files"][subject.ACTIVATOR]["identity"][2]), 0o755
+        )
+        self.assertFalse(
+            any(
+                role != "observer" and path == subject.ACTIVATOR
+                for (role, path), _ in reads
+            )
+        )
         binding_path = f"/run/credentials/{subject.prior._UNITS['broker']}/decision-measurement-binding"
         self.assertIn((("broker", binding_path), 2), reads)
         self.assertEqual(result["measured_joins"]["measurement_boot_id"], BOOT)
@@ -291,6 +326,9 @@ class NativeCommonIdentityTests(unittest.TestCase):
 
     def test_final_root_and_loaded_readback_changes_refuse(self):
         targets = (
+            ("observer", subject.ACTIVATOR),
+            ("observer", next(iter(subject.WORKER_INGRESS_SOURCES.values()))),
+            ("worker", next(iter(subject.WORKER_INGRESS_SOURCES.values()))),
             ("observer", subject.MEASUREMENT_BINDING),
             (
                 "observer",
@@ -350,20 +388,43 @@ class NativeCommonIdentityTests(unittest.TestCase):
                     subject.read_native_common_identity(**arguments)
 
     def test_exact_pin_inventory_and_source_digest_are_required(self):
-        for change in ("missing", "extra", "wrong"):
-            with self.subTest(change=change), ExitStack() as stack:
-                arguments, opened, _ = self.harness(stack)
-                pins = arguments["expected_file_digests"]
-                path = subject.MEASUREMENT_SOURCES["phase3_deployment.py"]
-                if change == "missing":
-                    pins.pop(path)
-                elif change == "extra":
-                    pins["/unexpected"] = PIN
-                else:
-                    pins[path] = PIN
-                with self.assertRaises(subject.NativeCommonIdentityError):
-                    subject.read_native_common_identity(**arguments)
-            self.assert_closed(opened)
+        for path in (
+            subject.MEASUREMENT_SOURCES["phase3_deployment.py"],
+            subject.ACTIVATOR,
+            *subject.WORKER_INGRESS_SOURCES.values(),
+        ):
+            for change in ("missing", "extra", "wrong"):
+                with self.subTest(path=path, change=change), ExitStack() as stack:
+                    arguments, opened, _ = self.harness(stack)
+                    pins = arguments["expected_file_digests"]
+                    if change == "missing":
+                        pins.pop(path)
+                    elif change == "extra":
+                        pins["/unexpected"] = PIN
+                    else:
+                        pins[path] = PIN
+                    with self.assertRaises(subject.NativeCommonIdentityError):
+                        subject.read_native_common_identity(**arguments)
+                self.assert_closed(opened)
+
+    def test_ingress_worker_process_view_must_equal_protected_helper_bytes(self):
+        path = next(iter(subject.WORKER_INGRESS_SOURCES.values()))
+        with ExitStack() as stack:
+            arguments, opened, reads = self.harness(
+                stack,
+                mutate_read=lambda key, count, content: (
+                    content + b"changed" if key == ("worker", path) else content
+                ),
+            )
+            with self.assertRaisesRegex(
+                subject.NativeCommonIdentityError, "process view differs"
+            ):
+                subject.read_native_common_identity(**arguments)
+            self.assertEqual(
+                [row for row in reads if row[0] == ("worker", path)],
+                [(("worker", path), 1)],
+            )
+        self.assert_closed(opened)
 
     def test_partial_pidfd_failure_and_process_epoch_change_close_handles(self):
         for change in ("pidfd", "process", "root"):
@@ -512,8 +573,11 @@ class NativeCommonIdentityTests(unittest.TestCase):
         self.assertTrue(all(compared[key] is False for key in subject._FALSE))
         for key, value in (
             ("schema", subject.prior.SCHEMA),
+            ("schema", "aragorn/native-phase3-common-live-identity/v1"),
             ("application_acknowledged", True),
             ("broker_module_views", {}),
+            ("worker_module_views", {}),
+            ("unreviewed_extra", True),
         ):
             changed = {**before, key: value}
             with (

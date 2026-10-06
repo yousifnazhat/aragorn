@@ -15,7 +15,7 @@ from aragorn import native_phase3_common_preparation as subject
 from aragorn import phase3_quantitative_metrics as metrics
 from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
-from scripts import stage_runtime_phase3_common_profile as stager
+from scripts import stage_runtime_phase3_ingress_profile as stager
 from tests import test_native_phase3_admission_case as admission_data
 from tests import test_runtime_broker_measurement_plan as measurement_data
 
@@ -30,7 +30,7 @@ PIN = "sha256:" + "f" * 64
 def _stage_data():
     # Data construction only: no prior test method, runtime or clock is invoked.
     with tempfile.TemporaryDirectory() as temporary:
-        stage = stager.stage_runtime_phase3_common_profile(
+        stage = stager.stage_runtime_phase3_ingress_profile(
             Path(temporary).resolve() / "common"
         )
     raw = admission_data._BASELINE.read_bytes()
@@ -361,7 +361,7 @@ class NativeCommonPreparationTests(unittest.TestCase):
             ):
                 self.build(**updates)
 
-    def test_single_request_joins_real_pure_measurement_closure_and_all_26_pins(self):
+    def test_single_request_joins_real_pure_measurement_closure_and_all_28_pins(self):
         preparation = self.build()
         self.retain(preparation["input_blobs"])
         measured = self.measurement(preparation)
@@ -380,7 +380,7 @@ class NativeCommonPreparationTests(unittest.TestCase):
             result = subject.prepare_native_common_request(**arguments)
         self.assertEqual(canonical_json(result["request"]), result["request_raw"])
         self.assertEqual(canonical_digest(result["request"]), result["request_digest"])
-        self.assertEqual(len(result["expected_file_digests"]), 26)
+        self.assertEqual(len(result["expected_file_digests"]), 28)
         self.assertEqual(len(result["provisioning_file_digests"]), 8)
         self.assertEqual(
             {

@@ -7,16 +7,17 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `f50dbc8` (fixed blocked-create driver and independent sink/receipt joins).
-The S2 same-action revocation, once-only workload wrapper and original-commitment
-handoff are documented below; actual common activation and measurement collection
-are still outstanding. The older counts and effort
+Current queue base: signed `b7321ab` (same-action revocation, once-only workload and original-commitment handoff).
+The S2 first-activation guest controller, actual-writer plan builder and fixed
+public evidence snapshot are the next implementation batch documented below.
+Host installation/export and a real owned capture remain outstanding; guest
+orchestration checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Setup capture, independent retained interval/sink/receipt joins, fixed blocked-create driver, original-commitment provisioning handoff and same-action revocation/workload wrapper implemented. Common outer activation controller, actual ingress/broker/clock collection, public export and cleanup integration remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Guest first-activation controller now composes actual seven-writer planning, held original handoff, once-only workload, same-process clock brackets, fixed public ingress/broker reads, independent consumers and owned-service cleanup. Host copy/install inventory, bounded guest invocation/public export, independent capture replay and a newly necessary isolated live capture remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -1560,3 +1561,59 @@ and perform bounded owned-service/fixture cleanup. Do not regenerate a commitmen
 to resume a consumed attempt or promote this single-attempt path into the final
 campaign. Remaining admission families, RUN/sensor-health coverage, real campaign
 inventory and the full independent verifier map still precede freeze/acceptance.
+
+**First-activation guest attempt integration (2026-10-06):** the signed
+`b7321ab` base now has one guest controller that calls the actual seven-writer
+hook, derives the fresh protected-directory identity and boot ID, creates the
+original common deployment/collection/broker plan, and enters the existing held
+handoff before the sole activation. The original private stores must be fresh,
+distinct and held. Caller-supplied campaign inventory is required; its paired
+host profiles must match the actual common OS profile, without rewriting them.
+No production inventory, timing marks or denial samples are generated.
+
+After activation, the controller joins common28 identity to the independent
+process observer, holds live process handles, takes both external clock
+observations in the same process around one fixed workload, reads the actual
+worker and effective broker records, and invokes the existing independent
+blocked-create and interval consumers. The kernel mount-namespace link is read
+and joined to the held namespace descriptor, not substituted with a device/inode
+dictionary. Only the fixed six record roles and five public broker-blob roles
+are eligible for snapshot export; arbitrary/private record types are excluded.
+The controller never enumerates the private planning CAS for export.
+
+The original handoff, protected root and CAS contexts remain held through the
+single owned four-service cleanup. Public evidence candidates are checked
+independently after that cleanup; a missing candidate prohibits success. Partial
+classified records survive later readback/report-publication failures, and the
+original interruption is preserved. All deployment/admission/RUN/metrics/Phase 3
+qualification flags remain false. These are guest implementation boundaries,
+not a completed host capture, continuous sink-absence proof or final campaign.
+
+Validation: **40 new methods pass** through the three selected pipeline stages
+(12 original-plan, 13 evidence-snapshot and 15 controller methods). The planner
+passed once. The controller's first run reached the real consumers successfully
+but its new test referenced the wrong proof-ceiling field; that assertion was
+corrected. Snapshot review then tightened nested measured-action/attribution
+classification, superseding its initial 12-method pass; a new negative fixture
+needed its dependent lease digests rehashed before it exercised that boundary.
+Both failed fingerprints and the superseded success remain retained. Only
+changed fingerprints ran; the exact pipeline-unit success was reused, and the
+controller was not rerun after the snapshot-test-only correction. Reviewed
+closures contain 136, 26 and 91 inputs respectively. No live fixture, service,
+VM action, performance sample or exit gate ran or changed. The
+[batch checkpoint](benchmark/evidence/phase3-native-common-attempt-implementation-v1-2026-10-06.json)
+records the exact results and source pins.
+
+Next S2 slice: reuse the host lifecycle in
+`scripts/capture_native_phase3_common_setup.py` and the fixed export pattern in
+`scripts/runtime_native_common_setup_capture.py` for the attempt's copy/install
+inventory and bounded invocation/export path. Keep their setup-only contracts
+unchanged; add the attempt's independent retained capture consumer and owned
+fixture/VM restoration. Add exact allowlisted recovery for pre-yield handoff
+failure: its permanent claim and partial provisioning remain on disk, but the
+current handoff exposes its public session only after yielding. Do not blanket
+export private CAS, re-enter the claimant/provisioner, or destroy the fixture
+before required failure evidence is retained. Supply the real workload/pair
+inventory before a newly necessary isolated live check; setup-only fixtures and
+consumed attempts stay non-resumable. Remaining admission, RUN/sensor-health and
+full verifier coverage still precede the one final freeze and acceptance run.

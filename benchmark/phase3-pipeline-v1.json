@@ -2,6 +2,73 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "native-blocked-create-driver",
+      "description": "Verify only the new exact reversible blocked-create driver successor and absent-only source publication, plus bounded JavaScript definition doubles. No real driver entrypoint, provider, gateway, fixture or effect execution.",
+      "tests": ["test_runtime_native_blocked_create_driver"],
+      "inputs": [
+        "benchmark/admission/openclaw-v2026.7.1/native-receipt-read-create-driver-v1.mjs",
+        "benchmark/runtime-action-worker-openclaw-systemd/openclaw-worker-driver.mjs",
+        "scripts/materialize_protected_install_quarantine_producers.py",
+        "scripts/materialize_runtime_native_blocked_create_driver.py",
+        "tests/test_runtime_native_blocked_create_driver.py"
+      ],
+      "needs": ["pipeline-unit"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-denied-create-sink",
+      "description": "Verify only the new fixed protected/staging sink observer with inert owned-guest, account, process, source and filesystem doubles. Held descriptor checks and two bounded observations do not prove continuous absence or pre-effect prevention.",
+      "tests": ["test_native_phase3_denied_create_sink"],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_denied_create_sink.py",
+        "src/aragorn/native_phase3_live_identity.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_denied_create_sink.py"
+      ],
+      "needs": ["pipeline-unit"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-blocked-create-verifier",
+      "description": "Verify only new independent joins of retained actual callback projections, a sole native create receipt pair, worker ingress, effective broker BLOCK and two fixed sink observations. Existing fixture modules construct inert data only; no historical suite, effect or acceptance execution.",
+      "tests": ["test_native_phase3_blocked_create_verify"],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_blocked_create_verify.py",
+        "src/aragorn/native_phase3_clock_domain_verify.py",
+        "src/aragorn/native_phase3_ingress_interval_verify.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "src/aragorn/phase3_quantitative_metrics.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_broker_v2.py",
+        "src/aragorn/runtime_action_broker_v3.py",
+        "src/aragorn/runtime_action_broker_v4.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_broker_decision_measurement_verify.py",
+        "src/aragorn/runtime_broker_effective_receipt_verify.py",
+        "src/aragorn/runtime_capability_grant.py",
+        "src/aragorn/runtime_native_tool_receipts.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_worker_ingress_verify.py",
+        "tests/test_native_phase3_blocked_create_verify.py",
+        "tests/test_native_phase3_clock_domain_verify.py",
+        "tests/test_native_phase3_ingress_interval_verify.py",
+        "tests/test_runtime_broker_decision_measurement_verify.py",
+        "tests/test_runtime_broker_effective_receipt_verify.py",
+        "tests/test_runtime_worker_ingress_verify.py"
+      ],
+      "needs": ["pipeline-unit"],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-common-setup-guest",
       "description": "Verify fixed owned-guest setup invocation, explicit public CAS journal export, partial failure retention and independent final source/input custody. Only inert filesystem, environment and setup doubles; no live capture, private writer export or activation.",
       "tests": [

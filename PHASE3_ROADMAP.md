@@ -7,15 +7,15 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `4925652` (common74 setup handoff and interval joins).
-The S2 setup-only host/guest capture integration is documented below; actual
+Current queue base: signed `8c5e39d` (common74 setup host/guest capture and replay).
+The S2 fixed blocked-create workload and sink/receipt integration is documented below; actual
 common activation and workload collection are still outstanding. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Setup-only seven-writer handoff, public host/guest capture and independent retained interval joins implemented; original commitment/request consumption, actual activation/workload, sink/attribution and measurement cleanup collection remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Setup-only seven-writer handoff, public host/guest capture and independent retained interval joins implemented; fixed blocked-create driver and sink/receipt consumer are the current batch. Original commitment/request consumption, real denial prerequisite, activation/workload and measurement cleanup collection remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -1453,3 +1453,57 @@ them to the retained worker-ingress/effective-final records. This setup-only
 checkpoint is not a resumable fixture and must not be activated as a shortcut.
 Complete remaining admission and RUN/sensor-health lanes and the full verifier
 inventory before the single final freeze and required acceptance campaign.
+
+**Fixed blocked-create workload and independent sink joins (2026-10-06):**
+the signed `8c5e39d` setup-capture base now has a separate, exact reversible
+blocked-create driver successor. It reuses the pinned native driver and legacy
+helpers without modifying either predecessor. Before helper use, the executable
+requires the fixed Linux/root/Node environment and exact owned container cgroup.
+Its sole workload keeps the original target and payload, requires a genuine
+`COMPLETED/BLOCK/NOT_PERFORMED` return, and retains the complete source result and
+actual source-derived `JSON.stringify` callback projections. The blocked callback
+details are no longer reconstructed as a successful `completed` return. Neither
+the driver nor its source materializer creates a denial prerequisite.
+
+The independent fixed-sink reader holds the protected/staging directory ancestry
+and fixture-init process across the caller's attempt. It validates fixed accounts,
+the protected device/inode descriptor and observer source readbacks; scans at most
+one entry through a fresh directory stream for each snapshot; and never exports
+arbitrary names or file contents. It refuses a nonempty starting sink and takes
+the after observation only once, including on a primary workload failure. Final
+readback and descriptor cleanup failures remain visible without replacing the
+primary failure. Two empty snapshots do not prove continuous absence, no transient
+effect, global residue cleanliness or pre-effect prevention.
+
+The pure retained consumer joins the complete returned broker result to existing
+effective broker evidence, the driver request to worker ingress, gateway/worker
+identity expectations, the sole native attempt/terminal pair and the exact
+callback byte pins. It independently checks both fixed sink observations against
+the actual protected-path descriptor and separately supplied account/source pins.
+Only retained associations are verified; execution/source truth, causal prevention,
+policy correctness, timing, RUN and Phase 3 qualification remain unclaimed.
+
+Validation: 28 new methods passed through the three selected pipeline stages
+(six driver, 11 sink and 11 independent-consumer methods). The sink and consumer
+passed once. The driver's first fingerprint stopped at four explicit missing-Node
+prerequisite assertions because the pipeline intentionally uses `os.defpath`;
+that failed record remains. The test now binds the local developer Node executable
+by absolute path and SHA256 before/after use, and only its corrected fingerprint
+ran again. No unchanged failed fingerprint or successful product stage reran;
+the exact pipeline-unit success was reused. Reviewed closures contain five,
+nine and 26 inputs. JavaScript helpers run only with inert I/O doubles, sink
+syscalls are inert doubles, and the pure consumer uses temporary structural CAS
+data. These are neither live observations nor replacement acceptance samples.
+The [batch checkpoint](benchmark/evidence/phase3-blocked-create-workload-implementation-v1-2026-10-06.json)
+retains the output/source pins, all relevant fingerprints and the resolved failure.
+No VM, live service, performance sample, frozen predecessor or exit gate changed.
+
+Next S2 integration must establish a real same-action denial condition and consume
+the original prepared commitment/request exactly once before activation. The
+current common request builder deliberately requires the actual action to match
+`policy.allow[0]`; changing a target/payload and relabelling that request is not a
+valid shortcut. Connect this driver, the held sink reader, actual receipt/ingress/
+broker collection and both external clock observations in one owned controller,
+with broker measurement inputs provisioned before the first activator. Keep the
+setup-only path non-resumable and final acceptance blocked until S2–S4 and the
+full independent verifier inventory are complete.

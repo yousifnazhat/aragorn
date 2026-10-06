@@ -7,15 +7,16 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `8c5e39d` (common74 setup host/guest capture and replay).
-The S2 fixed blocked-create workload and sink/receipt integration is documented below; actual
-common activation and workload collection are still outstanding. The older counts and effort
+Current queue base: signed `f50dbc8` (fixed blocked-create driver and independent sink/receipt joins).
+The S2 same-action revocation, once-only workload wrapper and original-commitment
+handoff are documented below; actual common activation and measurement collection
+are still outstanding. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Setup-only seven-writer handoff, public host/guest capture and independent retained interval joins implemented; fixed blocked-create driver and sink/receipt consumer are the current batch. Original commitment/request consumption, real denial prerequisite, activation/workload and measurement cleanup collection remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Setup capture, independent retained interval/sink/receipt joins, fixed blocked-create driver, original-commitment provisioning handoff and same-action revocation/workload wrapper implemented. Common outer activation controller, actual ingress/broker/clock collection, public export and cleanup integration remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -1507,3 +1508,55 @@ broker collection and both external clock observations in one owned controller,
 with broker measurement inputs provisioned before the first activator. Keep the
 setup-only path non-resumable and final acceptance blocked until S2–S4 and the
 full independent verifier inventory are complete.
+
+**Original-commitment handoff and once-only blocked workload (2026-10-06):**
+the signed `f50dbc8` base now has a fixed broker-owned revocation publisher. It
+keeps the policy, target and payload unchanged, derives the active skill from the
+pinned single-action policy, and publishes one fresh 15-second revocation through
+the existing broker atomic-publication primitive. A held, nonblocking regular-file
+lock guards the generation-floor update and before/after policy, revocation and
+state reads. The launcher has a five-second deadline and bounded output, drops
+privileges to the existing broker account, and retains partial public evidence
+without retrying. It does not refresh health, observations or services; publication
+alone does not prove a later denial or its sole cause.
+
+The fixed workload wrapper now joins the already-active common28 identity and
+process expectations, holds all four process handles plus the independent sink,
+requires the original empty receipt chain, and creates an absent-only durable
+local attempt marker. It publishes the revocation immediately before one bounded
+driver invocation. Success requires the actual returned broker decision to include
+`ACTIVE_SKILL_REVOKED` with the exact published digest and generation. The actual
+driver output is read even after child failure; the complete two-receipt chain,
+sink, identity and source reads are independently attempted. Partial chains are
+refusals, not reasons for an alternate-count retry. Interrupts retain their primary
+identity and attached evidence through subsequent readback and cleanup failures.
+
+The new held preactivation handoff consumes the original collection preparation,
+scheduled attributed request, actual seven-writer deployment and broker plan.
+It source-binds the real fixed workload, independent verifier and identity reader
+without invoking them or adapting retained timestamps to generic callback marks.
+An actual claim-clock read and the existing shared permanent claim namespace
+precede once-only broker input provisioning. This bounded handoff consumes the
+entire commitment for **one attributed attempt**; it is not the final 100-attempt
+collector. An outer `ExitStack` must hold it through activation, workload and
+cleanup. Failure before yielding still checks claim, sources, request, private
+inputs, public outputs and fixture custody independently. Private grant/input
+blobs are not public export artifacts, and the setup-only fixture is not resumable.
+
+Validation: all **44 new methods passed once** through the three selected pipeline
+stages (12 revocation, 18 workload, 14 handoff). The exact pipeline-unit success was
+reused. Reviewed input closures contain 8, 22 and 124 files, including the actual
+common staging data dependencies. Tests use temporary control/CAS files, the real
+pure policy evaluator and preparation joins, and inert authority/process/provisioning
+doubles; no live fixture, service, performance sample or acceptance case ran. The
+[batch checkpoint](benchmark/evidence/phase3-native-workload-handoff-implementation-v1-2026-10-06.json)
+retains source and result pins. No frozen predecessor or exit gate changed.
+
+Next S2 slice: connect these fixed pieces inside one common host/guest controller's
+first-activation hook, with an outer held handoff and both external clock reads in
+the same guest process. Retain the actual ingress and effective broker records,
+run the existing independent consumers, export only the explicit public evidence,
+and perform bounded owned-service/fixture cleanup. Do not regenerate a commitment
+to resume a consumed attempt or promote this single-attempt path into the final
+campaign. Remaining admission families, RUN/sensor-health coverage, real campaign
+inventory and the full independent verifier map still precede freeze/acceptance.

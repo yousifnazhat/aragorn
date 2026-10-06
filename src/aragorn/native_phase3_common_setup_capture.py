@@ -667,7 +667,15 @@ def _setup_readbacks(setup, guest, bound, value, baseline, stage):
         )
 
 
-def _outer(capture, bound, baseline):
+def _outer(
+    capture,
+    bound,
+    baseline,
+    *,
+    fixture_helpers=FIXTURE_HELPERS,
+    name_prefix="aragorn-native-common-setup-",
+):
+    """Shared retained ownership/isolation/cleanup joins, not execution proof."""
     _require(
         canonical_json(capture["source"]) == bound["source_raw"]
         and canonical_json(capture["staged_profile"]) == bound["stage_raw"],
@@ -680,10 +688,10 @@ def _outer(capture, bound, baseline):
     )
     helpers = capture["fixture_helpers"]
     _require(
-        type(helpers) is dict and set(helpers) == set(FIXTURE_HELPERS),
+        type(helpers) is dict and set(helpers) == set(fixture_helpers),
         "copied helper inventory changed",
     )
-    for path, target in FIXTURE_HELPERS.items():
+    for path, target in fixture_helpers.items():
         row, raw = helpers[path], bound["source_raws"][path]
         blob = hashlib.sha1(
             b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
@@ -722,7 +730,7 @@ def _outer(capture, bound, baseline):
     _require(
         type(owner) is str
         and re.fullmatch(r"[0-9a-f]{64}", owner) is not None
-        and name == "aragorn-native-common-setup-" + owner[:16]
+        and name == name_prefix + owner[:16]
         and cleanup["removed_id"] == container
         and cleanup["image"] == reported._IMAGE,
         "owned cleanup identity changed",

@@ -7,17 +7,17 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `b7321ab` (same-action revocation, once-only workload and original-commitment handoff).
-The S2 first-activation guest controller, actual-writer plan builder and fixed
-public evidence snapshot are the next implementation batch documented below.
-Host installation/export and a real owned capture remain outstanding; guest
-orchestration checks do not close those boundaries. The older counts and effort
+Current queue base: signed `89cf11c` (first-activation guest controller, actual-writer
+plan builder and fixed public evidence snapshot). The S2 host/guest capture and
+public retained replay implementation batch is documented below. A real owned
+capture, real workload/pair inventory and full private measurement replay remain
+outstanding; inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Guest first-activation controller now composes actual seven-writer planning, held original handoff, once-only workload, same-process clock brackets, fixed public ingress/broker reads, independent consumers and owned-service cleanup. Host copy/install inventory, bounded guest invocation/public export, independent capture replay and a newly necessary isolated live capture remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | First-activation guest composition and the exact host install/bounded invoke/public export path are implemented, including public retained replay and evidence-preserving failure suspension. Real workload/pair inventory, a newly necessary isolated capture and full private measurement replay remain; public byte joins do not replace private semantics |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -1617,3 +1617,57 @@ before required failure evidence is retained. Supply the real workload/pair
 inventory before a newly necessary isolated live check; setup-only fixtures and
 consumed attempts stay non-resumable. Remaining admission, RUN/sensor-health and
 full verifier coverage still precede the one final freeze and acceptance run.
+
+**Owned attempt capture boundary (2026-10-06):** the signed `89cf11c` base now
+has a pure public attempt bundle which retains the original setup bundle exactly,
+requires the real complete caller inventory, and closes the additional signed
+source/helper inventory. The original receipt bootstrap name remains unchanged;
+its underscore import alias installs the same pinned bytes. The existing fixed
+blocked-create driver renderer supplies the previously missing workload file;
+no new driver or generic capture framework was introduced.
+
+The new guest entrypoint calls the first-activation controller once. Only known
+public journal roles may be exported, with bounded record/total/wire sizes and
+independent input/source custody checks. It never enumerates private CAS or emits
+raw grants. Pre-yield failure recovery can classify only the exact completed
+permanent claim and already-known public plan joins. Unclassified provisioning
+partials, incomplete handoff retention and journal mismatches cannot authorize
+destruction or retry.
+
+The host requires an already available VM and exact signed-tree source custody,
+copies the unchanged common74 profile plus explicit helpers/alias/driver, verifies
+the owned network-none fixture and invokes the guest once with a bounded pipe
+drain/deadline. Every public child is independently retained before removal.
+An unknown outcome or incomplete required export preserves the exact fixture;
+one guarded pause bounds guest execution while preserving `/run` evidence.
+There is no automatic unpause, stop, reset, alternate attempt or recovery command.
+Pause uncertainty is an attention-requiring refusal, never successful cleanup.
+Parent/runtime/input/source after-checks remain independent.
+
+The new read-only consumer checks exact retained public input/source/install,
+original plan/caller schedule, handoff references, embedded workload/measurement
+records and owned isolation/cleanup joins. It reuses the existing pure public
+preparation and cleanup verifier; the setup consumer's default contract is
+unchanged. It reports **public joins only**. Private writer/grant semantics,
+full independent measurement replay, timing eligibility and all qualification
+flags remain false.
+
+Validation: **42 new methods and 11 affected setup-replay methods pass** through
+the reviewed pipeline (8 input, 16 guest, 11 host, 7 public replay, 11 existing
+setup replay). Two new test-fixture errors were diagnosed and corrected: `OTHER`
+was already a valid family, and attempted/retained lists accidentally shared one
+object. Their failed fingerprints remain retained and were not rerun unchanged.
+The host stage also passed under its changed imported-fixture fingerprint; the
+unchanged guest/setup stages were not rerun and pipeline-unit success was reused.
+No live capture, VM action, performance sample or exit gate ran. The
+[batch checkpoint](benchmark/evidence/phase3-native-common-attempt-capture-implementation-v1-2026-10-06.json)
+contains the exact source/result pins and attempt history.
+
+Next S2 slice: connect the real workload/pair inventory and a controlled finite
+private-input handoff to the existing full independent measurement consumers,
+without exporting raw grant credentials in the public capture. Review those
+prerequisites before one newly necessary changed-behavior isolated capture; do
+not treat public replay as the missing private semantic replay. S3 admission
+families and S4 RUN/sensor-health coverage remain separate dependency-ready
+implementation work. Final31 and 100-attempt/100-pair acceptance stay blocked
+until all shared deployment, verifier and real measurement prerequisites close.

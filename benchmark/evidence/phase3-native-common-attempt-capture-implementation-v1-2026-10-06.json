@@ -1,0 +1,287 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "89cf11cd9e009942f1c9d701233f74afb129b02e",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "latest_heartbeat": "2026-10-06T18:43:54.600Z",
+    "validation_recorded": "2026-10-06T19:07:27.046903+00:00",
+    "meaning": "Nonoverlapping implementation, cross-review and selected inert checks, not live runtime or acceptance performance."
+  },
+  "implementation": [
+    "Pure public attempt inputs retain the exact nested setup bundle, actual caller plan inventory, added signed sources and fixed helper/alias/generated-driver inventory. No invented production campaign or execution authority.",
+    "One fixed guest entrypoint invokes the existing controller once and exports only classified public journal candidates. Input and source custody after-checks are independent; primary interrupts retain their identity.",
+    "Exact pre-yield permanent claim recovery is read-only and bounded, never a second claimant/provisioner call. Unknown or partial provisioning remains unclassified and requires fixture preservation.",
+    "The host reuses the existing common74 staging and owned lifecycle, requires an already available VM and exact current signed source, installs fixed helpers and receipt alias and reuses the existing blocked-create driver renderer.",
+    "Guest stdout/stderr draining is bounded to 128MiB and 300seconds. Public children are published independently with no retries. Missing evidence or uncertain invocation preserves the exact fixture and attempts one ownership-checked pause to retain /run tmpfs while bounding guest execution. No stop, removal, unpause or automatic retry on this path.",
+    "The pure retained consumer independently joins public input, source/install metadata, caller schedule, common preparation, handoff references and embedded workload/measurement records to CAS bytes plus owned isolation/cleanup records. Private writer/grant and full measurement semantics remain unreplayed; no qualification flag is promoted.",
+    "The setup consumer only gained fixed optional helper-inventory/name-prefix parameters on its shared pure outer join helper. Its default setup-only contract is unchanged."
+  ],
+  "review_findings_resolved": [
+    "Guest journal digest-list mismatch previously could set complete=true; validity is now established only after the exact digest join.",
+    "Partial handoff retention could hide unexported outputs; all four handoff/request/provisioning/claim roles must be exported or the fixture is preserved.",
+    "Known permanent claim recovery cannot establish completeness of unclassified provisioning partials; every pre-yield handoff refusal preserves the fixture.",
+    "Killing a host docker-exec client does not bound guest execution. Preservation now performs one exact ownership-guarded container pause with independent after-inspection; uncertain suspension is a failure requiring attention.",
+    "The workload driver was absent from common74/helpers; the fixed existing renderer and its exact signed source closure are now installed and checked.",
+    "The controller stores workload/snapshot summaries, not their full reports. Consumer joins now follow the actual digest reference then each embedded record; handoff references are bound to their exact roles.",
+    "Public-only replay is not full independent measurement replay. Both host and consumer explicitly keep broad/private replay ceilings false."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:107d26bf475ac62ce1b5a930827081ac92ac15945d5645eab133b5c81c3cec6c",
+    "benchmark/phase3-pipeline-v1.json": "sha256:3656379624bf6da6fdfa29fe797eda55945492f5ecde0bb0ae869a62d130743c",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/capture_native_phase3_common_attempt.py": "sha256:fb72b883d1ff900476beb2ebceebeeae9ad96b49056d12e01c1f6e5bf3f7aff4",
+    "scripts/runtime_native_common_attempt_capture.py": "sha256:501ce0e2ccd59fdf76b5735a289dd46cbfcffc6e646c5a31c258670138f06d1f",
+    "src/aragorn/native_phase3_common_attempt_capture.py": "sha256:dc6c59ba444f3d27fcb2aafaa0dccda65878d08de100f8791a9d0c3949580fbd",
+    "src/aragorn/native_phase3_common_attempt_inputs.py": "sha256:a889cb4224d9a947de088d791544fd4b857cd30b55c88243e6cb52574532c075",
+    "src/aragorn/native_phase3_common_setup_capture.py": "sha256:093f3fbf3769898a563cb7a689f5aad6707e986b867c92949b92311027b13e31",
+    "tests/test_native_common_attempt_host.py": "sha256:a3d17deddddbf3ab796e89a0853e8fcaeea7ea19eecb3440a390254ded79ed97",
+    "tests/test_native_phase3_common_attempt_capture.py": "sha256:54f1daf7a9fe4a8b9027b8cb5ec4781393dc22cf1584dade323da7baca888b63",
+    "tests/test_native_phase3_common_attempt_inputs.py": "sha256:e7097ea1e2142af568771ed319dea5d5c87e62880d4127d00a727e0aa1f0a1d3",
+    "tests/test_runtime_native_common_attempt_capture.py": "sha256:f86e11250d8f5e4bb95ab54b3253c8c47441d41c6e9f1b3894e12d529f975b35"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-attempt-inputs",
+      "status": "PASS",
+      "fingerprint": "sha256:19c9d0c88ecde65393f33e464d259c522fb43884f48887f24898d33c8ade1148",
+      "tests": 8,
+      "unittest_seconds": 2.158,
+      "started_at_ns": 1791313427651081000,
+      "finished_at_ns": 1791313430100499000,
+      "wall_seconds": 2.449418,
+      "stderr_digest": "sha256:25216b8c7a82eb4f88ca5e0fe9dd5f5089c1bfbfba73693ac31c5358fb761bbb",
+      "result_digest": "sha256:2c3044c0f0550127b96bd7e195cf946b6528a41331ea0f24956df431f4ca9877",
+      "reviewed_inputs": 137
+    },
+    {
+      "stage_id": "native-common-attempt-capture-guest",
+      "status": "PASS",
+      "fingerprint": "sha256:520cc36c0d767317ced79c3d32dfdcb7aef497741c8eeb89c52cedbda38e71ca",
+      "tests": 16,
+      "unittest_seconds": 0.027,
+      "started_at_ns": 1791313344822687000,
+      "finished_at_ns": 1791313345179083000,
+      "wall_seconds": 0.356396,
+      "stderr_digest": "sha256:461db14544db4e2ac8c6bc0343f81abcfe62e2a5d99ab3085ed29f042eabf721",
+      "result_digest": "sha256:a968cef9b2a9e6e22582f298b0e19cf0cc6127ba6277bd6c2c39fb256b39b9e8",
+      "reviewed_inputs": 88
+    },
+    {
+      "stage_id": "native-common-attempt-host",
+      "status": "PASS",
+      "fingerprint": "sha256:3ee6bc85aae4d63b3db0c079d0020c6beb4897d176c1a568e7c419c8ccdae6a1",
+      "tests": 11,
+      "unittest_seconds": 2.871,
+      "started_at_ns": 1791313468069220000,
+      "finished_at_ns": 1791313471339602000,
+      "wall_seconds": 3.270382,
+      "stderr_digest": "sha256:0ff9b3b4d180bd5f269a36cfc6bf5648585643337a50b15c67aa59e7571af807",
+      "result_digest": "sha256:5a14b7d224ac823a72513bbfcec8456489852ddc001cbb162b4c98e39fed987e",
+      "reviewed_inputs": 186
+    },
+    {
+      "stage_id": "native-common-attempt-capture-replay",
+      "status": "PASS",
+      "fingerprint": "sha256:f6ab93b9f2bc94c52b2a56f6d8137a55041c8ba30b324efc366986babed3de28",
+      "tests": 7,
+      "unittest_seconds": 5.622,
+      "started_at_ns": 1791313430397690000,
+      "finished_at_ns": 1791313436386873000,
+      "wall_seconds": 5.989183,
+      "stderr_digest": "sha256:0488ea55ea441a5597318308f11201c4d54f3ec54c13d527ebf7edd4ae78f91f",
+      "result_digest": "sha256:2988c658c804bd7cb581a5036bed9fa671a1c631eb9919213b969afa832f3f46",
+      "reviewed_inputs": 215
+    },
+    {
+      "stage_id": "native-common-setup-replay",
+      "status": "PASS",
+      "fingerprint": "sha256:1464e767e3b59d77ebad5d64689c127eb14c31b152ca80e11271680c4013a483",
+      "tests": 11,
+      "unittest_seconds": 3.278,
+      "started_at_ns": 1791313355264808000,
+      "finished_at_ns": 1791313358836919000,
+      "wall_seconds": 3.572111,
+      "stderr_digest": "sha256:845d64fc99af0e233f393f59f77b4c45891f115777b44abaeadabd0a9c9cc113",
+      "result_digest": "sha256:7e8bf03807e0ca73965f7871f84917d49f983549149baa6de75b7c989f6bf6ce",
+      "reviewed_inputs": 115
+    }
+  ],
+  "pipeline_attempt_history": [
+    {
+      "stage_id": "native-common-attempt-inputs",
+      "status": "FAIL",
+      "fingerprint": "sha256:f13fba9d1edbac3a69f53ee0af0680d94a765113a25b7c16e7c96f8b9e8ec3cd",
+      "tests": 8,
+      "unittest_seconds": 2.118,
+      "started_at_ns": 1791313342112616000,
+      "finished_at_ns": 1791313344557064000,
+      "wall_seconds": 2.444448,
+      "stderr_digest": "sha256:7728433af533417841c4feab63d3c88452c44d998509ad603e2bfe7ebf07dff7",
+      "result_digest": "sha256:9f090e8b9ba3fd8ba54b18b51eaba83394709bbb0c51bab9b99a145f34b55249",
+      "reviewed_inputs": 137
+    },
+    {
+      "stage_id": "native-common-attempt-capture-guest",
+      "status": "PASS",
+      "fingerprint": "sha256:520cc36c0d767317ced79c3d32dfdcb7aef497741c8eeb89c52cedbda38e71ca",
+      "tests": 16,
+      "unittest_seconds": 0.027,
+      "started_at_ns": 1791313344822687000,
+      "finished_at_ns": 1791313345179083000,
+      "wall_seconds": 0.356396,
+      "stderr_digest": "sha256:461db14544db4e2ac8c6bc0343f81abcfe62e2a5d99ab3085ed29f042eabf721",
+      "result_digest": "sha256:a968cef9b2a9e6e22582f298b0e19cf0cc6127ba6277bd6c2c39fb256b39b9e8",
+      "reviewed_inputs": 88
+    },
+    {
+      "stage_id": "native-common-attempt-host",
+      "status": "PASS",
+      "fingerprint": "sha256:f1e1e5ae6c2e6a1a53049b753d6fe6860918fc9f49aee4c8dbe42479b168f803",
+      "tests": 11,
+      "unittest_seconds": 2.855,
+      "started_at_ns": 1791313345452897000,
+      "finished_at_ns": 1791313348715576000,
+      "wall_seconds": 3.262679,
+      "stderr_digest": "sha256:811991d1efbd92910dd2581177616d08d7ba9ccebcb819322aec5192120a5987",
+      "result_digest": "sha256:fde9036740f7a2eb3249bdecb72abea53c4e2f7a04251f8ecf637fe1888b9687",
+      "reviewed_inputs": 186
+    },
+    {
+      "stage_id": "native-common-attempt-capture-replay",
+      "status": "FAIL",
+      "fingerprint": "sha256:0ce43580c08be638d753efbbd0f1dd2072fbeae4f9bd178ceb2aee4b2689e6db",
+      "tests": 7,
+      "unittest_seconds": 5.609,
+      "started_at_ns": 1791313348992568000,
+      "finished_at_ns": 1791313354963156000,
+      "wall_seconds": 5.970588,
+      "stderr_digest": "sha256:eb1c14772352b2beded94ea359ed69370961e1780657bbe4d48fee5d61581a46",
+      "result_digest": "sha256:9adac4cf408307cc6382a8dfdfe4354b6f0b20f58cce13cd6e7dd7afe666a2a9",
+      "reviewed_inputs": 215
+    },
+    {
+      "stage_id": "native-common-setup-replay",
+      "status": "PASS",
+      "fingerprint": "sha256:1464e767e3b59d77ebad5d64689c127eb14c31b152ca80e11271680c4013a483",
+      "tests": 11,
+      "unittest_seconds": 3.278,
+      "started_at_ns": 1791313355264808000,
+      "finished_at_ns": 1791313358836919000,
+      "wall_seconds": 3.572111,
+      "stderr_digest": "sha256:845d64fc99af0e233f393f59f77b4c45891f115777b44abaeadabd0a9c9cc113",
+      "result_digest": "sha256:7e8bf03807e0ca73965f7871f84917d49f983549149baa6de75b7c989f6bf6ce",
+      "reviewed_inputs": 115
+    },
+    {
+      "stage_id": "native-common-attempt-inputs",
+      "status": "PASS",
+      "fingerprint": "sha256:19c9d0c88ecde65393f33e464d259c522fb43884f48887f24898d33c8ade1148",
+      "tests": 8,
+      "unittest_seconds": 2.158,
+      "started_at_ns": 1791313427651081000,
+      "finished_at_ns": 1791313430100499000,
+      "wall_seconds": 2.449418,
+      "stderr_digest": "sha256:25216b8c7a82eb4f88ca5e0fe9dd5f5089c1bfbfba73693ac31c5358fb761bbb",
+      "result_digest": "sha256:2c3044c0f0550127b96bd7e195cf946b6528a41331ea0f24956df431f4ca9877",
+      "reviewed_inputs": 137
+    },
+    {
+      "stage_id": "native-common-attempt-capture-replay",
+      "status": "PASS",
+      "fingerprint": "sha256:f6ab93b9f2bc94c52b2a56f6d8137a55041c8ba30b324efc366986babed3de28",
+      "tests": 7,
+      "unittest_seconds": 5.622,
+      "started_at_ns": 1791313430397690000,
+      "finished_at_ns": 1791313436386873000,
+      "wall_seconds": 5.989183,
+      "stderr_digest": "sha256:0488ea55ea441a5597318308f11201c4d54f3ec54c13d527ebf7edd4ae78f91f",
+      "result_digest": "sha256:2988c658c804bd7cb581a5036bed9fa671a1c631eb9919213b969afa832f3f46",
+      "reviewed_inputs": 215
+    },
+    {
+      "stage_id": "native-common-attempt-host",
+      "status": "PASS",
+      "fingerprint": "sha256:3ee6bc85aae4d63b3db0c079d0020c6beb4897d176c1a568e7c419c8ccdae6a1",
+      "tests": 11,
+      "unittest_seconds": 2.871,
+      "started_at_ns": 1791313468069220000,
+      "finished_at_ns": 1791313471339602000,
+      "wall_seconds": 3.270382,
+      "stderr_digest": "sha256:0ff9b3b4d180bd5f269a36cfc6bf5648585643337a50b15c67aa59e7571af807",
+      "result_digest": "sha256:5a14b7d224ac823a72513bbfcec8456489852ddc001cbb162b4c98e39fed987e",
+      "reviewed_inputs": 186
+    }
+  ],
+  "checks": {
+    "new_distinct_methods": 42,
+    "affected_existing_methods": 11,
+    "total_distinct_methods": 53,
+    "total_method_invocations": 79,
+    "scope": "Inert doubles, temporary CAS/data constructors and real pure joins only. No historical test methods called through fixture reuse."
+  },
+  "new_failed_fingerprints": [
+    {
+      "stage_id": "native-common-attempt-inputs",
+      "fingerprint": "sha256:f13fba9d1edbac3a69f53ee0af0680d94a765113a25b7c16e7c96f8b9e8ec3cd",
+      "retained": true,
+      "resolution": "The test mislabeled existing valid family OTHER as invalid. Use UNKNOWN_FAMILY for the actual negative case; production validator unchanged."
+    },
+    {
+      "stage_id": "native-common-attempt-capture-replay",
+      "fingerprint": "sha256:0ce43580c08be638d753efbbd0f1dd2072fbeae4f9bd178ceb2aee4b2689e6db",
+      "retained": true,
+      "resolution": "The inert attempted/retained lists shared one Python object, so the private-pin negative mutation appended twice and stopped at publication shape. Give each its own list as production does; production validator unchanged."
+    }
+  ],
+  "superseded_successes": [
+    {
+      "stage_id": "native-common-attempt-host",
+      "fingerprint": "sha256:f1e1e5ae6c2e6a1a53049b753d6fe6860918fc9f49aee4c8dbe42479b168f803",
+      "reason": "Imported input fixture module changed for the diagnosed invalid-family test correction. Current exact declared closure was checked once; host implementation unchanged."
+    }
+  ],
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "unchanged_failed_fingerprints_rerun": false,
+  "unchanged_successful_product_stages_rerun": false,
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "resolver_roots": [
+      "src",
+      ".",
+      "scripts",
+      "tests"
+    ],
+    "reviewed_inputs": {
+      "native-common-attempt-inputs": 137,
+      "native-common-attempt-capture-guest": 88,
+      "native-common-attempt-host": 186,
+      "native-common-attempt-capture-replay": 215,
+      "native-common-setup-replay": 115
+    },
+    "extra_data_closure": "Explicit existing common74 materializer/stager data, real source-copy inventory and fixed generated-driver source closure. AST traversal is static review only, not full environment or installed-image import attestation."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "frozen_predecessors_changed": false,
+  "decision": {
+    "private_writer_semantics_replayed": false,
+    "private_measurement_input_semantics_replayed": false,
+    "independent_full_measurement_replay_complete": false,
+    "admission_qualified": false,
+    "run_qualified": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Supply real workload/pair inventory and connect a controlled finite private-input handoff to existing full independent measurement consumers without public credential export. Review prerequisites before one newly necessary isolated changed-behavior capture. Remaining admission, RUN/sensor health and full verifier map still precede freeze/final31 and 100-attempt/100-pair acceptance.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and resulting tree, then retain its hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. Automatic pushes unauthorized."
+}

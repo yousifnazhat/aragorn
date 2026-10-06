@@ -210,6 +210,13 @@ class NativeCommonCaseSetupTests(unittest.TestCase):
         self.assertEqual(
             set(self.published), set(result["preparation"]["retained_blob_digests"])
         )
+        self.assertEqual(
+            result["public_blob_attempts"],
+            [
+                {"digest": pin, "bytes": len(self.fixture.reader.read(pin))}
+                for pin in self.published
+            ],
+        )
         for pin in self.published:
             self.assertNotIn(
                 self.fixture.reader.read(pin), self.fixture.inputs.values()
@@ -339,10 +346,46 @@ class NativeCommonCaseSetupTests(unittest.TestCase):
         )
         self.assertEqual(calls, 2)
         self.assertEqual(len(self.published), 1)
+        self.assertEqual(len(result["public_blob_attempts"]), 2)
+        self.assertEqual(
+            result["public_blob_attempts"][0],
+            {
+                "digest": self.published[0],
+                "bytes": len(self.fixture.reader.read(self.published[0])),
+            },
+        )
+        self.assertIsNone(result["preparation"])
         self.assertTrue(self.fixture.reader.read(self.published[0]))
         self.assertNotIn(b"secret", subject.canonical_json(result))
         native._activate.assert_not_called()
         native.prior._stop_fixture.assert_called_once()
+
+    def test_public_attempt_allowlist_refuses_private_or_unbounded_candidates(self):
+        private = next(iter(self.fixture.inputs.values()))
+        candidates = (
+            (private, subject.preparation.old._digest(private), "RAW_WRITER"),
+            (b"public", "sha256:" + "0" * 64, "PUBLIC_BLOB"),
+            (b"x" * (subject.preparation.old._MAX_ARTIFACT + 1), None, "PUBLIC_BLOB"),
+            (b"", None, "PUBLIC_BLOB"),
+        )
+        for raw, digest, reason in candidates:
+            with self.subTest(reason=reason, size=len(raw)):
+                pin = digest or subject.preparation.old._digest(raw)
+                built = {
+                    "preparation_digest": pin,
+                    "preparation_raw": raw,
+                    "input_blobs": {pin: raw},
+                }
+                attempts = []
+                writer, reader, guard = Mock(), Mock(), Mock()
+                with self.assertRaisesRegex(subject.NativeCommonCaseSetupError, reason):
+                    subject._retain_preparation(
+                        writer, reader, guard, built, self.fixture.inputs, attempts
+                    )
+                self.assertEqual(attempts, [])
+                writer.put_expected.assert_not_called()
+                reader.read.assert_not_called()
+                guard.assert_not_called()
 
     def test_final_source_change_refuses_but_retains_preparation_and_zero_activation(
         self,

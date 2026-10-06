@@ -277,15 +277,34 @@ def _writer_readback(native, inputs: dict) -> dict:
         _close_preserving(lambda: os.close(root), "WRITER_DESCRIPTOR_CLOSE_REFUSED")
 
 
-def _retain_preparation(writer, reader, guard, built: dict, inputs: dict) -> dict:
+def _retain_preparation(
+    writer, reader, guard, built: dict, inputs: dict, public_attempts: list
+) -> dict:
     pin, raw = built["preparation_digest"], built["preparation_raw"]
-    _require(built["input_blobs"].get(pin) == raw, "PREPARATION_CLOSURE_CHANGED")
+    _require(
+        type(built["input_blobs"]) is dict
+        and 1 <= len(built["input_blobs"]) <= 32
+        and built["input_blobs"].get(pin) == raw
+        and type(public_attempts) is list
+        and not public_attempts,
+        "PREPARATION_CLOSURE_CHANGED",
+    )
     # Children first, then the preparation record. Never retain raw writer inputs.
     ordered = [
         (key, value) for key, value in built["input_blobs"].items() if key != pin
     ] + [(pin, raw)]
     for child_pin, child_raw in ordered:
+        _require(
+            type(child_raw) is bytes
+            and 0 < len(child_raw) <= preparation.old._MAX_ARTIFACT
+            and preparation.old._digest(child_raw) == child_pin,
+            "PUBLIC_BLOB_BOUND_OR_DIGEST_REFUSED",
+        )
         _require(child_raw not in inputs.values(), "RAW_WRITER_RETENTION_REFUSED")
+        # This is an export allowlist of public publication attempts, not proof
+        # of publication. A failed put may have published before its failure;
+        # the guest wrapper must read each explicit candidate independently.
+        public_attempts.append({"digest": child_pin, "bytes": len(child_raw)})
         _require(
             writer.put_expected(
                 io.BytesIO(child_raw), expected_digest=child_pin, max_bytes=_LIMIT
@@ -354,6 +373,7 @@ def prepare_common_native_setup(
         "container_id": expected_container_id,
         "setup_source_digest": expected_setup_digest,
         "preparation": None,
+        "public_blob_attempts": [],
         "installed_sources": None,
         "installed_sources_after": None,
         "implementation_sources": None,
@@ -436,7 +456,12 @@ def prepare_common_native_setup(
                     )
                     phase = "RETENTION"
                     result["preparation"] = _retain_preparation(
-                        writer, reader, guard, built, inputs
+                        writer,
+                        reader,
+                        guard,
+                        built,
+                        inputs,
+                        result["public_blob_attempts"],
                     )
                     result["writer_readback_after"] = _writer_readback(native, inputs)
                     _require(

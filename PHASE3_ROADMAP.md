@@ -7,15 +7,15 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `ebc4767` (common74 packaging and v2 identity migration).
-The S2 setup-only handoff and interval verifier are documented below; actual
+Current queue base: signed `4925652` (common74 setup handoff and interval joins).
+The S2 setup-only host/guest capture integration is documented below; actual
 common activation and workload collection are still outstanding. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Setup-only seven-writer handoff and independent retained interval joins implemented; host dispatch, original commitment/request consumption, actual activation/workload, sink/attribution and cleanup collection remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Setup-only seven-writer handoff, public host/guest capture and independent retained interval joins implemented; original commitment/request consumption, actual activation/workload, sink/attribution and measurement cleanup collection remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -1403,3 +1403,53 @@ the driver and presented as the native ingress interval. The existing create
 driver expects `ALLOW/CREATED`, not a verified blocked attempt. These concrete
 execution contracts still require implementation before any live timing or final
 acceptance. Remaining admission and RUN/sensor-health lanes remain open.
+
+**Common74 setup host/guest capture and public replay (2026-10-06):** signed
+`4925652` is the setup/interval base. The new fixed host entrypoint prepares a
+signed-source-bound public input bundle, stages the exact existing 74-file
+profile, copies the reviewed helper inventory, and invokes the setup-only guest
+once in the existing owned disposable-fixture lifecycle. It does not start the
+VM or activate the four runtime services. The old70 host/guest entrypoints and
+all frozen profiles remain unchanged. The one known legacy helper collision,
+`phase3_deployment.py`, is explicitly removed because common74 already stages it
+with its reviewed mode; every other helper/stage overlap is refused.
+
+Setup now journals bounded public publication attempts before each CAS put.
+This is an export allowlist, not a successful-publication claim. The fixed guest
+wrapper reads only those digest paths with held no-follow directory/file custody;
+it never enumerates the CAS or exports the raw seven writer documents. Missing
+or failed candidates do not erase earlier public reads. Bundle, wrapper and
+consumer source readbacks are independently attempted after export, and a primary
+setup failure is preserved. The host retains exported children before exact
+owned-fixture cleanup, keeps the original guest report after publication failure,
+and attempts runtime, parent, source and input-closure postchecks independently.
+Failed effects and failed child publications are not automatically retried.
+
+The new pure consumer reconstructs the public preparation, seven deployment
+artifacts, case adapters and exact retained closure. It checks source/Git-blob
+content joins, reported installed metadata, the seven writer digests, stopped
+services, nonactivation, isolated fixture identity and cleanup. It does not
+import controllers or replay private writer semantics. Signature, execution,
+loaded-code, policy-account and custody truth remain reported claims, not
+independent attestations. Refused/partial captures can be retained but cannot
+pass the successful public replay contract. Capture publication and replay are
+separate records so a consumer refusal cannot cause another effect.
+
+Validation: all four selected pipeline stages passed on their first execution:
+40 methods (31 new and nine affected), with exact unchanged pipeline-unit success
+reused. Reviewed closures contain 133 setup, 45 guest, 169 host and 115 replay
+inputs. Checks use inert filesystem, service, container and source-custody doubles
+with real pure preparation/staging and temporary local CAS; they are not a live
+capture, acceptance samples or qualification. The
+[batch checkpoint](benchmark/evidence/phase3-common-setup-capture-implementation-v1-2026-10-06.json)
+retains source pins, successful fingerprints and limits. No VM, live service,
+performance sample, historical recapture or Phase 3 exit gate changed.
+
+Next S2 slice: implement the real fixed workload and independent sink/attribution
+callbacks, then consume the original prepared measurement commitment/request
+once on this same common74 path. Provision broker measurement inputs before the
+first activator; collect both external clock observations in one process and join
+them to the retained worker-ingress/effective-final records. This setup-only
+checkpoint is not a resumable fixture and must not be activated as a shortcut.
+Complete remaining admission and RUN/sensor-health lanes and the full verifier
+inventory before the single final freeze and required acceptance campaign.

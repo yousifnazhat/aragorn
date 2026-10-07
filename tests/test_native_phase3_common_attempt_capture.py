@@ -10,6 +10,7 @@ import hashlib
 from io import BytesIO
 import json
 from pathlib import Path
+import stat
 import unittest
 from unittest.mock import patch
 
@@ -356,6 +357,95 @@ class AttemptCaptureData(unittest.TestCase):
 
 
 class NativeCommonAttemptCaptureTests(AttemptCaptureData):
+    def private_capture(self):
+        value = deepcopy(self.capture)
+        plan = value["guest"]["attempt"]["plan"]
+        prepared = json.loads(self.reader.read(plan["measurement_prepared_digest"]))
+        grant = prepared["binding"]["grant_digest"]
+        size = next(
+            row["bytes"] for row in prepared["input_blobs"] if row["digest"] == grant
+        )
+        fixture = {
+            "container_id": value["fixture_container"],
+            "name": value["fixture_name"],
+            "owner": value["fixture_owner"],
+            "source_commit": value["source"]["commit"],
+            "image": value["fixture_image"]["Id"],
+            "network_mode": "none",
+            "pid": 71,
+            "started_at": "2026-10-06T20:10:58.131000000Z",
+        }
+        source = {
+            "digest": grant,
+            "bytes": size,
+            "identity": [1, 2, stat.S_IFREG | 0o444, 0, 0, 1, size, 3, 4],
+        }
+        value["private_input_transfer_attempted"] = True
+        value["private_measurement_inputs"] = {
+            "schema": "aragorn/native-common-measurement-input-retention/v1",
+            "authority": "PRIVATE_HOST_CAS_RETENTION_NOT_MEASUREMENT_OR_QUALIFICATION",
+            "status": "PRIVATE_INPUTS_RETAINED",
+            "container_id": value["fixture_container"],
+            "prepared_digest": plan["measurement_prepared_digest"],
+            "binding_digest": plan["binding_digest"],
+            "grant_digest": grant,
+            "grant_bytes": size,
+            "input_blobs": prepared["input_blobs"],
+            "input_set_digest": subject._digest(
+                canonical_json(prepared["input_blobs"])
+            ),
+            "fixture_before": deepcopy(fixture),
+            "fixture_after": deepcopy(fixture),
+            "grant_source_before": deepcopy(source),
+            "grant_source_after": deepcopy(source),
+            "scratch_directory": "/private/inert/native-common-measurement-input-retention",
+            "copy_count": 1,
+            "input_validation_complete": True,
+            "postcondition_failures": [],
+            "refusal": None,
+            **dict.fromkeys(subject.FALSE_FLAGS, False),
+        }
+        return value
+
+    def test_optional_private_metadata_joins_without_claiming_private_semantics(self):
+        result = self.verify(self.private_capture())
+        self.assertTrue(result["public_capture_joins_verified"])
+        self.assertFalse(result["private_measurement_input_semantics_replayed"])
+        self.assertFalse(result["independent_full_measurement_replay_complete"])
+        self.assertTrue(all(result[key] is False for key in subject.FALSE_FLAGS))
+        value = deepcopy(self.capture)
+        value.update(
+            private_input_transfer_attempted=False, private_measurement_inputs=None
+        )
+        self.assertTrue(self.verify(value)["public_capture_joins_verified"])
+
+    def test_private_metadata_rebinding_partial_or_extra_bytes_are_refused(self):
+        mutations = (
+            lambda value: value.pop("private_input_transfer_attempted"),
+            lambda value: value.update(private_input_transfer_attempted=False),
+            lambda value: value["private_measurement_inputs"].update(grant_bytes=1),
+            lambda value: value["private_measurement_inputs"].update(
+                prepared_digest="sha256:" + "f" * 64
+            ),
+            lambda value: value["private_measurement_inputs"].update(
+                raw_grant="forbidden field"
+            ),
+            lambda value: value["private_measurement_inputs"].update(
+                input_validation_complete=False
+            ),
+            lambda value: value["private_measurement_inputs"]["fixture_after"].update(
+                pid=99
+            ),
+            lambda value: value["private_measurement_inputs"]["grant_source_after"][
+                "identity"
+            ].__setitem__(1, 99),
+        )
+        for mutation in mutations:
+            value = self.private_capture()
+            mutation(value)
+            with self.assertRaises(subject.NativeCommonAttemptCaptureError):
+                self.verify(value)
+
     def test_real_public_plan_replay_is_read_only_and_keeps_claim_ceiling(self):
         raw = canonical_json(self.capture) + b"\n"
         pin = subject._digest(raw)

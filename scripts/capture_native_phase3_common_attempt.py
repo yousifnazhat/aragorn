@@ -7,6 +7,7 @@ public exports preserve the exact owned fixture for evidence, never erase it.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from io import BytesIO
 import json
 import os
@@ -26,6 +27,7 @@ sys.path[:0] = [str(_ROOT), str(_ROOT / "src")]
 from scripts import capture_native_phase3_common_setup as base
 from scripts import runtime_native_common_attempt_capture as guest
 from scripts import materialize_runtime_native_blocked_create_driver as driver
+from scripts import retain_native_common_measurement_inputs as private_inputs
 from aragorn import native_phase3_common_attempt_inputs as inputs
 from aragorn.cas import CAS
 from aragorn.oci_worker_protocol import canonical_json
@@ -523,7 +525,64 @@ def _suspend_preserved(result: dict, interrupts: list) -> None:
         result["cleanup_failure"] = "OWNED_FIXTURE_PRESERVATION_SUSPENSION_UNCONFIRMED"
 
 
-def _capture(store: CAS, pin: str) -> dict:
+def _separate_stores(public: CAS, private: CAS) -> None:
+    _require(type(public) is CAS and type(private) is CAS, "exact CAS required")
+    left, right = public.root.resolve(strict=True), private.root.resolve(strict=True)
+    _require(
+        left != right
+        and not left.is_relative_to(right)
+        and not right.is_relative_to(left),
+        "private and public stores must be disjoint",
+    )
+
+
+def _private_complete(result: dict) -> bool:
+    value = result.get("private_measurement_inputs")
+    return (
+        result.get("private_input_transfer_attempted") is True
+        and type(value) is dict
+        and value.get("schema") == private_inputs.SCHEMA
+        and value.get("authority") == private_inputs.AUTHORITY
+        and value.get("status") == "PRIVATE_INPUTS_RETAINED"
+        and value.get("container_id") == result["fixture_container"]
+        and value.get("input_validation_complete") is True
+        and type(value.get("copy_count")) is int
+        and value["copy_count"] == 1
+        and value.get("postcondition_failures") == []
+        and value.get("refusal") is None
+        and all(value.get(key) is False for key in private_inputs._FALSE)
+    )
+
+
+def _validate_private_retention(result, reader):
+    from aragorn.native_phase3_common_attempt_capture import _private_retention_metadata
+
+    _private_retention_metadata(
+        result, lambda pin, limit: reader.read(pin, max_bytes=limit)
+    )
+
+
+def _capture(
+    store: CAS, pin: str, *, private_store: CAS | None = None, private_guard=None
+) -> dict:
+    private_identity = None
+    if private_store is not None:
+        _separate_stores(store, private_store)
+        _require(private_store.read_only is False, "writable private CAS required")
+        with private_inputs._private_root(private_store) as (_, descriptor, guard):
+            private_identity = private_inputs._identity(os.fstat(descriptor))
+            guard()
+
+    def destination_guard():
+        if private_guard is not None:
+            private_guard()
+        with private_inputs._private_root(private_store) as (_, descriptor, guard):
+            _require(
+                private_inputs._identity(os.fstat(descriptor)) == private_identity,
+                "original private destination changed",
+            )
+            guard()
+
     bound = _inspect(CAS(store.root, read_only=True), pin)
     source = _source_guard(bound)
     build = native._build_binding(source["commit"])
@@ -586,6 +645,8 @@ def _capture(store: CAS, pin: str) -> dict:
             "failed": [],
             "complete": False,
         },
+        "private_input_transfer_attempted": False,
+        "private_measurement_inputs": None,
         "cleanup": None,
         "cleanup_failure": None,
         "refusal": None,
@@ -600,6 +661,7 @@ def _capture(store: CAS, pin: str) -> dict:
         **dict.fromkeys(_FALSE, False),
     }
     phase, interrupts = "STAGE", []
+    private_retention_complete = False
 
     def refused(error):
         result["status"] = "REFUSED"
@@ -710,6 +772,56 @@ def _capture(store: CAS, pin: str) -> dict:
                         "phase": "GUEST",
                         "reason": "COMMON_ATTEMPT_GUEST_REFUSED",
                     }
+                elif private_store is not None:
+                    phase = "PRIVATE_INPUT_RETENTION"
+                    result["private_input_transfer_attempted"] = True
+                    _source_guard(bound)
+                    destination_guard()
+                    try:
+                        private_report = (
+                            private_inputs.retain_native_common_measurement_inputs(
+                                capture=result,
+                                public_cas=CAS(store.root, read_only=True),
+                                private_cas=private_store,
+                            )
+                        )
+                        result["private_measurement_inputs"] = (
+                            private_inputs.public_retention_metadata(
+                                private_report,
+                                capture=result,
+                                private_cas=private_store,
+                            )
+                        )
+                    except BaseException as error:
+                        try:
+                            result["private_measurement_inputs"] = (
+                                private_inputs.public_retention_metadata(
+                                    getattr(
+                                        error, "_native_common_measurement_inputs", None
+                                    ),
+                                    capture=result,
+                                    private_cas=private_store,
+                                )
+                            )
+                        except BaseException as metadata_error:
+                            if (
+                                not isinstance(metadata_error, Exception)
+                                and not interrupts
+                            ):
+                                interrupts.append(metadata_error)
+                            result["private_measurement_inputs"] = {
+                                "schema": "aragorn/native-common-measurement-input-retention-refusal/v1",
+                                "status": "REFUSED",
+                                "reason": "PRIVATE_INPUT_METADATA_REFUSED",
+                            }
+                        raise
+                    _require(
+                        _private_complete(result), "private input retention incomplete"
+                    )
+                    _validate_private_retention(result, CAS(store.root, read_only=True))
+                    _source_guard(bound)
+                    destination_guard()
+                    private_retention_complete = True
             except BaseException as error:
                 refused(error)
             finally:
@@ -718,11 +830,15 @@ def _capture(store: CAS, pin: str) -> dict:
                     value is None
                     or value["preserve_fixture_for_evidence"] is True
                     or not result["guest_publication"]["complete"]
+                    or (
+                        result["private_input_transfer_attempted"]
+                        and not private_retention_complete
+                    )
                 )
                 if preserve:
                     result["fixture_preserved"] = True
                     result["cleanup_deferred_reason"] = (
-                        "REQUIRED_PUBLIC_FAILURE_EVIDENCE_INCOMPLETE_NO_RETRY"
+                        "REQUIRED_FAILURE_EVIDENCE_INCOMPLETE_NO_RETRY"
                     )
                     _suspend_preserved(result, interrupts)
                 else:
@@ -829,6 +945,8 @@ def _retain(store, result):
         "fixture_preserved": result["fixture_preserved"],
         "fixture_container": result["fixture_container"],
         "public_capture_joins_verified": False,
+        "private_inputs_retained": result["status"] == "CAPTURED_BOUNDED_ATTEMPT"
+        and _private_complete(result),
         "independent_capture_replay_complete": False,
         **dict.fromkeys(_FALSE, False),
     }
@@ -858,31 +976,121 @@ def _retain(store, result):
     return summary
 
 
+@contextmanager
+def _new_private_store(path: Path, public: CAS):
+    """A fresh persistent directory; failed transfers are never erased/retried."""
+    legacy._preparation_destination(path)
+    with pins._parent(path) as (parent, guard):
+        pins._absent(parent, path.name)
+        os.mkdir(path.name, 0o700, dir_fd=parent)
+        os.fsync(parent)
+        store = CAS(path)
+        _separate_stores(public, store)
+        with private_inputs._private_root(store) as (_, _, private_guard):
+
+            def check():
+                guard()
+                private_guard()
+
+            check()
+            try:
+                yield store, check
+            finally:
+                base.setup._close_preserving(
+                    check, "PRIVATE_DESTINATION_FINAL_CUSTODY_REFUSED"
+                )
+
+
+def _measurement_expectations(path: Path) -> dict:
+    _require(path.is_absolute(), "absolute expectations path required")
+    with pins._parent(path) as (parent, guard):
+        info = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        _require(0 < info.st_size <= 16384, "expectations bound exceeded")
+        # The fixed reader checks no-follow custody, single link and stable bytes.
+        fd = os.open(
+            path.name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            dir_fd=parent,
+        )
+        try:
+            raw = os.read(fd, 16385)
+        finally:
+            os.close(fd)
+        _require(len(raw) == info.st_size, "expectations read incomplete")
+        pins._read_fixed(path, (len(raw), _API._digest(raw)))
+        guard()
+    value = _API._load_json(raw, "measurement expectations")
+    _require(
+        type(value) is dict
+        and set(value)
+        == {
+            "expected_worker",
+            "expected_broker_process",
+            "expected_gateway",
+            "expected_sink_accounts",
+        }
+        and all(type(item) is dict for item in value.values()),
+        "measurement expectation inventory changed",
+    )
+    return value
+
+
+def _verify_measurement(raw, pin, public, private, expectations):
+    from aragorn.native_phase3_common_measurement_capture import (
+        verify_native_common_measurement_capture,
+    )
+
+    _separate_stores(public, private)
+    return verify_native_common_measurement_capture(
+        raw,
+        expected_capture_digest=pin,
+        public_cas=public,
+        private_input_cas=private,
+        **expectations,
+    )
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("prepare", "inspect", "capture", "verify"):
+    for name in ("prepare", "inspect", "capture", "verify", "verify-measurement"):
         command = commands.add_parser(name, allow_abbrev=False)
         command.add_argument("--cas", required=True, type=Path)
         if name == "prepare":
             command.add_argument("--expected-setup-input-digest", required=True)
             command.add_argument("--plan-arguments", required=True, type=Path)
-        elif name == "verify":
+        elif name in ("verify", "verify-measurement"):
             command.add_argument("--expected-capture-digest", required=True)
         else:
             command.add_argument("--expected-input-digest", required=True)
         if name in ("prepare", "capture"):
             command.add_argument("--out", required=True, type=Path)
+        if name in ("capture", "verify-measurement"):
+            command.add_argument("--private-cas", required=True, type=Path)
+        if name == "verify-measurement":
+            command.add_argument("--measurement-expectations", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
         _require(args.cas.is_absolute(), "absolute CAS required")
-        if args.command == "verify":
+        if args.command in ("verify", "verify-measurement"):
             reader = CAS(args.cas, read_only=True)
             raw = reader.read(
                 base.preparation.old._pin(args.expected_capture_digest),
                 max_bytes=_LIMIT,
             )
-            result = _verify(raw, args.expected_capture_digest, reader)
+            if args.command == "verify-measurement":
+                _require(
+                    args.private_cas.is_absolute(), "absolute private CAS required"
+                )
+                result = _verify_measurement(
+                    raw,
+                    args.expected_capture_digest,
+                    reader,
+                    CAS(args.private_cas, read_only=True),
+                    _measurement_expectations(args.measurement_expectations),
+                )
+            else:
+                result = _verify(raw, args.expected_capture_digest, reader)
         elif args.command == "inspect":
             bound = _inspect(CAS(args.cas, read_only=True), args.expected_input_digest)
             result = {
@@ -911,15 +1119,32 @@ def main(argv=None):
                     plan = _API._load_json(raw, "caller plan arguments")
                     result = _prepare(store, args.expected_setup_input_digest, plan)
                 else:
+                    captured = None
                     try:
-                        result = _capture(store, args.expected_input_digest)
+                        with _new_private_store(args.private_cas, store) as (
+                            private_store,
+                            private_guard,
+                        ):
+                            captured = _capture(
+                                store,
+                                args.expected_input_digest,
+                                private_store=private_store,
+                                private_guard=private_guard,
+                            )
+                        result = captured
                     except BaseException as error:
                         result = getattr(
-                            error, "_native_common_attempt_host_capture", None
+                            error, "_native_common_attempt_host_capture", captured
                         )
                         if result is None:
                             raise
-                        interrupted = error
+                        if captured is not None:
+                            result["status"] = "REFUSED"
+                            result["postcondition_failures"].append(
+                                "PRIVATE_DESTINATION_FINAL_CUSTODY_REFUSED"
+                            )
+                        if not isinstance(error, Exception):
+                            interrupted = error
                 cas_guard()
                 out_guard()
                 raw = canonical_json(result) + b"\n"

@@ -7,17 +7,17 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `89cf11c` (first-activation guest controller, actual-writer
-plan builder and fixed public evidence snapshot). The S2 host/guest capture and
-public retained replay implementation batch is documented below. A real owned
-capture, real workload/pair inventory and full private measurement replay remain
-outstanding; inert implementation checks do not close those boundaries. The older counts and effort
+Current queue base: signed `f3b283e` (bounded host/guest attempt capture and public
+retained replay). The step-1 private-input retention and independent bounded
+measurement replay implementation batch is documented below. A real owned
+capture, real workload/pair inventory and full campaign/private-writer semantics
+remain outstanding; inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | First-activation guest composition and the exact host install/bounded invoke/public export path are implemented, including public retained replay and evidence-preserving failure suspension. Real workload/pair inventory, a newly necessary isolated capture and full private measurement replay remain; public byte joins do not replace private semantics |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Host/guest attempt capture, finite private-input retention and independent bounded process/blocked-create/interval replay are implemented and checked. Real workload/pair inventory, a newly necessary isolated capture and broader private-writer/campaign semantics remain; inert composition does not replace live validation |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -34,6 +34,31 @@ working-tree state before starting the next batch. Reuse exact successful test
 fingerprints; never rerun unchanged failures. A clock interval is not a reason
 to test or commit, and incomplete changes are not represented as a completed
 batch. Automatic pushes remain unauthorized.
+
+### Sequential completion plan requested by the user
+
+Restate this plan and its exact status at the end of each run. Work one step at a
+time; completing an implementation batch is not permission to claim live gates.
+
+1. **Current integration sprint:** private handoff, independent bounded replay,
+   capture integration, focused checks and signed checkpoint. Implementation and
+   offline checks are complete in the batch below. The conditional isolated live
+   integration check is still prerequisite-blocked: no genuine complete workload/
+   pair inventory and campaign contract have been supplied, and the three
+   preserved admission drafts leave the checkout unsuitable for the clean signed
+   source capture guard. Do not invent an acceptance inventory or include those
+   drafts in this commit to hide the blocker.
+2. **Complete the remaining implementation:** admission routes, RUN/sensor-health
+   behavior, and real workload/pair measurement adapters on the same deployment.
+   Not advanced by the step-1-only run; existing admission drafts remain intact.
+3. **Close the verifier inventory and freeze:** every required execution path
+   must have an independent consumer. Pending steps 1–2 and their evidence.
+4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
+   retained cleanup and offline replay. Blocked until all prerequisites close.
+
+Next action within step 1 is to resolve the real-input/source-readiness
+prerequisites for its isolated check; no automatic effect retry or historical
+recapture is authorized. Signed implementation progress below is not live proof.
 
 ## Outcome and current position
 
@@ -1671,3 +1696,47 @@ not treat public replay as the missing private semantic replay. S3 admission
 families and S4 RUN/sensor-health coverage remain separate dependency-ready
 implementation work. Final31 and 100-attempt/100-pair acceptance stay blocked
 until all shared deployment, verifier and real measurement prerequisites close.
+
+**Step 1 — private input retention and independent measurement replay (2026-10-06):**
+the host capture now requires a fresh, separate private CAS through the CLI.
+After complete public export, one finite planner-derived handoff copies only the
+missing grant from the exact owned fixture; the twelve public inputs are copied
+locally into the private store. The existing prepared-input validator checks that
+complete closure. No private tree is enumerated, no raw grant enters stdout or
+public CAS, and failed scratch/partial inputs are retained without retry.
+
+Installed helper/alias sources are independently hashed before guest imports and
+after private reads. The original private destination identity, source custody,
+typed metadata and public plan joins must pass before fixture cleanup can proceed.
+Source/destination uncertainty or an unclassified transfer preserves and suspends
+the owned fixture. The metadata classifier also covers attached partial-failure
+reports before public persistence; arbitrary fields or diagnostic strings refuse.
+
+The new `verify-measurement` CLI path uses two read-only stores and a bounded
+caller-held expectation file with exactly `expected_worker`,
+`expected_broker_process`, `expected_gateway` and `expected_sink_accounts`.
+It independently replays public capture, actual private prepared inputs, process
+observations, blocked-create records and ingress timing through existing consumers.
+It compares independent results with retained guest results. Sink broker-group
+expectations remain caller-held, not inferred from a sink's own claims.
+
+Validation: **85 distinct methods, each run once** through the reviewed pipeline:
+19 new retention, 12 new measurement replay, 21 host (11 affected + 10 new),
+9 public replay (7 affected + 2 new), 8 affected inputs and 16 affected guest.
+All six selected fingerprints passed first try. The unchanged pipeline-unit
+fingerprint was reused; no other stage, broad regression, live capture, VM action,
+performance sample or acceptance campaign ran. The successful full-envelope unit
+test invokes every real semantic consumer on one coherent explicitly inert data
+fixture; it is not synthetic replacement acceptance evidence.
+
+The code-review findings fixed before the first test run were private/public CAS
+aliasing, unchecked process-result joins, guest import-source custody, deletion
+before the destination's final custody check, and metadata publication before
+classification. The common74 installed profile and frozen predecessors are
+unchanged. The admission auto-discovery drafts are preserved outside this batch.
+
+The [implementation checkpoint](benchmark/evidence/phase3-native-private-measurement-replay-implementation-v1-2026-10-06.json)
+retains exact input/result/source pins. One signed local batch commit is required;
+its verified hash is recorded in an ignored receipt. Live integration and Phase 3
+qualification remain unestablished. The next step is the explicitly recorded
+real-workload/source-readiness prerequisite, not another run of these checks.

@@ -84,7 +84,12 @@ EXTRA_SOURCE_PATHS = tuple(
     sorted(
         (
             set(EXTRA_HELPERS)
-            | {HOST_SOURCE, CAPTURE_CONSUMER_SOURCE}
+            | {
+                HOST_SOURCE,
+                CAPTURE_CONSUMER_SOURCE,
+                "scripts/retain_native_common_measurement_inputs.py",
+                "src/aragorn/native_phase3_common_measurement_capture.py",
+            }
             | set(DRIVER_SOURCE_PATHS)
         )
         - set(base.SOURCE_PATHS)

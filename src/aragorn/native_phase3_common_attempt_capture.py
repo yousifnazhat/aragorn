@@ -475,6 +475,117 @@ def _generated_driver(report, bound):
     )
 
 
+def _private_retention_metadata(capture, read):
+    """Join optional private-custody metadata; never read or attest private bytes."""
+    attempted = capture.get("private_input_transfer_attempted", False)
+    value = capture.get("private_measurement_inputs")
+    _require(type(attempted) is bool, "private transfer marker changed")
+    if not attempted:
+        _require(value is None, "unattempted private transfer has metadata")
+        return
+    _require(
+        type(value) is dict
+        and set(value)
+        == {
+            "schema",
+            "authority",
+            "status",
+            "container_id",
+            "prepared_digest",
+            "binding_digest",
+            "grant_digest",
+            "grant_bytes",
+            "input_blobs",
+            "input_set_digest",
+            "fixture_before",
+            "fixture_after",
+            "grant_source_before",
+            "grant_source_after",
+            "scratch_directory",
+            "copy_count",
+            "input_validation_complete",
+            "postcondition_failures",
+            "refusal",
+            *FALSE_FLAGS,
+        }
+        and len(canonical_json(value)) <= 32768,
+        "private retention metadata inventory changed",
+    )
+    _require(
+        value["schema"] == "aragorn/native-common-measurement-input-retention/v1"
+        and value["authority"]
+        == "PRIVATE_HOST_CAS_RETENTION_NOT_MEASUREMENT_OR_QUALIFICATION"
+        and value["status"] == "PRIVATE_INPUTS_RETAINED"
+        and value["container_id"] == capture["fixture_container"]
+        and type(value["copy_count"]) is int
+        and value["copy_count"] == 1
+        and value["input_validation_complete"] is True
+        and value["postcondition_failures"] == []
+        and value["refusal"] is None,
+        "private retention incomplete",
+    )
+    _false(value)
+    plan = capture["guest"]["attempt"]["plan"]
+    prepared = base._parse(read(plan["measurement_prepared_digest"], 32768), 32768)
+    _require(
+        value["prepared_digest"] == plan["measurement_prepared_digest"]
+        and value["binding_digest"] == plan["binding_digest"]
+        and value["grant_digest"] == prepared["binding"]["grant_digest"]
+        and value["input_blobs"] == prepared["input_blobs"]
+        and value["input_set_digest"] == _digest(canonical_json(value["input_blobs"]))
+        and type(value["grant_bytes"]) is int
+        and 0 < value["grant_bytes"] <= 65536
+        and {"digest": value["grant_digest"], "bytes": value["grant_bytes"]}
+        in value["input_blobs"],
+        "private retention plan changed",
+    )
+    fixture = value["fixture_before"]
+    _require(
+        type(fixture) is dict
+        and set(fixture)
+        == {
+            "container_id",
+            "name",
+            "owner",
+            "source_commit",
+            "image",
+            "network_mode",
+            "pid",
+            "started_at",
+        }
+        and fixture == value["fixture_after"]
+        and fixture["container_id"] == capture["fixture_container"]
+        and fixture["name"] == capture["fixture_name"]
+        and fixture["owner"] == capture["fixture_owner"]
+        and fixture["source_commit"] == capture["source"]["commit"]
+        and fixture["image"] == capture["fixture_image"]["Id"]
+        and fixture["network_mode"] == "none"
+        and type(fixture["pid"]) is int
+        and fixture["pid"] > 0
+        and type(fixture["started_at"]) is str
+        and 0 < len(fixture["started_at"]) <= 128,
+        "private retention fixture changed",
+    )
+    metadata = value["grant_source_before"]
+    base.live._metadata(metadata, owners={(0, 0)}, modes={0o444})
+    _require(
+        metadata == value["grant_source_after"]
+        and metadata["digest"] == value["grant_digest"]
+        and metadata["bytes"] == value["grant_bytes"],
+        "private grant source custody changed",
+    )
+    scratch = value["scratch_directory"]
+    _require(
+        type(scratch) is str
+        and 0 < len(scratch) <= 4096
+        and scratch.startswith("/")
+        and scratch.endswith("/native-common-measurement-input-retention")
+        and not {".", "..", ""}.intersection(scratch.split("/")[1:])
+        and "\x00" not in scratch,
+        "private scratch location changed",
+    )
+
+
 def verify_native_common_attempt_capture(
     capture_raw, *, expected_capture_digest, store
 ):
@@ -508,6 +619,7 @@ def verify_native_common_attempt_capture(
         )
         _require(
             set(capture)
+            - {"private_input_transfer_attempted", "private_measurement_inputs"}
             == {
                 "schema",
                 "authority",
@@ -546,6 +658,11 @@ def verify_native_common_attempt_capture(
                 *FALSE_FLAGS,
             },
             "capture envelope changed",
+        )
+        _require(
+            ("private_input_transfer_attempted" in capture)
+            == ("private_measurement_inputs" in capture),
+            "private retention envelope incomplete",
         )
         _require(
             capture["schema"] == SCHEMA
@@ -640,6 +757,7 @@ def verify_native_common_attempt_capture(
         baseline, deployment = _attempt(
             guest["attempt"], bound, capture["fixture_container"], exported, roles, read
         )
+        _private_retention_metadata(capture, read)
         _generated_driver(capture["generated_driver"], bound)
         base._outer(
             capture,

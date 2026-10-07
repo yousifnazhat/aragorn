@@ -7,10 +7,9 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-07)
 
-Current queue base: signed and pushed `190f935` (HTTP bundle, measurement and
-broker-readiness components). The new coherent HTTP94 profile, helper and
-attempt-plan batch is recorded below; its signed commit and push are recorded
-in the post-commit local receipt.
+Current queue base: signed and pushed `905f95f` (coherent HTTP94 profile, helpers
+and attempt plan). The combined capture implementation batch is recorded below;
+its signed commit and push are recorded in the post-commit local receipt.
 The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
@@ -24,8 +23,9 @@ components are now implemented and checked. The coherent readiness-capable
 HTTP94 successor and seven matching helper replacements now bind 22 measurement
 sources, nine writer documents and 43 selected identity paths. The original-plan
 and permanent-handoff bridge also joins the HTTP action and readiness nonce.
-Ready94 host/guest and private-retention assembly, same-process broker-listener
-observation, remaining action/task adapters, a guarded owned attempt capture and complete
+Ready94 host/guest/private-retention source assembly and the bounded same-process
+broker-listener observer are implemented. Actual listener/effect observation,
+remaining action/task adapters, a guarded owned attempt capture and complete
 campaign/private-writer semantics remain outstanding; a workload
 design and inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
@@ -33,7 +33,7 @@ allowances below are planning history, not a current completion percentage.
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | HTTP wiring has 99 distinct focused checks; preparation/identity adds 50; bundle/provisioning/readiness adds 55; coherent HTTP94/helpers/attempt planning adds 44. Ready94 host/guest/private-retention assembly, combined attempt lifecycle and actual broker-listener/effect evidence remain; no live qualification |
+| S2 / in progress | Real common host/guest execution and measurement wiring | HTTP wiring has 99 distinct focused checks; preparation/identity adds 50; bundle/provisioning/readiness adds 55; coherent HTTP94/helpers/attempt planning adds 44. Ready94 host/guest/private-retention assembly and combined attempt lifecycle are implemented; actual broker-listener/effect evidence remains; no live qualification |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -80,7 +80,8 @@ time; completing an implementation batch is not permission to claim live gates.
    coherent HTTP94 runtime and matching seven helpers are checked, with a ninth
    protected writer, 22 measured sources and 43 selected identity paths. The
    HTTP original-plan/permanent-handoff bridge is also checked. The combined
-   attempt lifecycle and ready94 host/guest/private-retention assembly remain.
+   attempt lifecycle and ready94 host/guest/private-retention assembly are now
+   implemented; actual capture is not implied by source composition.
    Actual broker-listener, timing/effect observations and campaign/deployment
    pins remain necessary.
    Use a clean signed source checkout when capture is ready. The three admission
@@ -99,10 +100,11 @@ time; completing an implementation batch is not permission to claim live gates.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
    retained cleanup and offline replay. Blocked until all prerequisites close.
 
-Next action within step 1 is **ready94 combined attempt capture assembly**.
+Next action within step 1 is **honest bounded capture prerequisites, then one
+ready94 combined capture and cleanup**.
 The coherent readiness-capable HTTP94 successor, nine-writer/43-path helpers and
-original-plan/permanent-handoff bridge are implemented and checked. Bind these
-generated bytes into the host/guest, public replay and private-retention bundles;
+original-plan/permanent-handoff bridge are implemented and checked. Their
+generated bytes are now bound into the host/guest, public replay and private-retention bundles;
 the frozen HTTP93 setup-only bundle does not accept ready94 by implication.
 Preserve both frozen predecessors and their exact pins. Reuse the existing
 common-attempt host/guest and private-evidence lifecycle for
@@ -118,6 +120,34 @@ compatible with the generic collector's controller-clock callback marks. Then co
 declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
+
+### Combined HTTP94 capture assembly checkpoint (2026-10-07)
+
+Batch record: [combined capture implementation](benchmark/evidence/phase3-http-combined-capture-assembly-v1-2026-10-07.json).
+
+- One finite composition now joins 23 generated host/guest/setup/plan/public and
+  private-retention outputs to the frozen HTTP94 runtime. Original signed source
+  bytes remain distinct from generated installation bytes. No predecessor changed.
+- The readiness observer holds the broker epoch and verifies that the startup
+  probe and kernel Unix listener belong to the same PID/start time. The sink child
+  must close and be reaped before native HTTP collection begins; partial records
+  and failed cleanup remain retained instead of becoming success.
+- Private host replay now loads six exact staged HTTP dependencies before the
+  generated measurement consumers. Temporary dataclass registrations never
+  replace original package names. The capture-only writer retains stopped guards
+  before activation but permits the intended running broker during final cleanup.
+- **27 distinct new checks are valid, 33 total invocations.** Five readiness
+  successes and two import-isolation successes are retained from failed stages.
+  Three macOS test mocks were repaired; then an original-versus-generated V4
+  source-pin mismatch was corrected. Only affected checks reran. All failed
+  fingerprints remain recorded. No broad regression or live operation ran.
+- Actual listener/capture/cleanup proof remains pending. The next prerequisite
+  is genuine finite benign task/input bindings and an explicitly bounded
+  one-HTTP development contract, not dummy hashes or final campaign authority.
+
+Plan: **1 in progress** at that prerequisite and one guarded capture/replay/cleanup;
+**2** remaining admission, RUN/sensor-health and workload/pair adapters;
+**3** complete independent verifiers then freeze; **4** acceptance remains blocked.
 
 ### Coherent HTTP94 and original-plan checkpoint (2026-10-07)
 

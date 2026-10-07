@@ -7,24 +7,27 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-07)
 
-Current queue base: signed and pushed `3f7c6a4` (HTTP mediation and admission-leaf
-implementation). The new HTTP common-runtime wiring batch is recorded below;
+Current queue base: signed and pushed `8042eed` (HTTP common-runtime wiring).
+The new HTTP preparation/identity bridge batch is recorded below;
 its signed commit and push are recorded in the post-commit local receipt.
 The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
 the 100 attempts and 100 pairs. The first fixed HTTP transport and independent
 ingress observer are implemented and checked. HTTP worker/sensor/capability/native
-collector paths are now composed in one checked 93-file inert successor. Fresh
-fixture preparation/installed identity for that successor, remaining action/task
-adapters, a guarded owned capture and complete campaign/private-writer semantics remain outstanding; a workload
+collector paths are now composed in one checked 93-file inert successor. The
+fresh eight-writer preparation and 41-path installed-identity helper bridge is
+implemented and checked. Its HTTP-specific host/guest source bundle and public
+report contract, root measurement provisioning, broker-restricted readiness,
+remaining action/task adapters, a guarded owned capture and complete
+campaign/private-writer semantics remain outstanding; a workload
 design and inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | HTTP worker/sensor/capability/native collector wiring and a 93-file successor now have 99 distinct focused checks. Fresh successor fixture preparation/identity, broker-restricted readiness, real capture, other actions/tasks and full campaign semantics remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | HTTP wiring has 99 distinct focused checks; the new preparation/identity bridge adds 50. HTTP host/guest bundle and public replay, measurement provisioning, broker-restricted readiness, real capture, other actions/tasks and full campaign semantics remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -61,10 +64,12 @@ time; completing an implementation batch is not permission to claim live gates.
    HTTP broker entry point now reuses protected policy/revocation/health and replay
    state, with authorization at connect/send boundaries. Worker/sensor/capability
    dispatch, grant/receipt/journal variants, native tool allowlisting and collector
-   replay are now wired in the checked HTTP successor. The current common74
-   fixture preparation and installed identity must be explicitly extended to the
-   new 93-file/21-measurement-source deployment before activation or collection.
-   Broker-restricted positive readiness, actual observations and coherent
+   replay are now wired in the checked HTTP successor. Six finite helper
+   replacements now extend preparation/identity to the new 93-file runtime,
+   21 measurement sources, eight provisioning documents and 41 identity paths.
+   They are not yet bound into an HTTP-specific host/guest execution bundle or
+   its public setup-replay contract; the old common74 controller is incompatible.
+   Root measurement provisioning, broker-restricted positive readiness, actual observations and coherent
    campaign/deployment pins remain necessary.
    Use a clean signed source checkout when capture is ready. The three admission
    drafts are now reviewed batch-owned implementation under the expanded step-2
@@ -82,17 +87,59 @@ time; completing an implementation batch is not permission to claim live gates.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
    retained cleanup and offline replay. Blocked until all prerequisites close.
 
-Next action within step 1 is to connect the checked HTTP successor to fresh owned
-fixture preparation and its installed identity, using the staged canonical
-gateway template before the first protected write and the absent-only HTTP
-credential provisioner. Extend the held source/binding inventory coherently;
-do not relabel a common74 setup or replay it as a 93-file deployment. Resolve
-broker-restricted readiness before one newly necessary isolated capture. The
+Next action within step 1 is to bind the six checked HTTP helper outputs and
+their signed original-source provenance into an HTTP-specific host/guest input
+bundle and public setup-replay contract. Preserve the existing exact-fixture
+creation/cleanup lifecycle, but do not relabel common74 reports. Extend the root
+measurement provisioner's create-only protected-input joins to the HTTP endpoint
+and credential, then resolve broker-restricted readiness before one newly
+necessary isolated capture. The new writer already selects the canonical HTTP
+template before the first protected config write and records the eighth writer
+intent before absent-only credential provisioning. The
 native collector preserves actual worker/broker stamps; it is explicitly not
 compatible with the generic collector's controller-clock callback marks. Then connect the remaining
 declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
+
+### HTTP preparation and installed-identity bridge checkpoint (2026-10-07)
+
+Batch record: [HTTP bridge checkpoint](benchmark/evidence/phase3-http-preparation-identity-v1-2026-10-07.json).
+
+- Six exact-pinned source replacements reuse the frozen common setup, writer,
+  preparation, measurement-input validator, identity reader and independent
+  process/file consumer. The common74 sources and HTTP93 runtime remain unchanged.
+- The writer selects the canonical HTTP template before the first config write,
+  captures the HTTP credential's intended bytes before absent-only provisioning,
+  derives HTTP policy/grant digests from a fixed lab attempt, and preserves the
+  outer stop-before-activation seam. Partial outcomes are bounded and redacted;
+  failed cleanup cannot turn into a successful preparation checkpoint.
+- Preparation binds eight writer documents, 21 measured sources and 41 selected
+  identity paths. The controller reads back all 93 runtime files. The identity
+  reader adds protected HTTP credential views in worker, sensor and broker
+  process roots; these are not loaded-code or network-namespace attestations.
+- **50 distinct valid focused checks, 68 total invocations.** First-pass writer
+  and controller suites passed. A consumer variable shadow and absolute/relative
+  directory mismatch were corrected; the fixture's import-time dependency wiring
+  was also corrected. Only two consumer, 14 preparation and one affected
+  composition checks reran, alongside one new integrated eight-writer replay
+  check. One final test-only size assumption was fixed and only that check reran:
+  the current 21-source credential is 3,631 bytes, within its 8,192-byte ceiling.
+- All failed fingerprints remain failed. Seven unchanged reader successes and
+  the unchanged renderer-only success are retained from failed stages; those
+  stages are not relabeled PASS. Thirteen later valid preparation successes are
+  retained without repeating them after the size-assertion correction. The
+  unchanged pipeline-capacity result was reused. No broad suite or live operation
+  ran, and fabricated unit inputs are not acceptance samples.
+- The helper composer deliberately produces installation bytes only. No fresh
+  fixture was created or activated, no installed identity was observed, and no
+  actual timing/effect evidence was collected. Host/guest source provenance and
+  public replay, root measurement provisioning, and broker-restricted readiness
+  are the next concrete integration gates; no user input or push approval is missing.
+
+Plan: **1 in progress** at the gates immediately above; **2** remaining admission,
+RUN/sensor-health and workload adapters; **3** complete independent verifiers and
+freeze; **4** final acceptance blocked until prerequisites close.
 
 ### HTTP common-runtime wiring checkpoint (2026-10-07)
 

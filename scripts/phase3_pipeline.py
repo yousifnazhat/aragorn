@@ -27,6 +27,7 @@ REGISTRY = "benchmark/phase3-pipeline-v1.json"
 RUNNER = "scripts/phase3_pipeline.py"
 _LIMIT = 32 * 1024 * 1024
 _LOG_LIMIT = 4 * 1024 * 1024
+_MAX_STAGES = 128
 _PREFLIGHT_CODE = "import time; time.sleep(1)"
 _FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 _LIMITATIONS = [
@@ -155,7 +156,10 @@ def load_registry(root):
         "unknown registry contract",
     )
     stages = value["stages"]
-    _require(type(stages) is list and 0 < len(stages) <= 64, "invalid stage inventory")
+    _require(
+        type(stages) is list and 0 < len(stages) <= _MAX_STAGES,
+        "invalid stage inventory",
+    )
     index = {}
     for row in stages:
         _require(

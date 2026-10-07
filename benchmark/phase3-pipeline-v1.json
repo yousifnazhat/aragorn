@@ -2,6 +2,53 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pipeline-capacity",
+      "description": "Only four new inert registry-capacity checks for the required bounded increase from 64 to 128 stages; no child execution, cache reset, unrelated stage run or qualification.",
+      "tests": ["test_phase3_pipeline_capacity"],
+      "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "runtime-http-mediation",
+      "description": "Focused protected-state HTTP broker checks after correcting the disposable fixture ancestry. The 32 unchanged transport checks passed in the retained first attempt and are not rerun. Inert sockets and owned control files; no live fixture or acceptance.",
+      "tests": ["test_runtime_http_broker"],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_broker_decision_measurement.py",
+        "src/aragorn/runtime_http_action.py",
+        "src/aragorn/runtime_http_broker.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_runtime_action_broker.py",
+        "tests/test_runtime_http_broker.py"
+      ],
+      "needs": ["pipeline-capacity"],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-admission-auto-discovery",
+      "description": "First run of the fixed two-candidate auto-discovery leaf and independent retained-byte consumer checks. Inert syscall/catalog doubles only; not yet common-deployment dispatch, active prompt consumption or admission qualification.",
+      "tests": ["test_native_admission_auto_discovery"],
+      "inputs": [
+        "scripts/runtime_native_admission_auto_discovery.py",
+        "scripts/runtime_native_admission_direct_write.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_admission_auto_discovery.py",
+        "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_admission_auto_discovery.py",
+        "tests/test_native_admission_direct_write.py"
+      ],
+      "needs": ["pipeline-capacity"],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-http-canary-lab",
       "description": "Verify only the new fixed dummy HTTP transport, held owned-fixture namespace guards, independent bounded raw-ingress observer and retained-byte verifier with inert sockets, clocks and proc descriptors. No real socket, fixture activation, broker decision, measurement campaign or acceptance.",
       "tests": [

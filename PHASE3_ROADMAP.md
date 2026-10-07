@@ -7,8 +7,8 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `c3bfd54` (reference-derived workload preparation,
-following private-input retention and independent bounded replay). The user has selected MITRE ATLAS and OWASP-derived,
+Current queue base: signed and pushed `2c716af` (fixed HTTP lab transport and
+independent sink, following reference-workload preparation). The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
 the 100 attempts and 100 pairs. The first fixed HTTP transport and independent
@@ -38,9 +38,10 @@ fingerprints; never rerun unchanged failures. A clock interval is not a reason
 to test or commit, and incomplete changes are not represented as a completed
 batch. The user now requests pushing every completed reviewed batch to
 `origin/codex/phase3-runtime-prevention`. This remote repository is public.
-Automatic approval review blocked the initial 30-commit push pending explicit
-confirmation that the code and evidence may be published publicly; that question
-is pending. Preserve signed local commits until the publishing condition closes.
+The initial public-push confirmation was resolved by the user's explicit push
+instruction. The prior 31 commits through `2c716af` were pushed and the remote tip
+was verified. Continue ordinary fast-forward pushes of reviewed signed batches;
+never force-push or describe a branch push as production activation.
 
 ### Sequential completion plan requested by the user
 
@@ -52,15 +53,23 @@ time; completing an implementation batch is not permission to claim live gates.
    offline checks are complete in the batch below. **Workload preparation is now
    complete:** use the declared ATLAS/OWASP-derived lab inventory and fabricated
    data; the user need not supply production inputs. Fixed HTTP transport and its
-   independent ingress observer are now implemented and checked. Common runtime
+   independent ingress observer are now implemented and checked. The new internal
+   HTTP broker entry point now reuses protected policy/revocation/health and replay
+   state, with authorization at connect/send boundaries; it is not yet installed
+   or dispatched by the common worker/sensor/capability service. Common runtime
    integration and the conditional isolated check still need broker/sensor/worker
    and collector adapters, actual observations and campaign/deployment pins.
-   Preserve the three admission drafts and use a clean signed source checkout
-   when capture is ready; never fold unrelated drafts into this batch to satisfy
-   the source guard. Preparation is not live integration completion.
+   Use a clean signed source checkout when capture is ready. The three admission
+   drafts are now reviewed batch-owned implementation under the expanded step-2
+   request, not unrelated files folded in merely to satisfy a source guard.
+   Preparation and an internal mediator are not live integration completion.
 2. **Complete the remaining implementation:** admission routes, RUN/sensor-health
    behavior, and real workload/pair measurement adapters on the same deployment.
-   Not advanced by the step-1-only run; existing admission drafts remain intact.
+   Advanced by hardening the fixed auto-discovery producer and independent
+   consumer (15 first-run inert checks); common dispatch remains outstanding.
+   Current common staging has no Tetragon reader, protected progress marker or
+   sensor/map/program binding provisioning. The historical reader fixture was
+   removed and cannot supply those current identities.
 3. **Close the verifier inventory and freeze:** every required execution path
    must have an independent consumer. Pending steps 1–2 and their evidence.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
@@ -74,6 +83,36 @@ with the generic collector's callback signatures. Then connect the remaining
 declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
+
+### HTTP mediation and admission-leaf checkpoint (2026-10-06)
+
+Batch record: [mediation checkpoint](benchmark/evidence/phase3-http-mediation-admission-v1-2026-10-06.json).
+
+- Added a finite credential-bound HTTP action, exact fixture/namespace/process
+  guards, and an internal broker entry point using the existing protected lock,
+  policy, revocation, health and consumed-request ledger. No generic action
+  framework, arbitrary destination/payload, service installation or activation.
+- HTTP activity does not renew sensor health. Authorization is rechecked after
+  transport guards immediately before connect and send, with one measured final
+  decision and a separately retained payload decision. Expiry, interrupts and
+  uncertain sends/cleanup retain conservative outcomes and partial evidence.
+- Hardened the two-candidate outside-root discovery draft and pure consumer:
+  unknown write/create outcomes, held-object custody and cleanup interruptions
+  remain explicit. Catalog exclusion is not active prompt/admission proof.
+- Verification covers 72 distinct new checks: 32 transport, 21 broker, 15
+  discovery and four pipeline-capacity checks. The initial broker fixture used
+  writable macOS temporary ancestry and was correctly refused. Its failed record
+  is preserved. The fixture was moved under protected workspace ancestry and
+  only the 21 affected broker checks reran; the 32 passing transport checks were
+  retained unchanged. No historical suite, live capture or acceptance ran.
+- Registry capacity increased from 64 to a bounded 128 to admit the new stages;
+  cache/fingerprint/failed-record logic is unchanged. Unrelated stages were not
+  rerun merely because the runner source changed.
+- Steps 1 and 2 remain incomplete; step 3 cannot freeze yet. Remaining common
+  HTTP wiring spans worker/sensor/grant/result schemas, installed source and
+  unit/credential custody, source inventory and collector/independent replay.
+  Remaining admission, RUN, meaningful sensor health and workload adapters are
+  substantive implementation, not a missing manual continue or push approval.
 
 ### Fixed HTTP lab implementation checkpoint (2026-10-06)
 

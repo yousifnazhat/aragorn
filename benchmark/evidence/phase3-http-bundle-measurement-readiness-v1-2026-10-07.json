@@ -1,0 +1,124 @@
+{
+  "schema": "aragorn/phase3-implementation-batch/v1",
+  "date": "2026-10-07",
+  "title": "HTTP source bundle, root measurement and broker readiness components",
+  "base_commit": "d260c05642d9468f0b1c1c574f0d9ee7180c82d3",
+  "authority": "REVIEWED_IMPLEMENTATION_AND_INERT_CHECKS_NOT_LIVE_QUALIFICATION",
+  "files": {
+    "scripts/capture_native_phase3_http_setup.py": {
+      "bytes": 5610,
+      "digest": "sha256:36dbdb05b4eddca4736a44b1b512236e9d69ac8c7d088c2099d393586f447847"
+    },
+    "scripts/materialize_native_phase3_http_setup_capture.py": {
+      "bytes": 26160,
+      "digest": "sha256:ca1bd93a2a8eed900934a602b015d8b6557920288ae78a5c1de55ff6793af2ef"
+    },
+    "scripts/materialize_native_phase3_http_measurement_provisioning.py": {
+      "bytes": 8954,
+      "digest": "sha256:3749d124bb1f89fb6c8dfa70f685ed8bdfeb65f8eaf9b70a3d0d0fcdc90ec6c7"
+    },
+    "scripts/materialize_runtime_http_readiness.py": {
+      "bytes": 2633,
+      "digest": "sha256:d012b334a5e8154d40c4c9cc4b4bda6ec4ae63d048eda8bb6fe403634595c27d"
+    },
+    "src/aragorn/runtime_http_readiness.py": {
+      "bytes": 18520,
+      "digest": "sha256:acd11f1583ba3ca1df7b9f68251336e2b45b9f991ef631bade5415d6aa8ba7cc"
+    },
+    "src/aragorn/native_phase3_http_readiness_verify.py": {
+      "bytes": 9855,
+      "digest": "sha256:159768784f98698d030b5a068d5835b69012de43664aef3fc57ae6e370ad5a47"
+    },
+    "tests/test_native_phase3_http_setup_capture.py": {
+      "bytes": 21085,
+      "digest": "sha256:d391d48139b07e9b4408fe94bcb5e9745a2f745656c13dfe1ee7b8ba76527e40"
+    },
+    "tests/test_native_phase3_http_measurement_provisioning.py": {
+      "bytes": 18352,
+      "digest": "sha256:f0bfedb4bb9ff327531e15603acef04d0b0768bf19fbebdbe0bec63eec682dae"
+    },
+    "tests/test_runtime_http_readiness.py": {
+      "bytes": 27745,
+      "digest": "sha256:74da2d57637b3ddd54b2b5e4a85019f317b6b6231b19f6431d6c9f8bfff8e46d"
+    }
+  },
+  "pipeline": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "stages": [
+      {
+        "id": "native-http-setup-bundle",
+        "fingerprint": "sha256:431d4c0bc0fba4ac353b1af9f36c83f472dcf7e49cecef5ff0194913125a6874",
+        "status": "PASS",
+        "new_checks": 9,
+        "attempts": 1,
+        "seconds": 2.064842
+      },
+      {
+        "id": "native-http-measurement-provisioning",
+        "fingerprint": "sha256:7db3347752547044ab924567c3f70c05a05b46223841ac29073c625d776dc018",
+        "status": "PASS",
+        "new_checks": 11,
+        "attempts": 1,
+        "seconds": 1.094778
+      },
+      {
+        "id": "runtime-http-broker-readiness",
+        "fingerprint": "sha256:a2db41b269e8b0903341ce33aadd8ef5247071bce8700a601babe25706707ae4",
+        "status": "PASS",
+        "new_checks": 35,
+        "attempts": 1,
+        "seconds": 0.313569
+      }
+    ],
+    "reused": {
+      "id": "pipeline-capacity",
+      "fingerprint": "sha256:77df0de1d5abc16a3ba1769ad5a8f7514a6414279328e32a810bdec3e2acea31",
+      "status": "SKIP_PASS"
+    },
+    "new_checks": 55,
+    "total_invocations": 55,
+    "old_behavioral_checks_rerun": 0,
+    "failed_fingerprints_retried": 0,
+    "broad_regression": false
+  },
+  "implementation": [
+    "Finite checked-source HTTP93 host/guest setup bundle separates original signed-tree bytes from generated installed outputs; host recomposes before copy.",
+    "Twelve composed outputs reuse six setup helpers, three HTTP measurement consumers and three new host/guest/replay replacements.",
+    "Guest observes owned boot/network namespace before eight-writer setup;21-directory custody handoff includes opt and src paths.",
+    "HTTP root measurement provisioning joins endpoint/canary/policy/fixture credential/accounts/boot/21 source pins under held custody; no create-inode surrogate or endpoint contact.",
+    "Broker startup readiness has fixed GET, durable absent-only claim before connection, credential recheck, bounded partial outcomes and cleanup before READY.",
+    "Independent readiness consumer joins raw request/claim/result/sink pins, nonce, source port, expected process identities and CLOCK_BOOTTIME; whole-service readiness remains false."
+  ],
+  "review_corrections_before_first_test": [
+    "Recheck protected readiness credential after the probe.",
+    "Complete outer broker process/namespace cleanup before publishing READY.",
+    "Preserve interruption and indeterminate observations when result publication fails.",
+    "Require same-current-process broker listener witness in future capture integration, not merely Type=simple MainPID or persisted READY."
+  ],
+  "environment": {
+    "colima_default": "Stopped",
+    "colima_aragorn_bakeoff": "Stopped",
+    "active_phase3_capture_observed": false,
+    "vm_started": false,
+    "host_service_activated": false,
+    "live_socket_opened": false,
+    "live_capture_performed": false
+  },
+  "next": [
+    "Compose readiness-capable HTTP94 successor and corresponding activator/source/measurement/installed-identity pins; preserve HTTP93.",
+    "Bind readiness credential explicitly; join same-process broker listener after successful startup.",
+    "Reuse existing common-attempt public/private evidence lifecycle for one newly necessary combined guarded capture, not another nonresumable setup-only capture.",
+    "Finish remaining admission, RUN/sensor-health and workload/pair adapters, complete verifier inventory, then freeze and required fresh acceptance."
+  ],
+  "limitations": [
+    "Inert component checks do not prove installation, activation, live readiness, measurement, admission, RUN or Phase3 qualification.",
+    "Public setup replay checks retained joins, not independent generated-code execution or private writer semantics.",
+    "Readiness raw replay proves only a conditional broker-process round-trip join; independently observed current process/listener and installed-source evidence are still required.",
+    "HTTP93 staged files and prior evidence remain unchanged; new readiness startup code is not installed by that frozen profile."
+  ],
+  "activation_performed": false,
+  "measurement_collected": false,
+  "broker_restricted_readiness_verified": false,
+  "phase3_exit_eligible": false,
+  "signed_commit_receipt": "Recorded after signed commit and fast-forward push in ignored .aragorn/phase3-batch-<commit>-checkpoint.json"
+}

@@ -1,0 +1,87 @@
+{
+  "schema": "aragorn/phase3-preparation-checkpoint/v1",
+  "authority": "LOCAL_REFERENCE_WORKLOAD_PREPARATION_ONLY_NOT_EXECUTION_OR_QUALIFICATION",
+  "status": "REVIEWED_DATA_AND_DOCUMENTATION_BATCH",
+  "base_commit": "5ce791a79ba6800d4faee66dbe32b05d1fb425fe",
+  "branch": "codex/phase3-runtime-prevention",
+  "recorded_at_utc": "2026-10-07T01:05:47Z",
+  "local_work_date": "2026-10-06",
+  "user_instruction": "Use MITRE ATLAS and OWASP to prepare lab tasks; real production/customer workload inputs are not required. Keep one-step sequence and no redundant testing.",
+  "delivered": [
+    "Versioned-source mappings and explicit preparatory authority ceiling.",
+    "Four concrete scenarios with 100 sorted unique reserved attempt IDs: 50 EXFILTRATION, 50 DESTRUCTIVE, with a100 the one unattributed destructive control inside the 100.",
+    "Four benign task templates with 100 sorted unique reserved pair IDs and fixed baseline-then-instrumented order matching the existing collector.",
+    "Fabricated canary template and exact benign/protected-original byte strings.",
+    "Roadmap no longer treats production/customer input delivery as a blocker; next work is a real fixed lab action with an independent observer."
+  ],
+  "reviews": {
+    "source_accuracy": "Official MITRE ATLAS 2026.09 and OWASP Agentic 2026/GenAI LLM 2026 final IDs and names independently reviewed.",
+    "existing_contract_fit": "Existing 100-attempt/100-pair schedule, one unattributed control, collector order and finite input contract inspected without imports or execution.",
+    "resolved_findings": [
+      "Removed proposed counterbalanced order to preserve the existing baseline-then-instrumented collector contract; fixed-order bias is documented.",
+      "Unattributed unlink control now requires independent process/attempt observation and verified missing attribution, not fabricated authenticated attribution.",
+      "Corrected reused finite input contract terminology to public attempt-input bundle."
+    ]
+  },
+  "validation": {
+    "behavioral_tests_run": 0,
+    "pipeline_stages_run": [],
+    "cached_test_results_rerun": 0,
+    "live_captures_run": 0,
+    "performance_measurements_run": 0,
+    "inspection_only": [
+      "JSON syntax and reserved inventory shape/counts/order inspected with jq",
+      "git diff --check",
+      "Source/category accuracy review",
+      "Relevant existing contract and collector source inspection"
+    ],
+    "reason": "Documentation/data-only batch changes no behavior, pipeline closure, fixed gate or threshold. Prior successful implementation evidence is preserved without rerunning it."
+  },
+  "artifact_digests": {
+    "PHASE3_ROADMAP.md": "sha256:2e7cea30cd528bdb8606e33f01c7a883908ccffbf5b8c61aebe2b3b2f189bd45",
+    "benchmark/phase3-reference-workload-plan-v1.json": "sha256:eacf805c2dfb71311755d6246aa29a49b74600f9766abc7e9f0bbdf6ae52e277",
+    "benchmark/phase3-reference-inputs/lab-data-v1.json": "sha256:c29b32f4b4eb5b2d4a232d448f9994d2ededfe4ece1af68aa517491405bdbd5f",
+    "benchmark/phase3-reference-workloads-v1.md": "sha256:cc82994f4728b773e0aaf32e97eea23f55dadf200790a4676ad06a9ae0c3a2db"
+  },
+  "unchanged_contract_digests": {
+    "benchmark/phase3-exit-gate-manifest-v1.json": "sha256:aff633a6d0d482cf79e3e540b0e7b8336cf266765eaacf277c9ac23ed5279f1d",
+    "benchmark/phase3-pipeline-v1.json": "sha256:18360967909a2b33247e455380e7cc0027737fcf058f65499e83bfa3f1027f3c"
+  },
+  "preserved_untracked_drafts": {
+    "scripts/runtime_native_admission_auto_discovery.py": "sha256:10a7371e5aa3bf44516c51d6e8a516d699394da437a8f404e16f6d0a62b4feac",
+    "src/aragorn/native_phase3_admission_auto_discovery.py": "sha256:9f0b2fdf06ac4f0d29f6f19a98a785951fc2e10d482d5408fe9026538d6cb236",
+    "tests/test_native_admission_auto_discovery.py": "sha256:1c696d5a00e54c182381d0ad7edfb0a6a3c3285b87636fd454b715d18f56b361"
+  },
+  "sequential_plan": [
+    {
+      "step": 1,
+      "status": "PRIVATE_HANDOFF_AND_BOUNDED_REPLAY_IMPLEMENTED; LAB_WORKLOAD_PREPARATION_COMPLETE; REAL_ACTION_ADAPTERS_AND_LIVE_INTEGRATION_PENDING",
+      "next": "Implement fixed owned-loopback canary action plus independent sink observer on the common deployment."
+    },
+    {
+      "step": 2,
+      "status": "REMAINING_ADMISSION_RUN_SENSOR_HEALTH_AND_MEASUREMENT_IMPLEMENTATION_PENDING"
+    },
+    {
+      "step": 3,
+      "status": "COMPLETE_INDEPENDENT_VERIFIER_INVENTORY_AND_FREEZE_PENDING"
+    },
+    {
+      "step": 4,
+      "status": "FINAL_31_CASE_AND_100_ATTEMPT_100_PAIR_ACCEPTANCE_BLOCKED"
+    }
+  ],
+  "no_new_authority": [
+    "NO_RUNNABLE_PLAN_ARGUMENTS",
+    "NO_FAKE_DIGESTS_OR_OBSERVATIONS",
+    "NO_PROMPT_INJECTION_RESISTANCE_CLAIM",
+    "NO_PRODUCTION_OVERHEAD_GENERALIZATION",
+    "NO_ADMISSION_RUN_PHASE3_EDR_OR_RELEASE_QUALIFICATION"
+  ],
+  "decision": {
+    "lab_input_preparation_complete": true,
+    "live_integration_complete": false,
+    "phase3_exit_eligible": false
+  },
+  "commit_policy": "One signed local batch commit, verified before handoff. Hash and resulting tree state retained in ignored .aragorn post-commit receipt; no push."
+}

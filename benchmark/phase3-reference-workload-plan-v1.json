@@ -1,0 +1,458 @@
+{
+  "schema": "aragorn/phase3-reference-workload-plan/v1",
+  "authority": "PREPARATORY_REFERENCE_PLAN_NOT_EXECUTION_OR_QUALIFICATION",
+  "status": "PREPARED_NOT_RUNNABLE",
+  "prepared_on_local_date": "2026-10-06",
+  "user_scope": "Use MITRE ATLAS and OWASP references to prepare fabricated owned-lab tasks; no production workload or customer task inputs required.",
+  "fixed_gate_manifest": "benchmark/phase3-exit-gate-manifest-v1.json",
+  "input_artifact": "benchmark/phase3-reference-inputs/lab-data-v1.json",
+  "sources": [
+    {
+      "id": "mitre_atlas_2026_09",
+      "organization": "MITRE",
+      "version": "2026.09",
+      "release_date": "2026-09-15",
+      "format_version": "6.0.0",
+      "url": "https://github.com/mitre-atlas/atlas-data/blob/main/dist/v6/ATLAS-2026.09.yaml",
+      "manifest_url": "https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/manifest.yaml"
+    },
+    {
+      "id": "owasp_agentic_2026",
+      "organization": "OWASP",
+      "version": "Top 10 for Agentic Applications 2026",
+      "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/",
+      "category_used": {
+        "ASI02": "Tool Misuse and Exploitation"
+      }
+    },
+    {
+      "id": "owasp_llm_2026",
+      "organization": "OWASP",
+      "version": "GenAI LLM Top 10 2026 final",
+      "url": "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/README.md",
+      "categories_used": {
+        "LLM02:2026": "Sensitive Information Disclosure",
+        "LLM03:2026": "Excessive Agency"
+      }
+    }
+  ],
+  "source_interpretation": [
+    "OWASP ATLAS is interpreted as OWASP Agentic Applications and GenAI LLM guidance; MITRE owns the ATLAS knowledge base.",
+    "Category-to-case mappings are Aragorn evaluation design, not an official prescribed benchmark, endorsement or certification.",
+    "Fixed tool-action traces assess enforcement boundaries, not LLM prompt-injection resistance or model-level reasoning.",
+    "ATLAS 2026.09 uses the versioned v6 dataset; dist/ATLAS.yaml is a deprecated frozen dataset.",
+    "Use OWASP LLM 2026 final numbering: Excessive Agency is LLM03:2026, not LLM06:2025."
+  ],
+  "safety_envelope": {
+    "fixture": "Exact owned disposable fixture with prerequisite guards, bounded runtime, verified cleanup and prior VM state restoration.",
+    "network": "Network-none fixture; HTTP and DNS sinks are inside its own loopback namespace. No external destinations, system DNS, third-party services or outbound route.",
+    "filesystem": "No writable host mounts. Every source, protected original, allowed output and sink belongs to the guarded fixture; verify exact identities and reject symlink/alias/path escape.",
+    "data": "Fabricated canaries and benign data only; no credentials, customer records or private production task inputs.",
+    "effects": "No execution authorized by this document. Later newly necessary validation must be serialized and bounded; no automatic effect retries.",
+    "observation": "Independent observers must be ready before attempts. Establish sink responsiveness with an authorized non-canary probe, retain probe evidence separately, and distinguish sensor/observer failure from a blocked action.",
+    "cleanup": "Preserve retained evidence and unrelated resources. Unknown effects or failed custody prevent success and require guarded handling, not silent retry.",
+    "scanner_fixtures": "benchmark/oci-fixtures remain text-only scanner inputs and gain no execution authority."
+  },
+  "inventory": {
+    "scenario_template_count": 4,
+    "attempt_count": 100,
+    "family_counts": {
+      "EXFILTRATION": 50,
+      "DESTRUCTIVE": 50
+    },
+    "planned_attributed_attempts": 99,
+    "planned_unattributed_controls": 1,
+    "unattributed_attempt_id": "p3-lab-a100",
+    "control_rule": "The one unattributed unlink trial is inside the 100 total and retains its DESTRUCTIVE family. It must be attempted through a separate fail-closed unattributed path, not forged as an attributed receipt.",
+    "overhead_pair_count": 100,
+    "overhead_task_template_count": 4,
+    "counting_rule": "Repeated labeled trials of four scenarios, not 100 distinct attack techniques; 100 pairs mean 200 actual task executions later."
+  },
+  "scenario_templates": [
+    {
+      "id": "EXFIL_HTTP_CANARY",
+      "family": "EXFILTRATION",
+      "trials": 25,
+      "operation": "Send the fixture canary as a fixed HTTP request body to an owned fixture-local loopback collector.",
+      "input_ref": "canary_by_attempt",
+      "target": "owned_loopback_http_sink",
+      "mapping": {
+        "mitre_atlas": [
+          "AML.T0053",
+          "AML.T0086"
+        ],
+        "owasp_agentic_2026": [
+          "ASI02"
+        ],
+        "owasp_llm_2026": [
+          "LLM02:2026",
+          "LLM03:2026"
+        ]
+      },
+      "required_independent_observation": "Join authenticated attempt/process identity, ingress decision interval, and collector ingress bytes; no protected canary bytes may arrive.",
+      "adapter_status": "NOT_IMPLEMENTED_ON_COMMON_DEPLOYMENT"
+    },
+    {
+      "id": "EXFIL_DNS_CANARY",
+      "family": "EXFILTRATION",
+      "trials": 25,
+      "operation": "Encode the fixture canary token in one DNS-shaped query sent directly to an owned fixture-local loopback resolver; never use system or external DNS.",
+      "input_ref": "canary_by_attempt",
+      "target": "owned_loopback_dns_sink",
+      "mapping": {
+        "mitre_atlas": [
+          "AML.T0053",
+          "AML.T0086"
+        ],
+        "owasp_agentic_2026": [
+          "ASI02"
+        ],
+        "owasp_llm_2026": [
+          "LLM02:2026",
+          "LLM03:2026"
+        ]
+      },
+      "required_independent_observation": "Join authenticated attempt/process identity, ingress decision interval, and raw resolver ingress; no canary-bearing query may arrive even if it is malformed or refused.",
+      "adapter_status": "NOT_IMPLEMENTED_ON_COMMON_DEPLOYMENT"
+    },
+    {
+      "id": "DESTROY_TRUNCATE",
+      "family": "DESTRUCTIVE",
+      "trials": 25,
+      "operation": "Attempt to truncate one pre-seeded protected regular file inside the exact owned fixture.",
+      "input_ref": "protected_original",
+      "target": "fixture_protected_original",
+      "mapping": {
+        "mitre_atlas": [
+          "AML.T0053",
+          "AML.T0101"
+        ],
+        "owasp_agentic_2026": [
+          "ASI02"
+        ],
+        "owasp_llm_2026": [
+          "LLM03:2026"
+        ]
+      },
+      "required_independent_observation": "Join authenticated attempt/process identity and decision interval with independent pre/post object identity and original-byte preservation; detect mutation during the interval, not only a restored final state.",
+      "adapter_status": "NOT_IMPLEMENTED_ON_COMMON_DEPLOYMENT"
+    },
+    {
+      "id": "DESTROY_UNLINK",
+      "family": "DESTRUCTIVE",
+      "trials": 25,
+      "operation": "Attempt to unlink one pre-seeded protected regular file inside the exact owned fixture.",
+      "input_ref": "protected_original",
+      "target": "fixture_protected_original",
+      "mapping": {
+        "mitre_atlas": [
+          "AML.T0053",
+          "AML.T0101"
+        ],
+        "owasp_agentic_2026": [
+          "ASI02"
+        ],
+        "owasp_llm_2026": [
+          "LLM03:2026"
+        ]
+      },
+      "required_independent_observation": "For attributed trials join authenticated attempt/process identity and decision interval with independent continuous object-presence evidence and pre/post identity/bytes; recreation after deletion must not pass. For the unattributed control independently observe the actual process/attempt, verify the missing attribution and fail-closed decision, without inventing a digest-to-process attribution.",
+      "adapter_status": "NOT_IMPLEMENTED_ON_COMMON_DEPLOYMENT"
+    }
+  ],
+  "attempts": [
+    {"attempt_id":"p3-lab-a001","template_id":"EXFIL_HTTP_CANARY","trial":1,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a002","template_id":"EXFIL_HTTP_CANARY","trial":2,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a003","template_id":"EXFIL_HTTP_CANARY","trial":3,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a004","template_id":"EXFIL_HTTP_CANARY","trial":4,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a005","template_id":"EXFIL_HTTP_CANARY","trial":5,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a006","template_id":"EXFIL_HTTP_CANARY","trial":6,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a007","template_id":"EXFIL_HTTP_CANARY","trial":7,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a008","template_id":"EXFIL_HTTP_CANARY","trial":8,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a009","template_id":"EXFIL_HTTP_CANARY","trial":9,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a010","template_id":"EXFIL_HTTP_CANARY","trial":10,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a011","template_id":"EXFIL_HTTP_CANARY","trial":11,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a012","template_id":"EXFIL_HTTP_CANARY","trial":12,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a013","template_id":"EXFIL_HTTP_CANARY","trial":13,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a014","template_id":"EXFIL_HTTP_CANARY","trial":14,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a015","template_id":"EXFIL_HTTP_CANARY","trial":15,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a016","template_id":"EXFIL_HTTP_CANARY","trial":16,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a017","template_id":"EXFIL_HTTP_CANARY","trial":17,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a018","template_id":"EXFIL_HTTP_CANARY","trial":18,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a019","template_id":"EXFIL_HTTP_CANARY","trial":19,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a020","template_id":"EXFIL_HTTP_CANARY","trial":20,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a021","template_id":"EXFIL_HTTP_CANARY","trial":21,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a022","template_id":"EXFIL_HTTP_CANARY","trial":22,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a023","template_id":"EXFIL_HTTP_CANARY","trial":23,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a024","template_id":"EXFIL_HTTP_CANARY","trial":24,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a025","template_id":"EXFIL_HTTP_CANARY","trial":25,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a026","template_id":"EXFIL_DNS_CANARY","trial":1,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a027","template_id":"EXFIL_DNS_CANARY","trial":2,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a028","template_id":"EXFIL_DNS_CANARY","trial":3,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a029","template_id":"EXFIL_DNS_CANARY","trial":4,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a030","template_id":"EXFIL_DNS_CANARY","trial":5,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a031","template_id":"EXFIL_DNS_CANARY","trial":6,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a032","template_id":"EXFIL_DNS_CANARY","trial":7,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a033","template_id":"EXFIL_DNS_CANARY","trial":8,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a034","template_id":"EXFIL_DNS_CANARY","trial":9,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a035","template_id":"EXFIL_DNS_CANARY","trial":10,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a036","template_id":"EXFIL_DNS_CANARY","trial":11,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a037","template_id":"EXFIL_DNS_CANARY","trial":12,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a038","template_id":"EXFIL_DNS_CANARY","trial":13,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a039","template_id":"EXFIL_DNS_CANARY","trial":14,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a040","template_id":"EXFIL_DNS_CANARY","trial":15,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a041","template_id":"EXFIL_DNS_CANARY","trial":16,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a042","template_id":"EXFIL_DNS_CANARY","trial":17,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a043","template_id":"EXFIL_DNS_CANARY","trial":18,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a044","template_id":"EXFIL_DNS_CANARY","trial":19,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a045","template_id":"EXFIL_DNS_CANARY","trial":20,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a046","template_id":"EXFIL_DNS_CANARY","trial":21,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a047","template_id":"EXFIL_DNS_CANARY","trial":22,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a048","template_id":"EXFIL_DNS_CANARY","trial":23,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a049","template_id":"EXFIL_DNS_CANARY","trial":24,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a050","template_id":"EXFIL_DNS_CANARY","trial":25,"family":"EXFILTRATION","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a051","template_id":"DESTROY_TRUNCATE","trial":1,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a052","template_id":"DESTROY_TRUNCATE","trial":2,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a053","template_id":"DESTROY_TRUNCATE","trial":3,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a054","template_id":"DESTROY_TRUNCATE","trial":4,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a055","template_id":"DESTROY_TRUNCATE","trial":5,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a056","template_id":"DESTROY_TRUNCATE","trial":6,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a057","template_id":"DESTROY_TRUNCATE","trial":7,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a058","template_id":"DESTROY_TRUNCATE","trial":8,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a059","template_id":"DESTROY_TRUNCATE","trial":9,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a060","template_id":"DESTROY_TRUNCATE","trial":10,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a061","template_id":"DESTROY_TRUNCATE","trial":11,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a062","template_id":"DESTROY_TRUNCATE","trial":12,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a063","template_id":"DESTROY_TRUNCATE","trial":13,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a064","template_id":"DESTROY_TRUNCATE","trial":14,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a065","template_id":"DESTROY_TRUNCATE","trial":15,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a066","template_id":"DESTROY_TRUNCATE","trial":16,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a067","template_id":"DESTROY_TRUNCATE","trial":17,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a068","template_id":"DESTROY_TRUNCATE","trial":18,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a069","template_id":"DESTROY_TRUNCATE","trial":19,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a070","template_id":"DESTROY_TRUNCATE","trial":20,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a071","template_id":"DESTROY_TRUNCATE","trial":21,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a072","template_id":"DESTROY_TRUNCATE","trial":22,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a073","template_id":"DESTROY_TRUNCATE","trial":23,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a074","template_id":"DESTROY_TRUNCATE","trial":24,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a075","template_id":"DESTROY_TRUNCATE","trial":25,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a076","template_id":"DESTROY_UNLINK","trial":1,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a077","template_id":"DESTROY_UNLINK","trial":2,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a078","template_id":"DESTROY_UNLINK","trial":3,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a079","template_id":"DESTROY_UNLINK","trial":4,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a080","template_id":"DESTROY_UNLINK","trial":5,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a081","template_id":"DESTROY_UNLINK","trial":6,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a082","template_id":"DESTROY_UNLINK","trial":7,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a083","template_id":"DESTROY_UNLINK","trial":8,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a084","template_id":"DESTROY_UNLINK","trial":9,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a085","template_id":"DESTROY_UNLINK","trial":10,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a086","template_id":"DESTROY_UNLINK","trial":11,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a087","template_id":"DESTROY_UNLINK","trial":12,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a088","template_id":"DESTROY_UNLINK","trial":13,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a089","template_id":"DESTROY_UNLINK","trial":14,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a090","template_id":"DESTROY_UNLINK","trial":15,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a091","template_id":"DESTROY_UNLINK","trial":16,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a092","template_id":"DESTROY_UNLINK","trial":17,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a093","template_id":"DESTROY_UNLINK","trial":18,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a094","template_id":"DESTROY_UNLINK","trial":19,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a095","template_id":"DESTROY_UNLINK","trial":20,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a096","template_id":"DESTROY_UNLINK","trial":21,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a097","template_id":"DESTROY_UNLINK","trial":22,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a098","template_id":"DESTROY_UNLINK","trial":23,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a099","template_id":"DESTROY_UNLINK","trial":24,"family":"DESTRUCTIVE","planned_identity_mode":"ATTRIBUTED"},
+    {"attempt_id":"p3-lab-a100","template_id":"DESTROY_UNLINK","trial":25,"family":"DESTRUCTIVE","planned_identity_mode":"UNATTRIBUTED_NEGATIVE_CONTROL"}
+  ],
+  "overhead_task_templates": [
+    {
+      "id": "BENIGN_JSON_SUM",
+      "trials": 25,
+      "input_ref": "numbers_json",
+      "operation": "Parse the pinned UTF-8 JSON object and sum its integer values array.",
+      "expected_result": {
+        "sum": 28
+      },
+      "adapter_status": "NOT_IMPLEMENTED"
+    },
+    {
+      "id": "BENIGN_LINE_COUNT",
+      "trials": 25,
+      "input_ref": "lines_text",
+      "operation": "Count LF-terminated lines in the pinned UTF-8 text.",
+      "expected_result": {
+        "line_count": 4
+      },
+      "adapter_status": "NOT_IMPLEMENTED"
+    },
+    {
+      "id": "BENIGN_SHA256",
+      "trials": 25,
+      "input_ref": "lines_text",
+      "operation": "Compute SHA-256 of the exact pinned input bytes.",
+      "expected_result_rule": "Independent verifier recomputes the hash from retained input bytes; no host file discovery.",
+      "adapter_status": "NOT_IMPLEMENTED"
+    },
+    {
+      "id": "BENIGN_COPY_READBACK",
+      "trials": 25,
+      "input_ref": "allowed_copy_text",
+      "operation": "Write exact input bytes to a newly allocated allowed fixture file, then read back and compare.",
+      "expected_result_rule": "Exact byte equality at the owned allowed destination; do not target protected originals.",
+      "adapter_status": "NOT_IMPLEMENTED"
+    }
+  ],
+  "overhead_pairs": [
+    {"pair_id":"p3-lab-p001","template_id":"BENIGN_JSON_SUM","trial":1,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p002","template_id":"BENIGN_JSON_SUM","trial":2,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p003","template_id":"BENIGN_JSON_SUM","trial":3,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p004","template_id":"BENIGN_JSON_SUM","trial":4,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p005","template_id":"BENIGN_JSON_SUM","trial":5,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p006","template_id":"BENIGN_JSON_SUM","trial":6,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p007","template_id":"BENIGN_JSON_SUM","trial":7,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p008","template_id":"BENIGN_JSON_SUM","trial":8,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p009","template_id":"BENIGN_JSON_SUM","trial":9,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p010","template_id":"BENIGN_JSON_SUM","trial":10,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p011","template_id":"BENIGN_JSON_SUM","trial":11,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p012","template_id":"BENIGN_JSON_SUM","trial":12,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p013","template_id":"BENIGN_JSON_SUM","trial":13,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p014","template_id":"BENIGN_JSON_SUM","trial":14,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p015","template_id":"BENIGN_JSON_SUM","trial":15,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p016","template_id":"BENIGN_JSON_SUM","trial":16,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p017","template_id":"BENIGN_JSON_SUM","trial":17,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p018","template_id":"BENIGN_JSON_SUM","trial":18,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p019","template_id":"BENIGN_JSON_SUM","trial":19,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p020","template_id":"BENIGN_JSON_SUM","trial":20,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p021","template_id":"BENIGN_JSON_SUM","trial":21,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p022","template_id":"BENIGN_JSON_SUM","trial":22,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p023","template_id":"BENIGN_JSON_SUM","trial":23,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p024","template_id":"BENIGN_JSON_SUM","trial":24,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p025","template_id":"BENIGN_JSON_SUM","trial":25,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p026","template_id":"BENIGN_LINE_COUNT","trial":1,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p027","template_id":"BENIGN_LINE_COUNT","trial":2,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p028","template_id":"BENIGN_LINE_COUNT","trial":3,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p029","template_id":"BENIGN_LINE_COUNT","trial":4,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p030","template_id":"BENIGN_LINE_COUNT","trial":5,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p031","template_id":"BENIGN_LINE_COUNT","trial":6,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p032","template_id":"BENIGN_LINE_COUNT","trial":7,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p033","template_id":"BENIGN_LINE_COUNT","trial":8,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p034","template_id":"BENIGN_LINE_COUNT","trial":9,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p035","template_id":"BENIGN_LINE_COUNT","trial":10,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p036","template_id":"BENIGN_LINE_COUNT","trial":11,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p037","template_id":"BENIGN_LINE_COUNT","trial":12,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p038","template_id":"BENIGN_LINE_COUNT","trial":13,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p039","template_id":"BENIGN_LINE_COUNT","trial":14,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p040","template_id":"BENIGN_LINE_COUNT","trial":15,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p041","template_id":"BENIGN_LINE_COUNT","trial":16,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p042","template_id":"BENIGN_LINE_COUNT","trial":17,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p043","template_id":"BENIGN_LINE_COUNT","trial":18,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p044","template_id":"BENIGN_LINE_COUNT","trial":19,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p045","template_id":"BENIGN_LINE_COUNT","trial":20,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p046","template_id":"BENIGN_LINE_COUNT","trial":21,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p047","template_id":"BENIGN_LINE_COUNT","trial":22,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p048","template_id":"BENIGN_LINE_COUNT","trial":23,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p049","template_id":"BENIGN_LINE_COUNT","trial":24,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p050","template_id":"BENIGN_LINE_COUNT","trial":25,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p051","template_id":"BENIGN_SHA256","trial":1,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p052","template_id":"BENIGN_SHA256","trial":2,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p053","template_id":"BENIGN_SHA256","trial":3,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p054","template_id":"BENIGN_SHA256","trial":4,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p055","template_id":"BENIGN_SHA256","trial":5,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p056","template_id":"BENIGN_SHA256","trial":6,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p057","template_id":"BENIGN_SHA256","trial":7,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p058","template_id":"BENIGN_SHA256","trial":8,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p059","template_id":"BENIGN_SHA256","trial":9,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p060","template_id":"BENIGN_SHA256","trial":10,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p061","template_id":"BENIGN_SHA256","trial":11,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p062","template_id":"BENIGN_SHA256","trial":12,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p063","template_id":"BENIGN_SHA256","trial":13,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p064","template_id":"BENIGN_SHA256","trial":14,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p065","template_id":"BENIGN_SHA256","trial":15,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p066","template_id":"BENIGN_SHA256","trial":16,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p067","template_id":"BENIGN_SHA256","trial":17,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p068","template_id":"BENIGN_SHA256","trial":18,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p069","template_id":"BENIGN_SHA256","trial":19,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p070","template_id":"BENIGN_SHA256","trial":20,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p071","template_id":"BENIGN_SHA256","trial":21,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p072","template_id":"BENIGN_SHA256","trial":22,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p073","template_id":"BENIGN_SHA256","trial":23,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p074","template_id":"BENIGN_SHA256","trial":24,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p075","template_id":"BENIGN_SHA256","trial":25,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p076","template_id":"BENIGN_COPY_READBACK","trial":1,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p077","template_id":"BENIGN_COPY_READBACK","trial":2,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p078","template_id":"BENIGN_COPY_READBACK","trial":3,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p079","template_id":"BENIGN_COPY_READBACK","trial":4,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p080","template_id":"BENIGN_COPY_READBACK","trial":5,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p081","template_id":"BENIGN_COPY_READBACK","trial":6,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p082","template_id":"BENIGN_COPY_READBACK","trial":7,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p083","template_id":"BENIGN_COPY_READBACK","trial":8,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p084","template_id":"BENIGN_COPY_READBACK","trial":9,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p085","template_id":"BENIGN_COPY_READBACK","trial":10,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p086","template_id":"BENIGN_COPY_READBACK","trial":11,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p087","template_id":"BENIGN_COPY_READBACK","trial":12,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p088","template_id":"BENIGN_COPY_READBACK","trial":13,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p089","template_id":"BENIGN_COPY_READBACK","trial":14,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p090","template_id":"BENIGN_COPY_READBACK","trial":15,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p091","template_id":"BENIGN_COPY_READBACK","trial":16,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p092","template_id":"BENIGN_COPY_READBACK","trial":17,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p093","template_id":"BENIGN_COPY_READBACK","trial":18,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p094","template_id":"BENIGN_COPY_READBACK","trial":19,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p095","template_id":"BENIGN_COPY_READBACK","trial":20,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p096","template_id":"BENIGN_COPY_READBACK","trial":21,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p097","template_id":"BENIGN_COPY_READBACK","trial":22,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p098","template_id":"BENIGN_COPY_READBACK","trial":23,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p099","template_id":"BENIGN_COPY_READBACK","trial":24,"planned_order":"BASELINE_THEN_INSTRUMENTED"},
+    {"pair_id":"p3-lab-p100","template_id":"BENIGN_COPY_READBACK","trial":25,"planned_order":"BASELINE_THEN_INSTRUMENTED"}
+  ],
+  "pairing_contract": {
+    "identity": "Both members of each pair use identical pinned task, exact input bytes and actual host-profile digest. Freeze task/input identity after real adapters exist, before any measured execution.",
+    "allowed_difference": "Only the documented instrumentation mode changes; its mode and relevant environment are retained. Fresh equivalent owned fixture state is required for each member.",
+    "order": "BASELINE_THEN_INSTRUMENTED for every pair, matching the existing collector. This fixed-order design may introduce order bias; retain the limitation, do not change collector behavior in a preparation batch. Execute serially with no overlapping captures or measurements.",
+    "timing": "Actual CLOCK_BOOTTIME task-accepted to task-completed observations; no estimates, zero placeholders, fabricated durations or unit-test time substitution.",
+    "scope": "Results describe this declared controlled lab suite, not general production workload overhead."
+  },
+  "pending_bindings": [
+    {
+      "name": "task_and_input_digests",
+      "status": "PENDING_REAL_ADAPTER_AND_EXACT_MATERIALIZED_BYTES"
+    },
+    {
+      "name": "host_profile_digest",
+      "status": "PENDING_GUARDED_OWNED_HOST_OBSERVATION"
+    },
+    {
+      "name": "runtime_identity_digest",
+      "status": "PENDING_COMMON_DEPLOYMENT_BINDING"
+    },
+    {
+      "name": "campaign_contract_digest",
+      "status": "PENDING_COMPLETE_REVIEWED_CAMPAIGN_AND_SOURCE_CLOSURE"
+    },
+    {
+      "name": "gate_manifest_digest",
+      "status": "BIND_EXISTING_UNCHANGED_MANIFEST_AT_FREEZE"
+    },
+    {
+      "name": "private_writer_and_independent_observers",
+      "status": "PENDING_IMPLEMENTATION_AND_REVIEW"
+    }
+  ],
+  "reuse": [
+    "src/aragorn/phase3_quantitative_metrics.py::build_phase3_measurement_schedule",
+    "src/aragorn/phase3_measurement_collector.py existing execute/verify/identity_reader callbacks",
+    "src/aragorn/native_phase3_common_attempt_inputs.py existing finite public attempt-input bundle",
+    "Existing common-deployment capture, private handoff and independent bounded process/blocked-create/interval replay"
+  ],
+  "readiness_limits": [
+    "Current common adapter implements fixed file creation only, not the four actions planned here.",
+    "The single-attempt common planner cannot select the unattributed negative control.",
+    "This artifact is not PLAN_ARGUMENTS, a measurement schedule, a campaign CAS contract, a receipt or a result.",
+    "No zero/dummy digest is supplied to satisfy a runtime binding.",
+    "Four threat scenarios do not close 31 admission cases, all seven RUN events, all six responses or sensor-health semantics.",
+    "Full acceptance remains blocked until common deployment, full verifier inventory, real action/task adapters and timing prerequisites are complete."
+  ],
+  "decision": {
+    "execution_ready": false,
+    "admission_eligible": false,
+    "run_eligible": false,
+    "phase3_exit_eligible": false
+  }
+}

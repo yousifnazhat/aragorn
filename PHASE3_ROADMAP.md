@@ -7,17 +7,19 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `f3b283e` (bounded host/guest attempt capture and public
-retained replay). The step-1 private-input retention and independent bounded
-measurement replay implementation batch is documented below. A real owned
-capture, real workload/pair inventory and full campaign/private-writer semantics
-remain outstanding; inert implementation checks do not close those boundaries. The older counts and effort
+Current queue base: signed `5ce791a` (private-input retention and independent
+bounded measurement replay). The user has selected MITRE ATLAS and OWASP-derived,
+fabricated owned-lab workloads: no customer or production task inputs are needed.
+The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
+the 100 attempts and 100 pairs. Real action/task adapters, a guarded owned capture,
+and complete campaign/private-writer semantics remain outstanding; a workload
+design and inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Host/guest attempt capture, finite private-input retention and independent bounded process/blocked-create/interval replay are implemented and checked. Real workload/pair inventory, a newly necessary isolated capture and broader private-writer/campaign semantics remain; inert composition does not replace live validation |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Host/guest capture, private-input retention and bounded replay are implemented and checked. ATLAS/OWASP lab workload design is prepared; real exfiltration/destructive/control and benign task adapters, isolated capture and complete campaign semantics remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -42,12 +44,13 @@ time; completing an implementation batch is not permission to claim live gates.
 
 1. **Current integration sprint:** private handoff, independent bounded replay,
    capture integration, focused checks and signed checkpoint. Implementation and
-   offline checks are complete in the batch below. The conditional isolated live
-   integration check is still prerequisite-blocked: no genuine complete workload/
-   pair inventory and campaign contract have been supplied, and the three
-   preserved admission drafts leave the checkout unsuitable for the clean signed
-   source capture guard. Do not invent an acceptance inventory or include those
-   drafts in this commit to hide the blocker.
+   offline checks are complete in the batch below. **Workload preparation is now
+   complete:** use the declared ATLAS/OWASP-derived lab inventory and fabricated
+   data; the user need not supply production inputs. The conditional isolated
+   check still needs actual adapters, observations and campaign/deployment pins.
+   Preserve the three admission drafts and use a clean signed source checkout
+   when capture is ready; never fold unrelated drafts into this batch to satisfy
+   the source guard. Preparation is not live integration completion.
 2. **Complete the remaining implementation:** admission routes, RUN/sensor-health
    behavior, and real workload/pair measurement adapters on the same deployment.
    Not advanced by the step-1-only run; existing admission drafts remain intact.
@@ -56,9 +59,32 @@ time; completing an implementation batch is not permission to claim live gates.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
    retained cleanup and offline replay. Blocked until all prerequisites close.
 
-Next action within step 1 is to resolve the real-input/source-readiness
-prerequisites for its isolated check; no automatic effect retry or historical
-recapture is authorized. Signed implementation progress below is not live proof.
+Next action within step 1 is to implement the smallest real lab boundary using
+the existing collector: one owned-loopback canary action plus an independent
+sink observer, with prerequisite and cleanup guards. Then connect the remaining
+declared actions and paired benign tasks before the complete campaign is frozen.
+No automatic effect retry or historical recapture is authorized. Signed
+implementation progress and prepared inputs are not live proof.
+
+### Reference-workload preparation checkpoint (2026-10-06)
+
+Batch record: [preparation checkpoint](benchmark/evidence/phase3-reference-workload-preparation-v1-2026-10-06.json).
+The signed commit hash is retained in the local post-commit batch receipt and
+reported at handoff, avoiding a self-referential commit hash in its own contents.
+
+- Sources: MITRE ATLAS 2026.09, OWASP Agentic Applications 2026 and GenAI LLM
+  Top 10 2026 final. Mappings are local evaluation design, not framework certification.
+- Four fixed scenario templates, 25 labeled trials each: HTTP canary send,
+  DNS-shaped canary query, protected-file truncation and protected-file unlink.
+  There are 50 exfiltration and 50 destructive trials. Unlink trial `p3-lab-a100`
+  is the one unattributed control **inside** the 100, not an extra 101st trial.
+- Four benign task templates reserve 100 pairs (200 eventual task executions).
+  Fabricated byte inputs are retained with the plan. No observations or timing
+  samples have been generated; runtime/campaign/host pins remain explicitly pending.
+- This documentation/data-only batch changes no runtime, pipeline, frozen gate
+  or threshold. No behavioral tests or live captures are required or run.
+- Existing fixed-create mediation is not relabeled as exfiltration or destruction.
+  The full admission/RUN/health inventory remains independently required.
 
 ## Outcome and current position
 

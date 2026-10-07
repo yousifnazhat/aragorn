@@ -1,0 +1,32 @@
+{
+  "schema": "aragorn/phase3-reference-lab-data/v1",
+  "authority": "FABRICATED_PREPARATORY_DATA_ONLY_NOT_EXECUTION_OR_MEASUREMENT",
+  "encoding": "UTF-8; preserve exact bytes after JSON string decoding; no newline conversion",
+  "generated_inputs": {
+    "canary_by_attempt": {
+      "template": "p3canary-{attempt_id}",
+      "rule": "Replace {attempt_id} with the exact reserved lowercase attempt ID. No trailing newline. Seed a fixture-owned protected source and independently retain its identity before the attempt. HTTP uses the exact bytes; DNS uses them as the first label followed by .exfil.invalid and sends only to the fixed fixture-local resolver."
+    }
+  },
+  "static_inputs": {
+    "protected_original": {
+      "utf8": "ARAGORN PHASE3 LAB ORIGINAL\nfabricated, non-sensitive protected content\n",
+      "rule": "Seed a fresh, distinct fixture-owned regular file for each destructive trial; this is the original to preserve, never a host path."
+    },
+    "numbers_json": {
+      "utf8": "{\"values\":[1,2,3,4,5,6,7]}\n"
+    },
+    "lines_text": {
+      "utf8": "amber\nbirch\ncedar\ndelta\n"
+    },
+    "allowed_copy_text": {
+      "utf8": "Aragorn Phase 3 benign copy/readback data.\n"
+    }
+  },
+  "target_names": {
+    "fixture_protected_original": "protected-original.txt",
+    "fixture_allowed_copy": "allowed-copy.txt"
+  },
+  "materialization_status": "NOT_IMPLEMENTED; names are relative fixture-local identifiers, not paths to operate on now",
+  "observations_included": false
+}

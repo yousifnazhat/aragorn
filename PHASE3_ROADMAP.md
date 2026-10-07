@@ -7,9 +7,12 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-07)
 
-Current queue base: signed and pushed `905f95f` (coherent HTTP94 profile, helpers
-and attempt plan). The combined capture implementation batch is recorded below;
-its signed commit and push are recorded in the post-commit local receipt.
+Current queue base: signed and pushed `1a63b55` (combined HTTP94 assembly,
+finite development inputs and source snapshot repair). One guarded capture then
+refused at guest source guards before provisioning or activation; exact fixture
+cleanup and restoration of the prior stopped VM state are verified. The source
+guard repair and retained refusal are recorded below; its signed commit and push
+are recorded in the post-commit local receipt.
 The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
@@ -24,8 +27,9 @@ HTTP94 successor and seven matching helper replacements now bind 22 measurement
 sources, nine writer documents and 43 selected identity paths. The original-plan
 and permanent-handoff bridge also joins the HTTP action and readiness nonce.
 Ready94 host/guest/private-retention source assembly and the bounded same-process
-broker-listener observer are implemented. Actual listener/effect observation,
-remaining action/task adapters, a guarded owned attempt capture and complete
+broker-listener observer are implemented. A guarded attempt was captured but
+refused before activation; it is not listener/effect evidence. Actual listener/effect
+observation, remaining action/task adapters and complete
 campaign/private-writer semantics remain outstanding; a workload
 design and inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
@@ -33,7 +37,7 @@ allowances below are planning history, not a current completion percentage.
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | HTTP wiring has 99 distinct focused checks; preparation/identity adds 50; bundle/provisioning/readiness adds 55; coherent HTTP94/helpers/attempt planning adds 44. Ready94 host/guest/private-retention assembly and combined attempt lifecycle are implemented; actual broker-listener/effect evidence remains; no live qualification |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Ready94 combined assembly, finite development inputs and source guards are implemented and checked. One real guarded capture refused before activation; exact fixture cleanup and VM restoration verified. The inherited source-pin mismatch is repaired offline; actual broker-listener/effect evidence remains; no live qualification |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -81,7 +85,10 @@ time; completing an implementation batch is not permission to claim live gates.
    protected writer, 22 measured sources and 43 selected identity paths. The
    HTTP original-plan/permanent-handoff bridge is also checked. The combined
    attempt lifecycle and ready94 host/guest/private-retention assembly are now
-   implemented; actual capture is not implied by source composition.
+   implemented. The first guarded combined capture refused at source guards,
+   before provisioning or activation; its exact fixture cleanup and VM
+   restoration are verified. The inherited predecessor-pin mismatch is now
+   repaired and checked offline without repeating the live attempt.
    Actual broker-listener, timing/effect observations and campaign/deployment
    pins remain necessary.
    Use a clean signed source checkout when capture is ready. The three admission
@@ -100,10 +107,12 @@ time; completing an implementation batch is not permission to claim live gates.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
    retained cleanup and offline replay. Blocked until all prerequisites close.
 
-Next action within step 1 is **prepare the source-bound development inputs, then
-one ready94 combined capture and cleanup**. Finite benign task source and the
-one-HTTP development contract builder are now implemented and checked; this
-does not authorize the final campaign or supply paired timing samples.
+Next action within step 1 is **fresh source-bound preparation and one guarded
+capture of the repaired guest source checks**, then same-broker listener/effect
+verification and cleanup. The prior refused capture and its inputs remain
+retained, never relabeled successful or automatically retried. Finite benign task
+source and the one-HTTP development contract builder are implemented and checked;
+this does not authorize the final campaign or supply paired timing samples.
 The coherent readiness-capable HTTP94 successor, nine-writer/43-path helpers and
 original-plan/permanent-handoff bridge are implemented and checked. Their
 generated bytes are now bound into the host/guest, public replay and private-retention bundles;
@@ -122,6 +131,34 @@ compatible with the generic collector's controller-clock callback marks. Then co
 declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
+
+### Guarded capture refusal, cleanup and source repair (2026-10-07)
+
+Batch record: [source guard repair and cleanup checkpoint](benchmark/evidence/phase3-http-guarded-capture-source-repair-v1-2026-10-07.json).
+Exact retained [public capture](benchmark/evidence/phase3-http-guarded-capture-refusal-v1-2026-10-07.json)
+has digest `sha256:dbb814b9fe1f730b6ea332131cc8f49d9deeb0da38d4df63a6678a72afe131af`.
+
+- Clean signed `1a63b55` prepared real source-bound setup, HTTP94 stage, finite
+  lab plan and combined attempt inputs. One network-none owned capture ran.
+  It refused at `OWNED_SOURCE_GUARDS`, before measurement provisioning,
+  activation or any workload. Listener, timing and HTTP effect evidence were
+  therefore not produced; public capture qualification remains false.
+- The generated HTTP inventory was followed by the frozen workload helper's
+  old common-identity pin and obsolete blocked-create driver requirement. The
+  HTTP successor now keeps the four unchanged bootstrap entries and all three
+  dynamic helper checks, while requiring the current identity and HTTP driver
+  through the exact new inventory. Frozen predecessors are untouched.
+- One new focused offline check passed once through the pipeline. Independent
+  review found no guard weakening. No old suite, unchanged failed fingerprint
+  or live attempt reran; the refused capture remains retained.
+- Cleanup checked exact container ID/owner/image, removed only that container
+  and verified both ID and name absent. Parent/runtime content and volume
+  inventories remain unchanged. Both VMs are again stopped and the default
+  Docker context remains `default`.
+
+Plan: **1 in progress** at fresh guarded observation of the repaired path;
+**2** remaining admission, RUN/sensor-health and real workload/pair adapters;
+**3** complete independent verifiers then freeze; **4** acceptance blocked.
 
 ### Offline preparation source-guard repair (2026-10-07)
 

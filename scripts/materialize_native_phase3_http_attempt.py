@@ -397,6 +397,39 @@ def render(original):
         "        } else 0o444\n"
         "        _, metadata = workload._read_fixed(path, mode, 2 * 1024 * 1024)\n",
     )
+    raw = _change(
+        raw,
+        "    # In particular the fixed old bootstrap is checked before package._native.\n"
+        "    records.update(\n"
+        "        workload._sources(\n"
+        "            pins[workload.SOURCE_PATH],\n"
+        "            pins[workload.SINK_SOURCE_PATH],\n"
+        "            pins[workload.REVOCATION_SOURCE_PATH],\n"
+        "        )\n"
+        "    )\n",
+        "    # Keep the frozen bootstrap checks, not its superseded workload pins.\n"
+        "    _require(os.path.abspath(workload.__file__) == workload.SOURCE_PATH,\n"
+        '             "INSTALLED_WORKLOAD_PATH_CHANGED")\n'
+        '    replaced_identity = "/usr/lib/aragorn/aragorn/native_phase3_common_identity.py"\n'
+        '    replaced_driver = "/opt/aragorn/native-blocked-create-driver-v1.mjs"\n'
+        "    _require(workload.DRIVER_PATH == replaced_driver\n"
+        '        and http_collection.DRIVER_PATH == "/opt/aragorn/native-http-attempt-driver-v1.mjs"\n'
+        "        and {replaced_identity, http_collection.DRIVER_PATH} <= set(records),\n"
+        '        "HTTP_SOURCE_REPLACEMENT_INVENTORY_CHANGED")\n'
+        "    fixed = {\n"
+        "        **workload._FIXED_SOURCES,\n"
+        "        workload.SOURCE_PATH: (None, workload._pin(pins[workload.SOURCE_PATH]), 0o444),\n"
+        "        workload.SINK_SOURCE_PATH: (None, workload._pin(pins[workload.SINK_SOURCE_PATH]), 0o444),\n"
+        "        workload.REVOCATION_SOURCE_PATH: (None, workload._pin(pins[workload.REVOCATION_SOURCE_PATH]), 0o444),\n"
+        "    }\n"
+        "    for path, (size, pin, mode) in fixed.items():\n"
+        "        if path in {replaced_identity, replaced_driver}:\n"
+        "            continue\n"
+        "        raw, metadata = workload._read_fixed(path, mode, 1024 * 1024)\n"
+        "        _require(metadata[\"digest\"] == pin and (size is None or len(raw) == size),\n"
+        '                 "FIXED_SOURCE_PIN_CHANGED")\n'
+        "        records[path] = metadata\n",
+    )
     raw = _section(
         raw,
         "@contextmanager\ndef _protected_descriptor(native):\n",

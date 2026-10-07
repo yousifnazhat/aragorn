@@ -1,6 +1,9 @@
 # Phase 3 reference-derived lab workloads
 
 Status: preparation complete, execution adapters incomplete, no measured results.
+The fixed HTTP transport, owned-fixture guard and independent raw-ingress
+observer/verifier are now implemented with 55 new inert checks. Connecting them
+to the common worker, sensor, broker and measurement collector remains pending.
 This is an authored controlled-lab design, not admission, RUN or Phase 3 evidence.
 The user's 2026-10-06 instruction selects public security references and fabricated
 data in place of production/customer workloads. No further customer data is needed.
@@ -53,7 +56,8 @@ The missing **workload choice and dummy input preparation** are resolved. No rea
 customer tasks, credentials or production data need to be obtained. Real means
 actual execution and observation of these controlled lab tasks, not real victims.
 
-Still required: exact owned sinks, exfiltration and destructive action adapters,
+Still required: integration of the implemented fixed HTTP sink/transport,
+remaining exfiltration and destructive action adapters,
 the separate unattributed path, independent observers, benign timing adapters,
 current host/deployment bindings and a complete reviewed campaign contract.
 The existing common capture adapter creates a fixed file; it must not be renamed
@@ -68,10 +72,13 @@ requirements remain necessary, even when absent from this four-scenario table.
 
 ## Next engineering sequence
 
-1. Materialize exact dummy bytes in the guarded owned fixture; implement one
-   fixed HTTP-canary action and its independent sink observer using the existing
-   `execute`, `verify` and `identity_reader` collector callbacks. No generic
-   shell-command runner, external target or new framework is needed.
+1. **In progress:** fixed HTTP-canary transport, owned-fixture guards and
+   independent ingress observation/replay are implemented and checked. Next bind
+   installed sources and the actual worker/sensor/broker network decision, then
+   adapt the existing collector's `execute`, `verify` and `identity_reader`
+   signatures with real boundaries. Existing native callbacks are not already
+   interchangeable with that generic API. Seed exact dummy source bytes in the
+   fixture; generated request bytes alone do not prove a canary-access event.
 2. Complete the fixed DNS, truncate, unlink and separate unattributed paths;
    connect exact action identity and interval evidence. Independently observe
    the control process and prove missing attribution; do not fabricate it.

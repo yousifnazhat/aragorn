@@ -7,19 +7,20 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-06)
 
-Current queue base: signed `5ce791a` (private-input retention and independent
-bounded measurement replay). The user has selected MITRE ATLAS and OWASP-derived,
+Current queue base: signed `c3bfd54` (reference-derived workload preparation,
+following private-input retention and independent bounded replay). The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
-the 100 attempts and 100 pairs. Real action/task adapters, a guarded owned capture,
-and complete campaign/private-writer semantics remain outstanding; a workload
+the 100 attempts and 100 pairs. The first fixed HTTP transport and independent
+ingress observer are implemented and checked. Common runtime/broker integration,
+remaining action/task adapters, a guarded owned capture and complete campaign/private-writer semantics remain outstanding; a workload
 design and inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Host/guest capture, private-input retention and bounded replay are implemented and checked. ATLAS/OWASP lab workload design is prepared; real exfiltration/destructive/control and benign task adapters, isolated capture and complete campaign semantics remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | Host/guest capture, private-input retention and bounded replay are implemented and checked. Fixed lab HTTP transport, fixture guard and independent raw-ingress observer/verifier passed 55 new checks. Common broker/worker/sensor and collector integration, other actions/tasks, isolated capture and full campaign semantics remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -35,7 +36,11 @@ its implementation, applicable checks and checkpoint. Verify its signature and
 working-tree state before starting the next batch. Reuse exact successful test
 fingerprints; never rerun unchanged failures. A clock interval is not a reason
 to test or commit, and incomplete changes are not represented as a completed
-batch. Automatic pushes remain unauthorized.
+batch. The user now requests pushing every completed reviewed batch to
+`origin/codex/phase3-runtime-prevention`. This remote repository is public.
+Automatic approval review blocked the initial 30-commit push pending explicit
+confirmation that the code and evidence may be published publicly; that question
+is pending. Preserve signed local commits until the publishing condition closes.
 
 ### Sequential completion plan requested by the user
 
@@ -46,8 +51,10 @@ time; completing an implementation batch is not permission to claim live gates.
    capture integration, focused checks and signed checkpoint. Implementation and
    offline checks are complete in the batch below. **Workload preparation is now
    complete:** use the declared ATLAS/OWASP-derived lab inventory and fabricated
-   data; the user need not supply production inputs. The conditional isolated
-   check still needs actual adapters, observations and campaign/deployment pins.
+   data; the user need not supply production inputs. Fixed HTTP transport and its
+   independent ingress observer are now implemented and checked. Common runtime
+   integration and the conditional isolated check still need broker/sensor/worker
+   and collector adapters, actual observations and campaign/deployment pins.
    Preserve the three admission drafts and use a clean signed source checkout
    when capture is ready; never fold unrelated drafts into this batch to satisfy
    the source guard. Preparation is not live integration completion.
@@ -59,12 +66,36 @@ time; completing an implementation batch is not permission to claim live gates.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
    retained cleanup and offline replay. Blocked until all prerequisites close.
 
-Next action within step 1 is to implement the smallest real lab boundary using
-the existing collector: one owned-loopback canary action plus an independent
-sink observer, with prerequisite and cleanup guards. Then connect the remaining
+Next action within step 1 is to connect the fixed HTTP transport and independent
+observer to one common runtime successor, with installed-source custody, an
+authenticated network action decision, controller coordination and genuine
+collector timing adapters. Existing native functions are not already compatible
+with the generic collector's callback signatures. Then connect the remaining
 declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
+
+### Fixed HTTP lab implementation checkpoint (2026-10-06)
+
+Batch record: [HTTP implementation checkpoint](benchmark/evidence/phase3-native-http-canary-implementation-v1-2026-10-06.json).
+
+- Fixed canary and distinct readiness requests use only `127.0.0.1:47631` in an
+  exact owned Linux fixture. Held namespace/init descriptors, boot/cgroup/process
+  checks and loopback-only interface checks guard the transport and observer.
+- The client makes one connect and one send, preserves partial or unknown byte
+  counts on failures, enforces a deadline, and closes its socket. The independent
+  sink retains raw ingress including malformed requests, separates readiness,
+  bounds its interval/bytes/connections and retains partial evidence on failure.
+- A separate pure consumer verifies caller-held identity, exact readiness,
+  full observation interval, byte records and cleanup before reporting what it
+  observed. Raw ingress requires private retention until classified. Empty
+  ingress is not a runtime prevention result; all qualification flags stay false.
+- Reviewed fixes cover interruption cleanup, partial-evidence retention, unknown
+  send counts, early timeouts and exhausted observation budgets. The new stage
+  passed all 55 new inert checks once; the unchanged pipeline check was reused.
+- The current common broker still implements file creation. HTTP mediation,
+  source installation, process attribution and generic collector adaptation are
+  the next integration work. No live fixture or performance capture ran here.
 
 ### Reference-workload preparation checkpoint (2026-10-06)
 

@@ -304,9 +304,10 @@ def _verified_sources():
     from scripts import capture_native_phase3_plugin_update_case as legacy
     from scripts import capture_runtime_native_receipt_systemd_check as native
 
+    paths = source_paths()
     source = legacy._current_source()
     originals = {}
-    for name in source_paths():
+    for name in paths:
         row = native.acquisition._tree_file(source["commit"], Path(name))
         originals[name] = pins._read_fixed(ROOT / name, (row["bytes"], row["digest"]))
     _require(legacy._current_source() == source, "signed source changed while reading")

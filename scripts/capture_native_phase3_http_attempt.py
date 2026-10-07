@@ -143,9 +143,10 @@ def _verified_sources():
     from scripts import capture_runtime_native_receipt_systemd_check as native
     from scripts import prepare_native_plugin_update_identity_pins as pins
 
+    paths = renderer.source_paths()
     source = legacy._current_source()
     original = {}
-    for path in renderer.source_paths():
+    for path in paths:
         row = native.acquisition._tree_file(source["commit"], Path(path))
         original[path] = pins._read_fixed(ROOT / path, (row["bytes"], row["digest"]))
     if legacy._current_source() != source:

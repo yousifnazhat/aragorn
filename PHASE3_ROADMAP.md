@@ -123,6 +123,18 @@ declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
 
+### Offline preparation source-guard repair (2026-10-07)
+
+The real task/plan prerequisite is signed and pushed as `fd76afb`. Its first
+offline preparation refused before CAS creation, VM start or fixture mutation:
+lazy dependency imports changed the source recorder's inventory after its first
+snapshot. Both active readers now resolve their finite paths before snapshotting;
+signed-byte and final change guards remain unchanged. One new focused check
+passed through the pipeline; no old suite or effect reran. The refusal and
+[repair checkpoint](benchmark/evidence/phase3-http-source-snapshot-order-v1-2026-10-07.json)
+are retained. Step 1 remains at actual preparation/capture/cleanup; steps 2–4
+retain their stated boundaries.
+
 ### Bounded development-plan prerequisite checkpoint (2026-10-07)
 
 Batch record: [real development bindings](benchmark/evidence/phase3-http-development-plan-v1-2026-10-07.json).

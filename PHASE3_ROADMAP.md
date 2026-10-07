@@ -5,22 +5,26 @@ Planning date: 2026-10-04. Assessed implementation: `0a51326` on
 or a qualification result. The fixed [exit manifest](benchmark/phase3-exit-gate-manifest-v1.json)
 remains authoritative; this roadmap does not weaken or expand it.
 
-## Current sprint queue (2026-10-06)
+## Current sprint queue (2026-10-07)
 
-Current queue base: signed and pushed `2c716af` (fixed HTTP lab transport and
-independent sink, following reference-workload preparation). The user has selected MITRE ATLAS and OWASP-derived,
+Current queue base: signed and pushed `3f7c6a4` (HTTP mediation and admission-leaf
+implementation). The new HTTP common-runtime wiring batch is recorded below;
+its signed commit and push are recorded in the post-commit local receipt.
+The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
 the 100 attempts and 100 pairs. The first fixed HTTP transport and independent
-ingress observer are implemented and checked. Common runtime/broker integration,
-remaining action/task adapters, a guarded owned capture and complete campaign/private-writer semantics remain outstanding; a workload
+ingress observer are implemented and checked. HTTP worker/sensor/capability/native
+collector paths are now composed in one checked 93-file inert successor. Fresh
+fixture preparation/installed identity for that successor, remaining action/task
+adapters, a guarded owned capture and complete campaign/private-writer semantics remain outstanding; a workload
 design and inert implementation checks do not close those boundaries. The older counts and effort
 allowances below are planning history, not a current completion percentage.
 
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Host/guest capture, private-input retention and bounded replay are implemented and checked. Fixed lab HTTP transport, fixture guard and independent raw-ingress observer/verifier passed 55 new checks. Common broker/worker/sensor and collector integration, other actions/tasks, isolated capture and full campaign semantics remain |
+| S2 / in progress | Real common host/guest execution and measurement wiring | HTTP worker/sensor/capability/native collector wiring and a 93-file successor now have 99 distinct focused checks. Fresh successor fixture preparation/identity, broker-restricted readiness, real capture, other actions/tasks and full campaign semantics remain |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -55,10 +59,13 @@ time; completing an implementation batch is not permission to claim live gates.
    data; the user need not supply production inputs. Fixed HTTP transport and its
    independent ingress observer are now implemented and checked. The new internal
    HTTP broker entry point now reuses protected policy/revocation/health and replay
-   state, with authorization at connect/send boundaries; it is not yet installed
-   or dispatched by the common worker/sensor/capability service. Common runtime
-   integration and the conditional isolated check still need broker/sensor/worker
-   and collector adapters, actual observations and campaign/deployment pins.
+   state, with authorization at connect/send boundaries. Worker/sensor/capability
+   dispatch, grant/receipt/journal variants, native tool allowlisting and collector
+   replay are now wired in the checked HTTP successor. The current common74
+   fixture preparation and installed identity must be explicitly extended to the
+   new 93-file/21-measurement-source deployment before activation or collection.
+   Broker-restricted positive readiness, actual observations and coherent
+   campaign/deployment pins remain necessary.
    Use a clean signed source checkout when capture is ready. The three admission
    drafts are now reviewed batch-owned implementation under the expanded step-2
    request, not unrelated files folded in merely to satisfy a source guard.
@@ -75,14 +82,56 @@ time; completing an implementation batch is not permission to claim live gates.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
    retained cleanup and offline replay. Blocked until all prerequisites close.
 
-Next action within step 1 is to connect the fixed HTTP transport and independent
-observer to one common runtime successor, with installed-source custody, an
-authenticated network action decision, controller coordination and genuine
-collector timing adapters. Existing native functions are not already compatible
-with the generic collector's callback signatures. Then connect the remaining
+Next action within step 1 is to connect the checked HTTP successor to fresh owned
+fixture preparation and its installed identity, using the staged canonical
+gateway template before the first protected write and the absent-only HTTP
+credential provisioner. Extend the held source/binding inventory coherently;
+do not relabel a common74 setup or replay it as a 93-file deployment. Resolve
+broker-restricted readiness before one newly necessary isolated capture. The
+native collector preserves actual worker/broker stamps; it is explicitly not
+compatible with the generic collector's controller-clock callback marks. Then connect the remaining
 declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
+
+### HTTP common-runtime wiring checkpoint (2026-10-07)
+
+Batch record: [HTTP wiring checkpoint](benchmark/evidence/phase3-http-common-wiring-v1-2026-10-07.json).
+
+- One exact-pinned, reversibly rendered 93-file successor connects the finite
+  HTTP tool to authenticated worker/sensor ingress, process attribution, grant
+  issuance, V2–V5 one-shot mediation, held lineage, native receipts and journal
+  v3 `SENT` outcomes. Original implementations and retained evidence are intact.
+- The new native collector runs the fixed gateway driver once with an independent
+  bounded sink and retains partial failures. Its independent consumers join
+  HTTP claims/results, four worker-ingress records, callback/terminal receipts,
+  broker decisions and clock/sink evidence. They do not substitute controller
+  timestamps, infer causal blocking, or confer generic collector/Phase 3 authority.
+- The staged gateway template uses the exact canonical bytes required by the
+  worker preflight. Fixture validation runs before activation locks, rollback
+  traps or service writes. Broker networking is constrained to the owned
+  loopback fixture; read-only interface enumeration is permitted without adding
+  capabilities. Worker/sensor network restrictions remain unchanged.
+- Writer, planner and verifier share 21 measurement-source pins. Only the
+  measurement credential may opt into the required 8 KB reader limit; unrelated
+  credentials retain 4 KB. HTTP profiled-submission and `SENT` retention paths
+  no longer fall through create-only assumptions.
+- **99 distinct focused checks pass, 103 total invocations.** The first combined
+  capability run retained 24 successful non-journal methods. A shared test mock
+  incorrectly gave the journal a 64-hex capability nonce instead of its 32-hex
+  nonce; four affected journal checks were isolated and rerun after correcting
+  that fixture. The failed fingerprint remains failed. The 24 successful
+  methods were not rerun or presented as an overall pipeline PASS. Other new
+  stages passed first try; the unchanged pipeline-capacity success was reused.
+- All checks used inert fixtures/OS or transport doubles and a disposable
+  DESTDIR. No host service, real socket, VM action, capture, performance sample
+  or acceptance campaign ran. Full retained measurement-envelope replay on a
+  real HTTP capture remains unestablished; component checks are not that proof.
+
+Step 1 remains in progress at **fresh successor preparation/identity and guarded
+live integration**, not the previous missing HTTP dispatch code. Steps 2–4 remain
+as listed above. No manual continue, push approval or production workload input
+is missing.
 
 ### HTTP mediation and admission-leaf checkpoint (2026-10-06)
 

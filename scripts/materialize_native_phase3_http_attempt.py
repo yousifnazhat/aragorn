@@ -384,6 +384,7 @@ def render(original):
         '    "/usr/lib/aragorn/aragorn/native_phase3_http_readiness_verify.py",\n'
         '    "/usr/lib/aragorn/aragorn/native_phase3_http_fixture.py",\n'
         '    "/usr/lib/aragorn/aragorn/native_phase3_http_sink.py",\n'
+        '    "/opt/aragorn/runtime-native-receipt-systemd-check.py",\n'
         "    http_collection.DRIVER_PATH,\n)",
     )
     raw = _change(
@@ -412,12 +413,14 @@ def render(original):
         '             "INSTALLED_WORKLOAD_PATH_CHANGED")\n'
         '    replaced_identity = "/usr/lib/aragorn/aragorn/native_phase3_common_identity.py"\n'
         '    replaced_driver = "/opt/aragorn/native-blocked-create-driver-v1.mjs"\n'
+        '    installed_writer = "/opt/aragorn/runtime-native-receipt-systemd-check.py"\n'
         "    _require(workload.DRIVER_PATH == replaced_driver\n"
         '        and http_collection.DRIVER_PATH == "/opt/aragorn/native-http-attempt-driver-v1.mjs"\n'
-        "        and {replaced_identity, http_collection.DRIVER_PATH} <= set(records),\n"
+        "        and {replaced_identity, http_collection.DRIVER_PATH, installed_writer} <= set(records),\n"
         '        "HTTP_SOURCE_REPLACEMENT_INVENTORY_CHANGED")\n'
         "    fixed = {\n"
         "        **workload._FIXED_SOURCES,\n"
+        "        installed_writer: (None, workload._pin(pins[installed_writer]), 0o444),\n"
         "        workload.SOURCE_PATH: (None, workload._pin(pins[workload.SOURCE_PATH]), 0o444),\n"
         "        workload.SINK_SOURCE_PATH: (None, workload._pin(pins[workload.SINK_SOURCE_PATH]), 0o444),\n"
         "        workload.REVOCATION_SOURCE_PATH: (None, workload._pin(pins[workload.REVOCATION_SOURCE_PATH]), 0o444),\n"

@@ -170,6 +170,7 @@ def _inputs(raw, original):
         raw,
         '    "/opt/aragorn/runtime_native_common_attempt.py",\n',
         '    "/opt/aragorn/runtime_native_common_attempt.py",\n'
+        '    "/opt/aragorn/runtime-native-receipt-systemd-check.py",\n'
         + "".join(
             f'    "/usr/lib/aragorn/aragorn/{name}.py",\n' for name in HTTP_MODULES
         )

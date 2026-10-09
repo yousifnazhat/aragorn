@@ -9,22 +9,39 @@ import unittest
 from unittest.mock import Mock
 
 from aragorn import native_phase3_http_collection as http_collection
+from scripts import capture_native_phase3_http_attempt as launcher
 from scripts import materialize_native_phase3_http_attempt as renderer
-from scripts import materialize_native_phase3_http_ready_helpers as ready_helpers
+from scripts import materialize_native_phase3_http_attempt_capture as assembly
 from scripts import runtime_native_blocked_create_workload as frozen_workload
+from scripts import stage_runtime_phase3_http_ready_profile as stager
 
 
 ROOT = Path(__file__).resolve().parents[1]
 IDENTITY = "/usr/lib/aragorn/aragorn/native_phase3_common_identity.py"
+WRITER = "/opt/aragorn/runtime-native-receipt-systemd-check.py"
 
 
 class HttpAttemptSourceGuardTests(unittest.TestCase):
     def test_http_replacements_keep_required_frozen_source_guards(self):
-        original = {name: (ROOT / name).read_bytes() for name in renderer.INPUTS}
-        generated = renderer.render(original)
-        ready = ready_helpers.render(
-            {name: (ROOT / name).read_bytes() for name in ready_helpers.INPUTS}
-        )
+        original = {
+            name: (ROOT / name).read_bytes() for name in assembly.source_paths()
+        }
+        generated = assembly.compose(original)
+        host = launcher.build_controller(original)
+        installed = original | generated
+        inherited, replacements, _ = stager._verified_payloads()
+        files = {
+            "/" + path: (raw, mode)
+            for path, (_, mode, raw) in (inherited | replacements).items()
+        }
+        # Mirror actual host installation, including both bootstrap aliases. Do
+        # not replace generated helpers with frozen predecessor bytes in a test.
+        for source, path in host._FILES.items():
+            self.assertFalse(path in files, "helper overlaps staged payload: " + path)
+            files[path] = (installed[source], 0o444)
+        for path, source in host._ALIASES.items():
+            self.assertFalse(path in files, "alias overlaps installed payload: " + path)
+            files[path] = (installed[source], 0o444)
         source_path = "/opt/aragorn/runtime_native_common_attempt.py"
         setup_path = "/opt/aragorn/runtime_native_common_case_setup.py"
         tree = ast.parse(generated[renderer.SOURCE])
@@ -42,7 +59,6 @@ class HttpAttemptSourceGuardTests(unittest.TestCase):
         ]
         self.assertEqual(len(nodes), 2)
         reads = []
-        files = {}
 
         def digest(raw):
             return "sha256:" + hashlib.sha256(raw).hexdigest()
@@ -91,79 +107,52 @@ class HttpAttemptSourceGuardTests(unittest.TestCase):
             ),
             namespace,
         )
-        staged_mode = {
-            "/usr/lib/aragorn/aragorn/native_phase3_http_collection.py",
-            "/usr/lib/aragorn/aragorn/native_phase3_http_collection_verify.py",
-            "/usr/lib/aragorn/aragorn/native_phase3_http_fixture.py",
-            "/usr/lib/aragorn/aragorn/native_phase3_http_sink.py",
-        }
-        for path in namespace["SOURCE_PATHS"]:
-            if path == http_collection.DRIVER_PATH:
-                raw = http_collection.render_native_http_driver(
-                    {
-                        name: (ROOT / name).read_bytes()
-                        for name in http_collection.DRIVER_INPUTS
-                    }
-                )
-            else:
-                relative = (
-                    "src/aragorn/" + Path(path).name
-                    if path.startswith("/usr/lib/aragorn/aragorn/")
-                    else "scripts/" + Path(path).name
-                )
-                raw = generated.get(relative, ready.get(relative))
-                if raw is None:
-                    raw = (ROOT / relative).read_bytes()
-            files[path] = (raw, 0o644 if path in staged_mode else 0o444)
+        self.assertEqual(
+            set(namespace["SOURCE_PATHS"]), set(host.inputs.ATTEMPT_SOURCE_PATHS)
+        )
+        self.assertEqual(
+            set(namespace["SOURCE_PATHS"]), set(host.guest.attempt.SOURCE_PATHS)
+        )
+        self.assertIn(WRITER, namespace["SOURCE_PATHS"])
         for path, (size, pin, mode) in frozen_workload._FIXED_SOURCES.items():
-            if path in {IDENTITY, workload.DRIVER_PATH}:
+            if path in {IDENTITY, workload.DRIVER_PATH, WRITER}:
                 continue
-            relative = {
-                "/opt/aragorn/runtime-native-receipt-systemd-check.py": "scripts/runtime_native_receipt_systemd_check.py",
-            }.get(path)
-            if relative is None:
-                relative = (
-                    path.removeprefix("/src/")
-                    if path.startswith("/src/")
-                    else (
-                        "src/aragorn/"
-                        if path.startswith("/usr/lib/aragorn/aragorn/")
-                        else "scripts/"
-                    )
-                    + Path(path).name
-                )
-            raw = (ROOT / relative).read_bytes()
+            raw, actual_mode = files[path]
             self.assertEqual((len(raw), digest(raw)), (size, pin))
-            files[path] = (raw, mode)
+            self.assertEqual(actual_mode, mode)
         pins = {path: digest(files[path][0]) for path in namespace["SOURCE_PATHS"]}
         self.assertNotEqual(pins[IDENTITY], frozen_workload._FIXED_SOURCES[IDENTITY][1])
+        self.assertNotEqual(pins[WRITER], frozen_workload._FIXED_SOURCES[WRITER][1])
         self.assertNotIn(workload.DRIVER_PATH, files)
         guard = namespace["_source_guard"]
         result = guard(pins)
         self.assertEqual(result[IDENTITY]["digest"], pins[IDENTITY])
+        self.assertEqual(result[WRITER]["digest"], pins[WRITER])
         self.assertEqual(
             result[http_collection.DRIVER_PATH]["digest"],
             pins[http_collection.DRIVER_PATH],
         )
+        self.assertIn((WRITER, 0o444, 1024 * 1024), reads)
         self.assertNotIn(workload.DRIVER_PATH, [row[0] for row in reads])
         workload._sources.assert_not_called()
 
-        for path in (IDENTITY, http_collection.DRIVER_PATH):
+        for path in (IDENTITY, http_collection.DRIVER_PATH, WRITER):
             original_file = files[path]
             files[path] = (original_file[0] + b"\n", original_file[1])
             with self.assertRaisesRegex(ValueError, "INSTALLED_SOURCE_PIN_CHANGED"):
                 guard(pins)
             files[path] = original_file
-        # Reintroducing the actual frozen common identity cannot satisfy HTTP94.
-        new_identity = files[IDENTITY]
-        files[IDENTITY] = (
-            (ROOT / "src/aragorn/native_phase3_common_identity.py").read_bytes(),
-            0o444,
-        )
-        with self.assertRaisesRegex(ValueError, "INSTALLED_SOURCE_PIN_CHANGED"):
-            guard(pins)
-        files[IDENTITY] = new_identity
-        bootstrap = "/opt/aragorn/runtime-native-receipt-systemd-check.py"
+        # Frozen identity/writer bytes cannot satisfy installed successor pins.
+        for path, source in (
+            (IDENTITY, "src/aragorn/native_phase3_common_identity.py"),
+            (WRITER, "scripts/runtime_native_receipt_systemd_check.py"),
+        ):
+            successor = files[path]
+            files[path] = (original[source], 0o444)
+            with self.assertRaisesRegex(ValueError, "INSTALLED_SOURCE_PIN_CHANGED"):
+                guard(pins)
+            files[path] = successor
+        bootstrap = "/opt/aragorn/runtime_native_plugin_package_check.py"
         original_file = files[bootstrap]
         files[bootstrap] = (original_file[0] + b"\n", original_file[1])
         with self.assertRaisesRegex(ValueError, "FIXED_SOURCE_PIN_CHANGED"):

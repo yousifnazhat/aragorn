@@ -5,14 +5,18 @@ Planning date: 2026-10-04. Assessed implementation: `0a51326` on
 or a qualification result. The fixed [exit manifest](benchmark/phase3-exit-gate-manifest-v1.json)
 remains authoritative; this roadmap does not weaken or expand it.
 
-## Current sprint queue (2026-10-07)
+## Current sprint queue (2026-10-09)
 
-Current queue base: signed and pushed `1a63b55` (combined HTTP94 assembly,
-finite development inputs and source snapshot repair). One guarded capture then
+Current queue base: signed and pushed `e63f965` (combined HTTP94 assembly,
+finite development inputs and source-guard repair). One guarded capture previously
 refused at guest source guards before provisioning or activation; exact fixture
 cleanup and restoration of the prior stopped VM state are verified. The source
 guard repair and retained refusal are recorded below; its signed commit and push
-are recorded in the post-commit local receipt.
+are recorded in the post-commit local receipt. Pre-capture review on October 9
+found the generated bootstrap writer was also still checked against its original
+pin. Both inventories now bind its actual installed bytes, and the focused check
+uses the assembled payloads instead of substituting the frozen writer. This
+repair is checked offline; fresh live observation remains necessary.
 The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
@@ -131,6 +135,22 @@ compatible with the generic collector's controller-clock callback marks. Then co
 declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
+
+### Installed bootstrap writer binding repair (2026-10-09)
+
+Batch record: [installed writer binding](benchmark/evidence/phase3-http-installed-writer-binding-v1-2026-10-09.json).
+The guest and input-contract inventories now bind the actual generated writer
+installed at the hyphenated bootstrap path. Its mode and 1 MiB bound are preserved,
+as are the other three frozen bootstrap checks. The affected check now uses the
+real stage/helper/alias installation map and rejects old writer substitution.
+It passed after correcting a duplicate test-only driver insertion; both pipeline
+fingerprints are retained. No old suite or live capture ran in this repair batch.
+The earlier October 9 preparation is retained unused; it must not be used after
+this source change. Fresh signed inputs and one guarded observation are next.
+
+Plan: **1 in progress** at repaired-path capture and same-broker listener proof;
+**2** remaining admission, RUN/sensor-health and real workload/pair adapters;
+**3** complete independent verifiers then freeze; **4** acceptance blocked.
 
 ### Guarded capture refusal, cleanup and source repair (2026-10-07)
 

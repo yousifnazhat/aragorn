@@ -7,16 +7,19 @@ remains authoritative; this roadmap does not weaken or expand it.
 
 ## Current sprint queue (2026-10-09)
 
-Current queue base: signed and pushed `e63f965` (combined HTTP94 assembly,
-finite development inputs and source-guard repair). One guarded capture previously
-refused at guest source guards before provisioning or activation; exact fixture
-cleanup and restoration of the prior stopped VM state are verified. The source
-guard repair and retained refusal are recorded below; its signed commit and push
-are recorded in the post-commit local receipt. Pre-capture review on October 9
-found the generated bootstrap writer was also still checked against its original
-pin. Both inventories now bind its actual installed bytes, and the focused check
-uses the assembled payloads instead of substituting the frozen writer. This
-repair is checked offline; fresh live observation remains necessary.
+Current queue base: signed and pushed `1beb95f` (installed bootstrap writer
+binding repair). One fresh guarded capture passed source, installed-source and
+implementation guards, provisioned all nine inputs and reached first activation.
+It then refused before the workload: the broker cannot traverse the root-only
+parent of its directly opened HTTP binding, and the sensor produced an incomplete
+startup traceback. Same-broker listener/effect proof remains absent. **The exact
+network-none fixture is paused and preserved; `aragorn-bakeoff` remains running
+although its prior state was stopped. Cleanup is not complete.** Broad private
+state copying was denied before execution; limited retention of the single
+fixture-generated grant and exact cleanup awaits user approval. Do not resume the
+fixture or automatically retry the effect. See the current activation-hold
+checkpoint below. The October 7 capture's completed cleanup remains historical
+evidence, not cleanup evidence for this new fixture.
 The user has selected MITRE ATLAS and OWASP-derived,
 fabricated owned-lab workloads: no customer or production task inputs are needed.
 The [preparatory inventory](benchmark/phase3-reference-workloads-v1.md) now reserves
@@ -31,8 +34,8 @@ HTTP94 successor and seven matching helper replacements now bind 22 measurement
 sources, nine writer documents and 43 selected identity paths. The original-plan
 and permanent-handoff bridge also joins the HTTP action and readiness nonce.
 Ready94 host/guest/private-retention source assembly and the bounded same-process
-broker-listener observer are implemented. A guarded attempt was captured but
-refused before activation; it is not listener/effect evidence. Actual listener/effect
+broker-listener observer are implemented. The new guarded attempt reached first
+activation but refused before workload; it is not listener/effect evidence. Actual listener/effect
 observation, remaining action/task adapters and complete
 campaign/private-writer semantics remain outstanding; a workload
 design and inert implementation checks do not close those boundaries. The older counts and effort
@@ -41,7 +44,7 @@ allowances below are planning history, not a current completion percentage.
 | Priority | Missing deliverable | Sprint completion evidence |
 |---|---|---|
 | S1 / implemented and checked | One ingress-capable common deployment profile: worker, helper, private-directory provisioning, unit, activator, preparation and installed identity inventory | Reviewed 74-file inert successor, matching 28-file identity/request boundary, 54 new or affected checks passed; signed batch checkpoint, activation still separate |
-| S2 / in progress | Real common host/guest execution and measurement wiring | Ready94 combined assembly, finite development inputs and source guards are implemented and checked. One real guarded capture refused before activation; exact fixture cleanup and VM restoration verified. The inherited source-pin mismatch is repaired offline; actual broker-listener/effect evidence remains; no live qualification |
+| S2 / in progress, cleanup hold | Real common host/guest execution and measurement wiring | Signed writer repair passed one affected check. Fresh capture passed source guards, provisioned nine inputs and reached first activation, then refused before workload. Exact fixture paused, VM running; limited private retention/cleanup requires approval. HTTP protected-credential and import-cycle successor repair remains; no listener/effect or qualification proof |
 | S3 / parallel after S1 | Remaining admission families on the same deployment | Each exact missing route has its execution adapter and independent consumer; reuse existing plugin-update/direct-write/rename/symlink implementations |
 | S4 / parallel after S1 | Remaining RUN events, responses, attribution and meaningful sensor health | All seven event classes, six responses and two RUN properties have implementation and verifier coverage, including hung/loss/in-flight semantics |
 | S5 / final only | Complete verifier map, frozen deployment and acceptance | One required 31-case plus 100-attempt/100-pair campaign, retained cleanup and offline replay, every mandatory threshold satisfied |
@@ -92,7 +95,12 @@ time; completing an implementation batch is not permission to claim live gates.
    implemented. The first guarded combined capture refused at source guards,
    before provisioning or activation; its exact fixture cleanup and VM
    restoration are verified. The inherited predecessor-pin mismatch is now
-   repaired and checked offline without repeating the live attempt.
+   repaired and checked offline without repeating that live attempt. A fresh
+   capture from signed `1beb95f` subsequently passed all source guards and
+   provisioned nine inputs, but first activation failed before workload. The
+   paused fixture's evidence/cleanup hold must be resolved before another live
+   operation. The next implementation is protected HTTP credential access and
+   removal of the eager sensor import cycle in a finite successor.
    Actual broker-listener, timing/effect observations and campaign/deployment
    pins remain necessary.
    Use a clean signed source checkout when capture is ready. The three admission
@@ -111,9 +119,11 @@ time; completing an implementation batch is not permission to claim live gates.
 4. **Final acceptance:** one frozen 31-case plus 100-attempt/100-pair campaign,
    retained cleanup and offline replay. Blocked until all prerequisites close.
 
-Next action within step 1 is **fresh source-bound preparation and one guarded
-capture of the repaired guest source checks**, then same-broker listener/effect
-verification and cleanup. The prior refused capture and its inputs remain
+Next action within step 1 is **limited private evidence retention and exact
+cleanup after approval**, then the protected-credential/import-cycle successor
+repair and its focused offline checks. Fresh source-bound preparation and
+same-broker listener/effect observation follow that signed repair, not a retry of
+the unchanged failed input. The prior refused captures and their inputs remain
 retained, never relabeled successful or automatically retried. Finite benign task
 source and the one-HTTP development contract builder are implemented and checked;
 this does not authorize the final campaign or supply paired timing samples.
@@ -136,6 +146,37 @@ declared actions and paired benign tasks before the complete campaign is frozen.
 No automatic effect retry or historical recapture is authorized. Signed
 implementation progress and prepared inputs are not live proof.
 
+### First activation reached; private retention and cleanup hold (2026-10-09)
+
+Checkpoint: [first activation hold](benchmark/evidence/phase3-http-first-activation-hold-v1-2026-10-09.json).
+The exact original 1,400,830-byte capture remains at
+`.aragorn/http94-development-20261009-1beb95f/capture.json`, digest
+`sha256:f9ec835d0c1bbc3418961cb617d9b8391d87bcdc03bc2c112165bbd716a9990e`.
+
+- Real progress beyond the previous refusal: source/installed/implementation
+  guards passed, nine documents provisioned, first activation called once.
+  Workload and snapshot counts are zero; no listener or HTTP effect is verified.
+- All 42 unique published public blobs were retained with no transfer failures,
+  but the required readiness inventory never materialized. One 1,064-byte private
+  grant remains in the paused fixture. The successful-attempt retention helper
+  cannot safely be applied to this failed, paused attempt.
+- Read-only diagnosis confirms root:root `0700` on `/etc/aragorn` blocks the
+  broker's direct HTTP binding read. Preserve that protection and reuse systemd
+  credential projections. The incomplete sensor trace does not establish its
+  final exception; a separate static eager import cycle needs a successor fix.
+- Safety review denied copying entire runtime/configuration trees. Nothing was
+  copied by that command. Limited single-grant retention and exact cleanup have
+  been requested. Until resolved, container `a106c9cbaa166adc…` remains paused,
+  the network-none boundary is unchanged, and the bakeoff VM remains running.
+  Do not stop the VM while volatile evidence still requires retention.
+- No automatic effect retry or broad regression ran. This documentation-only
+  checkpoint adds no behavioral test. All qualification gates remain false.
+
+Plan: **1 in progress, cleanup hold**, then protected-credential/import repair
+and same-broker listener proof; **2** remaining admission, RUN/sensor-health and
+workload/pair adapters; **3** independent verifiers then freeze; **4** acceptance
+blocked. The signed checkpoint hash is recorded in its post-commit local receipt.
+
 ### Installed bootstrap writer binding repair (2026-10-09)
 
 Batch record: [installed writer binding](benchmark/evidence/phase3-http-installed-writer-binding-v1-2026-10-09.json).
@@ -146,7 +187,8 @@ real stage/helper/alias installation map and rejects old writer substitution.
 It passed after correcting a duplicate test-only driver insertion; both pipeline
 fingerprints are retained. No old suite or live capture ran in this repair batch.
 The earlier October 9 preparation is retained unused; it must not be used after
-this source change. Fresh signed inputs and one guarded observation are next.
+this source change. Fresh signed inputs and the one guarded observation are now
+recorded in the first-activation checkpoint above.
 
 Plan: **1 in progress** at repaired-path capture and same-broker listener proof;
 **2** remaining admission, RUN/sensor-health and real workload/pair adapters;

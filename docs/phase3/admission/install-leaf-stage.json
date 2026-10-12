@@ -1,0 +1,20 @@
+{
+  "id": "native-admission-install-leaf",
+  "description": "Mocked fixed native upload-disabled INSTALL leaf: dropped privileges, PIDFD/gateway mount and source custody, bounded per-stream capture, distinct denial exit 1, owned child process-group cleanup and partial retention; no native effects or qualification.",
+  "tests": [
+    "test_native_admission_install_leaf"
+  ],
+  "inputs": [
+    "scripts/runtime_native_admission_direct_write.py",
+    "scripts/runtime_native_admission_install.py",
+    "src/aragorn/__init__.py",
+    "src/aragorn/native_phase3_admission_direct_write.py",
+    "src/aragorn/native_phase3_admission_install.py",
+    "src/aragorn/oci_worker_protocol.py",
+    "tests/test_native_admission_direct_write.py",
+    "tests/test_native_admission_install_leaf.py",
+    "tests/test_native_phase3_admission_install.py"
+  ],
+  "needs": [],
+  "timeout_seconds": 120
+}

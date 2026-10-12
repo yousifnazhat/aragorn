@@ -443,6 +443,30 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-workload-sha256",
+      "description": "Only inert SHA256 task callback and independent receipt/timing replay with mocked marks; no paired measurement or qualification.",
+      "tests": [
+        "test_native_phase3_workload_sha256"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_workload_json_sum_contract.py",
+        "src/aragorn/native_phase3_workload_sha256.py",
+        "src/aragorn/native_phase3_workload_sha256_verify.py",
+        "src/aragorn/phase3_reference_tasks.py",
+        "src/aragorn/native_phase3_http_fixture.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_workload_sha256.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "phase3-reference-tasks",
       "description": "Only four finite benign task outputs and guarded fd-only copy refusal/custody checks; no paired measurement.",
       "tests": [
@@ -8590,6 +8614,26 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-admission-install-leaf",
+      "description": "Mocked fixed native upload-disabled INSTALL leaf: dropped privileges, PIDFD/gateway mount and source custody, bounded per-stream capture, distinct denial exit 1, owned child process-group cleanup and partial retention; no native effects or qualification.",
+      "tests": [
+        "test_native_admission_install_leaf"
+      ],
+      "inputs": [
+        "scripts/runtime_native_admission_direct_write.py",
+        "scripts/runtime_native_admission_install.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_install.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_admission_direct_write.py",
+        "tests/test_native_admission_install_leaf.py",
+        "tests/test_native_phase3_admission_install.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-admission-install",
       "description": "Only inert retained-byte upload-disabled INSTALL denial joins; consumer-only, not live installation or complete INSTALL coverage.",
       "tests": [
@@ -8764,6 +8808,23 @@
       ],
       "needs": ["native-plugin-update-collection"],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-run-acquisition-records",
+      "description": "Only inert retained acquisition projection and independent raw joins; no live custody or enforcement",
+      "tests": [
+        "test_native_phase3_run_acquisition"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_acquisition.py",
+        "src/aragorn/native_phase3_run_acquisition_verify.py",
+        "src/aragorn/native_phase3_run_progress.py",
+        "src/aragorn/native_phase3_run_progress_verify.py",
+        "tests/test_native_phase3_run_acquisition.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
     },
     {
       "id": "native-run-reader-progress",

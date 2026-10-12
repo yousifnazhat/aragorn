@@ -9626,6 +9626,29 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-phase3-run-reader-store",
+      "description": "16 new mocked permanent reader claim, retained evidence and owning caller checks; no protected path, kernel exchange, telemetry health or effects",
+      "tests": [
+        "test_native_phase3_run_reader_store"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_clock_domain.py",
+        "src/aragorn/native_phase3_run_acquisition.py",
+        "src/aragorn/native_phase3_run_reader_acquisition.py",
+        "src/aragorn/native_phase3_run_reader_response.py",
+        "src/aragorn/native_phase3_run_reader_store.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_run_reader_store.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

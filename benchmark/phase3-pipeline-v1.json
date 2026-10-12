@@ -8766,6 +8766,23 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-run-acquisition-records",
+      "description": "Only inert retained acquisition projection and independent raw joins; no live custody or enforcement",
+      "tests": [
+        "test_native_phase3_run_acquisition"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_acquisition.py",
+        "src/aragorn/native_phase3_run_acquisition_verify.py",
+        "src/aragorn/native_phase3_run_progress.py",
+        "src/aragorn/native_phase3_run_progress_verify.py",
+        "tests/test_native_phase3_run_acquisition.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
       "id": "native-run-reader-progress",
       "description": "Only inert closed reader-challenge window decisions and independent replay; no acquisition, enforcement or qualification.",
       "tests": [

@@ -200,7 +200,6 @@ def load_registry(root):
         )
         for path in row["inputs"]:
             _relative(path)
-            _read_repo(root, path)
         _require(
             type(row["timeout_seconds"]) is int and 1 <= row["timeout_seconds"] <= 1800,
             "invalid timeout",
@@ -728,6 +727,12 @@ def pipeline(root: Path, *, run=False, selected=()):
     for name in reversed(ordered):
         if name in wanted:
             wanted.update(index[name]["needs"])
+    # Other worktrees may own unmerged stage inputs. Read the entire selected
+    # closure before creating state or launching any of its checks.
+    pins, contracts = {}, {}
+    for name in ordered:
+        if name in wanted:
+            pins[name], contracts[name] = fingerprint(root, index[name], pins)
     _require(
         b".aragorn/" in _read_repo(root, ".gitignore").splitlines(),
         "local state must be ignored",
@@ -755,7 +760,7 @@ def pipeline(root: Path, *, run=False, selected=()):
         except FileNotFoundError:
             _require(not run, "state creation failed")
             _require(state is None, "existing pipeline state lacks its lock")
-        pins, results = {}, {}
+        results = {}
 
         def current_pin(name):
             current, _ = load_registry(root)
@@ -773,10 +778,9 @@ def pipeline(root: Path, *, run=False, selected=()):
             return calculate(name)
 
         for name in ordered:
-            pin, contract = fingerprint(root, index[name], pins)
-            pins[name] = pin
             if name not in wanted:
                 continue
+            pin, contract = pins[name], contracts[name]
             dependency_ok = all(
                 results[dep]["status"] in {"PASS", "SKIP_PASS"}
                 for dep in index[name]["needs"]

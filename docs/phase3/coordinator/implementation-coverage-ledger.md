@@ -67,6 +67,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 | V-benign | JSON sum 6, line count 7, SHA256 8, copy/readback 12 checks | `sha256:9d5945fdbad517531b6cc61d32645596ded265683cbf82504651274557f16a82`; `sha256:79464c1432034d5d5a0298be6c1645e328dba1859bd75c5611fb73fb55480d0b`; `sha256:5c26a3df4d6f464ba8458d7ef60139bcc7e74c3f473044654edc3b22739c779f`; `sha256:bc7e9c5b46f7c44569ae94dd00fcf80aafa3b51d6ff883f985b1327e5790d8db`; four workload handoffs. |
 | V-HTTP | Credential repair 14 checks; composition 7 checks | `sha256:0d119c82b5671c45d08a1a1705a15ea092b601ff60caa32639b4ed4e4e1032a2`; `sha256:fc5ec4385aef9eb1263089fcd9aaa53be2c464d77d48c64efe9fad0b5c158a19`; `docs/phase3/integration-checkpoint-2026-10-12-http-credentials.md`. Actual public report: `benchmark/evidence/phase3-http-credential-staged-profile-v1.json`, 68263 bytes, `sha256:88d08ad1024d27426fecbde9eb73c4fff5ca03e783425a36d1d6559d47f5d1a9`. No repeated staging. |
 | V-contract | Published contract only | `ownership-and-release-v2.md` and its three linked contracts. Contract publication does not establish implementation or test execution; current delivery/agreement is recorded separately below. |
+| V-reader-store | Permanent claim/retention and owning caller: 16 new mocked checks | `sha256:920a28df3aa7a8f1fab8b55f6d29dea566b16bf070a44b510994e1e13d82e9e8`; root provider checkpoint. Actual accepted telemetry transport and deployment remain absent. |
 
 ## Admission: exact 31 requirements
 
@@ -187,12 +188,12 @@ New tests wait for stable-source/complete-dependency review and explicit Root
 registry scheduling. Root continues shared providers in parallel and must connect
 each completed leaf rather than treating local PASS as full requirement closure.
 
-Root's next bounded provider assignment is documented in
+Root's bounded provider assignment is documented in
 `reader-storage-provider-contract-v1.md`: new
 `P/native_phase3_run_reader_store.py`, `P/native_phase3_run_reader_acquisition.py`
-and `tests/test_native_phase3_run_reader_store.py`. At this ledger draft it is an
-implementation assignment, not a reviewed, tested or integrated provider. It
-supplies permanent consume-once storage, retention/readback and an owning caller;
+and `tests/test_native_phase3_run_reader_store.py`. It now has reviewed source and
+16 passing mocked checks (V-reader-store), supplying permanent consume-once
+storage, retention/readback and an owning caller of the existing reader leaf;
 accepted endpoint provisioning, actual sensor loop, loss/program/map acquisition
 and serialized broker enforcement remain separate Root obligations.
 

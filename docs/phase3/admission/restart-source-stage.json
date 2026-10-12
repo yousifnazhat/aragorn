@@ -1,0 +1,21 @@
+{
+  "id": "native-admission-restart",
+  "description": "PROPOSED SOURCE-REVIEW ONLY: 26 mocked finite native restart leaf and independent retained-byte tests; protected provider remains pending; coordinator registration and scheduling required.",
+  "tests": [
+    "test_native_phase3_admission_restart",
+    "test_native_admission_restart"
+  ],
+  "inputs": [
+    "scripts/runtime_native_admission_direct_write.py",
+    "scripts/runtime_native_admission_restart.py",
+    "src/aragorn/__init__.py",
+    "src/aragorn/native_phase3_admission_direct_write.py",
+    "src/aragorn/native_phase3_admission_restart.py",
+    "src/aragorn/oci_worker_protocol.py",
+    "tests/test_native_admission_direct_write.py",
+    "tests/test_native_admission_restart.py",
+    "tests/test_native_phase3_admission_restart.py"
+  ],
+  "needs": [],
+  "timeout_seconds": 120
+}

@@ -9649,6 +9649,19 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "pipeline-selected-closure",
+      "description": "Six new inert selected-worktree closure/preflight checks; no historical test children or live operations",
+      "tests": [
+        "test_phase3_pipeline_selection"
+      ],
+      "inputs": [
+        "scripts/phase3_pipeline.py",
+        "tests/test_phase3_pipeline_selection.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

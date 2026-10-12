@@ -395,6 +395,30 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-workload-json-sum",
+      "description": "Only inert JSON-sum task callback and independent receipt/timing replay with mocked marks; no paired measurement or qualification.",
+      "tests": [
+        "test_native_phase3_workload_json_sum"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_workload_json_sum_contract.py",
+        "src/aragorn/native_phase3_workload_json_sum.py",
+        "src/aragorn/native_phase3_workload_json_sum_verify.py",
+        "src/aragorn/phase3_reference_tasks.py",
+        "src/aragorn/native_phase3_http_fixture.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_workload_json_sum.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "phase3-reference-tasks",
       "description": "Only four finite benign task outputs and guarded fd-only copy refusal/custody checks; no paired measurement.",
       "tests": [
@@ -8542,6 +8566,24 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-admission-install",
+      "description": "Only inert retained-byte upload-disabled INSTALL denial joins; consumer-only, not live installation or complete INSTALL coverage.",
+      "tests": [
+        "test_native_phase3_admission_install"
+      ],
+      "inputs": [
+        "scripts/runtime_native_admission_direct_write.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_install.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_admission_direct_write.py",
+        "tests/test_native_phase3_admission_install.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-admission-direct-write",
       "description": "Verify the fixed single-attempt direct-write leaf and independent retained-byte consumer with inert data and syscall doubles; no fixture launch or admission qualification.",
       "tests": [
@@ -8698,6 +8740,21 @@
       ],
       "needs": ["native-plugin-update-collection"],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-run-reader-progress",
+      "description": "Only inert closed reader-challenge window decisions and independent replay; no acquisition, enforcement or qualification.",
+      "tests": [
+        "test_native_phase3_run_progress"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_progress.py",
+        "src/aragorn/native_phase3_run_progress_verify.py",
+        "tests/test_native_phase3_run_progress.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
     },
     {
       "id": "tetragon-loss-window",

@@ -8542,6 +8542,24 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-admission-install",
+      "description": "Only inert retained-byte upload-disabled INSTALL denial joins; consumer-only, not live installation or complete INSTALL coverage.",
+      "tests": [
+        "test_native_phase3_admission_install"
+      ],
+      "inputs": [
+        "scripts/runtime_native_admission_direct_write.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_install.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_admission_direct_write.py",
+        "tests/test_native_phase3_admission_install.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-admission-direct-write",
       "description": "Verify the fixed single-attempt direct-write leaf and independent retained-byte consumer with inert data and syscall doubles; no fixture launch or admission qualification.",
       "tests": [

@@ -1,7 +1,9 @@
 """Fabricated native install records only; no install, service or VM execution."""
 
 from copy import deepcopy
+import subprocess
 import unittest
+from unittest.mock import Mock
 
 from aragorn import native_phase3_admission_install as subject
 from aragorn.oci_worker_protocol import canonical_json
@@ -135,6 +137,124 @@ class NativeInstallTests(unittest.TestCase):
             subject.verify_native_admission_install(
                 raw, expected_raw_digest="sha256:" + "0" * 64, **bindings,
             )
+
+
+class NativeInstallRecordingTests(unittest.TestCase):
+    def setUp(self):
+        self.value, self.bindings = fixture()
+        rows = [*self.value["commands_before"], self.value["install_command"],
+                *self.value["commands_after"]]
+        self.outputs = [subprocess.CompletedProcess(
+            row["argv"], row["exit_code"], row["stdout"].encode(), b"",
+        ) for row in rows]
+        self.command = Mock(side_effect=self.outputs)
+        self.boundary = Mock(side_effect=lambda: deepcopy(self.value["before"]))
+
+    def record(self, **bindings):
+        return subject.record_native_admission_install(
+            read_boundary=self.boundary, run_command=self.command,
+            **(bindings or self.bindings),
+        )
+
+    def test_records_actual_bytes_once_and_replays(self):
+        result = self.record()
+        self.assertEqual(result, self.value)
+        verify(result, self.bindings)
+        self.assertEqual(self.command.call_count, 9)
+        self.assertEqual(self.boundary.call_count, 3)
+        self.assertEqual([call.args[0] for call in self.command.call_args_list],
+                         [output.args for output in self.outputs])
+        self.assertEqual(sum(call.args[0] == list(subject.ARGV)
+                             for call in self.command.call_args_list), 1)
+
+    def test_bad_caller_performs_no_reads_or_commands(self):
+        result = self.record(**{**self.bindings, "expected_gateway_pid": True})
+        self.assertEqual(result["refusal"]["phase"], "PREREQUISITES")
+        self.boundary.assert_not_called()
+        self.command.assert_not_called()
+
+    def test_unsealed_boundary_never_attempts_install(self):
+        self.value["before"]["admitted"]["read_only"] = False
+        result = self.record()
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertIsNone(result["install_command"])
+        self.assertEqual(self.command.call_count, 4)
+
+    def test_boundary_change_before_attempt_refuses(self):
+        changed = deepcopy(self.value["before"])
+        changed["gateway"]["start_time_ticks"] += 1
+        self.boundary.side_effect = [self.value["before"], changed]
+        result = self.record()
+        self.assertIsNone(result["install_command"])
+        self.assertEqual(self.command.call_count, 4)
+
+    def test_wrong_denial_retains_metadata_without_diagnostic_or_retry(self):
+        raw = b'{"error":"private fixture diagnostic"}'
+        self.outputs[4].stdout = raw
+        result = self.record()
+        self.assertEqual(result["refusal"]["phase"], "INSTALL")
+        self.assertIsNone(result["install_command"]["stdout"])
+        self.assertEqual(result["install_command"]["stdout_digest"],
+                         subject.shared.digest(raw))
+        self.assertNotIn(b"private fixture diagnostic", canonical_json(result))
+        self.assertIsNotNone(result["after"])
+        self.assertEqual(len(result["commands_after"]), 4)
+        self.assertEqual(self.command.call_count, 9)
+        with self.assertRaises(subject.NativeInstallError):
+            verify(result, self.bindings)
+
+    def test_timeout_preserves_unknown_attempt_and_postconditions(self):
+        self.outputs[4] = subprocess.TimeoutExpired(list(subject.ARGV), 15)
+        self.command.side_effect = self.outputs
+        result = self.record()
+        self.assertEqual(result["refusal"]["phase"], "INSTALL")
+        self.assertIsNone(result["install_command"]["exit_code"])
+        self.assertIsNotNone(result["after"])
+        self.assertEqual(self.command.call_count, 9)
+
+    def test_postcondition_failure_cannot_become_success(self):
+        self.boundary.side_effect = [self.value["before"], self.value["before"],
+                                     OSError("private read failure")]
+        result = self.record()
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertEqual(result["refusal"]["phase"], "AFTER")
+        self.assertEqual(len(result["commands_after"]), 4)
+        self.assertNotIn(b"private read failure", canonical_json(result))
+
+    def test_changed_final_boundary_fails_independent_replay(self):
+        changed = deepcopy(self.value["before"])
+        changed["gateway"]["start_time_ticks"] += 1
+        self.boundary.side_effect = [self.value["before"], self.value["before"], changed]
+        result = self.record()
+        self.assertEqual(result["refusal"]["phase"], "REPLAY")
+        self.assertEqual(result["status"], "REFUSED")
+
+    def test_interrupt_preserves_observation_and_propagates_without_retry(self):
+        interruption = KeyboardInterrupt()
+        self.outputs[4] = interruption
+        self.command.side_effect = self.outputs
+        with self.assertRaises(KeyboardInterrupt) as caught:
+            self.record()
+        self.assertIs(caught.exception, interruption)
+        result = interruption._native_install_observation
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertEqual(result["refusal"]["phase"], "INSTALL")
+        self.assertIsNotNone(result["after"])
+        self.assertEqual(self.command.call_count, 9)
+
+    def test_invalid_command_envelopes_refuse_and_never_retry(self):
+        for field, replacement in (
+            ("returncode", True), ("returncode", 0), ("args", ["other"]),
+            ("stdout", "not bytes"), ("stdout", b"x" * (subject.shared.MAX_COMMAND + 1)),
+            ("stderr", b"private stderr"),
+        ):
+            with self.subTest(field=field, replacement_type=type(replacement).__name__):
+                self.setUp()
+                setattr(self.outputs[4], field, replacement)
+                result = self.record()
+                self.assertEqual(result["status"], "REFUSED")
+                self.assertEqual(self.command.call_count, 9)
+                self.assertNotIn(b"private stderr", canonical_json(result))
 
 
 if __name__ == "__main__":

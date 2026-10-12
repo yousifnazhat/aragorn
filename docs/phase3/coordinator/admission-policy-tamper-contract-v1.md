@@ -56,8 +56,10 @@ expected stderr: blocked by install policy: plugin installs disabled by Aragorn 
 
 Root reuses the existing source-reviewed native plugin-package fixture builder
 and namespace/privilege conventions, with fresh pins. Baseline target starts
-present and must remain the same original bytes and catalog entry; candidate
-must not replace it. This is explicitly distinct from fresh-target absence.
+present and disabled and must remain the same original bytes and plugin inspection;
+the gateway/skills catalog remains unchanged. The disabled plugin need not be an
+active gateway catalog entry. Candidate must not replace it. This is explicitly
+distinct from fresh-target absence.
 The latter remains a subsequent root adapter and evidence obligation wherever
 the exit gate requires it. Never relabel baseline preservation as target absence.
 Require the clean branch's exact CLI stdout (including final newline):
@@ -97,7 +99,8 @@ record_policy_tamper(*, context_raw: bytes, bindings: dict,
 # invoke_policy() -> canonical invocation bytes
 
 verify_policy_tamper(raw: bytes, *, expected_digest: str,
-                     context_raw: bytes, bindings: dict) -> dict
+                     context_raw: bytes, bindings: dict,
+                     expected_policy_observation_digest: str) -> dict
 ```
 
 Verifier imports no producer or private producer parser. Stdlib and existing
@@ -146,8 +149,9 @@ root-selected native execution values bound by context, with no secrets retained
 only public credential paths and public fixed fixture settings may appear.
 Root must reject unreviewed environment keys before live execution. Subject exact
 keys: `plugin_id, candidate_path, target_path, candidate_digest, baseline_digest`.
-Plugin/candidate match the fixed values above; root resolves and pins the actual
-baseline target under its held parent from the existing native fixture contract.
+Plugin/candidate match the fixed values above; target_path is exactly
+`/var/lib/aragorn-agent-gateway/state/extensions/aragorn-plugin-skill-replacement-fixture`.
+Root pins that actual baseline target under its held parent.
 The lane must not choose a target from untrusted observations.
 
 Snapshot exact keys: `schema, context_digest, nonce, observed_ns, resources,
@@ -158,20 +162,28 @@ hash exact raw bytes; require original context identity/ancestry and digests.
 Baseline digest equals the pinned baseline, candidate_installed is false.
 Catalog digest must be equal before/after every mutation and invocation. Endpoint
 equality does not prove interval-wide custody or absence of mutation/restoration.
+Baseline/catalog digest fields are supplied protected-observer assertions here;
+this consumer does not independently decode the whole plugin tree or catalog.
+Only the retained config/printf bytes are independently hashed in this slice.
 
 Mutation exact keys: `schema, context_digest, nonce, resource, operation,
 started_ns, finished_ns, result, errno`. Schema:
-`aragorn/native-admission-policy-tamper-operation/v1`; result must be `DENIED`.
-Errno is a symbolic Linux name; only EACCES, EPERM or EROFS counts as protective
-denial. EXDEV/EBUSY is structural refusal and leaves this batch incomplete.
-All success/unknown outcomes stop the recorder, preserving partial evidence.
+`aragorn/native-admission-policy-tamper-operation/v1`. Errno is a symbolic Linux
+name. Result `DENIED` permits only EACCES, EPERM or EROFS and counts as protective
+denial. For REPLACE_RENAME or PARENT_RETARGET only, result `STRUCTURAL_REFUSAL`
+permits EXDEV or EBUSY. Both require an unchanged following snapshot. Structural
+outcomes are retained consistency evidence, never protective denial. All
+success/unknown outcomes stop the recorder, preserving partial evidence.
 
 Invocation exact keys: `schema, context_digest, nonce, started_ns, finished_ns,
 argv, exit_code, stdout_base64, stderr_base64, policy_observation_digest`.
 Schema: `aragorn/native-admission-policy-tamper-invocation/v1`; argv is exact,
 exit_code=1, stderr and stdout are the exact lines above.
 The policy_observation_digest must be an independently retained protected root
-observation, not a hash invented from CLI text. This slice carries its pin but
+observation, not a hash invented from CLI text. The verifier compares it to the
+separate caller-held expected_policy_observation_digest, acquired after invocation
+and retention; it cannot be predicted inside the pre-invocation context. This slice
+carries its pin but
 does not validate its missing native schema; policy execution remains unverified.
 The existing policy code supplies no such provider. Root must implement and review
 it before any native run; unresolved provider means no execution release.
@@ -195,7 +207,9 @@ original parent and points to the fixed replacement. Parent retarget attempts
 to rename the original parent to `<resource>.parent` in the scratch directory.
 All scratch/adjacent preconditions and held source/destination parents belong
 to root provisioning; missing or preexisting unexpected names refuse. Structural
-refusals remain incomplete evidence rather than protective denial. No adapter
+refusals are consistent observations but do not count as protective denial. These
+cross-mount operands can legitimately return EXDEV, and a mountpoint can return
+EBUSY; neither is relabeled policy protection. No adapter
 performing these operations is implemented or authorized by this contract.
 
 Complete record exact keys: `schema, context_digest, before, attempts,
@@ -208,9 +222,11 @@ nondecreasing observed/action times throughout; each action's start <= finish
 and enclosing before/after snapshot brackets. All snapshots preserve exact
 resource bytes/metadata, baseline and original catalog digest.
 
-Success verifier result exact keys: `status, digest, operations,
+Success verifier result exact keys: `status, digest, operations, protective_denials,
+structural_refusals,
 policy_execution_verified, admission_qualified, phase3_qualified, limitations`.
-Status `CONSISTENT_POLICY_TAMPER_RECORD`, operations=12, flags false. Limitations
+Status `CONSISTENT_POLICY_TAMPER_RECORD`, operations=12, flags false. The two strict
+nonnegative outcome counts sum to 12 and are reconstructed from rows. Limitations
 must retain missing protected invocation authenticity, interval custody, fresh
 target absence and native admission qualification. CLI text must never upgrade
 these flags. This additive leaf can be implemented with inert callbacks now;

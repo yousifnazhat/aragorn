@@ -8700,6 +8700,21 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-run-reader-progress",
+      "description": "Only inert closed reader-challenge window decisions and independent replay; no acquisition, enforcement or qualification.",
+      "tests": [
+        "test_native_phase3_run_progress"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_progress.py",
+        "src/aragorn/native_phase3_run_progress_verify.py",
+        "tests/test_native_phase3_run_progress.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
       "id": "tetragon-loss-window",
       "description": "Verify the new bounded raw-scrape loss accounting and retained selected upstream source bytes; never infer zero from absence.",
       "tests": ["test_runtime_tetragon_loss"],

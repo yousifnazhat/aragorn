@@ -395,6 +395,30 @@
       "timeout_seconds": 120
     },
     {
+      "id": "native-workload-json-sum",
+      "description": "Only inert JSON-sum task callback and independent receipt/timing replay with mocked marks; no paired measurement or qualification.",
+      "tests": [
+        "test_native_phase3_workload_json_sum"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_workload_json_sum_contract.py",
+        "src/aragorn/native_phase3_workload_json_sum.py",
+        "src/aragorn/native_phase3_workload_json_sum_verify.py",
+        "src/aragorn/phase3_reference_tasks.py",
+        "src/aragorn/native_phase3_http_fixture.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_workload_json_sum.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "phase3-reference-tasks",
       "description": "Only four finite benign task outputs and guarded fd-only copy refusal/custody checks; no paired measurement.",
       "tests": [

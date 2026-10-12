@@ -8842,6 +8842,76 @@
       "timeout_seconds": 30
     },
     {
+      "id": "native-admission-restart",
+      "description": "Only mocked finite native restart leaf and independent retained-byte joins; no protected provider or native operation",
+      "tests": [
+        "test_native_phase3_admission_restart",
+        "test_native_admission_restart"
+      ],
+      "inputs": [
+        "scripts/runtime_native_admission_direct_write.py",
+        "scripts/runtime_native_admission_restart.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_admission_direct_write.py",
+        "src/aragorn/native_phase3_admission_restart.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_admission_direct_write.py",
+        "tests/test_native_admission_restart.py",
+        "tests/test_native_phase3_admission_restart.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-run-reader-response",
+      "description": "Only mocked finite reader exchange, retained partial failures and existing independent acquisition join; no live custody or qualification",
+      "tests": [
+        "test_native_phase3_run_reader_response"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_clock_domain.py",
+        "src/aragorn/native_phase3_run_acquisition.py",
+        "src/aragorn/native_phase3_run_acquisition_verify.py",
+        "src/aragorn/native_phase3_run_progress.py",
+        "src/aragorn/native_phase3_run_progress_verify.py",
+        "src/aragorn/native_phase3_run_reader_response.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_run_acquisition.py",
+        "tests/test_native_phase3_run_reader_response.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "native-workload-copy-readback",
+      "description": "Only guarded copy/readback and independent retained-file checks in test-owned scratch with mocked native custody; no live execution context or product deadline",
+      "tests": [
+        "test_native_phase3_workload_copy_readback"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_workload_json_sum_contract.py",
+        "src/aragorn/native_phase3_workload_copy_readback.py",
+        "src/aragorn/native_phase3_workload_copy_readback_verify.py",
+        "src/aragorn/phase3_reference_tasks.py",
+        "src/aragorn/native_phase3_http_fixture.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/runtime_process_profile.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_workload_copy_readback.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "tetragon-loss-window",
       "description": "Verify the new bounded raw-scrape loss accounting and retained selected upstream source bytes; never infer zero from absence.",
       "tests": ["test_runtime_tetragon_loss"],

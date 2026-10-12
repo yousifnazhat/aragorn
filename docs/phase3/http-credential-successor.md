@@ -109,4 +109,47 @@ Two diagnosed failures remain retained in `.aragorn/phase3-pipeline/`:
 
 There was no unchanged retry, overwritten report, historical suite, live operation
 or private retention. The successful run performed the only staging call.
-The separate helper/capture/identity composition stage remains next.
+The separate helper/capture/identity composition stage follows below.
+
+## Reviewed composition registration
+
+Coordinator-owned new paths are
+`scripts/materialize_native_phase3_http_credential_helpers.py`,
+`scripts/materialize_native_phase3_http_credential_capture.py`,
+`scripts/capture_native_phase3_http_credential_attempt.py` and
+`tests/test_native_phase3_http_credential_composition.py`.
+Frozen predecessors and active lane worktrees are unchanged.
+
+`native-http-credential-composition` selects only seven new test methods, with
+`needs: []`. Its 277-input closure combines the existing attempt-assembly and
+credential-profile source inventories, excludes every historical test module,
+and includes these four files and the retained public report. Recursive static
+local-import review adds no missing source; all 124 report source inputs are
+included. Two installed gateway credential source names are generated outputs
+of the included gateway credential materializer, not missing disk inputs.
+
+The helper binds the actual report, root provisioning API and template/config
+pins. A dedicated observer reads only the fixed loaded HTTP credentials with
+held nofollow ancestry, exact ownership/modes, read-only mounts and a final
+readback; the independent consumer joins their byte counts and digests to the
+protected sources. Gateway environment bytes stay internal: only the selected
+`OPENCLAW_NO_RESPAWN=1` witness is exported, with an explicit attestation limit.
+Preparation v5, identity/process v3 and setup v3 reach their callers.
+
+Nested preparation consumes the retained report. The outer launcher privately
+loads the matching generated helpers and nine staged modules; pure in-memory
+payload rendering joins all 94 installed rows to the actual report. The focused
+check prohibits both full staging entrypoints and invokes no controller command.
+Behavioral cases cover custody/metadata mutation, incomplete reads, independent
+source disagreement and environment/config disagreement. Source is frozen and
+reviewed before this selected stage is scheduled.
+
+Composition PASS on its first run: all seven methods, fingerprint
+`sha256:fc5ec4385aef9eb1263089fcd9aaa53be2c464d77d48c64efe9fad0b5c158a19`.
+Command: `/opt/homebrew/bin/python3.12 scripts/phase3_pipeline.py run
+native-http-credential-composition`. The actual result and logs are retained in
+the matching `.aragorn/phase3-pipeline/native-http-credential-composition/`
+fingerprint directory. All 277 reviewed input hashes remained unchanged and all
+108 prior registry rows were preserved. No full staging entrypoint, controller
+command, live operation or historical test method ran. The first-stage success
+is reused without another run.

@@ -2,7 +2,46 @@
 
 Base: verified signed and published `27e9844e6d5f0924b79382a8a084099ee06e2ed6`.
 This document succeeds v1 only for the next bounded implementation assignments.
-All existing provider and operational holds remain. No new worktrees are needed.
+All existing provider and operational holds remain. Worktree capacity follows
+the standing coordinator rule below.
+
+## Hard coordinator rule: fastest complete Phase 3
+
+Operator instruction, 2026-10-12: minimize elapsed time to complete Phase 3,
+including final qualification. At every checkpoint, new blocker or completed
+handoff, reassess the existing coverage ledger and dependencies; identify the
+critical infrastructure blocking complete execution paths and immediately release
+the next independent, bounded assignments. Do not wait for all coordinator work
+to finish before starting a lane whose contract is ready.
+
+Each assignment must name its requirement, verified published base, owner,
+exact writable paths, concrete interfaces and failure semantics, dependencies,
+required raw evidence and independent consumer, proposed focused validation,
+and acceptance/handoff conditions. Publish the signed contract before release.
+Keep shared-file ownership explicit; delegate non-overlapping provider leaves
+when the coordinator becomes the bottleneck. Integrate completed consumers with
+their providers promptly, and confirm delivery/agreement rather than assuming it.
+
+Reuse or reassign existing worktrees when they can take the work promptly. When
+additional capacity can shorten the critical path, request that the operator open
+the necessary additional worktree(s). Supply the proposed branch/path, exact
+verified published base, copyable assignment, dependencies and expected benefit.
+Prepare the assignment before requesting capacity; continue independent work
+while awaiting the operator. Do not serialize ready work merely to keep a fixed
+worktree count, or add worktrees with no independent ready scope. This supersedes
+earlier blanket advice against new worktrees only for deliberate capacity
+expansion; preserve drafts and never create replacement worktrees or mutate an
+active owner's worktree.
+
+Repeat assignment, implementation, review, necessary focused validation, signed
+integration and capacity reassessment until the existing exit manifest is
+satisfied. Reuse unaffected evidence; do not add a gate framework, redundant
+tests or speculative scope. The operational/private-retention/cleanup holds
+remain, and implementation readiness is distinct from final qualification.
+End every checkpoint with completed work, released/pending assignments, concrete
+blockers, any operator capacity request and numbered remaining Phase 3 steps.
+
+## Existing released assignments
 
 | Existing branch | Contract | Exact implementation write allowlist |
 | --- | --- | --- |

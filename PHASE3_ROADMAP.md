@@ -5,6 +5,13 @@ Planning date: 2026-10-04. Assessed implementation: `0a51326` on
 or a qualification result. The fixed [exit manifest](benchmark/phase3-exit-gate-manifest-v1.json)
 remains authoritative; this roadmap does not weaken or expand it.
 
+Standing coordinator instruction (2026-10-12): follow the
+[fastest-completion rule](docs/phase3/coordinator/ownership-and-release-v2.md#hard-coordinator-rule-fastest-complete-phase-3).
+Continuously release independent critical infrastructure assignments and request
+operator-created additional worktrees when they shorten completion. Older
+sequential/fixed-worktree planning does not prohibit concurrent released lanes;
+existing ownership, evidence requirements and operational holds still apply.
+
 ## Current sprint queue (2026-10-09)
 
 Current queue base: signed and pushed `1beb95f` (installed bootstrap writer

@@ -9596,6 +9596,36 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-run-reader-evidence",
+      "description": "Only independent Linux reader supplement byte joins; no native custody, retention, meaningful progress or effect authority",
+      "tests": [
+        "test_native_phase3_run_reader_evidence_verify"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_reader_evidence_verify.py",
+        "tests/test_native_phase3_run_reader_evidence_verify.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "native-admission-policy-tamper",
+      "description": "26 inert callback and independent retained-byte policy tamper tests; no native effects or qualification",
+      "tests": [
+        "test_native_phase3_admission_policy_tamper"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_admission_policy_tamper.py",
+        "src/aragorn/native_phase3_admission_policy_tamper_verify.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_admission_policy_tamper.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

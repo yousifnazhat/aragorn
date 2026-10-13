@@ -32,8 +32,9 @@ owns shared dispatch/registry and the providers below except the explicitly
 delegated RUN transport leaf in `reader-transport-contract-v1.md` /
 `provider-release-v3.md` and Admission's independent submission replay in
 `broker-reader-provider-contract-v1.md` / `provider-release-v4.md`; both new
-implementations are pending. Root's bounded protocol/journal implementation is
-released by v4; actual shared broker wiring remains pending.
+implementations are pending. Root's bounded protocol/journal implementation now
+has its reviewed 28-test PASS (V-broker-submission); actual shared broker wiring
+and independent transcript agreement remain pending.
 
 Path shorthand is literal: **P/** means `src/aragorn/`, **S/** means `scripts/`,
 and **B/** means `benchmark/admission/openclaw-v2026.7.1/`. A path identified as
@@ -51,7 +52,7 @@ the complete provider interface is implemented or deployed.
 | Policy/lifecycle acquisition | Existing admission command helpers; `docs/phase3/coordinator/restart-lifecycle-contract-v1.md` and `admission-policy-tamper-contract-v1.md` | Root must provide actual protected invocation/request observation and lifecycle readback with source/config joins, retained raw output and externally held identities. A gateway-account log remains an emitter assertion. The baseline-present force route is separate from an absent-target route. |
 | Authenticated reader and permanent claim | `P/native_phase3_run_reader_response.py`, `P/native_phase3_run_acquisition.py`, `P/native_phase3_run_progress.py`; `P/runtime_process_profile.py` PIDFD helpers | Accepted Linux seqpacket transport, protected observer/reader identities, a fresh connection epoch, real read-loop challenge acknowledgement, permanent consume-once claim, retained bytes/readback and cancellation supervision. A successful reader leaf is not yet a real sensor-read-loop provider. |
 | Loss/program/map acquisition | `P/runtime_tetragon_loss.py`, `P/runtime_tetragon_program_map.py`, `P/runtime_tetragon_stats_map.py`, `P/runtime_tetragon_process.py` | Protected before/after raw samples, exact producer continuity, program/map identities and applicable counter inventory. Missing families remain unknown; resets and increases fail closed. Parsers do not authenticate a scrape or establish complete event delivery. |
-| Serialized broker and causal lineage | `P/runtime_action_broker.py` through `P/runtime_action_broker_v5.py`, `P/runtime_http_broker.py`, `P/runtime_lineage_capability_issuer.py`, `P/runtime_active_skill_lineage_v2.py`, `P/runtime_action_observation_publisher_v4.py` | Actual activation/session → tool request → PID/start/cgroup → digest/capability → serialized broker decision/result. Health and submission state must be checked inside the real serialization boundary. Missing receipts cannot establish NOT_SUBMITTED; SUBMITTED/UNKNOWN retain INDETERMINATE. |
+| Serialized broker and causal lineage | `P/runtime_action_broker.py` through `P/runtime_action_broker_v5.py`, `P/runtime_http_broker.py`, `P/native_phase3_broker_reader_protocol.py`, `P/runtime_http_run_submission.py`, `P/runtime_lineage_capability_issuer.py`, `P/runtime_active_skill_lineage_v2.py`, `P/runtime_action_observation_publisher_v4.py` | Actual activation/session → tool request → PID/start/cgroup → digest/capability → serialized broker decision/result. Health and submission state must be checked inside the real serialization boundary. Missing receipts cannot establish NOT_SUBMITTED; SUBMITTED/UNKNOWN retain INDETERMINATE. |
 | Responses and start barriers | `P/runtime_response_service.py`, `P/runtime_health_watchdog.py`, `P/runtime_health_service.py`, `P/runtime_revocation_service.py`, `P/runtime_quarantine_response.py`, `P/runtime_quarantine_service.py`, `P/runtime_skill_startup.py` | Retained trigger, pending latch, identity-bound stop/mask/quarantine/revocation and subsequent denial evidence. Fixed profile masking alone is not arbitrary digest quarantine; an intended response is not completed enforcement. |
 | Protected workload contexts | `P/native_phase3_common_preparation.py`, `P/native_phase3_common_attempt_inputs.py`, `S/runtime_native_common_attempt.py`, `P/native_phase3_http_fixture.py`, `P/native_phase3_http_sink.py`, `P/native_phase3_http_collection.py` | Fresh owned per-attempt directories and descriptors, held execution/process/sink identities, readiness before effect, cancellation and continuous destructive-object custody. HTTP readiness is separate from canary traffic; DNS needs its own protected observer and completeness source. |
 | Full timing and paired environments | `P/phase3_measurement_collector.py`, `P/phase3_measurement_replay.py`, `P/native_phase3_clock_domain.py`, `P/native_phase3_clock_domain_verify.py`, `P/native_phase3_ingress_interval_verify.py`, `P/runtime_broker_decision_measurement.py`, `P/runtime_broker_decision_measurement_verify.py` | Retain actual REQUEST_ACCEPTED → DECISION_FINALIZED and TASK_ACCEPTED → TASK_COMPLETED in a validated CLOCK_BOOTTIME/time-namespace domain. Select real baseline/instrumented contexts, retain identical task/input/host joins and execute both sides. A mode label or narrower broker timestamp interval is insufficient. |
@@ -75,6 +76,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 | V-reader-evidence | Independent ACK/TIMEOUT byte consumer: 14 new checks | `sha256:855ae03253e17074a4ff66c5e4d060f7906cc70a2b25efadb6ca36492cd655c9`; signed original `33f54e2aca224b216a4ae67f0a73588e03252939`, merged preserving ancestry. Byte consistency only. |
 | V-policy-tamper | Finite recorder/independent consumer: 26 new inert checks | `sha256:c08b47026e885e68bab6482ca5d858863ef442774f40db55eedea486b3e9ce46`; original signed `d3c5ffed8dbbf0520c9b8d2e9d798e204d09f96d`, merged preserving ancestry. Actual protected policy acquisition and complete ADM-03 remain open. |
 | V-reader-store | Permanent claim/retention and owning caller: 16 new mocked checks | `sha256:920a28df3aa7a8f1fab8b55f6d29dea566b16bf070a44b510994e1e13d82e9e8`; root provider checkpoint. Actual accepted telemetry transport and deployment remain absent. |
+| V-broker-submission | Protocol and immutable broker journal: 28 new mocked checks | `sha256:d36e14e55f23068293e2159caa74311a9519b23ce61ab7816108035d58ef574b`; actual result/logs and stable eight-file closure in `broker-reader-provider-handoff.md`. No IPC/provider acquisition, independent transcript agreement, caller/deployment or health authority follows. |
 
 ## Admission: exact 31 requirements
 
@@ -198,9 +200,12 @@ Released implementation paths are those in `ownership-and-release-v2.md`:
 policy-tamper recorder/consumer, completed reader evidence consumer, DNS
 builder/consumer and the newly delegated RUN guarded transport leaf. The real
 reader loop/checkpoint, independent transport replay and deployment remain open.
-The next published broker contract splits Root protocol/journal from Admission
-independent transcript replay. Its conservative terminal result is SUBMITTED or
-UNKNOWN; only the actual guarded broker can emit a current pre-connect snapshot.
+The published broker contract splits Root protocol/journal from Admission
+independent transcript replay. Root's two modules are implemented and have the
+28-test V-broker-submission PASS; Admission's independent consumer remains pending.
+The conservative terminal result is SUBMITTED or UNKNOWN; only the actual guarded
+broker can emit a current pre-connect snapshot. Real acquisition/IPC and owning
+broker integration remain open, so no requirement-level row becomes qualified.
 The reviewed DNS acquisition/context contract is pending the original signed
 builder dependency and a later explicit owner/base release. Its bounded receive
 sample always reports incomplete observation; full readiness/quiescence/drain

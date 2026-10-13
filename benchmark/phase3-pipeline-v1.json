@@ -4611,15 +4611,22 @@
     {
       "id": "pipeline-capacity",
       "description": "Only four new inert registry-capacity checks for the required bounded increase from 64 to 128 stages; no child execution, cache reset, unrelated stage run or qualification.",
-      "tests": ["test_phase3_pipeline_capacity"],
-      "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
+      "tests": [
+        "test_phase3_pipeline_capacity"
+      ],
+      "inputs": [
+        "scripts/phase3_pipeline.py",
+        "tests/test_phase3_pipeline_capacity.py"
+      ],
       "needs": [],
       "timeout_seconds": 120
     },
     {
       "id": "runtime-http-mediation",
       "description": "Focused protected-state HTTP broker checks after correcting the disposable fixture ancestry. The 32 unchanged transport checks passed in the retained first attempt and are not rerun. Inert sockets and owned control files; no live fixture or acceptance.",
-      "tests": ["test_runtime_http_broker"],
+      "tests": [
+        "test_runtime_http_broker"
+      ],
       "inputs": [
         "src/aragorn/__init__.py",
         "src/aragorn/cas.py",
@@ -4635,13 +4642,17 @@
         "tests/test_runtime_action_broker.py",
         "tests/test_runtime_http_broker.py"
       ],
-      "needs": ["pipeline-capacity"],
+      "needs": [
+        "pipeline-capacity"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-admission-auto-discovery",
       "description": "First run of the fixed two-candidate auto-discovery leaf and independent retained-byte consumer checks. Inert syscall/catalog doubles only; not yet common-deployment dispatch, active prompt consumption or admission qualification.",
-      "tests": ["test_native_admission_auto_discovery"],
+      "tests": [
+        "test_native_admission_auto_discovery"
+      ],
       "inputs": [
         "scripts/runtime_native_admission_auto_discovery.py",
         "scripts/runtime_native_admission_direct_write.py",
@@ -4652,7 +4663,9 @@
         "tests/test_native_admission_auto_discovery.py",
         "tests/test_native_admission_direct_write.py"
       ],
-      "needs": ["pipeline-capacity"],
+      "needs": [
+        "pipeline-capacity"
+      ],
       "timeout_seconds": 120
     },
     {
@@ -4676,7 +4689,9 @@
         "tests/test_native_phase3_http_canary.py",
         "tests/test_native_phase3_http_sink.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
@@ -6222,7 +6237,9 @@
     {
       "id": "native-blocked-create-driver",
       "description": "Verify only the new exact reversible blocked-create driver successor and absent-only source publication, plus bounded JavaScript definition doubles. No real driver entrypoint, provider, gateway, fixture or effect execution.",
-      "tests": ["test_runtime_native_blocked_create_driver"],
+      "tests": [
+        "test_runtime_native_blocked_create_driver"
+      ],
       "inputs": [
         "benchmark/admission/openclaw-v2026.7.1/native-receipt-read-create-driver-v1.mjs",
         "benchmark/runtime-action-worker-openclaw-systemd/openclaw-worker-driver.mjs",
@@ -6230,13 +6247,17 @@
         "scripts/materialize_runtime_native_blocked_create_driver.py",
         "tests/test_runtime_native_blocked_create_driver.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-denied-create-sink",
       "description": "Verify only the new fixed protected/staging sink observer with inert owned-guest, account, process, source and filesystem doubles. Held descriptor checks and two bounded observations do not prove continuous absence or pre-effect prevention.",
-      "tests": ["test_native_phase3_denied_create_sink"],
+      "tests": [
+        "test_native_phase3_denied_create_sink"
+      ],
       "inputs": [
         "src/aragorn/__init__.py",
         "src/aragorn/native_phase3_denied_create_sink.py",
@@ -6248,13 +6269,17 @@
         "src/aragorn/runtime_process_profile.py",
         "tests/test_native_phase3_denied_create_sink.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-blocked-create-verifier",
       "description": "Verify only new independent joins of retained actual callback projections, a sole native create receipt pair, worker ingress, effective broker BLOCK and two fixed sink observations. Existing fixture modules construct inert data only; no historical suite, effect or acceptance execution.",
-      "tests": ["test_native_phase3_blocked_create_verify"],
+      "tests": [
+        "test_native_phase3_blocked_create_verify"
+      ],
       "inputs": [
         "src/aragorn/__init__.py",
         "src/aragorn/cas.py",
@@ -6283,7 +6308,9 @@
         "tests/test_runtime_broker_effective_receipt_verify.py",
         "tests/test_runtime_worker_ingress_verify.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
@@ -8672,7 +8699,9 @@
     {
       "id": "native-plugin-update-case-guest",
       "description": "Verify absent-only guest CAS custody, fixed sealed input closure and request readback before the existing activation hook; inert fixtures only, no Linux effects.",
-      "tests": ["test_runtime_native_plugin_update_case"],
+      "tests": [
+        "test_runtime_native_plugin_update_case"
+      ],
       "inputs": [
         "scripts/runtime_native_plugin_update_case.py",
         "scripts/runtime_native_plugin_update_identity_check.py",
@@ -8682,13 +8711,18 @@
         "src/aragorn/oci_worker_protocol.py",
         "tests/test_runtime_native_plugin_update_case.py"
       ],
-      "needs": ["native-plugin-update-case", "native-plugin-update-identity-guest"],
+      "needs": [
+        "native-plugin-update-case",
+        "native-plugin-update-identity-guest"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-plugin-update-case-host",
       "description": "Verify fixed prepare/inspect/capture/replay CLI, offline child-first intent construction, pre-effect signed source and profile guards, sealed bounded guest handoff, unchanged native cleanup composition and offline failure retention; no Docker or capture.",
-      "tests": ["test_native_plugin_update_case_host"],
+      "tests": [
+        "test_native_plugin_update_case_host"
+      ],
       "inputs": [
         "scripts/capture_native_phase3_plugin_update_case.py",
         "scripts/capture_runtime_native_plugin_update_identity_check.py",
@@ -8703,13 +8737,19 @@
         "tests/test_native_phase3_plugin_update_case.py",
         "tests/test_native_plugin_update_case_host.py"
       ],
-      "needs": ["native-plugin-update-case-guest", "native-plugin-update-identity-host", "native-plugin-update-identity-pins"],
+      "needs": [
+        "native-plugin-update-case-guest",
+        "native-plugin-update-identity-host",
+        "native-plugin-update-identity-pins"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-plugin-update-case",
       "description": "Verify the fixed caller-retained native case intent, fresh preactivation writer joins and read-only request/collection replay using inert data; not live ordering or qualification.",
-      "tests": ["test_native_phase3_plugin_update_case"],
+      "tests": [
+        "test_native_phase3_plugin_update_case"
+      ],
       "inputs": [
         "benchmark/admission/openclaw-v2026.7.1/protected-final-combined-config-v3.json",
         "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
@@ -8724,13 +8764,17 @@
         "tests/test_native_phase3_plugin_update_case.py",
         "tests/test_native_phase3_plugin_update_live_binding.py"
       ],
-      "needs": ["native-plugin-update-collection"],
+      "needs": [
+        "native-plugin-update-collection"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "tetragon-program-map",
       "description": "Verify bounded INFO-only selected sensor FD program/map/perf-link association with inert syscall doubles; no attachment, event, health or live observation claim.",
-      "tests": ["test_runtime_tetragon_program_map"],
+      "tests": [
+        "test_runtime_tetragon_program_map"
+      ],
       "inputs": [
         "benchmark/tetragon-program-map-source-v1.lock.json",
         "benchmark/tetragon-program-map-source-v1/linux-v6.8-program-map-excerpts.json",
@@ -8740,13 +8784,17 @@
         "src/aragorn/runtime_tetragon_stats_map.py",
         "tests/test_runtime_tetragon_program_map.py"
       ],
-      "needs": ["tetragon-program-map-source"],
+      "needs": [
+        "tetragon-program-map-source"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "pipeline-unit",
       "description": "Verify the new local pipeline's fingerprint, skip, lock and refusal behavior; no historical product suite.",
-      "tests": ["test_phase3_pipeline"],
+      "tests": [
+        "test_phase3_pipeline"
+      ],
       "inputs": [
         "scripts/phase3_pipeline.py",
         "tests/test_phase3_pipeline.py"
@@ -8757,7 +8805,9 @@
     {
       "id": "native-plugin-update-binding",
       "description": "Verify the new read-only native update observation/deployment binding using retained evidence, without Docker or a new capture.",
-      "tests": ["test_native_phase3_plugin_update_binding"],
+      "tests": [
+        "test_native_phase3_plugin_update_binding"
+      ],
       "inputs": [
         "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
         "src/aragorn/__init__.py",
@@ -8767,13 +8817,17 @@
         "src/aragorn/phase3_deployment.py",
         "tests/test_native_phase3_plugin_update_binding.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-plugin-update-collection",
       "description": "Verify new exact-byte native observation retention and read-only independent replay; no live capture.",
-      "tests": ["test_native_phase3_plugin_update_collection"],
+      "tests": [
+        "test_native_phase3_plugin_update_collection"
+      ],
       "inputs": [
         "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
         "src/aragorn/__init__.py",
@@ -8786,13 +8840,18 @@
         "tests/test_native_phase3_plugin_update_collection.py",
         "tests/test_native_phase3_plugin_update_live_binding.py"
       ],
-      "needs": ["native-plugin-update-binding", "native-plugin-update-live-binding"],
+      "needs": [
+        "native-plugin-update-binding",
+        "native-plugin-update-live-binding"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-plugin-update-collection-cli",
       "description": "Verify the new offline prepare/retain/replay CLI and bounded direct input reads.",
-      "tests": ["test_native_plugin_update_collection_cli"],
+      "tests": [
+        "test_native_plugin_update_collection_cli"
+      ],
       "inputs": [
         "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
         "scripts/native_plugin_update_collection.py",
@@ -8806,7 +8865,9 @@
         "tests/test_native_phase3_plugin_update_live_binding.py",
         "tests/test_native_plugin_update_collection_cli.py"
       ],
-      "needs": ["native-plugin-update-collection"],
+      "needs": [
+        "native-plugin-update-collection"
+      ],
       "timeout_seconds": 120
     },
     {
@@ -8914,7 +8975,9 @@
     {
       "id": "tetragon-loss-window",
       "description": "Verify the new bounded raw-scrape loss accounting and retained selected upstream source bytes; never infer zero from absence.",
-      "tests": ["test_runtime_tetragon_loss"],
+      "tests": [
+        "test_runtime_tetragon_loss"
+      ],
       "inputs": [
         "benchmark/evidence/tetragon-isolated-exec-exit-smoke-v1-2026-09-13.json",
         "benchmark/tetragon-candidate-source-v1.lock.json",
@@ -8931,13 +8994,17 @@
         "src/aragorn/runtime_tetragon_process.py",
         "tests/test_runtime_tetragon_loss.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "native-live-identity",
       "description": "Verify new read-only native process/file identity guards with controlled doubles; no service activation or live fixture.",
-      "tests": ["test_native_phase3_live_identity"],
+      "tests": [
+        "test_native_phase3_live_identity"
+      ],
       "inputs": [
         "packaging/systemd/aragorn-agent-gateway.service",
         "packaging/systemd/aragorn-runtime-action-worker.service",
@@ -8952,13 +9019,17 @@
         "src/aragorn/runtime_process_profile.py",
         "tests/test_native_phase3_live_identity.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "tetragon-stats-map",
       "description": "Verify the new fixed read-only BPF syscall/map contract, bounded per-CPU decoding, continuity guards and selected source custody; no actual BPF operations.",
-      "tests": ["test_runtime_tetragon_stats_map"],
+      "tests": [
+        "test_runtime_tetragon_stats_map"
+      ],
       "inputs": [
         "benchmark/tetragon-stats-map-source-v1.lock.json",
         "benchmark/tetragon-stats-map-source-v1/bpf/lib/process.h",
@@ -8968,7 +9039,9 @@
         "src/aragorn/runtime_tetragon_stats_map.py",
         "tests/test_runtime_tetragon_stats_map.py"
       ],
-      "needs": ["pipeline-unit"],
+      "needs": [
+        "pipeline-unit"
+      ],
       "timeout_seconds": 120
     },
     {
@@ -9128,7 +9201,9 @@
     {
       "id": "native-plugin-update-identity-pins",
       "description": "Verify fixed historical binary/profile expectations and absent-only offline pin preparation; no live readback or image attestation.",
-      "tests": ["test_native_plugin_update_identity_pins"],
+      "tests": [
+        "test_native_plugin_update_identity_pins"
+      ],
       "inputs": [
         "benchmark/evidence/phase3-native-plugin-update-systemd-development-v2-2026-10-01.json",
         "benchmark/evidence/runtime-action-worker-final-combined-v3-route-core-updater-plugin-replacement-systemd-p3-final-2026-09-03.json",
@@ -9140,13 +9215,17 @@
         "src/aragorn/phase3_deployment.py",
         "tests/test_native_plugin_update_identity_pins.py"
       ],
-      "needs": ["native-plugin-update-binding"],
+      "needs": [
+        "native-plugin-update-binding"
+      ],
       "timeout_seconds": 120
     },
     {
       "id": "tetragon-program-map-source",
       "description": "Verify new pinned producer, loader, program/map/perf-link and PIDFD source custody and explicit evidence limits; no runtime operations.",
-      "tests": ["test_tetragon_program_map_source"],
+      "tests": [
+        "test_tetragon_program_map_source"
+      ],
       "inputs": [
         "benchmark/tetragon-program-map-source-v1.lock.json",
         "benchmark/tetragon-program-map-source-v1/bpf/process/bpf_execve_event.c",
@@ -9169,7 +9248,9 @@
         "benchmark/tetragon-stats-map-source-v1/bpf/lib/process.h",
         "tests/test_tetragon_program_map_source.py"
       ],
-      "needs": ["tetragon-stats-map"],
+      "needs": [
+        "tetragon-stats-map"
+      ],
       "timeout_seconds": 120
     },
     {
@@ -9696,6 +9777,20 @@
         "src/aragorn/oci_worker_protocol.py",
         "tests/test_native_phase3_broker_reader_protocol.py",
         "tests/test_runtime_http_run_submission.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "native-run-submission-replay",
+      "description": "33 independent fabricated-byte broker submission replay checks; no producer imports, native custody, health or qualification authority",
+      "tests": [
+        "test_native_phase3_run_submission_verify"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_submission_verify.py",
+        "tests/test_native_phase3_run_submission_verify.py"
       ],
       "needs": [],
       "timeout_seconds": 120

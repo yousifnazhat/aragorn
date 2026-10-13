@@ -251,6 +251,15 @@ and lock descriptors; do not open another lock or accept caller-selected paths.
 Require the original Linux broker main process/thread, all real/effective/saved
 accounts matching the independently pinned non-root broker and stable held/named
 ancestry, lock and directory identities. Failed custody poisons the guard.
+The existing service's fixed lock name is `broker.lock` in that control root.
+Reuse HTTP94's protected `/run/aragorn-broker-boot-id` bind for the broker's boot
+identity; never reintroduce direct broker access to `/proc/sys`. Hold its root-
+owned, single-link regular file and root-owned parent, refuse writable-by-others
+or changed held/named identities and require exact canonical boot UUID plus LF.
+Hold the actual `/proc/<broker pid>/ns/time` kernel namespace handle, joining its
+device/inode and named `time:[inode]` identity to the independently pinned clock.
+The proc namespace magic link is intentional; ordinary path components are
+opened without symlink following. Deployment must still bind the mount/source.
 
 Matching metadata alone does not establish a held lock. Freeze the Linux v6.8
 fdinfo FLOCK subset for local checking: read `/proc/self/fdinfo/<lock_fd>` as
@@ -332,6 +341,10 @@ last completed event, known intent and partial bounded bytes. Failed publication
 or cleanup prohibits return as usable success. The store never returns an ALLOW
 Boolean. An intent method documents the owning broker's imminent action; it
 cannot treat structurally valid packets as authorization to invoke that action.
+Local exceptions also preserve `intent_attempted`; `effect_possible` is true if
+intent was known or its publication was attempted, otherwise null. The future
+caller must propagate that conservative field when publication or cleanup fails;
+`known_intent=false` alone is never proof that submission is impossible.
 
 Names are `run-reader-<request hex>-context.json`,
 `run-reader-<request hex>-event-<sequence>.json`, and

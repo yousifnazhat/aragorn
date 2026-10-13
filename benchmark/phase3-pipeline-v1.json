@@ -9679,6 +9679,26 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-phase3-broker-reader-submission",
+      "description": "28 new fabricated protocol and mocked serialized journal cases; no real acquisition, deployment, effect or qualification authority",
+      "tests": [
+        "test_native_phase3_broker_reader_protocol",
+        "test_runtime_http_run_submission"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_broker_reader_protocol.py",
+        "src/aragorn/runtime_http_run_submission.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_broker_reader_protocol.py",
+        "tests/test_runtime_http_run_submission.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

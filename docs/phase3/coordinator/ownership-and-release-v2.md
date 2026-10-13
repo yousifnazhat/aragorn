@@ -62,6 +62,24 @@ Root retains launcher/service/provisioning, real telemetry/checkpoint/loss,
 independent transport replay, broker wiring and all shared files. No new test
 stage is scheduled until the actual stable source closure has been reviewed.
 
+### Next bounded broker submission release
+
+The signed `provider-release-v4.md` releases the ready portions of
+`broker-reader-provider-contract-v1.md`. Root retains the new protocol codec,
+broker journal, their two tests and coordinator handoff. The available Admission
+owner receives exactly `src/aragorn/native_phase3_run_submission_verify.py`,
+`tests/test_native_phase3_run_submission_verify.py`, and
+`docs/phase3/admission/SUBMISSION_REPLAY_HANDOFF.md`. This explicit independent
+consumer assignment follows the integrated policy-tamper delivery; it does not
+transfer broker wiring or any existing shared file. No producer code or fixtures
+may be imported by the independent consumer/tests. Each owner submits its stable
+actual dependency closure before Root registers or schedules a new focused stage.
+
+`dns-provider-contract-v1.md` records the reviewed acquisition/context decisions
+and proposed five-path split. Its source assignment is pending the original
+signed DNS builder delivery and an exact later published base. Do not create a
+worktree or begin those paths from a checkpoint lacking that dependency.
+
 Contracts live in `docs/phase3/coordinator/`. Each owner verifies the containing
 signed checkpoint, preserves local drafts, fast-forwards their own worktree,
 reads the contract's final coordinator decisions, and acknowledges agreement.

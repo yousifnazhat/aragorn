@@ -30,7 +30,10 @@ Rows do not grant new write permission: only the explicit paths in
 contract and exact additional paths before a lane begins a later family. Root
 owns shared dispatch/registry and the providers below except the explicitly
 delegated RUN transport leaf in `reader-transport-contract-v1.md` /
-`provider-release-v3.md`; that new implementation is pending.
+`provider-release-v3.md` and Admission's independent submission replay in
+`broker-reader-provider-contract-v1.md` / `provider-release-v4.md`; both new
+implementations are pending. Root's bounded protocol/journal implementation is
+released by v4; actual shared broker wiring remains pending.
 
 Path shorthand is literal: **P/** means `src/aragorn/`, **S/** means `scripts/`,
 and **B/** means `benchmark/admission/openclaw-v2026.7.1/`. A path identified as
@@ -195,6 +198,13 @@ Released implementation paths are those in `ownership-and-release-v2.md`:
 policy-tamper recorder/consumer, completed reader evidence consumer, DNS
 builder/consumer and the newly delegated RUN guarded transport leaf. The real
 reader loop/checkpoint, independent transport replay and deployment remain open.
+The next published broker contract splits Root protocol/journal from Admission
+independent transcript replay. Its conservative terminal result is SUBMITTED or
+UNKNOWN; only the actual guarded broker can emit a current pre-connect snapshot.
+The reviewed DNS acquisition/context contract is pending the original signed
+builder dependency and a later explicit owner/base release. Its bounded receive
+sample always reports incomplete observation; full readiness/quiescence/drain
+and protected retention remain separate missing provider conditions.
 Only the individually reviewed stages are released by the scheduling documents.
 DNS's full-marker correction passed delta review; only its newly registered owning-worktree stage is scheduled.
 Root continues shared providers in parallel and must connect

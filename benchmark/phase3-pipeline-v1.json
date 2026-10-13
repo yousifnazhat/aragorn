@@ -9662,6 +9662,23 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-workload-dns-canary",
+      "description": "13 fabricated DNS wire and independent retained-datagram checks; no native acquisition, completeness, effect or qualification authority",
+      "tests": [
+        "test_native_phase3_workload_dns"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_workload_dns_canary.py",
+        "src/aragorn/native_phase3_workload_dns_verify.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_native_phase3_workload_dns.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

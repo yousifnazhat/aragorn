@@ -68,6 +68,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 | V-HTTP | Credential repair 14 checks; composition 7 checks | `sha256:0d119c82b5671c45d08a1a1705a15ea092b601ff60caa32639b4ed4e4e1032a2`; `sha256:fc5ec4385aef9eb1263089fcd9aaa53be2c464d77d48c64efe9fad0b5c158a19`; `docs/phase3/integration-checkpoint-2026-10-12-http-credentials.md`. Actual public report: `benchmark/evidence/phase3-http-credential-staged-profile-v1.json`, 68263 bytes, `sha256:88d08ad1024d27426fecbde9eb73c4fff5ca03e783425a36d1d6559d47f5d1a9`. No repeated staging. |
 | V-contract | Published contract only | `ownership-and-release-v2.md` and its three linked contracts. Contract publication does not establish implementation or test execution; current delivery/agreement is recorded separately below. |
 | V-reader-evidence | Independent ACK/TIMEOUT byte consumer: 14 new checks | `sha256:855ae03253e17074a4ff66c5e4d060f7906cc70a2b25efadb6ca36492cd655c9`; signed original `33f54e2aca224b216a4ae67f0a73588e03252939`, merged preserving ancestry. Byte consistency only. |
+| V-policy-tamper | Finite recorder/independent consumer: 26 new inert checks | `sha256:c08b47026e885e68bab6482ca5d858863ef442774f40db55eedea486b3e9ce46`; original signed `d3c5ffed8dbbf0520c9b8d2e9d798e204d09f96d`, merged preserving ancestry. Actual protected policy acquisition and complete ADM-03 remain open. |
 | V-reader-store | Permanent claim/retention and owning caller: 16 new mocked checks | `sha256:920a28df3aa7a8f1fab8b55f6d29dea566b16bf070a44b510994e1e13d82e9e8`; root provider checkpoint. Actual accepted telemetry transport and deployment remain absent. |
 
 ## Admission: exact 31 requirements
@@ -110,7 +111,7 @@ registration in the final semantic verifier map.
 | 28 | `ADM-02/reload/session-snapshot-consumer` | Admission; `S/openclaw_final_v3_session_snapshot_case.py`, `B/protected-session-snapshot-fixed-probe.mjs` | Session snapshot and actual consumer bytes, protected prompt/catalog joins; `P/admission_protected_final_combined_v3_session_snapshot_consumer.py`, `P/admission_openclaw_final_v3_session_snapshot_subfixture.py` | legacy / false / false / false; V-source | Integrate current native session consumer with protected source/config custody; keep distinct from chat consumer case. |
 | 29 | `ADM-02/reload/workshop-invalidation` | Admission; `S/openclaw_final_v3_workshop_invalidation_case.py` | Actual workshop invalidation/proposal and subsequent protected consumer observation; `P/admission_protected_final_combined_v3_workshop_invalidation.py`, `P/admission_openclaw_final_v3_workshop_invalidation_subfixture.py` | legacy / false / false / false; V-source | Port/rebind current native lifecycle and protected consumer evidence; route-only historical qualification is insufficient. |
 | 30 | `ADM-03/policy-failure` | Admission; `B/adm03-probe.mjs` | Actual unavailable/failing/malformed policy invocation, denied activation and protected target/loaded config; native consumer pending | legacy / false / false / false; V-source | Publish exact current failure modes and native command/provider contract; complete each fail-closed route including required absent-target route. |
-| 31 | `ADM-03/policy-tampering` | Admission; assigned `P/native_phase3_admission_policy_tamper.py` and `P/native_phase3_admission_policy_tamper_verify.py` (pending at base) | Twelve retained mutation callbacks, raw source/config/printf readbacks, post-mutation actual policy observation and baseline/catalog preservation; assigned independent verifier | pending / false / false / false; V-contract | Implement released bounded recorder/consumer, then wire Root's actual protected policy invocation/acquisition. Structural rename refusals stay distinct; baseline-present route and no authentic emitter proof do not close full ADM-03. |
+| 31 | `ADM-03/policy-tampering` | Admission; `P/native_phase3_admission_policy_tamper.py` and `P/native_phase3_admission_policy_tamper_verify.py` | Twelve retained mutation callbacks, raw source/config/printf readbacks, post-mutation actual policy observation and baseline/catalog preservation; independent verifier | partial / false / false / false; V-policy-tamper | Wire Root's actual protected policy invocation/acquisition into the integrated finite recorder/consumer. Structural rename refusals stay distinct; baseline-present route and no authentic emitter proof do not close full ADM-03. |
 
 ## RUN: exact 15 requirements
 
@@ -182,13 +183,16 @@ acknowledgements, and Root's read-only branch checks confirmed each at
 messages and checks, independently of the still-unavailable outbound task bridge.
 Subsequently RUN completed its reviewed 14-case stage under the corrected runner,
 signed `33f54e2aca224b216a4ae67f0a73588e03252939` and Root merged it. Admission
-is reviewed and scheduled but has not acknowledged the new checkpoint; DNS has a
-source-review correction pending. Those two drafts are not integrated or validated.
+subsequently acknowledged `4ec18f8`, passed its scheduled 26 checks and delivered
+verified signed `d3c5ffe`, now integrated. Workloads acknowledged `4ec18f8`, corrected
+the full-marker bug and submitted the unchanged six-file closure; Root reviewed
+the delta and scheduled its 13-method stage in
+`dns-delta-review-and-scheduling-v1.md`. DNS has no result or integrated delivery yet.
 
 Released implementation paths remain those in `ownership-and-release-v2.md`:
 policy-tamper recorder/consumer, reader evidence consumer and DNS builder/consumer.
 Only the individually reviewed stages are released by the scheduling documents.
-DNS remains unscheduled until its full-marker correction passes delta review.
+DNS's full-marker correction passed delta review; only its newly registered owning-worktree stage is scheduled.
 Root continues shared providers in parallel and must connect
 each completed leaf rather than treating local PASS as full requirement closure.
 

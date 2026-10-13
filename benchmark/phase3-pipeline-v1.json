@@ -9713,6 +9713,23 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-reader-checkpoint-acquisition",
+      "description": "53 new mocked protected checkpoint acquisition and independent fabricated-byte replay checks; no actual stream, loss completeness, deployment or qualification authority",
+      "tests": [
+        "test_native_phase3_run_reader_checkpoint_acquisition",
+        "test_native_phase3_run_reader_checkpoint_verify"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_reader_checkpoint_acquisition.py",
+        "src/aragorn/native_phase3_run_reader_checkpoint_verify.py",
+        "tests/test_native_phase3_run_reader_checkpoint_acquisition.py",
+        "tests/test_native_phase3_run_reader_checkpoint_verify.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

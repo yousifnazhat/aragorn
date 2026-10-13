@@ -120,6 +120,8 @@ deadline_ns <= provision session deadline; timestamps/counters are uint.
 trigger_deadline_ns is the original challenge/refresh deadline; deadline_ns is
 the existing outer acquisition budget, never a newly extended deadline. For CHALLENGE trigger_digest is
 challenge_digest. For REFRESH it is the separate exact command digest below.
+REFRESH requires sequence_before >0 and a non-null previous_checkpoint_digest:
+it follows an acquired initial checkpoint and cannot initialize a session.
 
 The future root broker-reader service constructs this expectation from its
 protected request context, unchanged successful owned reader result and separately
@@ -271,7 +273,10 @@ The five flags are false. Source_files and retained_files are each exactly three
 ordered entries with roles BATCH, MANIFEST, PUBLICATION and fields
 `role,device,inode,mode,uid,gid,nlink,bytes,mtime_ns,ctime_ns,digest`. Record the
 actual identities and raw pins; source/retained bytes/digests agree, source
-owners match reader and retained owners root. Brackets satisfy
+owners match reader and retained owners root.
+The six held source/archive device/inode pairs must be distinct; one inode cannot
+substitute for multiple single-link source roles or independent archive copies.
+Brackets satisfy
 started<=source_readback_finished<=retention_started<=retention_finished<deadline.
 Require publication.receipt_prepared_ns <= source_readback_finished_ns in both
 the acquisition and independent consumer, and
@@ -284,7 +289,7 @@ batch_raw`. The unchanged broker checkpoint artifact can carry acquisition_raw;
 all referenced original bytes remain separately available for external replay.
 
 Any failure returns no usable result. `ReaderCheckpointAcquisitionError` has
-public attributes `original_failure`, `cleanup_failures` (tuple, at most 16
+public attributes `original_failure`, `cleanup_failures` (tuple, at most 32
 owned-descriptor failures), and `observed`. Its fixed message is "reader checkpoint
 acquisition refused; preserve claims and observed bytes". Do not interpolate raw
 records into diagnostics. `observed` has exactly `manifest_raw,publication_raw,
@@ -295,6 +300,10 @@ the record shape above. claim_attempted is a strict Boolean set before the
 exclusive claim open, and never asserts that an attempted write was absent.
 Preserve the original failure, cleanup failures, actual partial bytes and
 completed retention observations.
+Keep the claim descriptor held and revalidate its bytes/identity through the
+final guard; do not close it early to save a descriptor slot. The fixed ownership
+inventory has at most 17 simultaneous descriptors including a transient proc
+read; the cleanup bound leaves room to preserve that read's close failure.
 It never synthesizes absent source bytes. Consume handle ownership before close;
 check held identities and do not close a foreign reused descriptor. Failure after
 partial publication leaves every artifact/claim untouched and is not retryable.

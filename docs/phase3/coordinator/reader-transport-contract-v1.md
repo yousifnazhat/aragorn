@@ -51,8 +51,8 @@ class ReaderListener:
 ```
 
 The constructor exclusively receives the two launcher-owned descriptors; it
-records ownership before metadata reads and closes them once on construction
-failure. They must be distinct strict integers at least 3. Invalid integers
+records ownership before metadata reads and releases that ownership once on
+construction failure, subject to the safe-close rules below. They must be distinct strict integers at least 3. Invalid integers
 are not descriptors to close. No duplication, descriptor pooling or transfer is
 allowed. Listener, pathname-handle and ancestor descriptors are owned internally.
 Every operation requires Linux, little-endian native 12-byte `=iII` credentials,
@@ -308,7 +308,27 @@ scenarios. Do not imply that one listener lifetime can complete every gate.
 
 ## Closure, residue and bounded evidence
 
-Close owned descriptors once in reverse acquisition order; attempt the remaining
+Before any successful boundary return, after the final blocking proc/notice-pipe
+reads, close the custody bracket with held/named directory, pathname and listener
+identity, both held/named active time namespaces, notice writer and reader FD3
+identities/links/flags, reader PIDFD association/liveness and actual BOOTTIME.
+An identity checked only before a later proc read is not a closing check. Reuse
+the existing bounded snapshot shapes; do not extend the frozen fdinfo evidence
+schema or imply that point samples prove uninterrupted custody.
+
+Record each resource's initial held identity after recording ownership and before
+use. Pin pathname identity changes only after the authorized chown/chmod is
+successfully verified; keep the socket descriptor's identity separate. Consume
+ownership before each release. A missing initial identity, failed current fstat
+or changed identity produces a cleanup failure and no close of that numeric FD.
+For Python socket objects, detach once before any conditional raw descriptor
+close, require the detached number to match the owned number, then validate its
+held identity before os.close. This prevents a later socket destructor from
+closing a reused foreign FD. Detach/identity failures remain separate cleanup
+failures; never invent an actual-close entry for a skipped close. Transferred
+connections remain solely owned by the existing acquisition wrapper.
+
+Close verified owned descriptors once in reverse acquisition order; attempt the remaining
 closes even when one fails, preserving all failures. Never retry an ambiguous
 close. Terminal closure leaves the socket pathname and every root-store record
 untouched. A later constructor at that path refuses. No garbage collection,

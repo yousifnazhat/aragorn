@@ -67,6 +67,65 @@ stage is released until Root fixes these decisions, supplies exact paths and
 publishes the contract. Root protocol/journal implementation and the existing
 Admission/RUN/Workloads assignments continue independently.
 
+## 13 October checkpoint update and next connected release
+
+Provider v6 and `tetragon-stream-loss-decisions-v1.md` now decide the three-role
+reader/bridge/sensor boundary, one physical dial/stream accounting and complete
+loss scope. `reader-checkpoint-contract-v1.md` fixes raw storage, Root archive,
+original-ACK-preserving phase-two direction and UNKNOWN loss ceiling. Actual
+acquisition/archive plus independent byte replay are implemented and passed the
+one reviewed 53-method stage, fingerprint
+`sha256:091fd6c1739b55e7fae680a4612fd81bdb1d43e2007cf8ded86715855692c67e`.
+Those implementation decisions supersede the corresponding proposals above;
+actual bridge/sensor/source acquisition and the consuming loop remain absent.
+
+The next release must connect the actual pipe-consuming writer and a Root session
+owner in one bounded path: ReaderListener -> independent owned-reader evidence
+replay -> checkpoint acquisition -> independent checkpoint replay, then one
+protected refresh command and new checkpoint readback. Do not release another
+standalone manifest builder or a synthetic responder. RUN's transport first needs
+the two fixes in `reader-transport-source-review-v1.md` and reviewed signed delivery.
+
+Proposed Root-owned paths, **not source-released yet**:
+
+```text
+src/aragorn/native_phase3_run_reader_checkpoint.py
+src/aragorn/native_phase3_run_reader_checkpoint_session.py
+tests/test_native_phase3_run_reader_checkpoint.py
+tests/test_native_phase3_run_reader_checkpoint_session.py
+```
+
+Before release Root must publish the complete caller and descriptor contract:
+
+1. Exact independently pinned loop/stream provisioning, reader/bridge/observer
+   identities, inherited FD custody, fixed entrypoint and launch dependencies.
+   No arbitrary path, command or truth callback substitutes for acquisition.
+2. Define the predecessor pin as the previous manifest digest, available to both
+   writer and Root; retain the separate Root acquisition pin. This is the selected
+   direction for the future connected contract, not evidence of a current chain.
+3. Define how the protected FD5 command first binds original evidence/summary/
+   connection pins, which are absent from the frozen challenge. Root derives them
+   from independent replay of its actual owned result. No new challenge/ACK.
+4. Reserve a separately provisioned reader-to-Root completion pipe (proposed FD8)
+   for one bounded atomic notice after receipt fsync/readback and closing custody.
+   A manifest's appearance is too early. This signals availability only; Root
+   invokes acquisition once and never retries a failed acquisition. Pin exact
+   notice schema, both pipe ends, byte budget and original wait deadline.
+5. Freeze FD7 cancellation/EOF, stderr retention/refusal and partial-record/read
+   handling. Reserve a final real EAGAIN slot within 64 reads; no dropping tails,
+   silent EOF/quiescence, reset, reconnect or new deadline after ambiguity.
+6. Resolve record semantics explicitly: `runtime_tetragon_process.py:_event`
+   supports only process_exec/process_exit and rejects other variants and loss
+   notifications. A public wrapper cannot be relabeled all-event coverage. Any
+   process-only stream restriction must be in the protected source/loss inventory;
+   file/network/credential families need their actual complete paths. Preserve
+   original bytes and keep vendor-record semantics independent from byte replay.
+
+No additional worktree is requested for this not-yet-ready split. Root can reuse
+available internal owners after the precise caller/loop contract is published.
+The separate DNS acquisition split is ready and already requested at published
+base `0b819f3e953aff0c879298d96d76c9d35e2f7590`; operator creation remains unconfirmed.
+
 Remaining Phase 3 sequence: (1) complete protected providers, (2) wire all required
 admission/RUN/action and paired-task paths, (3) close the 48-entry inventory and
 freeze source/loaded identity, (4) separately release the final campaign, replay,

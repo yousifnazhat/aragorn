@@ -28,7 +28,9 @@ any existing bounded evidence. All rows have final qualification `false`.
 Rows do not grant new write permission: only the explicit paths in
 `ownership-and-release-v2.md` are presently released. Root must publish a concrete
 contract and exact additional paths before a lane begins a later family. Root
-owns every provider listed below and the shared dispatch/registry changes.
+owns shared dispatch/registry and the providers below except the explicitly
+delegated RUN transport leaf in `reader-transport-contract-v1.md` /
+`provider-release-v3.md`; that new implementation is pending.
 
 Path shorthand is literal: **P/** means `src/aragorn/`, **S/** means `scripts/`,
 and **B/** means `benchmark/admission/openclaw-v2026.7.1/`. A path identified as
@@ -189,8 +191,10 @@ the full-marker bug and submitted the unchanged six-file closure; Root reviewed
 the delta and scheduled its 13-method stage in
 `dns-delta-review-and-scheduling-v1.md`. DNS has no result or integrated delivery yet.
 
-Released implementation paths remain those in `ownership-and-release-v2.md`:
-policy-tamper recorder/consumer, reader evidence consumer and DNS builder/consumer.
+Released implementation paths are those in `ownership-and-release-v2.md`:
+policy-tamper recorder/consumer, completed reader evidence consumer, DNS
+builder/consumer and the newly delegated RUN guarded transport leaf. The real
+reader loop/checkpoint, independent transport replay and deployment remain open.
 Only the individually reviewed stages are released by the scheduling documents.
 DNS's full-marker correction passed delta review; only its newly registered owning-worktree stage is scheduled.
 Root continues shared providers in parallel and must connect

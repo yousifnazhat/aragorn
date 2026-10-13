@@ -49,6 +49,19 @@ blockers, any operator capacity request and numbered remaining Phase 3 steps.
 | `codex/phase3-run-health` | `reader-evidence-contract-v1.md` | `src/aragorn/native_phase3_run_reader_evidence_verify.py`, `tests/test_native_phase3_run_reader_evidence_verify.py`, `docs/phase3/run-health/READER_EVIDENCE_HANDOFF.md` |
 | `codex/phase3-workload-verifiers` | `dns-canary-contract-v1.md` | `src/aragorn/native_phase3_workload_dns_canary.py`, `src/aragorn/native_phase3_workload_dns_verify.py`, `tests/test_native_phase3_workload_dns.py`, `docs/phase3/workload-verifiers/dns-canary-handoff.md` |
 
+### Next bounded RUN provider release
+
+The published signed `provider-release-v3.md` releases
+`reader-transport-contract-v1.md` to the existing RUN owner after agreement:
+`src/aragorn/native_phase3_run_reader_transport.py`,
+`tests/test_native_phase3_run_reader_transport.py`, and
+`docs/phase3/run-health/READER_TRANSPORT_HANDOFF.md` only. The original signed
+reader-evidence consumer is integrated and remains unchanged. This explicit
+delegation transfers the new listener/notice/accepted-connection leaf to RUN;
+Root retains launcher/service/provisioning, real telemetry/checkpoint/loss,
+independent transport replay, broker wiring and all shared files. No new test
+stage is scheduled until the actual stable source closure has been reviewed.
+
 Contracts live in `docs/phase3/coordinator/`. Each owner verifies the containing
 signed checkpoint, preserves local drafts, fast-forwards their own worktree,
 reads the contract's final coordinator decisions, and acknowledges agreement.

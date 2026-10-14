@@ -31,8 +31,9 @@ contract and exact additional paths before a lane begins a later family. Root
 owns shared dispatch/registry and the providers below except the explicitly
 delegated RUN transport leaf in `reader-transport-contract-v1.md` /
 `provider-release-v3.md` and Admission's independent submission replay in
-`broker-reader-provider-contract-v1.md` / `provider-release-v4.md`; both new
-implementations are pending. Root's bounded protocol/journal implementation now
+`broker-reader-provider-contract-v1.md` / `provider-release-v4.md`. RUN transport
+is integrated with its reviewed first 30-check PASS (V-reader-transport);
+Admission replay actual result/signed delivery remains pending. Root's bounded protocol/journal implementation now
 has its reviewed 28-test PASS (V-broker-submission); actual shared broker wiring
 and independent transcript agreement remain pending. Root checkpoint acquisition/
 archive and independent byte replay have the 53-check V-reader-checkpoint result;
@@ -52,7 +53,7 @@ the complete provider interface is implemented or deployed.
 | --- | --- | --- |
 | Admission invocation and loaded identity | `S/runtime_native_admission_case.py`, `S/capture_native_phase3_admission_case.py`, `P/native_phase3_admission_case.py`, `P/native_phase3_admission_capture.py`, `P/native_phase3_live_identity.py`, `S/stage_runtime_native_admission_profile.py` | One current inventory must bind actual command, runtime/interpreter/policy/config bytes, loaded credentials, admitted artifact, namespace/process and activation identity. Current common admission case selection covers direct-write, rename, symlink and plugin-package replacement, not all 31 cases. Its frozen profile/config pins differ from the repaired HTTP successor and cannot be silently relabeled. |
 | Policy/lifecycle acquisition | Existing admission command helpers; `docs/phase3/coordinator/restart-lifecycle-contract-v1.md` and `admission-policy-tamper-contract-v1.md` | Root must provide actual protected invocation/request observation and lifecycle readback with source/config joins, retained raw output and externally held identities. A gateway-account log remains an emitter assertion. The baseline-present force route is separate from an absent-target route. |
-| Authenticated reader and permanent claim | `P/native_phase3_run_reader_response.py`, `P/native_phase3_run_acquisition.py`, `P/native_phase3_run_progress.py`; `P/runtime_process_profile.py` PIDFD helpers | Accepted Linux seqpacket transport, protected observer/reader identities, a fresh connection epoch, real read-loop challenge acknowledgement, permanent consume-once claim, retained bytes/readback and cancellation supervision. A successful reader leaf is not yet a real sensor-read-loop provider. |
+| Authenticated reader and permanent claim | `P/native_phase3_run_reader_transport.py`, `P/native_phase3_run_reader_response.py`, `P/native_phase3_run_acquisition.py`, `P/native_phase3_run_progress.py`; `P/runtime_process_profile.py` PIDFD helpers | Accepted Linux seqpacket transport, protected observer/reader identities, a fresh connection epoch, real read-loop challenge acknowledgement, permanent consume-once claim, retained bytes/readback and cancellation supervision. A successful reader leaf is not yet a real sensor-read-loop provider. |
 | Loss/program/map acquisition | `P/runtime_tetragon_loss.py`, `P/runtime_tetragon_program_map.py`, `P/runtime_tetragon_stats_map.py`, `P/runtime_tetragon_process.py` | Protected before/after raw samples, exact producer continuity, program/map identities and applicable counter inventory. Missing families remain unknown; resets and increases fail closed. Parsers do not authenticate a scrape or establish complete event delivery. |
 | Serialized broker and causal lineage | `P/runtime_action_broker.py` through `P/runtime_action_broker_v5.py`, `P/runtime_http_broker.py`, `P/native_phase3_broker_reader_protocol.py`, `P/runtime_http_run_submission.py`, `P/runtime_lineage_capability_issuer.py`, `P/runtime_active_skill_lineage_v2.py`, `P/runtime_action_observation_publisher_v4.py` | Actual activation/session → tool request → PID/start/cgroup → digest/capability → serialized broker decision/result. Health and submission state must be checked inside the real serialization boundary. Missing receipts cannot establish NOT_SUBMITTED; SUBMITTED/UNKNOWN retain INDETERMINATE. |
 | Responses and start barriers | `P/runtime_response_service.py`, `P/runtime_health_watchdog.py`, `P/runtime_health_service.py`, `P/runtime_revocation_service.py`, `P/runtime_quarantine_response.py`, `P/runtime_quarantine_service.py`, `P/runtime_skill_startup.py` | Retained trigger, pending latch, identity-bound stop/mask/quarantine/revocation and subsequent denial evidence. Fixed profile masking alone is not arbitrary digest quarantine; an intended response is not completed enforcement. |
@@ -81,6 +82,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 | V-DNS | Fixed DNS builder and independent retained-byte consumer: 13 new checks | `sha256:89b7cb5add286a2fc0de48c41797455250b5e26f34367fc577aed04f566fe262`; original signed `11dabe6ffeeaddc9e317fc46f93e188ae7fff614`, merged preserving ancestry. Actual result and logs remain in Workloads; `docs/phase3/workload-verifiers/dns-canary-handoff.md`. No live acquisition, completeness or blocking claim. |
 | V-broker-submission | Protocol and immutable broker journal: 28 new mocked checks | `sha256:d36e14e55f23068293e2159caa74311a9519b23ce61ab7816108035d58ef574b`; actual result/logs and stable eight-file closure in `broker-reader-provider-handoff.md`. No IPC/provider acquisition, independent transcript agreement, caller/deployment or health authority follows. |
 | V-reader-checkpoint | Protected checkpoint acquisition/archive and independent replay: 53 new mocked/fabricated-byte checks | `sha256:091fd6c1739b55e7fae680a4612fd81bdb1d43e2007cf8ded86715855692c67e`; `reader-checkpoint-acquisition-handoff.md`, five-file closure and original Root result/log pins. Actual pipe writer/refresh, stream continuity, loss completeness, deployment and effect authority remain absent. |
+| V-reader-transport | Guarded listener/notice/accepted-connection and actual owning-wrapper wiring: 30 new mocked checks | `sha256:b31f41624a6b096e7d009f690f26706c7531f7fd4c1a48a9eccac728ba26b97f`; original verified signed `5193a2fcdd0cb4173ddeeaa7188aa74fd2c7b09f`, integrated preserving ancestry. Actual result/log pins and complete 13-file closure: `docs/phase3/run-health/READER_TRANSPORT_HANDOFF.md`. No native custody, loop/health, full timing or qualification claim. |
 
 ## Admission: exact 31 requirements
 
@@ -135,7 +137,7 @@ row and its campaign joins rather than accept embedded PASS flags.
 | # | Exact requirement ID | Owner; implementation | Raw evidence and independent consumer | State; validation | Exact unresolved implementation condition |
 | --- | --- | --- | --- | --- | --- |
 | 32 | `RUN-01` | RUN + Root; `P/runtime_active_skill_lineage_v2.py`, `P/runtime_lineage_capability_issuer.py`, `P/runtime_action_broker_v5.py` | Activation/session/request/process/cgroup/digest/capability/decision/result chain and actual unattributed a100; partial `P/runtime_producer_lineage_openclaw_systemd_evidence.py`, `P/runtime_active_lineage_openclaw_systemd_evidence.py`, workload consumers; complete semantic adapter pending | partial / false / false / false; V-source | Connect every protected action to real authenticated lineage; implement a100 through a genuinely unattributed unlink path and independently prove pre-effect denial. Removing an attribution label is invalid. |
-| 33 | `RUN-02` | RUN + Root; `P/native_phase3_run_progress.py`, `P/native_phase3_run_acquisition.py`, `P/native_phase3_run_reader_response.py`, `P/native_phase3_run_reader_checkpoint_acquisition.py`, broker and response modules | Protected ACK/TIMEOUT, claim/readback, loss/program/map snapshots, serialized submission state and actual effect/response evidence; `P/native_phase3_run_progress_verify.py`, `P/native_phase3_run_acquisition_verify.py`; `P/native_phase3_run_reader_evidence_verify.py`, `P/native_phase3_run_reader_checkpoint_verify.py` | partial / false / false / false; V-reader, V-reader-evidence, V-reader-store, V-reader-checkpoint | Supply real reader loop/transport/claim/retention/loss and wire enforcement under broker lock. Idle/hung distinction, stale/replayed challenges and unknown/reset/lost counters must fail closed; post-submission ambiguity must remain explicit. |
+| 33 | `RUN-02` | RUN + Root; `P/native_phase3_run_reader_transport.py`, `P/native_phase3_run_progress.py`, `P/native_phase3_run_acquisition.py`, `P/native_phase3_run_reader_response.py`, `P/native_phase3_run_reader_checkpoint_acquisition.py`, broker and response modules | Protected ACK/TIMEOUT, claim/readback, loss/program/map snapshots, serialized submission state and actual effect/response evidence; `P/native_phase3_run_progress_verify.py`, `P/native_phase3_run_acquisition_verify.py`; `P/native_phase3_run_reader_evidence_verify.py`, `P/native_phase3_run_reader_checkpoint_verify.py` | partial / false / false / false; V-reader, V-reader-evidence, V-reader-store, V-reader-checkpoint, V-reader-transport | Wire guarded transport/claim/retention to the real reader loop, checkpoint/refresh and loss acquisition and wire enforcement under broker lock. Idle/hung distinction, stale/replayed challenges and unknown/reset/lost counters must fail closed; post-submission ambiguity must remain explicit. |
 | 34 | `EVENT/SKILL_ACTIVATION_AND_COMPLETION` | RUN + Root; `P/runtime_active_skill_lineage_v2.py`, `P/runtime_skill_startup.py` | Actual admitted skill activation and completion events with session/process interval and digest; partial `P/runtime_active_lineage_openclaw_systemd_evidence.py`; completion semantic consumer pending | partial / false / false / false; V-source | Add actual completion acquisition and causal joins; a startup/active binding alone is not the two-ended event lifecycle. |
 | 35 | `EVENT/TOOL_CALL_ATTEMPT_AND_RESULT` | RUN + Root; `S/materialize_runtime_native_tool_hooks.py`, `P/runtime_native_tool_receipts.py`, `P/runtime_action_observation_publisher_v4.py` | Real request/tool identity, process/capability, attempt and final/ambiguous result bytes; partial `P/runtime_broker_effective_receipt_verify.py`, `P/runtime_action_worker_openclaw_systemd_evidence.py` | partial / false / false / false; V-source | Join native hooks to authenticated broker/sensor records for all protected tools; retain actual attempts even when request/result delivery fails. |
 | 36 | `EVENT/PROCESS_EXECUTION_AND_ANCESTRY` | RUN + Root; `P/runtime_tetragon_process.py`, `P/runtime_process_profile.py`, `S/runtime_phase3_common_process_observer.py` | Raw exec/parent events, process start/PIDFD/cgroup and namespaces, reader/loss continuity; partial `P/native_phase3_common_process_verifier.py`, `P/runtime_process_profile_openclaw_systemd_evidence.py` | partial / false / false / false; V-source, V-HTTP (identity composition only) | Wire genuine process event acquisition and causal ancestry with protected continuity; point-in-time process identity is not a complete event stream. |
@@ -202,11 +204,14 @@ the delta and scheduled its 13-method stage in
 to `95b676e`, accepted v4 and delivered original signed `11dabe6` with the actual
 13-check PASS (V-DNS). Root inspected source/result/log pins and merged without
 rerunning or copying evidence. Admission and RUN explicitly acknowledged their
-v4/v3 contracts at `95b676e` and are implementing replay/transport respectively.
+v4/v3 contracts at `95b676e`. Admission replay remains pending delivery. RUN
+subsequently accepted both custody corrections and the final closing-read ordering
+fix, verified/fast-forwarded its own branch to schedule `afb06c4`, and delivered
+the original signed transport commit `5193a2f` with actual first 30-check PASS.
 
 Released implementation paths are those in `ownership-and-release-v2.md`:
 policy-tamper recorder/consumer, completed reader evidence consumer, DNS
-builder/consumer and the newly delegated RUN guarded transport leaf. The real
+builder/consumer and the now integrated RUN guarded transport leaf. The real
 reader loop/writer, independent transport replay and deployment remain open.
 Root checkpoint acquisition/archive and independent byte verifier are implemented
 under v6 and passed the one reviewed 53-check stage (V-reader-checkpoint).
@@ -216,19 +221,27 @@ independent transcript replay. Root's two modules are implemented and have the
 28-test V-broker-submission PASS; Admission's independent consumer source is reviewed
 and its 33-method stage is scheduled by `ce038d8`; actual result/delivery is pending.
 RUN completed both custody corrections and the final PIDFD/pipe read-order fix.
-Its revised 13-file closure and 30 methods are reviewed; only
-`native-run-reader-transport` is now scheduled in RUN by
-`reader-transport-review-and-scheduling-v1.md`. Actual result and signed delivery
-remain pending. The original fdinfo replay and point-sample limits are accepted.
+Root reviewed the stable 13-file closure and 30 methods, published the first
+selected schedule, then reviewed actual PASS/result/log bytes and verified original
+signed `5193a2fcdd0cb4173ddeeaa7188aa74fd2c7b09f`. Root fast-forwarded its own
+integration branch to this direct child, preserving original ancestry and leaving
+the lane untouched. The result remains in RUN; no rerun or cache copy occurred.
+The original fdinfo replay and point-sample limits remain. An uncertain socket
+detach requires retained supervising owner/error references; no completed cleanup
+is inferred. Root reuses the now available RUN owner for the already reviewed DNS acquisition
+slice under v7; connected reader/session implementation remains Root-owned pending
+its precise source release.
 The conservative terminal result is SUBMITTED or UNKNOWN; only the actual guarded
 broker can emit a current pre-connect snapshot. Real acquisition/IPC and owning
 broker integration remain open, so no requirement-level row becomes qualified.
-The DNS builder dependency is now integrated. `provider-release-v5.md` releases
-the reviewed five-path acquisition/context contract to an additional operator-
-created DNS worktree at the containing published signed checkpoint; owner creation
-and acknowledgment remain pending. Its bounded receive
-sample always reports incomplete observation; full readiness/quiescence/drain
-and protected retention remain separate missing provider conditions.
+The DNS builder dependency is integrated. v5 originally proposed an additional
+operator-created DNS worktree; no creation or owner agreement was confirmed.
+After signed transport integration freed the RUN owner, `provider-release-v7.md`
+reassigns the ready five-path acquisition/context contract to that existing RUN
+worktree and withdraws the additional-tree request. DNS assignment acknowledgment
+and implementation are pending. Its bounded receive sample always reports incomplete
+observation; full readiness/quiescence/drain and protected retention remain separate
+missing provider conditions.
 Only the individually reviewed stages are released by the scheduling documents.
 DNS's selected stage is complete; do not rerun it unchanged. No acquisition stage
 is scheduled until its stable source closure is reviewed. Root checkpoint acquisition

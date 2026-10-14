@@ -196,6 +196,21 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+14 October DNS delivery: Root verified original signed
+`a32477b0b38248f7dca825ec022ad4c0e467558d`, its exact five assigned paths,
+parent `a7c771c243aa303d765a18f8ed4860d3e825acc4` and all fourteen tested
+dependency pins, then fast-forward integrated it preserving ancestry. The first
+selected `native-dns-acquisition` stage passed all 50 methods once in RUN:
+`sha256:3b989508ec43b9ab89102eae7723aeefcf5bff8702b1266f21a770099a0bb88c`.
+Root reviewed its actual result and all method logs; their pins are retained in
+`../dns-provider/ACQUISITION_HANDOFF.md`. Reuse that unchanged result; no rerun
+or invented composition aggregate. This closes the bounded acquisition/context/
+replay leaf, not real DNS readiness, completeness, retention, dispatch or native
+qualification. All final positions remain false. Admission's two published
+descriptor-boundary corrections remain pending before its first schedule.
+Workloads' destructive/a100 source release remains pending a concrete contract.
+Earlier dated entries below describe their respective historical checkpoints.
+
 Latest first DNS schedule: RUN acknowledged v2/34c1f82 and corrected all reviewed
 boundaries. Root reviewed the final 14-file closure and 50 new methods, including
 the present-snapshot start requirement and missing-finish fallback. The first

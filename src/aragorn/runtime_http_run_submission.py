@@ -214,10 +214,18 @@ class SubmissionJournal:
                         and type(config.expected_broker_uid) is int
                         and config.expected_broker_uid == self._context["broker"]["uid"],
                         "fixed broker config differs")
-        for kind in ("uid", "gid"):
-            runtime_id = getattr(config, "expected_runtime_" + kind, None)
-            packet._require(runtime_id is None or runtime_id != self._context["broker"][kind],
-                            "runtime and broker accounts overlap")
+        runtime_uid = getattr(config, "expected_runtime_uid", None)
+        runtime_gid = getattr(config, "expected_runtime_gid", None)
+        packet._require((runtime_uid is None) == (runtime_gid is None),
+                        "runtime account binding is incomplete")
+        if runtime_uid is not None:
+            packet._uint(runtime_uid)
+            packet._uint(runtime_gid)
+            packet._require(runtime_uid != self._context["broker"]["uid"],
+                            "runtime and broker user identities overlap")
+        # The installed broker intentionally uses the runtime primary group.
+        # Isolation is distinct UIDs plus the unchanged 0700 control directory,
+        # 0600 lock, 0400 records and non-writable root-owned ancestors.
         self._last_boot = self._context["clock_bracket"]["boottime_after_ns"]
         self._last_mono = self._context["clock_bracket"]["monotonic_ns"]
         self._environment()

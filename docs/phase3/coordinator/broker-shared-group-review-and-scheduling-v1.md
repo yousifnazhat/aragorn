@@ -48,7 +48,7 @@ must refuse closing that handle, retain its cleanup finding and avoid a retry.
 This occurred before any execution, not as a hidden failed run.
 
 All previous 120 stage entries are unchanged. Root registers only
-`native-broker-shared-group-context-delta`, needs=[], timeout30. Execute only in
+`native-broker-shared-group-context-delta`, needs=[], timeout 30. Execute only in
 `/Users/yousi/Documents/Commits/aragorn` using:
 
 ```sh
@@ -72,5 +72,5 @@ bridge/inventory plus remaining shared provider paths. Final campaign stays held
 2. Wire HTTP/DNS/destructive, all admission/RUN, real a100, cancellation, full
    timing and four actual paired tasks.
 3. Close all 48 paths/consumers/source-custody conditions and publish a freeze candidate.
-4. Separately release same-deployment31 cases/100 actions/100 pairs, independent
+4. Separately release same-deployment 31 cases/100 actions/100 pairs, independent
    replay, existing gate evaluation and approved cleanup.

@@ -1,5 +1,11 @@
 # Broker reader bootstrap and cancellation: coordinator source review v1
 
+Current amendment: v9 and `broker-shared-group-handoff.md` resolve the historical
+journal GID incompatibility described below with four new passing checks. The
+old journal pin/table remains a record of this review's predecessor; use the
+handoff's actual successor pin. Bootstrap/IPC/launcher and installed capture
+source release still need the remaining exact contracts; this review grants none.
+
 Status: read-only source findings and concrete decisions for the next signed
 contract. This document does not release source, checks, staging, activation,
 live observation, private retention or cleanup. The preserved

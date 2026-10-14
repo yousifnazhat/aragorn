@@ -1,5 +1,11 @@
 # HTTP94 caller successor: source review v1
 
+Current amendment: v9 and `broker-shared-group-handoff.md` resolve the historical
+journal GID incompatibility described below with four new passing checks. The
+old journal pin/table remains a record of this review's predecessor; use the
+handoff's actual successor pin. Bootstrap/IPC/launcher and installed capture
+source release still need the remaining exact contracts; this review grants none.
+
 Status: coordinator design review, based on published checkpoint `c0b9900` and the retained HTTP94 credential report. This document releases no implementation, stage, installation or operation. The proposed four-path source assignment must wait for the exact bootstrap/configuration decisions and the actual shared-runtime-GID incompatibility below. No project imports, tests, restaging, Git operations or live operations were used for this review; source/hash/JSON/AST reads only.
 
 ## Retained predecessor and generated source origins

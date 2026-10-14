@@ -78,6 +78,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 | V-reader | Progress: 3 inert checks; acquisition: 10 inert checks; response: 17 mocked checks | `sha256:1ebdd044c7dd535f86f7fba19322a03a6254e96a8aa81adac0ca153eeb5a7226`; `sha256:c135daacf0473b0d2e80cc6f6ebc4671c429a2a3681c3e51433db46abe057ead`; `sha256:f1fab4f0fbe5eb90a0bdfebc731c576ba28f84db04e66d447767cf8150025e8b`; RUN handoffs. |
 | V-benign | JSON sum 6, line count 7, SHA256 8, copy/readback 12 checks | `sha256:9d5945fdbad517531b6cc61d32645596ded265683cbf82504651274557f16a82`; `sha256:79464c1432034d5d5a0298be6c1645e328dba1859bd75c5611fb73fb55480d0b`; `sha256:5c26a3df4d6f464ba8458d7ef60139bcc7e74c3f473044654edc3b22739c779f`; `sha256:bc7e9c5b46f7c44569ae94dd00fcf80aafa3b51d6ff883f985b1327e5790d8db`; four workload handoffs. |
 | V-HTTP | Credential repair 14 checks; composition 7 checks | `sha256:0d119c82b5671c45d08a1a1705a15ea092b601ff60caa32639b4ed4e4e1032a2`; `sha256:fc5ec4385aef9eb1263089fcd9aaa53be2c464d77d48c64efe9fad0b5c158a19`; `docs/phase3/integration-checkpoint-2026-10-12-http-credentials.md`. Actual public report: `benchmark/evidence/phase3-http-credential-staged-profile-v1.json`, 68263 bytes, `sha256:88d08ad1024d27426fecbde9eb73c4fff5ca03e783425a36d1d6559d47f5d1a9`. No repeated staging. |
+| V-fixture-cleanup | Shared HTTP/DNS fixture descriptor custody and cleanup: 25 new mocked checks, first selected PASS | `sha256:eb00a04f5617bf8caac3b558f8e0dab0f7b7491a523409bd4b0eb6e1d18a6c37`; `http-fixture-cleanup-handoff.md`. Local persistent handles and owned fdinfo temporary cleanup only; unchanged process-helper reads retain prior limits. No historical rerun, native custody or qualification claim. |
 | V-broker-group-delta | Four new shared-group and real journal-to-independent-replay composition methods: PASS | `sha256:7107b9706c8e9efa605f5d39343a754e88a95fecb419f16718ea00485b1c2144`; `broker-shared-group-handoff.md`. Actual source compatibility and mocked custody checks only; no original28 rerun or combined aggregate. |
 | V-submission-replay | Independent submission replay: 33 fabricated-byte checks | `sha256:913ead583dc4eff79e8b3986d89b1d0e85e86972cb173c2771737c96a20138d9`; original signed `5889169dad07814788508cdc377f543ed17af9ef`, verified and fast-forward integrated. `docs/phase3/admission/SUBMISSION_REPLAY_HANDOFF.md`; raw result/logs remain in Admission. Open-prefix UNKNOWN is not NOT_SUBMITTED or native custody. |
 | V-contract | Published contract only | `ownership-and-release-v2.md` and its three linked contracts. Contract publication does not establish implementation or test execution; current delivery/agreement is recorded separately below. |
@@ -201,8 +202,11 @@ The first DNS schedule remains unreleased pending corrections in
 `dns-acquisition-source-review-v1.md`: terminal replay/partial chronology/cleanup
 joins and actual descriptor checks at read/poll/close boundaries. Root releases
 its separate two-path fixture cleanup repair under v10; RUN must not edit that
-shared helper. Its new integrated pin must enter the corrected DNS closure.
-No new validation result or requirement-state promotion follows from this review.
+shared helper. The repair is now integrated after independent review and the
+first selected 25-method PASS (V-fixture-cleanup). Its exact integrated helper pin
+sha256:caa7ec1bf5ff1f768fe626009fdf208472f169abca539c5374ccf69b0f144f93
+must enter the corrected DNS closure. No DNS validation or requirement-state
+promotion follows from either source review or this bounded cleanup result.
 
 
 Latest reviewed integration: original signed Admission `5889169`, preserving c0

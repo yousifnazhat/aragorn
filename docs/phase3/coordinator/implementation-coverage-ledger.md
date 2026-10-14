@@ -215,9 +215,11 @@ The published broker contract splits Root protocol/journal from Admission
 independent transcript replay. Root's two modules are implemented and have the
 28-test V-broker-submission PASS; Admission's independent consumer source is reviewed
 and its 33-method stage is scheduled by `ce038d8`; actual result/delivery is pending.
-RUN's stable transport source and 27-method closure were reviewed; two custody
-corrections are required by `reader-transport-source-review-v1.md` before its
-first stage can be scheduled. The original fdinfo replay limit is accepted.
+RUN completed both custody corrections and the final PIDFD/pipe read-order fix.
+Its revised 13-file closure and 30 methods are reviewed; only
+`native-run-reader-transport` is now scheduled in RUN by
+`reader-transport-review-and-scheduling-v1.md`. Actual result and signed delivery
+remain pending. The original fdinfo replay and point-sample limits are accepted.
 The conservative terminal result is SUBMITTED or UNKNOWN; only the actual guarded
 broker can emit a current pre-connect snapshot. Real acquisition/IPC and owning
 broker integration remain open, so no requirement-level row becomes qualified.

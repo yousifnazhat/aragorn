@@ -9786,6 +9786,20 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-reader-checkpoint-writer-timeout-delta",
+      "description": "31 writer-only checks after diagnosed fake poll timeout correction; preserve initial combined FAIL and reuse unchanged 28 session method results without claiming aggregate PASS",
+      "tests": [
+        "test_native_phase3_run_reader_checkpoint"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_run_reader_checkpoint.py",
+        "tests/test_native_phase3_run_reader_checkpoint.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

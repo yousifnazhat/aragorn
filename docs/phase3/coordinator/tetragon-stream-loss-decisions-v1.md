@@ -114,6 +114,19 @@ expected deployment pins and actual observed installed bytes are distinct fields
 of evidence. Unknown installed/connection facts remain unavailable; do not fill
 them with the candidate source commit or historical image hash.
 
+## Connected v8 implementation amendment
+
+`reader-session-contract-v1.md` and the containing signed `provider-release-v8.md`
+supersede only the earlier unreleased parser and future descriptor proposals.
+The writer now preserves all syntax-valid JSON-object variants without the
+process-only `_event` wrapper. The separate Root observer owns notice/refresh
+writers and completion/cancellation read ends; the supervisor owns the sole FD7
+cancellation writer. Reader FD8 is the completion writer. The exact inventories,
+startup barrier, peer-close lifecycle and process-local unresolved-object custody
+are fixed in that contract. Implemented checkpoint/transport/broker schemas stay
+unchanged. Every upstream, installed-identity and complete-loss limitation in
+this document remains; no sensor/bridge patch or live action is released.
+
 ## Successor socket, retry, output and subscription boundaries
 
 Root chooses a narrowly patched bridge from the same pinned upstream source,

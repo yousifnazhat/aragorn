@@ -130,3 +130,16 @@ Remaining Phase 3 sequence: (1) complete protected providers, (2) wire all requi
 admission/RUN/action and paired-task paths, (3) close the 48-entry inventory and
 freeze source/loaded identity, (4) separately release the final campaign, replay,
 qualification evaluation and approved cleanup. Operational holds remain.
+
+## Connected v8 source release
+
+Original signed RUN transport `5193a2fcdd0cb4173ddeeaa7188aa74fd2c7b09f` is
+integrated with its reviewed first 30-check PASS. The signed v8 checkpoint now
+approves `reader-session-contract-v1.md` and releases the four previously reserved
+writer/session source/test paths to two exact internal Root owners. Syntax-only
+record preservation, FD7/FD8 custody, predecessor/refresh joins, the bounded
+post-ACK peer-close wait and actual startup/completion retention are resolved.
+No stage is scheduled until stable source and full closure review. Actual
+launcher/service/source/upstream/loss integration remains a separate dependency.
+External RUN retains the ready DNS assignment under v7; the previous additional
+DNS worktree request is superseded. No extra worktree is currently requested.

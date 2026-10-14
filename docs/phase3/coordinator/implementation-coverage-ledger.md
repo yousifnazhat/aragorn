@@ -26,7 +26,8 @@ any existing bounded evidence. All rows have final qualification `false`.
 
 `Admission`, `RUN`, `Workloads` and `Root` identify the existing worktree owners.
 Rows do not grant new write permission: only the explicit paths in
-`ownership-and-release-v2.md` are presently released. Root must publish a concrete
+`ownership-and-release-v2.md` and the applicable published provider releases
+(including v7 DNS reassignment and v8 internal reader/session) are released. Root must publish a concrete
 contract and exact additional paths before a lane begins a later family. Root
 owns shared dispatch/registry and the providers below except the explicitly
 delegated RUN transport leaf in `reader-transport-contract-v1.md` /
@@ -229,8 +230,10 @@ the lane untouched. The result remains in RUN; no rerun or cache copy occurred.
 The original fdinfo replay and point-sample limits remain. An uncertain socket
 detach requires retained supervising owner/error references; no completed cleanup
 is inferred. Root reuses the now available RUN owner for the already reviewed DNS acquisition
-slice under v7; connected reader/session implementation remains Root-owned pending
-its precise source release.
+slice under v7. The connected reader/session contract is now reviewed and
+source-released by v8 to two internal Root owners, with independent review.
+Implementation and its newly scheduled validation remain pending. A contract
+release changes none of the four requirement-state positions.
 The conservative terminal result is SUBMITTED or UNKNOWN; only the actual guarded
 broker can emit a current pre-connect snapshot. Real acquisition/IPC and owning
 broker integration remain open, so no requirement-level row becomes qualified.

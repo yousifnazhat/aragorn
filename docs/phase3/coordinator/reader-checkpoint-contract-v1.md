@@ -180,10 +180,13 @@ drain_finished_ns <= raw_publish_started_ns <= raw_readback_finished_ns <=
 manifest_prepared_ns < trigger_deadline_ns. All readings share the held BOOTTIME domain.
 
 The future reader owns one bounded cumulative buffer between checkpoints.
-It consumes actual telemetry FD4 in its original main loop, validates complete
-records through one published wrapper around the pinned
-`runtime_tetragon_process._event` single-record parser, and retains any incomplete
-tail until bounded completion. It cannot ACK with a tail or unretained batch.
+The signed v8 release and `reader-session-contract-v1.md` now supersede the earlier
+unreleased process-parser direction: consume actual telemetry FD4 in the original
+main loop, preserve every valid syntax-only JSON-object variant, and retain any
+incomplete tail until bounded completion. No `_event` wrapper or change to the
+implemented acquisition/verifier is released. Those independent consumers retain
+their framing/byte-consistency ceiling and do not parse vendor semantics or JSON
+syntax. The writer cannot ACK with a tail or unretained batch.
 Do not call normalize_process_capture, fabricate quiescence/EOF, create a timer
 responder, silently rotate a full buffer or discard unsupported records.
 Overflow, EOF, malformed/unsupported input, read/parse/publication failure,

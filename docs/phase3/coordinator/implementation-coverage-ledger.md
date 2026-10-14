@@ -196,6 +196,16 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+Latest DNS correction review: all three owners acknowledged and fast-forwarded
+their own branches to signed 722c479, preserving drafts. RUN submitted corrected
+source with a matching 14-file closure and 42 focused methods, including the
+integrated fixture helper. `dns-acquisition-source-review-v2.md` records remaining
+terminal/partial/resource-exhaustion/cleanup-owner/flag/deadline and regression
+premise corrections before execution. No DNS stage is registered/scheduled and
+no test result or requirement-state promotion follows. Admission implements v9;
+Workloads is available pending Root's four concrete destructive/a100 decisions.
+
+
 14 October DNS source review: RUN submitted its actual fourteen-file dependency
 closure and 34 focused methods; Root verified their inventory without execution.
 The first DNS schedule remains unreleased pending corrections in

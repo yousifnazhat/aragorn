@@ -195,6 +195,16 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+14 October DNS source review: RUN submitted its actual fourteen-file dependency
+closure and 34 focused methods; Root verified their inventory without execution.
+The first DNS schedule remains unreleased pending corrections in
+`dns-acquisition-source-review-v1.md`: terminal replay/partial chronology/cleanup
+joins and actual descriptor checks at read/poll/close boundaries. Root releases
+its separate two-path fixture cleanup repair under v10; RUN must not edit that
+shared helper. Its new integrated pin must enter the corrected DNS closure.
+No new validation result or requirement-state promotion follows from this review.
+
+
 Latest reviewed integration: original signed Admission `5889169`, preserving c0
 and all preceding lane ancestry. All three lane owners explicitly acknowledged
 c0 and their released assignments. Admission replay is delivered; RUN implements

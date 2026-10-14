@@ -196,6 +196,18 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+Latest first DNS schedule: RUN acknowledged v2/34c1f82 and corrected all reviewed
+boundaries. Root reviewed the final 14-file closure and 50 new methods, including
+the present-snapshot start requirement and missing-finish fallback. The first
+`native-dns-acquisition` schedule is released only by its signed published
+containing checkpoint; no actual result yet. See
+`dns-acquisition-review-and-scheduling-v1.md`. Admission submitted its exact
+12-input/55-method context slice; `broker-context-source-review-v1.md` records
+two read/close custody corrections before its first schedule. Workloads remains
+available pending Root's concrete destructive/a100 source contract. No requirement
+or final qualification state is promoted by either source review or schedule.
+
+
 Latest DNS correction review: all three owners acknowledged and fast-forwarded
 their own branches to signed 722c479, preserving drafts. RUN submitted corrected
 source with a matching 14-file closure and 42 focused methods, including the

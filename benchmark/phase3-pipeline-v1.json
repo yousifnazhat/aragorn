@@ -9840,6 +9840,31 @@
       ],
       "needs": [],
       "timeout_seconds": 30
+    },
+    {
+      "id": "native-dns-acquisition",
+      "description": "Only 50 new mocked fixed UDP owning-context, cancellation, raw journal and independent partial replay checks; no native operation or complete DNS interval",
+      "tests": [
+        "test_native_phase3_dns_acquisition"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_clock_domain.py",
+        "src/aragorn/native_phase3_dns_acquisition.py",
+        "src/aragorn/native_phase3_dns_acquisition_verify.py",
+        "src/aragorn/native_phase3_dns_context.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/native_phase3_http_fixture.py",
+        "src/aragorn/native_phase3_workload_dns_canary.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_dns_acquisition.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

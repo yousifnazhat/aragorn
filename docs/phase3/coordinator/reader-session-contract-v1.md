@@ -620,9 +620,13 @@ This service/client/materializer is not silently assigned by the loop release.
 The concrete launcher must create the six pipes, provision directories, acquire
 actual process/source/namespace identities, deliver the immutable protected
 inputs and independent pins, invoke the fixed loop API, keep only the specified
-FDs and own cancellation/termination. An unmodified tetra bridge can supply bytes
-to this syntax-only path but cannot establish authenticated subscription or
-complete delivery. Successor bridge/sensor readiness patches, actual installed
+FDs and own cancellation/termination. The strict post-exec noninheritability
+checks also cover bridge stdout FD1 and stderr FD2. Their writer must set CLOEXEC
+after intentional exec transfer and before readiness through a reviewed bridge
+change; the current unmodified tetra bridge is not established compatible with
+this startup contract. Root cannot set another process's descriptor flags. This
+is a deployment prerequisite, not an exception to endpoint custody. Successor
+bridge/sensor readiness patches, actual installed
 hashes and full loss omission scope remain in tetragon-stream-loss-decisions-v1.
 No invented PID/hash or historical image pin substitutes for unavailable facts.
 

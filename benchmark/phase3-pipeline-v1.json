@@ -9800,6 +9800,26 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-broker-shared-group-context-delta",
+      "description": "Four new mocked actual shared-runtime-GID and journal to independent replay composition checks; no historical methods or native qualification",
+      "tests": [
+        "test_runtime_http_run_submission_shared_group"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_broker_reader_protocol.py",
+        "src/aragorn/native_phase3_run_submission_verify.py",
+        "src/aragorn/runtime_http_run_submission.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "tests/test_runtime_http_run_submission.py",
+        "tests/test_runtime_http_run_submission_shared_group.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
     }
   ]
 }

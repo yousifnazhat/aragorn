@@ -27,16 +27,17 @@ any existing bounded evidence. All rows have final qualification `false`.
 `Admission`, `RUN`, `Workloads` and `Root` identify the existing worktree owners.
 Rows do not grant new write permission: only the explicit paths in
 `ownership-and-release-v2.md` and the applicable published provider releases
-(including v7 DNS reassignment and v8 internal reader/session) are released. Root must publish a concrete
+(including v7 DNS, v8 reader/session and v9 protected broker context) are released. Root must publish a concrete
 contract and exact additional paths before a lane begins a later family. Root
 owns shared dispatch/registry and the providers below except the explicitly
 delegated RUN transport leaf in `reader-transport-contract-v1.md` /
 `provider-release-v3.md` and Admission's independent submission replay in
 `broker-reader-provider-contract-v1.md` / `provider-release-v4.md`. RUN transport
 is integrated with its reviewed first 30-check PASS (V-reader-transport);
-Admission replay actual result/signed delivery remains pending. Root's bounded protocol/journal implementation now
+Admission replay is integrated from original signed `5889169` with its actual
+33-check PASS (V-submission-replay). Root's bounded protocol/journal implementation now
 has its reviewed 28-test PASS (V-broker-submission); actual shared broker wiring
-and independent transcript agreement remain pending. Root checkpoint acquisition/
+and actual acquired transcript composition remain pending. Root checkpoint acquisition/
 archive and independent byte replay have the 53-check V-reader-checkpoint result;
 the v8 writer and Root refresh/session source are now integrated (V-reader-session).
 Actual launch/IPC, authenticated stream and complete loss closure remain open.
@@ -77,6 +78,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 | V-reader | Progress: 3 inert checks; acquisition: 10 inert checks; response: 17 mocked checks | `sha256:1ebdd044c7dd535f86f7fba19322a03a6254e96a8aa81adac0ca153eeb5a7226`; `sha256:c135daacf0473b0d2e80cc6f6ebc4671c429a2a3681c3e51433db46abe057ead`; `sha256:f1fab4f0fbe5eb90a0bdfebc731c576ba28f84db04e66d447767cf8150025e8b`; RUN handoffs. |
 | V-benign | JSON sum 6, line count 7, SHA256 8, copy/readback 12 checks | `sha256:9d5945fdbad517531b6cc61d32645596ded265683cbf82504651274557f16a82`; `sha256:79464c1432034d5d5a0298be6c1645e328dba1859bd75c5611fb73fb55480d0b`; `sha256:5c26a3df4d6f464ba8458d7ef60139bcc7e74c3f473044654edc3b22739c779f`; `sha256:bc7e9c5b46f7c44569ae94dd00fcf80aafa3b51d6ff883f985b1327e5790d8db`; four workload handoffs. |
 | V-HTTP | Credential repair 14 checks; composition 7 checks | `sha256:0d119c82b5671c45d08a1a1705a15ea092b601ff60caa32639b4ed4e4e1032a2`; `sha256:fc5ec4385aef9eb1263089fcd9aaa53be2c464d77d48c64efe9fad0b5c158a19`; `docs/phase3/integration-checkpoint-2026-10-12-http-credentials.md`. Actual public report: `benchmark/evidence/phase3-http-credential-staged-profile-v1.json`, 68263 bytes, `sha256:88d08ad1024d27426fecbde9eb73c4fff5ca03e783425a36d1d6559d47f5d1a9`. No repeated staging. |
+| V-submission-replay | Independent submission replay: 33 fabricated-byte checks | `sha256:913ead583dc4eff79e8b3986d89b1d0e85e86972cb173c2771737c96a20138d9`; original signed `5889169dad07814788508cdc377f543ed17af9ef`, verified and fast-forward integrated. `docs/phase3/admission/SUBMISSION_REPLAY_HANDOFF.md`; raw result/logs remain in Admission. Open-prefix UNKNOWN is not NOT_SUBMITTED or native custody. |
 | V-contract | Published contract only | `ownership-and-release-v2.md` and its three linked contracts. Contract publication does not establish implementation or test execution; current delivery/agreement is recorded separately below. |
 | V-reader-evidence | Independent ACK/TIMEOUT byte consumer: 14 new checks | `sha256:855ae03253e17074a4ff66c5e4d060f7906cc70a2b25efadb6ca36492cd655c9`; signed original `33f54e2aca224b216a4ae67f0a73588e03252939`, merged preserving ancestry. Byte consistency only. |
 | V-policy-tamper | Finite recorder/independent consumer: 26 new inert checks | `sha256:c08b47026e885e68bab6482ca5d858863ef442774f40db55eedea486b3e9ce46`; original signed `d3c5ffed8dbbf0520c9b8d2e9d798e204d09f96d`, merged preserving ancestry. Actual protected policy acquisition and complete ADM-03 remain open. |
@@ -192,6 +194,24 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+Latest reviewed integration: original signed Admission `5889169`, preserving c0
+and all preceding lane ancestry. All three lane owners explicitly acknowledged
+c0 and their released assignments. Admission replay is delivered; RUN implements
+v7 DNS; Workloads delivered only its assigned destructive/a100 design review
+(SHA-256 `3028a8d267d9cc6b50d354b521e881155b86693b2026a66c6cc02d843c97838a`).
+The four unresolved destructive decisions are real ingress/intent, mutation
+custody/backend, start/quiescence barriers and genuine a100 lineage absence.
+
+v9 releases protected broker context acquisition to available Admission in three
+new exact paths. Root retains actual service/caller/launch and independently
+protected expectations. v9 receipt is unconfirmed; outgoing bridge delivery
+still failed after incoming acknowledgments and will not be retried unchanged.
+No additional tree is needed for these ready assignments. Root's shared-group
+journal correction preserves actual broker identity and all filesystem custody;
+its new selected delta/composition schedule is separate from the original 28
+checks. Their old fingerprint remains bound to old journal bytes. Neither a new
+contract nor bounded source PASS promotes a requirement-level state.
+
 Completed at the source base: signed integrated bounded admission/RUN/benign-task
 leaves, published three-lane contracts, offline HTTP protected credential repair
 and composition. In this coordinator turn all three actual lane owners sent
@@ -208,7 +228,7 @@ the delta and scheduled its 13-method stage in
 to `95b676e`, accepted v4 and delivered original signed `11dabe6` with the actual
 13-check PASS (V-DNS). Root inspected source/result/log pins and merged without
 rerunning or copying evidence. Admission and RUN explicitly acknowledged their
-v4/v3 contracts at `95b676e`. Admission replay remains pending delivery. RUN
+v4/v3 contracts at `95b676e`. Admission later delivered original signed `5889169` with the actual 33-check PASS; Root verified and fast-forwarded it without rerun. RUN
 subsequently accepted both custody corrections and the final closing-read ordering
 fix, verified/fast-forwarded its own branch to schedule `afb06c4`, and delivered
 the original signed transport commit `5193a2f` with actual first 30-check PASS.
@@ -223,7 +243,7 @@ They do not establish live checkpoint production, refresh or loss completeness.
 The published broker contract splits Root protocol/journal from Admission
 independent transcript replay. Root's two modules are implemented and have the
 28-test V-broker-submission PASS; Admission's independent consumer source is reviewed
-and its 33-method stage is scheduled by `ce038d8`; actual result/delivery is pending.
+and its 33-method stage was scheduled by `ce038d8`; actual result and original signed delivery are now reviewed and integrated (V-submission-replay).
 RUN completed both custody corrections and the final PIDFD/pipe read-order fix.
 Root reviewed the stable 13-file closure and 30 methods, published the first
 selected schedule, then reviewed actual PASS/result/log bytes and verified original
@@ -248,8 +268,7 @@ The DNS builder dependency is integrated. v5 originally proposed an additional
 operator-created DNS worktree; no creation or owner agreement was confirmed.
 After signed transport integration freed the RUN owner, `provider-release-v7.md`
 reassigns the ready five-path acquisition/context contract to that existing RUN
-worktree and withdraws the additional-tree request. DNS assignment acknowledgment
-and implementation are pending. Its bounded receive sample always reports incomplete
+worktree and withdraws the additional-tree request. RUN acknowledged c0/v7 and is implementing DNS. Stable source/closure and actual focused validation remain pending. Its bounded receive sample always reports incomplete
 observation; full readiness/quiescence/drain and protected retention remain separate
 missing provider conditions.
 Only the individually reviewed stages are released by the scheduling documents.

@@ -12,6 +12,13 @@ operator-created additional worktrees when they shorten completion. Older
 sequential/fixed-worktree planning does not prohibit concurrent released lanes;
 existing ownership, evidence requirements and operational holds still apply.
 
+Standing scope instruction (2026-10-14): follow the existing coordinator
+[mission and scope discipline](docs/phase3/coordinator/ownership-and-release-v2.md#mission-and-scope-discipline).
+Finish the existing manifest on one real deployment. Prioritize connected
+execution paths and unblock released lanes; defer unrelated features, framework
+expansion and contract churn. The existing gate, thresholds and operational holds
+remain authoritative.
+
 ## Current sprint queue (2026-10-09)
 
 Current queue base: signed and pushed `1beb95f` (installed bootstrap writer

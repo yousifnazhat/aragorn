@@ -41,6 +41,56 @@ remain, and implementation readiness is distinct from final qualification.
 End every checkpoint with completed work, released/pending assignments, concrete
 blockers, any operator capacity request and numbered remaining Phase 3 steps.
 
+## Mission and scope discipline
+
+Operator direction, 2026-10-14: finish Phase 3 and prevent scope drift after
+prolonged implementation. Aragorn's purpose is exact reviewed-capability
+admission and externally enforced runtime containment. The Phase 3 deliverable
+is one real supported runtime/deployment where approved digests are activated,
+protected attempts are causally attributed, prohibited or unattributed attempts
+are blocked before protected impact, and required containment/revocation and
+sensor-loss responses work. Evidence must independently support that behavior.
+
+The existing `benchmark/phase3-exit-gate-manifest-v1.json` and existing 48-entry
+coverage ledger define the complete finish line. This instruction creates no new
+gate or requirement. Keep their thresholds, evidence limits and operational holds.
+
+Every next assignment must name the existing requirement it closes or the
+specific missing dependency preventing that requirement's real execution. Name
+the owning caller, exact paths, acquisition and independent consumer. Prioritize
+a connected end-to-end path over additional disconnected leaves. Publish the
+minimum concrete contract needed to release implementation promptly; do not
+reopen settled interfaces or keep redesigning a released contract without a
+concrete correctness/security defect or changed dependency.
+
+Root's immediate priority is protected bootstrap inputs/readiness/cancellation,
+actual broker/reader/caller wiring and its exact deployment inventory. Admission
+and RUN continue their already released context and DNS work concurrently. Root
+must resolve and release bounded destructive/a100 work promptly. First connect
+HTTP, then reuse shared infrastructure for DNS/destructive actions and all other
+required admission/RUN paths, full timing and the four real paired tasks.
+
+Do not expand into additional runtime integrations, A2A, Phase 4 scaling, a new
+sensor/gate framework, generic platform abstractions or unrelated refactoring.
+Do not create planning/contract churn, speculative hardening or further standalone
+verifiers unless necessary for a named existing requirement or a concrete defect
+in its actual dependency path. Required custody and fail-closed repairs remain
+in scope; urgency never substitutes unknown loss for zero or removes evidence.
+
+Judge checkpoints by complete requirement paths, concrete blockers removed and
+ready assignments delivered/acknowledged. Commit, module and test counts are
+supporting implementation facts, not completion measures. A refusal-only slice
+with unknown sensor health is an intermediate state; it cannot establish usable
+runtime prevention or completed benign-task behavior.
+
+Reuse unaffected evidence, run only reviewed newly necessary checks, integrate
+original signed deliveries promptly and stop expanding implementation once the
+existing freeze conditions are met. Final qualification still requires the
+separately released same-deployment campaign and independent gate evaluation.
+If a mandatory guarantee cannot be implemented on the selected target, report
+the exact failed property and bounded remedy or apply the architecture's existing
+kill/pivot criteria; do not conceal the problem behind more framework work.
+
 ## Existing released assignments
 
 | Existing branch | Contract | Exact implementation write allowlist |

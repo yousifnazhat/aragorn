@@ -16,6 +16,33 @@ executed to assemble this source inventory.
 
 ## Status and ownership notation
 
+Current coordination recheck, 15 October, at published signed
+`ac7f95157315a0ae834f0fba62954f1137bbd2bd`: the original DNS acquisition
+delivery `a32477b0b38248f7dca825ec022ad4c0e467558d` is integrated with its
+actual 50-method result; preserve V-DNS-acquisition below. Admission's corrected
+context source/test still match the published 12-input/67-method first schedule,
+but its actual outcome and signed delivery remain pending. Its observed branch
+tip is `722c4794c349acc022dd6a751344408af82f454e`. RUN and Workloads explicitly
+acknowledged `f65e8f3b8a79f3ac7251a69f6facc7df89042364` and v12/v11;
+their current tips still match that checkpoint. Newer receipt is unconfirmed;
+the unavailable outbound bridge has not been retried unchanged. RUN's unexecuted
+59-method bootstrap and Workloads' unexecuted 27-method lineage candidates need
+the corrections in their published source reviews before first scheduling.
+
+Root v13's real service caller has reviewed stable source and 44 proposed methods;
+execution awaits the original signed Admission dependency. Root v14's HTTP reader
+client and v15's finite seven-output HTTP94 renderer proceed under distinct
+three-path internal assignments. Client source review now accepts terminal journal
+retention after late constructor failure and a final original accept-deadline
+check, with38 first-stage methods. The renderer's29 isolated generated-unit checks
+remain separate from actual v12/v14 composition and installed custody. Both full
+closures passed Root and independent source review; first schedules are published
+by their containing signed checkpoint. These candidates have no actual result yet. No complete requirement state is promoted by this recheck.
+Actual protected launch inputs, bridge build/subscription closure, full loss/
+program/map and policy/lifecycle acquisition, destructive interval observation
+and actual paired contexts remain Root-owned open conditions in the provider
+rows below. Missing loss remains UNKNOWN and REFUSED/LOSS_UNAVAILABLE.
+
 The four state positions are **leaf implemented / shared path wired / evidence
 verified / final qualified**. `partial` means existing bounded code supplies
 only part of that exact requirement. `legacy` means a predecessor probe/consumer

@@ -79,7 +79,13 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    This work proceeds concurrently while the service dependency is pending.
    V15 assigns a separate internal owner the finite HTTP94 seven-output renderer/
    accessor/caller and two HTTP reason-consumer successors. Read provider-release-v15.md
-   and http-run-guard-renderer-contract-v1.md. Keep exact source/assigned paths separate.
+   and http-run-guard-renderer-contract-v1.md. The frozen29-method renderer candidate
+   has an explicit14-file unit closure; actual v12/v14 composition and installed
+   inventory remain separate. The corrected38-method client and29-method renderer
+   have complete reviewed closures and their first selected schedules published in
+   broker-reader-client-review-and-scheduling-v1.md and
+   http-run-guard-renderer-review-and-scheduling-v1.md. Actual outcomes are pending.
+   Keep exact source/assigned paths separate.
    Root owns actual protected launch-input acquisition, bootstrap endpoint and
    provider readiness, cancellation/PIDFD transfer and lifetime. Connect the real
    broker/reader/HTTP caller, complete bridge/source closure and generated/deployed

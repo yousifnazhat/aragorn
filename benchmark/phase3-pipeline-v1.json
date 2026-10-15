@@ -9888,6 +9888,62 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-broker-reader-client",
+      "description": "Only 38 new isolated native-boundary HTTP reader client checks with real journal and codec; no native custody, installed composition or qualification",
+      "tests": [
+        "test_native_phase3_broker_reader_client"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_broker_reader_client.py",
+        "src/aragorn/native_phase3_broker_reader_protocol.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "src/aragorn/phase3_quantitative_metrics.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_broker_v2.py",
+        "src/aragorn/runtime_action_broker_v3.py",
+        "src/aragorn/runtime_action_broker_v4.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_broker_decision_measurement.py",
+        "src/aragorn/runtime_capability_grant.py",
+        "src/aragorn/runtime_http_action.py",
+        "src/aragorn/runtime_http_run_submission.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_broker_reader_client.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "runtime-http-run-guard",
+      "description": "Only 29 new finite HTTP94 renderer and isolated generated caller/accessor/refusal-consumer checks; no installed composition or native qualification",
+      "tests": [
+        "test_runtime_http_run_guard"
+      ],
+      "inputs": [
+        "scripts/materialize_runtime_http_run_guard.py",
+        "tests/test_runtime_http_run_guard.py",
+        "src/aragorn/runtime_http_broker.py",
+        "src/aragorn/runtime_broker_decision_measurement.py",
+        "src/aragorn/runtime_broker_measurement_plan.py",
+        "src/aragorn/runtime_broker_decision_measurement_verify.py",
+        "src/aragorn/runtime_action_service_v5.py",
+        "src/aragorn/runtime_http_capability.py",
+        "src/aragorn/native_phase3_http_collection_verify.py",
+        "benchmark/evidence/phase3-http-credential-staged-profile-v1.json",
+        "src/aragorn/runtime_http_action.py",
+        "scripts/materialize_runtime_http_credentials.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/runtime_broker_effective_receipt_verify.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

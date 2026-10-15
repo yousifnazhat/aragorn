@@ -37,7 +37,11 @@ retention after late constructor failure and a final original accept-deadline
 check, with38 first-stage methods. The renderer's29 isolated generated-unit checks
 remain separate from actual v12/v14 composition and installed custody. Both full
 closures passed Root and independent source review; first schedules are published
-by their containing signed checkpoint. These candidates have no actual result yet. No complete requirement state is promoted by this recheck.
+by signed c141775745f36723f322ac30de44cb9393269885. Root then ran each once: client38
+PASS at sha256:f490d36c2f7106bcef7396371c87a4628a23fa93732bc4170f37ec1b23d8058f;
+renderer29 PASS at sha256:08040bb8feb1309b5124944f40f4e19dd6a4fd035fc6cf8c70b2e2a668dc5d4d.
+Actual results/logs and all post-run source pins were reviewed; see
+integration-checkpoint-2026-10-15-http-run-guard.md for exact retained artifacts. No complete requirement state is promoted by this recheck.
 Actual protected launch inputs, bridge build/subscription closure, full loss/
 program/map and policy/lifecycle acquisition, destructive interval observation
 and actual paired contexts remain Root-owned open conditions in the provider

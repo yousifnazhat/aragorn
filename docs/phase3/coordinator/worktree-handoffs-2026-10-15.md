@@ -84,7 +84,9 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    inventory remain separate. The corrected38-method client and29-method renderer
    have complete reviewed closures and their first selected schedules published in
    broker-reader-client-review-and-scheduling-v1.md and
-   http-run-guard-renderer-review-and-scheduling-v1.md. Actual outcomes are pending.
+   http-run-guard-renderer-review-and-scheduling-v1.md. Actual client38 and renderer29
+   first-stage PASS results are reviewed and retained separately in
+   integration-checkpoint-2026-10-15-http-run-guard.md. Do not rerun either unchanged.
    Keep exact source/assigned paths separate.
    Root owns actual protected launch-input acquisition, bootstrap endpoint and
    provider readiness, cancellation/PIDFD transfer and lifetime. Connect the real

@@ -88,6 +88,17 @@ actual HTTP94 predecessor report sha256:88d08ad1024d27426fecbde9eb73c4fff5ca03e7
 its generated measurement-only8192-byte credential helper already exists and must
 be inventoried, not replaced with its4096-byte original or repaired again.
 
+The review proposal is now published at
+`docs/phase3/coordinator/protected-launch-inputs-next-review-v1.md`
+(20628 bytes, sha256:ece792d2d97aa79223512c86ac1788a2b057f4803ccd3f2401c0f739fdb4a8d5).
+Root inspected the complete proposed caller/source/readback boundary and actual
+HTTP94 helper report pin. This grants no implementation paths or execution.
+Before release, fix the finite actual generated broker allowlist/pins, protected
+binding origin and exact raw schema, supported alias provenance, original-budget
+supervisor cancellation topology and effective unit protections. Reuse the
+existing credential repair. The available internal owner can take the bounded
+four-path leaf once those decisions are concrete; no extra worktree is needed.
+
 Root still owns authenticated stream/loss/program/map, policy/lifecycle,
 destructive interval observation and actual paired providers. Missing loss remains
 UNKNOWN -> REFUSED/LOSS_UNAVAILABLE. Existing worktrees/internal capacity suffice

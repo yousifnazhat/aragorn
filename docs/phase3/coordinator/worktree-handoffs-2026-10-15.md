@@ -95,6 +95,9 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    bind the actual predecessor report
    `sha256:88d08ad1024d27426fecbde9eb73c4fff5ca03e783425a36d1d6559d47f5d1a9`.
    Do not rerun unchanged staging or relabel an old report as a successor.
+   Read protected-launch-inputs-next-review-v1.md for the next bounded Root leaf.
+   It is review-only: close its finite actual source inventory, protected binding,
+   cancellation and effective-unit decisions before publishing any source release.
 6. Preserve original accounts, root-only protections, credential ABI and separate
    bootstrap/session readiness. Missing loss is UNKNOWN and yields
    REFUSED/LOSS_UNAVAILABLE; refusal-only plumbing is intermediate. Finish actual

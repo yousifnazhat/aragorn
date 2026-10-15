@@ -65,8 +65,8 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    `sha256:3b989508ec43b9ab89102eae7723aeefcf5bff8702b1266f21a770099a0bb88c`.
    Release v12's three-path fixed bootstrap to RUN immediately at this signed
    publication; do not ask it to repeat DNS or edit Root-owned service/renderers.
-4. Release the bounded genuine-a100 peer lookup to Workloads when its v11
-   contract is published. Preserve the real runtime -> sensor -> broker topology,
+4. Workloads' published v11 peer lookup is implemented as an unexecuted draft;
+   receive its four reviewed custody/fixture corrections before scheduling. Preserve the real runtime -> sensor -> broker topology,
    exact loaded singleton bytes and the registered worker's actual positive
    lineage hold. A conditional comparison cannot supply loader authenticity or
    complete destructive enforcement by itself.
@@ -151,7 +151,7 @@ Branch: `codex/phase3-run-health`
    Do not rerun DNS, repeat its implementation, copy caches or promote incomplete
    observation/readiness into health or qualification.
 3. Read `provider-release-v12.md` and `broker-reader-bootstrap-contract-v1.md`.
-   Implement only these new paths:
+   Preserve the stable55-method bootstrap draft; correct only these paths:
    - `src/aragorn/native_phase3_broker_reader_bootstrap.py`
    - `tests/test_native_phase3_broker_reader_bootstrap.py`
    - `docs/phase3/run-health/BROKER_READER_BOOTSTRAP_HANDOFF.md`
@@ -172,9 +172,12 @@ Branch: `codex/phase3-run-health`
    Root proc views stay null. Root retains unit/source/launch acquisition,
    service/client/renderers, actual configure integration and deployed readiness.
    Proposed IPC drafts alone grant no shared edits or execution permission.
-7. Submit stable full closure and focused new cases before Root schedules the
-   owning stage. After reviewed PASS, sign/verify exact paths and hand off the
-   original commit and actual evidence. No feature-branch push or extra tree.
+7. Read bootstrap-source-review-v1.md. Correct paired transfer entry/ownership,
+   final deadline/custody after observation and cleanup, actual ready-frame receipt
+   chronology and association-UNKNOWN PIDFD cleanup. No bootstrap stage is
+   scheduled; the first55-method proposal never ran. Submit refreshed full stable
+   closure/cases before Root scheduling. After reviewed actual PASS, sign/verify
+   exact paths and hand off original commit/evidence. No feature push or extra tree.
 
 ## Workloads / verifiers prompt
 

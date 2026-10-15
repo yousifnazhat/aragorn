@@ -198,6 +198,18 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+15 October follow-up source review: Admission's corrected context67 stage is
+published at d7ebe099; exact newer receipt and actual result remain pending.
+RUN's acknowledged v12 bootstrap55 draft has its complete three-input closure
+reviewed, but four concrete transfer/deadline/PIDFD/receipt corrections are
+published in bootstrap-source-review-v1.md before any execution. Workloads'
+v11 first27 proposal remains unexecuted pending its four published corrections.
+Root's actual v13 service44 candidate now includes bounded review corrections
+and is undergoing frozen-byte approval; original signed Admission integration
+still blocks its execution. These are draft/review facts, not new validation
+references or changes to any of the48 requirement states. No unaffected evidence
+or HTTP94 predecessor report was changed or rerun.
+
 Latest 15 October active coordination: direct incoming messages confirm RUN and
 Workloads verified/fast-forwarded f65e8f3 and agreed the complete v12/v11 contracts;
 both began their exact released implementations. Admission submitted corrected

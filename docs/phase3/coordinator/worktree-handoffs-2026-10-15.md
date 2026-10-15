@@ -45,7 +45,7 @@ Paste the common rules together with the selected owner's prompt below.
 
 ## Coordinator prompt
 
-Worktree: `/Users/yousi/Documents/Commits/aragorn`  
+Worktree: `/Users/yousi/Documents/Commits/aragorn`
 Branch: `codex/phase3-runtime-prevention`
 
 Objective: finish the existing Phase 3 manifest as quickly as possible on one
@@ -63,8 +63,8 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
 3. RUN's original signed DNS `a32477b0b38248f7dca825ec022ad4c0e467558d` is
    already integrated. Preserve its actual 50-method PASS fingerprint
    `sha256:3b989508ec43b9ab89102eae7723aeefcf5bff8702b1266f21a770099a0bb88c`.
-   Give RUN the next explicitly published bounded provider assignment; do not
-   ask it to repeat DNS or implicitly edit Root-owned service/renderers.
+   Release v12's three-path fixed bootstrap to RUN immediately at this signed
+   publication; do not ask it to repeat DNS or edit Root-owned service/renderers.
 4. Release the bounded genuine-a100 peer lookup to Workloads when its v11
    contract is published. Preserve the real runtime -> sensor -> broker topology,
    exact loaded singleton bytes and the registered worker's actual positive
@@ -102,7 +102,7 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
 
 ## Admission prompt
 
-Worktree: `/Users/yousi/Documents/Commits/aragorn-phase3-admission`  
+Worktree: `/Users/yousi/Documents/Commits/aragorn-phase3-admission`
 Branch: `codex/phase3-admission`
 
 Requirement: actual protected broker-context acquisition, an existing missing
@@ -139,7 +139,7 @@ Write only:
 
 ## RUN / health prompt
 
-Worktree: `/Users/yousi/Documents/Commits/aragorn-phase3-run-health`  
+Worktree: `/Users/yousi/Documents/Commits/aragorn-phase3-run-health`
 Branch: `codex/phase3-run-health`
 
 1. Verify/fast-forward this checkpoint in your own worktree and acknowledge
@@ -149,22 +149,35 @@ Branch: `codex/phase3-run-health`
 2. Preserve completed transport/reader/DNS evidence, including original failures.
    Do not rerun DNS, repeat its implementation, copy caches or promote incomplete
    observation/readiness into health or qualification.
-3. Read the explicit next provider release if present in this signed checkpoint.
-   Implement only its exact write allowlist and concrete packet/API/ownership
-   contract. Root retains service/launcher/renderers, actual protected unit/source
-   acquisition and actual deployment readiness. Proposed IPC drafts alone grant
-   no write or execution permission.
-4. The next critical slice must preserve real credential/PIDFD/cancellation
-   custody, bootstrap-versus-session readiness and original deadline. No arbitrary
-   truth callback, copied expected proc observation, retry/reset or weaker accounts.
-   Report a concrete incompatibility before changing Root-owned/shared paths.
-5. Submit stable full closure and focused new cases before Root schedules the
+3. Read `provider-release-v12.md` and `broker-reader-bootstrap-contract-v1.md`.
+   Implement only these new paths:
+   - `src/aragorn/native_phase3_broker_reader_bootstrap.py`
+   - `tests/test_native_phase3_broker_reader_bootstrap.py`
+   - `docs/phase3/run-health/BROKER_READER_BOOTSTRAP_HANDOFF.md`
+4. Implement the actual fixed seqpacket HELLO -> HANDLES -> RECEIVED -> RELEASE
+   handshake. Authenticate kernel credentials/PIDFD, transfer exactly cancellation
+   read end then supervisor PIDFD once, report actual receiver FD numbers, and
+   join the protected final provision. Preserve the original 4-second startup
+   cap, session deadline, checked local ordinary buffers and account protections.
+5. Consume the separate real provider-ready pipe under its protected endpoint
+   expectation. Require actual session construction and guard listener readiness
+   in the Root-owned caller; never read its private state or substitute a Boolean.
+   Keep bootstrap notification separate from reader/session readiness. Retain
+   actual successful and failed packet/process/descriptor observations in the
+   frozen bounded artifact schema, not only their digests.
+6. Preserve exact descriptor ownership, partial failure/send ambiguity and
+   cancellation/exit priority. No arbitrary truth callback, expected proc fields
+   relabeled as reads, reconnect/resend/reset or weaker accounts. Client-inaccessible
+   Root proc views stay null. Root retains unit/source/launch acquisition,
+   service/client/renderers, actual configure integration and deployed readiness.
+   Proposed IPC drafts alone grant no shared edits or execution permission.
+7. Submit stable full closure and focused new cases before Root schedules the
    owning stage. After reviewed PASS, sign/verify exact paths and hand off the
    original commit and actual evidence. No feature-branch push or extra tree.
 
 ## Workloads / verifiers prompt
 
-Worktree: `/Users/yousi/Documents/Commits/aragorn-phase3-workload-verifiers`  
+Worktree: `/Users/yousi/Documents/Commits/aragorn-phase3-workload-verifiers`
 Branch: `codex/phase3-workload-verifiers`
 
 Requirement: actual peer-lineage lookup prerequisite for genuine unattributed

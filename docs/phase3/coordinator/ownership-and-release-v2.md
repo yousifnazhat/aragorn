@@ -93,6 +93,33 @@ kill/pivot criteria; do not conceal the problem behind more framework work.
 
 ## Existing released assignments
 
+### 15 October critical infrastructure releases
+
+At their signed published containing checkpoint, v11 assigns actual configured-
+scope peer-lineage acquisition to the existing Workloads owner and v12 assigns
+fixed broker/provider bootstrap to the available RUN owner. Read the detailed
+common and four-owner prompts in `worktree-handoffs-2026-10-15.md`. Admission
+continues its existing v9 three-path context corrections; no first context stage
+is scheduled. RUN's DNS delivery is already integrated and must not be repeated.
+
+- Workloads v11 / `destructive-lineage-contract-v1.md`: only
+  `src/aragorn/native_phase3_workload_destructive_lineage.py`,
+  `src/aragorn/native_phase3_workload_destructive_lineage_verify.py`,
+  `tests/test_native_phase3_workload_destructive_lineage.py` and
+  `docs/phase3/workload-verifiers/DESTRUCTIVE_LINEAGE_HANDOFF.md`.
+- RUN v12 / `broker-reader-bootstrap-contract-v1.md`: only
+  `src/aragorn/native_phase3_broker_reader_bootstrap.py`,
+  `tests/test_native_phase3_broker_reader_bootstrap.py` and
+  `docs/phase3/run-health/BROKER_READER_BOOTSTRAP_HANDOFF.md`.
+
+Both are offline source-only releases with explicit real Root caller, loaded/
+deployed custody and integration obligations. Neither schedules execution or
+establishes native a100, health, effect authority or qualification. Root retains
+shared files, protected launch/configuration, provider construction/lifetime,
+service/client/renderer, actual observations and complete paths. Available
+capacity is sufficient; owners acknowledge and proceed concurrently without
+waiting for all Root work. Preserve the remaining operational holds.
+
 | Existing branch | Contract | Exact implementation write allowlist |
 | --- | --- | --- |
 | `codex/phase3-admission` | `admission-policy-tamper-contract-v1.md` | `src/aragorn/native_phase3_admission_policy_tamper.py`, `src/aragorn/native_phase3_admission_policy_tamper_verify.py`, `tests/test_native_phase3_admission_policy_tamper.py`, `docs/phase3/admission/POLICY_TAMPER_HANDOFF.md` |

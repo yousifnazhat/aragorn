@@ -27,7 +27,8 @@ any existing bounded evidence. All rows have final qualification `false`.
 `Admission`, `RUN`, `Workloads` and `Root` identify the existing worktree owners.
 Rows do not grant new write permission: only the explicit paths in
 `ownership-and-release-v2.md` and the applicable published provider releases
-(including v7 DNS, v8 reader/session, v9 protected broker context and v11 peer lineage)
+(including v7 DNS, v8 reader/session, v9 protected broker context, v11 peer lineage
+and v12 fixed bootstrap)
 are released. Root must publish a concrete
 contract and exact additional paths before a lane begins a later family. Root
 owns shared dispatch/registry and the providers below except the explicitly
@@ -208,6 +209,14 @@ native a100/enforcement claim. Root retains actual loaded-config/positive-hold,
 bootstrap/caller/observer and deployed custody prerequisites. The detailed shared
 and four-owner prompts are `worktree-handoffs-2026-10-15.md`. All final positions
 remain false; earlier dated entries below are historical checkpoint records.
+
+The subsequent v12 release delegates the three-path fixed broker/provider
+bootstrap to available RUN, with exact four-packet/two-FD/readiness APIs and
+self-contained schemas. Successful and failed raw acquisitions remain retained;
+transport lifecycle cannot assert health or effect authority. Root retains
+actual unit/source/protected launch origins, provider construction/lifetime,
+service/client/HTTP renderer/configure and deployed inventory. No new stage or
+native support result is inferred from this source release.
 
 14 October DNS delivery: Root verified original signed
 `a32477b0b38248f7dca825ec022ad4c0e467558d`, its exact five assigned paths,

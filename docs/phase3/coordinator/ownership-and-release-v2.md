@@ -120,6 +120,16 @@ service/client/renderer, actual observations and complete paths. Available
 capacity is sufficient; owners acknowledge and proceed concurrently without
 waiting for all Root work. Preserve the remaining operational holds.
 
+Root v13 additionally delegates its actual broker/reader service to internal
+provider_path_review in the coordinator checkout, only
+`src/aragorn/native_phase3_broker_reader_service.py`,
+`tests/test_native_phase3_broker_reader_service.py` and
+`docs/phase3/coordinator/broker-reader-service-handoff.md`. Read the separate
+service contract. Internal code writing is allowed after publication; no Git or
+execution is delegated. Root retains review/registry/staging/signing/push and
+all other shared paths. Admission's first67-method context stage has its own
+owning schedule; the service has no schedule until actual dependencies are ready.
+
 | Existing branch | Contract | Exact implementation write allowlist |
 | --- | --- | --- |
 | `codex/phase3-admission` | `admission-policy-tamper-contract-v1.md` | `src/aragorn/native_phase3_admission_policy_tamper.py`, `src/aragorn/native_phase3_admission_policy_tamper_verify.py`, `tests/test_native_phase3_admission_policy_tamper.py`, `docs/phase3/admission/POLICY_TAMPER_HANDOFF.md` |

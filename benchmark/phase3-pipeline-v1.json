@@ -9865,6 +9865,29 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-broker-reader-context",
+      "description": "Only 67 new mocked protected broker context acquisition, public replay and late read/close custody checks; no native identity or qualification",
+      "tests": [
+        "test_native_phase3_broker_reader_context"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_broker_reader_context.py",
+        "src/aragorn/native_phase3_broker_reader_protocol.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/native_phase3_run_submission_verify.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_http_action.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_native_phase3_broker_reader_context.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

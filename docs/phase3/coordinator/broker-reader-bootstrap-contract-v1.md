@@ -446,6 +446,12 @@ Two observation-only roles are READY_WRITER and CANCEL_RECEIVED; process_role
 is SELF, PEER or PROVIDER and disambiguates every numeric FD. These remote
 observations confer no ownership: their closed field is false, and their numeric
 FD is never passed to local close. All owned-resource rows have process_role SELF.
+SUPERVISOR_TRANSFER may also retain the broker's actual received supervisor
+PIDFD as process_role PEER, closed=false. This is a remote observation, never
+local ownership; retain its actual remote fd/fdinfo association separately from
+the connection peer PIDFD. This uses the existing role, not a new packet/field.
+A held named guard.sock O_PATH handle uses TRANSIENT/SELF and closes once only
+after final custody checks following send/EOF; pathname and sockfs stay distinct.
 flags/descriptor_flags are actual uint, metadata the five-field shape above,
 closed a literal Boolean set only after successful owned close. Each encoded
 handle observation is <=8192 bytes. At most 16 transport snapshots

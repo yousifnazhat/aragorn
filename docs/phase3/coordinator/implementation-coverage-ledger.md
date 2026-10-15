@@ -198,6 +198,24 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+Latest 15 October active coordination: direct incoming messages confirm RUN and
+Workloads verified/fast-forwarded f65e8f3 and agreed the complete v12/v11 contracts;
+both began their exact released implementations. Admission submitted corrected
+stable v9 source, twelve-input closure and67 methods. Root plus two independent
+reviews found the two read/close corrections and late-armed cases ready for the
+first selected native-broker-reader-context stage. This checkpoint publishes
+its owning Admission schedule; actual result/new schedule receipt remain pending.
+The preceding123 registry entries remain unchanged. No new result is inferred.
+
+Root v13 releases only its three-path actual broker/reader service, including
+real session construction, guard listener/readiness writer, public context
+acquisition and complete raw/error retention. Actual Admission signed delivery
+is a service execution dependency; offline implementation proceeds concurrently.
+Root retains client/HTTP renderer/launch, stable generated/deployed inventories,
+stream/loss/program/map, policy/lifecycle, destructive and paired providers.
+V12 remote supervisor-PIDFD observation is clarified using existing role/schema;
+no packet or privilege changes. All final qualification positions remain false.
+
 15 October infrastructure release: Root inspected all three active lane heads
 read-only; all are ancestors of 6af32a0 and no unintegrated signed lane delivery
 exists. Admission's two published context corrections remain unapplied. RUN's

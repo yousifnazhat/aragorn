@@ -198,6 +198,15 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+V15 releases a second non-overlapping Root internal implementation: finite HTTP94
+seven-output renderer/accessor/real caller, including the two HTTP-specific reason
+consumers that reject mapped RUN refusals. Actual original/report/generated pins
+are distinguished; no historical stage executes. Root client35 stable candidate
+is submitted for source/20-path closure review, with the generated accessor honestly
+mocked. Source-only client/renderer work does not close native launch, actual
+protected inputs, stream/loss/program/map, lifecycle, destructive or paired-context
+providers. No new result or48-entry requirement status is inferred.
+
 Root service44 frozen source is now independently reviewed with no remaining
 concrete source blocker (broker-reader-service-source-review-v1.md); actual
 Admission signed dependency/result is still pending before execution. The

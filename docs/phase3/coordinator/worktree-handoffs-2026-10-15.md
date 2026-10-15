@@ -77,6 +77,9 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    exactly the new client module/test/coordinator handoff to Root's available
    internal owner; read provider-release-v14.md and broker-reader-client-contract-v1.md.
    This work proceeds concurrently while the service dependency is pending.
+   V15 assigns a separate internal owner the finite HTTP94 seven-output renderer/
+   accessor/caller and two HTTP reason-consumer successors. Read provider-release-v15.md
+   and http-run-guard-renderer-contract-v1.md. Keep exact source/assigned paths separate.
    Root owns actual protected launch-input acquisition, bootstrap endpoint and
    provider readiness, cancellation/PIDFD transfer and lifetime. Connect the real
    broker/reader/HTTP caller, complete bridge/source closure and generated/deployed

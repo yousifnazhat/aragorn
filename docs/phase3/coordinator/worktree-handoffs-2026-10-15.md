@@ -72,7 +72,11 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    complete destructive enforcement by itself.
 5. Root v13 implements its actual broker/reader service in three exact internal
    paths under broker-reader-service-contract-v1.md, concurrently with all lanes.
-   Its focused execution awaits actual integrated Admission dependency.
+   Its44-method candidate is source-reviewed under broker-reader-service-source-review-v1.md;
+   focused execution awaits actual integrated Admission dependency. V14 assigns
+   exactly the new client module/test/coordinator handoff to Root's available
+   internal owner; read provider-release-v14.md and broker-reader-client-contract-v1.md.
+   This work proceeds concurrently while the service dependency is pending.
    Root owns actual protected launch-input acquisition, bootstrap endpoint and
    provider readiness, cancellation/PIDFD transfer and lifetime. Connect the real
    broker/reader/HTTP caller, complete bridge/source closure and generated/deployed
@@ -175,7 +179,9 @@ Branch: `codex/phase3-run-health`
 7. Read bootstrap-source-review-v1.md. Correct paired transfer entry/ownership,
    final deadline/custody after observation and cleanup, actual ready-frame receipt
    chronology and association-UNKNOWN PIDFD cleanup. No bootstrap stage is
-   scheduled; the first55-method proposal never ran. Submit refreshed full stable
+   scheduled; both55/59-method proposals never ran. Read the successor recheck:
+   take-configuration improved, but rejected-entry custody, other final deadlines,
+   immediate ready receipt and UNKNOWN PIDFD association remain open. Submit refreshed full stable
    closure/cases before Root scheduling. After reviewed actual PASS, sign/verify
    exact paths and hand off original commit/evidence. No feature push or extra tree.
 

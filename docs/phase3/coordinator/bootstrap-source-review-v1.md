@@ -27,8 +27,9 @@ module and its test. Existing DNS50 evidence remains unaffected and unchanged.
    after its final deadline-enforcing check. That observation takes another
    non-enforcing clock sample; an expired deadline or changed descriptor at that
    seam can still escape as a configuration. Assemble the actual observation,
-   then perform the final enforcing sample and final local flags/held identity/
-   owner/PIDFD association guards immediately before consuming ownership. Preserve
+   perform blocking PIDFD-association and other slow custody guards before the
+   final enforcing BOOTTIME sample, then finish with finite local flags/held
+   identity/owner checks immediately before consuming ownership. Preserve
    the original deadline; do not renew it or invent new return-time guarantees.
    Add genuinely late-armed clock and descriptor substitution cases after all
    earlier acquisition/guards have succeeded. The same successful-return defect
@@ -68,6 +69,36 @@ project imports, compilation, test execution, historical rerun, cache copying,
 live operation, private retention or cleanup is released by this document.
 After actual scheduled PASS and Root evidence review, sign/verify exactly the
 three assigned paths and hand off the original commit; Root integrates ancestry.
+
+## Unexecuted59-method successor recheck
+
+RUN submitted source71214 bytes,
+sha256:22e02a87634dfd8e830bceaf4f261ff6c56cdaaf7b46ad8ecc8fa2837a5adbed;
+test65020 bytes,
+sha256:205a122ffa3c3cf04fc397dd4f460273b08978eadfd8a96de817ce23c50916c0;
+handoff sha256:fa7bad934050814f523869c5195c32234a232fa2e3bee587a02df20cd75058b7.
+Independent before/after static review confirms those stable bytes. No execution.
+Batch registration and the final take-configuration serialization deadline case
+are meaningful progress. The same four corrective conditions remain open:
+
+- Public offer/release still register incoming arguments before enter rejects
+  owner/state/reentry; rejected calls must leave existing owner and new caller
+  handles untouched. The owner-failure test currently injects before API entry,
+  and the wrong-state test expects a newly taken handle. Correct those fixtures
+  to distinguish accepted entry from later failure. Actual recvmsg ancillary
+  ingress is different: those FDs are already installed and MUST be tracked
+  before owner/metadata checks. Preserve that valid ancillary regression.
+- Take-configuration's final sample is improved, but opening/hello/offer/release/
+  client-receipt successful returns still need deadline enforcement after final
+  observations and potentially blocking cleanup. Keep original budgets.
+- Ready receipt is still sampled after parsing/guard/socket work; move it to the
+  actual LF-completing read boundary and preserve the later closing sample.
+- Known/observed PIDFDs still start pid=None; association UNKNOWN and safe close
+  semantics remain required before pre-configuration/ancillary refusal cleanup.
+
+Correct the existing same three paths, acknowledge all four conditions and
+resubmit stable closure. No bootstrap row/run, historical rerun, shared edit or
+new scope is authorized. The first55 and successor59 proposals are both unexecuted.
 
 ## Completed, assignments and remaining steps
 

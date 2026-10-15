@@ -198,6 +198,16 @@ strictly below 110% of baseline across 100 pairs. No threshold is evaluated here
 
 ## Current checkpoint and release order
 
+Root service44 frozen source is now independently reviewed with no remaining
+concrete source blocker (broker-reader-service-source-review-v1.md); actual
+Admission signed dependency/result is still pending before execution. The
+available Root internal owner receives v14's exact client module/test/handoff
+assignment, with real public journal/readback, configuration lifetime, missing
+accessor and non-root observation ceilings fixed. Source implementation can proceed
+concurrently; generated caller/accessor/launch remains separate Root work. RUN's
+unexecuted59 successor has the same four precise corrective conditions still
+open; no new stage or PASS is inferred. All48 row states/old results remain intact.
+
 15 October follow-up source review: Admission's corrected context67 stage is
 published at d7ebe099; exact newer receipt and actual result remain pending.
 RUN's acknowledged v12 bootstrap55 draft has its complete three-input closure

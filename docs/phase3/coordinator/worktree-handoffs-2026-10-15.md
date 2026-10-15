@@ -56,10 +56,10 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
 1. Confirm owner receipt of this published checkpoint. No unchanged retry of the
    unavailable outbound bridge. Publish these copyable prompts and record receipt
    unconfirmed until each owner acknowledges the exact commit/contract.
-2. Admission's context draft is unchanged and its two published corrections are
-   unapplied. Review only its refreshed three-path source and complete closure;
-   then register/schedule the first necessary focused stage. Do not rerun its
-   integrated 33-method submission replay or broaden its ownership.
+2. Admission submitted corrected stable source and its67-method/12-input closure.
+   The first selected schedule is published in broker-context-review-and-scheduling-v1.md.
+   Confirm owning receipt, review its actual outcome before signed delivery, then
+   integrate original ancestry. Do not rerun its completed33 replay suite.
 3. RUN's original signed DNS `a32477b0b38248f7dca825ec022ad4c0e467558d` is
    already integrated. Preserve its actual 50-method PASS fingerprint
    `sha256:3b989508ec43b9ab89102eae7723aeefcf5bff8702b1266f21a770099a0bb88c`.
@@ -70,7 +70,10 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    exact loaded singleton bytes and the registered worker's actual positive
    lineage hold. A conditional comparison cannot supply loader authenticity or
    complete destructive enforcement by itself.
-5. Root owns actual protected launch-input acquisition, bootstrap endpoint and
+5. Root v13 implements its actual broker/reader service in three exact internal
+   paths under broker-reader-service-contract-v1.md, concurrently with all lanes.
+   Its focused execution awaits actual integrated Admission dependency.
+   Root owns actual protected launch-input acquisition, bootstrap endpoint and
    provider readiness, cancellation/PIDFD transfer and lifetime. Connect the real
    broker/reader/HTTP caller, complete bridge/source closure and generated/deployed
    inventories. Follow the reviewed bootstrap and HTTP94 successor decisions;
@@ -84,7 +87,9 @@ lanes proceed as soon as their contract is ready, concurrently with Root.
    usable positive enforcement. Full REQUEST_ACCEPTED -> DECISION_FINALIZED and
    TASK_ACCEPTED -> TASK_COMPLETED remain mandatory, with original deadlines and
    explicit post-submission ambiguity.
-7. Finish the destructive execution contract: valid ingress/claim/intent,
+7. Workloads' first27-method source review is published in destructive-lineage-source-review-v1.md.
+   Receive only its bounded FD-generation/late-flags/transient-cleanup/Linux-fixture
+   corrections and re-review stable bytes before first scheduling. Finish the destructive execution contract: valid ingress/claim/intent,
    exclusive target mutation custody, observer/readiness/quiescence/drain/loss/
    retention/clock, real control launch and independent consumer. Retain source-
    backed decisions already made; do not reopen them without a concrete defect.
@@ -114,28 +119,24 @@ Write only:
 - `tests/test_native_phase3_broker_reader_context.py`
 - `docs/phase3/admission/BROKER_READER_CONTEXT_HANDOFF.md`
 
-1. Preserve the existing 55-method draft. Its source/test pins remain
-   `c0f16a10c1ee4760c6a01261b2c646af5eb67711e5b6d46af80f5087d51a02ee` /
-   `105acb27b97a285fe990da8856e2d23f26a3cc15418b77582821413133bb904b`;
-   both published corrections are still unapplied as of this read-only inspection.
-2. Correct close ordering: finish all fallible flags/PIDFD-association observations,
-   then recheck held identity, original owner and current borrowed aliases
-   immediately before the consumed-once close. Uncertain/substituted/borrowed
-   ownership must not close a foreign descriptor. Preserve original failures.
-3. Correct read ordering: after seek/timing/prior-read observations, recheck
-   ownership, held identity, readonly/nonblocking flags and borrowed aliases
-   immediately before every actual read. Preserve bounded original prefixes;
-   never read a known substituted or newly borrowed descriptor.
-4. Add narrow late-armed fabricated-boundary cases asserting no foreign read or
-   close, not merely eventual refusal. Preserve public API, deadline, strict
-   schemas, shared-GID and dual-mount joins; do not edit shared dependencies.
-5. Submit refreshed exact source/handoff hashes, actual complete closure and case
-   inventory. No context stage is currently scheduled. After Root schedules,
-   execute only that stage, retain the actual outcome and submit for review.
-6. After reviewed PASS, sign/verify one exact-path commit and hand it off. Root
-   still owns actual accepted caller/request/receipt origins, protected expectations,
-   bootstrap, cancellation and installed HTTP integration. Do not claim those
-   from this bounded leaf or rerun the completed submission-replay suite.
+1. Preserve the corrected67-method draft and existing replay evidence. Stable source
+   sha256:53aedfa46cd67c5febcd4f5aef3ff54d41f1227cd4a5d780b42cea2fb37e9493;
+   test sha256:7a898d3fa1906ca2caac6c37683a6a567e31b9f044dc50e2643f4aea4a566fd7.
+   Both published read/close corrections are reviewed; do not reimplement them.
+2. Read broker-context-review-and-scheduling-v1.md at the supplied verified published
+   checkpoint, preserve drafts and fast-forward your own branch. Acknowledge the
+   exact schedule and unchanged full twelve-file closure.
+3. Inspect status native-broker-reader-context using /opt/homebrew/bin/python3.12
+   -S -B scripts/phase3_pipeline.py. Reuse a matching actual successful result.
+   Otherwise if NEW, run only this first selected67-method stage once. Never
+   override/retry an existing failure. No historical suite or other stage.
+4. Retain actual result/logs, byte sizes/hashes and pre/post fingerprint on either
+   outcome. Submit to Root; do not sign before Root reviews the actual evidence.
+5. After reviewed PASS, stage exactly your three source/test/handoff paths, make
+   one git commit -S, verify and hand Root original hash/paths/result/limits/blockers.
+   No feature push. Root retains actual accepted caller/request/receipt origins,
+   bootstrap/cancellation and installed HTTP integration. This bounded acquisition
+   is an actual execution dependency of Root's new v13 service; integrate promptly.
 
 ## RUN / health prompt
 
@@ -192,37 +193,29 @@ The v11 write allowlist is exactly:
 - `tests/test_native_phase3_workload_destructive_lineage.py`
 - `docs/phase3/workload-verifiers/DESTRUCTIVE_LINEAGE_HANDOFF.md`
 
-1. Acknowledge the exact release and implement the bounded acquisition API over
-   the actual borrowed runtime-to-sensor frontend socket, worker PIDFD and
-   cancellation descriptor. The backend broker's immediate sensor peer is not
-   the runtime. Do not alter sensor accounts, FSUID/FSGID or capabilities.
-2. Preserve raw peer credentials/PIDFD/proc/cgroup/namespace/boot observations,
-   original clock/deadline and finite descriptor custody. Consume immutable
-   loaded-binding bytes and the real registered worker's positive summary only
-   under the explicit Root caller obligations; never claim this leaf authenticates
-   opaque loader/source/hold summaries.
-3. Derive MATCH only for the actual registered worker. Derive configured-scope
-   NO_MATCH only for a different live peer in a different stable cgroup while
-   the complete configured singleton/registered-positive joins hold. Everything
-   missing/malformed/changed/ambiguous is UNKNOWN/refusal. No attempt-label denial,
-   fabricated control attribution or generic exception converted to absence.
-4. Preserve the existing lineage version-path representation. Its omitted
-   context_id cannot be replaced by context_digest. Preserve sequential resolved
-   calls in the repeated sensor process; poison only unresolved acquired ownership,
-   with no reset API, automatic retry or new one-attempt daemon.
-5. Implement an independent stdlib consumer over actual retained bytes; no producer
-   parser/private helper imports. All authority/qualification flags remain false.
-   Prepare focused mocked acquisition/replay cases including positive and genuine
-   different-cgroup comparison, malformed/stale inputs, cancellation, descriptor
-   substitution/cleanup and resolved versus poisoned sequential ownership.
-6. Submit stable actual complete closure/cases. This source release schedules no
-   execution. After Root's focused schedule and reviewed PASS, sign/verify the four
-   exact paths and hand off original commit, actual result/fingerprint and limits.
-7. Full a100 enforcement remains pending actual valid ingress, positive lineage
-   hold, authenticated broker decision and continuous destructive interval evidence.
-   Root owns those providers. Do not edit shared broker/observer/launcher files or
-   claim completed control blocking from this conditional lookup alone. Take the
-   next destructive execution leaf as soon as its concrete contract is published.
+1. Preserve your completed v11 acquisition/verifier draft and older design/evidence.
+   Read destructive-lineage-source-review-v1.md; no Workloads stage is scheduled.
+   Root reviewed all four behavioral inputs and27 methods before execution.
+2. Correct only the existing four assigned paths: permit numeric descriptor reuse
+   after a fully CLOSED generation while rejecting active/unresolved/borrowed
+   aliases; track newly acquired descriptors before fallible metadata. Make the
+   model reuse closed numbers with per-generation close accounting.
+3. Move final access/nonblocking/CLOEXEC checks after slow clock/cancellation/link/
+   poll work, followed by final local custody immediately before read/use. Arm
+   regressions after acquisition/earlier guards succeed, not during initial own().
+4. Ensure fdinfo transient descriptors opened during terminal PIDFD cleanup get
+   their known-safe close attempt after read failure, preserving original errors
+   and poisoned unresolved ownership. Never retry ambiguous close or force-close.
+5. Supply selected Darwin fixture's Linux-only getresuid/getresgid/SO_PEERCRED
+   attributes explicitly with create=True, and unwind partially started patches
+   on setup failure. Keep production Linux ABI/protection requirements intact.
+6. Submit refreshed stable hashes, complete actual closure and focused cases.
+   Root reviews before first scheduling. Do not execute the unreviewed27-method
+   proposal, copy caches, duplicate DNS or rerun historical stages.
+7. Preserve actual frontend peer, immutable singleton/real worker joins, independent
+   replay, safe sequential calls, UNKNOWN and seven false flags. Full a100 valid
+   ingress/positive hold/authenticated broker/destructive interval remains Root-owned.
+   After scheduled reviewed PASS, sign/verify exact paths and hand off original hash.
 
 ## Remaining Phase 3 steps
 

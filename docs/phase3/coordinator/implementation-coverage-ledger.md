@@ -27,7 +27,8 @@ any existing bounded evidence. All rows have final qualification `false`.
 `Admission`, `RUN`, `Workloads` and `Root` identify the existing worktree owners.
 Rows do not grant new write permission: only the explicit paths in
 `ownership-and-release-v2.md` and the applicable published provider releases
-(including v7 DNS, v8 reader/session and v9 protected broker context) are released. Root must publish a concrete
+(including v7 DNS, v8 reader/session, v9 protected broker context and v11 peer lineage)
+are released. Root must publish a concrete
 contract and exact additional paths before a lane begins a later family. Root
 owns shared dispatch/registry and the providers below except the explicitly
 delegated RUN transport leaf in `reader-transport-contract-v1.md` /
@@ -195,6 +196,18 @@ p95 over 100 full decision intervals <500ms; aggregate instrumented task duratio
 strictly below 110% of baseline across 100 pairs. No threshold is evaluated here.
 
 ## Current checkpoint and release order
+
+15 October infrastructure release: Root inspected all three active lane heads
+read-only; all are ancestors of 6af32a0 and no unintegrated signed lane delivery
+exists. Admission's two published context corrections remain unapplied. RUN's
+actual DNS result is complete and unchanged. Workloads receives the bounded
+four-path actual peer-lineage/independent-comparison assignment under v11 and
+`destructive-lineage-contract-v1.md`; source-backed version-path and sequential
+caller decisions are resolved. This source-only release creates no stage or
+native a100/enforcement claim. Root retains actual loaded-config/positive-hold,
+bootstrap/caller/observer and deployed custody prerequisites. The detailed shared
+and four-owner prompts are `worktree-handoffs-2026-10-15.md`. All final positions
+remain false; earlier dated entries below are historical checkpoint records.
 
 14 October DNS delivery: Root verified original signed
 `a32477b0b38248f7dca825ec022ad4c0e467558d`, its exact five assigned paths,

@@ -16,7 +16,18 @@ executed to assemble this source inventory.
 
 ## Status and ownership notation
 
-Latest integration, 28 October: original verified signed Admission context
+Latest integration, 29 October: verified signed broker service
+`721e63cbb8f3bc47fe5fd58cbc8793538c4851db` is integrated with a complete
+44-method unit PASS at matching pre/post fingerprint
+`sha256:3a3931727362b25199c19374d6f2e82a967664c2eacd5fe05b39f1582a826201`.
+The initial 43-pass/one-failure result is retained separately; a diagnosed shared
+fixture correction, not production changes or an unchanged retry, preceded PASS.
+See `../integration-checkpoint-2026-10-29-broker-service.md`. Actual native
+composition, launch/source custody and full health remain open. RUN's 69 and
+Workloads' 32 corrected methods remain unexecuted drafts. No full requirement or
+final qualification state is promoted.
+
+Prior checkpoint, 28 October: original verified signed Admission context
 `018959a4fd47205d3b467cfc99794fd649671fb7` is integrated. Its first scheduled
 67-method stage passed once at matching pre/post fingerprint
 `sha256:befda78d72d7a2a0c35c2c05887bcf84825cdf8ef64a8750036903e98141bd12`.
@@ -117,6 +128,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 
 | Reference | Existing selected result | Fingerprint / retained source of result |
 | --- | --- | --- |
+| V-broker-service | 44 mocked service/readiness/refusal/custody checks; PASS after diagnosed shared-fixture repair | `sha256:3a3931727362b25199c19374d6f2e82a967664c2eacd5fe05b39f1582a826201`; original signed `721e63cbb8f3bc47fe5fd58cbc8793538c4851db`. Both initial FAIL and corrected PASS retained with artifact pins in `broker-reader-service-handoff.md`. No native context/session composition, installed-source, full-health or qualification claim. |
 | V-broker-context | 67 new mocked protected context and retained-byte replay checks; first selected PASS | `sha256:befda78d72d7a2a0c35c2c05887bcf84825cdf8ef64a8750036903e98141bd12`; original signed `018959a4fd47205d3b467cfc99794fd649671fb7`, integrated preserving ancestry. Original Admission result/log pins: `docs/phase3/admission/BROKER_READER_CONTEXT_HANDOFF.md`. No native custody, installed-source, service composition or qualification claim. |
 | V-source | Source inspected; no current requirement-level result asserted | Existing inventory/probe/consumer only. Historical standalone qualification must not become same-deployment campaign evidence. |
 | V-install | INSTALL recorder/consumer: 16 checks; native leaf: 17 mocked checks | `sha256:0d3692546c31cc2733070f93f85a83a7ee6cd13b45f1d93b8974b53c6cd105c2`; `sha256:62afde843001570524bafaed58dfcfab678f3a2dd1ac9e61712e7ff0a8217882`; `docs/phase3/admission/INSTALL_RECORDING.md`, `INSTALL_LEAF.md`, integration batch2/batch3 checkpoints. |

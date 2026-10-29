@@ -43,6 +43,34 @@ bootstrap paths. Integrate the original signed ancestry, without copying caches.
 No historical tests, broad suite, live operations, installed activation,
 private cleanup, health/effect authority or final qualification is released.
 
+## 29 October: diagnosed late-substitution fixture correction
+
+Published first schedule `38ddb2f15c60f63f4a1f29518ca706eabb1edd21` was
+fast-forwarded into RUN without changing its drafts. The sole selected stage
+ran69 methods at unchanged pre/post fingerprint
+`sha256:5b07605a92ef38f655e087517a3dd15c4e532bdf86d9a6cecda2606d49752004`:
+68 methods passed and the late-cancel substitution method failed in two subcases.
+The actual result/logs/preflight remain in that owning fingerprint directory;
+the unchanged failed fingerprint is not released for retry.
+
+Root and independent diagnosis found the fixture changed FD60 on the first
+pin_resource readlink, before initial metadata/flags were captured. The altered
+values became the baseline, which configuration subsequently refused and cleanup
+could safely close. This did not exercise the claimed later custody change.
+The minimal correction moves substitution to the second readlink, inside the
+held-resource guard. Existing no-read/no-close assertions are preserved; explicit
+original-failure assertions now prove late flags/identity guards are reached.
+No production code, stage definition, dependency, runner or unrelated test changed.
+
+Reviewed replacement test: 82845 bytes,
+`sha256:85bdf2af88204a1c4cb231a22e81dc5ee8630c7873d3ccccfc8bfe69a25b7918`.
+Source and initializer retain the first schedule pins. Independent static review
+confirmed the cause and repair. After publication and safe RUN fast-forward,
+only this same69-method stage may run at its genuinely changed fingerprint;
+the existing runner selects modules, not individual methods. No runner extension,
+extra stage, broad regression or live operation is authorized. Review actual
+outcome before signed delivery; preserve both evidence records separately.
+
 ## Historical first source review, no execution release
 
 Reviewed candidate: RUN source 70447 bytes,

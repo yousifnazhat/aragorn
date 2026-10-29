@@ -16,7 +16,18 @@ executed to assemble this source inventory.
 
 ## Status and ownership notation
 
-Latest integration, 29 October: verified signed broker service
+Latest integration, 29 October: original verified signed RUN bootstrap
+`ec171a674b45eeb7a3c9473e266b072aefacce5f` is fast-forward integrated with
+69 modeled checks passing at matching pre/post fingerprint
+`sha256:8f564bf4208fb8c5c9f5f3719d7fe79e5c6f29eec5c353ae67a8bd51190d4e45`.
+The initial 68-pass/one-method failure remains retained; a diagnosed fixture-only
+timing correction preceded this changed-input PASS. No unchanged failure reran.
+See `../integration-checkpoint-2026-10-29-run-bootstrap.md`. Workloads' 32-method
+lineage draft is next for review, and the128-row pipeline is now at capacity.
+Actual protected launch and caller composition remain open; no full requirement
+or final qualification state is promoted.
+
+Prior integration, 29 October: verified signed broker service
 `721e63cbb8f3bc47fe5fd58cbc8793538c4851db` is integrated with a complete
 44-method unit PASS at matching pre/post fingerprint
 `sha256:3a3931727362b25199c19374d6f2e82a967664c2eacd5fe05b39f1582a826201`.
@@ -128,6 +139,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 
 | Reference | Existing selected result | Fingerprint / retained source of result |
 | --- | --- | --- |
+| V-broker-bootstrap | 69 modeled four-message bootstrap, descriptor custody, readiness and transfer checks; PASS after diagnosed late-substitution fixture repair | `sha256:8f564bf4208fb8c5c9f5f3719d7fe79e5c6f29eec5c353ae67a8bd51190d4e45`; original signed `ec171a674b45eeb7a3c9473e266b072aefacce5f`, ancestry preserved. Initial FAIL and corrected PASS retained in RUN with artifact pins in `../run-health/BROKER_READER_BOOTSTRAP_HANDOFF.md`. No live launch/caller composition, full-health, positive-enforcement or qualification claim. |
 | V-broker-service | 44 mocked service/readiness/refusal/custody checks; PASS after diagnosed shared-fixture repair | `sha256:3a3931727362b25199c19374d6f2e82a967664c2eacd5fe05b39f1582a826201`; original signed `721e63cbb8f3bc47fe5fd58cbc8793538c4851db`. Both initial FAIL and corrected PASS retained with artifact pins in `broker-reader-service-handoff.md`. No native context/session composition, installed-source, full-health or qualification claim. |
 | V-broker-context | 67 new mocked protected context and retained-byte replay checks; first selected PASS | `sha256:befda78d72d7a2a0c35c2c05887bcf84825cdf8ef64a8750036903e98141bd12`; original signed `018959a4fd47205d3b467cfc99794fd649671fb7`, integrated preserving ancestry. Original Admission result/log pins: `docs/phase3/admission/BROKER_READER_CONTEXT_HANDOFF.md`. No native custody, installed-source, service composition or qualification claim. |
 | V-source | Source inspected; no current requirement-level result asserted | Existing inventory/probe/consumer only. Historical standalone qualification must not become same-deployment campaign evidence. |

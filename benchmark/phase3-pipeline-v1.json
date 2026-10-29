@@ -9978,6 +9978,20 @@
       ],
       "needs": [],
       "timeout_seconds": 120
+    },
+    {
+      "id": "native-broker-reader-bootstrap",
+      "description": "Mocked fixed authenticated four-message bootstrap, exact FD custody, concrete provider readiness and retained partial failures; no native operation or health authority",
+      "tests": [
+        "test_native_phase3_broker_reader_bootstrap"
+      ],
+      "inputs": [
+        "src/aragorn/__init__.py",
+        "src/aragorn/native_phase3_broker_reader_bootstrap.py",
+        "tests/test_native_phase3_broker_reader_bootstrap.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
     }
   ]
 }

@@ -1,4 +1,49 @@
-# Fixed bootstrap: first source review, no execution release
+# Fixed bootstrap: source review and first focused schedule
+
+## 29 October: corrected 69-check first execution release
+
+This section supersedes the unexecuted 55/59 scheduling holds below; those
+historical source reviews and all prior evidence remain intact. Root and two
+independent static reviewers checked the v12 contract, all four corrections,
+mocked native boundaries and the complete three-file behavioral closure.
+No remaining blocker was found in this bounded review. Production is unchanged
+from the corrected 69-check submission. Before any execution, Root corrected two test
+fixture defects: explicitly model Linux errno instead of host Darwin values,
+and arm the configuration-transfer final-clock substitution only after the
+post-observation supervisor check and its following cancellation guard finish.
+Independent re-review confirmed both repairs without adding/removing methods.
+
+Reviewed inputs (SHA-256):
+
+```text
+4b573d061d6b777ac928a08a368cfbea9dee0e2071b78ffe3d105f9cf1a40c01  src/aragorn/__init__.py
+c7b304e749c27da383570874d5f8094ce6241f3540566e0f262593c9cdd19486  src/aragorn/native_phase3_broker_reader_bootstrap.py
+c774dc87e1baefe06c74ac1cb9aeec588406e96a340d89ca31990d571b306ef8  tests/test_native_phase3_broker_reader_bootstrap.py
+```
+
+Sizes are 78, 74370 and 82316 bytes respectively. All 69 methods are still
+unexecuted at registration. The stdlib-only producer imports no other project
+module; the sole project-source read is this same inventoried producer. Every
+OS/socket/proc/clock/namespace/PIDFD/pipe boundary is modeled. The monotonic
+fixture descriptor allocator does not establish numeric-reuse coverage.
+
+Only `native-broker-reader-bootstrap` is appended to the shared registry with
+these three inputs, one test module, no prerequisite stages and a 120-second
+bound. All 127 prior rows, runner and worker lock remain unchanged. This is the
+128th and last row permitted by the current runner; any later capacity change
+needs a separate reviewed batch, not a silent extension here.
+
+After this signed schedule is published, the coordinator may safely fast-forward
+the existing RUN-health worktree from fc96aed to that exact commit, preserving
+its three drafts, unrelated HTML and original evidence. In that owning checkout,
+inspect status for this stage only; execute once only if NEW, reuse exact PASS,
+and never rerun an unchanged failed/interrupted/timed-out fingerprint. Review
+actual results and pre/post input pins before signing exactly the three owned
+bootstrap paths. Integrate the original signed ancestry, without copying caches.
+No historical tests, broad suite, live operations, installed activation,
+private cleanup, health/effect authority or final qualification is released.
+
+## Historical first source review, no execution release
 
 Reviewed candidate: RUN source 70447 bytes,
 `sha256:35a74d79f2b5154caf04c1ff4f18710b937b42bc370c13fd936360cf196dcbe8`;

@@ -1,0 +1,228 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "b7321ab0b3ef61f45012ddc17e6491acc37aaaf0",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "latest_heartbeat": "2026-10-06T17:22:43.773Z",
+    "validation_recorded": "2026-10-06 18:40:35 UTC",
+    "meaning": "Parallel nonoverlapping implementation and cross-review followed by selected inert pipeline stages. Not live runtime or acceptance performance."
+  },
+  "implementation": [
+    "One fixed guest controller consumes the actual seven-writer hook, fresh protected-directory descriptor and boot ID; it creates original common/collection/broker preparation in two fresh distinct held private CAS roots. Real caller inventory is mandatory; pair host profiles must equal the actual common OS profile and are never rewritten.",
+    "Original preparation source-binds the actual fixed workload, independent verifier and common identity reader. The existing permanent claim and measurement handoff are entered before the sole activation and held through workload, readbacks and cleanup. No generic callback timestamp translation, commitment regeneration, reset or retry.",
+    "After activation, common28 identity is joined to an independent process observer. The broker mount namespace uses the actual kernel readlink joined to a held namespace descriptor and the common device/inode identity.",
+    "Held process handles cover both same-process external clock observations, one same-action revoked workload, and a fixed public snapshot of four worker records, pending/completion, and five explicit effective broker blobs. Existing independent blocked-create and interval consumers operate on a finite retained closure.",
+    "Public role classification precedes raw export. Canonical worker records and nested bodies, pending/binding/process records, effective evidence, consumed state, profile receipt, broker result and profiled submission are checked with existing validators and exact measured-action/attribution joins. Unknown or dependency-unclassifiable bytes remain local to custody; only role, byte count and digest are public.",
+    "The snapshot never opens private input CAS or raw grant credentials and never enumerates a digest graph. Valid classified partial records survive a post-read guard failure. Missing driver pins allow partial readback only, never success.",
+    "The controller keeps handoff, protected root and private stores held through the once-only four-service cleanup. Every journaled public candidate is independently checked after cleanup; missing evidence makes the result a refusal. Child records survive whole-report CAS failures and primary interrupts are preserved.",
+    "This is a guest API, not the host copy/install/invocation/export wrapper or live qualification. The existing handoff exposes its session only after yield; exact pre-yield claim/partial-provisioning recovery remains a required host integration boundary before disposable fixture destruction."
+  ],
+  "review_findings_resolved": [
+    "Broker verifier requires a kernel mnt:[inode] string while common identity supplies a device/inode dictionary; the controller now reads and joins both actual representations.",
+    "Snapshot directory constructor could leak its initial descriptor on custody refusal; closure preserves the primary exception. Successfully read classified bytes are recorded before the post-read guard can fail.",
+    "Planner registers source replay before the first public write and independently checks retained source/target records on failure. Private root freshness, distinct inodes and strict actual host-profile joins are enforced.",
+    "Snapshot interrupt-attached evidence, individual child records and the common after-identity read now survive whole-report retention or independent process-observer failures.",
+    "Precleanup-only public CAS readbacks could miss cleanup-time evidence loss. Final per-candidate reads now occur after cleanup while held contexts remain open, with an inert deletion test.",
+    "Digest equality alone did not classify a blob as public. Fixed canonical role validators now gate raw admission and expose only digest/length metadata for unrecognized content.",
+    "Existing profiled-submission and consumed-state primitives did not fully validate nested measured-action/attribution fields. Exact action projections and the existing attribution parser close those nested public-export gaps."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:3f0707c09c9b2933172e5fb68e05d4e5fe6690b71f9dfde2377f5a7561ae1993",
+    "benchmark/phase3-pipeline-v1.json": "sha256:ccaa51633fea182e7ed8c4570fcf772a89f93428afb4510a4588e9d18273b394",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/runtime_native_common_attempt.py": "sha256:434588e3aaf00e93488e3ddb793b5ed29acf681c1a66cd227882ebb357a5b613",
+    "scripts/runtime_native_common_attempt_plan.py": "sha256:d4c0e36fa6920448818401caecf07286a79f14877668cebc5ea3b04a7992c433",
+    "scripts/runtime_native_measurement_evidence_snapshot.py": "sha256:1980a44c5d7e58f8b92bd53ba56c42358cedd3fb64fc51b3f8b39cef5c3eb204",
+    "tests/test_runtime_native_common_attempt.py": "sha256:41a07fd7de0006093bd8b34dc2beb94d80224588f1cbb37bbae5896b2164a9a0",
+    "tests/test_runtime_native_common_attempt_plan.py": "sha256:ab2dee30f28fea9647c9e630908017f8866759d051793ccb42c44985c5981716",
+    "tests/test_runtime_native_measurement_evidence_snapshot.py": "sha256:77b2919857a0ca1899c435bf742ba9cf600932c15c96679803401386abfe0fb3"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-attempt-plan",
+      "status": "PASS",
+      "fingerprint": "sha256:f9c429e0496bc6d637846cd0a06add856a9e9a4f0a47177056b13dda54067355",
+      "tests": 12,
+      "unittest_seconds": 2.955,
+      "wall_seconds": 3.291567,
+      "finished_at_ns": 1791308471611077000,
+      "stderr_digest": "sha256:cfde103b36256539ada0170848e3a9bca27a5fedf661a36c97bdab4cc4fd809a",
+      "result_digest": "sha256:ceb3303789291ccf9e80f70069ffa93cdf7ad9c2231583197809ae6bba776bf7",
+      "reviewed_inputs": 136
+    },
+    {
+      "stage_id": "native-measurement-evidence-snapshot",
+      "status": "PASS",
+      "fingerprint": "sha256:16f88759630e9f637f06874ced3d77dd4ad2ac41203a47f5a51e75f6e1bd91ab",
+      "tests": 13,
+      "unittest_seconds": 0.27,
+      "wall_seconds": 0.541728,
+      "finished_at_ns": 1791311986689607000,
+      "stderr_digest": "sha256:b306122fef8f3dc51bf306a36e29d928758dfeae8694a349f71d8a0e83162047",
+      "result_digest": "sha256:fdc650773bf146f50651d8562dd5c52ea1e4abf1c1f5afb0b15e8fc0c6d5e820",
+      "reviewed_inputs": 26
+    },
+    {
+      "stage_id": "native-common-attempt",
+      "status": "PASS",
+      "fingerprint": "sha256:da59ea37249798e69b98054e94942c7136417c0da30fd89e0f4bec0752730549",
+      "tests": 15,
+      "unittest_seconds": 0.261,
+      "wall_seconds": 0.573718,
+      "finished_at_ns": 1791311940897709000,
+      "stderr_digest": "sha256:8ee91c7a9dc448fa2d65a711e33318cacb615b4e9659afef1898e57d6b7bce25",
+      "result_digest": "sha256:cdd22e1daeb2371509c4b08c7384bce0ae5d91e097bc2804cc768812a400b414",
+      "reviewed_inputs": 91
+    }
+  ],
+  "pipeline_attempt_history": [
+    {
+      "stage_id": "native-common-attempt-plan",
+      "status": "PASS",
+      "fingerprint": "sha256:f9c429e0496bc6d637846cd0a06add856a9e9a4f0a47177056b13dda54067355",
+      "tests": 12,
+      "unittest_seconds": 2.955,
+      "wall_seconds": 3.291567,
+      "finished_at_ns": 1791308471611077000,
+      "stderr_digest": "sha256:cfde103b36256539ada0170848e3a9bca27a5fedf661a36c97bdab4cc4fd809a",
+      "result_digest": "sha256:ceb3303789291ccf9e80f70069ffa93cdf7ad9c2231583197809ae6bba776bf7",
+      "reviewed_inputs": 136
+    },
+    {
+      "stage_id": "native-measurement-evidence-snapshot",
+      "status": "PASS",
+      "fingerprint": "sha256:f2d832fa1746b362600b7d42981d2b47a70eb352adfe3be4d1cbc7741bc6a5ed",
+      "tests": 12,
+      "unittest_seconds": 0.259,
+      "wall_seconds": 0.515557,
+      "finished_at_ns": 1791311807727655000,
+      "stderr_digest": "sha256:09bad852d13508d68d429df626d16905ba3b1d68c59f4f715c9c9c0d9fe5eaea",
+      "result_digest": "sha256:3c33ed7dcd61000a142a5807e0a09b7a49d0cb86324326bce5265885db4ab199",
+      "reviewed_inputs": 26
+    },
+    {
+      "stage_id": "native-common-attempt",
+      "status": "FAIL",
+      "fingerprint": "sha256:37d4e3f80a63aa9b29bfadc8db6826ce9cc95277874d873a10ae3d0d5dc1fb02",
+      "tests": 15,
+      "unittest_seconds": 0.257,
+      "wall_seconds": 0.575452,
+      "finished_at_ns": 1791311808553094000,
+      "stderr_digest": "sha256:0a9c39b1f579f90dd44c6a38a5b58b8c6be7ad20f9f8a82147a73f488dd19e4d",
+      "result_digest": "sha256:72b301f6d0e929b2136d01aa087cf968d4ba1d32d8457ac3eeec42dad65f46f7",
+      "reviewed_inputs": 91
+    },
+    {
+      "stage_id": "native-measurement-evidence-snapshot",
+      "status": "FAIL",
+      "fingerprint": "sha256:ef5237c663e8b7cd356bf1c5ed684ee4d32643b1d8aab012d8d4bce9bb38eeb1",
+      "tests": 13,
+      "unittest_seconds": 0.283,
+      "wall_seconds": 0.54773,
+      "finished_at_ns": 1791311940069955000,
+      "stderr_digest": "sha256:50e4ae7bd7d1968c7b5aeb68269e626254bbe162c604210b5f4d2d0d6de3ccf0",
+      "result_digest": "sha256:f278a448902bab27bceb1a65a9b5b51715e695a840552bc5f060235ce64d00fc",
+      "reviewed_inputs": 26
+    },
+    {
+      "stage_id": "native-common-attempt",
+      "status": "PASS",
+      "fingerprint": "sha256:da59ea37249798e69b98054e94942c7136417c0da30fd89e0f4bec0752730549",
+      "tests": 15,
+      "unittest_seconds": 0.261,
+      "wall_seconds": 0.573718,
+      "finished_at_ns": 1791311940897709000,
+      "stderr_digest": "sha256:8ee91c7a9dc448fa2d65a711e33318cacb615b4e9659afef1898e57d6b7bce25",
+      "result_digest": "sha256:cdd22e1daeb2371509c4b08c7384bce0ae5d91e097bc2804cc768812a400b414",
+      "reviewed_inputs": 91
+    },
+    {
+      "stage_id": "native-measurement-evidence-snapshot",
+      "status": "PASS",
+      "fingerprint": "sha256:16f88759630e9f637f06874ced3d77dd4ad2ac41203a47f5a51e75f6e1bd91ab",
+      "tests": 13,
+      "unittest_seconds": 0.27,
+      "wall_seconds": 0.541728,
+      "finished_at_ns": 1791311986689607000,
+      "stderr_digest": "sha256:b306122fef8f3dc51bf306a36e29d928758dfeae8694a349f71d8a0e83162047",
+      "result_digest": "sha256:fdc650773bf146f50651d8562dd5c52ea1e4abf1c1f5afb0b15e8fc0c6d5e820",
+      "reviewed_inputs": 26
+    }
+  ],
+  "test_count": 40,
+  "new_test_methods": 40,
+  "affected_test_invocations": 80,
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-common-attempt-plan",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-measurement-evidence-snapshot native-common-attempt",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-measurement-evidence-snapshot native-common-attempt",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-measurement-evidence-snapshot"
+  ],
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "new_failed_fingerprints": [
+    {
+      "stage_id": "native-common-attempt",
+      "fingerprint": "sha256:37d4e3f80a63aa9b29bfadc8db6826ce9cc95277874d873a10ae3d0d5dc1fb02",
+      "retained": true,
+      "resolution": "New test used blocked_pre_effect instead of the real consumer's blocked_pre_effect_verified ceiling; corrected only the assertion after real consumer composition succeeded."
+    },
+    {
+      "stage_id": "native-measurement-evidence-snapshot",
+      "fingerprint": "sha256:ef5237c663e8b7cd356bf1c5ed684ee4d32643b1d8aab012d8d4bce9bb38eeb1",
+      "retained": true,
+      "resolution": "New negative attribution fixture needed all dependent lease and result digests updated to reach the classification guard; corrected fixture construction, not production validation."
+    }
+  ],
+  "superseded_successes": [
+    {
+      "stage_id": "native-measurement-evidence-snapshot",
+      "fingerprint": "sha256:f2d832fa1746b362600b7d42981d2b47a70eb352adfe3be4d1cbc7741bc6a5ed",
+      "reason": "Subsequent focused review identified nested public-field classification gaps; actual source checks and a new method were added before a new fingerprint ran."
+    }
+  ],
+  "unchanged_failed_fingerprints_rerun": false,
+  "unchanged_successful_product_stages_rerun": false,
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "ast_local_import_counts": {
+      "native-measurement-evidence-snapshot": 26,
+      "native-common-attempt-plan": 83,
+      "native-common-attempt": 91
+    },
+    "reviewed_inputs": {
+      "native-measurement-evidence-snapshot": 26,
+      "native-common-attempt-plan": 136,
+      "native-common-attempt": 91
+    },
+    "undeclared_local_imports": [],
+    "resolver_roots": [
+      "src",
+      ".",
+      "scripts",
+      "tests"
+    ],
+    "extra_plan_data_closure": "Union with the reviewed native-common-preparation inputs for its actual stager/materializer, baseline capture and configuration data. Constructor helpers only; no historical test methods invoked.",
+    "limits": "Static local import review plus explicit data closure, not full environment or loaded-code attestation."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "frozen_predecessors_changed": false,
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Reuse capture_native_phase3_common_setup.py host lifecycle and runtime_native_common_setup_capture.py fixed public export pattern, keeping setup-only predecessors unchanged. Implement attempt copy/install inventory, bounded guest bundle/entrypoint and export, exact pre-yield claim/provisioning failure readback, independent capture consumer and verified owned fixture/VM restoration. Supply real campaign inventory before a newly necessary isolated live check. Admission families, RUN/sensor health and full verifier map still precede final freeze and acceptance.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and working-tree state, and retain actual hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

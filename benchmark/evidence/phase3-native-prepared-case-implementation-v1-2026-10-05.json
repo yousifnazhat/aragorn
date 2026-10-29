@@ -1,0 +1,66 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "a380cd3da1f2b9b166af8eb68e8d234ccc725e6f",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T04:01:33.888Z",
+    "validation_reported": "2026-10-05T04:28:02Z",
+    "meaning": "approximately 26.5 minutes session wall time, not summed agent CPU time or a delivery estimate"
+  },
+  "implementation": [
+    "Fixed one-case intent and seven fresh provisioning-writer joins with separate common controller and case adapter identities",
+    "Guest-local absent-only root CAS request publication and readback before the existing activation hook",
+    "Fixed inspect/capture/replay host CLI with signed source and exact staged-profile guards and retained one-shot envelope before offline consumption",
+    "One semantic live-collection replay followed by full nested child-custody readback",
+    "Bounded caller-selected sensor FD exit-program/map/perf-link association reader, not program execution or sensor health"
+  ],
+  "review_fixes": [
+    "Reuse cas.py already staged by the native 70-file profile rather than copying a conflicting helper mode",
+    "Reject nested evidence loss occurring after the existing live replay",
+    "Keep all nine guest and prepared-case qualification flags false and reject changed authority",
+    "Keep syscall tests inert and portable to macOS where pidfd_open is unavailable"
+  ],
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run tetragon-program-map",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-plugin-update-case-host"
+  ],
+  "registry": "benchmark/phase3-pipeline-v1.json",
+  "earlier_preflight_refusal": {
+    "command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-plugin-update-case-guest",
+    "reason": "The already registered host test file was still being authored and did not yet exist; the global registry preflight refused before starting any stage",
+    "tests_started": false,
+    "resolution": "Finished and reviewed the actual host test file, then selected the completed host dependency closure",
+    "records_deleted_or_reset": false
+  },
+  "passed_stages": [
+    {"id": "tetragon-program-map", "tests": 8, "new_tests": 8, "fingerprint": "sha256:7abe546bf695a9fbe062774884d5d006a62a6220c8b9f84861eff2f9dcf76489", "result_wall_seconds": 0.11175296},
+    {"id": "native-plugin-update-identity-guest", "tests": 12, "new_tests": 2, "fingerprint": "sha256:a469edf2d20a0b0c0029c6a13bf340cd1d85dd9bab3389c54aaf123224f874e6", "result_wall_seconds": 0.104929024},
+    {"id": "native-plugin-update-identity-host", "tests": 9, "new_tests": 0, "fingerprint": "sha256:987bb10d998c040a3e4e84d3c946d630874e70f9838a93eb5843f3b0c288efe3", "result_wall_seconds": 0.111872},
+    {"id": "native-plugin-update-live-binding", "tests": 5, "new_tests": 0, "fingerprint": "sha256:c8da4dbb72aaf7d3ba295cbf7272b6db0477742b0aeeb3c2c135468925233838", "result_wall_seconds": 0.44484608},
+    {"id": "native-plugin-update-collection", "tests": 11, "new_tests": 0, "fingerprint": "sha256:56ceceb14f15754319e27a1196056bac79833dfbe4b58f8136534542b57e734f", "result_wall_seconds": 0.59852288},
+    {"id": "native-plugin-update-case", "tests": 7, "new_tests": 7, "fingerprint": "sha256:9fbbff26250b8b5a46d9c074e79f100b6fd6d1d48a7a1f6cb366da67cdee6107", "result_wall_seconds": 0.831726848},
+    {"id": "native-plugin-update-case-guest", "tests": 10, "new_tests": 10, "fingerprint": "sha256:331f9d42164c41c4b7d5f6582fcac08eaee993029d5f6979696d9e94afdff931", "result_wall_seconds": 0.120411136},
+    {"id": "native-plugin-update-case-host", "tests": 7, "new_tests": 7, "fingerprint": "sha256:eb9d6564527c256ab1631c8290c5f252079c606a87ecadcd8106d24e60d78c76", "result_wall_seconds": 0.819988992}
+  ],
+  "unchanged_stages_reused": [
+    {"id": "pipeline-unit", "fingerprint": "sha256:72eb97083794bbf8387875cc050255c7c39d8c27a18864b7ffdfe16bc028016f"},
+    {"id": "native-plugin-update-binding", "fingerprint": "sha256:bab1c5be52f3c3c955571b20bff53aafe949f3228e6c39f1a9297812d4e31a80"},
+    {"id": "native-live-identity", "fingerprint": "sha256:3c74eb3418dfed86ac9832ef50287f253ba9d653b54b6e550aeaa3a70655a986"},
+    {"id": "tetragon-stats-map", "fingerprint": "sha256:fc30e36cb6e1e8b3fd3fa162b8d49cddf9fe7cd5e89f86fb25e4b923ff08abf0"},
+    {"id": "tetragon-program-map-source", "fingerprint": "sha256:01b69f695b0aa7a96c24d6bb51ea097f77a4bd984f0227576fc4256a0294b684"}
+  ],
+  "tests_passed": 69,
+  "new_test_methods": 34,
+  "sum_passed_stage_wall_seconds": 3.14404992,
+  "live_captures": 0,
+  "vm_actions": [],
+  "performance_measurements": 0,
+  "broad_regression_runs": 0,
+  "newly_closed_exit_gate_entries": 0,
+  "phase3_complete": false,
+  "automatic_push_performed": false,
+  "next_dependency": "Construct the current signed caller-held intent and shared deployment from pinned inputs; review the exact owned fixture prerequisites before one newly necessary preactivation-boundary integration check. Then continue native admission family ports and meaningful sensor progress/loss integration.",
+  "remaining_acceptance": "Final 31-case and 100-attempt/100-pair acceptance remains blocked by shared deployment/full independent verifier inventory and real workload/timing prerequisites."
+}

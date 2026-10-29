@@ -1,0 +1,109 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "ebc47672be024e965cf7ae34a795bb325db1512f",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-06T02:01:09.093Z",
+    "validation_recorded": "2026-10-06 02:13:27 UTC",
+    "meaning": "Parallel setup integration and independent retained-interval implementation, source review and focused inert checks; not native runtime or acceptance performance."
+  },
+  "implementation": [
+    "Fixed common74 guest setup reuses the frozen seven-document writer hook with exactly thirteen stage-derived changed/added source overrides, preserving other predecessor source expectations and driver pins.",
+    "Before legacy reset or setup writes, require the exact owned guest, source readbacks, stopped units, unused broker measurement state and absent fixed ingress root. Bound all retained source/document inputs before mutation.",
+    "Read back the actual seven protected writer documents, derive v2 common preparation, publish children then preparation, and reconstruct it from the read-only CAS. Raw writer credentials are not returned or published as public raw blobs.",
+    "Stop with a private control-transfer sentinel before the first activator. There is no optional arbitrary measurement callback, published measured request, broker measurement provisioning, activation or resume authority in this setup-only API.",
+    "Attempt source, implementation, ingress absence, broker unused and CAS postchecks independently; then recheck exact fixture identity and verify four-service cleanup. Preserve partial evidence and original failures if descriptor or context cleanup also fails.",
+    "Independent interval consumer reuses the worker ingress, external clock-domain and effective broker-receipt verifiers. Join full canonical action bytes, worker epoch/attribution/peer, broker boot, active time namespace and event chronology inside both external read brackets.",
+    "Require the four ingress records, two clock observations, broker completion and original broker binding to be retained under caller pins in read-only stores. Preserve existing broker evidence closure and final readbacks; no producer/controller imports, live clocks, commands or CAS writes in the new consumer.",
+    "Derive only the recorded authenticated non-receipt frame to effective-final-verdict interval. This is not generic collector semantics, native tool-call latency, effect completion, response delivery, sink acknowledgment, causal proof or acceptance."
+  ],
+  "review_findings_resolved": [
+    "Blindly switching the old70 controller to common74 would consume the one-use ingress directory before required broker measurement inputs were ready. The new setup integration intentionally stops before activation; real binding/provisioning must precede any future activator.",
+    "The predecessor guest only overrode gateway and activator. The new fixed thirteen-path inventory also binds the changed worker/unit, broker sources/unit/base activator and added measurement/ingress helper modules.",
+    "Descriptor and inherited CAS-context teardown could mask a primary setup failure. New cleanup handling preserves the primary exception plus fixed secret-safe cleanup labels; inert checks cover both failures.",
+    "Initial source input bounds allowed two MiB while later preparation retention allowed one MiB. Preflight now uses the actual retained-artifact bound and rejects known-invalid oversized inputs before any setup or CAS mutation.",
+    "The generic collector mark API samples its own callback time, and the existing native create driver expects ALLOW/CREATED. Neither is relabeled as native ingress timing or blocked-attempt semantics."
+  ],
+  "common_profile": {
+    "files": 74,
+    "report_bytes": 51756,
+    "report_digest": "sha256:0fcd6cb67ac2721122c72ebe6bb6973a1a15f57444a8e8107d618add74677d4e",
+    "frozen_predecessors_changed": false,
+    "source_override_paths": 13,
+    "writer_documents": 7,
+    "activation_implemented_by_this_slice": false,
+    "common_activation_executed": false
+  },
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:a3dc52c97df4fc52b64d5e459ae6256299cf14013e2f38f1f2d7273bbcfa8d10",
+    "benchmark/phase3-pipeline-v1.json": "sha256:3386f47937fb42ea27bbe9f514a138d2e77f2de45a2c4548dfa4d834842a4e2b",
+    "scripts/runtime_native_common_case_setup.py": "sha256:cd7aac139feb78ca9df7d80b84709334f6ce68048cfef4cf3c31aa3df84068f5",
+    "src/aragorn/native_phase3_ingress_interval_verify.py": "sha256:24c0db9e97b530f2e27d7b08522271da6255ca2357bedea58f52f22e0af77662",
+    "tests/test_native_phase3_ingress_interval_verify.py": "sha256:3af81fea06f929c42bd89b2ef35d3b161c95aabe57244a3a0a32e647fe6b7ce4",
+    "tests/test_runtime_native_common_case_setup.py": "sha256:2059f79730fba1c76a2c3b967f358475239fda06d9ad9e8374f4bbf63d3c9355",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-case-setup",
+      "status": "PASS",
+      "fingerprint": "sha256:b392d0a890a80fcc93869b50c0b878fe81dc3c1f069ed6868b537b6d960a18d5",
+      "tests": 9,
+      "wall_seconds": 2.125317,
+      "unittest_seconds": 1.842,
+      "stderr_digest": "sha256:189369f14e9496c7321a63a67681d14a472ccf12856d8a72256c4694479673dd",
+      "reviewed_inputs": 133
+    },
+    {
+      "stage_id": "native-ingress-interval-verifier",
+      "status": "PASS",
+      "fingerprint": "sha256:766c1939f38ff4d05672861d250e100f81057f709f88dd7c669d8d6764cf814b",
+      "tests": 11,
+      "wall_seconds": 0.564023,
+      "unittest_seconds": 0.373,
+      "stderr_digest": "sha256:69e776d1228db9280b44be22e87a43ef79336ca47748ecdb7e118af23e37bce1",
+      "reviewed_inputs": 23
+    }
+  ],
+  "test_count": 20,
+  "new_test_methods": 20,
+  "selected_pipeline_runs": 1,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-common-case-setup native-ingress-interval-verifier",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "native-common-case-setup": 133,
+    "native-ingress-interval-verifier": 23,
+    "meaning": "Setup combines the previously reviewed common preparation closure with the new test/module and transitive predecessor guest/measurement-provisioning imports; includes the exact stage source/payload bytes and retained baseline records actually read by data constructors. Interval closure contains only its local consumer dependencies and four existing inert data-constructor test modules. AST local-import review found no undeclared local dependencies (80 setup-local imports, 23 interval-local imports). Only the two new test modules are discovered. Runner/interpreter and prior sources remain unchanged."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "All behavioral validation uses explicit inert kernel/writer/service/credential-custody doubles and temporary local profile/CAS data. No actual owned fixture, activation, workload, process observation, native clock measurement or acceptance sample was executed.",
+    "The setup-only API is a source integration checkpoint, not resumable authority. Real signed host source/copy inventory, outer capture/replay, original measurement commitment/request and broker input provisioning remain to be wired before activation.",
+    "The new setup script is separately caller-pinned in its setup envelope, not silently included in the existing deployment artifact identity; future host integration must bind this and all execution dependencies.",
+    "Protected source/readback joins do not prove running Python provenance, the entire installed common74 state, continuous custody or hostile-root resistance.",
+    "The interval remains conditional on local retained records and point-in-time external shared-time-namespace observations. It includes synchronous retention and dispatch overhead, excludes tool-call/socket-acceptance start and post-verdict persistence/delivery, and does not join the old collection commitment clock.",
+    "Recorded broker outcomes do not independently prove policy causality, blocking before effect, sink/residue truth, or RUN conformance. Negative-control and task schedules are refused by this one-attributed-interval API.",
+    "Admission families, RUN event/response/attribution and meaningful sensor-health coverage are still incomplete. Final31 and 100-attempt/100-pair acceptance remains blocked."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Bind the fixed common74 guest integration to signed host source/copy inventory and independent outer retained replay, then implement the actual fixed workload and sink/attribution callbacks. Consume the original prepared commitment/request once, provision broker inputs before the first activator, retain both clock reads from one collector and join them with actual ingress/effective-final evidence. Do not relabel generic mark() times or the ALLOW/CREATED driver as native blocked-attempt evidence.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and clean tree, and retain its hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

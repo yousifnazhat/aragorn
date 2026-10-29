@@ -102,8 +102,9 @@ def _gateway_config() -> dict[str, object]:
             },
         },
         "tools": {
-            "alsoAllow": ["aragorn_runtime_create"],
+            "alsoAllow": ["aragorn_runtime_create", "read"],
             "deny": ["session_status"],
+            "fs": {"workspaceOnly": True},
             "profile": "minimal",
         },
     }
@@ -172,7 +173,10 @@ class RuntimeActionWorkerTests(unittest.TestCase):
             "wrong-path",
             "extra-pin",
             "env",
-            "additive-tools",
+            "missing-read",
+            "missing-fs",
+            "unconfined-read",
+            "extra-tool",
         )
         for mutation in mutations:
             with self.subTest(mutation=mutation):
@@ -187,8 +191,14 @@ class RuntimeActionWorkerTests(unittest.TestCase):
                     ]["sensorSocketPath"] = "/tmp/sensor.sock"
                 elif mutation == "env":
                     document["models"]["apiKey"] = "${OPENAI_API_KEY}"
-                elif mutation == "additive-tools":
-                    document["tools"] = {"alsoAllow": ["aragorn_runtime_create"]}
+                elif mutation == "missing-read":
+                    document["tools"]["alsoAllow"] = ["aragorn_runtime_create"]
+                elif mutation == "missing-fs":
+                    document["tools"].pop("fs")
+                elif mutation == "unconfined-read":
+                    document["tools"]["fs"]["workspaceOnly"] = False
+                elif mutation == "extra-tool":
+                    document["tools"]["alsoAllow"].append("write")
                 with (
                     patch("aragorn.runtime_action_worker.sys.platform", "linux"),
                     patch("aragorn.runtime_action_worker.os.geteuid", return_value=0),

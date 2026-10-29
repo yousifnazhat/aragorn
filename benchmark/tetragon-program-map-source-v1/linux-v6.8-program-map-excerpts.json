@@ -1,0 +1,200 @@
+{
+  "schema": "aragorn/linux-bpf-program-map-abi-excerpts/v1",
+  "repository": "https://github.com/torvalds/linux",
+  "tag": "v6.8",
+  "commit": "e8f897f4afef0031fe618a8e94127a0934896aba",
+  "authority": "SELECTED_EXCERPTS_NOT_FULL_SOURCE_OR_RUNNING_KERNEL_ATTESTATION",
+  "verification": "Whole fetched files were verified against byte size and Git blob SHA from the pinned GitHub contents API before selecting these exact inclusive line excerpts. SHA-256 records the full fetched source. Only excerpts are retained; offline whole-file Git verification is not possible from them. Tag signature was not verified.",
+  "files": [
+    {
+      "path": "include/uapi/linux/bpf.h",
+      "git_blob": "754e68ca8744cc5db4416ef4fc37fcef4d5ae5bc",
+      "size": 274787,
+      "sha256": "c6726e54670db2c651f4321cd6b9f526d4a0c026ebe001511315155fec79845b",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/include/uapi/linux/bpf.h",
+      "metadata_url": "https://api.github.com/repos/torvalds/linux/contents/include/uapi/linux/bpf.h?ref=e8f897f4afef0031fe618a8e94127a0934896aba",
+      "excerpts": [
+        {
+          "start_line": 826,
+          "end_line": 864,
+          "text": " * BPF_LINK_DETACH\n *\tDescription\n *\t\tForcefully detach the specified *link_fd* from its\n *\t\tcorresponding attachment point.\n *\n *\tReturn\n *\t\tReturns zero on success. On error, -1 is returned and *errno*\n *\t\tis set appropriately.\n *\n * BPF_PROG_BIND_MAP\n *\tDescription\n *\t\tBind a map to the lifetime of an eBPF program.\n *\n *\t\tThe map identified by *map_fd* is bound to the program\n *\t\tidentified by *prog_fd* and only released when *prog_fd* is\n *\t\treleased. This may be used in cases where metadata should be\n *\t\tassociated with a program which otherwise does not contain any\n *\t\treferences to the map (for example, embedded in the eBPF\n *\t\tprogram instructions).\n *\n *\tReturn\n *\t\tReturns zero on success. On error, -1 is returned and *errno*\n *\t\tis set appropriately.\n *\n * NOTES\n *\teBPF objects (maps and programs) can be shared between processes.\n *\n *\t* After **fork**\\ (2), the child inherits file descriptors\n *\t  referring to the same eBPF objects.\n *\t* File descriptors referring to eBPF objects can be transferred over\n *\t  **unix**\\ (7) domain sockets.\n *\t* File descriptors referring to eBPF objects can be duplicated in the\n *\t  usual way, using **dup**\\ (2) and similar calls.\n *\t* File descriptors referring to eBPF objects can be pinned to the\n *\t  filesystem using the **BPF_OBJ_PIN** command of **bpf**\\ (2).\n *\n *\tAn eBPF object is deallocated only after all file descriptors referring\n *\tto the object have been closed and no references remain pinned to the\n *\tfilesystem or attached (for example, bound to a program or device).\n"
+        },
+        {
+          "start_line": 956,
+          "end_line": 972,
+          "text": "/* Note that tracing related programs such as\n * BPF_PROG_TYPE_{KPROBE,TRACEPOINT,PERF_EVENT,RAW_TRACEPOINT}\n * are not subject to a stable API since kernel internal data\n * structures can change from release to release and may\n * therefore break existing tracing BPF programs. Tracing BPF\n * programs correspond to /a/ specific kernel which is to be\n * analyzed, and not /a/ specific kernel /and/ all future ones.\n */\nenum bpf_prog_type {\n\tBPF_PROG_TYPE_UNSPEC,\n\tBPF_PROG_TYPE_SOCKET_FILTER,\n\tBPF_PROG_TYPE_KPROBE,\n\tBPF_PROG_TYPE_SCHED_CLS,\n\tBPF_PROG_TYPE_SCHED_ACT,\n\tBPF_PROG_TYPE_TRACEPOINT,\n\tBPF_PROG_TYPE_XDP,\n\tBPF_PROG_TYPE_PERF_EVENT,\n"
+        },
+        {
+          "start_line": 1062,
+          "end_line": 1090,
+          "text": "enum bpf_link_type {\n\tBPF_LINK_TYPE_UNSPEC = 0,\n\tBPF_LINK_TYPE_RAW_TRACEPOINT = 1,\n\tBPF_LINK_TYPE_TRACING = 2,\n\tBPF_LINK_TYPE_CGROUP = 3,\n\tBPF_LINK_TYPE_ITER = 4,\n\tBPF_LINK_TYPE_NETNS = 5,\n\tBPF_LINK_TYPE_XDP = 6,\n\tBPF_LINK_TYPE_PERF_EVENT = 7,\n\tBPF_LINK_TYPE_KPROBE_MULTI = 8,\n\tBPF_LINK_TYPE_STRUCT_OPS = 9,\n\tBPF_LINK_TYPE_NETFILTER = 10,\n\tBPF_LINK_TYPE_TCX = 11,\n\tBPF_LINK_TYPE_UPROBE_MULTI = 12,\n\tBPF_LINK_TYPE_NETKIT = 13,\n\t__MAX_BPF_LINK_TYPE,\n};\n\n#define MAX_BPF_LINK_TYPE __MAX_BPF_LINK_TYPE\n\nenum bpf_perf_event_type {\n\tBPF_PERF_EVENT_UNSPEC = 0,\n\tBPF_PERF_EVENT_UPROBE = 1,\n\tBPF_PERF_EVENT_URETPROBE = 2,\n\tBPF_PERF_EVENT_KPROBE = 3,\n\tBPF_PERF_EVENT_KRETPROBE = 4,\n\tBPF_PERF_EVENT_TRACEPOINT = 5,\n\tBPF_PERF_EVENT_EVENT = 6,\n};\n"
+        },
+        {
+          "start_line": 1542,
+          "end_line": 1547,
+          "text": "\tstruct { /* anonymous struct used by BPF_OBJ_GET_INFO_BY_FD */\n\t\t__u32\t\tbpf_fd;\n\t\t__u32\t\tinfo_len;\n\t\t__aligned_u64\tinfo;\n\t} info;\n\n"
+        },
+        {
+          "start_line": 6433,
+          "end_line": 6473,
+          "text": "struct bpf_prog_info {\n\t__u32 type;\n\t__u32 id;\n\t__u8  tag[BPF_TAG_SIZE];\n\t__u32 jited_prog_len;\n\t__u32 xlated_prog_len;\n\t__aligned_u64 jited_prog_insns;\n\t__aligned_u64 xlated_prog_insns;\n\t__u64 load_time;\t/* ns since boottime */\n\t__u32 created_by_uid;\n\t__u32 nr_map_ids;\n\t__aligned_u64 map_ids;\n\tchar name[BPF_OBJ_NAME_LEN];\n\t__u32 ifindex;\n\t__u32 gpl_compatible:1;\n\t__u32 :31; /* alignment pad */\n\t__u64 netns_dev;\n\t__u64 netns_ino;\n\t__u32 nr_jited_ksyms;\n\t__u32 nr_jited_func_lens;\n\t__aligned_u64 jited_ksyms;\n\t__aligned_u64 jited_func_lens;\n\t__u32 btf_id;\n\t__u32 func_info_rec_size;\n\t__aligned_u64 func_info;\n\t__u32 nr_func_info;\n\t__u32 nr_line_info;\n\t__aligned_u64 line_info;\n\t__aligned_u64 jited_line_info;\n\t__u32 nr_jited_line_info;\n\t__u32 line_info_rec_size;\n\t__u32 jited_line_info_rec_size;\n\t__u32 nr_prog_tags;\n\t__aligned_u64 prog_tags;\n\t__u64 run_time_ns;\n\t__u64 run_cnt;\n\t__u64 recursion_misses;\n\t__u32 verified_insns;\n\t__u32 attach_btf_obj_id;\n\t__u32 attach_btf_id;\n} __attribute__((aligned(8)));\n"
+        },
+        {
+          "start_line": 6503,
+          "end_line": 6612,
+          "text": "struct bpf_link_info {\n\t__u32 type;\n\t__u32 id;\n\t__u32 prog_id;\n\tunion {\n\t\tstruct {\n\t\t\t__aligned_u64 tp_name; /* in/out: tp_name buffer ptr */\n\t\t\t__u32 tp_name_len;     /* in/out: tp_name buffer len */\n\t\t} raw_tracepoint;\n\t\tstruct {\n\t\t\t__u32 attach_type;\n\t\t\t__u32 target_obj_id; /* prog_id for PROG_EXT, otherwise btf object id */\n\t\t\t__u32 target_btf_id; /* BTF type id inside the object */\n\t\t} tracing;\n\t\tstruct {\n\t\t\t__u64 cgroup_id;\n\t\t\t__u32 attach_type;\n\t\t} cgroup;\n\t\tstruct {\n\t\t\t__aligned_u64 target_name; /* in/out: target_name buffer ptr */\n\t\t\t__u32 target_name_len;\t   /* in/out: target_name buffer len */\n\n\t\t\t/* If the iter specific field is 32 bits, it can be put\n\t\t\t * in the first or second union. Otherwise it should be\n\t\t\t * put in the second union.\n\t\t\t */\n\t\t\tunion {\n\t\t\t\tstruct {\n\t\t\t\t\t__u32 map_id;\n\t\t\t\t} map;\n\t\t\t};\n\t\t\tunion {\n\t\t\t\tstruct {\n\t\t\t\t\t__u64 cgroup_id;\n\t\t\t\t\t__u32 order;\n\t\t\t\t} cgroup;\n\t\t\t\tstruct {\n\t\t\t\t\t__u32 tid;\n\t\t\t\t\t__u32 pid;\n\t\t\t\t} task;\n\t\t\t};\n\t\t} iter;\n\t\tstruct  {\n\t\t\t__u32 netns_ino;\n\t\t\t__u32 attach_type;\n\t\t} netns;\n\t\tstruct {\n\t\t\t__u32 ifindex;\n\t\t} xdp;\n\t\tstruct {\n\t\t\t__u32 map_id;\n\t\t} struct_ops;\n\t\tstruct {\n\t\t\t__u32 pf;\n\t\t\t__u32 hooknum;\n\t\t\t__s32 priority;\n\t\t\t__u32 flags;\n\t\t} netfilter;\n\t\tstruct {\n\t\t\t__aligned_u64 addrs;\n\t\t\t__u32 count; /* in/out: kprobe_multi function count */\n\t\t\t__u32 flags;\n\t\t\t__u64 missed;\n\t\t} kprobe_multi;\n\t\tstruct {\n\t\t\t__aligned_u64 path;\n\t\t\t__aligned_u64 offsets;\n\t\t\t__aligned_u64 ref_ctr_offsets;\n\t\t\t__aligned_u64 cookies;\n\t\t\t__u32 path_size; /* in/out: real path size on success, including zero byte */\n\t\t\t__u32 count; /* in/out: uprobe_multi offsets/ref_ctr_offsets/cookies count */\n\t\t\t__u32 flags;\n\t\t\t__u32 pid;\n\t\t} uprobe_multi;\n\t\tstruct {\n\t\t\t__u32 type; /* enum bpf_perf_event_type */\n\t\t\t__u32 :32;\n\t\t\tunion {\n\t\t\t\tstruct {\n\t\t\t\t\t__aligned_u64 file_name; /* in/out */\n\t\t\t\t\t__u32 name_len;\n\t\t\t\t\t__u32 offset; /* offset from file_name */\n\t\t\t\t} uprobe; /* BPF_PERF_EVENT_UPROBE, BPF_PERF_EVENT_URETPROBE */\n\t\t\t\tstruct {\n\t\t\t\t\t__aligned_u64 func_name; /* in/out */\n\t\t\t\t\t__u32 name_len;\n\t\t\t\t\t__u32 offset; /* offset from func_name */\n\t\t\t\t\t__u64 addr;\n\t\t\t\t\t__u64 missed;\n\t\t\t\t} kprobe; /* BPF_PERF_EVENT_KPROBE, BPF_PERF_EVENT_KRETPROBE */\n\t\t\t\tstruct {\n\t\t\t\t\t__aligned_u64 tp_name;   /* in/out */\n\t\t\t\t\t__u32 name_len;\n\t\t\t\t} tracepoint; /* BPF_PERF_EVENT_TRACEPOINT */\n\t\t\t\tstruct {\n\t\t\t\t\t__u64 config;\n\t\t\t\t\t__u32 type;\n\t\t\t\t} event; /* BPF_PERF_EVENT_EVENT */\n\t\t\t};\n\t\t} perf_event;\n\t\tstruct {\n\t\t\t__u32 ifindex;\n\t\t\t__u32 attach_type;\n\t\t} tcx;\n\t\tstruct {\n\t\t\t__u32 ifindex;\n\t\t\t__u32 attach_type;\n\t\t} netkit;\n\t};\n} __attribute__((aligned(8)));\n"
+        }
+      ]
+    },
+    {
+      "path": "kernel/bpf/syscall.c",
+      "git_blob": "a1f18681721c7eb18e43ce40d409823901fba31a",
+      "size": 145318,
+      "sha256": "cde893c570a0d505f03d811c6be27f6e001198b7daa728a30b9962a3db211d4e",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/kernel/bpf/syscall.c",
+      "metadata_url": "https://api.github.com/repos/torvalds/linux/contents/kernel/bpf/syscall.c?ref=e8f897f4afef0031fe618a8e94127a0934896aba",
+      "excerpts": [
+        {
+          "start_line": 2898,
+          "end_line": 2944,
+          "text": "/* bpf_link_free is guaranteed to be called from process context */\nstatic void bpf_link_free(struct bpf_link *link)\n{\n\tbpf_link_free_id(link->id);\n\tif (link->prog) {\n\t\t/* detach BPF program, clean up used resources */\n\t\tlink->ops->release(link);\n\t\tbpf_prog_put(link->prog);\n\t}\n\t/* free bpf_link and its containing memory */\n\tlink->ops->dealloc(link);\n}\n\nstatic void bpf_link_put_deferred(struct work_struct *work)\n{\n\tstruct bpf_link *link = container_of(work, struct bpf_link, work);\n\n\tbpf_link_free(link);\n}\n\n/* bpf_link_put might be called from atomic context. It needs to be called\n * from sleepable context in order to acquire sleeping locks during the process.\n */\nvoid bpf_link_put(struct bpf_link *link)\n{\n\tif (!atomic64_dec_and_test(&link->refcnt))\n\t\treturn;\n\n\tINIT_WORK(&link->work, bpf_link_put_deferred);\n\tschedule_work(&link->work);\n}\nEXPORT_SYMBOL(bpf_link_put);\n\nstatic void bpf_link_put_direct(struct bpf_link *link)\n{\n\tif (!atomic64_dec_and_test(&link->refcnt))\n\t\treturn;\n\tbpf_link_free(link);\n}\n\nstatic int bpf_link_release(struct inode *inode, struct file *filp)\n{\n\tstruct bpf_link *link = filp->private_data;\n\n\tbpf_link_put_direct(link);\n\treturn 0;\n}\n"
+        },
+        {
+          "start_line": 2958,
+          "end_line": 2979,
+          "text": "static void bpf_link_show_fdinfo(struct seq_file *m, struct file *filp)\n{\n\tconst struct bpf_link *link = filp->private_data;\n\tconst struct bpf_prog *prog = link->prog;\n\tchar prog_tag[sizeof(prog->tag) * 2 + 1] = { };\n\n\tseq_printf(m,\n\t\t   \"link_type:\\t%s\\n\"\n\t\t   \"link_id:\\t%u\\n\",\n\t\t   bpf_link_type_strs[link->type],\n\t\t   link->id);\n\tif (prog) {\n\t\tbin2hex(prog_tag, prog->tag, sizeof(prog->tag));\n\t\tseq_printf(m,\n\t\t\t   \"prog_tag:\\t%s\\n\"\n\t\t\t   \"prog_id:\\t%u\\n\",\n\t\t\t   prog_tag,\n\t\t\t   prog->aux->id);\n\t}\n\tif (link->ops->show_fdinfo)\n\t\tlink->ops->show_fdinfo(link, m);\n}\n"
+        },
+        {
+          "start_line": 3376,
+          "end_line": 3393,
+          "text": "static int bpf_copy_to_user(char __user *ubuf, const char *buf, u32 ulen,\n\t\t\t    u32 len)\n{\n\tif (ulen >= len + 1) {\n\t\tif (copy_to_user(ubuf, buf, len + 1))\n\t\t\treturn -EFAULT;\n\t} else {\n\t\tchar zero = '\\0';\n\n\t\tif (copy_to_user(ubuf, buf, ulen - 1))\n\t\t\treturn -EFAULT;\n\t\tif (put_user(zero, ubuf + ulen - 1))\n\t\t\treturn -EFAULT;\n\t\treturn -ENOSPC;\n\t}\n\n\treturn 0;\n}\n"
+        },
+        {
+          "start_line": 3423,
+          "end_line": 3506,
+          "text": "#ifdef CONFIG_PERF_EVENTS\nstruct bpf_perf_link {\n\tstruct bpf_link link;\n\tstruct file *perf_file;\n};\n\nstatic void bpf_perf_link_release(struct bpf_link *link)\n{\n\tstruct bpf_perf_link *perf_link = container_of(link, struct bpf_perf_link, link);\n\tstruct perf_event *event = perf_link->perf_file->private_data;\n\n\tperf_event_free_bpf_prog(event);\n\tfput(perf_link->perf_file);\n}\n\nstatic void bpf_perf_link_dealloc(struct bpf_link *link)\n{\n\tstruct bpf_perf_link *perf_link = container_of(link, struct bpf_perf_link, link);\n\n\tkfree(perf_link);\n}\n\nstatic int bpf_perf_link_fill_common(const struct perf_event *event,\n\t\t\t\t     char __user *uname, u32 ulen,\n\t\t\t\t     u64 *probe_offset, u64 *probe_addr,\n\t\t\t\t     u32 *fd_type, unsigned long *missed)\n{\n\tconst char *buf;\n\tu32 prog_id;\n\tsize_t len;\n\tint err;\n\n\tif (!ulen ^ !uname)\n\t\treturn -EINVAL;\n\n\terr = bpf_get_perf_event_info(event, &prog_id, fd_type, &buf,\n\t\t\t\t      probe_offset, probe_addr, missed);\n\tif (err)\n\t\treturn err;\n\tif (!uname)\n\t\treturn 0;\n\tif (buf) {\n\t\tlen = strlen(buf);\n\t\terr = bpf_copy_to_user(uname, buf, ulen, len);\n\t\tif (err)\n\t\t\treturn err;\n\t} else {\n\t\tchar zero = '\\0';\n\n\t\tif (put_user(zero, uname))\n\t\t\treturn -EFAULT;\n\t}\n\treturn 0;\n}\n\n#ifdef CONFIG_KPROBE_EVENTS\nstatic int bpf_perf_link_fill_kprobe(const struct perf_event *event,\n\t\t\t\t     struct bpf_link_info *info)\n{\n\tunsigned long missed;\n\tchar __user *uname;\n\tu64 addr, offset;\n\tu32 ulen, type;\n\tint err;\n\n\tuname = u64_to_user_ptr(info->perf_event.kprobe.func_name);\n\tulen = info->perf_event.kprobe.name_len;\n\terr = bpf_perf_link_fill_common(event, uname, ulen, &offset, &addr,\n\t\t\t\t\t&type, &missed);\n\tif (err)\n\t\treturn err;\n\tif (type == BPF_FD_TYPE_KRETPROBE)\n\t\tinfo->perf_event.type = BPF_PERF_EVENT_KRETPROBE;\n\telse\n\t\tinfo->perf_event.type = BPF_PERF_EVENT_KPROBE;\n\n\tinfo->perf_event.kprobe.offset = offset;\n\tinfo->perf_event.kprobe.missed = missed;\n\tif (!kallsyms_show_value(current_cred()))\n\t\taddr = 0;\n\tinfo->perf_event.kprobe.addr = addr;\n\treturn 0;\n}\n#endif\n"
+        },
+        {
+          "start_line": 3533,
+          "end_line": 3640,
+          "text": "static int bpf_perf_link_fill_probe(const struct perf_event *event,\n\t\t\t\t    struct bpf_link_info *info)\n{\n#ifdef CONFIG_KPROBE_EVENTS\n\tif (event->tp_event->flags & TRACE_EVENT_FL_KPROBE)\n\t\treturn bpf_perf_link_fill_kprobe(event, info);\n#endif\n#ifdef CONFIG_UPROBE_EVENTS\n\tif (event->tp_event->flags & TRACE_EVENT_FL_UPROBE)\n\t\treturn bpf_perf_link_fill_uprobe(event, info);\n#endif\n\treturn -EOPNOTSUPP;\n}\n\nstatic int bpf_perf_link_fill_tracepoint(const struct perf_event *event,\n\t\t\t\t\t struct bpf_link_info *info)\n{\n\tchar __user *uname;\n\tu32 ulen;\n\n\tuname = u64_to_user_ptr(info->perf_event.tracepoint.tp_name);\n\tulen = info->perf_event.tracepoint.name_len;\n\tinfo->perf_event.type = BPF_PERF_EVENT_TRACEPOINT;\n\treturn bpf_perf_link_fill_common(event, uname, ulen, NULL, NULL, NULL, NULL);\n}\n\nstatic int bpf_perf_link_fill_perf_event(const struct perf_event *event,\n\t\t\t\t\t struct bpf_link_info *info)\n{\n\tinfo->perf_event.event.type = event->attr.type;\n\tinfo->perf_event.event.config = event->attr.config;\n\tinfo->perf_event.type = BPF_PERF_EVENT_EVENT;\n\treturn 0;\n}\n\nstatic int bpf_perf_link_fill_link_info(const struct bpf_link *link,\n\t\t\t\t\tstruct bpf_link_info *info)\n{\n\tstruct bpf_perf_link *perf_link;\n\tconst struct perf_event *event;\n\n\tperf_link = container_of(link, struct bpf_perf_link, link);\n\tevent = perf_get_event(perf_link->perf_file);\n\tif (IS_ERR(event))\n\t\treturn PTR_ERR(event);\n\n\tswitch (event->prog->type) {\n\tcase BPF_PROG_TYPE_PERF_EVENT:\n\t\treturn bpf_perf_link_fill_perf_event(event, info);\n\tcase BPF_PROG_TYPE_TRACEPOINT:\n\t\treturn bpf_perf_link_fill_tracepoint(event, info);\n\tcase BPF_PROG_TYPE_KPROBE:\n\t\treturn bpf_perf_link_fill_probe(event, info);\n\tdefault:\n\t\treturn -EOPNOTSUPP;\n\t}\n}\n\nstatic const struct bpf_link_ops bpf_perf_link_lops = {\n\t.release = bpf_perf_link_release,\n\t.dealloc = bpf_perf_link_dealloc,\n\t.fill_link_info = bpf_perf_link_fill_link_info,\n};\n\nstatic int bpf_perf_link_attach(const union bpf_attr *attr, struct bpf_prog *prog)\n{\n\tstruct bpf_link_primer link_primer;\n\tstruct bpf_perf_link *link;\n\tstruct perf_event *event;\n\tstruct file *perf_file;\n\tint err;\n\n\tif (attr->link_create.flags)\n\t\treturn -EINVAL;\n\n\tperf_file = perf_event_get(attr->link_create.target_fd);\n\tif (IS_ERR(perf_file))\n\t\treturn PTR_ERR(perf_file);\n\n\tlink = kzalloc(sizeof(*link), GFP_USER);\n\tif (!link) {\n\t\terr = -ENOMEM;\n\t\tgoto out_put_file;\n\t}\n\tbpf_link_init(&link->link, BPF_LINK_TYPE_PERF_EVENT, &bpf_perf_link_lops, prog);\n\tlink->perf_file = perf_file;\n\n\terr = bpf_link_prime(&link->link, &link_primer);\n\tif (err) {\n\t\tkfree(link);\n\t\tgoto out_put_file;\n\t}\n\n\tevent = perf_file->private_data;\n\terr = perf_event_set_bpf_prog(event, prog, attr->link_create.perf_event.bpf_cookie);\n\tif (err) {\n\t\tbpf_link_cleanup(&link_primer);\n\t\tgoto out_put_file;\n\t}\n\t/* perf_event_set_bpf_prog() doesn't take its own refcnt on prog */\n\tbpf_prog_inc(prog);\n\n\treturn bpf_link_settle(&link_primer);\n\nout_put_file:\n\tfput(perf_file);\n\treturn err;\n}\n"
+        },
+        {
+          "start_line": 4370,
+          "end_line": 4439,
+          "text": "static int bpf_prog_get_info_by_fd(struct file *file,\n\t\t\t\t   struct bpf_prog *prog,\n\t\t\t\t   const union bpf_attr *attr,\n\t\t\t\t   union bpf_attr __user *uattr)\n{\n\tstruct bpf_prog_info __user *uinfo = u64_to_user_ptr(attr->info.info);\n\tstruct btf *attach_btf = bpf_prog_get_target_btf(prog);\n\tstruct bpf_prog_info info;\n\tu32 info_len = attr->info.info_len;\n\tstruct bpf_prog_kstats stats;\n\tchar __user *uinsns;\n\tu32 ulen;\n\tint err;\n\n\terr = bpf_check_uarg_tail_zero(USER_BPFPTR(uinfo), sizeof(info), info_len);\n\tif (err)\n\t\treturn err;\n\tinfo_len = min_t(u32, sizeof(info), info_len);\n\n\tmemset(&info, 0, sizeof(info));\n\tif (copy_from_user(&info, uinfo, info_len))\n\t\treturn -EFAULT;\n\n\tinfo.type = prog->type;\n\tinfo.id = prog->aux->id;\n\tinfo.load_time = prog->aux->load_time;\n\tinfo.created_by_uid = from_kuid_munged(current_user_ns(),\n\t\t\t\t\t       prog->aux->user->uid);\n\tinfo.gpl_compatible = prog->gpl_compatible;\n\n\tmemcpy(info.tag, prog->tag, sizeof(prog->tag));\n\tmemcpy(info.name, prog->aux->name, sizeof(prog->aux->name));\n\n\tmutex_lock(&prog->aux->used_maps_mutex);\n\tulen = info.nr_map_ids;\n\tinfo.nr_map_ids = prog->aux->used_map_cnt;\n\tulen = min_t(u32, info.nr_map_ids, ulen);\n\tif (ulen) {\n\t\tu32 __user *user_map_ids = u64_to_user_ptr(info.map_ids);\n\t\tu32 i;\n\n\t\tfor (i = 0; i < ulen; i++)\n\t\t\tif (put_user(prog->aux->used_maps[i]->id,\n\t\t\t\t     &user_map_ids[i])) {\n\t\t\t\tmutex_unlock(&prog->aux->used_maps_mutex);\n\t\t\t\treturn -EFAULT;\n\t\t\t}\n\t}\n\tmutex_unlock(&prog->aux->used_maps_mutex);\n\n\terr = set_info_rec_size(&info);\n\tif (err)\n\t\treturn err;\n\n\tbpf_prog_get_stats(prog, &stats);\n\tinfo.run_time_ns = stats.nsecs;\n\tinfo.run_cnt = stats.cnt;\n\tinfo.recursion_misses = stats.misses;\n\n\tinfo.verified_insns = prog->aux->verified_insns;\n\n\tif (!bpf_capable()) {\n\t\tinfo.jited_prog_len = 0;\n\t\tinfo.xlated_prog_len = 0;\n\t\tinfo.nr_jited_ksyms = 0;\n\t\tinfo.nr_jited_func_lens = 0;\n\t\tinfo.nr_func_info = 0;\n\t\tinfo.nr_line_info = 0;\n\t\tinfo.nr_jited_line_info = 0;\n\t\tgoto done;\n"
+        },
+        {
+          "start_line": 4651,
+          "end_line": 4657,
+          "text": "done:\n\tif (copy_to_user(uinfo, &info, info_len) ||\n\t    put_user(info_len, &uattr->info.info_len))\n\t\treturn -EFAULT;\n\n\treturn 0;\n}\n"
+        },
+        {
+          "start_line": 4720,
+          "end_line": 4790,
+          "text": "static int bpf_link_get_info_by_fd(struct file *file,\n\t\t\t\t  struct bpf_link *link,\n\t\t\t\t  const union bpf_attr *attr,\n\t\t\t\t  union bpf_attr __user *uattr)\n{\n\tstruct bpf_link_info __user *uinfo = u64_to_user_ptr(attr->info.info);\n\tstruct bpf_link_info info;\n\tu32 info_len = attr->info.info_len;\n\tint err;\n\n\terr = bpf_check_uarg_tail_zero(USER_BPFPTR(uinfo), sizeof(info), info_len);\n\tif (err)\n\t\treturn err;\n\tinfo_len = min_t(u32, sizeof(info), info_len);\n\n\tmemset(&info, 0, sizeof(info));\n\tif (copy_from_user(&info, uinfo, info_len))\n\t\treturn -EFAULT;\n\n\tinfo.type = link->type;\n\tinfo.id = link->id;\n\tif (link->prog)\n\t\tinfo.prog_id = link->prog->aux->id;\n\n\tif (link->ops->fill_link_info) {\n\t\terr = link->ops->fill_link_info(link, &info);\n\t\tif (err)\n\t\t\treturn err;\n\t}\n\n\tif (copy_to_user(uinfo, &info, info_len) ||\n\t    put_user(info_len, &uattr->info.info_len))\n\t\treturn -EFAULT;\n\n\treturn 0;\n}\n\n\n#define BPF_OBJ_GET_INFO_BY_FD_LAST_FIELD info.info\n\nstatic int bpf_obj_get_info_by_fd(const union bpf_attr *attr,\n\t\t\t\t  union bpf_attr __user *uattr)\n{\n\tint ufd = attr->info.bpf_fd;\n\tstruct fd f;\n\tint err;\n\n\tif (CHECK_ATTR(BPF_OBJ_GET_INFO_BY_FD))\n\t\treturn -EINVAL;\n\n\tf = fdget(ufd);\n\tif (!f.file)\n\t\treturn -EBADFD;\n\n\tif (f.file->f_op == &bpf_prog_fops)\n\t\terr = bpf_prog_get_info_by_fd(f.file, f.file->private_data, attr,\n\t\t\t\t\t      uattr);\n\telse if (f.file->f_op == &bpf_map_fops)\n\t\terr = bpf_map_get_info_by_fd(f.file, f.file->private_data, attr,\n\t\t\t\t\t     uattr);\n\telse if (f.file->f_op == &btf_fops)\n\t\terr = bpf_btf_get_info_by_fd(f.file, f.file->private_data, attr, uattr);\n\telse if (f.file->f_op == &bpf_link_fops)\n\t\terr = bpf_link_get_info_by_fd(f.file, f.file->private_data,\n\t\t\t\t\t      attr, uattr);\n\telse\n\t\terr = -EINVAL;\n\n\tfdput(f);\n\treturn err;\n}\n"
+        },
+        {
+          "start_line": 5180,
+          "end_line": 5201,
+          "text": "#define BPF_LINK_DETACH_LAST_FIELD link_detach.link_fd\n\nstatic int link_detach(union bpf_attr *attr)\n{\n\tstruct bpf_link *link;\n\tint ret;\n\n\tif (CHECK_ATTR(BPF_LINK_DETACH))\n\t\treturn -EINVAL;\n\n\tlink = bpf_link_get_from_fd(attr->link_detach.link_fd);\n\tif (IS_ERR(link))\n\t\treturn PTR_ERR(link);\n\n\tif (link->ops->detach)\n\t\tret = link->ops->detach(link);\n\telse\n\t\tret = -EOPNOTSUPP;\n\n\tbpf_link_put_direct(link);\n\treturn ret;\n}\n"
+        },
+        {
+          "start_line": 5351,
+          "end_line": 5416,
+          "text": "#define BPF_PROG_BIND_MAP_LAST_FIELD prog_bind_map.flags\n\nstatic int bpf_prog_bind_map(union bpf_attr *attr)\n{\n\tstruct bpf_prog *prog;\n\tstruct bpf_map *map;\n\tstruct bpf_map **used_maps_old, **used_maps_new;\n\tint i, ret = 0;\n\n\tif (CHECK_ATTR(BPF_PROG_BIND_MAP))\n\t\treturn -EINVAL;\n\n\tif (attr->prog_bind_map.flags)\n\t\treturn -EINVAL;\n\n\tprog = bpf_prog_get(attr->prog_bind_map.prog_fd);\n\tif (IS_ERR(prog))\n\t\treturn PTR_ERR(prog);\n\n\tmap = bpf_map_get(attr->prog_bind_map.map_fd);\n\tif (IS_ERR(map)) {\n\t\tret = PTR_ERR(map);\n\t\tgoto out_prog_put;\n\t}\n\n\tmutex_lock(&prog->aux->used_maps_mutex);\n\n\tused_maps_old = prog->aux->used_maps;\n\n\tfor (i = 0; i < prog->aux->used_map_cnt; i++)\n\t\tif (used_maps_old[i] == map) {\n\t\t\tbpf_map_put(map);\n\t\t\tgoto out_unlock;\n\t\t}\n\n\tused_maps_new = kmalloc_array(prog->aux->used_map_cnt + 1,\n\t\t\t\t      sizeof(used_maps_new[0]),\n\t\t\t\t      GFP_KERNEL);\n\tif (!used_maps_new) {\n\t\tret = -ENOMEM;\n\t\tgoto out_unlock;\n\t}\n\n\t/* The bpf program will not access the bpf map, but for the sake of\n\t * simplicity, increase sleepable_refcnt for sleepable program as well.\n\t */\n\tif (prog->aux->sleepable)\n\t\tatomic64_inc(&map->sleepable_refcnt);\n\tmemcpy(used_maps_new, used_maps_old,\n\t       sizeof(used_maps_old[0]) * prog->aux->used_map_cnt);\n\tused_maps_new[prog->aux->used_map_cnt] = map;\n\n\tprog->aux->used_map_cnt++;\n\tprog->aux->used_maps = used_maps_new;\n\n\tkfree(used_maps_old);\n\nout_unlock:\n\tmutex_unlock(&prog->aux->used_maps_mutex);\n\n\tif (ret)\n\t\tbpf_map_put(map);\nout_prog_put:\n\tbpf_prog_put(prog);\n\treturn ret;\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "kernel/pid.c",
+      "git_blob": "b52b108654541545797c19aa0bf68c735442bbac",
+      "size": 18738,
+      "sha256": "b0fa137e20740163864206a921421b3a9f17e0d53790d3a3472677257813515f",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/kernel/pid.c",
+      "metadata_url": "https://api.github.com/repos/torvalds/linux/contents/kernel/pid.c?ref=e8f897f4afef0031fe618a8e94127a0934896aba",
+      "excerpts": [
+        {
+          "start_line": 669,
+          "end_line": 748,
+          "text": "static struct file *__pidfd_fget(struct task_struct *task, int fd)\n{\n\tstruct file *file;\n\tint ret;\n\n\tret = down_read_killable(&task->signal->exec_update_lock);\n\tif (ret)\n\t\treturn ERR_PTR(ret);\n\n\tif (ptrace_may_access(task, PTRACE_MODE_ATTACH_REALCREDS))\n\t\tfile = fget_task(task, fd);\n\telse\n\t\tfile = ERR_PTR(-EPERM);\n\n\tup_read(&task->signal->exec_update_lock);\n\n\treturn file ?: ERR_PTR(-EBADF);\n}\n\nstatic int pidfd_getfd(struct pid *pid, int fd)\n{\n\tstruct task_struct *task;\n\tstruct file *file;\n\tint ret;\n\n\ttask = get_pid_task(pid, PIDTYPE_PID);\n\tif (!task)\n\t\treturn -ESRCH;\n\n\tfile = __pidfd_fget(task, fd);\n\tput_task_struct(task);\n\tif (IS_ERR(file))\n\t\treturn PTR_ERR(file);\n\n\tret = receive_fd(file, NULL, O_CLOEXEC);\n\tfput(file);\n\n\treturn ret;\n}\n\n/**\n * sys_pidfd_getfd() - Get a file descriptor from another process\n *\n * @pidfd:\tthe pidfd file descriptor of the process\n * @fd:\t\tthe file descriptor number to get\n * @flags:\tflags on how to get the fd (reserved)\n *\n * This syscall gets a copy of a file descriptor from another process\n * based on the pidfd, and file descriptor number. It requires that\n * the calling process has the ability to ptrace the process represented\n * by the pidfd. The process which is having its file descriptor copied\n * is otherwise unaffected.\n *\n * Return: On success, a cloexec file descriptor is returned.\n *         On error, a negative errno number will be returned.\n */\nSYSCALL_DEFINE3(pidfd_getfd, int, pidfd, int, fd,\n\t\tunsigned int, flags)\n{\n\tstruct pid *pid;\n\tstruct fd f;\n\tint ret;\n\n\t/* flags is currently unused - make sure it's unset */\n\tif (flags)\n\t\treturn -EINVAL;\n\n\tf = fdget(pidfd);\n\tif (!f.file)\n\t\treturn -EBADF;\n\n\tpid = pidfd_pid(f.file);\n\tif (IS_ERR(pid))\n\t\tret = PTR_ERR(pid);\n\telse\n\t\tret = pidfd_getfd(pid, fd);\n\n\tfdput(f);\n\treturn ret;\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "include/uapi/asm-generic/unistd.h",
+      "git_blob": "75f00965ab1586cd64d00928217596de5034bd25",
+      "size": 31189,
+      "sha256": "2807c5c2e1ad8128b37438f81cf9776b52fb664b48d93e2ea8edb06846eda90d",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/include/uapi/asm-generic/unistd.h",
+      "metadata_url": "https://api.github.com/repos/torvalds/linux/contents/include/uapi/asm-generic/unistd.h?ref=e8f897f4afef0031fe618a8e94127a0934896aba",
+      "excerpts": [
+        {
+          "start_line": 785,
+          "end_line": 792,
+          "text": "#define __NR_close_range 436\n__SYSCALL(__NR_close_range, sys_close_range)\n#define __NR_openat2 437\n__SYSCALL(__NR_openat2, sys_openat2)\n#define __NR_pidfd_getfd 438\n__SYSCALL(__NR_pidfd_getfd, sys_pidfd_getfd)\n#define __NR_faccessat2 439\n__SYSCALL(__NR_faccessat2, sys_faccessat2)\n"
+        }
+      ]
+    },
+    {
+      "path": "arch/x86/entry/syscalls/syscall_64.tbl",
+      "git_blob": "7e8d46f4147f574111962c214119af2dd2b62b4a",
+      "size": 15278,
+      "sha256": "4c30abea9a4b69f3409bea7a0c910a8c8feb9a44b22a448b5c82f2bfdd8249c8",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/arch/x86/entry/syscalls/syscall_64.tbl",
+      "metadata_url": "https://api.github.com/repos/torvalds/linux/contents/arch/x86/entry/syscalls/syscall_64.tbl?ref=e8f897f4afef0031fe618a8e94127a0934896aba",
+      "excerpts": [
+        {
+          "start_line": 358,
+          "end_line": 365,
+          "text": "434\tcommon\tpidfd_open\t\tsys_pidfd_open\n435\tcommon\tclone3\t\t\tsys_clone3\n436\tcommon\tclose_range\t\tsys_close_range\n437\tcommon\topenat2\t\t\tsys_openat2\n438\tcommon\tpidfd_getfd\t\tsys_pidfd_getfd\n439\tcommon\tfaccessat2\t\tsys_faccessat2\n440\tcommon\tprocess_madvise\t\tsys_process_madvise\n441\tcommon\tepoll_pwait2\t\tsys_epoll_pwait2\n"
+        }
+      ]
+    },
+    {
+      "path": "kernel/events/core.c",
+      "git_blob": "f0f0f71213a1d387753a3d37a79ed7bddd44cc43",
+      "size": 341775,
+      "sha256": "bfbdd6533fc7b02c4a9acf3fa272cddfa6a40217d449180c64e7fea6b0bdd34d",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/kernel/events/core.c",
+      "metadata_url": "https://api.github.com/repos/torvalds/linux/contents/kernel/events/core.c?ref=e8f897f4afef0031fe618a8e94127a0934896aba",
+      "excerpts": [
+        {
+          "start_line": 2431,
+          "end_line": 2483,
+          "text": "static void __perf_event_disable(struct perf_event *event,\n\t\t\t\t struct perf_cpu_context *cpuctx,\n\t\t\t\t struct perf_event_context *ctx,\n\t\t\t\t void *info)\n{\n\tif (event->state < PERF_EVENT_STATE_INACTIVE)\n\t\treturn;\n\n\tif (ctx->is_active & EVENT_TIME) {\n\t\tupdate_context_time(ctx);\n\t\tupdate_cgrp_time_from_event(event);\n\t}\n\n\tperf_pmu_disable(event->pmu_ctx->pmu);\n\n\tif (event == event->group_leader)\n\t\tgroup_sched_out(event, ctx);\n\telse\n\t\tevent_sched_out(event, ctx);\n\n\tperf_event_set_state(event, PERF_EVENT_STATE_OFF);\n\tperf_cgroup_event_disable(event, ctx);\n\n\tperf_pmu_enable(event->pmu_ctx->pmu);\n}\n\n/*\n * Disable an event.\n *\n * If event->ctx is a cloned context, callers must make sure that\n * every task struct that event->ctx->task could possibly point to\n * remains valid.  This condition is satisfied when called through\n * perf_event_for_each_child or perf_event_for_each because they\n * hold the top-level event's child_mutex, so any descendant that\n * goes to exit will block in perf_event_exit_event().\n *\n * When called from perf_pending_irq it's OK because event->ctx\n * is the current context on this CPU and preemption is disabled,\n * hence we can't get into perf_event_task_sched_out for this context.\n */\nstatic void _perf_event_disable(struct perf_event *event)\n{\n\tstruct perf_event_context *ctx = event->ctx;\n\n\traw_spin_lock_irq(&ctx->lock);\n\tif (event->state <= PERF_EVENT_STATE_OFF) {\n\t\traw_spin_unlock_irq(&ctx->lock);\n\t\treturn;\n\t}\n\traw_spin_unlock_irq(&ctx->lock);\n\n\tevent_function_call(event, __perf_event_disable, NULL);\n}\n"
+        },
+        {
+          "start_line": 5874,
+          "end_line": 5885,
+          "text": "static long _perf_ioctl(struct perf_event *event, unsigned int cmd, unsigned long arg)\n{\n\tvoid (*func)(struct perf_event *);\n\tu32 flags = arg;\n\n\tswitch (cmd) {\n\tcase PERF_EVENT_IOC_ENABLE:\n\t\tfunc = _perf_event_enable;\n\t\tbreak;\n\tcase PERF_EVENT_IOC_DISABLE:\n\t\tfunc = _perf_event_disable;\n\t\tbreak;\n"
+        },
+        {
+          "start_line": 10539,
+          "end_line": 10585,
+          "text": "int perf_event_set_bpf_prog(struct perf_event *event, struct bpf_prog *prog,\n\t\t\t    u64 bpf_cookie)\n{\n\tbool is_kprobe, is_uprobe, is_tracepoint, is_syscall_tp;\n\n\tif (!perf_event_is_tracing(event))\n\t\treturn perf_event_set_bpf_handler(event, prog, bpf_cookie);\n\n\tis_kprobe = event->tp_event->flags & TRACE_EVENT_FL_KPROBE;\n\tis_uprobe = event->tp_event->flags & TRACE_EVENT_FL_UPROBE;\n\tis_tracepoint = event->tp_event->flags & TRACE_EVENT_FL_TRACEPOINT;\n\tis_syscall_tp = is_syscall_trace_event(event->tp_event);\n\tif (!is_kprobe && !is_uprobe && !is_tracepoint && !is_syscall_tp)\n\t\t/* bpf programs can only be attached to u/kprobe or tracepoint */\n\t\treturn -EINVAL;\n\n\tif (((is_kprobe || is_uprobe) && prog->type != BPF_PROG_TYPE_KPROBE) ||\n\t    (is_tracepoint && prog->type != BPF_PROG_TYPE_TRACEPOINT) ||\n\t    (is_syscall_tp && prog->type != BPF_PROG_TYPE_TRACEPOINT))\n\t\treturn -EINVAL;\n\n\tif (prog->type == BPF_PROG_TYPE_KPROBE && prog->aux->sleepable && !is_uprobe)\n\t\t/* only uprobe programs are allowed to be sleepable */\n\t\treturn -EINVAL;\n\n\t/* Kprobe override only works for kprobes, not uprobes. */\n\tif (prog->kprobe_override && !is_kprobe)\n\t\treturn -EINVAL;\n\n\tif (is_tracepoint || is_syscall_tp) {\n\t\tint off = trace_event_get_offsets(event->tp_event);\n\n\t\tif (prog->aux->max_ctx_offset > off)\n\t\t\treturn -EACCES;\n\t}\n\n\treturn perf_event_attach_bpf_prog(event, prog, bpf_cookie);\n}\n\nvoid perf_event_free_bpf_prog(struct perf_event *event)\n{\n\tif (!perf_event_is_tracing(event)) {\n\t\tperf_event_free_bpf_handler(event);\n\t\treturn;\n\t}\n\tperf_event_detach_bpf_prog(event);\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "kernel/trace/bpf_trace.c",
+      "git_blob": "7ac6c52b25ebc8dcb93df83844f5e796740b8206",
+      "size": 92087,
+      "sha256": "f5537c7e6c8e5e8d1faf73e5e9ef93e776db8b7a8cc0182b154021f362e0dfe2",
+      "url": "https://raw.githubusercontent.com/torvalds/linux/e8f897f4afef0031fe618a8e94127a0934896aba/kernel/trace/bpf_trace.c",
+      "metadata_url": "https://api.github.com/repos/torvalds/linux/contents/kernel/trace/bpf_trace.c?ref=e8f897f4afef0031fe618a8e94127a0934896aba",
+      "excerpts": [
+        {
+          "start_line": 2277,
+          "end_line": 2304,
+          "text": "void perf_event_detach_bpf_prog(struct perf_event *event)\n{\n\tstruct bpf_prog_array *old_array;\n\tstruct bpf_prog_array *new_array;\n\tint ret;\n\n\tmutex_lock(&bpf_event_mutex);\n\n\tif (!event->prog)\n\t\tgoto unlock;\n\n\told_array = bpf_event_rcu_dereference(event->tp_event->prog_array);\n\tret = bpf_prog_array_copy(old_array, event->prog, NULL, 0, &new_array);\n\tif (ret == -ENOENT)\n\t\tgoto unlock;\n\tif (ret < 0) {\n\t\tbpf_prog_array_delete_safe(old_array, event->prog);\n\t} else {\n\t\trcu_assign_pointer(event->tp_event->prog_array, new_array);\n\t\tbpf_prog_array_free_sleepable(old_array);\n\t}\n\n\tbpf_prog_put(event->prog);\n\tevent->prog = NULL;\n\nunlock:\n\tmutex_unlock(&bpf_event_mutex);\n}\n"
+        },
+        {
+          "start_line": 2460,
+          "end_line": 2510,
+          "text": "int bpf_get_perf_event_info(const struct perf_event *event, u32 *prog_id,\n\t\t\t    u32 *fd_type, const char **buf,\n\t\t\t    u64 *probe_offset, u64 *probe_addr,\n\t\t\t    unsigned long *missed)\n{\n\tbool is_tracepoint, is_syscall_tp;\n\tstruct bpf_prog *prog;\n\tint flags, err = 0;\n\n\tprog = event->prog;\n\tif (!prog)\n\t\treturn -ENOENT;\n\n\t/* not supporting BPF_PROG_TYPE_PERF_EVENT yet */\n\tif (prog->type == BPF_PROG_TYPE_PERF_EVENT)\n\t\treturn -EOPNOTSUPP;\n\n\t*prog_id = prog->aux->id;\n\tflags = event->tp_event->flags;\n\tis_tracepoint = flags & TRACE_EVENT_FL_TRACEPOINT;\n\tis_syscall_tp = is_syscall_trace_event(event->tp_event);\n\n\tif (is_tracepoint || is_syscall_tp) {\n\t\t*buf = is_tracepoint ? event->tp_event->tp->name\n\t\t\t\t     : event->tp_event->name;\n\t\t/* We allow NULL pointer for tracepoint */\n\t\tif (fd_type)\n\t\t\t*fd_type = BPF_FD_TYPE_TRACEPOINT;\n\t\tif (probe_offset)\n\t\t\t*probe_offset = 0x0;\n\t\tif (probe_addr)\n\t\t\t*probe_addr = 0x0;\n\t} else {\n\t\t/* kprobe/uprobe */\n\t\terr = -EOPNOTSUPP;\n#ifdef CONFIG_KPROBE_EVENTS\n\t\tif (flags & TRACE_EVENT_FL_KPROBE)\n\t\t\terr = bpf_get_kprobe_info(event, fd_type, buf,\n\t\t\t\t\t\t  probe_offset, probe_addr, missed,\n\t\t\t\t\t\t  event->attr.type == PERF_TYPE_TRACEPOINT);\n#endif\n#ifdef CONFIG_UPROBE_EVENTS\n\t\tif (flags & TRACE_EVENT_FL_UPROBE)\n\t\t\terr = bpf_get_uprobe_info(event, fd_type, buf,\n\t\t\t\t\t\t  probe_offset, probe_addr,\n\t\t\t\t\t\t  event->attr.type == PERF_TYPE_TRACEPOINT);\n#endif\n\t}\n\n\treturn err;\n}\n"
+        }
+      ]
+    }
+  ]
+}

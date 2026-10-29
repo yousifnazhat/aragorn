@@ -1,0 +1,275 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "REVIEWED_HTTP_HELPER_IMPLEMENTATION_NOT_INSTALLED_DEPLOYMENT_OR_QUALIFICATION",
+  "parent_commit": "8042eedc130162ce45d4f07259c2f3f8a8a896ff",
+  "branch": "codex/phase3-runtime-prevention",
+  "recorded_at_utc": "2026-10-07T06:14:59.052847+00:00",
+  "source_digests": {
+    "scripts/materialize_native_phase3_http_identity.py": "sha256:116502735c5ba9e3dc2933e412db94c7fcda2a81c6b6ff54db57901892a6e08e",
+    "scripts/materialize_native_phase3_http_preparation.py": "sha256:98bc829cf6e6d14f0eb633a499fc31e1b91b4ed4a5823e287c1160ef396f6ca6",
+    "scripts/materialize_native_phase3_http_setup.py": "sha256:f7e39fa14003c4265569dd837ce15c9120ee1dd6e2c3ce46b2cd706101a95352",
+    "scripts/materialize_native_phase3_http_writer.py": "sha256:71cf7fdc2f7e95d55b614546e04bd84d0d8b5aa7028edfa631a730047956b0a9",
+    "tests/test_native_phase3_http_binding_size.py": "sha256:83445a6d4079b3fa8724a0af15b2e6161c87a385dd520c65330e6dd8ed9c86ec",
+    "tests/test_native_phase3_http_identity.py": "sha256:a4b36d958299c8a3044eb1b41364c9fe83e2e9314e287fa2aca47f1930ea4673",
+    "tests/test_native_phase3_http_identity_consumer.py": "sha256:8747f2581c6b536bfec509fbd768a0ce5a7d0179fd851512a1c0fc50406e6191",
+    "tests/test_native_phase3_http_preparation.py": "sha256:54b8562fb851cfe18bf97539d35a10c0da7ab9a6eb32ec560d9d89d981f784f5",
+    "tests/test_native_phase3_http_preparation_repaired.py": "sha256:cce0491c03cfb90e4af63b9680894ced1f4e59a52a2f32d617c2d91a234cae1f",
+    "tests/test_native_phase3_http_setup.py": "sha256:a0c6c88d8035352bc5f20e30467cbbf97d86d3f47538c8cca40ae0f2d2d7b627",
+    "tests/test_native_phase3_http_setup_composition.py": "sha256:6df4bcf798f6912f72da3f1067c6a23d0486eaed8f80a18100f7ae7a4f512891",
+    "tests/test_native_phase3_http_writer.py": "sha256:34e738ce588bc10bcbd0170da64c0792b57ff921d56a978a74fe0af27881ff8b"
+  },
+  "rendered_helpers": {
+    "scripts/runtime_native_common_case_setup.py": {
+      "bytes": 25236,
+      "digest": "sha256:c3c053aaafd1670baeb49e50a5afb5d0d35bc4e8755c3a7224606344ae5284f4"
+    },
+    "scripts/runtime_native_receipt_systemd_check.py": {
+      "bytes": 55641,
+      "digest": "sha256:33c44abc4b8d19176e2906822a7274ba0c24769b3ce89a4b35e595f2b2defbe8"
+    },
+    "src/aragorn/native_phase3_common_identity.py": {
+      "bytes": 23702,
+      "digest": "sha256:4f715bddc183347945e0f99a8e58e17c13ef97070af322416fc34805d759bb7d"
+    },
+    "src/aragorn/native_phase3_common_preparation.py": {
+      "bytes": 33455,
+      "digest": "sha256:dc8435479af95d01d68ec4fa0b66fdf72023e56ba8583e722102dd51fd6f2c29"
+    },
+    "src/aragorn/native_phase3_common_process_verifier.py": {
+      "bytes": 25950,
+      "digest": "sha256:5c92dfd4a2691a03e1c2623de3697f1b97bea7372b5dc14e636431cc5b9c93cc"
+    },
+    "src/aragorn/runtime_native_measurement_inputs.py": {
+      "bytes": 8871,
+      "digest": "sha256:8ae5e71a61c9c0869033082bfcdeadb9f3aafffdaf63bad30e14274048ac8ce3"
+    }
+  },
+  "pipeline_results": [
+    {
+      "stage": "native-http-identity-bridge",
+      "fingerprint": "sha256:9bf8a04393bcf451f9f380f276d8ef40886bf14dbe6928564a5f61b06f299954",
+      "status": "FAIL",
+      "result_digest": "sha256:3372670c94178e31599d1af5e21c429ff8151c1af5c2be8f9cae6583a1b1427f",
+      "logs": {
+        "stderr.log": {
+          "bytes": 2855,
+          "digest": "sha256:dd7c6056058387d66a47dab77fb2bd2a6d54c6321d79775fae3f19ab37547b90"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-identity-bridge/9bf8a04393bcf451f9f380f276d8ef40886bf14dbe6928564a5f61b06f299954/result.json"
+    },
+    {
+      "stage": "native-http-preparation-bridge",
+      "fingerprint": "sha256:d4ef21683ccbdb57315532057a4dfcc8598bfa8184d0d45990345caaeb8a1718",
+      "status": "FAIL",
+      "result_digest": "sha256:13272aa5eee348185fb7ae5bfc228b0d25b556f458f4dbb3b950357b766135f3",
+      "logs": {
+        "stderr.log": {
+          "bytes": 14391,
+          "digest": "sha256:11034e612baf04b52b362c0bec460763a6aea9b16659eb07932533d94bc5073c"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-preparation-bridge/d4ef21683ccbdb57315532057a4dfcc8598bfa8184d0d45990345caaeb8a1718/result.json"
+    },
+    {
+      "stage": "native-http-writer-bridge",
+      "fingerprint": "sha256:6d6fdb9d61c2da39a498278c295b88b23734e24100e6c42c1c98e2adf47260b4",
+      "status": "PASS",
+      "result_digest": "sha256:f024dc96f78c18b7bac338b6e37920f15fed963f28250beac549f84b94b10679",
+      "logs": {
+        "stderr.log": {
+          "bytes": 2355,
+          "digest": "sha256:d53c8100dd14427d7abf883f3d44111b849137a25437230998fdc37045235b41"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-writer-bridge/6d6fdb9d61c2da39a498278c295b88b23734e24100e6c42c1c98e2adf47260b4/result.json"
+    },
+    {
+      "stage": "native-http-setup-bridge",
+      "fingerprint": "sha256:b8fbe5f6eb0616ab01ee2af01538daaeb5955ab1ee5b04ba5f371f0f8b273128",
+      "status": "PASS",
+      "result_digest": "sha256:cdaffbcc4062e856fe10a68a1d80b2db191ed183cabc0df12b60c8f6c7d90844",
+      "logs": {
+        "stderr.log": {
+          "bytes": 2031,
+          "digest": "sha256:14061bb8f08b97c972eb01d83defd7af0dfee1025971964ed5683e09bb3fd8b6"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-setup-bridge/b8fbe5f6eb0616ab01ee2af01538daaeb5955ab1ee5b04ba5f371f0f8b273128/result.json"
+    },
+    {
+      "stage": "native-http-identity-consumer-repair",
+      "fingerprint": "sha256:eae6c4717392aa51e087006d3bd486fb9de4974058b6b6984ae34007099b4017",
+      "status": "PASS",
+      "result_digest": "sha256:628f1588edd83a032e4584353d51847af282883b259e3af7b14a4807dd99e999",
+      "logs": {
+        "stderr.log": {
+          "bytes": 560,
+          "digest": "sha256:5ec80234228b4e926de1d9497ffe3b575f021739f0e35fcbbc5831df013c6bed"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-identity-consumer-repair/eae6c4717392aa51e087006d3bd486fb9de4974058b6b6984ae34007099b4017/result.json"
+    },
+    {
+      "stage": "native-http-preparation-repair",
+      "fingerprint": "sha256:fba5cd56be41335dddde9badde94cd84c4ca538810ed174b49ae8e5450216e09",
+      "status": "FAIL",
+      "result_digest": "sha256:131bb8ba428b9d47becab359da7a7f2e9209fb6bf4d4de1e33c84c5a45f98201",
+      "logs": {
+        "stderr.log": {
+          "bytes": 3381,
+          "digest": "sha256:6de0047e59c4d387fc95718eff45a8a05c8cbbefc8048d481ec3b7520fbfcaba"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-preparation-repair/fba5cd56be41335dddde9badde94cd84c4ca538810ed174b49ae8e5450216e09/result.json"
+    },
+    {
+      "stage": "native-http-setup-composition",
+      "fingerprint": "sha256:3d9d8fac70eb80622084a6e5b3f07edfe86c0b1c4a0a367df997dabda9a75a02",
+      "status": "PASS",
+      "result_digest": "sha256:029955b9f483f7f9aa11a8288149b924153d6c527bca3bea4bdfb9038be9566c",
+      "logs": {
+        "stderr.log": {
+          "bytes": 505,
+          "digest": "sha256:105739360825f0409c22c3058d02f68bfc8a3fe280decd62ca676168df132e1e"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-setup-composition/3d9d8fac70eb80622084a6e5b3f07edfe86c0b1c4a0a367df997dabda9a75a02/result.json"
+    },
+    {
+      "stage": "native-http-binding-size-check",
+      "fingerprint": "sha256:eef9957643efc8ab8a0f46303e4379a93edfa918c07d233564d73de28a37818c",
+      "status": "PASS",
+      "result_digest": "sha256:733365bfaabf42b618fe0f4dc4d74f45516dd16dfba790ec8deb474358b28f33",
+      "logs": {
+        "stderr.log": {
+          "bytes": 303,
+          "digest": "sha256:39016bce00ca8b13be86cf667576df6b319e2315579d6d057aa72349bb7d2e83"
+        },
+        "stdout.log": {
+          "bytes": 0,
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "result_path": ".aragorn/phase3-pipeline/native-http-binding-size-check/eef9957643efc8ab8a0f46303e4379a93edfa918c07d233564d73de28a37818c/result.json"
+    }
+  ],
+  "runtime_profile": {
+    "files": 93,
+    "bytes": 65735,
+    "digest": "sha256:95c8aecc2eb5df094f8d88260971f5b7497d8aed411dc126206dbee08d68e6b5",
+    "unchanged": true
+  },
+  "implemented": [
+    "Finite composition of six preparation, input-validation, installed-identity, independent-consumer, writer and setup source replacements; frozen predecessors are unchanged.",
+    "Eight exact writer intents, including HTTP credential intent before absent-only provisioning, with canonical HTTP template chosen before the first protected configuration write.",
+    "Fixed HTTP attempt policy/grant digests replace create-only action inputs; setup intercepts activation and retains private partial outcomes with bounded public fields.",
+    "Pure preparation and request closure binds21 source pins and41 distinct identity paths; controller checks all93 runtime files.",
+    "HTTP identity reader and independent retained consumer join protected credential bytes and worker/sensor/broker process-root views without claiming application load or network namespace observation."
+  ],
+  "verification": {
+    "distinct_valid_checks": 50,
+    "total_test_invocations": 68,
+    "first_run": {
+      "identity": {
+        "ran": 9,
+        "valid_successes_retained": 7,
+        "failed": 1,
+        "negative_success_invalidated": 1
+      },
+      "preparation": {
+        "ran": 15,
+        "valid_successes_retained": 1,
+        "failed": 8,
+        "negative_successes_invalidated": 6
+      },
+      "writer": {
+        "ran": 13,
+        "passed": 13
+      },
+      "setup": {
+        "ran": 12,
+        "passed": 12
+      }
+    },
+    "affected_checks": {
+      "identity_consumer": {
+        "ran": 2,
+        "passed": 2,
+        "cause": "Consumer local dictionary shadowed the inherited exact-field-name set; corrected only injected local name and required positive controls."
+      },
+      "preparation": {
+        "ran": 14,
+        "passed": 13,
+        "failed": 1,
+        "cause": "HTTP93 directories are relative while baseline directories are absolute. Corrected finite translation. Test module dependencies now bind before import-time constants; negatives establish a valid baseline."
+      },
+      "setup_composition": {
+        "ran": 2,
+        "passed": 2,
+        "cause": "One affected composition check plus one new full eight-intent setup/pure-preparation/CAS-retention join."
+      },
+      "binding_size": {
+        "ran": 1,
+        "passed": 1,
+        "cause": "Test incorrectly required the21-source credential to exceed4096bytes. Actual3631bytes satisfies0<size<=8192; production unchanged."
+      }
+    },
+    "failed_records_preserved": true,
+    "failed_stages_relabelled_pass": false,
+    "unchanged_failed_fingerprints_rerun": false,
+    "unchanged_successes_not_rerun": true,
+    "pipeline_capacity_reused": "sha256:77df0de1d5abc16a3ba1769ad5a8f7514a6414279328e32a810bdec3e2acea31",
+    "static_checks": [
+      "Ruff E9,F63,F7,F82 on batch-owned Python",
+      "git diff --check"
+    ],
+    "scope": "Fabricated unit data, inert native/OS doubles and disposable test DESTDIRs; no historical test methods, live captures, network effects, services, VM operations or acceptance.",
+    "cache_note": "Older stage fingerprints can now show NEW because affected methods were isolated or renderer inputs changed. Do not rerun them merely to turn the overall cache green; retained method results and scoped successor checks are the evidence."
+  },
+  "next": [
+    "Bind signed original sources and these six rendered outputs into an HTTP-specific host/guest bundle and public setup-replay contract; old common74 controller/report paths remain incompatible.",
+    "Extend root measurement provisioning from protected-create inputs to the HTTP endpoint and fixture credential, preserving absent-only custody and exact source/account/boot joins.",
+    "Prove broker-restricted positive readiness, then perform one newly necessary bounded owned network-none capture with verified cleanup and independent replay.",
+    "Finish remaining admission families, RUN/sensor-health and fabricated-lab action/task adapters; complete verifier inventory, freeze once, then required fresh acceptance."
+  ],
+  "qualification": {
+    "fresh_fixture_prepared": false,
+    "installed_identity_observed": false,
+    "activation_performed": false,
+    "measurement_collected": false,
+    "admission_qualified": false,
+    "run_qualified": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false
+  },
+  "commit_record": "The signed commit and authorized fast-forward push are verified in the ignored post-commit .aragorn batch receipt and user milestone; no self-referential commit hash is embedded here."
+}

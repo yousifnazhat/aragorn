@@ -1,0 +1,279 @@
+{
+  "schema": "aragorn/phase3-implementation-batch/v1",
+  "date": "2026-10-07",
+  "title": "HTTP94 combined host/guest/private-evidence capture and same-process listener witness",
+  "base_commit": "905f95f7019fb157c81a61201f7cea5433070cc1",
+  "authority": "REVIEWED_IMPLEMENTATION_AND_INERT_CHECKS_NOT_LIVE_QUALIFICATION",
+  "files": {
+    "scripts/capture_native_phase3_http_attempt.py": {
+      "bytes": 7243,
+      "digest": "sha256:ddd941caaef7254e868b86659a12bf216f3f77d64bfe0eceacd56a0211af6eef"
+    },
+    "scripts/materialize_native_phase3_http_attempt.py": {
+      "bytes": 29391,
+      "digest": "sha256:fb7443cbb3d4603f8e865f89c969de633e0b6e43a608ea94ce5139e52ab74418"
+    },
+    "scripts/materialize_native_phase3_http_attempt_capture.py": {
+      "bytes": 14639,
+      "digest": "sha256:d6d504c9edacea8eefec3661ca4e2741efc34461f77dd6e90a1421ad56faf411"
+    },
+    "scripts/materialize_native_phase3_http_attempt_evidence.py": {
+      "bytes": 24421,
+      "digest": "sha256:62d4baf22e4341a1552365133e5139c55220cb4d93f85b628883ef88d18b5ddf"
+    },
+    "scripts/materialize_native_phase3_http_ready_setup_capture.py": {
+      "bytes": 11012,
+      "digest": "sha256:0d4cf6a94660dfdf9ccd5c1193c960673658d0993abee9df0e3baf2e6069b204"
+    },
+    "src/aragorn/native_phase3_http_broker_ready_capture.py": {
+      "bytes": 26690,
+      "digest": "sha256:f6e8886f4f1c2e4073be7764be7d4287eb22d3bfbd817145d79e86d792691d50"
+    },
+    "tests/test_native_phase3_http_attempt.py": {
+      "bytes": 8783,
+      "digest": "sha256:4c7834dd9de24ee9011e68cd7c9db66cd8161317c935ab0ce28ee43ef82007ef"
+    },
+    "tests/test_native_phase3_http_attempt_capture.py": {
+      "bytes": 6040,
+      "digest": "sha256:7f6777738d9001f6cbd3d953ae320d69dc039a386aa8ae8229bf4905bc133748"
+    },
+    "tests/test_native_phase3_http_attempt_evidence.py": {
+      "bytes": 16165,
+      "digest": "sha256:e985f16fa08d8f7ca0be1c86af751ba390e446950e68b1aa3f3d8e2aa6ce4082"
+    },
+    "tests/test_native_phase3_http_attempt_private_dependencies.py": {
+      "bytes": 7432,
+      "digest": "sha256:6e8e5d9df679ccff910170cb27609d21184d6a4b10dc5b268407c31f0492a277"
+    },
+    "tests/test_native_phase3_http_attempt_private_bound.py": {
+      "bytes": 426,
+      "digest": "sha256:c7230085e217db4272f01aae9ae7e21832c57a810fca23ce12b151bf5922df5c"
+    },
+    "tests/test_native_phase3_http_broker_ready_capture.py": {
+      "bytes": 10360,
+      "digest": "sha256:16c34914cb8a2a86d2a25ace4d88eb709c87be699852c954c342632ad1313277"
+    },
+    "tests/test_native_phase3_http_listener_host_mock.py": {
+      "bytes": 519,
+      "digest": "sha256:dbb0cdf5794f73f3b2587a238a8aabe2f92c1ef0585562438c102e83f69fbc45"
+    },
+    "tests/test_native_phase3_http_ready_setup_capture.py": {
+      "bytes": 5679,
+      "digest": "sha256:cb1a4ce542f583d782275446c6ffa6e593cd07ca05a4992ec17a8dac4ce88c09"
+    }
+  },
+  "pipeline": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "stages": [
+      {
+        "stage_id": "native-http-broker-listener",
+        "fingerprint": "sha256:9a52d0087888e659452d5461f37eedfd2d3485808c5f4612e4c8c655a26db7f1",
+        "status": "FAIL",
+        "logs": {
+          "stderr.log": {
+            "bytes": 7091,
+            "digest": "sha256:5e838940b69e3e98022599aa086be943ec7fa0e7b8d8685866b74204aa07edba"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791397718661672000,
+        "finished_at_ns": 1791397718976293000
+      },
+      {
+        "stage_id": "native-http-ready-setup-capture",
+        "fingerprint": "sha256:389f935ab95dab8e122442fb0393b95646fd5f4e496d0bc706c76c6ec5e1321c",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 924,
+            "digest": "sha256:a778d09973f3829364f08394352b50cb667f5beb17441c0031d705c779695946"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791397719303481000,
+        "finished_at_ns": 1791397719776861000
+      },
+      {
+        "stage_id": "native-http-attempt-guest",
+        "fingerprint": "sha256:837f0fa63274ac33ab281a0a00af94938f50daddb645387d22ffd9793d9eedd5",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 242,
+            "digest": "sha256:e5e75bed8658eb36ea277349b5ba137c0c2a7ffc00f69e71d64aa916c4319d00"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791397720098401000,
+        "finished_at_ns": 1791397720390513000
+      },
+      {
+        "stage_id": "native-http-attempt-evidence",
+        "fingerprint": "sha256:d5b81f8dae377c9c1664c3555a73ae118042ac67daa5256920b5edf175ff55d7",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 2001,
+            "digest": "sha256:5e3e5a843eed19c3d85ad3627b3e66da0c3287bf7832a17656de5b687c1cabac"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791397720716029000,
+        "finished_at_ns": 1791397721035843000
+      },
+      {
+        "stage_id": "native-http-attempt-assembly",
+        "fingerprint": "sha256:b370ec9e96a867711a5bb9c3cd4f5c49efa9bc0008400dc51794c17f34c7e80e",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 291,
+            "digest": "sha256:14b83cb99762566ed864939810136c514607a930f47934864f5532610357b855"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791397721365030000,
+        "finished_at_ns": 1791397723172982000
+      },
+      {
+        "stage_id": "native-http-broker-listener",
+        "fingerprint": "sha256:90162263e40fdf281be99f9435e3dab34728bf28a0a93aa79922c0bdfc5a885e",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 698,
+            "digest": "sha256:3a028712084303934acf0d4f6bef1c866f1958c8296502b2f904a3ca20b4f0fb"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791397754793829000,
+        "finished_at_ns": 1791397755065677000
+      },
+      {
+        "stage_id": "native-http-attempt-assembly",
+        "fingerprint": "sha256:4f0722db45e601f98e2fa2430f40a5ab81783e12583e239d0fed6676f5964f1b",
+        "status": "FAIL",
+        "logs": {
+          "stderr.log": {
+            "bytes": 1819,
+            "digest": "sha256:f320b69bb765bf1305507963523940784a755ae0bac2db016c78cb8e46eceddc"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791398538537398000,
+        "finished_at_ns": 1791398539095776000
+      },
+      {
+        "stage_id": "native-http-attempt-private-dependencies",
+        "fingerprint": "sha256:77e968540014e7654370f07c0d787f5f05c8b873aaf0aea53ad3d9d6f8d05012",
+        "status": "FAIL",
+        "logs": {
+          "stderr.log": {
+            "bytes": 2626,
+            "digest": "sha256:0065ae357aa3de330236d029ea2a2620dc2e90388f757860c682a60c97b538e6"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791398539479368000,
+        "finished_at_ns": 1791398539991659000
+      },
+      {
+        "stage_id": "native-http-attempt-assembly",
+        "fingerprint": "sha256:09e7bab3eef89af10bf6ed9628b43c62aa00ea05e5aea20a57dce043f96e6003",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 291,
+            "digest": "sha256:1476f43ce48d9b9b0b95c9d3ded2b420815d20bdd57b78e1e7f426577584ed71"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791398710333126000,
+        "finished_at_ns": 1791398712236289000
+      },
+      {
+        "stage_id": "native-http-attempt-private-dependencies",
+        "fingerprint": "sha256:29aec0e787ccf39d2dd452e1f311bc36f0ff92d27fcca1d49d5bd2c68bca1fd7",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 333,
+            "digest": "sha256:62dd1a84baa44ce7278dc2f7f98afe054665c5c2e64f9f814971a9153f985832"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791398712569868000,
+        "finished_at_ns": 1791398713104519000
+      }
+    ],
+    "distinct_valid_new_checks": 27,
+    "total_invocations": 33,
+    "unchanged_failed_fingerprints_retried": 0,
+    "broad_regression": false,
+    "retained_passes_from_failed_stages": {
+      "9a52d0087888e659452d5461f37eedfd2d3485808c5f4612e4c8c655a26db7f1": 5,
+      "77e968540014e7654370f07c0d787f5f05c8b873aaf0aea53ad3d9d6f8d05012": 2
+    },
+    "failed_fingerprints_preserved": true,
+    "repairs": [
+      "macOS readiness mocks explicitly create Linux-only pipe2 attribute; only three errored methods rerun",
+      "Private loader uses root source pins rather than generated intermediate V4 pins; only affected import and assembly checks rerun"
+    ]
+  },
+  "implementation": [
+    "One finite 23-output composition binds HTTP94 setup, nine-writer provisioning, plan/handoff, one native HTTP attempt and public/private retention. Frozen predecessors remain unchanged.",
+    "Broker startup GET and AF_UNIX listener are joined to the same independently observed broker PID/start epoch, with pidfd and listening-inode ownership checks. No connection to the broker socket is used as a witness.",
+    "Readiness child is closed and reaped before the effect sink opens. Partial observations survive cleanup failure; incomplete custody preserves the exact fixture.",
+    "Private host semantic replay uses the exact six staged dependencies plus generated consumers, with temporary unique dataclass registrations and unchanged original package globals.",
+    "Native worker/broker timestamps and real HTTP evidence are retained; no generic callback timestamps, fake effects or automatic retries."
+  ],
+  "remaining": [
+    "Source-bound finite benign task inputs and reviewed one-HTTP development contract before capture preparation",
+    "One serialized guarded HTTP94 capture, actual same-process listener evidence, independent replay and verified cleanup/prior VM state restoration",
+    "Remaining admission, RUN/sensor-health and paired workload adapters; full verifier inventory then final freeze/acceptance"
+  ],
+  "observations": {
+    "vm_started": false,
+    "live_capture": false,
+    "service_activation": false,
+    "listener_observed": false,
+    "measurement_collected": false,
+    "cleanup_live_verified": false
+  },
+  "qualification": {
+    "admission_qualified": false,
+    "run_qualified": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false
+  }
+}

@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically check accepted health for the fixed Aragorn runtime
+
+[Timer]
+OnBootSec=5s
+OnUnitInactiveSec=1s
+AccuracySec=100ms
+RandomizedDelaySec=0
+Unit=aragorn-runtime-health-watchdog.service
+
+[Install]
+WantedBy=timers.target

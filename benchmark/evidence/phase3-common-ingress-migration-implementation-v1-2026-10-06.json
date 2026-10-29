@@ -1,0 +1,176 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "06a047e8be4acd9cb88d60e9a3d7fd1d61be0370",
+  "branch": "codex/phase3-runtime-prevention",
+  "validation_recorded_utc": "2026-10-06 01:57:54 UTC",
+  "implementation": [
+    "One inert common74 successor stages the existing authenticated ingress worker, its helper, constrained unit and absent-only private-directory activator. Frozen common73 and all predecessors remain unchanged.",
+    "The unit grants ReadWritePaths only for the fixed ingress root; StateDirectory remains the native receipt store, preventing systemd-managed ownership repair of retained ingress evidence.",
+    "The activator validates loaded restrictions and four inactive services before root-held nofollow ancestor checks, absent-only creation, bounded emptiness, worker ownership/mode checks and held/named inode joins. Partial creation is retained and prevents retry.",
+    "Preparation pins the complete real common74 report, derives the actual staged worker artifact, and preserves seven-writer semantics and seven broker measurement source bindings.",
+    "Current static pins, preparation, request, identity and independent-verification envelopes are v2. The selected identity/request inventory grows from 26 to 28 files; the helper has protected-root and worker-process-root byte joins, while the activator is root-only source evidence.",
+    "Existing independent descriptor/process readers are reused. No generic framework, runtime argv change or caller-selected worker override was introduced."
+  ],
+  "review_findings_resolved": [
+    "Replace unbounded listdir allocation in the fixed-root provisioner with a bounded context-managed empty-directory check.",
+    "Keep the inherited new-dependencies inventory semantic: add only the new helper, while all four replacements are bound by the full file manifest and explicit output pins.",
+    "Preserve frozen v1 evidence and refuse its promotion through current v2 preparation and identity boundaries; coherent local manifest rehashing cannot bypass the complete reviewed stage pin.",
+    "Treat process-root helper bytes and root-only activator bytes as source observations, not proof of loaded code or the full 74-file installed state."
+  ],
+  "staged_profile": {
+    "schema": "aragorn/runtime-phase3-ingress-staged-profile/v1",
+    "report_bytes": 51756,
+    "report_digest": "sha256:0fcd6cb67ac2721122c72ebe6bb6973a1a15f57444a8e8107d618add74677d4e",
+    "files": 74,
+    "source_inputs": 96,
+    "new_dependencies": 30,
+    "directories": 16,
+    "static_pins": 20,
+    "request_identity_files": 28,
+    "outputs": {
+      "worker": {
+        "bytes": 49327,
+        "digest": "sha256:1ba2bc446b0561d992ef800d324269ab6a428b2cb3449109fe771029317f850a"
+      },
+      "helper": {
+        "bytes": 20731,
+        "digest": "sha256:aba3d6b705f9b147fdf89f083ec6edcde7d3165ba1a8008cf4bcdcaee88fe17e"
+      },
+      "unit": {
+        "bytes": 3084,
+        "digest": "sha256:eddb82f4fa51e5211a6c19ae52f1e29cd7eb9e9b791adffc94f23ff01f0f7053"
+      },
+      "activator": {
+        "bytes": 46670,
+        "digest": "sha256:167de84ec8cce52cd185e3f947d6a69983b6fb923be5c8bc92f167b219c5dabf"
+      }
+    },
+    "common_activation_executed": false,
+    "measurement_directory_provisioned": false
+  },
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:5bd9f099fb0e90faec02f10bb8d7df0d497f86a39e24d0fd85d71651a984db32",
+    "benchmark/phase3-pipeline-v1.json": "sha256:baac2c2da38295cc8c74f360bc26f4caead9a01ec267d91db3620bfaf8055e15",
+    "src/aragorn/native_phase3_common_identity.py": "sha256:46aed5e163e490d7f3261930d956c3c8f3ad7dd1775816a4cdf3efc7f5b780a8",
+    "src/aragorn/native_phase3_common_preparation.py": "sha256:428d298ec64f0aab08f08256621f88848260c4736a13d6e0feb1053f114f0b03",
+    "src/aragorn/native_phase3_common_process_verifier.py": "sha256:8be4794672c91772592ddf586ca641f1d1f8d5f67aa51e19b29466379519c302",
+    "tests/test_native_phase3_common_identity.py": "sha256:92b3ca2391739439b65d1d70f1f6c2b8f938704189393f9eb764ee2fdef068df",
+    "tests/test_native_phase3_common_preparation.py": "sha256:40cea118a53c85eea2485f7d1eb02b313be05107bc483f6098cb6960d2f43cad",
+    "tests/test_native_phase3_common_process_verifier.py": "sha256:c5471856be684830a2f1415543250fd46ad08f035400d9213089a4c678eb900c",
+    "scripts/stage_runtime_phase3_ingress_profile.py": "sha256:758f650169d286bfff133c591444e8416c4abce70def1b74050f712475473022",
+    "tests/test_native_phase3_common_ingress_migration.py": "sha256:cf08a3aa49baa407e6f1c2a845c9dbd449dbd5df01ac91cba8bbf090fedb4520",
+    "tests/test_runtime_phase3_ingress_profile.py": "sha256:15512e4dc97fc284c4c1f370ba6c83c7ec359ec9696f7d3ef373740e45791ad3",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "phase3-ingress-profile",
+      "status": "PASS",
+      "fingerprint": "sha256:80d7216950cf969a0bb8bd77bed91f058e07c859f82de95d5f51537bbde07f78",
+      "tests": 7,
+      "wall_seconds": 1.736616,
+      "unittest_seconds": 1.53,
+      "stderr_digest": "sha256:f889693a7163e30f4605fb95530ccca2765976b222a3aa168c5a4f42b7fd2028",
+      "reviewed_inputs": 98
+    },
+    {
+      "stage_id": "native-common-ingress-migration",
+      "status": "PASS",
+      "fingerprint": "sha256:d707ed2d742c3e95d674ec7ee4535c8516317f9c52d1c2cb4b8933d81e91fec6",
+      "tests": 8,
+      "wall_seconds": 3.145073,
+      "unittest_seconds": 2.902,
+      "stderr_digest": "sha256:7ce29abce67ba551707c2baab4fcd734e102434f541be267d4c73194c0157d84",
+      "reviewed_inputs": 114
+    },
+    {
+      "stage_id": "native-common-preparation",
+      "status": "PASS",
+      "fingerprint": "sha256:2b236c9401a1ecd886021806ed0f2cc2283fb934cbeec4e6afce28acb4688a75",
+      "tests": 8,
+      "wall_seconds": 2.998039,
+      "unittest_seconds": 2.753,
+      "stderr_digest": "sha256:21a96cb26d75d6439ed7a0246e3454791a3e20951fc0b8e3606f9443f324f914",
+      "reviewed_inputs": 113
+    },
+    {
+      "stage_id": "native-common-worker-provisioning",
+      "status": "PASS",
+      "fingerprint": "sha256:b6b135eb3c58230d263f4b001660c930846329f3013634dfc1bd5a7ce3a0e896",
+      "tests": 9,
+      "wall_seconds": 2.251535,
+      "unittest_seconds": 2.025,
+      "stderr_digest": "sha256:a3b0694ab999ce9df53b40b9368ea835662ead2302ea77cc81933e17838524b3",
+      "reviewed_inputs": 114
+    },
+    {
+      "stage_id": "native-common-identity",
+      "status": "PASS",
+      "fingerprint": "sha256:5c78c398b1c0839b50fb532424d9899ce9686d3fad7e4ff097e057c07d07ca92",
+      "tests": 12,
+      "wall_seconds": 0.272134,
+      "unittest_seconds": 0.071,
+      "stderr_digest": "sha256:3cbe813db3308453e2ff5035659b3b5f9c063ad4e8b9c953d6373462b8e9ada9",
+      "reviewed_inputs": 17
+    },
+    {
+      "stage_id": "native-common-process-verifier",
+      "status": "PASS",
+      "fingerprint": "sha256:ac7a3869433e5c5871021e51644d06ddab7ad394b8de01940d120c503d48c3c3",
+      "tests": 10,
+      "wall_seconds": 0.245197,
+      "unittest_seconds": 0.05,
+      "stderr_digest": "sha256:bdef12bebde668a9c8edd3ec3ce20fd3230ce9f4fcd90f4cee598df50f2d2183",
+      "reviewed_inputs": 8
+    }
+  ],
+  "test_count": 54,
+  "new_test_methods": 17,
+  "affected_existing_test_methods": 37,
+  "selected_pipeline_runs": 1,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run phase3-ingress-profile native-common-ingress-migration native-common-preparation native-common-worker-provisioning native-common-identity native-common-process-verifier",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    },
+    {
+      "stage_id": "native-measurement-inputs",
+      "fingerprint": "sha256:3af475b99a20a10ff967c18ff10dbda9000f34d98efa352c2e3e8a7ade2e4d88"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "meaning": "Explicit transitive local imports plus pinned source/payload inputs; AST local-import review found no missing inputs. Existing preparation and worker-provisioning closures add the new stager, existing ingress renderer and helper. New profile and migration stages inherit only their required explicit closures; historical test discovery is not added. Identity/verifier path closures are unchanged and bind their changed source/test bytes. Runner and interpreter remain unchanged.",
+    "phase3-ingress-profile": 98,
+    "native-common-ingress-migration": 114,
+    "native-common-preparation": 113,
+    "native-common-worker-provisioning": 114,
+    "native-common-identity": 17,
+    "native-common-process-verifier": 8
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "Checks use temporary inert DESTDIRs, mocked process/kernel/descriptor observations and fake provisioning filesystem calls. No host or guest service, owned live fixture, real activation or measurement directory was invoked.",
+    "Current controller/guest orchestration still needs migration to the common74 profile and v2 prepared request. Historical controller observations must not be relabeled.",
+    "The selected 28-file protected/process identity boundary is not the complete installed 74-file inventory, loaded Python provenance, continuous immutability or hostile-root protection.",
+    "Ingress requires actual external boot/active-time-namespace observations from one collector and effective broker-final evidence. These source and envelope changes alone establish no elapsed time, sink acknowledgment, effect or causal attribution.",
+    "Real prepared-attempt and workload callbacks, remaining admission families, RUN event/response/attribution and meaningful sensor-health coverage remain incomplete.",
+    "Final31 and 100-attempt/100-pair acceptance stays blocked until shared deployment, complete independent-verifier inventory and real workload/timing prerequisites are complete."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "S2: migrate the existing common host/guest execution path to the common74 profile and v2 prepared request; consume the original commitment once, independently join actual ingress, both one-collector boot/active-namespace observations and effective broker-final records, and wire real workload, sink/attribution and verified cleanup callbacks. Remaining admission and RUN implementation lanes must converge on this same deployment before freeze.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and clean tree, and retain its hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

@@ -1,0 +1,62 @@
+[Unit]
+Description=Aragorn fixed-profile response to the current accepted health
+# Serialize the next health publication; OnSuccess is not a durable event queue.
+Before=aragorn-runtime-health-publisher.service
+# Other response kinds share a nonblocking lock; contention needs root retry.
+After=local-fs.target nss-user-lookup.target
+RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-response
+RefuseManualStart=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+User=root
+Group=root
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-response-service.py --health-dispatch
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+TimeoutStartSec=45s
+TasksMax=8
+MemoryMax=128M
+MemorySwapMax=0
+LimitNOFILE=64
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-runtime-health-response
+NoNewPrivileges=yes
+AmbientCapabilities=
+# Broker-owned control files and its lock require DAC override, not arbitrary PID signaling.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+# Plain bind preserves source RO/RW for the reader's custody check; do not force RO.
+BindPaths=-/run/credentials/aragorn-runtime-action-worker.service:/run/aragorn-runtime-response-worker-credential
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=default
+ProtectSystem=strict
+ProcSubset=pid
+ReadWritePaths=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-response /run/lock /etc/systemd/system
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock

@@ -4,6 +4,11 @@ Date: 2026-07-27
 
 Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; bounded exercised-profile Phase 2 exit complete; Phase 3 runtime-prevention engineering active; universal capture completeness, general archives, private repositories, trusted runtime/host attestation, runtime conformance, installer eligibility, EDR status, and public release remain blocked
 
+Separate signed current-V3 DET-01 and core-updater subfixtures now have bounded
+decision-case and route-level qualifications, respectively. Along with dedicated
+workshop invalidation, they remain standalone regression evidence rather than
+final campaign evidence; the historical formal `FAIL` profile is unchanged.
+
 Companion evaluation: [`agent-capability-admission-evaluation.md`](../agent-capability-admission-evaluation.md)
 
 **Aragorn** stands for **Agent Runtime Admission, Governance, Observation, Response, and Neutralization**. It is the working name of both the open-source project and its CLI.
@@ -404,7 +409,7 @@ Runtime selection is conformance-based, not brand-based:
 
 OpenClaw, Hermes, Pi, or another runtime earns a role only by passing the applicable mandatory properties. A failed mandatory property cannot be averaged away by scanner accuracy.
 
-Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never satisfies a profile. No runtime currently has a passing conformance result. The retained OpenClaw `2026.7.1` probe passed explicit install blocking but failed `ADM-02/direct-write`: OpenClaw discovered a directly written, model-visible skill without invoking `security.installPolicy`. That mandatory failure eliminates this version as a standalone admission reference monitor; its hook remains usable only as defense in depth. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, formal `ADM-01` exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. `ADM-02/update/workshop-proposal-apply` failed because the configured install policy blocked the positive-control installer but was not invoked when workshop apply created the workspace skill. The cumulative route ledger therefore records 3/9 update `PASS`, 1/9 update `FAIL`, and 6/12 reload `PASS`; the formal profile is `FAIL` and installer-ineligible. The remaining routes, including `reload/workshop-invalidation`, stay `NOT_TESTED`. This is a bounded result for the pinned runtime, configuration, route, and retained evidence, not a general OpenClaw security claim. A DET-only receipt separately passes four fixed decision exits across three clean processes each but is not composed with the runtime receipt; host, daemon, and root tampering are outside the retained claim. A fake runtime validates only Aragorn's harness, not mediation, privilege separation, hook timing, tamper resistance, or attribution in a real runtime.
+Each property result is `PASS`, `FAIL`, or `NOT_TESTED`; `NOT_TESTED` never satisfies a profile. No runtime currently has a passing conformance result. The retained OpenClaw `2026.7.1` probe passed explicit install blocking but failed `ADM-02/direct-write`: OpenClaw discovered a directly written, model-visible skill without invoking `security.installPolicy`. That mandatory failure eliminates this version as a standalone admission reference monitor; its hook remains usable only as defense in depth. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, formal `ADM-01` exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. `ADM-02/update/workshop-proposal-apply` failed because the configured install policy blocked the positive-control installer but was not invoked when workshop apply created the workspace skill. The cumulative route ledger therefore records 3/9 update `PASS`, 1/9 update `FAIL`, and 6/12 reload `PASS`; the formal profile is `FAIL` and installer-ineligible, and its ledger leaves `reload/workshop-invalidation` `NOT_TESTED`. A separately pinned dedicated current-V3 capture qualifies workshop invalidation only at route level and does not rewrite that formal profile. This is a bounded result for the pinned runtime, configuration, route, and retained evidence, not a general OpenClaw security claim. A DET-only receipt separately passes four fixed decision exits across three clean processes each but is not composed with the runtime receipt; host, daemon, and root tampering are outside the retained claim. A fake runtime validates only Aragorn's harness, not mediation, privilege separation, hook timing, tamper resistance, or attribution in a real runtime.
 
 The separate protected-route raw-action receipt binds a hardened read-only-root
 profile to five `OBSERVED` actions and seven `NOT_TESTED` routes. It records no
@@ -459,6 +464,130 @@ does not claim native agent-command or provider execution, but it disproves the
 profile's protected-bytes-only invariant for the inventoried consumer route.
 The earlier missing-blob reconstruction PASS is a cache-recovery route and does
 not satisfy this distinct consumer route.
+
+A separate private patched-runtime verifier qualifies only
+`ADM-02/reload/session-snapshot-consumer` as `PASS` for
+`openclaw-2026.7.1-session-snapshot-fixed`. Its pinned compiled resolver keeps
+the clean baseline unchanged, rejects the attacker-controlled prompt reference
+with `shouldRefresh:true`, and returns the identical trusted protected prompt
+and skill catalog; the joined native-turn timestamps bind persistence of that
+protected snapshot to the injected session turn. The fresh route-only profile
+is 1 `PASS` and 20 `NOT_TESTED`, not a rewrite of the official-runtime failure
+above. The private build lacks official-release and independent reproducibility
+authority, and aggregate admission, installer, `RUN-01`, `RUN-02`, Phase 3,
+EDR, and release authority remain false.
+
+The additive private fixed-runtime route-coverage verifier records 6 `PASS` and
+15 `NOT_TESTED`. It retains the core-updater route as an observation but does not
+qualify it because no plugin replacement outcome occurred. Aggregate admission,
+installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release authority all remain
+false.
+
+The subsequent fresh-session verifier composes that frozen result into 7
+`PASS` and 14 `NOT_TESTED` by qualifying only
+`ADM-02/reload/fresh-session-reset`. It binds `/new` acceptance, session-ID
+rotation, snapshot clearing, and exact protected prompt-reference
+reconstruction. Reset reply dispatch and model turns failed, the full runtime
+tree was not rehashed, and all broader authority remains false.
+
+The following native-chat qualifier reuses the exact fixed session capture and
+records 8 `PASS` and 13 `NOT_TESTED`, adding only
+`ADM-02/reload/chat-session-snapshot-consumer`. It binds a same-session second
+chat turn to replacement of the injected prompt reference with the exact
+protected prompt and catalog. The result is shared-capture black-box behavior,
+not direct `session-updates.ts` tracing or successful model/reply delivery, and
+all broader authority remains false.
+
+The separate restore-authority profile starts fresh and currently records 1
+`PASS` and 20 `NOT_TESTED`. Its curator qualifier binds both gateway restore
+and CLI local-fallback denials to the shared external-authority guard, with the
+exact archived lifecycle row and protected skill unchanged. The archived row
+is an explicit ephemeral fixture, prior-profile passes are not composed, and
+all aggregate, installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release
+authority remains false.
+
+An additive restore-authority config qualifier composes a separate exact
+capture and records 2 `PASS` and 19 `NOT_TESTED`. It adds only
+`ADM-02/update/config-entry-activation`: native `skills.update` reached the
+read-only configuration lock and failed with `EROFS`, with configuration and
+the protected skill unchanged. This is qualification-layer composition across
+separate captures, not aggregate admission, installer, `RUN-01`, `RUN-02`,
+Phase 3, EDR, or release authority.
+
+The next additive restore-authority archive qualifier records 3 `PASS` and 18
+`NOT_TESTED`, adding only `ADM-02/update/archive-source-force-replacement`.
+The exact source install reached the protected target and failed with `EROFS`;
+uploaded archive routes were disabled and no archive bytes were ingested, with
+source, target, and runtime state preserved. This is separate-capture
+composition only, and every aggregate, installer, `RUN-01`, `RUN-02`, Phase 3,
+EDR, and release decision remains false.
+
+The following additive restore-authority prompt qualifier records 4 `PASS` and
+17 `NOT_TESTED`, adding only `ADM-02/reload/missing-prompt-blob-rebuild`.
+After the exact 728-byte protected prompt blob was removed and the
+byte-identical session store was mtime-touched, a second native turn rebuilt
+the identical `promptRef`, prompt, and session identity. Both turns stopped at
+the expected model-not-found boundary, so provider execution is not claimed.
+This is separate-capture composition on a private build, and every aggregate,
+installer, `RUN-01`, `RUN-02`, Phase 3, EDR, and release decision remains
+false.
+
+The additive restore-authority fresh-session qualifier records 5 `PASS` and 16
+`NOT_TESTED`, adding only `ADM-02/reload/fresh-session-reset`. A separate exact
+capture binds the accepted `/new` reset, session-ID rotation, cleared snapshot,
+and reconstruction of the same protected prompt and skill catalog. The failed
+model row's non-monotonic `ended_at`/`started_at` values are excluded from this
+claim; reset reply completion, model success, and reply delivery remain
+unclaimed. Composition is separate-capture and private-build only, and every
+broad eligibility decision remains false.
+
+The additive restore-authority workshop qualifier records 6 `PASS` and 15
+`NOT_TESTED`, adding only `ADM-02/update/workshop-proposal-apply`. A separate
+exact capture binds proposal creation in ephemeral state and the native apply's
+`EROFS` denial before target creation; the protected target remained absent.
+The legacy proposal volume has only its phase label, and no writable-workspace
+positive control was captured. Composition remains separate-capture and
+private-build only, with every broad eligibility decision false.
+
+The additive restore-authority session-consumer qualifier records 7 `PASS` and
+14 `NOT_TESTED`, adding only `ADM-02/reload/session-snapshot-consumer`. A
+separate exact native turn began with no session store and populated the exact
+protected prompt snapshot. This is absent-before population only and does not
+establish reuse, tamper repair, invalidation, direct module execution tracing,
+provider or model success, reply delivery, or a fresh full-runtime-tree hash.
+Composition remains separate-capture and private-build only, with every broad
+eligibility decision false.
+
+The additive restore-authority chat qualifier records 8 `PASS` and 13
+`NOT_TESTED`, adding only `ADM-02/reload/chat-session-snapshot-consumer`. It
+reuses the exact shared prompt-rebuild capture rather than an independent
+execution and establishes only black-box native same-session chat persistence,
+without a direct session-update or module-execution trace. Both model turns
+failed, so provider-body observation, model success, and reply delivery remain
+unclaimed. This is private-build composition with every broad eligibility
+decision false.
+
+The additive
+[restore-authority cron route coverage qualifier](./benchmark/receipts/phase3-openclaw-protected-restore-authority-cron-route-coverage-v1-2026-08-13.json)
+records 9 `PASS` and 12 `NOT_TESTED`, adding only
+`ADM-02/reload/cron-rescan`. It composes one fresh exact capture on the private
+patched runtime: an isolated job was created, forced once, and removed, with no
+repeatability claim. Because the base session was absent, it establishes no
+snapshot reuse or tamper repair; the exact protected `promptRef` persisted
+before the expected model-not-found result, separate run-ID and `runAtMs` clock
+reads are only causally bounded, and state changes remained ephemeral. This is
+black-box native cron persistence without a direct module trace, provider
+network or request, successful model, reply, or delivery. The inherited chat
+subsequence still reuses the shared prompt-rebuild capture rather than an
+independent run, has no direct session-update trace, and covers one missing-blob
+trigger rather than general chat behavior. The build is private, not an
+official release, and lacks independent source-to-binary reproduction; 12
+routes remain untested and aggregate admission, installer, `RUN-01`, `RUN-02`,
+Phase 3, EDR, and release authority remain false. This is a checkpoint only
+and is non-composable with P3.7c before the final runtime freeze because the
+captures bind different runtime identities. A common final runtime freeze,
+fresh reruns, and an explicit cross-capture qualifier are required before any
+shared Phase 3 claim.
 
 The exact-profile cron verifier separately qualifies
 `ADM-02/reload/cron-rescan` as `PASS`. It binds one random cron job's absence
@@ -891,6 +1020,40 @@ P3.5b is therefore closed only for this one local create slice; aggregate
 `RUN-02`, Phase 3 exit, EDR status, installer authority, and release authority
 remain false.
 
+An additive root-authorized response command consumes, but does not publish,
+an exact accepted revocation snapshot. It serializes with activation and broker
+publication, joins the running and provisioned worker bindings, checks the caller's
+skill and snapshot digests, and confirms the current policy and generation floor
+before stopping the two fixed gateway/worker units. It requires effective
+`KillMode=control-group` and `Delegate=no`, then verifies inactive units and absent
+or recursively unpopulated cgroups. This uses systemd's
+[unit-wide stop semantics](https://github.com/systemd/systemd/blob/main/man/systemd.kill.xml)
+and the kernel's [recursive populated indicator](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#un-populated-notification),
+not a PID-list kill loop. Timeouts or failed post-stop checks remain indeterminate.
+The fixed worker also accepts its frozen `Restart=on-failure` setting:
+[explicit systemd stop suppresses automatic restart](https://github.com/systemd/systemd/blob/main/man/systemd.service.xml).
+The gateway remains restricted to `Restart=no`; termination proof is still required.
+The command is manual and local. Its optional `--prevent-starts` mode persists
+root-owned systemd masks for the two fixed units after confirming termination,
+fsyncs their directory, reloads systemd, and verifies masked/inactive state under
+the same locks. It neither overwrites existing unit overrides nor automatically
+unmasks. This whole-profile barrier is not installed-digest quarantine or
+protection against independent root control. Cgroups are derived from a tightly
+checked native or Docker systemd PID1 scope, then joined with fixed unit names.
+Its installer is additive; frozen V3 deployment and historical evidence remain
+unchanged. One retained disposable-fixture observation now demonstrates stop and
+persistent start masking, including an extra gateway-cgroup member. It does not
+prove gateway child genealogy, automatic response dispatch, general digest
+quarantine, or final common-deployment qualification.
+Optional `--retain-evidence` stores the canonical completed response under its
+SHA-256 digest in a fixed root:root 0700 CAS. The returned envelope keeps that
+response separate from its receipt to avoid a self-referential digest. It verifies
+blob bytes, root ownership, read-only mode and single-link custody, then syncs the
+blob and complete directory chain, including deduplicated writes. Storage or
+delivery failure after termination remains indeterminate and never rolls back
+the stop or masks. This local audit artifact does not add external alert delivery,
+automatic dispatch, retention rotation, or independent qualification authority.
+
 P3.6a closes the next bounded dependency: the capability route now consumes a
 live, lock-stable protected-install transaction instead of relying only on
 root-provisioned digest claims. The protected installer atomically replaces
@@ -1009,18 +1172,35 @@ The host activation contract uses OpenClaw's `minimal` profile, adds only
 `aragorn_runtime_create`, and denies the profile's sole built-in
 `session_status`. A failed activation masks the gateway and worker and requires
 explicit operator unmasking after the cause is corrected.
-A disposable privileged Docker/systemd smoke against the pinned P3.7b base
-image exercised current expiry and activation bytes: an unused grant became
-`EXPIRED`, the expired activation failed stopped, a fresh grant archived that
-terminal state, and one native OpenClaw action ended `COMPLETED` / `ALLOW` /
-`CREATED` with the grant `CONSUMED`. No smoke output was retained. This does not
-qualify a native host, persistent renewal, boot activation, aggregate runs,
-Phase 3 exit, EDR, installer authority, or release authority.
+The [retained P3.7c observation](./benchmark/evidence/runtime-action-worker-activation-expiry-systemd-composition-p3-7c-2026-08-09.json)
+and [qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-activation-expiry-systemd-qualification-v1-2026-08-09.json)
+bind current expiry and activation bytes to four replayed phases: idle
+`AVAILABLE` -> `EXPIRED`, expired activation fail-stop, exact terminal archive
+rotation to a distinct fresh `AVAILABLE` grant, and one activated OpenClaw
+`COMPLETED` / `ALLOW` / `CREATED` action ending `CONSUMED`. The P3.7b parent
+remains separately immutable. P3.7c is one privileged local Docker/systemd
+fixture, not native-host, automatic-renewal, concurrent, reboot, crash,
+power-loss, aggregate-run, Phase 3 exit, EDR, installer, or release authority.
 The trace establishes one route connection without a reconnect attempt, not an
 application send-syscall count.
 The negative outcomes and effect snapshots are retained, but causal
 classification of those cases relies on the pinned capture setup rather than
 retained runtime reason evidence.
+
+The bounded [sensor-process-loss observation](./benchmark/evidence/runtime-action-worker-sensor-loss-systemd-composition-2026-08-28.json)
+and [qualification receipt](./benchmark/receipts/phase3-runtime-action-worker-sensor-loss-systemd-qualification-v2-2026-08-28.json)
+exercise one exact enforcement-plane dependency failure. After root sends
+`SIGKILL` to the active sensor PID, systemd leaves that unit failed without a
+restart, stops the gateway and worker with empty cgroups, leaves the sensor and
+worker sockets absent, and preserves the broker process and socket unchanged.
+The verifier replays
+the raw systemd, cgroup, socket, artifact, image-lineage, and signed-source
+records and requires the terminal state to remain identical across an exact
+successful two-second wait. This qualifies only that local private-cgroup
+process-loss boundary. It does not cover a hung sensor, stale endpoint,
+in-flight effect response, worker or broker loss, hostile root, power loss,
+aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer, or release
+authority.
 
 The [retained P3.7b observation](./benchmark/evidence/runtime-action-worker-openclaw-systemd-composition-p3-7b-2026-08-09.json)
 has canonical digest
@@ -1044,6 +1224,78 @@ same-UID output-directory mutation, and power loss remain unqualified.
 Aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer, and public-release
 authority remain false. The verifier implementation file is digest-bound; its
 Python standard-library and dynamic dependency closure is not pinned.
+
+P3.8a is a receipt-only composition over existing retained evidence, not a new
+capture. The
+[cross-capture qualification](./benchmark/receipts/phase3-runtime-acquisition-action-binding-v1-2026-08-11.json)
+replays the signed Phase 1 supported-ingress archive, its exact receipt, and the
+P3.7c qualification through the immutable P3.7b and P3.6b parents. It binds the
+exact public-GitHub request, manifest, tree, and 140-byte `SKILL.md` digest
+across the Phase 1 coordinator and protected install record, the P3.6b
+producer/grant, and the P3.7c producer, grant, runtime attribution, lease, and
+one coherent `COMPLETED` / `ALLOW` / `CREATED` action ending `CONSUMED`. The
+Phase 1 install is a retained live-summary case without its live quarantine
+CAS, and P3.6b used evaluator-rebound CAS custody plus an adapted Python 3.12
+release. Therefore this establishes cross-capture exact-content identity only,
+not continuous custody, a shared transaction or release identity, semantic
+skill causation, aggregate `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer, or
+release authority.
+
+P3.8b adds one bounded live capture of public GitHub commit
+`2235be7c60b551f5de82ade908fd3816455afcda`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-systemd-composition-p3-8b-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-systemd-qualification-v1-2026-08-11.json)
+bind same-container custody from the quarantine CAS through protected install
+into one `ALLOW` / `CREATED` action ending `CONSUMED`; network access is
+disconnected and reverified before runtime. The capture uses adapted Python
+3.12 and fixture-only systemd 252, cgroup, and Docker-DNS adapters. It does not
+establish the Phase 1 release identity, semantic skill causation, aggregate
+`RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or release authority.
+
+P3.8c extends that exact live route with one bounded capture of public GitHub
+commit `f57638a74759376871509ccf080e606f62052f1b` from `obra/superpowers`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-multifile-systemd-composition-p3-8c-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_multifile_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-multifile-systemd-qualification-v1-2026-08-11.json)
+bind the exact flat `SKILL.md` and `code-reviewer.md` tree from the live
+quarantine CAS through one protected transaction and projection into one
+`ALLOW` / `CREATED` action ending `CONSUMED`; network access is disconnected
+and reverified before runtime. It remains one privileged local Docker/systemd
+fixture using adapted Python 3.12, with no nested-skill assets, broader source
+layouts or action families, provider/session raw bytes, full non-skill blob
+replay, or continuous measurement qualified. It does not establish the Phase 1
+release identity, semantic skill causation, aggregate gate or `RUN-01`/`RUN-02`,
+Phase 3 exit, EDR, installer authority, or public-release authority.
+
+P3.8d adds one exact third-party public two-file depth-one Markdown source:
+commit `9b081280bc52ee6f22a2e0463761b318936dd980` from `affaan-m/ecc`, rooted at
+`skills/brand-voice`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-nested-systemd-composition-p3-8d-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_nested_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-nested-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-nested-systemd-qualification-v1-2026-08-11.json)
+bind `SKILL.md`, the direct `references` directory, and
+`references/voice-profile-schema.md` from the live quarantine CAS through the
+protected and projected trees into the same bounded coherent action. This is
+one nonempty direct directory at depth one, not general nested or deeper
+recursive coverage, and remains one privileged local Docker/systemd fixture
+using adapted Python 3.12. It does not establish remote signer or signature
+trust, the Phase 1 release identity, semantic skill causation, aggregate gate
+or `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or public-release
+authority.
+
+The final common-runtime
+[fresh-session qualifier](./benchmark/receipts/phase3-openclaw-protected-final-fresh-session-reset-route-coverage-v1-2026-08-13.json)
+records 6 `PASS` and 15 `NOT_TESTED`. Five passes are exact static gate-or-deny
+routes whose transitions were not dynamically exercised; only
+`ADM-02/reload/fresh-session-reset` is dynamic. It binds accepted `/new`,
+session-ID rotation, a cleared snapshot, and exact protected prompt and catalog
+rebuild before the terminal network error. All nine broad eligibility decisions
+remain false; this is one private local fixture with no provider, reply, or
+model-success claim.
 
 ### 8. Evidence and interoperability plane
 
@@ -1407,6 +1659,53 @@ No public HTTP API is needed initially. Versioned JSON and SARIF cover local aut
 | 3. Runtime Detect and Respond | 10–12 weeks | One real runtime, out-of-process sensor, digest attribution, process/file/network/tool events, block/kill/quarantine/revoke | Known skill digest can be contained before protected impact | At least 99% event attribution; benchmark exfiltration and destructive actions blocked before protected sink; p95 synchronous decision under 500 ms; task overhead under 10% |
 | 4. Scale | 6–8 weeks | Digest cache, idempotent jobs, incremental rescans, evidence retention, SARIF/evidence API, two upstream integrations | Scale does not weaken integrity or evidence | At least 80% cache reuse on update workloads; near-linear one-to-eight-worker throughput; 10× the frozen reference workload without dropped evidence |
 | 5. OSS 1.0 | Ongoing | Signed releases, SBOM, reproducible builds, parser fuzzing, disclosure process, compatibility policy | The security tool's own supply chain is defensible | Independent review; no unresolved critical/high findings; 72-hour parser fuzz run; clean supported install and upgrade tests |
+
+The Phase 3 V1 exit contract now fixes the complete 31-subfixture admission
+campaign, seven required event classes, six required response classes, and the
+exact quantitative measurement rules. Its dispatcher is intentionally
+non-executing: fourteen cases map to retained current V3 implementations; twelve
+require V3 ports; and five still lack route adapters. Fourteen retained receipt paths remain
+regression-oracle-only and cannot promote campaign eligibility. The dedicated
+workshop-invalidation capture now has one fail-closed route-level qualification
+and replaces the shared-capture child as that route's regression oracle. The new
+standalone DET-01 and core-updater qualifications supply two additional regression
+oracles; their exact, read-only materialized bundle descriptors remain available.
+All 31 final campaign subfixtures still require fresh isolated execution.
+The DET-01 request binder now checks the exact caller-held contract/request join,
+fixed dispatcher paths, pinned materializer/source bytes, and the read-only
+materialized bundle without executing it. Parent identities remain declarations;
+the execution backend must reverify execution bytes and live custody. This binding
+does not establish signatures, freshness, cleanup, replay results, or eligibility.
+The opt-in DET-01 wrapper reuses the historical native recipe unchanged, binds
+the exact request to its invocation and captured source/bundle/argv, and checks
+full parent snapshots and local daemon cleanup before CAS publication. The
+nonce association is wrapper-only, not collector-observed. These snapshots do
+not establish an exclusive volume lease, and this one-case backend neither
+qualifies fresh evidence nor enables/resumes the complete campaign.
+A separate exact-capture consumer now binds the September 8 wrapper observation
+to its signed source and evidence-only retention, checks its CAS bytes, rebuilds
+the request/bundle binding, recomputes the native replay, and validates recorded
+parent snapshots and cleanup evidence. Its receipt qualifies one wrapper-associated
+DET-01 replay only. It does not turn the wrapper nonce into a native collector observation,
+the local cleanup record into external attestation, or the point-in-time parent
+snapshots into a lease. Every eligibility flag remains false, and the receipt is
+not wired into campaign PASS aggregation.
+The one-case development executor now supports DET-01 and the core-updater route
+behind a fixed case selector, with unsupported cases rejected before execution.
+The core-updater binding explicitly maps provisional campaign paths to the existing
+native recipe paths and checks the six exact read-only bundle members. Source and
+parent custody, native evidence checks, cleanup, and CAS publication are ordered
+per call; this is not final campaign execution, resume, or qualification.
+Final capture follows implementation of the remaining ports/adapters and RUN
+coverage, then a common deployment freeze. Changing the worker, broker, policy,
+configuration, or runtime can invalidate the shared binding. The existing create-
+file mediation and bounded sensor-loss evidence do not yet establish all seven
+required event classes or all six required response classes.
+The quantitative leaf independently checks exact caller-held inventories, one
+blocked residue-free unattributed negative control, separate exfiltration and
+destructive denominators, nearest-rank `CLOCK_BOOTTIME` p95, and aggregate
+paired overhead. The campaign and metrics contracts have not executed or composed
+their own evidence; no aggregate eligibility follows from the standalone receipts.
 
 The historical
 `benchmark/receipts/phase1-acquisition-lock-milestone-v2-2026-07-29.json`

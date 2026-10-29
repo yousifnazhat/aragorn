@@ -1,0 +1,134 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "2c716af571410d6ba3e4363290e8e6a29a85e18d",
+  "branch": "codex/phase3-runtime-prevention",
+  "recorded_at_utc": "2026-10-07T03:35:06.871835+00:00",
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:310d008e32c85169e6477d6b54b08c010dc197a9a96e6b5df513e4dd51cc2c0d",
+    "benchmark/phase3-pipeline-v1.json": "sha256:3f4674576f13f9ee739451336258ddea9879df267c9c33057610c7ec218cd9eb",
+    "scripts/phase3_pipeline.py": "sha256:dd90f7902bdb805986c9579f5576775e620ba0c21c587adfaf38144864b3bf17",
+    "scripts/runtime_native_admission_auto_discovery.py": "sha256:d68e8961ee83216a1db75d6761a9eebbdab07a4424250f5b97b15f51ce2b8490",
+    "src/aragorn/native_phase3_admission_auto_discovery.py": "sha256:4f281af17dcd497d35aac91fd9325441520da049274ad51ae652f84968ea2bc5",
+    "src/aragorn/runtime_http_action.py": "sha256:823ffdcaf114bdc8bcd7ca43009f67d6bf46969d4a27856e104ceedc979b0ac5",
+    "src/aragorn/runtime_http_broker.py": "sha256:fff489d9a315d53c79bd44f6266465788e55876d2e14e363d84713857f0b9d50",
+    "tests/test_native_admission_auto_discovery.py": "sha256:5c7727f016c21ff9d5b3e709d90fbf355feb85916e05f6b8b34578f710235648",
+    "tests/test_phase3_pipeline_capacity.py": "sha256:f8e01b3ee50a964b3ff79e41ef7da79f1e5ea13c3f24ad87d261017e38ca1a2f",
+    "tests/test_runtime_http_action.py": "sha256:0278bdf1e515674a075042aab3c4f60e8d8549339c7dcd488c34719f5bc217fe",
+    "tests/test_runtime_http_broker.py": "sha256:0c67fc87577dde6001433f509e46b116cc720bb61086e91241f1a2770ad023d7"
+  },
+  "exit_manifest_digest": "sha256:aff633a6d0d482cf79e3e540b0e7b8336cf266765eaacf277c9ac23ed5279f1d",
+  "user_scope": "Proceed with steps 1, 2 and 3; automatically sign and push reviewed batches; no redundant testing. All three stages remain incomplete.",
+  "implementation": [
+    "Fixed HTTP action/worker/transport contracts bind fabricated attempt bytes to a root-provisioned fixture credential and exact unprivileged broker process, container, boot and network namespace.",
+    "Internal HTTP broker entry point reuses protected broker roots, locking, policy/health/revocation evaluation and consumed-request replay state. It is not yet wired into common authenticated worker/sensor/grant/service deployment.",
+    "Observation publication never renews health. Final authorization occurs after transport guards before connect and again before send; remaining deadline is refreshed after callbacks.",
+    "One measured connect decision and a separate payload decision preserve timing and expiry semantics; partial or unknown effect evidence survives transport/cleanup interruptions.",
+    "Existing three auto-discovery drafts were hardened, reviewed and first checked under expanded step-2 scope; fixed outside-root catalog observations remain not common-dispatched or admission-qualified.",
+    "Pipeline stage capacity increased from 64 to 128 without changing cache/fingerprint/failure-record semantics. Only the new capacity tests ran for that change."
+  ],
+  "pipeline_stages": [
+    {
+      "stage_id": "pipeline-capacity",
+      "status": "PASS",
+      "tests": 4,
+      "fingerprint": "sha256:77df0de1d5abc16a3ba1769ad5a8f7514a6414279328e32a810bdec3e2acea31",
+      "result_digest": "sha256:f89cbea956e298efb3342e1d7823dc28b0ef8957d82c9cde2ca2ee82811a509e",
+      "unittest_seconds": 0.014,
+      "attempts": 1
+    },
+    {
+      "stage_id": "native-admission-auto-discovery",
+      "status": "PASS",
+      "tests": 15,
+      "fingerprint": "sha256:d59715adbf3f7e3d9f7255b8d694a8dd183c66faa014a2c6c7bc73ce897a695e",
+      "result_digest": "sha256:1ef0c1f80060f081b43df5f49529aeeb6e23af2848eaa53485543053f89813d8",
+      "unittest_seconds": 0.027,
+      "attempts": 1
+    },
+    {
+      "stage_id": "runtime-http-mediation",
+      "status": "PASS",
+      "tests": 21,
+      "fingerprint": "sha256:f7025cdca234ae70f6d4e54c5a3e7fcae976c30ee85371dff2b69c14670b36a0",
+      "result_digest": "sha256:81c8a204eb7ead0bf10e838f7ecb618029517ef6c5d49373006285b71a561f1f",
+      "unittest_seconds": 0.06,
+      "attempts": 1
+    }
+  ],
+  "retained_failed_attempt": {
+    "stage_id": "runtime-http-mediation",
+    "status": "FAIL_NOT_ERASED_OR_RELABELLED",
+    "fingerprint": "sha256:1ed4ed4f45f55ff5f77328fa68ed240d7ac212bc839e04e01ad41f5e2f660211",
+    "result_digest": "sha256:6d8b99e9d0ebbf3d0955e6e5674ef051da12d0ce2d607a547f61b8dfbe013f5c",
+    "stderr_digest": "sha256:b669d7d5ebc5a2b65298865ac5b837b665fc7eba1bb313ecfab56e8602f5d232",
+    "cause": "Broker tests used default macOS temporary ancestry; production protected-ancestry validation correctly refused before mediation.",
+    "actual_fix": "Move only disposable broker test fixture into existing workspace .aragorn ancestry; do not mock or weaken production custody checks.",
+    "retry_scope": "Only the 21 affected broker tests after fixing their fixture; unchanged failed fingerprint never rerun.",
+    "reused_successful_submodule": {
+      "name": "test_runtime_http_action",
+      "tests": 32,
+      "status": "32_INDIVIDUAL_TESTS_OK_WITHIN_RETAINED_FAILED_STAGE_NOT_STAGE_PASS",
+      "source_digest": "sha256:0278bdf1e515674a075042aab3c4f60e8d8549339c7dcd488c34719f5bc217fe",
+      "unchanged_production_source_digest": "sha256:823ffdcaf114bdc8bcd7ca43009f67d6bf46969d4a27856e104ceedc979b0ac5",
+      "rerun": false
+    }
+  },
+  "validation": {
+    "distinct_new_checks_passed": 72,
+    "total_test_invocations": 93,
+    "historical_suites": 0,
+    "live_captures": 0,
+    "performance_measurements": 0,
+    "acceptance_campaigns": 0,
+    "scope": "Inert sockets/proc/clock doubles and disposable protected workspace control files only.",
+    "static_review": "Independent correctness/error-path review, formatting and focused Ruff E9/F63/F7/F82 passed. Full lint reported style and intentional BaseException-retention warnings; not represented as fully lint-clean."
+  },
+  "review_findings_resolved": [
+    "No request-driven stale-health renewal",
+    "Authorization and deadlines checked at both network boundaries",
+    "Partial observations and original interrupts retained through cleanup",
+    "Unknown file write/create outcomes are not reported as known zero/no effect"
+  ],
+  "sensor_inventory_finding": "Common deployment has no current Tetragon reader endpoint/marker/source identity and map/program/link provisioning. Only historical removed fixture supplies example CLI semantics; it cannot be reused as current evidence.",
+  "remaining_steps": [
+    {
+      "step": 1,
+      "status": "IN_PROGRESS",
+      "remaining": "Common worker/sensor/capability/grant/result adapters, one installed successor profile with credential/unit/source custody, collector and independent replay integration, then guarded newly necessary changed-behavior capture."
+    },
+    {
+      "step": 2,
+      "status": "IN_PROGRESS",
+      "remaining": "Remaining common admission routes, seven RUN event classes/six responses, meaningful sensor progress/loss provisioning and verification, DNS/destructive actions and paired workload adapters."
+    },
+    {
+      "step": 3,
+      "status": "BLOCKED_ON_IMPLEMENTATION",
+      "remaining": "Complete all 48 independent verifier entries and freeze one fully implemented deployment; do not freeze partial components."
+    },
+    {
+      "step": 4,
+      "status": "PREREQUISITES_NOT_COMPLETE",
+      "remaining": "Fresh required 31-case plus 100-attempt/100-pair acceptance and retained cleanup/offline replay."
+    }
+  ],
+  "publication": {
+    "requested_by_user": true,
+    "visibility": "PUBLIC",
+    "remote": "origin",
+    "branch": "codex/phase3-runtime-prevention",
+    "prior_public_push_authorization_resolved": true,
+    "prior_verified_remote_commit": "2c716af571410d6ba3e4363290e8e6a29a85e18d",
+    "this_batch_push": "TO_BE_RECORDED_IN_POST_COMMIT_LOCAL_RECEIPT"
+  },
+  "decision": {
+    "component_implementation_checked": true,
+    "common_http_runtime_integrated": false,
+    "sensor_progress_provisioned": false,
+    "verifier_inventory_complete": false,
+    "live_validation_complete": false,
+    "phase3_exit_eligible": false
+  }
+}

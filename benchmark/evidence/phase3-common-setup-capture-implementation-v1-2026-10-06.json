@@ -1,0 +1,162 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "4925652be7e76b7298d31295e32cd7feae6ac10d",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-06T03:02:08.826Z",
+    "validation_recorded": "2026-10-06 03:34:38 UTC",
+    "meaning": "Parallel fixed host/guest capture and pure public replay implementation, static review and selected inert checks; not live runtime or acceptance performance."
+  },
+  "implementation": [
+    "New fixed host entrypoint prepares and retains signed-source-bound public inputs for the exact common74 report and twenty static pins. It copies thirty-one reviewed helpers with one explicit legacy phase3_deployment overlap removal; all other stage/helper overlaps refuse.",
+    "Guest wrapper requires the exact owned Linux fixture and fixed root-owned read-only bundle, wrapper and consumer sources before one setup invocation. Its setup-only contract cannot activate, publish a measured request or resume a prepared fixture.",
+    "Setup journals public digest/size publication attempts before CAS writes. Each candidate is bounded and checked against public artifact bytes; raw seven-writer documents are refused. Journal membership is not publication success.",
+    "Guest reads only explicit journal digest paths with held no-follow root/run/CAS/prefix custody and bounded regular-file reads. No CAS enumeration or private writer export. Missing candidates and export failures retain previous successes without retries.",
+    "Bundle and both controller-source postchecks are independently attempted after export, preserving primary refusal. Host publishes received public children before exact owned fixture cleanup and attempts parent/runtime/source/input readbacks independently after failures.",
+    "Host preserves the original bounded guest report and successful child publications when a child put fails. Capture and independent replay are separate immutable records; the final publisher never reattempts failed child publication or guest effects.",
+    "Pure consumer reconstructs the public preparation, seven deployment artifacts, four case-adapter identities and exact retained closure; joins source SHA256/Git blob bytes, reported installed/writer metadata, stopped units, nonactivation, fixture isolation/identity and cleanup.",
+    "Public replay does not import controllers, access credentials, publish CAS data or reconstruct private seven-writer semantics. Source signatures, loaded code, actual execution, account identity and local observation truth are not independently attested."
+  ],
+  "review_findings_resolved": [
+    "The old host helper map installed phase3_deployment.py as 0444 although common74 stages it as 0644. Removed only that exact known helper duplicate and require the stage-owned path/mode; reject every other overlap.",
+    "A setup failure during publication could leave public children without an export inventory. Added a bounded pre-put public attempt journal and an explicit-candidate-only guest reader; no directory scan or private-file fallback.",
+    "Cleanup failure could obscure the original guest/publication failure. Separate cleanup reporting and independently attempted read-only postconditions preserve the primary phase and retained guest evidence.",
+    "The actual cleanup producer returns owned_container identity metadata, not a boolean. The independent consumer now validates the exact identity map and separate cleanup booleans.",
+    "Public worker runtime and policy version must match the fixed producer constants even without private writer documents. Added those checks and fully rehashed negative cases, plus Git blob recomputation from retained source bytes.",
+    "Input seal, guest output, copied source inventory and guest-envelope fields were migrated together with explicit bounds; no frozen report was relabelled as current capture.",
+    "Static guest import/copy audit found no missing dependency. Frozen bootstrap scripts are still inherited from the exact pinned fixture image's /src/scripts; source content checks do not claim to attest all running Python."
+  ],
+  "common_profile": {
+    "files": 74,
+    "report_bytes": 51756,
+    "report_digest": "sha256:0fcd6cb67ac2721122c72ebe6bb6973a1a15f57444a8e8107d618add74677d4e",
+    "copied_helpers": 31,
+    "static_pin_paths": 20,
+    "frozen_predecessors_changed": false,
+    "common_activation_executed": false
+  },
+  "transport_bounds": {
+    "input_bundle_bytes": 8388608,
+    "public_candidates": 32,
+    "individual_public_blob_bytes": 1048576,
+    "public_export_total_bytes": 8388608,
+    "guest_result_bytes": 50331648,
+    "outer_capture_bytes": 67108864,
+    "guest_timeout_seconds": 240
+  },
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:b0c6a4741bb25201d94d472b3cb9b829680ea3e38249a81a402fd93ad6dd47c0",
+    "benchmark/phase3-pipeline-v1.json": "sha256:1ce550bd7f8a89c09b64e17fdf395326bddce2989cce28f12a9307b8419c6223",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/runtime_native_common_case_setup.py": "sha256:d4c7b744da1fe22f76a528223d6c296582a366fbb2ade96f684cf11f1aa409f0",
+    "scripts/runtime_native_common_setup_capture.py": "sha256:1185e83bdbd7996c8efac584fd34f171fcebe3242fef9e61f577ec3cdc4cacc5",
+    "scripts/capture_native_phase3_common_setup.py": "sha256:d03f72b016e40a0b9062e8256dfef079f40a213c0724f8e01c207fdff1a31c23",
+    "src/aragorn/native_phase3_common_setup_capture.py": "sha256:8c3e06e3fa7b93deba0182bbe07f295ce83b991e5077f1e7b19765af8de0621a",
+    "tests/test_runtime_native_common_case_setup.py": "sha256:733afddb5b912ed7ff8eb1c8389c99b1cde061b6515c2fa1ab11305f1a5b9e85",
+    "tests/test_runtime_native_common_setup_capture.py": "sha256:706d2178cdc397026b7fec0724b676f83785f0399b258fde8fcc423fbade3eba",
+    "tests/test_native_common_setup_host.py": "sha256:e76d43554edccd59e9217f2e72ba3321bdd2306a90dcdce99d21e19e9eadded4",
+    "tests/test_native_phase3_common_setup_capture.py": "sha256:a9296d431c96f0e644e3508384092ec75f1d83a686e44206c64752bdd3b46e93"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-case-setup",
+      "status": "PASS",
+      "fingerprint": "sha256:df88f5e35d1d59dcb4e642910075cde489526290176fe4bec62a6e52b79dd26d",
+      "tests": 10,
+      "wall_seconds": 2.325986,
+      "unittest_seconds": 2.02,
+      "stderr_digest": "sha256:fae21a103879205b185da1fc14adb4fa1cea936781e2815190254a52f5d15f2d",
+      "reviewed_inputs": 133
+    },
+    {
+      "stage_id": "native-common-setup-guest",
+      "status": "PASS",
+      "fingerprint": "sha256:29a97a1f50bdcb97c636404a9c8366cbffcdc72cc8a73f0f3eea9816c2ec52b1",
+      "tests": 10,
+      "wall_seconds": 0.330881,
+      "unittest_seconds": 0.009,
+      "stderr_digest": "sha256:267809d6388b73a5756e08eb98a6f760e9dea14753584c9bfca2ccb6c419d551",
+      "reviewed_inputs": 45
+    },
+    {
+      "stage_id": "native-common-setup-host",
+      "status": "PASS",
+      "fingerprint": "sha256:53895b2d4aa8341aa16f3dff3e705f7d11b3ca34bbaab73edeca5ff53c778caf",
+      "tests": 9,
+      "wall_seconds": 2.786408,
+      "unittest_seconds": 2.367,
+      "stderr_digest": "sha256:02c2cbfab76ff2261e48160e837bf87d6e165c35257b78bfe1947784f1072448",
+      "reviewed_inputs": 169
+    },
+    {
+      "stage_id": "native-common-setup-replay",
+      "status": "PASS",
+      "fingerprint": "sha256:31ef9f90a2b2e261e36fb17246ab84286f51061a91e7292577232cfde112e50d",
+      "tests": 11,
+      "wall_seconds": 3.619767,
+      "unittest_seconds": 3.368,
+      "stderr_digest": "sha256:7430b7da7f9b702ea49712821d01392cf550d06a3264f72cfd0673237ae7bd8e",
+      "reviewed_inputs": 115
+    }
+  ],
+  "test_count": 40,
+  "new_test_methods": 31,
+  "affected_prior_test_methods": 9,
+  "selected_pipeline_runs": 1,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-common-case-setup native-common-setup-guest native-common-setup-host native-common-setup-replay",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "stages": {
+      "native-common-setup-guest": {
+        "ast_local_imports": 45,
+        "reviewed_inputs": 45,
+        "undeclared_local_imports": []
+      },
+      "native-common-setup-host": {
+        "ast_local_imports": 115,
+        "reviewed_inputs": 169,
+        "undeclared_local_imports": []
+      },
+      "native-common-setup-replay": {
+        "ast_local_imports": 52,
+        "reviewed_inputs": 115,
+        "undeclared_local_imports": []
+      },
+      "native-common-case-setup": {
+        "ast_local_imports": 70,
+        "reviewed_inputs": 133,
+        "undeclared_local_imports": []
+      }
+    },
+    "meaning": "Guest closure contains its actual local imports. Host and replay include the reviewed common preparation/staging payload and data-constructor closure, plus the host's fixed binary-provenance record. AST review found no undeclared local imports. Only four selected test modules are discovered; historical fixture classes supply data, not inherited test runs. Runner and interpreter unchanged."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "All validation uses inert service, kernel, container, source and custody observations with pure preparation/staging and temporary local CAS. No actual owned fixture or VM was launched in this batch.",
+    "Successful public replay is retained consistency, not independently verified private-writer semantics, signature/execution/loaded-code attestation, policy-account verification, causal prevention, workload success or qualification.",
+    "The fixed setup-only path is deliberately not resumable. Real commitment/request consumption, broker measurement provisioning before activation, actual fixed workload and independent sink/attribution callbacks remain required.",
+    "The prior independent ingress interval consumer is unchanged and its tests were not rerun. The generic collector mark() timestamps and ALLOW/CREATED driver still cannot be relabelled as blocked native-attempt evidence.",
+    "Remaining admission families, full RUN response/attribution and meaningful sensor-health coverage, full verifier inventory and real workload/timing prerequisites remain incomplete. Final31 and 100-attempt/100-pair acceptance stay blocked."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Implement fixed real workload and independent sink/attribution callbacks on the same common74 deployment, then consume the original prepared measurement commitment/request once and provision broker inputs before the first activator. Capture both external clock observations in one collector and join actual worker ingress/effective-final evidence. Setup-only fixtures cannot be resumed. Complete remaining admission/RUN/sensor-health and verifier inventory before final freeze and required acceptance.",
+  "checkpoint_commit": "Create one signed local commit, verify its signature and clean tree, and retain its exact hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

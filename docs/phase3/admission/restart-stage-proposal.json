@@ -1,0 +1,27 @@
+{
+  "id": "native-admission-restart",
+  "description": "PROPOSED ONLY: mocked fixed native in-process restart with agreed coordinator lifecycle contract and independent fresh-pin retained-byte consumer; requires containing signed checkpoint, explicit implementation release, actual import closure review and separate scheduling.",
+  "tests": [
+    "test_native_phase3_admission_restart",
+    "test_native_admission_restart"
+  ],
+  "inputs": [
+    "benchmark/admission/openclaw-v2026.7.1/restart-probe.mjs",
+    "benchmark/evidence/phase3-native-tool-runtime-build-development-v2-2026-09-13.json",
+    "docs/phase3/admission/RESTART_PLAN.md",
+    "docs/phase3/coordinator/restart-lifecycle-contract-v1.md",
+    "scripts/runtime_native_admission_direct_write.py",
+    "scripts/runtime_native_admission_install.py",
+    "scripts/runtime_native_admission_restart.py",
+    "src/aragorn/__init__.py",
+    "src/aragorn/admission_evidence.py",
+    "src/aragorn/native_phase3_admission_direct_write.py",
+    "src/aragorn/native_phase3_admission_restart.py",
+    "src/aragorn/oci_worker_protocol.py",
+    "tests/test_native_admission_direct_write.py",
+    "tests/test_native_admission_restart.py",
+    "tests/test_native_phase3_admission_restart.py"
+  ],
+  "needs": [],
+  "timeout_seconds": 120
+}

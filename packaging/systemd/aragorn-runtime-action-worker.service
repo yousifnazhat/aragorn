@@ -1,7 +1,7 @@
 [Unit]
 Description=Aragorn isolated runtime action worker
 After=local-fs.target nss-user-lookup.target aragorn-runtime-lineage-capability-observation-publisher.service
-Requires=aragorn-runtime-lineage-capability-observation-publisher.service
+BindsTo=aragorn-runtime-lineage-capability-observation-publisher.service
 RequiresMountsFor=/var/lib/aragorn-runtime-action/protected /var/lib/aragorn-protected/skills
 ConditionPathExists=/etc/aragorn/runtime-action-worker.json
 
@@ -17,8 +17,7 @@ ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-acti
 WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
-Restart=on-failure
-RestartSec=1s
+Restart=no
 TimeoutStartSec=5s
 TimeoutStopSec=5s
 KillMode=control-group

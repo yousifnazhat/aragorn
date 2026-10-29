@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/runtime-acquisition-action-systemd-qualification-v1.schema.json",
+  "title": "Aragorn bounded live acquisition-to-action qualification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "bindings",
+    "cases",
+    "decision",
+    "limitations",
+    "source_recorded_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/runtime-acquisition-action-systemd-qualification/v1"
+    },
+    "assurance": {
+      "const": "SEMANTICALLY_REPLAY_VERIFIED_PINNED_LIVE_ACQUISITION_TO_ONE_COHERENT_RUNTIME_ACTION"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acquisition",
+        "custody",
+        "harness",
+        "implementation",
+        "network",
+        "parent_qualification",
+        "runtime_action",
+        "source_observation"
+      ],
+      "properties": {
+        "acquisition": {
+          "const": {
+            "cas_closure_digest": "sha256:80c3e4079f20bb3da94325fefadeac4f45d0a949e083510ecc1b599dff533e14",
+            "context_id": "sha256:4eb48da6e2b69eda43f8e1ccdb90a09cd2d0f31bccd0007a2c9cd8178b52f86e",
+            "gateway_profile_digest": "sha256:297201c776e8c510f4ca62a8c5e41d3a9d0b73125d84c963088b5a7836df5686",
+            "manifest_digest": "sha256:166c7061869e00807924dae2c5cdac1939efc9f9cf8faf4db1855e23c237e8fe",
+            "quarantine_receipt_digest": "sha256:7c67870c68c170dc2db7442f5fb3102f0df35ee02394ca3fca889258af9cac02",
+            "source_request": {
+              "commit": "2235be7c60b551f5de82ade908fd3816455afcda",
+              "owner": "anthropics",
+              "repository": "skills",
+              "schema": "aragorn/github-gateway-request/v1",
+              "skill_path": "template"
+            },
+            "tree_digest": "sha256:d409d3747207c4ac4b50002c256557c43262457e988de92189b9f8324beb5b7b"
+          }
+        },
+        "custody": {
+          "const": {
+            "active_record_digest": "sha256:730057e537d416615e534c188005fa21d73104847c7424a1fb74994ac454c71a",
+            "claim_digest": "sha256:133043699b09aacf504d7c1e41fa5f76c6e6d77eb9446e24ee83bb00bc238f34",
+            "skill_digest": "sha256:eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa",
+            "transaction_digest": "sha256:133043699b09aacf504d7c1e41fa5f76c6e6d77eb9446e24ee83bb00bc238f34"
+          }
+        },
+        "harness": {
+          "const": {
+            "child_image_id": "sha256:d9c0da9a13a72d1c4d28749421840da13d79a93f748fb9de472a78962f1707d9",
+            "container_cgroup_digest": "sha256:dfad81fcdbc75175a6fb18680c4241a7285f3eb02d7b30d36b3b220fe108ff76",
+            "container_id": "c3bf2de4898efc76459952779b488aa1a76f21c64d2744ffc0cfea55075ef68a",
+            "harness_digest": "sha256:a984e20e65670445f773c142cb3c9b7f50ca5b03f7d5200901e38cd96e623e3f",
+            "image_lineage_digest": "sha256:bd9645fe769aa6997f099ca51032ae4e0d85eede9d24cde746b4a31723d4b040",
+            "parent_image_id": "sha256:3c8321a7118684b8358876179406da6f12fb814dcfc3a1731a923c8bb5b3fe07",
+            "source_commit": "cc96e7965e183639681d1ed23239db6158b821de"
+          }
+        },
+        "implementation": {
+          "const": {
+            "adapter_digest": "sha256:e13b2408655e1b1c2235bc7f8e511062547440ee73119a82bffd1f70f168fc30",
+            "capture_recipe_digest": "sha256:333fea9aa0840fe7f78409058e8d13586347598bdeaa9d7ee61c8db856acf2c9",
+            "dockerfile_digest": "sha256:7a74bdf65b0c9cf003243bd85ab2fac5eb4f4c0d3e14e3653879c21bd26afb4d",
+            "gateway_postimage_digest": "sha256:b31305c4555607a19a54a3ef08a61a243fd60ab1b5cacb38b1b04569ec3cac56",
+            "gateway_preimage_digest": "sha256:21e3a74cb0927d1a160b089797cc169e1d1bfc8c68b7a2b5005904ee7aabe07c",
+            "installed_identity_digest": "sha256:c193e8d5d56fb858257ba866f8abc150949b2898d67759746eb1ce0d64fe1f0d",
+            "p37c_verifier_digest": "sha256:46e527ed0977ea5e2778cd775527515732002acf3051a580b786c8f90bcfda97",
+            "package_tree_digest": "sha256:c4c2aec999a3731d0193c59114d52bfced1dca89163738a3400776f2bc42463d",
+            "probe_digest": "sha256:5cd535e40e1beca5453a46865c52de873605348d3a630afbbbc3e94dfb96ee9b",
+            "release_identity_digest": "sha256:08ce966f9523c211ddeea9d48f386c73491d69f685c6a83d09f42d5887144cda",
+            "source_identity_digest": "sha256:7c2b4f88376dfe5c5a328f6b81db01457f5ef4ce99b07dd695a310eaf793c448",
+            "source_install_pair_identity_digest": "sha256:4bf7e2379611d30a1851a337c7b9f6afd5cdc1c39afe051f11186263f35c4750",
+            "verifier_implementation_digest": "sha256:3b8b5214bed875836012ed5cefd82f36e1a926218992b818a252883801b2f133"
+          }
+        },
+        "network": {
+          "const": {
+            "acquisition_complete_marker_digest": "sha256:28af26f5617d821a1c895eb61cbf6d596e0ffca13c967af4f1b317c0eb79ecdd",
+            "disconnected_before_runtime": true,
+            "disconnected_marker_digest": "sha256:3111633bafbfe8a3533bbb3793fa6762cbe6664ead824545c739daa44b03dfad",
+            "public_connect_succeeded": false,
+            "runtime_interfaces": ["lo"]
+          }
+        },
+        "parent_qualification": {
+          "const": {
+            "observation": {
+              "bytes": 311385,
+              "canonical_digest": "sha256:a0607801571db26cf8d2f2c07ebc6ca7675da8dbc2f385e0e64f5ab5e3187322",
+              "path": "benchmark/evidence/runtime-action-worker-activation-expiry-systemd-composition-p3-7c-2026-08-09.json",
+              "raw_digest": "sha256:b9d360c7b5b7eac5e66f79a4a2b09b70094070bc297619f499ac880663d8ad91"
+            },
+            "receipt": {
+              "bytes": 6655,
+              "canonical_digest": "sha256:62d04b3615832f2da7713d5ac7eb2ae14e859454d810f421b79b54d427876fa1",
+              "path": "benchmark/receipts/phase3-runtime-action-worker-activation-expiry-systemd-qualification-v1-2026-08-09.json",
+              "raw_digest": "sha256:e01fdcf8e18ecd02ddbbaece02a7b4abe14dd2635396d1ffa7bb9a8f9ed61eb7"
+            }
+          }
+        },
+        "runtime_action": {
+          "const": {
+            "action_digest": "sha256:9ececb9b6882c2d5052dabb8b7ca75d072175948d5c03bbe5fb1e93b94058ad0",
+            "consumed_state_digest": "sha256:83d610d88c095e1758b1d9b05f52a65b7bfec2a8eedc1f3c41800471950f869c",
+            "fresh_grant_digest": "sha256:b725f167896ad19fdb5f8c69a1765f7b0f7c152a4d5173a03b42b6c6eec714a4",
+            "profile_digest": "sha256:add815013a92173e465384eea4a01663ae4ceb4cc637862255676c3c90742982",
+            "profile_receipt_digest": "sha256:0844182aff2fd197e7b23e0e2604d8e84c9792b1dff9a75f8fe73cc8a51aa522",
+            "target_digest": "sha256:20c28aeafad659b2d49aa7b6b94980754eae950fa4338c53bb8b56772c59b24b"
+          }
+        },
+        "source_observation": {
+          "const": {
+            "authority": "BOUNDED_LIVE_COORDINATOR_ACQUISITION_TO_RUNTIME_ACTION_OBSERVATION_ONLY_NOT_VERIFIED_RUN_EDR_INSTALLER_RELEASE_AUTHORITY",
+            "bytes": 447132,
+            "canonical_digest": "sha256:598800c8f08efc8c8aaebda5ae13f310ef0bf66ff86823f58cbadecae46c87fb",
+            "path": "benchmark/evidence/runtime-acquisition-action-systemd-composition-p3-8b-2026-08-11.json",
+            "raw_digest": "sha256:a095687592ff5d5a51f9a36ef52fa9933ce5dede3c9fe54115f1b2be3180c16d",
+            "schema": "aragorn/runtime-acquisition-action-systemd-observation/v1"
+          }
+        }
+      }
+    },
+    "cases": {
+      "const": {
+        "coherent_action": {
+          "driver_status": "COMPLETED",
+          "effect_status": "CREATED",
+          "grant_state": "CONSUMED",
+          "status": "PASS",
+          "verdict": "ALLOW"
+        },
+        "live_acquisition": {
+          "file_count": 1,
+          "source": "anthropics/skills@2235be7c60b551f5de82ade908fd3816455afcda:template",
+          "status": "PASS",
+          "verdict": "COMPLETED_NOT_INSTALLER_AUTHORITY"
+        },
+        "network_cutover": {
+          "disconnected_before_runtime": true,
+          "public_connect_succeeded": false,
+          "runtime_interfaces": ["lo"],
+          "status": "PASS"
+        },
+        "same_custody_binding": {
+          "skill_digest": "sha256:eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa",
+          "status": "PASS",
+          "transaction_digest": "sha256:133043699b09aacf504d7c1e41fa5f76c6e6d77eb9446e24ee83bb00bc238f34",
+          "tree_digest": "sha256:d409d3747207c4ac4b50002c256557c43262457e988de92189b9f8324beb5b7b"
+        }
+      }
+    },
+    "decision": {
+      "const": {
+        "aggregate_gate_eligible": false,
+        "bounded_live_acquisition_action_evidence_eligible": true,
+        "edr_claim_eligible": false,
+        "installer_authority_eligible": false,
+        "live_same_custody_install_to_action_verified": true,
+        "network_disconnected_before_runtime_verified": true,
+        "one_coherent_allow_created_consumed_action_verified": true,
+        "parent_p3_7c_unchanged": true,
+        "phase3_exit_eligible": false,
+        "public_release_eligible": false,
+        "qualified_pair_retained_evidence_eligible": true,
+        "run_01_eligible": false,
+        "run_02_eligible": false,
+        "same_phase1_release_identity": false,
+        "semantic_skill_causation_established": false,
+        "source_observation_unchanged": true,
+        "source_observation_verified": true,
+        "status": "P3_8B_BOUNDED_PASS"
+      }
+    },
+    "limitations": {
+      "const": [
+        "ADAPTED_PYTHON_3_12_CURRENT_RELEASE_NOT_RETAINED_PHASE1_RELEASE_IDENTITY",
+        "ONE_LIVE_PUBLIC_GITHUB_COMMIT_AND_SINGLE_FILE_SKILL_ONLY",
+        "ONE_EVALUATOR_CONTROLLED_LOOPBACK_PROVIDER_ACTION_ONLY",
+        "ONE_LOCAL_PRIVILEGED_DOCKER_SYSTEMD_FIXTURE_ONLY",
+        "SYSTEMD_252_CGROUP_AND_DOCKER_DNS_ADAPTERS_ARE_FIXTURE_ONLY",
+        "NETWORK_DISCONNECTION_IS_WRAPPER_CONTROLLED_AND_PROBE_REVERIFIED",
+        "SKILL_BYTES_ARE_BOUND_TO_THE_ACTION_WITHOUT_SEMANTIC_CAUSATION_AUTHORITY",
+        "P3_7C_RUNTIME_FLOW_IS_REUSED_WITHOUT_PROMOTING_ITS_PARENT_QUALIFICATION",
+        "QUARANTINE_CAS_METADATA_AND_SKILL_BYTES_RETAINED_NOT_FULL_NON_SKILL_BLOB_REPLAY",
+        "PROVIDER_AND_OPENCLAW_SESSION_RAW_BYTES_NOT_RETAINED",
+        "TRACE_PROVES_ONE_ROUTE_CONNECT_WITHOUT_RETRY_NOT_APPLICATION_SEND_COUNT",
+        "PYTHON_STDLIB_AND_DYNAMIC_VERIFIER_DEPENDENCY_CLOSURE_NOT_PINNED",
+        "NO_AGGREGATE_RUN_PHASE3_EDR_INSTALLER_OR_RELEASE_AUTHORITY"
+      ]
+    },
+    "source_recorded_at": {
+      "const": "2026-08-11T06:48:23.307028Z"
+    }
+  }
+}

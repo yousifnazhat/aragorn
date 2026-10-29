@@ -29,15 +29,69 @@ public-release authority remain false.
 
 Unused one-action grants now terminalize as `EXPIRED` at their deadline. This
 is a forward-only fail-stop state: older binaries reject it, and rollback must
-not delete or rewrite the durable record. These newer lifecycle and activation
-bytes are not qualified by the retained P3.7b receipt.
-Activation failure stops the four-service route and masks its gateway and
-worker; retry requires operator inspection and explicit unmasking.
-A discarded privileged Docker/systemd smoke observed expiry, fail-stop
-rotation, and one coherent action for these bytes. It is not retained
-qualification, native-host production evidence, continuous renewal, boot
-authority, aggregate admission, Phase 3 exit, EDR, installer authority, or
-release authority.
+not delete or rewrite the durable record. Activation failure stops the
+four-service route and masks its gateway and worker; retry requires operator
+inspection and explicit unmasking. A retained P3.7c observation and separate
+semantic-replay receipt qualify one exact privileged Docker/systemd sequence:
+idle expiry, failed activation fail-stop, terminal archive rotation to one
+fresh grant, and one coherent action ending `CONSUMED`. P3.7b remains an exact
+immutable parent. P3.7c does not establish native-host production, automatic or
+concurrent renewal, reboot/crash/power-loss behavior, aggregate admission,
+Phase 3 exit, EDR, installer authority, or release authority.
+
+The receipt-only P3.8a composition joins the exact retained 140-byte protected
+skill across the Phase 1, P3.6b, and P3.7c captures to one coherent action. It
+does not retain the Phase 1 install's live quarantine CAS and does not turn
+separate custody epochs or release identities into one continuous transaction.
+Exact content identity is not semantic skill causation, and this composition
+does not establish aggregate `RUN-01`, `RUN-02`, Phase 3 exit, EDR, installer
+authority, or release authority.
+
+P3.8b adds one bounded live capture of public GitHub commit
+`2235be7c60b551f5de82ade908fd3816455afcda`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-systemd-composition-p3-8b-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-systemd-qualification-v1-2026-08-11.json)
+bind same-container custody from the quarantine CAS through protected install
+into one `ALLOW` / `CREATED` action ending `CONSUMED`; network access is
+disconnected and reverified before runtime. The capture uses adapted Python
+3.12 and fixture-only systemd 252, cgroup, and Docker-DNS adapters. It does not
+establish the Phase 1 release identity, semantic skill causation, aggregate
+`RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or release authority.
+
+P3.8c extends that exact live route with one bounded capture of public GitHub
+commit `f57638a74759376871509ccf080e606f62052f1b` from `obra/superpowers`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-multifile-systemd-composition-p3-8c-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_multifile_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-multifile-systemd-qualification-v1-2026-08-11.json)
+bind the exact flat `SKILL.md` and `code-reviewer.md` tree from the live
+quarantine CAS through one protected transaction and projection into one
+`ALLOW` / `CREATED` action ending `CONSUMED`; network access is disconnected
+and reverified before runtime. It remains one privileged local Docker/systemd
+fixture using adapted Python 3.12, with no nested-skill assets, broader source
+layouts or action families, provider/session raw bytes, full non-skill blob
+replay, or continuous measurement qualified. It does not establish the Phase 1
+release identity, semantic skill causation, aggregate gate or `RUN-01`/`RUN-02`,
+Phase 3 exit, EDR, installer authority, or public-release authority.
+
+P3.8d adds one exact third-party public two-file depth-one Markdown source:
+commit `9b081280bc52ee6f22a2e0463761b318936dd980` from `affaan-m/ecc`, rooted at
+`skills/brand-voice`. Its
+[observation](./benchmark/evidence/runtime-acquisition-action-nested-systemd-composition-p3-8d-2026-08-11.json),
+[verifier](./src/aragorn/runtime_acquisition_action_nested_systemd_evidence.py),
+[schema](./schema/runtime-acquisition-action-nested-systemd-qualification-v1.schema.json),
+and [qualification receipt](./benchmark/receipts/phase3-runtime-acquisition-action-nested-systemd-qualification-v1-2026-08-11.json)
+bind `SKILL.md`, the direct `references` directory, and
+`references/voice-profile-schema.md` from the live quarantine CAS through the
+protected and projected trees into the same bounded coherent action. This is
+one nonempty direct directory at depth one, not general nested or deeper
+recursive coverage, and remains one privileged local Docker/systemd fixture
+using adapted Python 3.12. It does not establish remote signer or signature
+trust, the Phase 1 release identity, semantic skill causation, aggregate gate
+or `RUN-01`/`RUN-02`, Phase 3 exit, EDR, installer authority, or public-release
+authority.
 
 ## Threat Model, Trust Boundaries, and Assumptions
 

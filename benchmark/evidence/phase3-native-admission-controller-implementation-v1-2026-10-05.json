@@ -1,0 +1,82 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "7fff0bcba408c0f69f7d8fc8c884445c421a38d5",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T08:07:44.745Z",
+    "validation_recorded": "2026-10-05T13:48:58Z",
+    "meaning": "Session wall window includes parallel implementation, review and tool waits; active engineering time is not separately instrumented."
+  },
+  "implementation": [
+    "Fixed successor intent and request helper joins the reviewed 70-file profile, exactly two changed installed identities and seven unchanged provisioning writer contracts",
+    "Direct-write and retained plugin-update adapter identities share one deployment regardless of selected case and nonce",
+    "Host preparation retains the complete input closure child-first, updates only the gateway static pin, and checks signed source and actual inert staging",
+    "Guest publishes and reads back its request before one activation, applies exactly two startup identity overrides, then dispatches the direct-write leaf through a held namespace descriptor once",
+    "Leaf process and loaded-configuration observations join both root live identity boundaries; all qualification flags remain false",
+    "Host and guest failure paths independently retain available post-action evidence and attempt exact owned cleanup without automatic effect retries",
+    "Host retention publishes and reads back the prepared request before the outer capture and rechecks the retained input closure"
+  ],
+  "source_digests": {
+    "scripts/capture_native_phase3_admission_case.py": "sha256:c9f650979a2b17e6aeeb45f77705a2f585f2e14342b8ff3ddeb2ce157c941a98",
+    "scripts/runtime_native_admission_case.py": "sha256:c05fd1977b4bbe2b0f5975cad4484df94d7aba44eabfe5096874308f450ee595",
+    "src/aragorn/native_phase3_admission_case.py": "sha256:e39e0bfed1ada7553d173e0a1a99c64abff089caa49870d5ebdb4a78ea9bbeec",
+    "tests/test_native_admission_case_host.py": "sha256:5b03d4b67869326b13f07cf2b0dc78545b15ed9ebc39b36078f6f7d9159b46b3",
+    "tests/test_native_phase3_admission_case.py": "sha256:ab842741fd7308f66365f5c6f0dd4f0e139a0ec2ebcae01add562bc3a1962755",
+    "tests/test_runtime_native_admission_case.py": "sha256:93e5c37fce85840fc8a5d9f00eb5dccd5053c9423f63c0e77ee2565cd2f31dc2"
+  },
+  "review_findings_resolved_before_affected_validation": [
+    "Host timeout could skip parent, runtime and source readbacks; fixed independent postconditions now retain each failure",
+    "Capture publication needed child-first request retention and final input closure readback; both now precede outer publication",
+    "Outer independent semantic replay is not implemented and must be explicitly false in retained capture and summary",
+    "Leaf observations needed gateway process and loaded configuration joins to root live readings at both boundaries",
+    "A leaf exception after possible effects could skip guest after-readbacks; fixed one-shot readbacks preserve the original sanitized failure and later evidence even when other reads fail"
+  ],
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-case",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-case-host"
+  ],
+  "registry": "benchmark/phase3-pipeline-v1.json",
+  "reviewed_input_closure": {
+    "native-admission-case": 95,
+    "native-admission-case-guest": 42,
+    "native-admission-case-host": 158,
+    "meaning": "Explicit reviewed inputs; runner and requirements-worker.lock are also fingerprinted by the existing pipeline. Data-only helper test utilities do not execute historical test methods."
+  },
+  "passed_stages": [
+    {"id": "native-admission-case", "tests": 6, "new_tests": 6, "fingerprint": "sha256:d49c6f89aaeab292ffb6cbde81c190d1e6285bb5d81f97adae11c45d32db2a08", "result_wall_seconds": 0.942040},
+    {"id": "native-admission-case-guest", "tests": 9, "new_tests": 9, "fingerprint": "sha256:a49344fe152da8388c73b8cdd1badbe48b1cb4669847bfd651fa941a66b623dd", "result_wall_seconds": 0.148697},
+    {"id": "native-admission-case-host", "tests": 7, "new_tests": 7, "fingerprint": "sha256:8290e5f91b6e7302b135a4abddaf22b9a1c30572b01bfccda10d1c317436dc1a", "result_wall_seconds": 2.848323}
+  ],
+  "unchanged_stages_reused": [
+    {"id": "pipeline-unit", "fingerprint": "sha256:1d95aeb81b5ec64368ac2ac1c8eaa6c802732a45de08d82c1fb99c34c44a7f51"},
+    {"id": "native-admission-profile", "fingerprint": "sha256:53b64574f46d11332db9cb9521fc59d342ac27943335a93875466ad83dd8e670"},
+    {"id": "native-admission-direct-write", "fingerprint": "sha256:8f040321677f87e2bf55a0f4fe47e129920d5427490a894d3e523bf87f4314a7"},
+    {"id": "native-admission-case", "fingerprint": "sha256:d49c6f89aaeab292ffb6cbde81c190d1e6285bb5d81f97adae11c45d32db2a08", "when": "second selected command"}
+  ],
+  "tests_passed": 22,
+  "new_test_methods": 22,
+  "sum_passed_stage_wall_seconds": 3.939060,
+  "failed_stage_fingerprints": [],
+  "unchanged_failed_fingerprint_retries": 0,
+  "live_captures": 0,
+  "vm_actions": [],
+  "performance_measurements": 0,
+  "broad_regression_runs": 0,
+  "newly_closed_exit_gate_entries": 0,
+  "independent_capture_replay_complete": false,
+  "plugin_update_successor_execution_connected": false,
+  "phase3_complete": false,
+  "automatic_push_performed": false,
+  "proof_limits": [
+    "Mocked controller and syscall outcomes are implementation checks, never native observations or acceptance samples",
+    "Guest-local request readback is not a host acknowledgment, preactivation external attestation or hostile-root protection",
+    "The new intent inventory has only two cases, not the required full final 31-case inventory",
+    "Plugin-update intent shares the deployment but successor execution deliberately refuses before effects until the existing adapter is connected",
+    "The direct-write leaf has a semantic consumer; full outer capture independent semantic replay remains unimplemented",
+    "No fresh mount-enforcement, admission, RUN, sensor-health or performance qualification is claimed"
+  ],
+  "next_dependency": "Connect the existing plugin-update execution and full outer capture semantic consumer on this same successor; review the complete composition before one newly necessary owned-fixture changed-behavior check. Preserve frozen predecessors and do not recapture their unchanged behavior.",
+  "remaining_acceptance": "Remaining A1/A2/A3 families, RUN event/response and sensor progress/loss coverage, measured-broker effective-BLOCK successor and real workload/timing prerequisites remain incomplete. Final 31-case and 100-attempt/100-pair acceptance stays blocked until those prerequisites and all independent semantic consumers are ready."
+}

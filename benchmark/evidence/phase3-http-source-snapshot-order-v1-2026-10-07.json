@@ -1,0 +1,24 @@
+{
+  "schema": "aragorn/phase3-implementation-batch/v1",
+  "date": "2026-10-07",
+  "base_commit": "fd76afbcf0775ae0f44b6c9fdce298bc8aa63e45",
+  "authority": "SOURCE_GUARD_REPAIR_NOT_LIVE_QUALIFICATION",
+  "diagnosis": "Offline prepare-setup refused before CAS creation or any VM operation: the finite source inventory resolver imported repository dependencies after the first signed-source snapshot. The final guard correctly detected the changed imported-module inventory.",
+  "repair": "Both active HTTP CLI source readers now resolve their paths before the initial snapshot. Signed tree byte checks and final source-change detection are unchanged. Frozen predecessors are untouched.",
+  "pipeline": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "stage_id": "native-http-source-snapshot-order",
+    "fingerprint": "sha256:a63b813b3d630488ce575b08e7af34eef6c78ad7ee89e0c26f580198a7fc0a43",
+    "status": "PASS",
+    "distinct_new_checks": 1,
+    "scope": "One focused method verifies both reader call orders and genuine source-change refusal.",
+    "broad_regression": false,
+    "unchanged_failed_fingerprints_retried": 0
+  },
+  "refusal_retained": ".aragorn/http94-development-20261007-fd76afb/preparation-refusal.json",
+  "vm_started": false,
+  "fixture_created": false,
+  "capture_invoked": false,
+  "effect_invoked": false,
+  "phase3_exit_eligible": false
+}

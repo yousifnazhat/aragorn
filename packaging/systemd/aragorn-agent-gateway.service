@@ -1,7 +1,7 @@
 [Unit]
 Description=Aragorn isolated OpenClaw agent gateway
-After=local-fs.target nss-user-lookup.target aragorn-runtime-action-worker.service
-Requires=aragorn-runtime-action-worker.service
+After=local-fs.target nss-user-lookup.target aragorn-runtime-lineage-capability-action-broker.service aragorn-runtime-lineage-capability-observation-publisher.service aragorn-runtime-action-worker.service
+BindsTo=aragorn-runtime-lineage-capability-action-broker.service aragorn-runtime-lineage-capability-observation-publisher.service aragorn-runtime-action-worker.service
 ConditionPathExists=/usr/local/bin/node
 ConditionPathExists=/runtime/lib/node_modules/openclaw/openclaw.mjs
 ConditionPathExists=/etc/aragorn/agent-gateway/openclaw.json

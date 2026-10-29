@@ -1,0 +1,61 @@
+[Unit]
+Description=Aragorn root-authorized runtime health publisher
+After=local-fs.target nss-user-lookup.target
+RequiresMountsFor=/var/lib/aragorn-runtime-action/control
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+User=aragorn-broker
+Group=aragorn-runtime
+SupplementaryGroups=aragorn-sensor
+LoadCredential=runtime-binding:/etc/aragorn/runtime-action-runtime.json
+LoadCredential=health:/etc/aragorn/runtime-action-health-publication.json
+ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-health-service.py %d/runtime-binding %d/health
+WorkingDirectory=/
+Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
+UMask=0077
+TimeoutStartSec=5s
+TasksMax=2
+MemoryMax=128M
+MemorySwapMax=0
+LimitNOFILE=32
+OOMPolicy=stop
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aragorn-runtime-health-publisher
+
+NoNewPrivileges=yes
+AmbientCapabilities=
+CapabilityBoundingSet=
+Delegate=no
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+ProcSubset=pid
+InaccessiblePaths=/etc/aragorn/runtime-action-runtime.json /etc/aragorn/runtime-action-health-publication.json /var/lib/aragorn-runtime-action/protected /var/lib/aragorn-runtime-action/staging
+ReadWritePaths=/var/lib/aragorn-runtime-action/control
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@mount @reboot @swap @raw-io @clock

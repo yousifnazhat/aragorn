@@ -1,0 +1,125 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "a5130541d0da191dbc6511ddff814e9dc1044505",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T19:37:35.764Z",
+    "validation_recorded": "2026-10-05 20:01:37 UTC",
+    "meaning": "Implementation, source review and focused inert tests; not separately instrumented engineering or acceptance performance time."
+  },
+  "implementation": [
+    "Read-only consumer resolves the existing prepared measurement plan, schedule/commitment/deployment, grant and protected path into an exact retained input closure with semantic joins and final rereads; no writes, clocks, callbacks or replacement samples.",
+    "Absent-only native provisioner requires an unused-state guard before any inherited fixture reset, refuses prior measurement/grant/profile history, and checks four fixed units plus independently fixed kernel cgroups.",
+    "Provisioning reuses activation/broker locks and descriptor custody primitives, checks actual protected policy/worker/runtime/grant/source bytes, boot and protected inode, copies only validated CAS inputs, and transfers ownership children-first.",
+    "The third root credential is published last without replacement; post-publication source/held-byte, current grant, boot, target-absence and stopped-unit checks must pass before a report is returned. All partial output remains on failure; no service activation, state repair, deletion or effect retry.",
+    "Common identity reader preserves frozen readers and validates the three-credential broker contract, 26 caller-pinned protected files, all four held PIDFDs, loaded process credentials, and seven broker-root measurement module views with final readback.",
+    "Common host/guest/request/second-observer/outer-replay integration is still pending; no existing 70-file intent or observation is promoted to the 73-file common deployment."
+  ],
+  "review_findings_resolved": [
+    "Independent source review found no remaining blocking custody, semantic-join, credential-last publication or partial-state preservation issue.",
+    "The initial provisioning fixture failed before its intended branches because system temporary ancestry is not a protected root fixture on macOS. Repair is confined to the new test file; production ancestry and ownership guards remain unchanged.",
+    "The repaired fixture normalizes only its owned group and doubles ancestry only above its real private root, retaining type/owner/mode checks on every actual in-fixture ancestor. Unsafe in-fixture ancestry is explicitly rejected.",
+    "Negative tests now prove intended causal boundaries and injected effects; positive real temporary CAS interoperability, no-replace publication and postpublication failure preservation pass.",
+    "Old fixture data constructors are composed without inheriting or discovering historical tests. The three registered stages include reviewed explicit transitive source/fixture closure."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:9948d949768b2f771673b2dce4f03a5cd2f7f409acbbd3fb30c8af4b1f47639a",
+    "benchmark/phase3-pipeline-v1.json": "sha256:897f79be36a324c134a562b297496e77e3bb48ee2cd2654c12f2c1844def2ed0",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "src/aragorn/native_phase3_common_identity.py": "sha256:3f601d797d9e00c04d3e4072ee00ea31ba3271702925ff49719276bd3a922d65",
+    "src/aragorn/runtime_native_measurement_inputs.py": "sha256:bc7d2f356ad40d56cb343375032bc08757130ad9516fae2fc02018b12ccf10da",
+    "src/aragorn/runtime_native_measurement_provisioning.py": "sha256:77dcfa7f8f62704c44bfec769e98737bf3ef585f0c4dcc76829bc22bf18bfa6d",
+    "tests/test_native_phase3_common_identity.py": "sha256:d00f93108bd77e1296993c106d305b88f0b61d43d675b9a0dda1fbf2357806d2",
+    "tests/test_runtime_native_measurement_inputs.py": "sha256:b60722befa64316ac4cf08e7b625858f0c006b4c241dbd9e4d34a4e8784572c6",
+    "tests/test_runtime_native_measurement_provisioning.py": "sha256:09bc4bc73073c215abc76d9927e500a39c90229e5530950058e31495d6298870"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-identity",
+      "status": "PASS",
+      "fingerprint": "sha256:ec15a0cb77999c56bf752cb082cbbc4bcad56d29888e0510936ce597637e7e49",
+      "tests": 11,
+      "wall_seconds": 0.136488,
+      "stderr_digest": "sha256:e7fa8c7f9def0995c957ed869705147a744c175b52a046cc814c6672d8005a62"
+    },
+    {
+      "stage_id": "native-measurement-inputs",
+      "status": "PASS",
+      "fingerprint": "sha256:3af475b99a20a10ff967c18ff10dbda9000f34d98efa352c2e3e8a7ade2e4d88",
+      "tests": 7,
+      "wall_seconds": 0.2274,
+      "stderr_digest": "sha256:66ba9904938307fd6f840d681863779bafe14af602dfd5006bb5ac347317c743"
+    },
+    {
+      "stage_id": "native-measurement-provisioning",
+      "status": "PASS",
+      "fingerprint": "sha256:d75d019947397fbe61738f6067978ba981f1faffd1bbcc8a5a172b1553b48d94",
+      "tests": 10,
+      "wall_seconds": 1.116698,
+      "stderr_digest": "sha256:8934ee540178c98ef782b28c45ebe9751a981aaffd129f059700df60a220aa0f"
+    }
+  ],
+  "test_count": 28,
+  "new_test_methods": 28,
+  "total_method_executions_including_failed_stage": 38,
+  "sum_successful_stage_wall_seconds": 1.480586,
+  "selected_pipeline_runs": 2,
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-measurement-provisioning native-common-identity",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-measurement-provisioning"
+  ],
+  "failed_fingerprints_retained": [
+    {
+      "stage_id": "native-measurement-provisioning",
+      "fingerprint": "sha256:222b515f719360b2a0e3dc9bb0396b8004bb84097771c9d06021b817a525f355",
+      "tests": 10,
+      "stderr_digest": "sha256:e5e568f092748d41baae736c140a5f58db03ebc350f3ded10796fe5ff2b8d2b4",
+      "cause": "Unsafe system temporary ancestry in the new fixture prevented intended provisioning branches from being reached.",
+      "resolution": "Relevant test-fixture ownership/ancestry correction and decisive failure-point assertions; production source was not changed. Changed fingerprint passed once.",
+      "unchanged_retry": false
+    }
+  ],
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730",
+      "meaning": "Reused in both selected runs; never executed this batch."
+    },
+    {
+      "stage_id": "native-measurement-inputs",
+      "fingerprint": "sha256:3af475b99a20a10ff967c18ff10dbda9000f34d98efa352c2e3e8a7ade2e4d88",
+      "meaning": "Executed once, reused unchanged during the repaired provisioning stage."
+    }
+  ],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "native-measurement-inputs": 19,
+    "native-common-identity": 17,
+    "native-measurement-provisioning": 30,
+    "meaning": "Explicit transitive imports and inert fixture-helper sources; runner, locked requirements, interpreter/platform and prerequisite fingerprints are additionally bound."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "All new checks are inert local developer tests, not admission, RUN, timing or final acceptance samples.",
+    "Provisioning checks use real caller-owned temporary files, CAS, modes, descriptor readbacks and no-replace publication, with root/accounts/systemd/locks doubled; distinct privileged root-to-broker ownership transfer remains unobserved live.",
+    "The common reader's kernel/unit/file observations are inert doubles; process and credential contracts, joins, comparator and orchestration are checked, not an actual deployed runtime.",
+    "Local point-in-time module/credential bytes are not loaded-Python provenance, application acknowledgement, hostile-root-resistant attestation, input-CAS readback or whole 73-file deployment identity.",
+    "The prepared payload digest is only a caller expectation. No retained payload content, real workload, protected-sink residue, negative-control attribution or full REQUEST_ACCEPTED latency is established.",
+    "Prior stopped VM/default Docker context observations and the earlier pre-execution permission timeout were not refreshed or retried in this batch. No VM action occurred.",
+    "Final 31-case and 100-attempt/100-pair acceptance remains blocked by shared deployment integration, remaining A1/A2/A3 routes, RUN/sensor coverage and full real measurement/independent-verifier prerequisites."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Wire this common input provisioning and identity boundary into the exact 73-file host/guest and one-request handoff, then update independently acquired process observation and outer replay contracts for the third credential before any newly necessary guarded isolated activation. Preserve all 70-file intents and frozen predecessors.",
+  "checkpoint_commit": "Create one signed local commit for this reviewed checked batch, verify its signature and clean working tree, and retain its actual hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

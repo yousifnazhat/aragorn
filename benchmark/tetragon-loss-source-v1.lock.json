@@ -1,0 +1,64 @@
+{
+  "schema": "aragorn/tetragon-loss-source-slice/v1",
+  "authority": "SELECTED_UPSTREAM_BYTES_NOT_EXECUTED_SENSOR_OR_LOSS_COMPLETENESS",
+  "repository": "https://github.com/cilium/tetragon",
+  "commit": "1de2ed8ebea18e56257dc59597aa13bf8f0e471e",
+  "parent_source_lock_digest": "sha256:b7d69c22590952fbf717fb3c293c5ebff4391c7c02f1787f1e28aa185efcb9b9",
+  "tree_url": "https://api.github.com/repos/cilium/tetragon/git/trees/1de2ed8ebea18e56257dc59597aa13bf8f0e471e?recursive=1",
+  "files": [
+    {
+      "path": "pkg/metrics/eventmetrics/eventmetrics.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/metrics/eventmetrics/eventmetrics.go",
+      "bytes": 6051,
+      "git_blob": "98644fadf169619566999474b6783fec7e48ab11",
+      "digest": "sha256:6f19804bdae36f9fddbed23ae7ce36dbc41de8e646d9361a75ab2afc4ba700e2",
+      "local_path": "benchmark/tetragon-loss-source-v1/pkg/metrics/eventmetrics/eventmetrics.go"
+    },
+    {
+      "path": "pkg/metrics/eventmetrics/bpfcollector.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/metrics/eventmetrics/bpfcollector.go",
+      "bytes": 1463,
+      "git_blob": "ee9e3a444ce802bc6b857eb6cebf4ee73399467d",
+      "digest": "sha256:3edd2e0147c7a26e26d30bf0f0e148282aeeafc5d409ff5613b16ce8e95153c8",
+      "local_path": "benchmark/tetragon-loss-source-v1/pkg/metrics/eventmetrics/bpfcollector.go"
+    },
+    {
+      "path": "pkg/metrics/kprobemetrics/kprobemetrics.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/metrics/kprobemetrics/kprobemetrics.go",
+      "bytes": 4497,
+      "git_blob": "39b2493a22f587467d7f68314baade2a750bb686",
+      "digest": "sha256:cb413817b075cabf9006b2fb7d8b51771d94e49a78a950bd5ce6ad7670c38f4d",
+      "local_path": "benchmark/tetragon-loss-source-v1/pkg/metrics/kprobemetrics/kprobemetrics.go"
+    },
+    {
+      "path": "pkg/metrics/kprobemetrics/collector.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/metrics/kprobemetrics/collector.go",
+      "bytes": 2513,
+      "git_blob": "1b588d302490fd312843734d06bc81634a9cc368",
+      "digest": "sha256:affe8b22f41e07b4d86dce1cf0e5c9a88389119dedfdb3260b8b8f03c7366fbe",
+      "local_path": "benchmark/tetragon-loss-source-v1/pkg/metrics/kprobemetrics/collector.go"
+    },
+    {
+      "path": "pkg/metrics/kprobemetrics/missed.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/metrics/kprobemetrics/missed.go",
+      "bytes": 967,
+      "git_blob": "a10d92e0d8a3126fecea731102cfe5eb8ef87189",
+      "digest": "sha256:e205e2719a0a9fbb00595be2c2e18e212921fdc687065c204828a94688def6e0",
+      "local_path": "benchmark/tetragon-loss-source-v1/pkg/metrics/kprobemetrics/missed.go"
+    },
+    {
+      "path": "pkg/metricsconfig/healthmetrics.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/metricsconfig/healthmetrics.go",
+      "bytes": 3570,
+      "git_blob": "6b63f540e35d57f017615a603b72b141d86b9a27",
+      "digest": "sha256:8819c19b048dc723bb5c957a2e5bb09e453d20f2df9d5dcd44fac3793feff651",
+      "local_path": "benchmark/tetragon-loss-source-v1/pkg/metricsconfig/healthmetrics.go"
+    }
+  ],
+  "limitations": [
+    "GIT_BLOB_JOIN_IS_NOT_SIGNATURE_OR_RELEASE_IMAGE_VERIFICATION",
+    "SPARSE_BPF_COUNTER_ABSENCE_CAN_MEAN_ZERO_OR_MAP_READ_FAILURE",
+    "PROBE_MISS_COUNTERS_ARE_NOT_PERF_EVENT_SEND_FAILURE_COUNTERS",
+    "NO_LIVE_MAP_IDENTITY_READABILITY_OR_SENSOR_ATTRIBUTION_VERIFIED"
+  ]
+}

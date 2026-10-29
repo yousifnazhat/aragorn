@@ -143,7 +143,7 @@ class RuntimeProcessProfileTests(unittest.TestCase):
                 expected_gid=20,
             )
 
-    def test_skill_hash_requires_one_immutable_skill_file(self) -> None:
+    def test_skill_hash_uses_immutable_skill_file_with_companions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             skill = root / "SKILL.md"
@@ -179,11 +179,10 @@ class RuntimeProcessProfileTests(unittest.TestCase):
                 )
                 extra = root / "extra.txt"
                 extra.write_text("ambiguous", encoding="utf-8")
-                with self.assertRaisesRegex(
-                    RuntimeActionObservationPublisherError,
-                    "single immutable skill",
-                ):
-                    _profile_skill_digest(123, skill)
+                self.assertEqual(
+                    _profile_skill_digest(123, skill),
+                    "sha256:" + hashlib.sha256(b"bounded skill\n").hexdigest(),
+                )
 
     def test_process_profile_requires_every_capability_set_empty(self) -> None:
         fields = ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")

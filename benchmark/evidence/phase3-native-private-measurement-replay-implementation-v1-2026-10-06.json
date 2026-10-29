@@ -1,0 +1,182 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "f3b283ec9f8b813add377e4ecad8649d881b82c1",
+  "branch": "codex/phase3-runtime-prevention",
+  "recorded_at_utc": "2026-10-06T23:38:20Z",
+  "user_scope": "Step 1 only; restate the four-step plan and current position at end of every run. Preserve unrelated admission drafts. No redundant testing.",
+  "implementation": [
+    "CLI capture requires a fresh separate private CAS. Finite public plan identifies exactly one missing grant; one exact owned fixture file is copied privately, public inputs hydrated locally and the existing prepared-input validator checks the actual private closure.",
+    "Installed helper/alias source pins are checked with no-follow root-owned file custody before imports and after metadata-only guest reads. Fixed single-file copy, bounded subprocess and no retries/tree enumeration/private stdout.",
+    "Host checks original private destination identity, held destination guard, signed source custody, classified metadata and exact public plan joins before cleanup. Transfer or custody uncertainty preserves and suspends the exact fixture; scratch and partial private state remain.",
+    "Both successful and attached failure metadata are classified before public persistence. Unknown fields/arbitrary diagnostics are never copied into public capture.",
+    "Read-only verify-measurement CLI accepts explicit bounded caller process/account expectations. Existing real public/private-input/process/blocked-create/interval consumers are composed and compared with retained results.",
+    "Public capture schema accepts the private retention metadata only as a paired optional extension and joins it without claiming private semantic proof. Source closure binds both new host-only files; common74 installed profile and frozen predecessors unchanged.",
+    "Full successful combined-envelope unit composition uses one coherent explicitly inert deployment and all real semantic consumers; final replay forbids writes and clock sampling. It is not live evidence or an acceptance replacement."
+  ],
+  "review_findings_resolved": [
+    "Canonical disjoint private/public CAS roots reject aliasing and nesting.",
+    "Independently recomputed process verification is compared with the retained process result.",
+    "Guest source custody is checked before importing the private-read helper and after reading.",
+    "Original private-destination custody checks now precede the cleanup eligibility marker, including direct API use.",
+    "Success and failure report metadata is classified before entering the public result or CAS."
+  ],
+  "pipeline_stages": [
+    {
+      "stage_id": "native-common-measurement-input-retention",
+      "status": "PASS",
+      "fingerprint": "sha256:27d1f477018ed0780b617f764fa7c94fa6b53b1c2089785fbe3e2617f28c0c41",
+      "tests": 19,
+      "unittest_seconds": 0.125,
+      "result_digest": "sha256:7344a195387442880defceba057e28c41cca97ed80d81014d784b86c79deb9c2",
+      "stderr_digest": "sha256:45911dcd56bd7c777dc953b5a70cc48ae1162a980bbf8d52fc510756057aa01d",
+      "reviewed_inputs": 120,
+      "started_at_ns": 1791320826244010000,
+      "finished_at_ns": 1791320827087287000,
+      "attempts_this_batch": 1
+    },
+    {
+      "stage_id": "native-common-measurement-capture-replay",
+      "status": "PASS",
+      "fingerprint": "sha256:7a5e4825d0784d464e0074011df96520d2446b5f47857e8dd84f69bde806be43",
+      "tests": 12,
+      "unittest_seconds": 9.868,
+      "result_digest": "sha256:124da7a0fbb9067da451ee340c7531db51e44457a5170edb8c1d39feb41899d0",
+      "stderr_digest": "sha256:a7848195ed6f3f0589a4ede4a45bbec294ef70877b150c159313ab83cde43c1b",
+      "reviewed_inputs": 225,
+      "started_at_ns": 1791320827480717000,
+      "finished_at_ns": 1791320838007108000,
+      "attempts_this_batch": 1
+    },
+    {
+      "stage_id": "native-common-attempt-host",
+      "status": "PASS",
+      "fingerprint": "sha256:dd8eba25e18d6e16f321b0fbb0bdd716db04b289825cf27d4378df70b422a983",
+      "tests": 21,
+      "unittest_seconds": 4.273,
+      "result_digest": "sha256:4bfbb9c886d811a0d48857a4a1a0eed3a567ec6ee12aa5795d646ea0dadb2d94",
+      "stderr_digest": "sha256:4019a9627d9c61b475790ee362e301d6b4b2686ce3cdd3f9b6765bc973810582",
+      "reviewed_inputs": 189,
+      "started_at_ns": 1791321071705945000,
+      "finished_at_ns": 1791321076460949000,
+      "attempts_this_batch": 1
+    },
+    {
+      "stage_id": "native-common-attempt-capture-replay",
+      "status": "PASS",
+      "fingerprint": "sha256:382321cfa6a06d3868756a4a187d3156f8fd07e19b73c99a2d12fd9ffd209403",
+      "tests": 9,
+      "unittest_seconds": 11.132,
+      "result_digest": "sha256:a0ee35ea6c740e4b346d76b0ef696e16b49692b04d3ed1f8cdc2c471c5431256",
+      "stderr_digest": "sha256:11d57e27293f6e54d364f4df798f153df2354fe9d65b7c9bb40243babeac5715",
+      "reviewed_inputs": 217,
+      "started_at_ns": 1791321076829642000,
+      "finished_at_ns": 1791321088431516000,
+      "attempts_this_batch": 1
+    },
+    {
+      "stage_id": "native-common-attempt-inputs",
+      "status": "PASS",
+      "fingerprint": "sha256:2d1d226c2942b12d1e2817851508afd517034c8af10b9f90375007b820d62cdb",
+      "tests": 8,
+      "unittest_seconds": 2.207,
+      "result_digest": "sha256:14e0ede8543079ea093a24134225128bfcf566ebb4c8a0a36aadf148d9aaf741",
+      "stderr_digest": "sha256:3f201f77aa7b6c7456ac4c4c539455a323fd40240ff9e1681408f4b8ad852882",
+      "reviewed_inputs": 137,
+      "started_at_ns": 1791321068269732000,
+      "finished_at_ns": 1791321070777503000,
+      "attempts_this_batch": 1
+    },
+    {
+      "stage_id": "native-common-attempt-capture-guest",
+      "status": "PASS",
+      "fingerprint": "sha256:886c25bb640c2dc6cbfeff7cb5c533464357d809a36a8555427308b169619df5",
+      "tests": 16,
+      "unittest_seconds": 0.026,
+      "result_digest": "sha256:f638fe81a338aeececc01c08ed98d92e8136ba9f83a0e976f53d49cb35649fe9",
+      "stderr_digest": "sha256:cc3126ef32063759604933df49512c1578c093a1d2881a9d0a93de9f460a36ad",
+      "reviewed_inputs": 88,
+      "started_at_ns": 1791321071057632000,
+      "finished_at_ns": 1791321071414566000,
+      "attempts_this_batch": 1
+    }
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:545cd928ff6c034fb9ad374b34a0bf42843f65c5bdb8705967dead10c0c98fc2",
+    "benchmark/phase3-pipeline-v1.json": "sha256:18360967909a2b33247e455380e7cc0027737fcf058f65499e83bfa3f1027f3c",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/capture_native_phase3_common_attempt.py": "sha256:9f0d59428aa692c193c180c37285a1ce52d458d473ebbb54fa698c2aa912cf05",
+    "scripts/retain_native_common_measurement_inputs.py": "sha256:8e8447cbf0ccaa9f0831382e9ae43a9fef6b6bd3d54feb96e293c79027a3c60a",
+    "src/aragorn/native_phase3_common_attempt_capture.py": "sha256:fe69b35825468aa86df062a561688542e2f37636e889b0609937f0e66fbaad5d",
+    "src/aragorn/native_phase3_common_attempt_inputs.py": "sha256:dd834dd99d70ed6f0d12477f6c3cf9588a9970b760a1c8e32cb5db41950cfc42",
+    "src/aragorn/native_phase3_common_measurement_capture.py": "sha256:d910033eb1c62ad8c709af7bdcfd0ee2515e14aed23be43607d51ed5c0a38ad9",
+    "tests/test_native_common_attempt_private_host.py": "sha256:120ccd642818b909b03952e7e01d44fa1cb94369fcff477b9b33ba87b258d04e",
+    "tests/test_native_common_measurement_inputs.py": "sha256:2c4db7cabdf657087c05c02554d18e911c5776a07864f6b400a7f48beb0f0d7d",
+    "tests/test_native_phase3_common_measurement_capture.py": "sha256:b47043d4d3fc90bff7e17b9d03ee288fb9545b999aa978924d413dd6711c4865",
+    "tests/test_native_phase3_common_attempt_capture.py": "sha256:6bdd2c7be1d1a75993e8ce6851944f42784dd999c847f813e2eb7963ffb2b646"
+  },
+  "preserved_uncommitted_drafts": {
+    "scripts/runtime_native_admission_auto_discovery.py": "sha256:10a7371e5aa3bf44516c51d6e8a516d699394da437a8f404e16f6d0a62b4feac",
+    "src/aragorn/native_phase3_admission_auto_discovery.py": "sha256:9f0b2fdf06ac4f0d29f6f19a98a785951fc2e10d482d5408fe9026538d6cb236",
+    "tests/test_native_admission_auto_discovery.py": "sha256:1c696d5a00e54c182381d0ad7edfb0a6a3c3285b87636fd454b715d18f56b361"
+  },
+  "checks": {
+    "new_distinct_methods": 43,
+    "affected_existing_methods": 42,
+    "total_distinct_methods": 85,
+    "total_method_invocations": 85,
+    "selected_stages": 6,
+    "first_attempt_passes": 6,
+    "failed_fingerprints_this_batch": [],
+    "unchanged_failed_fingerprints_rerun": 0,
+    "unchanged_successful_behavioral_checks_rerun": 0,
+    "scope": "Only new or directly affected inert checks through reviewed explicit pipeline input closures. No historical test methods invoked via fixture reuse."
+  },
+  "reused_success": {
+    "stage_id": "pipeline-unit",
+    "status": "SKIP_PASS",
+    "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "frozen_predecessors_changed": false,
+  "decision": {
+    "step1_implementation_and_offline_checks_complete": true,
+    "step1_live_integration_complete": false,
+    "live_private_measurement_input_semantics_replayed": false,
+    "live_bounded_measurement_consumers_replayed": false,
+    "private_writer_semantics_replayed": false,
+    "independent_full_measurement_replay_complete": false,
+    "admission_qualified": false,
+    "run_qualified": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "remaining_plan": [
+    {
+      "step": 1,
+      "status": "IMPLEMENTATION_CHECKED_LIVE_PREREQUISITES_OUTSTANDING",
+      "next": "Resolve genuine workload/pair inventory and campaign contract; use clean signed source without discarding or including unrelated admission drafts. Then one newly necessary owned isolated integration capture with verified cleanup."
+    },
+    {
+      "step": 2,
+      "status": "NOT_ADVANCED_IN_THIS_RUN",
+      "next": "Complete remaining admission, runtime response/attribution/sensor-health and real workload measurement implementation on the common deployment."
+    },
+    {
+      "step": 3,
+      "status": "PENDING",
+      "next": "Close complete independent-verifier inventory and freeze the deployment once."
+    },
+    {
+      "step": 4,
+      "status": "BLOCKED_ON_PREREQUISITES",
+      "next": "Required fresh 31-case and 100-attempt/100-pair acceptance, retained cleanup and offline replay."
+    }
+  ],
+  "checkpoint_commit": "One signed local batch commit. Verify signature and exact owned file list; record commit hash and preserved draft hashes in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

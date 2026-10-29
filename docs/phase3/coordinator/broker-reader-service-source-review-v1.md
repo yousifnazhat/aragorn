@@ -1,4 +1,48 @@
-# Root service: stable source review, actual dependency pending
+# Root service: stable source review and first focused schedule
+
+## First selected schedule, 29 October 2026
+
+The user authorizes only the first 44-check service stage, signed delivery and
+push to PR #1. Verified signed base:
+`bdf3ec818fed339831c3d807ee2ad20dcfa2ef3e`. Original signed Admission context
+`018959a4fd47205d3b467cfc99794fd649671fb7` is an integrated ancestor, with the
+actual Root source pin
+`53aedfa46cd67c5febcd4f5aef3ff54d41f1227cd4a5d780b42cea2fb37e9493`.
+The dependency-absent statements in the historical review below are superseded.
+
+Root and an independent read-only reviewer refreshed all 23 input hashes against
+the approved handoff: unchanged service/test pins below, plus 21 tracked inputs
+whose actual bytes match this verified base and the handoff inventory. Source
+still contains exactly 44 new methods. No new closure, platform or native-boundary
+blocker was found. No source or test edit is needed before first execution.
+
+Registry row `native-broker-reader-service` selects only
+`test_native_phase3_broker_reader_service`, with the complete 23 explicit inputs,
+`needs: []` and a 120-second timeout. All preceding 126 rows are unchanged; no
+historical dependency stage is selected. Runner pin remains
+`46163b06a07679d157d1d37b23a8b627ea52fce1e37808753937ebbfd6edee58` and worker
+lock pin `945fd7620689d38962297a61f5e888f3156b90780e7ea8d3bf62a1459d75d0f4`.
+
+After this schedule is signed and published, Root inspects the owning checkout:
+
+```sh
+/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py status native-broker-reader-service
+```
+
+Reuse an exact existing PASS. Only if NEW, execute once:
+
+```sh
+/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-broker-reader-service
+```
+
+Retain the actual outcome, logs and matching pre/post closure. Never retry an
+unchanged failure. After reviewed PASS, sign only the three assigned service
+paths; retain the original signed integration ancestry. No other stages, live
+operations, native service activation or qualification are authorized by this
+schedule. Explicit context/session unit mocks do not establish actual native
+composition. All false flags and operational/cleanup holds remain unchanged.
+
+## Historical pre-execution source review
 
 Source release v13: verified published d7ebe099cc692eff476338668e5edd27a0af76cd.
 Root and independent reviewers read the full production service and all44 new

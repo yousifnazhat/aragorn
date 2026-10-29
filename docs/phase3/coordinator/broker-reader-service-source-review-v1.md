@@ -42,6 +42,40 @@ operations, native service activation or qualification are authorized by this
 schedule. Explicit context/session unit mocks do not establish actual native
 composition. All false flags and operational/cleanup holds remain unchanged.
 
+## Reviewed fixture correction after the first run, 29 October
+
+Published first schedule: signed `2c6487d5f5e137e372b60f37f40344de004afc92`.
+The first owning run retained FAIL, exit 1, with 43 passing methods and one
+failure at matching pre/post fingerprint
+`sha256:1a49e077a561c7c630b742bf3a06f616aaa8cefc31ed4b8f63a0b79984da9b44`.
+The unchanged failed fingerprint must never rerun. Original result/logs remain
+in its owning `.aragorn/phase3-pipeline/native-broker-reader-service/` directory;
+result.json is 810 bytes, SHA-256
+`c3e8de3bf16f1f9b7155c0c4aaeb125d256a015c09546789e31099045f5d75e5`.
+
+The actual failed method is
+`test_confirmed_close_is_retired_before_snapshot_clock_failure`. Static diagnosis
+and independent review found that the shared `Native.read` model identifies
+cancellation by numeric fd15 alone. After that pipe is closed and fd15 is reused
+for supervisor fdinfo, the model incorrectly raises BlockingIOError instead of
+reading the new proc-file generation. Production correctly retires the old
+generation before the snapshot failure; no production change is justified.
+
+The minimal correction resolves the current row after `read_hook` and applies
+cancellation only when fd15 still has kind `pipe`. Every original test assertion
+and all 44 methods are unchanged. The corrected shared test fixture is 45761
+bytes, SHA-256
+`474fd55ec3914de29ea11d0da3eb041a63549eed52544abe614f49f8dbec589f`.
+All other 22 registered inputs, the runner and worker lock are unchanged.
+
+Root and independent review approve only this changed-input execution of the
+same 44-method stage: its common native-read model is used throughout the module.
+No other stage, dependency test, runner extension or fixture bypass is needed.
+After signing/publishing this correction, inspect status, require NEW and run
+the same selected command once. Preserve both results separately; do not relabel
+the original FAIL as PASS or erase its records. This is a diagnosed shared-fixture
+repair, not an unchanged retry or final qualification.
+
 ## Historical pre-execution source review
 
 Source release v13: verified published d7ebe099cc692eff476338668e5edd27a0af76cd.

@@ -16,6 +16,18 @@ executed to assemble this source inventory.
 
 ## Status and ownership notation
 
+Latest integration, 28 October: original verified signed Admission context
+`018959a4fd47205d3b467cfc99794fd649671fb7` is integrated. Its first scheduled
+67-method stage passed once at matching pre/post fingerprint
+`sha256:befda78d72d7a2a0c35c2c05887bcf84825cdf8ef64a8750036903e98141bd12`.
+See `../integration-checkpoint-2026-10-28-admission-context.md` and the Admission
+handoff for retained evidence. This removes the service's signed context
+dependency, not its own pending 44-method validation or deployment prerequisites.
+RUN/Workloads acknowledged fc96aed and are correcting their existing drafts;
+neither correction batch has executed checks or signed delivery. No complete
+requirement or final qualification state is promoted. The 15 October recheck
+below is historical and its pending Admission delivery is superseded here.
+
 Current coordination recheck, 15 October, at published signed
 `ac7f95157315a0ae834f0fba62954f1137bbd2bd`: the original DNS acquisition
 delivery `a32477b0b38248f7dca825ec022ad4c0e467558d` is integrated with its
@@ -105,6 +117,7 @@ only if their actual behavioral closure and relevant environment remain equal.
 
 | Reference | Existing selected result | Fingerprint / retained source of result |
 | --- | --- | --- |
+| V-broker-context | 67 new mocked protected context and retained-byte replay checks; first selected PASS | `sha256:befda78d72d7a2a0c35c2c05887bcf84825cdf8ef64a8750036903e98141bd12`; original signed `018959a4fd47205d3b467cfc99794fd649671fb7`, integrated preserving ancestry. Original Admission result/log pins: `docs/phase3/admission/BROKER_READER_CONTEXT_HANDOFF.md`. No native custody, installed-source, service composition or qualification claim. |
 | V-source | Source inspected; no current requirement-level result asserted | Existing inventory/probe/consumer only. Historical standalone qualification must not become same-deployment campaign evidence. |
 | V-install | INSTALL recorder/consumer: 16 checks; native leaf: 17 mocked checks | `sha256:0d3692546c31cc2733070f93f85a83a7ee6cd13b45f1d93b8974b53c6cd105c2`; `sha256:62afde843001570524bafaed58dfcfab678f3a2dd1ac9e61712e7ff0a8217882`; `docs/phase3/admission/INSTALL_RECORDING.md`, `INSTALL_LEAF.md`, integration batch2/batch3 checkpoints. |
 | V-restart | 26 mocked checks | `sha256:70b1548feb59a4bd38673bb01cd9d52a78e26c31ebca95a1f5d47f7588b335b8`; `docs/phase3/admission/RESTART_SOURCE_HANDOFF.md`. |

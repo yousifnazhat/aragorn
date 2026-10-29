@@ -1,5 +1,12 @@
 # Phase 3 critical infrastructure: worktree handoffs, 15 October
 
+Current supplement, 28 October: Admission context's original signed
+`018959a4fd47205d3b467cfc99794fd649671fb7` is now integrated with its first
+67-method PASS. RUN and Workloads acknowledged fc96aed and are correcting their
+published source/fixture defects without executing checks. Follow
+`../integration-checkpoint-2026-10-28-admission-context.md` for current delivery
+and next-stage status; the contracts and ownership rules below remain intact.
+
 Source review base: verified signed published
 `6af32a0f127999ef44dfddf37763789ba3fef52c`. This package takes effect only at
 its containing verified signed published checkpoint. Root supplies that exact

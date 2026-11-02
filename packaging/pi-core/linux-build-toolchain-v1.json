@@ -1,0 +1,53 @@
+{
+  "schema": "aragorn/pi-core-linux-build-toolchain/v1",
+  "purpose": "LOCAL_COMPILER_ONLY_BUILD_NOT_RUNTIME_EXECUTION_OR_OS_QUALIFICATION",
+  "reviewed_date": "2026-11-02",
+  "docker": {
+    "executable": "/opt/homebrew/bin/docker",
+    "resolved_executable": "/opt/homebrew/Cellar/docker/29.6.1/bin/docker",
+    "sha256": "e8a1e5351c4d12337a4ee2b54523bc0107b4d13f795c9d6e791b9e4cf835f385",
+    "client_version": "29.6.1",
+    "context": "colima",
+    "endpoint": "unix:///Users/yousi/.colima/default/docker.sock",
+    "server_version": "29.5.2",
+    "server_os": "linux",
+    "server_arch": "arm64",
+    "precondition": "ALREADY_RUNNING_NO_VM_START_OR_CONTEXT_SWITCH"
+  },
+  "archives": {
+    "node": {
+      "path": ".aragorn/pi-core-build-inputs/node-v24.22.2-linux-arm64.tar.xz",
+      "bytes": 30968168,
+      "sha256": "eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8",
+      "design_pin": "node.version=24.22.2; node.sha256"
+    },
+    "typescript": {
+      "path": ".aragorn/pi-core-build-inputs/typescript-7.0.2.tgz",
+      "bytes": 365612,
+      "sha256": "da2513f4b95176d6dde8b51aab7afe8a927656c9d277369793f77f7e59371c08",
+      "design_pin": "node_modules/typescript@7.0.2; integrity"
+    },
+    "compiler": {
+      "path": ".aragorn/pi-core-build-inputs/typescript-linux-arm64-7.0.2.tgz",
+      "bytes": 8900516,
+      "sha256": "c83d931ac9dd7549cde6e71246aa9d6a9812843023df3e277fe3b5dcf41dd0ea",
+      "design_pin": "node_modules/@typescript/typescript-linux-arm64@7.0.2; integrity"
+    }
+  },
+  "constraints": {
+    "build_timeout_seconds": 120,
+    "cleanup_reserve_seconds": 30,
+    "compiler_only": true,
+    "node_or_worker_execution": false,
+    "network": "none",
+    "pull": "never",
+    "runtime_package_occurrences": 89,
+    "automatic_effect_or_build_retry": false
+  },
+  "limitations": [
+    "LOCAL_ARTIFACT_PREFLIGHT_NOT_PACKAGE_SIGNATURE_TRUST_CHAIN_VERIFICATION",
+    "DOCKER_SERVER_METADATA_NOT_HOST_OR_VM_ATTESTATION",
+    "NO_GLIBC_LIBSTDCXX_OR_MANAGED_OS_IMAGE_CLOSURE",
+    "NO_PHASE3_ACCEPTANCE_OR_QUALIFICATION"
+  ]
+}

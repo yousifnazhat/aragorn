@@ -15,7 +15,11 @@ claims. The [first connected offline batch](docs/phase3/coordinator/pi-core-conn
 implements Pi-loop/request-protocol composition. The subsequent
 [offline launch/identity batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md)
 adds exact bundle preparation and a protected activation/PIDFD relay boundary;
-it neither starts a worker nor installs the new handler. No Pi deployment is qualified. The
+it neither starts a worker nor installs the new handler. The
+[compiled/bootstrap batch](docs/phase3/coordinator/pi-core-compiled-launch-batch-3.md)
+adds a real compiler-only Linux artifact and guarded confinement/bootstrap
+composition. Native supervisor execution, OS installation and protected
+identity/provider integration remain outstanding. No Pi deployment is qualified. The
 existing Phase 3 manifest and all operational holds remain unchanged. Historical
 status and target-specific sections below remain preserved; the SDD supersedes
 them only where they direct future runtime selection or managed-profile scope.

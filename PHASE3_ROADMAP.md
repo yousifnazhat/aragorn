@@ -9,13 +9,19 @@ with its [approved SDD](docs/design/pi-core-managed-capability-sdd-v1.md).
 The user has now approved the full [29-requirement acceptance mapping](docs/design/pi-core-phase3-acceptance-mapping-v1.md)
 and authorized [the first connected offline Pi batch](docs/phase3/coordinator/pi-core-connected-batch-1.md),
 using the [exact dependency pins](docs/design/pi-core-dependency-pins-v1.md).
-Only its new/affected checks are released; no live operations, deployed pilot,
-compiled target build or deployment freeze is claimed.
+Only new/affected checks are released; no live operations, deployed pilot
+or deployment freeze is claimed.
 
 The next [D2 launch/identity batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md)
 implements protected bundle preparation and a PIDFD-bound accepted-peer guard.
 Actual confined launch, compiled-source custody, provider mediation and native
 integration remain prerequisites; no live operation is released.
+
+The [compiled/bootstrap batch](docs/phase3/coordinator/pi-core-compiled-launch-batch-3.md)
+now emits the actual Linux adapter using the pinned isolated compiler, plus a
+credential-free entrypoint, guarded confinement plan and authenticated bootstrap
+composition. This is not the native supervisor or a protected OS installation;
+the compiler artifact does not close D2's useful-task/effect/health/cleanup exit.
 
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;

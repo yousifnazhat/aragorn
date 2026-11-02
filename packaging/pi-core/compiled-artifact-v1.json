@@ -1,0 +1,64 @@
+{
+  "schema": "aragorn/pi-core-compiled-artifact-checkpoint/v1",
+  "status": "COMPILED_NOT_DEPLOYED_OR_OS_QUALIFIED",
+  "base_commit": "6087a84ef97c9b6a5cf1fd821fee81e3821f0b09",
+  "pipeline_stage": "pi-core-linux-compile",
+  "pipeline_fingerprint": "sha256:300ddc9d141f467454640fd184fe4fba68a31b338cc8e8fada03cf586a94afde",
+  "receipt_local_path": ".aragorn/pi-core-build/d2-1c37879592044638ba9d039a76891fba/build-receipt.json",
+  "receipt_file_sha256": "a91434f1c9216c628d5feb7fa7f072534109f4bb8807a556c5c31bb825323f87",
+  "receipt_canonical_digest": "sha256:5eda7cc88960ffd85fc2edaf96f6cac96bf3d65e1f5d03f93438905a81c38d83",
+  "receipt_file_bytes": 2468270,
+  "deployment_inventory_entries": 12694,
+  "deployment_tree_sha256": "0fa00453f41ca94c7942076ce0d4130cfc7cdcd91755439460aa50f5fd9d5875",
+  "inputs": {
+    "compiler_archive_sha256": "c83d931ac9dd7549cde6e71246aa9d6a9812843023df3e277fe3b5dcf41dd0ea",
+    "compiler_binary_sha256": "f86e8070c267b12d6c119bf567cb82d8b245e9d93da1864bc7c603cea10a8b2f",
+    "node_archive_sha256": "eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8",
+    "offline_toolchain_sha256": "1b71fb40b6ace80f165471df2cf95b2ed49e444994ae9404222b08e843ec6e9d",
+    "pins_sha256": "49f578cc96b4c8e6a68cb03efdbba0f4ad09d165366982d063f2e3fb2707b5d0",
+    "runtime_dependency_tree_sha256": "4ea4f2b7eb5408dbe64682a99c9921d42855faa69fdb4511328c444e4afed359",
+    "runtime_package_occurrences": 89,
+    "sources": {
+      "entrypoint.ts": "9da060fea42cc72266e940abc1f6513988d59b03b4f71024207270ef68337920",
+      "package-lock.json": "ec3ba79e5d5f2516408311f05e3196efb604179a4421d0364b63527131b72789",
+      "package.json": "f913fc41b0e32167b11c7253db4ec4a63080b4bfd3e6b6aa7d4b97863f348bab",
+      "tsconfig.json": "5ea2f7a064af994f3ba81e08a88edbc5d1be97d0afae597cc77df0a93af3cbea",
+      "worker.ts": "4aef05690ec65bcf994b87dbb9054908d90d8f9a7c4ef73ffcfdfa9e9d009e32"
+    },
+    "typescript_archive_sha256": "da2513f4b95176d6dde8b51aab7afe8a927656c9d277369793f77f7e59371c08"
+  },
+  "selected_output_files": [
+    {
+      "bytes": 123378856,
+      "kind": "file",
+      "path": "node/bin/node",
+      "sha256": "b4855de8c4781130b722ceaec9718fed77cca3eed2e5cfc5455e267c0b9ee3b0"
+    },
+    {
+      "bytes": 12745,
+      "kind": "file",
+      "path": "pi-core/entrypoint.js",
+      "sha256": "cd8fbc0fb4acb26e70bbad15efb8d011730181af5c4f40e40a39cef193ce47bf"
+    },
+    {
+      "bytes": 17731,
+      "kind": "file",
+      "path": "pi-core/worker.js",
+      "sha256": "d316b62734aae95c168e89833553fc98ade20f628c9988e43b87be83a0d9ace4"
+    }
+  ],
+  "compiler_cleanup": {
+    "container": "aragorn-pi-compiler-8216c8b488ea441a9c9fda23acb4981c",
+    "context": "colima",
+    "image": "aragorn-pi-compiler-8216c8b488ea441a9c9fda23acb4981c:owned",
+    "owned_container_absent": true,
+    "owned_image_absent": true
+  },
+  "limitations": [
+    "NO_OS_LIBRARY_CLOSURE_OR_LIVE_LAUNCH",
+    "NO_PHASE3_QUALIFICATION",
+    "UPSTREAM_DECLARATIONS_SKIP_LIB_CHECK_ADAPTER_SOURCE_STRICT",
+    "LOCAL_BINARY_AND_FULL_INVENTORY_ARTIFACTS_NOT_PUBLISHED",
+    "NO_PROTECTED_INSTALL_OR_NATIVE_SUPERVISOR_EXECUTION"
+  ]
+}

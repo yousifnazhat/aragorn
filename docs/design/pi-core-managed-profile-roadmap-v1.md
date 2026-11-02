@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation batch released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation and compiled/bootstrap slices released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -11,8 +11,9 @@ The complete [48-row acceptance crosswalk](pi-core-phase3-acceptance-mapping-v1.
 defines 29 managed-profile logical requirements and is **approved by the user**.
 The subsequent [batch-1 release](../phase3/coordinator/pi-core-connected-batch-1.md)
 authorizes only offline implementation and new/affected checks, signing and push.
-No live operations are authorized. Compiled adapter and managed OS/deployment
-identities remain future outputs; the complete deployment is not frozen.
+No live operations are authorized. The compiled adapter now has an artifact
+checkpoint; managed OS/installed deployment identities remain future outputs.
+The complete deployment is not frozen.
 
 Batch-1 checkpoint: the actual pinned Pi loop is now connected offline to the
 existing Aragorn request/result protocol. 28 new focused methods and four
@@ -27,6 +28,14 @@ must consume the exact prepared bundle and install this guard; no process is
 launched and no loaded-JavaScript or deployed-identity result is claimed.
 Its 50 new checks and four affected capacity checks passed once; no old suite
 or live operation ran.
+
+Batch-3 [compiled/bootstrap checkpoint](../phase3/coordinator/pi-core-compiled-launch-batch-3.md):
+the pinned Linux arm64 compiler produces `worker.js` and `entrypoint.js` with the
+exact preserved dependency/legacy layout. Root-side guarded planning joins
+compiled/runtime/OS/configuration expectations to admission and the authenticated
+post-exec bootstrap. Native startup remains provider-unavailable and the
+actual supervisor is not implemented. OS installation, lifecycle/cleanup custody,
+action-relay identity handoff and provider mediation remain D2 dependencies.
 
 ## Goal
 
@@ -51,8 +60,8 @@ implementation and actual Phase 3 qualification.
 
 ## Research: where we actually are
 
-The latest integrated checkpoint is RUN bootstrap (`ec171a6`, checkpoint
-`dc3fc10`). Admission context67, broker service44 and bootstrap69 have focused
+The reusable predecessor includes RUN bootstrap (`ec171a6`, checkpoint
+`dc3fc10`), followed by the Pi slices above. Admission context67, broker service44 and bootstrap69 have focused
 component evidence. The service's current profile is `HTTP_REFUSAL_ONLY`; real
 positive composition, installed/loaded-source custody, complete health,
 remaining routes and actual measurements remain incomplete. More leaf tests
@@ -64,9 +73,10 @@ legacy adapter, `benchmark/` fixed acceptance/workloads, `tests/` focused checks
 Current entrypoint remains the root Python `aragorn` launcher. The selected
 Pi/Node/build dependency pins now live in the linked step-2 inventory. The
 request-only `packaging/pi-core/worker.ts` is implemented and exercised offline;
-no protected Pi process launcher or compiled target deployment exists yet.
-Supervisor-side preparation and accepted-peer guard APIs now exist as the
-batch-2 integration boundary; their live caller remains the next dependency.
+the compiled target artifact now exists, but no protected Pi process launcher
+or complete OS deployment exists yet. Supervisor-side preparation, guarded
+confinement planning, bootstrap and accepted-peer guard APIs now exist; their
+native caller and the protected cross-UID action-identity handoff remain next.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension
@@ -116,7 +126,8 @@ The linked step-2 documents prepare a bounded **compatibility-and-acceptance
 contract**, not another generic framework. The remaining release obligations are:
 
 1. Preserve the selected immutable Pi-core, Node and transitive/build-tool pins.
-   Pin the actual adapter build and managed OS closure once implemented; no
+   The actual adapter artifact is now pinned in `packaging/pi-core/compiled-artifact-v1.json`.
+   Pin the managed OS closure and installed custody once implemented; no
    placeholder digest may stand in for those bytes. Publish the exact worker
    entrypoint with the later implementation contract.
 2. List every load/activation surface: managed install/replacement/restart;

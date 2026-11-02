@@ -12,8 +12,12 @@ original OpenClaw-specific Phase 3 gates. The
 connects the pinned Pi loop to the existing request/result protocol. It is not
 an authenticated Linux deployment, runtime qualification or release. The next
 [offline D2 batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md) adds
-protected bundle preparation and activation-bound peer handling; an actual
-confined launcher/entrypoint and deployed custody remain outstanding. Historical
+protected bundle preparation and activation-bound peer handling; the native
+confined supervisor and deployed custody remain outstanding. The
+[compiled/bootstrap batch](docs/phase3/coordinator/pi-core-compiled-launch-batch-3.md)
+now produces a pinned Linux artifact, credential-free entrypoint and guarded
+confinement/bootstrap APIs. The native supervisor, protected OS installation,
+provider and effect-identity handoff are still incomplete. Historical
 results below keep their original scope and do not qualify Pi.
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.

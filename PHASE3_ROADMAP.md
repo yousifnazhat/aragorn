@@ -6,17 +6,17 @@ The user approved Pi agent-core as an unprivileged engine in an Aragorn-managed
 Linux capability host. The current forward plan is the
 [managed-profile roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md),
 with its [approved SDD](docs/design/pi-core-managed-capability-sdd-v1.md).
-This remains documentation-only; implementation and testing are not released.
-Step 2 has now recorded [exact dependency pins](docs/design/pi-core-dependency-pins-v1.md)
-and the full [proposed acceptance crosswalk](docs/design/pi-core-phase3-acceptance-mapping-v1.md).
-The next decision is approval of that mapping, not another OpenClaw capture or
-leaf campaign. No adapter build or deployment freeze is claimed.
+The user has now approved the full [29-requirement acceptance mapping](docs/design/pi-core-phase3-acceptance-mapping-v1.md)
+and authorized [the first connected offline Pi batch](docs/phase3/coordinator/pi-core-connected-batch-1.md),
+using the [exact dependency pins](docs/design/pi-core-dependency-pins-v1.md).
+Only its new/affected checks are released; no live operations, deployed pilot,
+compiled target build or deployment freeze is claimed.
 
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned
-managed-profile qualification mapping needs separate approval before evaluator
-changes or a revised Phase 3 completion claim. Historical signed work, evidence,
+managed-profile qualification mapping is approved as a design; its executable
+contract and independent evidence still precede any completion claim. Historical signed work, evidence,
 failure records and operational/cleanup holds remain intact. No Phase 4 release.
 
 **Reading order:** the linked roadmap is current for future implementation

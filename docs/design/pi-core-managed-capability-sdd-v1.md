@@ -1,8 +1,10 @@
 # SDD: Pi-core managed capability profile v1
 
 Status: **architecture and managed-profile scope approved by the user, 2026-11-02**.
-Implementation: **not released by this document**. No product checks or live
-operations were run for this decision. Research baseline:
+Implementation: the user subsequently released the
+[first connected offline batch](../phase3/coordinator/pi-core-connected-batch-1.md).
+No live operations are authorized. No product checks or live
+operations were run for the original design decision. Research baseline:
 `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 This is the software design description and behavioral specification for a
@@ -11,8 +13,9 @@ orders future work. The existing [Phase 3 manifest](../../benchmark/phase3-exit-
 and historical qualification records are unchanged.
 
 Step-2 follow-up: [exact dependency pins](pi-core-dependency-pins-v1.md) and the
-[complete proposed acceptance crosswalk](pi-core-phase3-acceptance-mapping-v1.md)
-are prepared. The latter needs user approval; it is not an approved gate change.
+[complete acceptance crosswalk](pi-core-phase3-acceptance-mapping-v1.md)
+are recorded. The user approved the 29-requirement mapping; executable
+qualification machinery and actual evidence remain outstanding.
 Pinning upstream components does not pin the not-yet-built adapter or deployment.
 
 ## Goal and approved decision
@@ -288,18 +291,19 @@ marked PASS because Pi does not implement them.
 | External broker and out-of-process sensor | Linux isolation plus separately protected mediation/health | Pi callbacks are not an OS boundary |
 | Measurement and independent replay | Actual effects, actual tasks and externally bound timings | Old OpenClaw evidence and unit timings cannot qualify Pi |
 
-**Recommended qualification disposition, not yet an approved manifest change:**
-retain original v1 forever and author a separately reviewed managed-profile
+**Approved qualification design, executable successor still outstanding:**
+retain original v1 forever and implement the separately reviewed managed-profile
 successor mapping. Preserve security properties and numeric thresholds, replace
 ecosystem-specific route assertions with a complete supported-path/denied-surface
 inventory, and account for every original ID as retained, replaced or out of
 scope. Do not pad a route count with fictional cases. User approval of that exact
-mapping is required before changing the evaluator or claiming revised Phase 3
-completion. The alternative is to complete the original OpenClaw qualification
+mapping is now recorded; executable contract review and actual evidence still
+precede any revised Phase 3 completion. The alternative is to complete the original OpenClaw qualification
 separately; that is not the recommended parallel implementation campaign.
 
-Until that decision, a bounded **Pi managed-profile pilot** can be designed and,
-after separate implementation authorization, built. It is neither the original
+With that decision, the first offline connected slice is released. A bounded
+**Pi managed-profile pilot** still requires the remaining D2 work and operational
+release. It is neither the original
 Phase 3 PASS nor permission to proceed to Phase 4.
 
 The unchanged original final gates require one exact deployment, 31 admission

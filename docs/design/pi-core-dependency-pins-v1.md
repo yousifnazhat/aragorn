@@ -5,6 +5,13 @@ built or qualified**. This is step 2 of the approved managed-profile plan.
 The [machine-readable inventory](pi-core-dependency-pins-v1.json) is a design
 artifact, not a production `package.json`, npm lockfile or deployment manifest.
 
+Subsequent implementation checkpoint: [batch 1](../phase3/coordinator/pi-core-connected-batch-1.md)
+translates the runtime graph into `packaging/pi-core/package-lock.json` and
+prepares it for offline checks with scripts disabled. The statements below
+record step 2's original evidence ceiling; they are not claims that the later
+offline preparation is a Linux build or qualified deployment. Target compiler,
+OS/image and compiled adapter identities remain outstanding.
+
 ## Decision
 
 Consume the **published Pi 1.4.0 distribution artifacts**, with a thin Aragorn

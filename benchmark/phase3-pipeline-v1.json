@@ -4610,7 +4610,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Only four new inert registry-capacity checks for the required bounded increase from 64 to 128 stages; no child execution, cache reset, unrelated stage run or qualification.",
+      "description": "Only four affected inert registry-capacity checks for the required bounded increase from 128 to 129 stages; no child execution, cache reset, unrelated stage run or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],
@@ -9989,6 +9989,30 @@
         "src/aragorn/__init__.py",
         "src/aragorn/native_phase3_broker_reader_bootstrap.py",
         "tests/test_native_phase3_broker_reader_bootstrap.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "pi-core-worker-offline",
+      "description": "New actual pinned Pi loop and existing Aragorn request/result protocol checks with scripted model and in-memory relay only; pinned host Node/dependency bytes, no live effect, Linux build or qualification",
+      "tests": ["test_pi_core_worker"],
+      "inputs": [
+        "docs/design/pi-core-dependency-pins-v1.json",
+        "packaging/pi-core/package.json",
+        "packaging/pi-core/package-lock.json",
+        "packaging/pi-core/offline-toolchain-v1.json",
+        "packaging/pi-core/worker.ts",
+        "packaging/openclaw/aragorn-runtime-action-worker/index.js",
+        "packaging/openclaw/aragorn-runtime-action-worker/package.json",
+        "src/aragorn/__init__.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_service.py",
+        "src/aragorn/runtime_action_worker.py",
+        "tests/test_pi_core_worker.py",
+        "tests/fixtures/pi_core_worker_offline.mjs"
       ],
       "needs": [],
       "timeout_seconds": 120

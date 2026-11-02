@@ -8,10 +8,11 @@ untrusted Pi-core worker, one admitted bundle per fresh context, existing Python
 security authority and external Linux enforcement. Aragorn owns the lifecycle;
 arbitrary native in-process plugins and shared multi-skill contexts are excluded
 from this first profile. The [delivery roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md)
-defines reuse, adaptation and the separate qualification-mapping decision.
+defines reuse, adaptation and the approved 29-requirement qualification mapping.
 
 This approval changes the forward target, not historical evidence or completion
-claims. No Pi runtime is implemented or qualified by this documentation. The
+claims. The [first connected offline batch](docs/phase3/coordinator/pi-core-connected-batch-1.md)
+implements only Pi-loop/request-protocol composition; no Pi deployment is qualified. The
 existing Phase 3 manifest and all operational holds remain unchanged. Historical
 status and target-specific sections below remain preserved; the SDD supersedes
 them only where they direct future runtime selection or managed-profile scope.

@@ -1,20 +1,24 @@
-# Proposed Phase 3 acceptance mapping: Pi-core managed profile v1
+# Approved Phase 3 acceptance mapping: Pi-core managed profile v1
 
-Date: 2026-11-02. Status: **PREPARED FOR USER APPROVAL — NOT APPROVED OR
-IMPLEMENTED**. Based on the approved [SDD](pi-core-managed-capability-sdd-v1.md)
+Date: 2026-11-02. Status: **APPROVED BY THE USER — NOT YET AN EXECUTABLE
+QUALIFICATION CONTRACT OR RESULT**. Based on the approved [SDD](pi-core-managed-capability-sdd-v1.md)
 and selected [dependency pins](pi-core-dependency-pins-v1.md).
 
-This document is a proposed successor qualification contract, not a result,
+The user approved this exact 29-requirement mapping and separately authorized
+the first offline connected implementation batch. No live operations were
+authorized. See the [bounded batch release](../phase3/coordinator/pi-core-connected-batch-1.md).
+
+This document is the approved successor qualification design, not a result,
 waiver, executable manifest or implementation release. It does not modify
 `benchmark/phase3-exit-gate-manifest-v1.json`, its hard-pinned digest,
 `phase3_exit_qualification.py`, the original ledger or any retained evidence.
 
-## Approval requested
+## Recorded approval
 
-Approve a separately versioned **`pi-core-managed-phase3/v1`** contract with
+Approved: a separately versioned **`pi-core-managed-phase3/v1`** contract with
 **29 logical evidence requirements**:
 
-| Family | Original v1 | Proposed managed profile | Change |
+| Family | Original v1 | Approved managed profile | Change |
 | --- | ---: | ---: | --- |
 | Admission | 31 | 12 | Retain ten runtime-neutral requirements; replace 21 ecosystem-specific update/reload assertions with two comprehensive managed lifecycle requirements |
 | RUN properties/events/responses | 15 | 15 | Retain every property, all seven events and all six responses |
@@ -26,7 +30,7 @@ Approve a separately versioned **`pi-core-managed-phase3/v1`** contract with
 cases. Each requirement must cover all actual supported and denied entrypoints
 in the frozen managed deployment. The original 31-case admission campaign is
 not claimed completed or preserved unchanged: its ecosystem-specific case
-inventory is replaced, subject to this explicit approval, by the complete
+inventory is replaced under this explicit approval by the complete
 managed surface inventory. Do not pad it with fictional OpenClaw-like cases or
 reduce it to one example per group.
 
@@ -55,7 +59,7 @@ completed. A successor PASS must be reported as **Pi-core managed-profile Phase
 No Phase 4 readiness, public release, EDR claim or implementation authority is
 granted merely by approving this proposal.
 
-## Proposed admission requirements
+## Approved admission requirements
 
 All IDs below start with `MP1/`. The suffixes are shown fully in the crosswalk.
 
@@ -218,7 +222,7 @@ tasks and declare the exact measured scope before collecting samples.
 
 ## Approval and future execution boundary
 
-Recommended approval wording:
+Approved design scope (the user separately released offline implementation):
 
 > Approve `pi-core-managed-phase3/v1` with the 29 logical requirements and complete
 > 48-row crosswalk above. Preserve original v1 and its historical results.
@@ -229,9 +233,9 @@ Recommended approval wording:
 > of necessary cases. This approves the mapping only, not implementation, live
 > operations, acceptance execution or Phase 4 readiness.
 
-After approval, a separate implementation instruction can release one connected
-vertical slice using the selected dependency pins. Do not amend executable
-gate/schema/registry code before approval. Future necessary checks use the
+The user's separate implementation instruction now releases the first connected
+offline slice using the selected dependency pins. It does not release live
+operations or acceptance. Future necessary checks use the
 existing reviewed fingerprint pipeline; unchanged successful results are reused,
 unchanged failures are not rerun, and no broad regression is scheduled.
 
@@ -243,4 +247,5 @@ coverage ledger and approved SDD. The original manifest digest is
 `sha256:aff633a6d0d482cf79e3e540b0e7b8336cf266765eaacf277c9ac23ed5279f1d`.
 No implementation or product tests were used to prepare this proposal. The
 signature on the containing documentation commit proves authorship/integrity,
-not approval of this proposed successor or qualification of its behavior.
+not qualification of behavior. Approval is the user's explicit subsequent
+instruction, recorded at the top, not inferred from a signature.

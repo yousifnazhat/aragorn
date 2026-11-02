@@ -3,14 +3,15 @@
 ## Current scope override (2026-11-02)
 
 The user approved the [Pi-core managed capability profile](../../design/pi-core-managed-capability-sdd-v1.md)
-and requested finalized design/roadmap only, with no implementation or tests.
+and subsequently approved the 29-requirement successor mapping and
+[first connected offline implementation batch](pi-core-connected-batch-1.md).
 The [managed-profile roadmap](../../design/pi-core-managed-profile-roadmap-v1.md)
 supersedes old forward runtime-selection and automatic implementation instructions
 on this page. This is a replacement target, not permission to run a second
 runtime campaign. Preserve exact ownership, drafts, signatures, frozen evidence
-and all operational holds. No new lane code scope is released by this update.
-Future code work needs a concrete current contract and user implementation
-direction; do not silently continue historical OpenClaw-specific assignments.
+and all operational holds. Only the exact paths/interfaces in that current
+batch contract are released; no live operations or historical OpenClaw-specific
+assignments are released by this update.
 
 Base: verified signed and published `27e9844e6d5f0924b79382a8a084099ee06e2ed6`.
 This document succeeds v1 only for the next bounded implementation assignments.

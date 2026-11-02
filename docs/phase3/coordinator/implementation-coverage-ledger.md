@@ -2,10 +2,11 @@
 
 Current direction, 2026-11-02: the user approved the
 [Pi-core managed-profile SDD](../../design/pi-core-managed-capability-sdd-v1.md)
-and requested documentation only. This ledger remains the unchanged original
+and subsequently approved the 29-requirement mapping and
+[first offline connected batch](pi-core-connected-batch-1.md). This ledger remains the unchanged original
 48-requirement inventory, not a Pi evidence map. No row is promoted by the runtime
 decision. See the [current roadmap](../../design/pi-core-managed-profile-roadmap-v1.md)
-for reuse and the required explicit successor qualification mapping. Older
+for reuse and the approved successor qualification mapping. Older
 "next" lane/capture instructions below do not release implementation now.
 
 Source base: published checkpoint `d87572182584f9c106393a2ca952c69703b6da6d`.

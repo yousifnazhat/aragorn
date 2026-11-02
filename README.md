@@ -6,10 +6,12 @@
 the approved [Pi-core managed capability profile](docs/design/pi-core-managed-capability-sdd-v1.md):
 Pi is an unprivileged agent engine; Aragorn retains admission, policy, isolation,
 effect mediation and evidence authority. See the [current delivery roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md)
-for what is reused, what changes and the unresolved mapping from the original
-OpenClaw-specific Phase 3 gates. This is design approval only, not implementation,
-runtime qualification or a release. Historical results below keep their original
-scope and do not qualify Pi.
+for what is reused, what changes and the approved 29-requirement mapping from the
+original OpenClaw-specific Phase 3 gates. The
+[first connected offline batch](docs/phase3/coordinator/pi-core-connected-batch-1.md)
+connects the pinned Pi loop to the existing request/result protocol. It is not
+an authenticated Linux deployment, runtime qualification or release. Historical
+results below keep their original scope and do not qualify Pi.
 
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 

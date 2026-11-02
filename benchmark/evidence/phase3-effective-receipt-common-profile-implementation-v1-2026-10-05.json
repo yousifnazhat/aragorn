@@ -1,0 +1,130 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "8b638a866db256388cb5021d2d5284c3b8d929ad",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T18:17:39.176Z",
+    "validation_recorded": "2026-10-05 19:35:47 UTC",
+    "meaning": "Includes source review, delegation, one pre-execution VM permission timeout and offline implementation; not separately instrumented engineering time."
+  },
+  "implementation": [
+    "Successor renderer replaces the installed V4 receipt validator's incorrect policy/effective equality relation while preserving pinned V3 receipt/hash/attribution checks and all frozen source predecessors.",
+    "Exactly three effective-receipt payloads change within the 73-file measured profile: V4, measurement helper and activator; evidence/completion contracts become v2, pending/binding and seven binding source names remain v1.",
+    "Policy ALLOW or BLOCK may yield an exact recorded broker-only BLOCK vector; absent policy is accepted only for exact replay BLOCK/NOT_PERFORMED. Original policy data is retained, not rewritten; broker causality is not independently established.",
+    "Independent read-only v2 verifier reconstructs receipt/profile/grant/final joins from retained CAS bytes, with exact replay-null policy digest, native input/custody checks and final readback, without importing the new producer validator.",
+    "One inert common 73-file profile combines admission seals with receipt-complete measured broker via exact reversible gateway/activator changes; it does not activate or change the existing 70-file capture deployment.",
+    "Fixed real pipeline cache-key instability caused solely by volatile network nodename; source/interpreter/OS/release/kernel/architecture/dependency pins remain bound."
+  ],
+  "review_findings_resolved": [
+    "Producer and independent consumer aligned on exact supported vectors, sorted unique policy codes and reserved BROKER reason separation.",
+    "Producer inert integration checks use actual successor _result_record, _consume_grant and helper.retain; only custody/identity/state fixtures are doubled. No broker effect runs.",
+    "Consumer test fixture composition does not inherit or discover historical test methods. Rehashed tampering rebuilds all downstream CAS edges before refusal.",
+    "Both syntax-only shell subprocesses are bounded by ten seconds; no activation entrypoint executes.",
+    "Independent cross-review found no remaining blocking findings in producer, consumer, common composition or nodename correction."
+  ],
+  "source_digests": {
+    "benchmark/phase3-pipeline-v1.json": "sha256:09a2ca8ea0917bf5000efa01f2017daacc2be9be6964d93c07ce1c63bf2d568d",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/stage_runtime_broker_effective_receipt_profile.py": "sha256:4862d2bf0d812396f88546437e394416e142d548cb65a7a0431bedf609be2125",
+    "scripts/stage_runtime_phase3_common_profile.py": "sha256:576d2572dfc8a4fb8bd6fab8e14929b2de18150db8e19eb16a7d2b4d8695bebf",
+    "src/aragorn/runtime_broker_effective_receipt_verify.py": "sha256:a8441ec4098d119677b29b3644f5040d6301b29e2c600ca090f90417c1399cfa",
+    "tests/test_phase3_pipeline.py": "sha256:d3d97b83404f203d9cb5bdd9188cd8e0c9d7e28640ccc42c45eb385289b710ba",
+    "tests/test_runtime_broker_effective_receipt_profile.py": "sha256:dbf5dc50523cc336bffa5d0acc305bd669bb1aebb2b646619ec71f4ece4d8c1f",
+    "tests/test_runtime_broker_effective_receipt_verify.py": "sha256:ea0229d25ff076969b3ae166967dde0fb59cba61eee515496754707d0a18817b",
+    "tests/test_runtime_phase3_common_profile.py": "sha256:7f77f4608db72d8bf3bbb6bfed32393cddb3374a6ae98e9f90d8c9e713b66190"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "pipeline-unit",
+      "status": "PASS",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730",
+      "tests": 10,
+      "wall_seconds": 1.987112,
+      "stderr_digest": "sha256:c66db64aeda1043496dbbbdcf060ec2b9a6c2fc554c3293adc4acf3c7e9e41d8"
+    },
+    {
+      "stage_id": "broker-effective-receipt-profile",
+      "status": "PASS",
+      "fingerprint": "sha256:0315f8de3ad09151945c6b17b3525caf0cc770014050f24e6c62041c3d1be411",
+      "tests": 6,
+      "wall_seconds": 0.910946,
+      "stderr_digest": "sha256:68c9a1fa3aa717460afbfa75b10708d0aa0dbe91f758b566521285cb47b9ed46"
+    },
+    {
+      "stage_id": "broker-effective-receipt-verify",
+      "status": "PASS",
+      "fingerprint": "sha256:5ce0df761cfbeb54246f7b732aa9c5a89a7f5b8d916a00d561d830f96e9e00f0",
+      "tests": 14,
+      "wall_seconds": 0.60745,
+      "stderr_digest": "sha256:c3a40ed76561f0644882a119c93dc0b1af5ae3eeff256278a69dbd0e2de15c37"
+    },
+    {
+      "stage_id": "phase3-common-profile",
+      "status": "PASS",
+      "fingerprint": "sha256:a94dc1f75c57cf543cede71ae746ef374fa45eac5e07f8ea6383b9de890c2c7a",
+      "tests": 2,
+      "wall_seconds": 0.817481,
+      "stderr_digest": "sha256:66d6d5541631c189298f9108330a8b4606acd4ecda4181faec2122ce0f9779ce"
+    }
+  ],
+  "test_count": 32,
+  "new_test_methods": 23,
+  "sum_stage_wall_seconds": 4.322989,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run phase3-common-profile",
+  "selected_pipeline_runs": 1,
+  "failed_or_retried_fingerprints": [],
+  "reused_exact_successes": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "broker-effective-receipt-profile": 93,
+    "broker-effective-receipt-verify": 17,
+    "phase3-common-profile": 95,
+    "pipeline-unit": 2,
+    "meaning": "Explicit rendered source, transitive imports and inert fixture-helper closure; runner/requirements/toolchain/dependency pins additionally bound."
+  },
+  "cache_key_diagnosis": {
+    "previous_successful_root": "sha256:9d2c2943d8e3c3c79f2741eb56d3fb00c8d33e2d630889a9ecba91f9271d0a05",
+    "hostname_only_new_root_not_executed": "sha256:f1e03125c039cc04015785fffc87ddd17518e16b793dd7dc3571ffdb058539a0",
+    "proof": "Replacing only current os.uname nodename with prior MacBook-Pro.local in a read-only reconstructed pre-fix contract reproduced the exact prior successful root key. No source/interpreter/OS change was required.",
+    "resolution": "Exclude volatile nodename from developer toolchain identity; new focused test checks its stability and invalidation by each other uname component. The now-affected pipeline suite ran once, not as an unchanged prerequisite.",
+    "preservation": "No cache record was deleted, rewritten, reclassified or migrated. A runner-key change alone never authorizes historical failed/interrupted retries; only this batch's three new stages and affected pipeline stage were selected."
+  },
+  "live_preparation": {
+    "status": "PREPARED_EXPECTATIONS_ONLY_NO_LIVE_EXECUTION",
+    "case_id": "ADM-02/direct-write",
+    "profile_files": 70,
+    "intent_digest": "sha256:5f5ef3eed819fdbde036308e3dcad87d4d7f961f608a3e996509e563d26bc8c2",
+    "deployment_digest": "sha256:22261e04364379ae1864bd365b2258c52922675a720512787ec43407a775dbe1",
+    "prepared_report": ".aragorn/phase3-native-admission-direct-v1-inputs.json",
+    "cas": ".aragorn/phase3-native-admission-direct-v1-cas",
+    "report_digest": "sha256:6e4fff84b9dd8478fe80f184a2b84d2540241844ff1f2f53036569c983c1e671",
+    "vm_start_command": "colima start --profile aragorn-bakeoff --activate=false --save-config=false",
+    "permission_outcome": "Automatic permission approval review did not finish before its deadline; command did not execute. No retry was made.",
+    "last_state_observed_utc": "2026-10-05 19:33:11 UTC",
+    "prior_and_final_vm_state": "STOPPED",
+    "prior_and_final_docker_context": "default",
+    "limitation": "Prepared 70-file intent cannot be relabelled as the new 73-file common measured profile. No fresh native outcome exists."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "All checks use inert synthetic unit fixtures; none are replacement acceptance samples.",
+    "Staging does not provision credentials/input CAS, wire common request/installed identity, activate services or attest deployment.",
+    "V4 validated-redemption interval is narrower than full REQUEST_ACCEPTED timing. No cross-process/time-namespace chronology proof.",
+    "No independent broker-reason causality, policy re-evaluation, physical effect/protected-sink residue, task baseline/overhead or generic collector semantics.",
+    "Phase 3 acceptance remains blocked by remaining admission routes, full RUN/sensor coverage, independent-verifier inventory and real workload/timing prerequisites."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Wire common 73-file measurement credential/input-CAS provisioning, request handoff and installed-identity verification before one newly necessary guarded native activation. Continue remaining A1/A2/A3, RUN/sensor semantics and real measurement/verifier wiring on that same successor.",
+  "checkpoint_commit": "Create one signed local commit for this reviewed batch; verify signature and clean tree; retain resulting hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

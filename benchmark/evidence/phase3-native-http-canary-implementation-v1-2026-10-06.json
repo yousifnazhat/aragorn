@@ -1,0 +1,97 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "c3bfd54aa1eaf9146c4e3fa2729df7f2d670eed2",
+  "branch": "codex/phase3-runtime-prevention",
+  "recorded_at_utc": "2026-10-07T03:00:04Z",
+  "user_scope": "Continue the first integration step; signed commit and push after every completed reviewed batch. Use prepared ATLAS/OWASP fabricated lab workloads and avoid redundant testing.",
+  "implementation": [
+    "Fixed HTTP canary/readiness transport to numeric 127.0.0.1:47631 only; one connect and one send, bounded response/deadline and classified detached partial observations on failures.",
+    "Held Linux fixture guard binds exact container/boot, self/init network namespaces, loopback-only interface inventory, process epochs/root identity and live init PIDFD.",
+    "Separate held raw-ingress sink records readiness and attempt interval, accepts malformed bytes as observations, bounds bytes/connections/time and retains partial evidence through interrupts and guard failures.",
+    "Pure independent replay checks exact caller-held identity, nonce/attempt bindings, readiness bytes, full window, raw records and cleanup; reports observed ingress with every prevention/qualification flag false.",
+    "One reviewed pipeline stage declares the new modules, tests and existing import dependencies; fixed gate and frozen predecessor implementations are unchanged.",
+    "Roadmap records common HTTP broker/worker/sensor/source installation and actual generic collector adaptation as next integration work."
+  ],
+  "review_findings_resolved": [
+    "Partial ingress is retained before clocks/guards can fail after accept.",
+    "Accepted and listening sockets are closed on failure; interrupted/uncertain cleanup remains incomplete and preserves primary exceptions.",
+    "Early accept timeout and exhausted connection budget cannot verify a complete observation.",
+    "Raised sends retain unknown byte counts as null, never a false zero.",
+    "Client failures after send and final fixture guard failures retain classified detached observations without exception text.",
+    "Existing collector callback incompatibility and create-only common broker are explicit next dependencies."
+  ],
+  "pipeline_stages": [
+    {
+      "stage_id": "native-http-canary-lab",
+      "status": "PASS",
+      "fingerprint": "sha256:03eb7d2c1d74ed7ecc52dfaab6cebcec8d02402bf06078737f9650858143e9c7",
+      "tests": 55,
+      "new_tests": 55,
+      "affected_historical_tests": 0,
+      "unittest_seconds": 0.044,
+      "attempts_this_batch": 1,
+      "reviewed_inputs": 12,
+      "result_digest": "sha256:56cc0c69259eb54e216c76d38aefe68d9fdadfc0c1723bac720a318bc5c00b40",
+      "stderr_digest": "sha256:b7e12de0c7de8e9ebb2f60007be43cac8e3d2cfbf22bca342cb3af2f0f0e6b7f",
+      "started_at_ns": 1791341972735174000,
+      "finished_at_ns": 1791341972992502000
+    }
+  ],
+  "reused_successful_stages": [
+    {
+      "stage_id": "pipeline-unit",
+      "status": "SKIP_PASS",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "failed_test_fingerprints_this_batch": [],
+  "validation_limits": {
+    "sockets": "Inert doubles only; no actual socket opened.",
+    "environment": "Inert proc/namespace/clock doubles only; no owned VM activated or modified.",
+    "measurements": "No live attempts, quantitative samples, overhead pairs or final acceptance.",
+    "static_review": "New files formatted and linted; source closure and diff reviewed."
+  },
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:0f43009110d5830ea4fe7743e6e7fe1ef3d8e927c07c6d043d865e6f99b5b655",
+    "benchmark/phase3-reference-workloads-v1.md": "sha256:12483b35663e923ae4654df218574a3fd70de33ac9f6ebf502aa111b9517daf3",
+    "benchmark/phase3-pipeline-v1.json": "sha256:dd7ba76212381601ba9f531fc2a865246d97cad52aee9db32710adda5db1ba40",
+    "src/aragorn/native_phase3_http_canary.py": "sha256:4249256e60654e649b8beb435815f9ad5e3ed3da14ef3aeed5372aa7f9925d43",
+    "src/aragorn/native_phase3_http_canary_contract.py": "sha256:bcdd7b92d3ddaddb4ab38ce5cabcdbd68c7f87c79a6251f81c1bb225313946c2",
+    "src/aragorn/native_phase3_http_fixture.py": "sha256:49c2d801c4e27dca73336042a76e1c47daf8532cbb4553a0c318410dcb246d64",
+    "src/aragorn/native_phase3_http_sink.py": "sha256:06e81234b1576f484cf3a9ab39a6db6d48bc6e74d249106da3628200dd4c1a5b",
+    "tests/test_native_phase3_http_canary.py": "sha256:489e9a1602ad547641e7fa8c5a9a6922da5aa373fc37a81998fcbfc0180ac985",
+    "tests/test_native_phase3_http_sink.py": "sha256:c32a656d41ea0937958341f217463da17169ef1a71b6a7fe6a1804e68695a60c"
+  },
+  "preserved_untracked_drafts": {
+    "scripts/runtime_native_admission_auto_discovery.py": "sha256:10a7371e5aa3bf44516c51d6e8a516d699394da437a8f404e16f6d0a62b4feac",
+    "src/aragorn/native_phase3_admission_auto_discovery.py": "sha256:9f0b2fdf06ac4f0d29f6f19a98a785951fc2e10d482d5408fe9026538d6cb236",
+    "tests/test_native_admission_auto_discovery.py": "sha256:1c696d5a00e54c182381d0ad7edfb0a6a3c3285b87636fd454b715d18f56b361"
+  },
+  "publication": {
+    "requested_by_user": true,
+    "remote": "origin",
+    "repository": "yousifnazhat/aragorn",
+    "visibility": "PUBLIC",
+    "branch": "codex/phase3-runtime-prevention",
+    "last_verified_remote_commit": "6c7488193717e546862f2a574c30d052ca710f12",
+    "push_performed": false,
+    "status": "BLOCKED_BY_AUTOMATIC_APPROVAL_REVIEW",
+    "reason": "Review requires explicit confirmation of publishing this commit payload and subsequent reviewed batches publicly; asynchronous confirmation requested and still pending.",
+    "bypass_or_retry_performed": false
+  },
+  "current_step": 1,
+  "remaining_steps": [
+    "Connect HTTP transport/observer to common worker, sensor, broker, installed source inventory and actual collector timing adapters; then guarded isolated integration.",
+    "Complete remaining admission routes, RUN/sensor-health coverage and action/task adapters.",
+    "Close independent verifier inventory and freeze the shared deployment.",
+    "Perform required fresh 31-case and 100-attempt/100-pair acceptance, retain cleanup and replay offline."
+  ],
+  "decision": {
+    "component_implementation_checked": true,
+    "common_http_runtime_integrated": false,
+    "live_validation_complete": false,
+    "phase3_exit_eligible": false
+  }
+}

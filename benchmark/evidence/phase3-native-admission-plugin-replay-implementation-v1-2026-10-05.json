@@ -1,0 +1,259 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "3ba0058223c47a7fcfc061575c99fb6c45f673ef",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T13:51:29.360Z",
+    "validation_recorded": "2026-10-05T16:49:31Z",
+    "meaning": "Session wall window includes implementation, delegation, review and tool waits; active engineering time was not separately instrumented."
+  },
+  "implementation": [
+    "Common successor now executes either direct-write or the unchanged tracked-marketplace plugin-update adapter, without a second deployment or modified predecessor.",
+    "Host stages and audits the exact inert 13-file plugin bundle before create, after copy and after invocation or failure; establishes caller group custody on the newly owned root before materialization.",
+    "Guest seeds the fixed plugin baseline before request publication/readback and one activation, then invokes once with held gateway identity and independent post-readbacks.",
+    "Guest retains native processes and boot identity before and after both cases, plus separate service cleanup, input unmount and metadata-only inherited restoration.",
+    "New read-only outer consumer joins original successor envelopes, caller-pinned CAS closure, preactivation request, selected live process/code/credential records, branch semantics and owned cleanup without controller imports or effects.",
+    "Plugin replay joins copied helper records to fixed source and installed readbacks, staged/mounted input identities, gateway epoch/hardening and frozen command/protected-state primitives.",
+    "Host retains original capture before replay and separately retains verification or refusal; verifies exact success and false proof flags; offline verify CLI does not write or capture."
+  ],
+  "source_digests": {
+    "scripts/capture_native_phase3_admission_case.py": "sha256:c47c4798136e680d72aee74d9b04c2f789444b34bb4c41e7744c2afd6d27342b",
+    "scripts/runtime_native_admission_case.py": "sha256:2001d05c897b92e810e82c954619c325c8579310835a0a3fc88d633deb8da509",
+    "src/aragorn/native_phase3_admission_case.py": "sha256:b89f8673fb0a483dd79bed41f73054b47d07efb321e3074d3bda0fc142455ec8",
+    "src/aragorn/native_phase3_admission_capture.py": "sha256:92c5fbcd02c4254e211faa1a696b62c873139c6fed5c9a493692b4371c500f01",
+    "tests/test_native_admission_case_host.py": "sha256:2265639e2a2ff6d3da48325218c8c049b8708754d51b703d92d5d86c9842a1bb",
+    "tests/test_runtime_native_admission_case.py": "sha256:4493cfbf950083fee179946969c7da3d96d2783632d92e8e97f9fd19f63adf11",
+    "tests/test_native_phase3_admission_capture.py": "sha256:392f43e48aa16fee5831ecac3ba86aef3cfa7e2c6c50046d7dc67dde1a8ab2a2",
+    "benchmark/phase3-pipeline-v1.json": "sha256:4416f2ccaa1d54886f335388f35d92b53aee3e29f70620cf7506f5d9b0112a6e"
+  },
+  "review_findings_resolved": [
+    "Normal verifier return could falsely promote refusal or qualification: host now requires exact bounded status, replay true and all nine qualification flags false.",
+    "Plugin copied helper records were not joined to source/installed records: consumer now requires exact frozen helper records and source projections, with targeted tamper checks.",
+    "Plugin lifecycle and staged/mounted input alias identities are explicitly recomputed; direct-write process/credential joins and live field shapes independently reviewed.",
+    "CAS.put unit fixture missed mandatory max_bytes argument; corrected only the affected host test.",
+    "First real inert host bundle audit refused inherited /private/tmp group custody under the sanitized pipeline environment. New owned input root now receives caller uid/gid before materialization; frozen auditor remains unchanged."
+  ],
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-case-guest",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-case-host (initial: new consumer passed, host failed)",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-case-host (CAS fixture fix plus audit diagnostics: host custody failure retained)",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-admission-case-host (owned input group custody fix: host passed; all six prerequisites skipped)"
+  ],
+  "registry": "benchmark/phase3-pipeline-v1.json",
+  "reviewed_input_closure": {
+    "native-admission-case": 95,
+    "native-admission-case-guest": 42,
+    "native-admission-capture": 101,
+    "native-admission-case-host": 163,
+    "meaning": "Explicit reviewed inputs include inert fixture source files and data-only helper modules; historical test methods were not selected. Runner and requirements-worker.lock also fingerprinted."
+  },
+  "pipeline_attempts": [
+    {
+      "stage_id": "native-admission-case",
+      "fingerprint": "sha256:63bceddab1f86eb25e588168435f9c4a96e5ccd9867d8cbbeffbc8ea38875872",
+      "status": "PASS",
+      "started_at_ns": 1791214074498193000,
+      "finished_at_ns": 1791214075741667000,
+      "tests": 6,
+      "wall_seconds": 1.243474
+    },
+    {
+      "stage_id": "native-admission-case-guest",
+      "fingerprint": "sha256:07d4ec4c549002444dd3a951575fd72ab7a809c199ed65e9e0e5a1a48591b7f4",
+      "status": "PASS",
+      "started_at_ns": 1791214075882423000,
+      "finished_at_ns": 1791214076104436000,
+      "tests": 14,
+      "wall_seconds": 0.222013
+    },
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:9d2c2943d8e3c3c79f2741eb56d3fb00c8d33e2d630889a9ecba91f9271d0a05",
+      "status": "PASS",
+      "started_at_ns": 1791218661815440000,
+      "finished_at_ns": 1791218663918032000,
+      "tests": 9,
+      "wall_seconds": 2.102592
+    },
+    {
+      "stage_id": "native-admission-profile",
+      "fingerprint": "sha256:808faeccf20027628c339482e5a3c9050f797196e7ef430f3f6fb63de5570d13",
+      "status": "PASS",
+      "started_at_ns": 1791218664058844000,
+      "finished_at_ns": 1791218664815024000,
+      "tests": 5,
+      "wall_seconds": 0.75618
+    },
+    {
+      "stage_id": "native-admission-direct-write",
+      "fingerprint": "sha256:8328397ccc9d7a7c5ac809e29372e1081091b02dc5dfe82bc0c05c313d1885bb",
+      "status": "PASS",
+      "started_at_ns": 1791218665927357000,
+      "finished_at_ns": 1791218666037278000,
+      "tests": 9,
+      "wall_seconds": 0.109921
+    },
+    {
+      "stage_id": "native-admission-case",
+      "fingerprint": "sha256:c0468c9b33cc1ba13ae80f94937194a108c02f90d3ac4090dc48697db0422a13",
+      "status": "PASS",
+      "started_at_ns": 1791218664958897000,
+      "finished_at_ns": 1791218665802826000,
+      "tests": 6,
+      "wall_seconds": 0.843929
+    },
+    {
+      "stage_id": "native-admission-case-guest",
+      "fingerprint": "sha256:ec5571b9aa5ca76ccc165bc933b39c478fb0db68718ca0c0e5e5a340d4a9afe8",
+      "status": "PASS",
+      "started_at_ns": 1791218666187544000,
+      "finished_at_ns": 1791218666401311000,
+      "tests": 14,
+      "wall_seconds": 0.213767
+    },
+    {
+      "stage_id": "native-admission-capture",
+      "fingerprint": "sha256:94f7393b68335a3eb30193061902f7cd0ee30584df5bc84b3d09657fad4f2361",
+      "status": "PASS",
+      "started_at_ns": 1791218666546749000,
+      "finished_at_ns": 1791218668263497000,
+      "tests": 13,
+      "wall_seconds": 1.716748
+    },
+    {
+      "stage_id": "native-admission-case-host",
+      "fingerprint": "sha256:4a8300c9d32a039a28b2ee183e3b2eef2ac5101e30d975cc73fdf23ebac00746",
+      "status": "FAIL",
+      "started_at_ns": 1791218668425238000,
+      "finished_at_ns": 1791218669543473000,
+      "tests": 11,
+      "wall_seconds": 1.118235
+    },
+    {
+      "stage_id": "native-admission-case-host",
+      "fingerprint": "sha256:5ecd3035c9c4935ba4aea9dc39a805ac732142a7b2dd09704046cead1c0ce2ad",
+      "status": "FAIL",
+      "started_at_ns": 1791218799392094000,
+      "finished_at_ns": 1791218800529801000,
+      "tests": 11,
+      "wall_seconds": 1.137707
+    },
+    {
+      "stage_id": "native-admission-case-host",
+      "fingerprint": "sha256:95545285db56c47956c8bdad0cdd5fb883e972f79d77b95f3d3a48d14b945151",
+      "status": "PASS",
+      "started_at_ns": 1791218861626434000,
+      "finished_at_ns": 1791218862856393000,
+      "tests": 11,
+      "wall_seconds": 1.229959
+    }
+  ],
+  "latest_successful_stages": [
+    {
+      "stage_id": "native-admission-case",
+      "fingerprint": "sha256:c0468c9b33cc1ba13ae80f94937194a108c02f90d3ac4090dc48697db0422a13",
+      "status": "PASS",
+      "started_at_ns": 1791218664958897000,
+      "finished_at_ns": 1791218665802826000,
+      "tests": 6,
+      "wall_seconds": 0.843929
+    },
+    {
+      "stage_id": "native-admission-case-guest",
+      "fingerprint": "sha256:ec5571b9aa5ca76ccc165bc933b39c478fb0db68718ca0c0e5e5a340d4a9afe8",
+      "status": "PASS",
+      "started_at_ns": 1791218666187544000,
+      "finished_at_ns": 1791218666401311000,
+      "tests": 14,
+      "wall_seconds": 0.213767
+    },
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:9d2c2943d8e3c3c79f2741eb56d3fb00c8d33e2d630889a9ecba91f9271d0a05",
+      "status": "PASS",
+      "started_at_ns": 1791218661815440000,
+      "finished_at_ns": 1791218663918032000,
+      "tests": 9,
+      "wall_seconds": 2.102592
+    },
+    {
+      "stage_id": "native-admission-profile",
+      "fingerprint": "sha256:808faeccf20027628c339482e5a3c9050f797196e7ef430f3f6fb63de5570d13",
+      "status": "PASS",
+      "started_at_ns": 1791218664058844000,
+      "finished_at_ns": 1791218664815024000,
+      "tests": 5,
+      "wall_seconds": 0.75618
+    },
+    {
+      "stage_id": "native-admission-direct-write",
+      "fingerprint": "sha256:8328397ccc9d7a7c5ac809e29372e1081091b02dc5dfe82bc0c05c313d1885bb",
+      "status": "PASS",
+      "started_at_ns": 1791218665927357000,
+      "finished_at_ns": 1791218666037278000,
+      "tests": 9,
+      "wall_seconds": 0.109921
+    },
+    {
+      "stage_id": "native-admission-capture",
+      "fingerprint": "sha256:94f7393b68335a3eb30193061902f7cd0ee30584df5bc84b3d09657fad4f2361",
+      "status": "PASS",
+      "started_at_ns": 1791218666546749000,
+      "finished_at_ns": 1791218668263497000,
+      "tests": 13,
+      "wall_seconds": 1.716748
+    },
+    {
+      "stage_id": "native-admission-case-host",
+      "fingerprint": "sha256:95545285db56c47956c8bdad0cdd5fb883e972f79d77b95f3d3a48d14b945151",
+      "status": "PASS",
+      "started_at_ns": 1791218861626434000,
+      "finished_at_ns": 1791218862856393000,
+      "tests": 11,
+      "wall_seconds": 1.229959
+    }
+  ],
+  "focused_distinct_tests_passed": 44,
+  "new_test_methods": 22,
+  "other_prerequisite_distinct_tests_executed": 23,
+  "total_pass_test_method_executions": 87,
+  "sum_passed_stage_wall_seconds": 8.438583,
+  "cache_drift": {
+    "observed": true,
+    "prior_pipeline_unit_fingerprint": "sha256:1d95aeb81b5ec64368ac2ac1c8eaa6c802732a45de08d82c1fb99c34c44a7f51",
+    "current_pipeline_unit_fingerprint": "sha256:9d2c2943d8e3c3c79f2741eb56d3fb00c8d33e2d630889a9ecba91f9271d0a05",
+    "explanation": "The final selected host run found a new root pipeline fingerprint despite unchanged root-stage source paths, invalidating downstream cache keys. The existing fingerprint includes toolchain/environment and os.uname values; old immutable result records do not retain that complete contract, so the exact changed field cannot be retrospectively established. This caused additional prerequisite executions and repeated the 20 earlier successful focused methods under new fingerprints; they are not reported as reuse.",
+    "preserved": true,
+    "later_reuse": "After the first host run, all six exact successful prerequisite fingerprints were reused on both corrected host attempts; no unchanged failed fingerprint was rerun.",
+    "future_efficiency_note": "Inspect the planned pipeline status before executing another batch. If root fingerprints drift without source changes, diagnose environment/toolchain stability before launching dependency checks; do not forge prior fingerprints or delete evidence."
+  },
+  "failed_stage_fingerprints": [
+    "sha256:4a8300c9d32a039a28b2ee183e3b2eef2ac5101e30d975cc73fdf23ebac00746",
+    "sha256:5ecd3035c9c4935ba4aea9dc39a805ac732142a7b2dd09704046cead1c0ce2ad"
+  ],
+  "unchanged_failed_fingerprint_retries": 0,
+  "live_captures": 0,
+  "vm_actions": [],
+  "performance_measurements": 0,
+  "broad_regression_runs": 0,
+  "newly_closed_exit_gate_entries": 0,
+  "independent_capture_replay_implementation_complete": true,
+  "independent_capture_replay_complete": false,
+  "plugin_update_successor_execution_connected": true,
+  "phase3_complete": false,
+  "automatic_push_performed": false,
+  "proof_limits": [
+    "Offline controller and consumer tests are implementation checks, never fresh native observations or acceptance samples.",
+    "Positive public consumer tests isolate outer/live/branch readers while exercising real retained input/request closure; separate real pure plugin/file primitives are checked with explicitly inert data. No full fresh successor capture has yet passed this consumer.",
+    "Guest-local request readback is not host acknowledgment, source execution attestation, signature verification or independent preactivation timing.",
+    "Selected protected-boundary and SQLite physical custody joins do not prove all side effects, logical whole-database equality or housekeeping causation.",
+    "The dispatcher does not retain its initial general protected-effects snapshot; the consumer therefore does not independently assert all-effects before/after equality.",
+    "Inherited input restoration compares metadata and inventory, not content hashes.",
+    "Two cases share the successor; this is not the full final 31-case inventory, RUN/sensor qualification or real performance coverage."
+  ],
+  "next_dependency": "Review the completed common composition for one newly necessary, serial, exact owned network-isolated disposable changed-behavior capture with prerequisite guards and verified cleanup; retain any failed attempt without effect retry. Continue remaining admission consumers/families, RUN/sensor and measured-broker timing integration on this successor.",
+  "remaining_acceptance": "Remaining A1/A2/A3 families, full verifier inventory, RUN event/response and meaningful sensor-health coverage, measured-broker effective-BLOCK and real workload/timing prerequisites remain incomplete. Final 31-case and 100-attempt/100-pair acceptance remains blocked.",
+  "signed_commit_receipt": "After the signed commit, retain verified commit hash/signature/working-tree state in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json; do not create a self-referential tracked commit hash or amend merely to insert it."
+}

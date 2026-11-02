@@ -1,0 +1,410 @@
+"""Offline crypto check of six retained public objects, not a Cosign replacement.
+
+Trust is the explicit official root-signing GitHub snapshot fetched over HTTPS;
+TUF update/rollback verification, build reproduction and runtime execution are
+not performed. No network or image operations occur in this script.
+"""
+
+import base64
+import hashlib
+import json
+import struct
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import ExtendedKeyUsageOID, ObjectIdentifier
+
+HERE = Path(__file__).resolve().parent
+INDEX = "sha256:deda51c3f88e4d26b4d76c99ea207f2b05f9e40c210e0f04a37ca632ab7bf527"
+ARM64 = "sha256:1bffeee60f1d47e367d237129e576729d14fe8db748440328aded8a6091c4a40"
+IDENTITY = "https://github.com/cilium/tetragon/.github/workflows/build-images-releases.yml@refs/tags/v1.7.0"
+ISSUER = "https://token.actions.githubusercontent.com"
+TRUST_URL = "https://raw.githubusercontent.com/sigstore/root-signing/e72a0e4310ae0e65dc44b4824b487149790c15d6/targets/trusted_root.json"
+PINS = {
+    "index": (685, INDEX),
+    "arm64": (2865, ARM64),
+    "payload": (
+        239,
+        "sha256:e69040a93af2e2b1934c926afca94f4265a760296de7ae1b7c21021ce25fed58",
+    ),
+    "signature_manifest": (
+        9788,
+        "sha256:86a0fc2a5e68091290b2f9d3c4e0f4deeb6b2f6c64fc07412fef39e00725b3c8",
+    ),
+    "trust": (
+        6787,
+        "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66",
+    ),
+    "rekor_entry": (
+        7692,
+        "sha256:646b7cab614c280db46b60974f544142005d1c77a763f210ff969a9cc449bd85",
+    ),
+}
+
+
+def require(condition, reason):
+    if not condition:
+        raise ValueError(reason)
+
+
+def b64(value):
+    return base64.b64decode(value, validate=True)
+
+
+def digest(raw):
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii")
+
+
+def check_time(validity, moment):
+    require(moment >= datetime.fromisoformat(validity["start"]), "key not yet valid")
+    if "end" in validity:
+        require(moment <= datetime.fromisoformat(validity["end"]), "key expired")
+
+
+def key_for(entries, identifier, moment):
+    selected = [
+        entry for entry in entries if b64(entry["logId"]["keyId"]) == identifier
+    ]
+    require(len(selected) == 1, "trusted log key is not unique")
+    entry = selected[0]
+    check_time(entry["publicKey"]["validFor"], moment)
+    raw = b64(entry["publicKey"]["rawBytes"])
+    require(hashlib.sha256(raw).digest() == identifier, "log public key ID mismatch")
+    key = serialization.load_der_public_key(raw)
+    require(isinstance(key, ec.EllipticCurvePublicKey), "unexpected key algorithm")
+    return key
+
+
+def run():
+    with (HERE / "public-inputs.json").open("rb") as stream:
+        envelope = stream.read(29943)
+    require(
+        len(envelope) == 29942
+        and digest(envelope)
+        == "sha256:599c6c4a36197120e1bb2a0a59ff3e36ea9b08a7e0c212ae8ec2c1794d5cf25c",
+        "fixed public envelope changed",
+    )
+    retained = json.loads(envelope)
+    raw = {name: item["raw"].encode("utf-8") for name, item in retained.items()}
+    require(set(raw) == set(PINS), "public input inventory changed")
+    for name, value in raw.items():
+        require(
+            (len(value), digest(value)) == PINS[name],
+            "fixed public input changed: " + name,
+        )
+    docs = {name: json.loads(value) for name, value in raw.items()}
+    require(digest(raw["index"]) == INDEX, "index byte digest mismatch")
+    require(digest(raw["arm64"]) == ARM64, "ARM64 byte digest mismatch")
+    selected = [item for item in docs["index"]["manifests"] if item["digest"] == ARM64]
+    require(len(selected) == 1, "ARM64 child not unique")
+    require(
+        selected[0]["platform"] == {"architecture": "arm64", "os": "linux"},
+        "platform mismatch",
+    )
+    require(selected[0]["size"] == len(raw["arm64"]) == 2865, "ARM64 size mismatch")
+    require(retained["trust"]["url"] == TRUST_URL, "trust source changed")
+    trust = docs["trust"]
+    layers = docs["signature_manifest"]["layers"]
+    require(len(layers) == 1, "signature selection changed")
+    layer = layers[0]
+    require(layer["size"] == len(raw["payload"]) == 239, "payload size mismatch")
+    require(layer["digest"] == digest(raw["payload"]), "payload digest mismatch")
+    annotations = layer["annotations"]
+    signature = b64(annotations["dev.cosignproject.cosign/signature"])
+    require(
+        docs["payload"]
+        == {
+            "critical": {
+                "identity": {"docker-reference": "quay.io/cilium/tetragon"},
+                "image": {"docker-manifest-digest": INDEX},
+                "type": "cosign container image signature",
+            },
+            "optional": None,
+        },
+        "signed image claims mismatch",
+    )
+    leaf_pem = annotations["dev.sigstore.cosign/certificate"].encode("ascii")
+    cert = x509.load_pem_x509_certificate(leaf_pem)
+    chain = x509.load_pem_x509_certificates(
+        annotations["dev.sigstore.cosign/chain"].encode("ascii")
+    )
+    require(len(chain) == 2, "certificate chain selection changed")
+    der = lambda value: value.public_bytes(serialization.Encoding.DER)
+    chains = [
+        [b64(item["rawBytes"]) for item in ca["certChain"]["certificates"]]
+        for ca in trust["certificateAuthorities"]
+    ]
+    require(
+        [der(item) for item in chain] in chains,
+        "chain is not the official trust snapshot",
+    )
+    require(
+        der(x509.load_pem_x509_certificate((HERE / "leaf.pem").read_bytes()))
+        == der(cert),
+        "OpenSSL leaf alias changed",
+    )
+    for name, item in zip(("intermediate.pem", "root.pem"), chain, strict=True):
+        require(
+            der(x509.load_pem_x509_certificate((HERE / name).read_bytes()))
+            == der(item),
+            "OpenSSL chain alias changed",
+        )
+    require(
+        cert.extensions.get_extension_for_class(
+            x509.SubjectAlternativeName
+        ).value.get_values_for_type(x509.UniformResourceIdentifier)
+        == [IDENTITY],
+        "signer SAN mismatch",
+    )
+    require(
+        cert.extensions.get_extension_for_oid(
+            ObjectIdentifier("1.3.6.1.4.1.57264.1.1")
+        ).value.value
+        == ISSUER.encode(),
+        "OIDC issuer mismatch",
+    )
+    for oid, expected in (
+        ("1.3", "1de2ed8ebea18e56257dc59597aa13bf8f0e471e"),
+        ("1.5", "cilium/tetragon"),
+        ("1.6", "refs/tags/v1.7.0"),
+    ):
+        require(
+            cert.extensions.get_extension_for_oid(
+                ObjectIdentifier("1.3.6.1.4.1.57264." + oid)
+            ).value.value
+            == expected.encode(),
+            "GitHub certificate claim mismatch",
+        )
+    require(
+        list(cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value)
+        == [ExtendedKeyUsageOID.CODE_SIGNING],
+        "certificate EKU mismatch",
+    )
+    require(
+        cert.extensions.get_extension_for_class(x509.KeyUsage).value.digital_signature,
+        "certificate key usage mismatch",
+    )
+    cert.public_key().verify(signature, raw["payload"], ec.ECDSA(hashes.SHA256()))
+
+    bundle = json.loads(annotations["dev.sigstore.cosign/bundle"])
+    claim = bundle["Payload"]
+    moment = datetime.fromtimestamp(claim["integratedTime"], timezone.utc)
+    selected_ca = [
+        ca
+        for ca in trust["certificateAuthorities"]
+        if [b64(item["rawBytes"]) for item in ca["certChain"]["certificates"]]
+        == [der(item) for item in chain]
+    ]
+    require(len(selected_ca) == 1, "certificate trust authority is not unique")
+    check_time(selected_ca[0]["validFor"], moment)
+    require(
+        cert.not_valid_before_utc <= moment <= cert.not_valid_after_utc,
+        "certificate was not valid at SET time",
+    )
+    log_id = bytes.fromhex(claim["logID"])
+    log_key = key_for(trust["tlogs"], log_id, moment)
+    log_key.verify(
+        b64(bundle["SignedEntryTimestamp"]), canonical(claim), ec.ECDSA(hashes.SHA256())
+    )
+    body = b64(claim["body"])
+    record = json.loads(body)
+    require(
+        record["kind"] == "hashedrekord" and record["apiVersion"] == "0.0.1",
+        "Rekor body type mismatch",
+    )
+    require(
+        record["spec"]["data"]["hash"]
+        == {"algorithm": "sha256", "value": digest(raw["payload"])[7:]},
+        "Rekor payload hash mismatch",
+    )
+    require(
+        b64(record["spec"]["signature"]["content"]) == signature,
+        "Rekor signature alias mismatch",
+    )
+    require(
+        der(
+            x509.load_pem_x509_certificate(
+                b64(record["spec"]["signature"]["publicKey"]["content"])
+            )
+        )
+        == der(cert),
+        "Rekor signer certificate mismatch",
+    )
+    completed = subprocess.run(
+        [
+            "/opt/homebrew/bin/openssl",
+            "verify",
+            "-x509_strict",
+            "-purpose",
+            "any",
+            "-attime",
+            str(claim["integratedTime"]),
+            "-no-CApath",
+            "-no-CAstore",
+            "-CAfile",
+            str(HERE / "root.pem"),
+            "-untrusted",
+            str(HERE / "intermediate.pem"),
+            str(HERE / "leaf.pem"),
+        ],
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+    require(completed.stderr == b"", "unexpected chain diagnostics")
+    require(
+        completed.stdout == (str(HERE / "leaf.pem") + ": OK\n").encode(),
+        "unexpected chain verification output",
+    )
+    version = subprocess.run(
+        ["/opt/homebrew/bin/openssl", "version"],
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+    require(
+        version.stderr == b"" and len(version.stdout) <= 256,
+        "unexpected OpenSSL version output",
+    )
+
+    scts = cert.extensions.get_extension_for_class(
+        x509.PrecertificateSignedCertificateTimestamps
+    ).value
+    require(len(scts) == 1, "SCT selection changed")
+    sct = scts[0]
+    sct_time = sct.timestamp.replace(tzinfo=timezone.utc)
+    require(
+        cert.not_valid_before_utc <= sct_time <= cert.not_valid_after_utc,
+        "SCT time outside certificate validity",
+    )
+    require(
+        sct.version.value == 0 and sct.entry_type.value == 1, "unsupported SCT encoding"
+    )
+    require(
+        isinstance(sct.signature_hash_algorithm, hashes.SHA256), "unsupported SCT hash"
+    )
+    issuer_spki = (
+        chain[0]
+        .public_key()
+        .public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    )
+    tbs = cert.tbs_precertificate_bytes
+    signed = (
+        struct.pack(">BBQH", 0, 0, int(sct_time.timestamp() * 1000), 1)
+        + hashlib.sha256(issuer_spki).digest()
+        + len(tbs).to_bytes(3, "big")
+        + tbs
+        + len(sct.extension_bytes).to_bytes(2, "big")
+        + sct.extension_bytes
+    )
+    key_for(trust["ctlogs"], sct.log_id, sct_time).verify(
+        sct.signature, signed, ec.ECDSA(hashes.SHA256())
+    )
+
+    require(len(docs["rekor_entry"]) == 1, "Rekor entry selection changed")
+    entry = next(iter(docs["rekor_entry"].values()))
+    require(
+        {key: entry[key] for key in claim} == claim,
+        "live retained entry differs from signed bundle",
+    )
+    proof = entry["verification"]["inclusionProof"]
+    checkpoint, signature_line = proof["checkpoint"].split("\n\n")
+    origin, tree_size, root_hash = checkpoint.splitlines()
+    require(
+        origin == "rekor.sigstore.dev - 1193050959916656506",
+        "checkpoint origin mismatch",
+    )
+    require(
+        int(tree_size) == proof["treeSize"]
+        and b64(root_hash).hex() == proof["rootHash"],
+        "checkpoint proof binding mismatch",
+    )
+    prefix, name, encoded = signature_line.rstrip("\n").split(" ")
+    note_signature = b64(encoded)
+    require(
+        prefix == "—"
+        and name == "rekor.sigstore.dev"
+        and note_signature[:4] == log_id[:4],
+        "checkpoint signer mismatch",
+    )
+    log_key.verify(
+        note_signature[4:], (checkpoint + "\n").encode(), ec.ECDSA(hashes.SHA256())
+    )
+    position, last = proof["logIndex"], proof["treeSize"] - 1
+    require(type(position) is int and 0 <= position <= last, "invalid proof position")
+    current = hashlib.sha256(b"\0" + body).digest()
+    for value in proof["hashes"]:
+        require(last > 0, "excess inclusion proof")
+        sibling = bytes.fromhex(value)
+        require(len(sibling) == 32, "invalid proof hash")
+        if position & 1 or position == last:
+            current = hashlib.sha256(b"\1" + sibling + current).digest()
+            while position and not position & 1:
+                position >>= 1
+                last >>= 1
+        else:
+            current = hashlib.sha256(b"\1" + current + sibling).digest()
+        position >>= 1
+        last >>= 1
+    require(
+        last == 0 and current.hex() == proof["rootHash"],
+        "Rekor inclusion proof mismatch",
+    )
+    return {
+        "status": "CRYPTOGRAPHIC_CHECKS_PASSED_WITH_EXPLICIT_HTTPS_TRUST_SNAPSHOT",
+        "image_index": INDEX,
+        "arm64_manifest": ARM64,
+        "signer_identity": IDENTITY,
+        "oidc_issuer": ISSUER,
+        "integrated_time": claim["integratedTime"],
+        "chain": True,
+        "payload_signature": True,
+        "rekor_set": True,
+        "sct": True,
+        "rekor_checkpoint": True,
+        "rekor_inclusion": True,
+        "rekor_indices": {
+            "signed_global_log_index": claim["logIndex"],
+            "checkpoint_shard_local_leaf_index": proof["logIndex"],
+            "global_to_shard_offset_independently_verified": False,
+            "binding": "IDENTICAL_BODY_HASH_VERIFIED_IN_SIGNED_SET_AND_CHECKPOINT_TREE",
+        },
+        "local_openssl": {
+            "tool_binary_identity_verified": False,
+            "version_argv": version.args,
+            "version_exit_code": version.returncode,
+            "version_stdout": version.stdout.decode("ascii"),
+            "version_stderr": version.stderr.decode("ascii"),
+            "verify_argv": completed.args,
+            "verify_exit_code": completed.returncode,
+            "verify_stdout": completed.stdout.decode("ascii"),
+            "verify_stderr": completed.stderr.decode("ascii"),
+        },
+        "input_pins": {
+            name: {
+                "bytes": len(value),
+                "digest": digest(value),
+                "url": retained[name]["url"],
+            }
+            for name, value in raw.items()
+        },
+        "tuf_verification": False,
+        "cosign_equivalence": False,
+        "build_reproduction": False,
+        "executed_binary_binding": False,
+        "run_or_phase3_qualification": False,
+    }
+
+
+if __name__ == "__main__":
+    print(json.dumps(run(), indent=2, sort_keys=True))

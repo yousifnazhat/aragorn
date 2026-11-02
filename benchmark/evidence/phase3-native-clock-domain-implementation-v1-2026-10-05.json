@@ -1,0 +1,105 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "390598bb94ef9ad3a5406aaa99fbdbb066be72ec",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T22:01:06.521Z",
+    "validation_recorded": "2026-10-05 22:15:55 UTC",
+    "meaning": "Parallel implementation and source review followed by focused offline checks; not live runtime or acceptance performance."
+  },
+  "implementation": [
+    "New external Linux root observer reads exactly the collector and caller-pinned worker/broker. It holds three PIDFDs and three active time-namespace descriptors, verifies process start epochs and all four UID/GID values, and checks held/named/magic-link namespace identities.",
+    "Both actual CLOCK_BOOTTIME read calls are bracketed by collector epoch, active namespace and boot/account/thread readbacks. Differing namespace identities are retained by the producer, never normalised or relabelled.",
+    "The independent consumer has no producer import. It verifies raw SHA-256 pins, canonical JSON, exact schemas, strict integer bounds, false claim ceilings, shared active namespaces, stable process identities and boot, and ordered before/after brackets.",
+    "The existing common process observer gains an additive owned-fixture wrapper. It derives worker/broker pins from actual fixed unit observations, performs one clock observation, and rechecks the entire four-role fixture before returning the unmodified clock record.",
+    "No offset translation, time_for_children substitution, latency output, event timestamp, namespace transition, service action, profile migration or final acceptance execution is added."
+  ],
+  "review_findings_resolved": [
+    "The initial observer draft sampled its first clock before acquiring collector namespace custody. Static review moved sampling after all six descriptors are held and added collector-domain readbacks after the final stamp, before the first pipeline run.",
+    "A boot ID alone does not identify a common Linux time namespace. This implementation requires exact active namespace device/inode equality instead of inferring offsets or comparing clock values.",
+    "Linux timens_offsets describes the children namespace, so offset-based evidence was excluded from both producer and strict independent consumer.",
+    "The rendered worker handles receipt-only messages before actual create dispatch and retains an inherited hard-pinned artifact contract. The roadmap records that a real ingress hook requires honest successor provisioning and may not be patched into the common profile by fabricating the predecessor artifact."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:65af5ad6b26d59ab870f294e20670c93c0c3b98c788bdca6d2f8470ce0b52cdd",
+    "benchmark/phase3-pipeline-v1.json": "sha256:93f34a0336f2b6aa173b388eab7294d4e7fd6066bf999da4f65c909d385a5bd8",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/runtime_phase3_common_process_observer.py": "sha256:e8fe4429cc0bdb3445dfb3cf84b170278df4a1001ee630ee2a4b0d56f880c377",
+    "src/aragorn/native_phase3_clock_domain.py": "sha256:600d5da48f4a5b4702245936972c796162ca01b37c74f0ac46ea6c619ed82a7b",
+    "src/aragorn/native_phase3_clock_domain_verify.py": "sha256:939d47e99874e13a375280eea6586d1537d5a09d6e1585453c1d13c49ce89361",
+    "tests/test_native_phase3_clock_domain.py": "sha256:2e39d56f757eaffff3bdb9638c99f898abd088ac55bbefff4542cf4ba4fdf002",
+    "tests/test_native_phase3_clock_domain_verify.py": "sha256:742066da6adccc03711f15c442192b2c78ea2fcbe9211f7d0f44d6490cc7e050",
+    "tests/test_runtime_phase3_common_clock_observer.py": "sha256:56c74d4dac03157e36cfc2dd9b667c14461b300666bf1c907f03836651aa5887"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-clock-domain",
+      "status": "PASS",
+      "fingerprint": "sha256:65643e83bd989e04f4ff368cbeba69fab200b6d49fa63655c3c34fea65a40c07",
+      "tests": 10,
+      "wall_seconds": 0.132211,
+      "unittest_seconds": 0.011,
+      "stderr_digest": "sha256:cbd4d52f40b8b3c6eccceca848b7ec7ab41d5f2522382043627c35da7d69a209"
+    },
+    {
+      "stage_id": "native-clock-domain-verify",
+      "status": "PASS",
+      "fingerprint": "sha256:7028bba08fb2324c61a0312e734e82b8ba83660b20f3441bab3eda6aa184953b",
+      "tests": 11,
+      "wall_seconds": 0.092009,
+      "unittest_seconds": 0.009,
+      "stderr_digest": "sha256:3955de2f1b3e5cf8b656bf41a65d83cf69f16472a32876cb9eda859270b4927b"
+    },
+    {
+      "stage_id": "native-common-clock-observer",
+      "status": "PASS",
+      "fingerprint": "sha256:1709d23f0bb37ec6afd61eb12520a78368cc5f332f0194009bef40a7bb246ee9",
+      "tests": 7,
+      "wall_seconds": 0.140702,
+      "unittest_seconds": 0.015,
+      "stderr_digest": "sha256:185631e4dce055373d4203563321e26e80a4535a2ba2c859536fd2ea053e8404"
+    }
+  ],
+  "test_count": 28,
+  "new_test_methods": 28,
+  "selected_pipeline_runs": 1,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-clock-domain native-clock-domain-verify native-common-clock-observer",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "native-clock-domain": 8,
+    "native-clock-domain-verify": 4,
+    "native-common-clock-observer": 50,
+    "meaning": "Explicit transitive local Python sources and new test modules; wrapper reuses the old inert fixture constructor without discovering historical tests. Reviewed against recursive local AST import closure. Runner, requirements, interpreter/platform and prerequisite fingerprint are separately bound. No dynamic repository data fixtures are used."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "Producer kernel/descriptor/clock operations are mocked in unit tests; no Linux readback was performed. Wrapper tests use inert unit/kernel doubles with real local descriptor lifetimes, not live systemd or PIDFD observations.",
+    "The output is external root process/namespace readback, not authenticated ingress, broker final decision, request attribution, elapsed time, causal proof, task completion or sink verification.",
+    "Both retained observations must come from the same collector process. Point-in-time read brackets do not establish continuous process/namespace immutability or hostile-root-resistant attestation.",
+    "The wrapper performs independent fixture checks but returns the producer record unchanged. Wrapper custody and installed helper source inventory still need outer controller evidence and live identity joins.",
+    "The common73 profile and frozen predecessors are unchanged. Real worker hook installation requires honest successor provisioning because the inherited preparation path independently pins the old rendered worker.",
+    "The worker ProcSubset=pid setting prevents directly reusing this external root observer as an in-process hook. The broker final-decision hook must remain free of filesystem reads.",
+    "Final31 and100-attempt/100-pair acceptance remains blocked pending runtime event/timing/workload/negative-control/sink callback integration, remaining admission and RUN/sensor semantics, and the full independent verifier inventory."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Integrate actual authenticated create-ingress and effective final-decision hooks with honest successor provisioning and installed-helper inventories. Wire both clock observations from one collector process and independent replay into the shared controller, then real source-pinned execute, verifier and identity callbacks into genuine prepared-attempt consumption. Do not consume ingress on receipt-only messages, fake a predecessor artifact, translate unobserved clock offsets or run final acceptance early.",
+  "checkpoint_commit": "Create one signed local commit for this reviewed checked batch, verify signature and clean working tree, and retain its hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

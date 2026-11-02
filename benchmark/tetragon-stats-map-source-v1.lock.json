@@ -1,0 +1,59 @@
+{
+  "schema": "aragorn/tetragon-stats-map-source-slice/v1",
+  "authority": "SELECTED_LAYOUT_BYTES_NOT_EXECUTED_SENSOR_OR_LOSS_COMPLETENESS",
+  "repository": "https://github.com/cilium/tetragon",
+  "commit": "1de2ed8ebea18e56257dc59597aa13bf8f0e471e",
+  "parent_source_lock_digest": "sha256:b7d69c22590952fbf717fb3c293c5ebff4391c7c02f1787f1e28aa185efcb9b9",
+  "files": [
+    {
+      "path": "bpf/lib/process.h",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/bpf/lib/process.h",
+      "bytes": 21361,
+      "git_blob": "365bb8cca04d9c5e3144cbfa445258a07d25de79",
+      "digest": "sha256:14ae7891e2237b990c021188d5698c81634b8a26a0e68c634dedc5d211d6770a",
+      "local_path": "benchmark/tetragon-stats-map-source-v1/bpf/lib/process.h"
+    },
+    {
+      "path": "pkg/api/processapi/processapi.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/api/processapi/processapi.go",
+      "bytes": 6883,
+      "git_blob": "4fe490b30e91affba4b03777066215b76d344c26",
+      "digest": "sha256:ead5c02dd9214333112fb3ce0ccfb5b09f0c5cf0c78d75252079acfb05597c3a",
+      "local_path": "benchmark/tetragon-stats-map-source-v1/pkg/api/processapi/processapi.go"
+    }
+  ],
+  "linux_abi_excerpts": {
+    "local_path": "benchmark/tetragon-stats-map-source-v1/linux-v6.8-abi-excerpts.json",
+    "digest": "sha256:4121e891f8de8a0337227765d9fc6b034c18ade6b95507453a5e1a638931c2b1",
+    "commit": "e8f897f4afef0031fe618a8e94127a0934896aba",
+    "full_sources_retained": false,
+    "signature_verified": false
+  },
+  "layout": {
+    "map_name": "tg_stats_map",
+    "map_type": 6,
+    "key_size": 4,
+    "value_size": 14336,
+    "max_entries": 1,
+    "opcode_count": 256,
+    "error_count": 7,
+    "error_order": [
+      "UNKNOWN",
+      "ENOENT",
+      "E2BIG",
+      "EBUSY",
+      "EINVAL",
+      "ENOSPC",
+      "EAGAIN"
+    ],
+    "per_cpu_stride": 14336,
+    "lookup_key": 0
+  },
+  "limitations": [
+    "GIT_BLOB_JOIN_IS_NOT_SIGNATURE_OR_RELEASE_IMAGE_VERIFICATION",
+    "LINUX_ABI_REFERENCE_IS_NOT_RUNNING_KERNEL_ATTESTATION",
+    "MAP_COPY_IS_SEQUENTIAL_NOT_ATOMIC_ACROSS_CPUS_OR_COUNTERS",
+    "PIN_IDENTITY_AND_SENSOR_CONTINUITY_DO_NOT_PROVE_PROGRAM_MAP_OWNERSHIP",
+    "ZERO_READBACK_IS_NOT_FULL_SENSOR_HEALTH_OR_EVENT_COVERAGE"
+  ]
+}

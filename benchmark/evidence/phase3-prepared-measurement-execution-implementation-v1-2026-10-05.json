@@ -1,0 +1,83 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "b31a9d1f8960ced7c0e18910550497e6a888a7f3",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "heartbeat": "2026-10-05T21:00:35.927Z",
+    "validation_recorded": "2026-10-05 21:14:30 UTC",
+    "meaning": "Implementation, parallel source review and focused offline checks; not live runtime or acceptance performance."
+  },
+  "implementation": [
+    "New collect_prepared_phase3_attempt consumes one attributed scheduled request against the original caller-pinned canonical preparation report, commitment and schedule. It never invokes preparation again or launches the full campaign.",
+    "Reconstruction checks exact report/commitment contracts, canonical boolean types, original chronology, seven deployment artifacts, actual imported callback source files and current collector/metrics pins. The report must already be retained by the caller.",
+    "A private commitment-keyed exclusive claim is persisted and read back before any callback, including identity_reader. All success, failure, interruption and partial claim paths preserve the claim; another attempt under the same commitment is refused.",
+    "Held directory and claim identity, source/input custody, live identity callback results and retained outputs are rechecked. Final source/input/output readbacks execute without another callback before returning.",
+    "Original preparation behavior and the full collector API are preserved. One shared sampler handles receipt and timing boundaries; verifier-owned results are canonically detached before subsequent callbacks can mutate them.",
+    "The bounded result has no metrics qualifier and all four eligibility flags are false. Local claim custody is not cross-store or hostile-owner-resistant replay protection."
+  ],
+  "review_findings_resolved": [
+    "The old full collect entry point always generates a fresh random commitment, so it cannot consume an already installed broker measurement binding. The new bounded entry point retains the exact original commitment and request digest instead.",
+    "An identity callback could change input/source custody after the initial guard. A second no-callback context check now precedes the next callback or effect.",
+    "Mutable verifier-owned dictionaries could change after validation during a later identity callback. Canonical detachment now protects both the retained verification and returned semantics.",
+    "One descriptor close failure previously could skip remaining closes. Cleanup now attempts every held descriptor and preserves the original body exception, including interruption.",
+    "A misplaced negative-test assertion block was corrected during static review before the first pipeline run. No failed test record was erased or retried."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:196cea08333f642649064b7a08c3e86fe9450a77e11a58cc99ec3db2624abf96",
+    "benchmark/phase3-pipeline-v1.json": "sha256:52538e6fb6daaf69513fcc7325b022f68a639a79c282defb6da5b4a73ae73b3e",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "src/aragorn/phase3_measurement_collector.py": "sha256:99b4ca9a0a574a1a9202de1bcbdd24032f05312ea96f03fdaee677a21a328dd4",
+    "tests/test_phase3_prepared_measurement_execution.py": "sha256:bf6edcea7aea6c7c8ca41180a7f5a995d468e500205db8560dafa14ee7b3502c"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "prepared-measurement-execution",
+      "status": "PASS",
+      "fingerprint": "sha256:ccba4174d27668cdf9487b529ba0be2a83d3ca50e01fc9750edcf35eab6051a4",
+      "tests": 14,
+      "wall_seconds": 0.972066,
+      "unittest_seconds": 0.795,
+      "stderr_digest": "sha256:854dd76de068e4c2f95c3c248206b424cbe456397b3e27977944f990091a7cb1"
+    }
+  ],
+  "test_count": 14,
+  "new_test_methods": 14,
+  "selected_pipeline_runs": 1,
+  "pipeline_command": "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run prepared-measurement-execution",
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "failed_or_retried_fingerprints": [],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "prepared-measurement-execution": 8,
+    "meaning": "Explicit transitive local Python sources, the new test module and the old inert data constructor/template module. Historical test methods are not discovered. Runner, requirements, interpreter/platform and prerequisite fingerprint are separately bound."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "limitations": [
+    "All callbacks and clock readings in the new tests are inert doubles. A single newly affected legacy compatibility method exercises 300 inert callbacks; these are not acceptance samples or replacement measurements.",
+    "The new API has no callback timeout. The concrete embedding adapter must bound execution and clean its exact owned resources; source pins do not establish trusted semantics or dependency closure.",
+    "Preparation v1 has no boot/time-namespace identity. Ordered CLOCK_BOOTTIME values do not establish same-boot or cross-process clock-domain proof. Historical broker stamps cannot substitute for live mark callbacks.",
+    "The existing native driver is an actual gateway read/create path but hardcodes ALLOW/CREATED and lacks full timing marks. It is not an exfiltration/destructive/negative-control/task-pair callback.",
+    "The effective broker receipt interval begins after lineage and issued-submission checks. Its verifier explicitly excludes generic collector semantics, full REQUEST_ACCEPTED latency, causality, residue and task completion.",
+    "The full common host/guest capture and outer replay integration remain pending. Frozen predecessors, the staged common73 profile and retained historical evidence were not edited or recaptured.",
+    "Final31 and100-attempt/100-pair acceptance remains blocked pending real runtime/timing/workload/sink/negative-control callbacks, remaining admission and RUN/sensor semantics, and the full independent verifier inventory."
+  ],
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Reuse the actual native read/create driver, authenticated worker ingress, broker final-decision hook and physical create sink consumer to implement real boundary transport and common clock-domain evidence. Then wire real pinned execute/independent-verify/identity callbacks into genuine collection preparation and the shared host/guest preactivation seam. Do not substitute admission CLI denial or a fabricated commitment/schedule; keep final acceptance blocked.",
+  "checkpoint_commit": "Create one signed local commit for this reviewed checked batch, verify signature and clean working tree, and retain its hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

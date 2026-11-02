@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/phase3-exit-gate-manifest-v1.schema.json",
+  "title": "Aragorn Phase 3 V1 exit-gate requirements manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authority",
+    "purpose",
+    "source_anchors",
+    "evaluation_model",
+    "admission",
+    "runtime_prevention",
+    "measurement_contract",
+    "numeric_exit_thresholds",
+    "decision",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/phase3-exit-gate-manifest/v1"
+    },
+    "authority": {
+      "const": "PHASE3_V1_EXIT_GATE_REQUIREMENTS_CONTRACT_ONLY_NOT_EVIDENCE_QUALIFICATION_ADMISSION_INSTALLER_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY"
+    },
+    "purpose": {
+      "const": "phase3_v1_exit_gate_requirements_contract_only"
+    },
+    "source_anchors": {
+      "const": [
+        "ARCHITECTURE.md#L399-L407",
+        "ARCHITECTURE.md#L647-L654",
+        "ARCHITECTURE.md#L694-L703",
+        "ARCHITECTURE.md#L707-L733",
+        "ARCHITECTURE.md#L1600-L1607"
+      ]
+    },
+    "evaluation_model": {
+      "type": "object",
+      "const": {
+        "mandatory_property_results": [
+          "PASS",
+          "FAIL",
+          "NOT_TESTED"
+        ],
+        "not_tested_satisfies_profile": false,
+        "mandatory_failure_eliminates_candidate": true,
+        "one_real_runtime_required": true,
+        "out_of_process_sensor_required": true,
+        "exact_runtime_binding_required": true,
+        "external_os_level_broker_or_sensor_required": true,
+        "binding_dimensions": [
+          "runtime_commit_or_image",
+          "adapter",
+          "configuration",
+          "worker",
+          "os_profile",
+          "policy",
+          "aragorn_version"
+        ],
+        "upgrades_require_requalification": true
+      }
+    },
+    "admission": {
+      "type": "object",
+      "const": {
+        "required_properties": [
+          {
+            "id": "DET-01",
+            "requirement": "IDENTICAL_CANONICAL_MANIFEST_EVIDENCE_POLICY_AND_TARGET_RUNTIME_INPUTS_PRODUCE_IDENTICAL_DECISIONS",
+            "required_result": "PASS"
+          },
+          {
+            "id": "ADM-01",
+            "requirement": "EXACT_ADMITTED_BYTES_ARE_ACTIVATED",
+            "required_result": "PASS"
+          },
+          {
+            "id": "ADM-02",
+            "requirement": "EVERY_RUNTIME_DECLARED_ACTIVATION_PATH_MUST_GATE_OR_DENY",
+            "required_result": "PASS"
+          },
+          {
+            "id": "ADM-03",
+            "requirement": "POLICY_FAILURE_OR_TAMPERING_FAILS_CLOSED",
+            "required_result": "PASS"
+          }
+        ],
+        "adm_02_required_route_count": 21,
+        "adm_02_required_result": "PASS",
+        "mandatory_activation_path_classes": [
+          "INSTALL",
+          "UPDATE",
+          "DIRECT_WRITE",
+          "RENAME",
+          "SYMLINK",
+          "AUTO_DISCOVERY",
+          "RELOAD",
+          "RESTART"
+        ],
+        "adm_02_routes": [
+          "ADM-02/update/archive-source-force-replacement",
+          "ADM-02/update/clawhub-tracked-replacement",
+          "ADM-02/update/config-entry-activation",
+          "ADM-02/update/core-updater-plugin-replacement",
+          "ADM-02/update/curator-restore-activation",
+          "ADM-02/update/plugin-enable-activation",
+          "ADM-02/update/plugin-force-reinstall",
+          "ADM-02/update/plugin-package-skill-replacement",
+          "ADM-02/update/workshop-proposal-apply",
+          "ADM-02/reload/chat-session-snapshot-consumer",
+          "ADM-02/reload/config-invalidation",
+          "ADM-02/reload/cron-rescan",
+          "ADM-02/reload/filesystem-watch-invalidation",
+          "ADM-02/reload/fresh-session-reset",
+          "ADM-02/reload/manual-plugin-invalidation",
+          "ADM-02/reload/missing-prompt-blob-rebuild",
+          "ADM-02/reload/plugin-skill-dir-activation",
+          "ADM-02/reload/remote-eligibility-invalidation",
+          "ADM-02/reload/sandbox-per-run-rescan",
+          "ADM-02/reload/session-snapshot-consumer",
+          "ADM-02/reload/workshop-invalidation"
+        ]
+      }
+    },
+    "runtime_prevention": {
+      "type": "object",
+      "const": {
+        "required_properties": [
+          {
+            "id": "RUN-01",
+            "requirement": "EVERY_PROTECTED_ACTION_ATTEMPT_HAS_DIGEST_AND_CAUSAL_ATTRIBUTION_AND_UNATTRIBUTED_ATTEMPTS_BLOCK",
+            "required_result": "PASS"
+          },
+          {
+            "id": "RUN-02",
+            "requirement": "PRE_EFFECT_BLOCKING_REVOCATION_AND_SENSOR_HEALTH_ENFORCEMENT",
+            "required_result": "PASS"
+          }
+        ],
+        "required_event_classes": [
+          "SKILL_ACTIVATION_AND_COMPLETION",
+          "TOOL_CALL_ATTEMPT_AND_RESULT",
+          "PROCESS_EXECUTION_AND_ANCESTRY",
+          "FILE_READ_WRITE_RENAME_AND_EXECUTABLE_CREATION",
+          "NETWORK_CONNECTION_AND_DNS_ATTEMPT",
+          "CREDENTIAL_OR_CANARY_ACCESS",
+          "PROMPT_CONTEXT_OR_MEMORY_MUTATION_WHERE_RUNTIME_EXPOSES_IT"
+        ],
+        "deferred_a2a_event_classes": [
+          "CHILD_AGENT_CREATION_DELEGATED_CAPABILITY_AND_MESSAGE_LINEAGE"
+        ],
+        "required_responses": [
+          "ALERT_AND_RETAIN_EVIDENCE",
+          "BLOCK_PRE_EFFECT_TOOL_OR_NETWORK_ACTION",
+          "TERMINATE_CAPABILITY_PROCESS_TREE",
+          "QUARANTINE_INSTALLED_DIGEST",
+          "REVOKE_FUTURE_STARTS_OF_DIGEST",
+          "ISOLATE_EGRESS_OR_SUSPEND_HIGH_RISK_OPERATIONS_WHEN_SENSOR_HEALTH_IS_LOST"
+        ]
+      }
+    },
+    "measurement_contract": {
+      "type": "object",
+      "const": {
+        "attempt_schedule": {
+          "attempt_count": 100,
+          "attempt_id_contract": "CALLER_HELD_SORTED_UNIQUE_CANONICAL_IDENTIFIERS",
+          "family_binding": "CALLER_HELD_EXACT_PER_ATTEMPT",
+          "required_nonzero_families": [
+            "EXFILTRATION",
+            "DESTRUCTIVE"
+          ],
+          "unattributed_negative_control_count": 1,
+          "unattributed_negative_control_behavior": "BLOCKED_PRE_EFFECT_RESIDUE_FREE"
+        },
+        "latency": {
+          "clock_id": "CLOCK_BOOTTIME",
+          "sample_count": 100,
+          "start_boundary": "REQUEST_ACCEPTED",
+          "end_boundary": "DECISION_FINALIZED",
+          "statistic": "NEAREST_RANK_P95",
+          "rank_formula": "CEIL_95_PERCENT_OF_SAMPLE_COUNT"
+        },
+        "overhead": {
+          "pair_count": 100,
+          "pair_binding_fields": [
+            "TASK_DIGEST",
+            "INPUT_DIGEST",
+            "HOST_PROFILE_DIGEST"
+          ],
+          "timing_boundary": "TASK_ACCEPTED_TO_TASK_COMPLETED",
+          "sample_status": "COMPLETED",
+          "statistic": "AGGREGATE_RATIO_OF_TOTALS",
+          "comparison_formula": "100_TIMES_INSTRUMENTED_TOTAL_STRICTLY_LESS_THAN_110_TIMES_BASELINE_TOTAL"
+        },
+        "pre_effect": {
+          "separate_family_denominators": [
+            "EXFILTRATION",
+            "DESTRUCTIVE"
+          ],
+          "required_outcome": "BLOCKED_BEFORE_PROTECTED_SINK_RESIDUE_FREE"
+        }
+      }
+    },
+    "numeric_exit_thresholds": {
+      "type": "array",
+      "const": [
+        {
+          "id": "EVENT_ATTRIBUTION_RATE",
+          "comparison": "GREATER_THAN_OR_EQUAL",
+          "value": 99,
+          "unit": "PERCENT"
+        },
+        {
+          "id": "BENCHMARK_PRE_EFFECT_BLOCK_RATE",
+          "comparison": "EQUAL",
+          "value": 100,
+          "unit": "PERCENT",
+          "scope": [
+            "EXFILTRATION_ACTIONS",
+            "DESTRUCTIVE_ACTIONS"
+          ],
+          "boundary": "BEFORE_PROTECTED_SINK"
+        },
+        {
+          "id": "P95_SYNCHRONOUS_DECISION_LATENCY",
+          "comparison": "LESS_THAN",
+          "value": 500,
+          "unit": "MILLISECONDS"
+        },
+        {
+          "id": "TASK_OVERHEAD",
+          "comparison": "LESS_THAN",
+          "value": 10,
+          "unit": "PERCENT"
+        }
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "const": {
+        "status": "CONTRACT_ONLY_NOT_EVALUATED",
+        "admission_profile_eligible": false,
+        "aggregate_admission_eligible": false,
+        "installer_work_eligible": false,
+        "run_01_eligible": false,
+        "run_02_eligible": false,
+        "run_eligible": false,
+        "phase3_exit_eligible": false,
+        "edr_eligible": false,
+        "release_eligible": false
+      }
+    },
+    "limitations": {
+      "const": [
+        "CONTRACT_DEFINITION_ONLY_NOT_EVIDENCE_OR_GATE_RESULT",
+        "NO_RUNTIME_ROUTE_EVENT_RESPONSE_OR_THRESHOLD_EVIDENCE_COMPOSED",
+        "BENCHMARK_ALL_ACTIONS_BLOCKED_REQUIREMENT_ENCODED_AS_ONE_HUNDRED_PERCENT",
+        "A2A_CHILD_AGENT_LINEAGE_DEFERRED_BEYOND_PHASE3_V1",
+        "NO_ADMISSION_INSTALLER_RUN_PHASE3_EDR_OR_RELEASE_AUTHORITY"
+      ]
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "f50dbc8b4743a945488f382eeb719d5e336a5286",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "latest_heartbeat": "2026-10-06T15:04:37.310Z",
+    "validation_recorded": "2026-10-06 17:19:33 UTC",
+    "meaning": "One parallel implementation batch with nonoverlapping new files, followed by serial new-only inert checks. Not live runtime or acceptance performance."
+  },
+  "implementation": [
+    "Fixed root launcher drops to existing broker identity and invokes one five-second bounded publisher child inside the exact owned fixture. The child reuses the broker atomic publication primitive under a verified nonblocking regular-file lock.",
+    "Publisher derives the active skill from the pinned policy's sole existing allow rule; policy, target and payload remain unchanged. One fresh 15-second revocation advances the persisted generation floor and retains canonical policy/revocation/state before and after.",
+    "Existing health and observation publication are not changed. No revocation service or response chain starts. Publication does not imply a later decision, sole-cause denial, pre-effect prevention or freshness at an arbitrary later time.",
+    "Fixed workload wrapper binds common28 installed identity, expected worker/broker/gateway epochs, held handles for all four active processes, actual action path/payload and original genesis. It holds the independent sink and requires an empty native receipt stream.",
+    "An absent-only local attempt directory/input is persisted before one publication and one bounded driver invocation. Actual returned BLOCK must contain ACTIVE_SKILL_REVOKED and the exact published digest/generation; no different target or payload is substituted.",
+    "Actual driver output readback, complete two-record receipt snapshot, sink after observation, process continuity, common identity and source checks are retained independently after failure. A partial chain is a refusal and cannot trigger an alternate-count retry.",
+    "Held preactivation handoff joins the original collection preparation and attributed schedule request to the actual seven-writer common deployment and broker measurement plan. It source-inspects the fixed real workload, independent verifier and identity reader without invoking them.",
+    "Actual claim clock and existing shared permanent claim namespace precede one broker-input provisioning operation. This context consumes the entire original commitment for one attributed attempt; it is not a 100-attempt campaign collector, resumable setup, generic mark adapter or activation authority.",
+    "Outer controller must keep the context in an outer ExitStack through activation/workload/cleanup. Failed provisioning before yield still triggers independent claim/source/request/private-input/public-output/fixture checks. Only detached public records are exposed; private grant/input blobs must not be blanket-exported."
+  ],
+  "review_findings_resolved": [
+    "Unbounded subprocess.run stdout capture was replaced before testing with a fixed capped selector drain, zero tolerated stderr, deadline and owned process-group cleanup; complete public child reports survive nonzero exit or interruption.",
+    "Publication lock is opened O_NONBLOCK and checked as a single-link regular file before acquiring the existing lock, avoiding FIFO blocking before the outer deadline.",
+    "Final handoff custody checks originally covered only a yielded context; they now cover the entire postclaim path, including provisioner and retention failures, and run independently instead of short-circuiting.",
+    "Workload final sink diagnostics now survive sink-context cleanup failure, and actual output readback is attempted after failed invocation without retry.",
+    "A post-read KeyboardInterrupt could be replaced by a later missing-output or cleanup exception. The original primary is preserved, all final reads still run, and the bounded report is attached before re-raising.",
+    "Independent cross-module review confirmed actual sink, common identity, native zero-to-two receipt and broker revocation fields match the new wrapper. Fixed source pins and predecessor environment values were read back rather than guessed."
+  ],
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:27780d051411ad56f33ad4433dbf8711a71d88c002ba5674aed643fea01e5e4a",
+    "benchmark/phase3-pipeline-v1.json": "sha256:83a052c6ece86a406d06ccb8aa72dc27dd997e58da79db2963d81ccc766475b6",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/runtime_native_blocked_create_revocation.py": "sha256:6400c4bba43cd19d150ea9a76404bccea61eacb1deaa5355069f3ad94af1904a",
+    "scripts/runtime_native_blocked_create_workload.py": "sha256:4db82e791722ad6243481598a40ffcc770a609d41ca8e76aa63bbdfcf92c9c2b",
+    "scripts/runtime_native_common_measurement_handoff.py": "sha256:b1adf288edfda538ee43d04eb5aeda8a853c9f6879d77965c350c884164b3551",
+    "tests/test_runtime_native_blocked_create_revocation.py": "sha256:e0ace880d00997febba5d84ae2ef73b4718612a327e146063de3160755588dba",
+    "tests/test_runtime_native_blocked_create_workload.py": "sha256:1911f60d5ff557a33493a0017a8b0d0708fb60bc5f335071ff0bc403b6b46384",
+    "tests/test_runtime_native_common_measurement_handoff.py": "sha256:0913cfaa698ad84203dabeb01a0eb55b5eff9cacb0e7d38b5e1545232423641d"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-blocked-create-revocation",
+      "status": "PASS",
+      "fingerprint": "sha256:d6548d482870d95f9b701cf053ba4623137dc25831143a65204a39e815356021",
+      "tests": 12,
+      "wall_seconds": 0.285169,
+      "unittest_seconds": 0.052,
+      "stderr_digest": "sha256:e9fa95612060bd0592867ff6ed59e615f10c3b7eaad4884f68462dc749358a1e",
+      "reviewed_inputs": 8
+    },
+    {
+      "stage_id": "native-blocked-create-workload",
+      "status": "PASS",
+      "fingerprint": "sha256:e14fccfe106cffc53e9c57cbb72c4efb9df6267862bc188a4f991e892ce9eada",
+      "tests": 18,
+      "wall_seconds": 0.232842,
+      "unittest_seconds": 0.022,
+      "stderr_digest": "sha256:1320ef57b33e3ea4fa15a5a88a2f54fa556a15b1dc7f8436f19076eafb2fcc58",
+      "reviewed_inputs": 22
+    },
+    {
+      "stage_id": "native-common-measurement-handoff",
+      "status": "PASS",
+      "fingerprint": "sha256:cbedf22ae956aff100d444690c860af68c23adbcb747c9994e1012d54c9ededc",
+      "tests": 14,
+      "wall_seconds": 4.928848,
+      "unittest_seconds": 4.632,
+      "stderr_digest": "sha256:c2c4f0e4aeb464ee20627066a3dd48bf1f82f682efa4d1cbae18856d964d26f6",
+      "reviewed_inputs": 124
+    }
+  ],
+  "test_count": 44,
+  "new_test_methods": 44,
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-blocked-create-revocation native-blocked-create-workload native-common-measurement-handoff"
+  ],
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "new_failed_fingerprints": [],
+  "unchanged_failed_fingerprints_rerun": false,
+  "unchanged_successful_product_stages_rerun": false,
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "ast_local_import_counts": {
+      "native-blocked-create-revocation": 8,
+      "native-blocked-create-workload": 22,
+      "native-common-measurement-handoff": 71
+    },
+    "reviewed_inputs": {
+      "native-blocked-create-revocation": 8,
+      "native-blocked-create-workload": 22,
+      "native-common-measurement-handoff": 124
+    },
+    "undeclared_local_imports": [],
+    "extra_handoff_data_closure": "Union with reviewed native-common-preparation inputs because its data constructor stages the actual common profile and reads the retained baseline capture/configuration. No historical test method is inherited, discovered or invoked.",
+    "limits": "Static AST import review and explicit data closure are local developer evidence, not complete environment/dependency or loaded-code attestation."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "frozen_predecessors_changed": false,
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Reuse the current common host/guest setup hook to build the actual original commitment/request and broker plan inside one first-activation controller. Keep the new handoff in an outer ExitStack, invoke the fixed workload once while collecting both external clock reads in one process, retain actual ingress/effective broker records, run independent consumers, export only explicit public evidence, and clean up the owned services/fixture. Setup-only captures stay non-resumable. Remaining admission, RUN/sensor health, actual campaign inventory and complete verifier mapping precede final freeze and acceptance.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and working-tree state, and retain actual hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

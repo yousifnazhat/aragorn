@@ -1,0 +1,247 @@
+{
+  "schema": "aragorn/phase3-implementation-batch/v1",
+  "date": "2026-10-07",
+  "title": "Coherent HTTP94 readiness profile, nine-writer helpers and original attempt plan",
+  "base_commit": "190f9357e1ba189623318cab949b69b67a7a88e7",
+  "authority": "REVIEWED_IMPLEMENTATION_AND_INERT_CHECKS_NOT_LIVE_QUALIFICATION",
+  "files": {
+    "scripts/materialize_native_phase3_http_attempt_plan.py": {
+      "bytes": 11954,
+      "digest": "sha256:bafd8fe6cf3cc5ea3a7e5986df6e81efb3da11b68ad9b91873fcfc6302450d9b"
+    },
+    "scripts/materialize_native_phase3_http_ready_helpers.py": {
+      "bytes": 28210,
+      "digest": "sha256:f3896783790cf19f87f7ad048f6905ad256093cd1c59853145a4171bc7acf262"
+    },
+    "scripts/stage_runtime_phase3_http_ready_profile.py": {
+      "bytes": 13146,
+      "digest": "sha256:535893d521ec08472cb56d13f19e3e4f1ebf47df1f85f88666bf0054e69b88d0"
+    },
+    "tests/test_native_phase3_http_attempt_plan.py": {
+      "bytes": 25054,
+      "digest": "sha256:6c16295f7e7867c37dab3fc3f34c4f16fbdba052399439fd44bf19331a70e99f"
+    },
+    "tests/test_native_phase3_http_ready_helpers.py": {
+      "bytes": 26092,
+      "digest": "sha256:572d0bf2ee367af310b8a4e1bd338ec71059bfc110e086bd173c01fbf2f5b995"
+    },
+    "tests/test_runtime_phase3_http_ready_profile.py": {
+      "bytes": 17053,
+      "digest": "sha256:37f5caddc26e14ced192a7269cc3390d7bbb855e04cc1835b1161ef7f06dd470"
+    },
+    "tests/test_runtime_phase3_http_ready_profile_corrections.py": {
+      "bytes": 540,
+      "digest": "sha256:8e2bad0d352d1df7f95a27a49554fd1e76e3aa3e08f3de3b382e5778d33cb594"
+    }
+  },
+  "staged_profile": {
+    "changed_files": [
+      {
+        "bytes": 4790,
+        "digest": "sha256:b802d6b797aae8f209bafdbea483384d49128b4d35cbc0de4769ab0955126dbc",
+        "mode": "0644",
+        "path": "/usr/lib/aragorn/aragorn/runtime_action_service_v5.py",
+        "source_name": "src/aragorn/runtime_action_service_v5.py"
+      },
+      {
+        "bytes": 20698,
+        "digest": "sha256:d45e313fde5021484c0e42e10f1b3336c9811a7fdf9c730e02632a368dfb5d8f",
+        "mode": "0644",
+        "path": "/usr/lib/aragorn/aragorn/runtime_broker_decision_measurement.py",
+        "source_name": "src/aragorn/runtime_broker_decision_measurement.py"
+      },
+      {
+        "bytes": 22735,
+        "digest": "sha256:a1af7656a1d3103c67a3ddbc33d5874231f2432231c07e565d29267b70a104e4",
+        "mode": "0644",
+        "path": "/usr/lib/aragorn/aragorn/runtime_broker_decision_measurement_verify.py",
+        "source_name": "src/aragorn/runtime_broker_decision_measurement_verify.py"
+      },
+      {
+        "bytes": 14096,
+        "digest": "sha256:ccc6229458f243ff87b033e07d64d06c4132c2bfd230c091777bda3dff516cab",
+        "mode": "0644",
+        "path": "/usr/lib/aragorn/aragorn/runtime_broker_measurement_plan.py",
+        "source_name": "src/aragorn/runtime_broker_measurement_plan.py"
+      },
+      {
+        "bytes": 19543,
+        "digest": "sha256:193ad90bff3d91c569c6d2b694ff040a735300f93a2a0751c14cde092219b004",
+        "mode": "0644",
+        "path": "/usr/lib/aragorn/aragorn/runtime_http_readiness.py",
+        "source_name": "src/aragorn/runtime_http_readiness.py"
+      },
+      {
+        "bytes": 3201,
+        "digest": "sha256:5b81d77f1a3bbc8beef6bddeb122c0a2ddf3dfe68da6dea4d1480c3d23ad728e",
+        "mode": "0644",
+        "path": "/usr/lib/systemd/system/aragorn-runtime-lineage-capability-action-broker.service",
+        "source_name": "packaging/systemd/aragorn-runtime-lineage-capability-action-broker.service"
+      },
+      {
+        "bytes": 52654,
+        "digest": "sha256:9954b8f807bfd0657372ae36f41acfb7036dfda1d58154007440a2d7cf7f3609",
+        "mode": "0755",
+        "path": "/usr/libexec/aragorn/activate-runtime-action-worker-host.sh",
+        "source_name": "packaging/activate-runtime-action-worker-host.sh"
+      },
+      {
+        "bytes": 16157,
+        "digest": "sha256:60a403103b92db1dcb59419d0f64d54b54b6a16c405b2cdbf0b5ac2c217c10cb",
+        "mode": "0755",
+        "path": "/usr/libexec/aragorn/activate-runtime-capability-host.sh",
+        "source_name": "packaging/activate-runtime-capability-host.sh"
+      }
+    ],
+    "counts": {
+      "directories": 21,
+      "files": 94,
+      "new_dependencies": 50,
+      "source_inputs": 122
+    },
+    "report_bytes": 67222,
+    "report_digest": "sha256:419aa0d6dffd093dbb20c1533bb79eca70ee8700c2e1741662c303f905360c0a"
+  },
+  "pipeline": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "stages": [
+      {
+        "id": "runtime-http-ready-profile",
+        "fingerprint": "sha256:ca5590304622dce2060dbccb70b3017a4e80c577f8fd56efa7c110c13929f86d",
+        "status": "FAIL",
+        "seconds": 1.432329,
+        "logs": {
+          "stderr.log": {
+            "bytes": 4908,
+            "digest": "sha256:4a8cf2da4fbcd681050b0ef5a9d5ba3131820b5d18a50ef517c1e9c4cfb5e7b3"
+          },
+          "stdout.log": {
+            "bytes": 2247,
+            "digest": "sha256:c02d997f3d71b35893639d84adaa5e651bfa40241e32709708d0dde4efe87738"
+          }
+        },
+        "checks_invoked": 15,
+        "retained_successful_methods": [
+          "test_active_units_refuse_before_readiness_credential_read",
+          "test_changed_fixture_account_binding_refuses_before_read_or_mutation",
+          "test_changed_postread_bytes_metadata_or_fixture_refuse",
+          "test_held_fixture_or_cleanup_failure_is_not_validation_success",
+          "test_prior_claim_or_result_blocks_and_never_retries",
+          "test_valid_bound_nonce_is_read_twice_under_held_fixture_without_any_write_api",
+          "test_exact_frozen_predecessor_and_finite_changed_inventory",
+          "test_existing_destdir_refuses_without_invoking_predecessor",
+          "test_fresh_inert_stage_report_binds_actual_files_and_keeps_claims_false",
+          "test_only_new_rendered_python_and_shell_syntax",
+          "test_real_broker_startup_seam_and_credential_are_only_staged",
+          "test_tampered_source_pin_refuses_before_output_mutation",
+          "test_writer_plan_and_independent_verifier_share_exact_22_sources"
+        ],
+        "failed_checks": 2
+      },
+      {
+        "id": "runtime-http-ready-profile",
+        "fingerprint": "sha256:a0576c9ad738545b642bc143ff29d66f2db034b6ba6036122ba45a98883dacfe",
+        "status": "PASS",
+        "seconds": 0.365125,
+        "logs": {
+          "stderr.log": {
+            "bytes": 508,
+            "digest": "sha256:b07b8a28ca053026b63502603a21552b4ffe6b1f4ae9c192f0db4c65093f823e"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "checks_invoked": 2,
+        "scope": "Only two corrected assertions; unchanged successes not rerun."
+      },
+      {
+        "id": "native-http-ready-helpers",
+        "fingerprint": "sha256:a30cfe1ed88ac6aa46c2d8e02264592cb9c0e46a4103b5a312cc0188a5df9b73",
+        "status": "PASS",
+        "seconds": 2.692379,
+        "logs": {
+          "stderr.log": {
+            "bytes": 3762,
+            "digest": "sha256:a39e649ac330cda0518403300b6c5f8a18eabb9504d383d81320e355ef0b2a16"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "checks_invoked": 20
+      },
+      {
+        "id": "native-http-ready-attempt-plan",
+        "fingerprint": "sha256:eed51f49971679272b4d7a8894288ca0b0fcf8e2ffd196e0cf519ce16207e048",
+        "status": "PASS",
+        "seconds": 1.80602,
+        "logs": {
+          "stderr.log": {
+            "bytes": 1873,
+            "digest": "sha256:c05c28459b8f36caa4ef8aadbc10452aa8c2c375fb81f3379048d2f188f3736a"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "checks_invoked": 9
+      }
+    ],
+    "reused": {
+      "id": "pipeline-capacity",
+      "fingerprint": "sha256:77df0de1d5abc16a3ba1769ad5a8f7514a6414279328e32a810bdec3e2acea31",
+      "status": "SKIP_PASS"
+    },
+    "distinct_valid_new_checks": 44,
+    "total_invocations": 46,
+    "old_behavioral_checks_rerun": 0,
+    "unchanged_failed_fingerprints_retried": 0,
+    "broad_regression": false,
+    "pre_execution_refusal": "Method-qualified test names were rejected by registry validation before execution; use explicit two-method wrapper module.",
+    "failed_fingerprint_retained": true
+  },
+  "implementation": [
+    "One 94-file/21-directory inert successor preserves frozen HTTP93, adds staged-only read-only readiness validation, and shares 22-source writer/planner/verifier pins.",
+    "Capability activator is rendered and pinned before worker; new dependency hashes and exact protected readiness inputs are checked before activation mutation.",
+    "Seven exact-pinned helper replacements bind nine writer inputs, 33 static paths, 43 identity paths and explicit readiness nonce to the exact ready94 report.",
+    "Ninth intent precedes absent-only credential publication. Final custody/cleanup failure cannot become successful setup or lose bounded publication evidence.",
+    "Measurement provisioner holds and rechecks readiness credential, and rejects prior readiness claim/result state without retry.",
+    "HTTP plan binds finite canary, endpoint, nonce, attributed selected EXFILTRATION attempt and nine inputs before original private preparation.",
+    "Permanent handoff retains the original no-retry claim and joins HTTP provisioner report and real HTTP function-source identities; no generic clock-mark translation."
+  ],
+  "review_corrections_before_helper_checks": [
+    "Reconcile exact staged report field names with matching preparation consumer.",
+    "Preserve nested successful-publication evidence when provisioner final custody or writer cleanup fails.",
+    "Require overall provisioning completion as well as publication completion.",
+    "Require explicit readiness_nonce in pure preparation and replay, separate from HTTP attempt ID."
+  ],
+  "environment": {
+    "vm_started": false,
+    "host_service_activated": false,
+    "live_socket_opened": false,
+    "live_capture_performed": false,
+    "measurement_collected": false,
+    "acceptance_started": false
+  },
+  "next": [
+    "Bind the ready94 runtime and generated helpers/plan into host/guest/public replay/private-retention bundles; frozen HTTP93 setup-only bundle is incompatible.",
+    "Implement bounded broker-startup sink and independent same-PID/start-time broker-listener witness.",
+    "Compose one fresh guarded setup/provisioning/activation/HTTP collection/retention/cleanup lifecycle and independently replay evidence.",
+    "Complete remaining admission, RUN/sensor-health and workload/pair adapters, independent verifier inventory, freeze, then required fresh acceptance."
+  ],
+  "limitations": [
+    "Successful inert checks do not prove installed identity, activation, broker readiness, actual timing/effects, admission, RUN or Phase3 qualification.",
+    "Thirteen individual unchanged successes are retained from a failed stage; that failed fingerprint is not presented as PASS.",
+    "HTTP93 host/guest setup bundle is frozen and not falsely relabeled ready94.",
+    "Prepared function-source pins are not execution evidence or generic collector compatibility."
+  ],
+  "activation_performed": false,
+  "measurement_collected": false,
+  "broker_restricted_readiness_verified": false,
+  "phase3_exit_eligible": false,
+  "signed_commit_receipt": "Recorded after signed commit and fast-forward push in ignored .aragorn/phase3-batch-<commit>-checkpoint.json"
+}

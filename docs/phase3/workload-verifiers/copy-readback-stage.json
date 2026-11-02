@@ -1,0 +1,24 @@
+{
+  "id": "native-workload-copy-readback",
+  "description": "Planning agreement: docs/phase3/coordinator/copy-readback-context-contract-v1.md; provider/publication/explicit release pending. Prospective 13-path closure requires actual-import review. timeout_seconds bounds tests only. No stage scheduled.",
+  "tests": [
+    "test_native_phase3_workload_copy_readback"
+  ],
+  "inputs": [
+    "src/aragorn/__init__.py",
+    "src/aragorn/native_phase3_workload_json_sum_contract.py",
+    "src/aragorn/native_phase3_workload_copy_readback.py",
+    "src/aragorn/native_phase3_workload_copy_readback_verify.py",
+    "src/aragorn/phase3_reference_tasks.py",
+    "src/aragorn/native_phase3_http_fixture.py",
+    "src/aragorn/native_phase3_http_canary_contract.py",
+    "src/aragorn/runtime_process_profile.py",
+    "src/aragorn/runtime_action_broker.py",
+    "src/aragorn/runtime_action_decision.py",
+    "src/aragorn/runtime_action_observation_publisher.py",
+    "src/aragorn/oci_worker_protocol.py",
+    "tests/test_native_phase3_workload_copy_readback.py"
+  ],
+  "needs": [],
+  "timeout_seconds": 120
+}

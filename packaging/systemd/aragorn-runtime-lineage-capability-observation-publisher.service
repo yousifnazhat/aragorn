@@ -1,7 +1,7 @@
 [Unit]
 Description=Aragorn lineage-bound capability-attributing runtime observation publisher
 After=local-fs.target nss-user-lookup.target aragorn-runtime-lineage-capability-action-broker.service
-Requires=aragorn-runtime-lineage-capability-action-broker.service
+BindsTo=aragorn-runtime-lineage-capability-action-broker.service
 Conflicts=aragorn-runtime-observation-publisher.service aragorn-runtime-profile-observation-publisher.service aragorn-runtime-capability-observation-publisher.service
 RequiresMountsFor=/var/lib/aragorn-runtime-action/control /var/lib/aragorn-runtime-action/protected /var/lib/aragorn-protected/skills
 ConditionPathExists=/etc/aragorn/runtime-action-observation.json
@@ -21,8 +21,7 @@ ExecStart=/usr/bin/python3.12 -I -S -B /usr/libexec/aragorn/aragorn-runtime-obse
 WorkingDirectory=/
 Environment=HOME=/nonexistent LANG=C LC_ALL=C PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 TZ=UTC
 UMask=0077
-Restart=on-failure
-RestartSec=1s
+Restart=no
 TimeoutStartSec=5s
 TimeoutStopSec=5s
 KillMode=control-group

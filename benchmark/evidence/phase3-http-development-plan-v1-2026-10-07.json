@@ -1,0 +1,110 @@
+{
+  "schema": "aragorn/phase3-implementation-batch/v1",
+  "date": "2026-10-07",
+  "title": "Finite benign reference tasks and honest one-HTTP development plan bindings",
+  "base_commit": "9ab76602cf12246afc7a37ec2973d326b781a798",
+  "authority": "REVIEWED_IMPLEMENTATION_AND_INERT_CHECKS_NOT_LIVE_QUALIFICATION",
+  "files": {
+    "scripts/prepare_native_phase3_http_development_plan.py": {
+      "bytes": 13772,
+      "digest": "sha256:d4ea2dc0b6f61c6fe89c0ef30cc58a138b0f9c495c4909debb8b79feb34af45c"
+    },
+    "src/aragorn/phase3_reference_tasks.py": {
+      "bytes": 9339,
+      "digest": "sha256:6cbb4c8d34bf8ac2b9be93d45ad8db4220954e7d4481a2960fcd8063ffbc3011"
+    },
+    "tests/test_native_phase3_http_development_plan.py": {
+      "bytes": 5681,
+      "digest": "sha256:26b96bcd8f84002d5a9af13637f66732e05d23c40e3a25f5aa025a81a7ce2116"
+    },
+    "tests/test_phase3_reference_tasks.py": {
+      "bytes": 7159,
+      "digest": "sha256:182a8ded01effb8e1a273792fa5d496c5e4afc080caecab0a4e638901cdc823f"
+    }
+  },
+  "pipeline": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "stages": [
+      {
+        "stage_id": "phase3-reference-tasks",
+        "fingerprint": "sha256:be8dbf6f41a76d4ac2200393c6e62c0ae5136613fd7184b1046fc9b44c92770e",
+        "status": "FAIL",
+        "logs": {
+          "stderr.log": {
+            "bytes": 1571,
+            "digest": "sha256:aec2637e19cabb6a52a0a941f289989f28ea6e3652ff9a149e44e7c7ce0c3118"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791399393651506000,
+        "finished_at_ns": 1791399393950426000
+      },
+      {
+        "stage_id": "native-http-development-plan",
+        "fingerprint": "sha256:502548f0bcdbcccfac79bab7f9b5330f50a3300ce7abad337e6ec6a652785f01",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 584,
+            "digest": "sha256:71ed380deec6a0872fea20bc4604c4dc1beec0675ab116cf62d15dc83b1e81f7"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791399394294926000,
+        "finished_at_ns": 1791399395730317000
+      },
+      {
+        "stage_id": "phase3-reference-tasks",
+        "fingerprint": "sha256:bf5003785c4cde4b46fca11070498b671cfd4f3f979a70678d0f5fa54d57bb11",
+        "status": "PASS",
+        "logs": {
+          "stderr.log": {
+            "bytes": 264,
+            "digest": "sha256:1038065e045bdbf5ee540f0ed221610982a02093b3423ebd036571ea8a2ab3dd"
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "started_at_ns": 1791399440082266000,
+        "finished_at_ns": 1791399440360710000
+      }
+    ],
+    "distinct_valid_new_checks": 3,
+    "total_invocations": 4,
+    "unchanged_failed_fingerprints_retried": 0,
+    "broad_regression": false,
+    "repair": "Test scratch directory group is explicitly current egid on macOS to model unchanged owned-fixture guard; only that task test reran.",
+    "failed_fingerprint_preserved": true
+  },
+  "implementation": [
+    "Four exact fabricated benign tasks now have real executable source, pinned decoded input bytes and bounded expected-output descriptors. Copy/readback requires an owned fixture and independently pinned private directory fd, creates only one fixed absent target, and retains output on failure.",
+    "Development builder retains signed source closure, task descriptors, actual input bytes, unchanged gate manifest and exact HTTP94 stage artifact in CAS.",
+    "Existing100attempt/100pair metadata inventory is reserved but not executed or qualified. Only p3-lab-a001 is selected; no pair execution or automatic effect retry is authorized.",
+    "A positive HTTP transport/measurement capture may produce ALLOW/SENT. This does not pass blocked-exfiltration acceptance or claim policy causality."
+  ],
+  "remaining": [
+    "Prepare source-bound setup/attempt inputs from a clean signed checkout",
+    "One guarded combined HTTP94 capture with actual same-process listener and verified cleanup/prior VM state restoration",
+    "Independent paired measurement adapters, remaining admission/RUN/sensor-health and full verifier inventory before freeze and acceptance"
+  ],
+  "observations": {
+    "vm_started": false,
+    "live_capture": false,
+    "measurement_collected": false,
+    "paired_tasks_executed": false
+  },
+  "qualification": {
+    "admission_qualified": false,
+    "run_qualified": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false
+  }
+}

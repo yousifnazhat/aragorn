@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragorn.dev/schema/runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json",
+  "title": "Aragorn bounded live two-file acquisition-to-action qualification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assurance",
+    "bindings",
+    "cases",
+    "decision",
+    "limitations",
+    "source_recorded_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "aragorn/runtime-acquisition-action-multifile-systemd-qualification/v1"
+    },
+    "assurance": {
+      "const": "SEMANTICALLY_REPLAY_VERIFIED_PINNED_LIVE_TWO_FILE_ACQUISITION_TO_ONE_COHERENT_RUNTIME_ACTION"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acquisition",
+        "implementation",
+        "parent_qualification",
+        "runtime_action",
+        "source_observation",
+        "two_file_tree"
+      ],
+      "properties": {
+        "acquisition": {
+          "const": {
+            "context_id": "sha256:158cfc07b67e99c377b0250189ff3168db99bcab30ef69baa721f8afa5294beb",
+            "manifest_digest": "sha256:4b9b51c9b809ca04f86a2f954c73d3a429865ca3f31ff83de32d92aa37631555",
+            "source_request": {
+              "commit": "f57638a74759376871509ccf080e606f62052f1b",
+              "owner": "obra",
+              "repository": "superpowers",
+              "schema": "aragorn/github-gateway-request/v1",
+              "skill_path": "skills/requesting-code-review"
+            },
+            "tree_digest": "sha256:c3e6b4db9b149d219cd714ecabd94806c41c5a4811fdac9299f339e0bfca5d34"
+          }
+        },
+        "implementation": {
+          "const": {
+            "p38b_verifier_digest": "sha256:3b8b5214bed875836012ed5cefd82f36e1a926218992b818a252883801b2f133",
+            "verifier_implementation_digest": "sha256:4b4bf4255b9a4290cb3d4c93861086ad4fac5b34b8c59e91afe30ecfd9ecbe4c"
+          }
+        },
+        "parent_qualification": {
+          "const": {
+            "observation": {
+              "bytes": 447132,
+              "canonical_digest": "sha256:598800c8f08efc8c8aaebda5ae13f310ef0bf66ff86823f58cbadecae46c87fb",
+              "path": "benchmark/evidence/runtime-acquisition-action-systemd-composition-p3-8b-2026-08-11.json",
+              "raw_digest": "sha256:a095687592ff5d5a51f9a36ef52fa9933ce5dede3c9fe54115f1b2be3180c16d"
+            },
+            "receipt": {
+              "bytes": 7738,
+              "canonical_digest": "sha256:cb2ca3426649d047b1519a465378051631d4f0c916d4f68ceacd2a0ce0bd4780",
+              "path": "benchmark/receipts/phase3-runtime-acquisition-action-systemd-qualification-v1-2026-08-11.json",
+              "raw_digest": "sha256:53f8c2093ee5556801e314f4eb7d7af8933c9eee25aa1a4bcd8a89816d8b23ea"
+            }
+          }
+        },
+        "runtime_action": {
+          "const": {
+            "consumed_state_digest": "sha256:2588cd2f0c43ad994efe1ede3e44ab27d6b553285effe8573b38d5c1e8d796fc",
+            "fresh_grant_digest": "sha256:d85345af8bfeb6fe3344d0658a8d90672e07679b975c79b24d600154676f5cf3",
+            "target_digest": "sha256:20c28aeafad659b2d49aa7b6b94980754eae950fa4338c53bb8b56772c59b24b"
+          }
+        },
+        "source_observation": {
+          "const": {
+            "authority": "BOUNDED_LIVE_COORDINATOR_TWO_FILE_ACQUISITION_TO_RUNTIME_ACTION_OBSERVATION_ONLY_NOT_VERIFIED_RUN_EDR_INSTALLER_RELEASE_AUTHORITY",
+            "bytes": 546216,
+            "canonical_digest": "sha256:c8fa91e73954b7535ab4393728be41abe1c125b6cc31af6c3b93acf4021b03e0",
+            "path": "benchmark/evidence/runtime-acquisition-action-multifile-systemd-composition-p3-8c-2026-08-11.json",
+            "raw_digest": "sha256:5238310228e0116f77e15feaf7be735b454650cbae715cc6ee3452b1b7dff891",
+            "schema": "aragorn/runtime-acquisition-action-multifile-systemd-observation/v1"
+          }
+        },
+        "two_file_tree": {
+          "const": {
+            "entries": [
+              {
+                "digest": "sha256:1c9e975642c859c407bc4bbc9c06a171bf9ff88267300def1e02f46047ca5ad9",
+                "executable": false,
+                "path": "SKILL.md",
+                "size": 2712
+              },
+              {
+                "digest": "sha256:7f5328dca12cb200005ae9d4386f63a9b0acb735ece57f82db206b4a3189ccae",
+                "executable": false,
+                "path": "code-reviewer.md",
+                "size": 3385
+              }
+            ],
+            "projected_tree_digest": "sha256:c3e6b4db9b149d219cd714ecabd94806c41c5a4811fdac9299f339e0bfca5d34",
+            "protected_tree_digest": "sha256:c3e6b4db9b149d219cd714ecabd94806c41c5a4811fdac9299f339e0bfca5d34"
+          }
+        }
+      }
+    },
+    "cases": {
+      "const": {
+        "coherent_action": {
+          "driver_status": "COMPLETED",
+          "effect_status": "CREATED",
+          "grant_state": "CONSUMED",
+          "status": "PASS",
+          "verdict": "ALLOW"
+        },
+        "live_two_file_acquisition": {
+          "file_count": 2,
+          "status": "PASS",
+          "tree_digest": "sha256:c3e6b4db9b149d219cd714ecabd94806c41c5a4811fdac9299f339e0bfca5d34"
+        },
+        "network_cutover": {
+          "disconnected_before_runtime": true,
+          "public_connect_succeeded": false,
+          "runtime_interfaces": [
+            "lo"
+          ],
+          "status": "PASS"
+        }
+      }
+    },
+    "decision": {
+      "const": {
+        "aggregate_gate_eligible": false,
+        "bounded_live_acquisition_action_evidence_eligible": true,
+        "bounded_two_file_tree_verified": true,
+        "edr_claim_eligible": false,
+        "installer_authority_eligible": false,
+        "live_same_custody_install_to_action_verified": true,
+        "network_disconnected_before_runtime_verified": true,
+        "one_coherent_allow_created_consumed_action_verified": true,
+        "parent_p3_8b_unchanged": true,
+        "phase3_exit_eligible": false,
+        "public_release_eligible": false,
+        "qualified_pair_retained_evidence_eligible": true,
+        "run_01_eligible": false,
+        "run_02_eligible": false,
+        "same_phase1_release_identity": false,
+        "semantic_skill_causation_established": false,
+        "source_observation_unchanged": true,
+        "source_observation_verified": true,
+        "status": "P3_8C_BOUNDED_TWO_FILE_PASS"
+      }
+    },
+    "limitations": {
+      "const": [
+        "ADAPTED_PYTHON_3_12_CURRENT_RELEASE_NOT_RETAINED_PHASE1_RELEASE_IDENTITY",
+        "ONE_LIVE_PUBLIC_GITHUB_COMMIT_AND_EXACTLY_TWO_FILE_FLAT_SKILL_ONLY",
+        "FLAT_TREE_ONLY_NESTED_SKILL_ASSETS_NOT_QUALIFIED",
+        "ONE_EVALUATOR_CONTROLLED_LOOPBACK_PROVIDER_ACTION_ONLY",
+        "ONE_LOCAL_PRIVILEGED_DOCKER_SYSTEMD_FIXTURE_ONLY",
+        "SYSTEMD_252_CGROUP_AND_DOCKER_DNS_ADAPTERS_ARE_FIXTURE_ONLY",
+        "NETWORK_DISCONNECTION_IS_WRAPPER_CONTROLLED_AND_PROBE_REVERIFIED",
+        "TWO_SOURCE_FILES_ARE_BOUND_TO_THE_ACTION_WITHOUT_SEMANTIC_CAUSATION_AUTHORITY",
+        "P3_7C_RUNTIME_FLOW_IS_REUSED_WITHOUT_PROMOTING_ITS_PARENT_QUALIFICATION",
+        "QUARANTINE_CAS_METADATA_AND_TWO_FILE_BYTES_RETAINED_NOT_FULL_NON_SKILL_BLOB_REPLAY",
+        "PROVIDER_AND_OPENCLAW_SESSION_RAW_BYTES_NOT_RETAINED",
+        "TRACE_PROVES_ONE_ROUTE_CONNECT_WITHOUT_RETRY_NOT_APPLICATION_SEND_COUNT",
+        "PYTHON_STDLIB_AND_DYNAMIC_VERIFIER_DEPENDENCY_CLOSURE_NOT_PINNED",
+        "NO_AGGREGATE_RUN_PHASE3_EDR_INSTALLER_OR_RELEASE_AUTHORITY"
+      ]
+    },
+    "source_recorded_at": {
+      "const": "2026-08-11T09:12:23.870632Z"
+    }
+  }
+}

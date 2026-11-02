@@ -231,25 +231,27 @@ do
 done <<'EOF'
 755 7863a4d5e03fde7791c7f8c2c304cf3522f435e19745364ad18a6b7a0458af57 /usr/local/bin/python3.12
 755 3a988781edde7f1c76751f771cf402e0866fb4a81fbcd0852a2ce2f5bd2ccd37 /usr/local/bin/node
-755 6d8925e6195b1218d7dd81452707e88b89e1b68e41d3afa1d6211981a3bb203a /usr/libexec/aragorn/activate-runtime-capability-host.sh
+755 b4ad162940d842e93ede73143f607cff4c612716334b66430d71b885f398984c /usr/libexec/aragorn/activate-runtime-capability-host.sh
 755 9dd8e3836176e3d2a6d2ab8d6a036e078dd868a188f10a74d3808b51290405fc /usr/libexec/aragorn/aragorn-runtime-action-service-v5.py
 755 dba9cf34f9103073f9583f29bf0a83ae7f3162ca511ec2d76ec250ab161167cf /usr/libexec/aragorn/aragorn-runtime-observation-service-v4.py
 755 42ab2d99c368090be83451ac9b1d99155608fdd8cb2e86a142ef22b22bd26a8a /usr/libexec/aragorn/aragorn-runtime-revocation-service.py
 755 5274f51d50293ba7559c6348fe79c5eb43753ecb09024525cfd09c368cc360f8 /usr/libexec/aragorn/aragorn-runtime-action-worker-service.py
 644 4b573d061d6b777ac928a08a368cfbea9dee0e2071b78ffe3d105f9cf1a40c01 /usr/lib/aragorn/aragorn/__init__.py
+644 56942e7c1b10c58f265615c8b7abf3f199c7f98bf016be50eb6d3a98d2bd0f8c /usr/lib/aragorn/aragorn/acquire.py
+644 c5642f910ac4b2d6172a59a02105b359cb43d3a2f2e2240368229d3436ad4859 /usr/lib/aragorn/aragorn/cas.py
 644 0af6b5fc1fa6b4a3a4b4ec6fd514c2edc475cf339cda01cf9a1b66d3a6e81c2b /usr/lib/aragorn/aragorn/oci_worker_protocol.py
 644 3b3b7beffd331280dfbc8088a1ef28f6b32affe59d0abf75305ff97fe93d459d /usr/lib/aragorn/aragorn/runtime_action_decision.py
 644 94a0da837f3c6562fc53f9c9126170c2d49b3734db21081abd133ea14deeae21 /usr/lib/aragorn/aragorn/runtime_action_broker.py
 644 288714579b5df19c5b3137caee21ede1a5c8bf69f690e3e9434bd3d646806a90 /usr/lib/aragorn/aragorn/runtime_action_observation_publisher.py
 644 e9b9fd55fc88aa0c9f5916907465ea7f0f4c01e5ec822293ef0ec8e9d32e4e3e /usr/lib/aragorn/aragorn/runtime_action_service.py
 644 ef738d4de1485917906f7fa95353650f007c6f4cdf4d401906abb737ef38e319 /usr/lib/aragorn/aragorn/runtime_observation_service.py
-644 5e321d90b1684e7cfe6dd4a9c02228e8018f330f54fe60e5c602e45939f453d3 /usr/lib/aragorn/aragorn/runtime_process_profile.py
+644 a6cbac4f3eeab0f6b1853a3f77e42a54f53cd711deeb0e5490ab506d70e58f68 /usr/lib/aragorn/aragorn/runtime_process_profile.py
 644 a77d7c5cc2b607b9234f6758283bdff74c73586651e6aa7d5a9e3c3ab48b14e3 /usr/lib/aragorn/aragorn/runtime_action_broker_v2.py
 644 39b42a466eb248bbc5d176f9a5350a72f88afe85f98ea492bde882f7a3ba5c8e /usr/lib/aragorn/aragorn/runtime_action_observation_publisher_v2.py
 644 69100dc7729922bfc980aa10a3666051703c8d1c4d319e28f6abd3128aaf3dd6 /usr/lib/aragorn/aragorn/runtime_action_service_v2.py
 644 c2fd548f7d98e34cedba3313e4d477b5c258d127409dc0531e1bd5dc97a4ee1e /usr/lib/aragorn/aragorn/runtime_observation_service_v2.py
 644 408f0b5373139c93b13e61fcf4ea6791865841806f0a9aa8a269e095cd0d9f8d /usr/lib/aragorn/aragorn/runtime_action_broker_v3.py
-644 417314caf5ba62f7bd312a7e99930d206f8137ad90bb3f744c4957789b88febf /usr/lib/aragorn/aragorn/runtime_active_skill_lineage.py
+644 6d1663d097410838d6c9b69644ffdfb2bd7ace30091d31544f31b04a7f6776d1 /usr/lib/aragorn/aragorn/runtime_active_skill_lineage.py
 644 85c4ec36c163648e3d706e5c7c650642caee8b1f6799fd820bc12fb1486ad0ca /usr/lib/aragorn/aragorn/runtime_lineage_capability_issuer.py
 644 058aa743c6bdebffe1660120d88886d465aaaa5192171979e466ba6ce20f5681 /usr/lib/aragorn/aragorn/runtime_capability_grant.py
 644 e74dc65223f84dfe4562ad8aebdde2a6ead1fce3763c8d559c0ce44e6073cde0 /usr/lib/aragorn/aragorn/runtime_action_observation_publisher_v3.py
@@ -261,7 +263,7 @@ done <<'EOF'
 644 a3e829d2e60f26dd91cbb14967ddf2a747414ce8f125b4f207dbce7a5e1e86c7 /usr/lib/aragorn/aragorn/runtime_action_service_v5.py
 644 fff0ae55827237d9a05c93cfbae17b974e2817d258dcdf1c2cb66630eda619da /usr/lib/aragorn/aragorn/runtime_observation_service_v4.py
 644 20cac61e1e497dec177e16a564e0735e6b5d593b6965fba5a57fa9d715a4c6ca /usr/lib/aragorn/aragorn/runtime_revocation_service.py
-644 16e77024f715d1b7f2c600df16e5878e23f584753444fef998cf9b4742603d60 /usr/lib/aragorn/aragorn/runtime_action_worker.py
+644 a0aa80b0870c18ecb380ca6f7a65663e4046e92f55938b84c9e15284ba221873 /usr/lib/aragorn/aragorn/runtime_action_worker.py
 644 71dfcdc6d2f1d51472230e9cda240c25d0b316fee39434e6761bb2e7b411467b /usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/index.js
 644 d90c95c23da3de4a32b8088a69d927bf10a45ed4e116e3ccece491ee3c766036 /usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/openclaw.plugin.json
 644 0097f2e532b1a5d99e3cfc4990d4bbf83a01c10ee11d567b139bd9144a859ad2 /usr/lib/aragorn/openclaw/aragorn-runtime-action-worker/package.json
@@ -271,6 +273,12 @@ require_root_secret "$gateway_config" 4096
 require_root_secret "$gateway_environment" 8192
 require_root_secret "$worker_binding" 4096
 require_exact_directory /etc/aragorn/agent-gateway 0 0 700
+
+if [ "$(sha256sum -- "$gateway_config" | cut -d ' ' -f 1)" != \
+    b9a0942063caa917affc1f7ef309e3abcb39dcf755144506f5b1633a66d24b6e ]
+then
+    fail_activation "gateway activation configuration digest changed"
+fi
 
 if [ "$(wc -l < "$gateway_environment")" -ne 1 ]; then
     fail_activation "gateway environment must contain one canonical assignment"
@@ -405,7 +413,7 @@ print(
 PY
 )
 if [ "$runtime_identity" != \
-    "45856:45837:19:369317461:sha256:475772bbb9896a9be9b41a96f073b58eb39a4187305a83a46fad6517f86cdb2c:sha256:f643b005d6db233a0b45204e8d8e943256874ccc6897b8a6e0cf42a9b376a188" ]
+    "45860:45841:19:369443243:sha256:5d09f482ad1cb177eae168eaea074f6d2a6ec976d16042a3e1d665cc2371f154:sha256:f643b005d6db233a0b45204e8d8e943256874ccc6897b8a6e0cf42a9b376a188" ]
 then
     fail_activation "pinned OpenClaw runtime inventory changed"
 fi
@@ -475,6 +483,43 @@ require_unit_value()
     checked_expected=$3
     if [ "$(unit_property "$checked_unit" "$checked_property")" != "$checked_expected" ]; then
         fail_activation "effective $checked_property is unsafe for $checked_unit"
+    fi
+}
+
+require_unit_member()
+{
+    checked_unit=$1
+    checked_property=$2
+    checked_member=$3
+    checked_value=$(unit_property "$checked_unit" "$checked_property")
+    case " $checked_value " in
+        *" $checked_member "*)
+            ;;
+        *)
+            fail_activation "effective $checked_property is unsafe for $checked_unit"
+            ;;
+    esac
+}
+
+require_only_aragorn_service_after()
+{
+    checked_unit=$1
+    checked_expected=$2
+    checked_value=$(unit_property "$checked_unit" After)
+    checked_found=0
+    for checked_dependency in $checked_value
+    do
+        case "$checked_dependency" in
+            "$checked_expected")
+                checked_found=$((checked_found + 1))
+                ;;
+            aragorn-*.service)
+                fail_activation "effective After is unsafe for $checked_unit"
+                ;;
+        esac
+    done
+    if [ "$checked_found" -ne 1 ]; then
+        fail_activation "effective After is unsafe for $checked_unit"
     fi
 }
 
@@ -686,21 +731,29 @@ verify_gateway_listener()
 /usr/bin/systemctl daemon-reload
 require_unit_file \
     "$worker_unit" \
-    e231978207dd27b71ef43449cf603ac424f6129f64c8a03dd0851ddf32503723
+    e4ef9e3f2229d92ed9dd9ee4896646e646d7171ee585ecba5aecdd87dba5e790
 require_unit_file \
     "$gateway_unit" \
-    32dea7dfdf5ccb9914c46ea2aadfc88a491d6eadba5bdb8b4982d473af1a0ebe
+    70a0aa0a89aae8bce8b7785b26d73d844c784e85be449363cb739835500de067
 require_unit_file \
     "$broker_unit" \
-    c43a81b394e0b96b0950af94b937a79e777d7e0c815a0104f1ab45871f4afa64
+    e0273dbeb4ed40a203193a52eb6146f81ecbc6abca605fa0bfff69774676b2db
 require_unit_file \
     "$sensor_unit" \
-    d0f433abba94a4560c26cb99017f56543b432e2fc3aa74e3374ee4e04addeeaf
+    f48258b00213c2c1ff4c5c95d0f1c446f78593d1d04780719cba79bf8dd73d8a
 require_unit_file \
     aragorn-runtime-revocation-publisher.service \
     edac3cde6f441496320689edb5dd8ba202879c802dc877800cbd308be718e453
 ARAGORN_RUNTIME_ACTIVATION_LOCK_HELD=1 "$base_activator"
 /usr/bin/systemctl disable "$worker_unit" "$sensor_unit" "$broker_unit"
+for unit in "$worker_unit" "$sensor_unit" "$broker_unit"
+do
+    require_unit_value "$unit" Restart no
+done
+require_unit_value "$worker_unit" BindsTo "$sensor_unit"
+require_only_aragorn_service_after "$worker_unit" "$sensor_unit"
+require_unit_value "$sensor_unit" BindsTo "$broker_unit"
+require_only_aragorn_service_after "$sensor_unit" "$broker_unit"
 wait_socket "$broker_socket" "$broker_uid" "$sensor_gid"
 wait_socket "$sensor_socket" "$sensor_uid" "$worker_gid"
 
@@ -728,10 +781,21 @@ verify_unit \
     /org/freedesktop/systemd1/unit/aragorn_2dagent_2dgateway_2eservice
 require_unit_value "$gateway_unit" PrivateNetwork no
 require_unit_value "$gateway_unit" RestrictAddressFamilies "AF_INET AF_INET6 AF_UNIX"
+require_unit_value "$gateway_unit" KillMode control-group
 require_unit_value \
     "$gateway_unit" \
     EnvironmentFiles \
     "$gateway_environment (ignore_errors=no)"
+gateway_binds_to=$(unit_property "$gateway_unit" BindsTo)
+set -- $gateway_binds_to
+if [ "$#" -ne 3 ]; then
+    fail_activation "effective BindsTo is unsafe for $gateway_unit"
+fi
+for dependency in "$worker_unit" "$sensor_unit" "$broker_unit"
+do
+    require_unit_member "$gateway_unit" BindsTo "$dependency"
+    require_unit_member "$gateway_unit" After "$dependency"
+done
 
 /usr/bin/systemctl start "$worker_unit"
 wait_socket "$worker_socket" "$worker_uid" "$gateway_gid"

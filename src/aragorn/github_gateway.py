@@ -1294,6 +1294,10 @@ def _run_systemd_gateway_process(
     writable_root: Path,
     stdin_bytes: bytes | None,
 ) -> _ProcessResult:
+    if any("$" in argument for argument in command):
+        raise GitHubGatewayError(
+            "gateway command contains systemd environment expansion syntax"
+        )
     _require_systemd_host()
     systemd_run, run_identity = _trusted_root_executable(
         _SYSTEMD_RUN_PATH,
@@ -1372,7 +1376,6 @@ def _run_systemd_gateway_process(
             f"--uid={worker_uid}",
             f"--gid={worker_gid}",
             "--working-directory=/",
-            "--expand-environment=no",
             *(
                 f"--setenv={key}={value}"
                 for key, value in sorted(service_environment.items())

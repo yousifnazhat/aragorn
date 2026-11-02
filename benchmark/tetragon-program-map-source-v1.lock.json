@@ -1,0 +1,256 @@
+{
+  "schema": "aragorn/tetragon-program-map-source-slice/v1",
+  "authority": "SELECTED_SOURCE_CONTRACT_NOT_LIVE_PROGRAM_USE_ACTIVE_ATTACHMENT_OR_QUALIFICATION",
+  "repository": "https://github.com/cilium/tetragon",
+  "commit": "1de2ed8ebea18e56257dc59597aa13bf8f0e471e",
+  "tree_metadata_url": "https://api.github.com/repos/cilium/tetragon/git/trees/1de2ed8ebea18e56257dc59597aa13bf8f0e471e?recursive=1",
+  "parent_source_lock_digest": "sha256:b7d69c22590952fbf717fb3c293c5ebff4391c7c02f1787f1e28aa185efcb9b9",
+  "files": [
+    {
+      "path": "bpf/process/bpf_execve_event.c",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/bpf/process/bpf_execve_event.c",
+      "bytes": 11890,
+      "git_blob": "00a75923c9a8b8428b84d3916581f54eb7db2334",
+      "digest": "sha256:29bd471732b457186f926303edf8db3a4daf4cd4eb8787f06de97d89fbd6efe6",
+      "local_path": "benchmark/tetragon-program-map-source-v1/bpf/process/bpf_execve_event.c"
+    },
+    {
+      "path": "bpf/process/bpf_exit.c",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/bpf/process/bpf_exit.c",
+      "bytes": 1860,
+      "git_blob": "f1f0b06f3e145322bc98effe0c4f1502e95f9917",
+      "digest": "sha256:e9986d62d1c20ff4c3a8a45caa82f13c8e706a57bde47be0be11ca8f251313a1",
+      "local_path": "benchmark/tetragon-program-map-source-v1/bpf/process/bpf_exit.c"
+    },
+    {
+      "path": "bpf/process/bpf_exit.h",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/bpf/process/bpf_exit.h",
+      "bytes": 2200,
+      "git_blob": "9713c470722b63c3ef368004ba5302133b162906",
+      "digest": "sha256:6d9dd1094083a7a723ab337bc85b7dd3caf05fe6a80e53974e8db7411cec0115",
+      "local_path": "benchmark/tetragon-program-map-source-v1/bpf/process/bpf_exit.h"
+    },
+    {
+      "path": "pkg/config/config_linux.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/config/config_linux.go",
+      "bytes": 6061,
+      "git_blob": "f49f141bd5c039f38d81ef31c1b62d769e7023f0",
+      "digest": "sha256:99640c024322e0a3fc8dcee4644bd136016069549c228618d679a11da4eebd40",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/config/config_linux.go"
+    },
+    {
+      "path": "pkg/sensors/base/base_linux.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/base/base_linux.go",
+      "bytes": 1343,
+      "git_blob": "763ded7c4ecde39d1dfd2afa0bbe9a7f14c145a3",
+      "digest": "sha256:2cfa28c963c6da20497df998de818da5247237917ca9610722336ce0426b7c55",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/base/base_linux.go"
+    },
+    {
+      "path": "pkg/sensors/base/base.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/base/base.go",
+      "bytes": 6084,
+      "git_blob": "edd5a58f56b635a6a8a66c6932c1faee958e0e1e",
+      "digest": "sha256:755ebb5143a47c8603b5290b9b6341dc158027f7fd372feb9cfe237bf25e7dad",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/base/base.go"
+    },
+    {
+      "path": "pkg/sensors/exec/exec_linux.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/exec/exec_linux.go",
+      "bytes": 8541,
+      "git_blob": "8d5a7c995ff0b3be927a5d8034f311320ee15b7b",
+      "digest": "sha256:93219a21be18017488d5ff2fba251d2e98f54996a3725a5d75acc001688a8f94",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/exec/exec_linux.go"
+    },
+    {
+      "path": "pkg/sensors/load_linux.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/load_linux.go",
+      "bytes": 6752,
+      "git_blob": "730285f4c8bad9627387f98ce60609371e23a42b",
+      "digest": "sha256:15bcf83b95f93a0b53ccf5a694f446ef7b6e0b71cf3fc02578c63c34b8dba16a",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/load_linux.go"
+    },
+    {
+      "path": "pkg/sensors/program/loader_linux.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/program/loader_linux.go",
+      "bytes": 33516,
+      "git_blob": "7e58c5009bb78f96287f71e62a301a35620fff82",
+      "digest": "sha256:e6fe3efda576566a319d10fb2366337a22bbb09f54dbf7a876076805574e2a1b",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/program/loader_linux.go"
+    },
+    {
+      "path": "pkg/sensors/program/loader.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/program/loader.go",
+      "bytes": 3369,
+      "git_blob": "9f10502e48704a4481b2fd33d94c813d44a2f5e4",
+      "digest": "sha256:914042921e5442ff8f1f571023318f76e018941fe7e6ecd571f821a6eb5434c2",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/program/loader.go"
+    },
+    {
+      "path": "pkg/sensors/program/program.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/program/program.go",
+      "bytes": 6312,
+      "git_blob": "f1400e057d523d863d6a23d1b72d18bdd37457c7",
+      "digest": "sha256:894017dcddb3abb52645eb94e97aff4eef043e8ec42d9a8c3ab7284a13ca8f8b",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/program/program.go"
+    },
+    {
+      "path": "pkg/sensors/sensor_types_linux.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/pkg/sensors/sensor_types_linux.go",
+      "bytes": 889,
+      "git_blob": "9bb5d619a0a386c5a51330b427096e300cd766c7",
+      "digest": "sha256:f8a7370a31aa434377929534a8570f2ffeedbfe351d6709ce63af952fc3a671b",
+      "local_path": "benchmark/tetragon-program-map-source-v1/pkg/sensors/sensor_types_linux.go"
+    },
+    {
+      "path": "vendor/github.com/cilium/ebpf/link/kprobe.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/vendor/github.com/cilium/ebpf/link/kprobe.go",
+      "bytes": 12332,
+      "git_blob": "8b27677f905d4bd2f3facb7ce3367f24b92a1e5b",
+      "digest": "sha256:bc516b06be3f8f93f4d25ff1d9eb3bfbc1051f612b7add6c8af273838b328267",
+      "local_path": "benchmark/tetragon-program-map-source-v1/vendor/github.com/cilium/ebpf/link/kprobe.go"
+    },
+    {
+      "path": "vendor/github.com/cilium/ebpf/link/perf_event.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/vendor/github.com/cilium/ebpf/link/perf_event.go",
+      "bytes": 11803,
+      "git_blob": "a1455cabc4cc6a929b65afc8353ccf1950fa2277",
+      "digest": "sha256:16f665f02a69390b2ea366e5294e3c08aa8a6d367c65f9e866337fff74daba47",
+      "local_path": "benchmark/tetragon-program-map-source-v1/vendor/github.com/cilium/ebpf/link/perf_event.go"
+    },
+    {
+      "path": "vendor/github.com/cilium/ebpf/link/tracepoint.go",
+      "url": "https://raw.githubusercontent.com/cilium/tetragon/1de2ed8ebea18e56257dc59597aa13bf8f0e471e/vendor/github.com/cilium/ebpf/link/tracepoint.go",
+      "bytes": 1942,
+      "git_blob": "514961ebec9f0c5d54230f4399d2fa79d209b200",
+      "digest": "sha256:5eea825b0d10756cc329b74ffc150f29b2c86e2a68f9f0a92781bd61faa06d5a",
+      "local_path": "benchmark/tetragon-program-map-source-v1/vendor/github.com/cilium/ebpf/link/tracepoint.go"
+    }
+  ],
+  "source_selection": {
+    "bpf/process/bpf_execve_event.c": "Exec root, execve_calls tail-call chain, and MSG_OP_EXECVE event_output_metric producer.",
+    "bpf/process/bpf_exit.c": "Exact acct_process and disassociate_ctty exit attachment entrypoints.",
+    "bpf/process/bpf_exit.h": "Exit send predicates and direct MSG_OP_EXIT event_output_metric call.",
+    "pkg/config/config_linux.go": "Exec/exit object variants and runtime configuration/version selection.",
+    "pkg/sensors/base/base.go": "Base exec/exit labels, selected exit symbol, stats map and tail-call map declarations.",
+    "pkg/sensors/base/base_linux.go": "Inclusion of exec/exit programs and stats/tail-call maps in the base sensor.",
+    "pkg/sensors/exec/exec_linux.go": "Registered execve loader dispatches to LoadTracepointProgram and registers exec/exit handlers.",
+    "pkg/sensors/load_linux.go": "Map pin resolution and standard/registered loader dispatch.",
+    "pkg/sensors/program/loader.go": "Load and attachment composition; exact link pin path.",
+    "pkg/sensors/program/loader_linux.go": "Pinned map replacement, collection/program FD retention, and tracepoint/kprobe attachment calls.",
+    "pkg/sensors/program/program.go": "Program/link handles and unload/unlink lifetime ownership.",
+    "pkg/sensors/sensor_types_linux.go": "Standard kprobe and tracepoint loader selection.",
+    "vendor/github.com/cilium/ebpf/link/kprobe.go": "Kprobe attachment funnels into the perf-event attachment implementation.",
+    "vendor/github.com/cilium/ebpf/link/perf_event.go": "Actual BPF perf-link versus legacy ioctl fallback, info query, and close behavior.",
+    "vendor/github.com/cilium/ebpf/link/tracepoint.go": "Named tracepoint resolution and perf-event attachment path."
+  },
+  "linux_abi_excerpts": {
+    "local_path": "benchmark/tetragon-program-map-source-v1/linux-v6.8-program-map-excerpts.json",
+    "bytes": 36436,
+    "digest": "sha256:0e3479c4dec195c8876a0bd69590674ab4d4dd159fe2faebc4e9158575ba4029",
+    "commit": "e8f897f4afef0031fe618a8e94127a0934896aba",
+    "full_sources_retained": false,
+    "signature_verified": false
+  },
+  "existing_source_inputs": [
+    {
+      "local_path": "benchmark/tetragon-stats-map-source-v1.lock.json",
+      "digest": "sha256:24ebc77c050db856177d3880e05c08ea0a1c33a2942391fac619e06dcfe4abe8",
+      "purpose": "Existing read-only map layout, bpf syscall numbers, and arm64 generic syscall include source."
+    },
+    {
+      "local_path": "benchmark/tetragon-stats-map-source-v1/bpf/lib/process.h",
+      "bytes": 21361,
+      "git_blob": "365bb8cca04d9c5e3144cbfa445258a07d25de79",
+      "digest": "sha256:14ae7891e2237b990c021188d5698c81634b8a26a0e68c634dedc5d211d6770a",
+      "purpose": "Existing tg_stats_map definition and event_output_metric perf/ringbuf send-failure accounting; not duplicated."
+    }
+  ],
+  "selected_contract": {
+    "scope": "BOUNDED_SENSOR_HELD_PROGRAM_MAP_AND_PERF_LINK_ASSOCIATION_ONLY",
+    "pidfd_getfd": {
+      "x86_64_syscall": 438,
+      "asm_generic_syscall": 438,
+      "flags": 0,
+      "access_check": "ptrace_may_access(task, PTRACE_MODE_ATTACH_REALCREDS)",
+      "result": "CLOEXEC_DUPLICATE_OF_TARGET_FD",
+      "changes_target_fd": false,
+      "duplicate_extends_object_lifetime": true
+    },
+    "program_info": {
+      "map_ids_source": "prog->aux->used_maps",
+      "returned_count": "prog->aux->used_map_cnt",
+      "copied_count": "min(supplied_nr_map_ids, returned_nr_map_ids)",
+      "association_can_include_instruction_unused_maps": true,
+      "association_proves_instruction_use": false,
+      "association_proves_execution": false
+    },
+    "perf_link": {
+      "link_type": 7,
+      "selected_perf_types": {
+        "kprobe": 3,
+        "tracepoint": 5
+      },
+      "link_info_proves_enabled": false,
+      "link_info_proves_responsiveness": false,
+      "bpf_link_detach_supported_in_selected_linux_ops": false,
+      "release": "FINAL_REFERENCE_RELEASE_FREES_PERF_EVENT_BPF_PROGRAM",
+      "legacy_ioctl_info_supported": false
+    },
+    "base_exec": {
+      "type": "execve",
+      "loader": "LoadTracepointProgram",
+      "attach": "sched/sched_process_exec",
+      "section": "tracepoint/sys_execve",
+      "pin_name": "event_execve",
+      "tail_call_map": "execve_calls",
+      "tail_calls": {
+        "0": "execve_rate",
+        "1": "execve_send"
+      },
+      "send_function": "execve_send",
+      "send_operation": "MSG_OP_EXECVE",
+      "send_helper": "event_output_metric",
+      "root_program_only_query_covers_send_chain": false
+    },
+    "base_exit": {
+      "type": "kprobe",
+      "loader": "LoadKprobeProgram",
+      "preferred_attach": "acct_process",
+      "fallback_attach": "disassociate_ctty",
+      "pin_name": "event_exit",
+      "send_function": "event_exit_send",
+      "send_operation": "MSG_OP_EXIT",
+      "send_helper": "event_output_metric",
+      "send_requires_existing_execve_entry_and_nonzero_ktime_and_exit_heap": true
+    },
+    "required_next_evidence": "CALLER_BOUND_SENSOR_FDS_AND_EXACT_PROGRAM_MAP_LINK_READBACKS_PLUS_SEPARATE_POSITIVE_EVENT_EVIDENCE_FOR_RESPONSIVENESS",
+    "unsupported_by_initial_association_scope": [
+      "EXEC_TAIL_CALL_CLOSURE",
+      "LEGACY_PERF_EVENT_IOCTL_LINK",
+      "OTHER_LINK_TYPES",
+      "CURRENT_PERF_ENABLED_STATE",
+      "INSTRUCTION_OR_BUILD_EQUIVALENCE"
+    ]
+  },
+  "limitations": [
+    "GIT_BLOB_JOIN_IS_NOT_SIGNATURE_RELEASE_IMAGE_OR_DEPLOYED_SENSOR_VERIFICATION",
+    "LINUX_REFERENCE_ABI_IS_NOT_RUNNING_KERNEL_ATTESTATION",
+    "PROGRAM_MAP_IDS_INCLUDE_EXPLICITLY_BOUND_BUT_UNUSED_MAPS",
+    "PROGRAM_TAG_OR_SOURCE_PATH_ALONE_IS_NOT_EXECUTED_BINARY_OR_INSTRUCTION_PROOF",
+    "HELD_DUPLICATED_FDS_EXTEND_OBJECT_LIFETIMES_AND_DO_NOT_PROVE_ORIGINAL_SENSOR_STILL_HOLDS_THEM",
+    "PERF_LINK_INFO_DOES_NOT_EXPOSE_PERF_ENABLED_STATE_OR_PROVE_RESPONSIVENESS",
+    "EXEC_SEND_ACCOUNTING_REQUIRES_UNVERIFIED_TAIL_CALL_CHAIN",
+    "LEGACY_IOCTL_LINK_INFO_UNSUPPORTED",
+    "SELECTED_SEND_FAILURE_COUNTERS_DO_NOT_MEASURE_ALL_DROPS_FILTERS_OR_DELIVERY",
+    "POSITIVE_EVENT_EVIDENCE_WOULD_BE_BOUNDED_RESPONSIVENESS_NOT_COMPLETE_COVERAGE",
+    "NO_LIVE_CALLS_EXECUTED_OR_RUNTIME_OBSERVER_IMPLEMENTED_BY_THIS_SOURCE_SLICE"
+  ],
+  "sensor_program_map_use_verified": false,
+  "active_attachment_verified": false,
+  "sensor_responsiveness_verified": false,
+  "delivery_completeness_verified": false,
+  "phase3_eligible": false,
+  "run_conformance_eligible": false,
+  "production_activation_eligible": false
+}

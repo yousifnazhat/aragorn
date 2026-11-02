@@ -7,9 +7,17 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
+from jsonschema import ValidationError
+from jsonschema.validators import validator_for
+
 from aragorn.admission_routes import (
     AdmissionRouteInventoryError,
     validate_openclaw_2026_7_1_route_inventory,
+)
+from aragorn.oci_worker_protocol import canonical_json
+from aragorn.phase3_exit_gate_manifest import (
+    Phase3ExitGateManifestError,
+    load_phase3_exit_gate_manifest_bytes,
 )
 
 SCHEMA_DIRECTORY = Path(__file__).parents[1] / "schema"
@@ -76,6 +84,7 @@ EXPECTED_CONTRACTS = {
     "phase2-matrix-catalog-v3.schema.json": "aragorn/phase2-matrix-catalog/v3",
     "phase2-matrix-operator-index-v1.schema.json": "aragorn/phase2-matrix-operator-index/v1",
     "phase2-exit-gate-report-v1.schema.json": "aragorn/phase2-exit-gate-report/v1",
+    "phase3-exit-gate-manifest-v1.schema.json": "aragorn/phase3-exit-gate-manifest/v1",
     "benchmark-phase0-hidden-calibration-result-receipt-v1.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v1",
     "benchmark-phase0-hidden-calibration-result-receipt-v2.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v2",
     "benchmark-phase0-hidden-calibration-result-receipt-v3.schema.json": "aragorn/benchmark-phase0-hidden-calibration-result-receipt/v3",
@@ -173,7 +182,13 @@ EXPECTED_CONTRACTS = {
     "protected-install-context-v2.schema.json": "aragorn/protected-install-context/v2",
     "protected-install-transaction-v1.schema.json": "aragorn/protected-install-transaction/v1",
     "resolve-artifacts-result-v1.schema.json": "aragorn/resolve-artifacts-result/v1",
+    "runtime-acquisition-action-binding-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-binding-qualification/v1",
+    "runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-multifile-systemd-qualification/v1",
+    "runtime-acquisition-action-nested-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-nested-systemd-qualification/v1",
+    "runtime-acquisition-action-systemd-qualification-v1.schema.json": "aragorn/runtime-acquisition-action-systemd-qualification/v1",
+    "runtime-action-worker-activation-expiry-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-activation-expiry-systemd-qualification/v1",
     "runtime-action-worker-openclaw-systemd-qualification-v1.schema.json": "aragorn/runtime-action-worker-openclaw-systemd-qualification/v1",
+    "runtime-action-worker-sensor-loss-systemd-qualification-v2.schema.json": "aragorn/runtime-action-worker-sensor-loss-systemd-qualification/v2",
     "source-artifact-graph-v1.schema.json": "aragorn/source-artifact-graph/v1",
     "zip-archive-inventory-v1.schema.json": "aragorn/zip-archive-inventory/v1",
 }
@@ -193,6 +208,410 @@ class SchemaTests(unittest.TestCase):
                     "https://json-schema.org/draft/2020-12/schema",
                 )
                 self.assertEqual(document["properties"]["schema"]["const"], identifier)
+
+    def test_phase3_exit_gate_manifest_is_canonical_and_exact(self) -> None:
+        root = SCHEMA_DIRECTORY.parent
+        schema = json.loads(
+            (SCHEMA_DIRECTORY / "phase3-exit-gate-manifest-v1.schema.json").read_text()
+        )
+        manifest_path = root / "benchmark" / "phase3-exit-gate-manifest-v1.json"
+        manifest_raw = manifest_path.read_bytes()
+        manifest = load_phase3_exit_gate_manifest_bytes(manifest_raw)
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator_class(schema).validate(manifest)
+
+        self.assertEqual(manifest_raw, canonical_json(manifest) + b"\n")
+        self.assertEqual(
+            [item["id"] for item in manifest["admission"]["required_properties"]],
+            ["DET-01", "ADM-01", "ADM-02", "ADM-03"],
+        )
+        self.assertTrue(manifest["evaluation_model"]["one_real_runtime_required"])
+        self.assertTrue(
+            manifest["evaluation_model"]["out_of_process_sensor_required"]
+        )
+        self.assertEqual(
+            manifest["admission"]["mandatory_activation_path_classes"],
+            [
+                "INSTALL",
+                "UPDATE",
+                "DIRECT_WRITE",
+                "RENAME",
+                "SYMLINK",
+                "AUTO_DISCOVERY",
+                "RELOAD",
+                "RESTART",
+            ],
+        )
+        profile = json.loads(
+            (
+                root
+                / "benchmark"
+                / "admission"
+                / "openclaw-v2026.7.1"
+                / "protected-final-combined-profile-v3.json"
+            ).read_text()
+        )
+        route_ids = manifest["admission"]["adm_02_routes"]
+        self.assertEqual(route_ids, [route["id"] for route in profile["routes"]])
+        self.assertEqual(len(route_ids), 21)
+        self.assertEqual(len(set(route_ids)), 21)
+        self.assertEqual(
+            [
+                item["id"]
+                for item in manifest["runtime_prevention"]["required_properties"]
+            ],
+            ["RUN-01", "RUN-02"],
+        )
+        self.assertEqual(
+            (
+                len(manifest["runtime_prevention"]["required_event_classes"]),
+                len(manifest["runtime_prevention"]["required_responses"]),
+            ),
+            (7, 6),
+        )
+        self.assertEqual(
+            manifest["measurement_contract"],
+            {
+                "attempt_schedule": {
+                    "attempt_count": 100,
+                    "attempt_id_contract": (
+                        "CALLER_HELD_SORTED_UNIQUE_CANONICAL_IDENTIFIERS"
+                    ),
+                    "family_binding": "CALLER_HELD_EXACT_PER_ATTEMPT",
+                    "required_nonzero_families": ["EXFILTRATION", "DESTRUCTIVE"],
+                    "unattributed_negative_control_count": 1,
+                    "unattributed_negative_control_behavior": (
+                        "BLOCKED_PRE_EFFECT_RESIDUE_FREE"
+                    ),
+                },
+                "latency": {
+                    "clock_id": "CLOCK_BOOTTIME",
+                    "sample_count": 100,
+                    "start_boundary": "REQUEST_ACCEPTED",
+                    "end_boundary": "DECISION_FINALIZED",
+                    "statistic": "NEAREST_RANK_P95",
+                    "rank_formula": "CEIL_95_PERCENT_OF_SAMPLE_COUNT",
+                },
+                "overhead": {
+                    "pair_count": 100,
+                    "pair_binding_fields": [
+                        "TASK_DIGEST",
+                        "INPUT_DIGEST",
+                        "HOST_PROFILE_DIGEST",
+                    ],
+                    "timing_boundary": "TASK_ACCEPTED_TO_TASK_COMPLETED",
+                    "sample_status": "COMPLETED",
+                    "statistic": "AGGREGATE_RATIO_OF_TOTALS",
+                    "comparison_formula": (
+                        "100_TIMES_INSTRUMENTED_TOTAL_STRICTLY_LESS_THAN_"
+                        "110_TIMES_BASELINE_TOTAL"
+                    ),
+                },
+                "pre_effect": {
+                    "separate_family_denominators": [
+                        "EXFILTRATION",
+                        "DESTRUCTIVE",
+                    ],
+                    "required_outcome": (
+                        "BLOCKED_BEFORE_PROTECTED_SINK_RESIDUE_FREE"
+                    ),
+                },
+            },
+        )
+        self.assertEqual(
+            [
+                (item["id"], item["comparison"], item["value"], item["unit"])
+                for item in manifest["numeric_exit_thresholds"]
+            ],
+            [
+                ("EVENT_ATTRIBUTION_RATE", "GREATER_THAN_OR_EQUAL", 99, "PERCENT"),
+                ("BENCHMARK_PRE_EFFECT_BLOCK_RATE", "EQUAL", 100, "PERCENT"),
+                (
+                    "P95_SYNCHRONOUS_DECISION_LATENCY",
+                    "LESS_THAN",
+                    500,
+                    "MILLISECONDS",
+                ),
+                ("TASK_OVERHEAD", "LESS_THAN", 10, "PERCENT"),
+            ],
+        )
+        eligibility = {
+            key: value
+            for key, value in manifest["decision"].items()
+            if key.endswith("_eligible")
+        }
+        self.assertEqual(len(eligibility), 9)
+        self.assertTrue(
+            all(
+                type(value) is bool and value is False for value in eligibility.values()
+            )
+        )
+
+    def test_phase3_exit_gate_manifest_rejects_requirement_or_authority_drift(
+        self,
+    ) -> None:
+        schema = json.loads(
+            (SCHEMA_DIRECTORY / "phase3-exit-gate-manifest-v1.schema.json").read_text()
+        )
+        manifest = json.loads(
+            (
+                SCHEMA_DIRECTORY.parent
+                / "benchmark"
+                / "phase3-exit-gate-manifest-v1.json"
+            ).read_text()
+        )
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator = validator_class(schema)
+
+        mutations = []
+        changed = deepcopy(manifest)
+        changed["admission"]["adm_02_routes"].pop()
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["admission"]["adm_02_required_result"] = "NOT_TESTED"
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["admission"]["required_properties"].pop()
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["evaluation_model"]["out_of_process_sensor_required"] = False
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["runtime_prevention"]["required_event_classes"].pop()
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["runtime_prevention"]["required_responses"].pop()
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["measurement_contract"]["attempt_schedule"]["attempt_count"] = 99
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["measurement_contract"]["latency"]["clock_id"] = "CLOCK_MONOTONIC"
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["measurement_contract"]["overhead"]["pair_count"] = 99
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["measurement_contract"]["overhead"]["statistic"] = (
+            "MEAN_OF_PAIR_RATIOS"
+        )
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["numeric_exit_thresholds"][1]["value"] = 99
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["numeric_exit_thresholds"][2]["comparison"] = "LESS_THAN_OR_EQUAL"
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["decision"]["phase3_exit_eligible"] = True
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["decision"]["edr_eligible"] = 0
+        mutations.append(changed)
+        changed = deepcopy(manifest)
+        changed["unexpected"] = True
+        mutations.append(changed)
+
+        for changed in mutations:
+            with self.subTest(changed=changed), self.assertRaises(ValidationError):
+                validator.validate(changed)
+
+    def test_phase3_exit_gate_manifest_rejects_lexical_number_or_key_drift(
+        self,
+    ) -> None:
+        raw = (
+            SCHEMA_DIRECTORY.parent
+            / "benchmark"
+            / "phase3-exit-gate-manifest-v1.json"
+        ).read_bytes()
+        variants = {
+            "integral_float": raw.replace(b'"value":100', b'"value":100.0', 1),
+            "duplicate": raw.replace(
+                b'{"admission":', b'{"admission":{},"admission":', 1
+            ),
+            "noncanonical": b" " + raw,
+        }
+        for name, changed in variants.items():
+            with self.subTest(mutation=name), self.assertRaises(
+                Phase3ExitGateManifestError
+            ):
+                load_phase3_exit_gate_manifest_bytes(changed)
+
+    def test_p38b_schema_pins_the_current_verifier(self) -> None:
+        verifier = (
+            SCHEMA_DIRECTORY.parent
+            / "src"
+            / "aragorn"
+            / "runtime_acquisition_action_systemd_evidence.py"
+        )
+        schema = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "runtime-acquisition-action-systemd-qualification-v1.schema.json"
+            ).read_text()
+        )
+        self.assertEqual(
+            schema["properties"]["bindings"]["properties"]["implementation"][
+                "const"
+            ]["verifier_implementation_digest"],
+            "sha256:" + hashlib.sha256(verifier.read_bytes()).hexdigest(),
+        )
+
+    def test_p38c_schema_pins_verifier_and_exact_retained_receipt(self) -> None:
+        root = SCHEMA_DIRECTORY.parent
+        verifier = (
+            root
+            / "src"
+            / "aragorn"
+            / "runtime_acquisition_action_multifile_systemd_evidence.py"
+        )
+        schema = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "runtime-acquisition-action-multifile-systemd-qualification-v1.schema.json"
+            ).read_text()
+        )
+        receipt_path = (
+            root
+            / "benchmark"
+            / "receipts"
+            / (
+                "phase3-runtime-acquisition-action-multifile-systemd-qualification-"
+                "v1-2026-08-11.json"
+            )
+        )
+        receipt = json.loads(receipt_path.read_bytes())
+        bindings = schema["properties"]["bindings"]
+        self.assertFalse(schema["additionalProperties"])
+        self.assertFalse(bindings["additionalProperties"])
+        self.assertEqual(set(schema["required"]), set(receipt))
+        self.assertEqual(set(schema["properties"]), set(receipt))
+        self.assertEqual(set(bindings["required"]), set(receipt["bindings"]))
+        self.assertEqual(
+            receipt_path.read_bytes(), canonical_json(receipt) + b"\n"
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:" + hashlib.sha256(verifier.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:4b4bf4255b9a4290cb3d4c93861086ad4fac5b34b8c59e91afe30ecfd9ecbe4c",
+        )
+        for name, value in receipt["bindings"].items():
+            self.assertEqual(bindings["properties"][name]["const"], value)
+        for name in (
+            "assurance",
+            "cases",
+            "decision",
+            "limitations",
+            "schema",
+            "source_recorded_at",
+        ):
+            self.assertEqual(schema["properties"][name]["const"], receipt[name])
+
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator = validator_class(schema)
+        validator.validate(receipt)
+        changed = deepcopy(receipt)
+        changed["decision"]["public_release_eligible"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+        changed = deepcopy(receipt)
+        changed["unexpected"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+
+    def test_p38d_schema_pins_verifier_and_exact_retained_receipt(self) -> None:
+        root = SCHEMA_DIRECTORY.parent
+        verifier = (
+            root
+            / "src"
+            / "aragorn"
+            / "runtime_acquisition_action_nested_systemd_evidence.py"
+        )
+        schema = json.loads(
+            (
+                SCHEMA_DIRECTORY
+                / "runtime-acquisition-action-nested-systemd-qualification-v1.schema.json"
+            ).read_text()
+        )
+        receipt_path = (
+            root
+            / "benchmark"
+            / "receipts"
+            / (
+                "phase3-runtime-acquisition-action-nested-systemd-qualification-"
+                "v1-2026-08-11.json"
+            )
+        )
+        receipt_raw = receipt_path.read_bytes()
+        receipt = json.loads(receipt_raw)
+        bindings = schema["properties"]["bindings"]
+        self.assertFalse(schema["additionalProperties"])
+        self.assertFalse(bindings["additionalProperties"])
+        self.assertEqual(set(schema["required"]), set(receipt))
+        self.assertEqual(set(schema["properties"]), set(receipt))
+        self.assertEqual(set(bindings["required"]), set(receipt["bindings"]))
+        self.assertEqual(receipt_raw, canonical_json(receipt) + b"\n")
+        self.assertEqual(len(receipt_raw), 5559)
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(receipt_raw).hexdigest(),
+            "sha256:915c4e637122aa8c8ac5b767350eb1eb842ec1bd53481ae91c91d6d753276dd9",
+        )
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(canonical_json(receipt)).hexdigest(),
+            "sha256:f7661947800089290bc70da4d41af03d1b9187c6422092ed5156b7416bc3fd35",
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:" + hashlib.sha256(verifier.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            bindings["properties"]["implementation"]["const"][
+                "verifier_implementation_digest"
+            ],
+            "sha256:a16c83a1f0a262be1c296643c3fbc047ee204ab911d656046b006aa9aa5d7715",
+        )
+        for name, value in receipt["bindings"].items():
+            self.assertEqual(bindings["properties"][name]["const"], value)
+        for name in (
+            "assurance",
+            "cases",
+            "decision",
+            "limitations",
+            "schema",
+            "source_recorded_at",
+        ):
+            self.assertEqual(schema["properties"][name]["const"], receipt[name])
+
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator = validator_class(schema)
+        validator.validate(receipt)
+        changed = deepcopy(receipt)
+        changed["decision"]["public_release_eligible"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+        changed = deepcopy(receipt)
+        changed["bindings"]["depth_one_two_file_tree"]["directories"].append(
+            "deeper"
+        )
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
+        changed = deepcopy(receipt)
+        changed["unexpected"] = True
+        with self.assertRaises(ValidationError):
+            validator.validate(changed)
 
     def test_gvisor_v3_entrypoint_path_is_canonical(self) -> None:
         document = json.loads(

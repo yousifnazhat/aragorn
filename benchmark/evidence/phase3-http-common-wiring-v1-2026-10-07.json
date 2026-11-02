@@ -1,0 +1,178 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "3f7c6a4efc8cb586f6ff2cb7ae9f02f65650fa84",
+  "branch": "codex/phase3-runtime-prevention",
+  "recorded_at_utc": "2026-10-07T04:14:23.939066+00:00",
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:dda8af7a0f8e7e14a6b8e92bfea864d864e7a762ce98005de386df34372e8564",
+    "benchmark/phase3-pipeline-v1.json": "sha256:6ea27814925b9951735fced877289ee25c10d0801b762825190d82c6851a56e5",
+    "scripts/materialize_runtime_http_capability.py": "sha256:64fdf59445c7a5ff76abedc0638f97b640e06b3bc4d7c03c2bf83b032804f56e",
+    "scripts/materialize_runtime_http_collection.py": "sha256:978cdd411f1b3f883310e7a5a5eb904443d24337c5d7392ef769075c71b743d7",
+    "scripts/materialize_runtime_http_ingress.py": "sha256:a49b2200ddb7a4f902d0e536a382a2a2b438cb144a52765dba6e57b07ff5fe0a",
+    "scripts/stage_runtime_phase3_http_profile.py": "sha256:214c4dfbf7ab2f89873b4602bd359f948a3cf6e61cb6a62c02941f8f82e3d7c6",
+    "src/aragorn/native_phase3_http_collection.py": "sha256:b5f76a060d635ff15b0022aa794055a2861dc7cb6e9172ead0a548c12bd51e86",
+    "src/aragorn/native_phase3_http_collection_verify.py": "sha256:d19c8042dac3d84e3f9d0cd86442093755767d74a6e368346a7311a9af53e03a",
+    "src/aragorn/runtime_http_capability.py": "sha256:3ec5d0b7d213a0ebaf24f06c6ef94d405ba38b187ec4d1be0d1d5e1391d5391e",
+    "src/aragorn/runtime_http_ingress.py": "sha256:394b02ce5e8497d754db449d54157a58ad1df2893463e28baf4b471fcc41faea",
+    "src/aragorn/runtime_http_provisioning.py": "sha256:d02ee8fb3f535ab4c3925f26bed134cb319548c63ab7d9056fec3415bc37b6bc",
+    "tests/test_native_phase3_http_collection.py": "sha256:fbefbf0cc0197b6e18755117b013393fa94fcb41a73646de7e110669386cb235",
+    "tests/test_runtime_http_capability.py": "sha256:50538997a14dbd592564c2325e4e190bea47891cd5c1f1d248d11f817b5042a7",
+    "tests/test_runtime_http_ingress.py": "sha256:88ad23c2e6b99e65641681a5b3568dcc1e046621175b0fe2351aa3afe6b42b3d",
+    "tests/test_runtime_http_journal.py": "sha256:d11d9ad5376f454b50ed8914cabe592d24b845da8e084a2cf7d850be3860a454",
+    "tests/test_runtime_http_provisioning.py": "sha256:2cbdb96c465ec2483b98eb1a1f86994497538c6d4bcd1228770974004b0a0b7d",
+    "tests/test_runtime_phase3_http_profile.py": "sha256:01d809d1144efafe064790404a24b4906c36dedadb6a0ab88e3be0a725e1f56c"
+  },
+  "exit_manifest_digest": "sha256:aff633a6d0d482cf79e3e540b0e7b8336cf266765eaacf277c9ac23ed5279f1d",
+  "user_scope": "Connect new HTTP components to worker, sensor, capability and collector paths; signed commit and authorized public fast-forward push; no redundant testing.",
+  "implementation": [
+    "Finite HTTP tool, manifest, gateway template and worker/sensor process-attributed ingress rendered over exact frozen predecessors.",
+    "Root-issued HTTP capabilities traverse V2-V5 one-shot claiming, held lineage, HTTP-specific receipts and journal v3 SENT semantics; uncertain effects retain durable claims.",
+    "Independent native collection uses a fixed gateway driver and raw sink once; retained replay validates callback/terminal, ingress, broker/claim/result, clock and sink roles without substituting controller timestamps.",
+    "One inert 93-file successor preserves common74 predecessors, with canonical gateway bytes, absent-only credential provisioning and exact owned stopped-fixture guard before activation writes.",
+    "One matching 21-source measurement inventory spans writer/planner/verifier; only the measurement role opts into 8192-byte credentials, other roles retain4096 bytes."
+  ],
+  "staged_inventory": {
+    "predecessor_files": 74,
+    "successor_files": 93,
+    "additional_files": 19,
+    "measurement_sources": 21,
+    "activated": false
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "runtime-http-ingress-integration",
+      "status": "PASS",
+      "fingerprint": "sha256:4fbfff370eece34cf0b9ffd3f4a0b009c5044896325992bd2acbddf80331e235",
+      "tests": 29,
+      "unittest_seconds": 0.153,
+      "result_digest": "sha256:c5eac8de42bd21e5dd5594308503ef13ac5dce68ca5b72839ab5de01ca7a1b4f",
+      "stderr_digest": "sha256:6c25387d0b67a0ec99f26e3f77e56d53ce312eb291da457c02bfe966cde63833",
+      "reviewed_input_count": 104
+    },
+    {
+      "stage_id": "runtime-http-provisioning",
+      "status": "PASS",
+      "fingerprint": "sha256:4b49a942ce58f3c0f26b39605b4de2ea587e0e486d4985ad981f0cd3d2c91a33",
+      "tests": 14,
+      "unittest_seconds": 0.008,
+      "result_digest": "sha256:589b94995166bff9079093ae2903ca3d2accdbd4f50a50186eff824128d98154",
+      "stderr_digest": "sha256:2d881976917b6997502aa15fefae810c5e14ba91393cba06dbbc421470dff91d",
+      "reviewed_input_count": 11
+    },
+    {
+      "stage_id": "runtime-http-journal-integration",
+      "status": "PASS",
+      "fingerprint": "sha256:cf30478323107885cf2f9f39aeba9221b53707d26862ee1af3eb85033021e10c",
+      "tests": 4,
+      "unittest_seconds": 0.061,
+      "result_digest": "sha256:be2d5f6bf2121eb258d26773a358c9736c50731773e98108d21abb0b39110676",
+      "stderr_digest": "sha256:5e7489d0f4a7440e416b73c17b53ff7c042747d9bca5fbda812b221630e57109",
+      "reviewed_input_count": 104
+    },
+    {
+      "stage_id": "runtime-http-collection-integration",
+      "status": "PASS",
+      "fingerprint": "sha256:e0dec4156ac173bc16e2f5186cf6fb1e71c124e55900dcea7f3f6c0de75eb895",
+      "tests": 18,
+      "unittest_seconds": 0.095,
+      "result_digest": "sha256:e15dc77c47c9fcbbfbd1af57824f6f56cf09d2bb2f05c77f06599479f08a4173",
+      "stderr_digest": "sha256:b6cd9483e79a4a4712138e7cb3d31453cd9197d44a92eae3d0af180a2c9fb245",
+      "reviewed_input_count": 33
+    },
+    {
+      "stage_id": "runtime-http-common-profile",
+      "status": "PASS",
+      "fingerprint": "sha256:03d1526c37cd3312a47baaac60f477912c8309381375a2dc68ed9a3af1b2bed2",
+      "tests": 10,
+      "unittest_seconds": 1.438,
+      "result_digest": "sha256:313ed87ceb4dc04e5d852ea6a7185082f38a5bb27b059f952b6bd5b786af65de",
+      "stderr_digest": "sha256:cd32166ec64a04366658077c5ce04ef9e6a1dd10b67798259a593a850acc274b",
+      "reviewed_input_count": 122
+    }
+  ],
+  "retained_failed_attempt": {
+    "stage_id": "runtime-http-capability-integration",
+    "status": "FAIL_NOT_ERASED_OR_RELABELLED",
+    "fingerprint": "sha256:51c69b16da6afc86665a58f557f3a2864e82de8c4f14decd064808849495221f",
+    "result_digest": "sha256:ba72ae45e8bc77dab851c55cd842f579cabc5626e2802003d06b982fdcaed727",
+    "stderr_digest": "sha256:b4fb3583c84d5b6af0d503b05aa2adc2acaec850e0f497d30fbd97fe1466fb3c",
+    "cause": "Shared inert token_hex mock returned 64 hex characters for a journal token_hex(16) call that requires32; two positive journal checks correctly refused.",
+    "actual_fix": "Move four affected journal tests into isolated test_runtime_http_journal with a correct32-hex nonce and valid-baseline assertions. No production workaround.",
+    "reused_successful_methods": 24,
+    "reused_success_status": "24_INDIVIDUAL_NONJOURNAL_METHODS_OK_WITHIN_FAILED_STAGE_NOT_OVERALL_STAGE_PASS",
+    "rerun_unchanged_methods": false,
+    "affected_journal_methods_rerun": 4,
+    "failed_fingerprint_rerun": false
+  },
+  "validation": {
+    "distinct_new_checks_passed": 99,
+    "total_test_invocations": 103,
+    "unchanged_pipeline_capacity_fingerprint_reused": "sha256:77df0de1d5abc16a3ba1769ad5a8f7514a6414279328e32a810bdec3e2acea31",
+    "historical_suites": 0,
+    "live_captures": 0,
+    "services_activated": 0,
+    "performance_measurements": 0,
+    "acceptance_campaigns": 0,
+    "full_retained_http_measurement_envelope_replayed": false,
+    "scope": "New inert component joins and lifecycle doubles, generated JS syntax check and disposable DESTDIR only. These are implementation checks, not synthetic acceptance samples.",
+    "static_review": "Independent lane reviews, focused Ruff E9/F63/F7/F82 and diff whitespace checks passed."
+  },
+  "review_findings_resolved": [
+    "Pinned actual common74 V5 response-drain and native-receipt journal predecessors.",
+    "Schema-bound HTTP SENT retention and HTTP-profiled measurement reconstruction.",
+    "Native tool manifest, activation allowlist and canonical no-newline gateway configuration digest.",
+    "Shared stopped-fixture credential access and required netlink interface enumeration without added capabilities.",
+    "Actual 64-hex capability nonce in the independent verifier; journal test uses32-hex nonce.",
+    "Measurement-only credential size extension includes reader, writer, activator, planner and verifier.",
+    "Owned stopped-fixture guard precedes inherited activation locks, armed rollback and service writes."
+  ],
+  "review_references": [
+    {
+      "url": "https://github.com/systemd/systemd/blob/v255/src/systemctl/systemctl-show.c",
+      "use": "IPAddressAllow/Deny effective properties format explicit CIDR addresses; guard permits either order of the exact two deny-all prefixes."
+    }
+  ],
+  "remaining_steps": [
+    {
+      "step": 1,
+      "status": "IN_PROGRESS",
+      "remaining": "Extend fresh owned fixture preparation and installed identity to HTTP successor93files/21measurement sources; write staged canonical gateway bytes initially, provision HTTP binding, resolve broker-restricted readiness and coherent private measurement inputs, then one newly necessary guarded capture and full replay. Do not relabel common74."
+    },
+    {
+      "step": 2,
+      "status": "IN_PROGRESS",
+      "remaining": "Remaining admission dispatch, RUN event/response and meaningful sensor health coverage; DNS/truncate/unlink and benign paired workload adapters on the same successor."
+    },
+    {
+      "step": 3,
+      "status": "BLOCKED_ON_IMPLEMENTATION",
+      "remaining": "Complete all48 independent verifier entries and freeze one completed deployment."
+    },
+    {
+      "step": 4,
+      "status": "PREREQUISITES_NOT_COMPLETE",
+      "remaining": "Fresh final31 cases and100attempts/100pairs, retained cleanup and offline replay."
+    }
+  ],
+  "publication": {
+    "requested_by_user": true,
+    "visibility": "PUBLIC",
+    "remote": "origin",
+    "branch": "codex/phase3-runtime-prevention",
+    "prior_public_push_authorization_resolved": true,
+    "prior_verified_remote_commit": "3f7c6a4efc8cb586f6ff2cb7ae9f02f65650fa84",
+    "this_batch_push": "TO_BE_RECORDED_IN_POST_COMMIT_LOCAL_RECEIPT"
+  },
+  "decision": {
+    "component_implementation_checked": true,
+    "common_http_paths_staged": true,
+    "fresh_http_fixture_preparation_integrated": false,
+    "broker_restricted_readiness_verified": false,
+    "generic_collector_semantics_eligible": false,
+    "live_validation_complete": false,
+    "verifier_inventory_complete": false,
+    "phase3_exit_eligible": false
+  }
+}

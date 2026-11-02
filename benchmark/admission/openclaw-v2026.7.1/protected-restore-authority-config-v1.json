@@ -1,0 +1,1 @@
+{"agents":{"defaults":{"skills":["requesting-code-review"],"workspace":"/profile/workspace"},"list":[{"id":"main","skills":["requesting-code-review"],"workspace":"/profile/workspace"}]},"gateway":{"mode":"local"},"plugins":{"enabled":false},"skills":{"load":{"allowSymlinkTargets":[],"extraDirs":[],"watch":false},"workshop":{"restoreAuthority":"external"}}}

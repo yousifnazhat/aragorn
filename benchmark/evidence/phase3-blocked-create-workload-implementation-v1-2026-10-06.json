@@ -1,0 +1,129 @@
+{
+  "schema": "aragorn/phase3-implementation-checkpoint/v1",
+  "authority": "LOCAL_DEVELOPER_IMPLEMENTATION_AND_PIPELINE_RECORD_NOT_LIVE_OR_EXIT_GATE_EVIDENCE",
+  "status": "REVIEWED_IMPLEMENTATION_BATCH_CHECKED",
+  "base_commit": "8c5e39d571ab918db8467afaaa9841b4bfecf96b",
+  "branch": "codex/phase3-runtime-prevention",
+  "work_window_utc": {
+    "latest_heartbeat": "2026-10-06T14:13:11.085Z",
+    "validation_recorded": "2026-10-06 14:51:10 UTC",
+    "meaning": "Continued the existing parallel workload/sink/verifier implementation batch; not live runtime or acceptance performance."
+  },
+  "implementation": [
+    "Exact counted reversible transformation of the frozen native driver plus pinned legacy helper; absent-only source materialization. Original target/payload and one chat.send are preserved, but only a genuine COMPLETED/BLOCK/NOT_PERFORMED result is accepted.",
+    "New driver CLI requires blocked-create CONTAINER INPUT OUTPUT and exact owned Linux root fixture cgroup before legacy helpers. Proc pseudo-file reads are bounded without assuming stat size equals contents.",
+    "Driver retains the complete actual worker request and source result, source-derived JSON.stringify callback strings with byte/digest pins, and validated blocked transcript details instead of reconstructing a completed success.",
+    "Independent fixed protected/staging sink reader holds directory ancestry and init PIDFD, matches actual descriptor/account/source expectations, requires an empty starting sink, and observes the after state once with no workload or retry of its own.",
+    "Each sink scan uses a fresh directory stream and reads at most one entry without exporting names or contents. Independent final guards and all descriptor closes are attempted; inner and outer cleanup diagnostics preserve the primary failure.",
+    "Pure retained verifier composes existing worker-ingress and effective broker verifiers, independently validates the sole zero-to-two native receipt chain, joins exact callback bytes and complete returned broker result, and checks both sink observations against the retained protected-path descriptor.",
+    "Gateway and worker identity, caller source/account/container expectations and final CAS readbacks are checked. Broker process GID and worker GID join runtime_gid; staging broker_gid remains an independent account expectation.",
+    "All prevention, causality, timing, continuous-absence, residue, RUN, metrics and Phase 3 qualification flags remain false. No controller, activation or real denial condition is claimed."
+  ],
+  "review_findings_resolved": [
+    "The predecessor callback projection used completed details even for the proposed BLOCK workload. The successor now retains the actual validated blocked transcript details and actual JSON.stringify projections.",
+    "Reusing a directory stream could leave its read offset advanced between sink snapshots. Each observation now opens a fresh stream relative to the held directory and checks its identity before/after the bounded scan.",
+    "Caller mutation of the public before observation must not change source custody expectations. The reader keeps an independent original source identity tuple for after/final checks.",
+    "Nested cleanup diagnostics could be overwritten by later final cleanup. Both paths now append fixed labels and preserve the original exception; a combined inner/outer failure test covers this.",
+    "The pipeline intentionally uses os.defpath, so ambient Homebrew Node discovery failed before JavaScript checks. The affected test now explicitly pins the reviewed local developer Node binary before and after each inert invocation. The failed fingerprint remains retained; only the relevant corrected stage ran again."
+  ],
+  "driver_source_artifact": {
+    "name": "native-blocked-create-driver-v1.mjs",
+    "bytes": 16293,
+    "digest": "sha256:e898ba4ab7b5cbd8742bc36c8e1ae578c7e73f45280aa660afc5815fec386df4",
+    "mode": "0444",
+    "frozen_predecessors_changed": false,
+    "included_in_common_profile": false,
+    "executed_in_owned_fixture": false
+  },
+  "source_digests": {
+    "PHASE3_ROADMAP.md": "sha256:43cf46c73b0ddc4c828c5d8c2ed6ebd45c2d4a6502a1e07ae1dad4a07ed58f77",
+    "benchmark/phase3-pipeline-v1.json": "sha256:6b2a923ea057c953047cb307233d3f68e3ee94508a5133b652c5fffce60007cd",
+    "scripts/phase3_pipeline.py": "sha256:c6cb31916cb64a079a1c042cc5326f495ed4caf1129241d76c2deeabed093f54",
+    "scripts/materialize_runtime_native_blocked_create_driver.py": "sha256:47539718da1017df4eeb90b7bfb4f238879916f8b19845dc359f9de65e9e3aef",
+    "src/aragorn/native_phase3_denied_create_sink.py": "sha256:c0d9431901c401ef360e466bfb58ff1e2f8b8de7a8d15393a6fe9ca0e02920ff",
+    "src/aragorn/native_phase3_blocked_create_verify.py": "sha256:42347b6643900411081f9a812d4417765f3e84b460a6bf5305dd78fa0693f420",
+    "tests/test_runtime_native_blocked_create_driver.py": "sha256:176c32bb68856deb67bc3efb598fe845d38badb815e4ffa7823f516174db6ec6",
+    "tests/test_native_phase3_denied_create_sink.py": "sha256:666ba4ce2896faade6dcad354c57332088a4fcbdcc82effecb7eec0a075f61c2",
+    "tests/test_native_phase3_blocked_create_verify.py": "sha256:b13d5f807e6ed551f5ec9e8b4c8bcdbc8ca72776019a05350259544ee4698ef6"
+  },
+  "pipeline_stages": [
+    {
+      "stage_id": "native-blocked-create-driver",
+      "status": "PASS",
+      "fingerprint": "sha256:cefb0ee9d561958a52324f45724c80c025f9c68619fb989b327bc143b4a748d4",
+      "tests": 6,
+      "wall_seconds": 0.646303,
+      "unittest_seconds": 0.457,
+      "stderr_digest": "sha256:eafb0fcd4a281b78b6f868209b4dd61a60719e77def28122759f74a9c3b6bf14",
+      "reviewed_inputs": 5
+    },
+    {
+      "stage_id": "native-denied-create-sink",
+      "status": "PASS",
+      "fingerprint": "sha256:8bdd3e0a3b165d058e7e86081090e59566276d2c5e62e862f79183cb0fa6351d",
+      "tests": 11,
+      "wall_seconds": 0.234469,
+      "unittest_seconds": 0.019,
+      "stderr_digest": "sha256:2dd89de8b6ac19091c602ecc8fd19c14a93ff6d0ab5291c8db90981627d2da87",
+      "reviewed_inputs": 9
+    },
+    {
+      "stage_id": "native-blocked-create-verifier",
+      "status": "PASS",
+      "fingerprint": "sha256:a50ce14d43d15a1f0f9956f5ae13f5e5836a85fd8444b50422cad045a99b25f9",
+      "tests": 11,
+      "wall_seconds": 0.904759,
+      "unittest_seconds": 0.688,
+      "stderr_digest": "sha256:6c7a5c2d72c26eb06127dd1031642963503bf0c9fe4f451041876b44c5c70779",
+      "reviewed_inputs": 26
+    }
+  ],
+  "test_count": 28,
+  "new_test_methods": 28,
+  "pipeline_commands": [
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-blocked-create-driver native-denied-create-sink native-blocked-create-verifier",
+    "/opt/homebrew/bin/python3.12 -S -B scripts/phase3_pipeline.py run native-blocked-create-driver"
+  ],
+  "reused_exact_successes": [
+    {
+      "stage_id": "pipeline-unit",
+      "fingerprint": "sha256:cdb39c9b3114c99dfd74600f8827c2daf6e4b4290cf10c9f9b3925b485ceb730"
+    }
+  ],
+  "retained_failed_fingerprints": [
+    {
+      "stage_id": "native-blocked-create-driver",
+      "fingerprint": "sha256:9649e1546f1a9ed85db7eb202e609919b97ff9e1a29f5cc286fc79f223a1cc70",
+      "status": "FAIL",
+      "cause": "Four inert JavaScript methods refused because shutil.which(node) returned None under the pipeline's fixed os.defpath; the two Python materialization methods passed.",
+      "stderr_digest": "sha256:cf866df87c54d5a68bfacfa078b7131d131221de1cadd1bf609127fde6c35cf2",
+      "remediation": "Changed only the affected test to an absolute content-pinned local developer Node executable; did not widen pipeline PATH or weaken assertions.",
+      "unchanged_fingerprint_rerun": false
+    }
+  ],
+  "reviewed_input_closure": {
+    "registry": "benchmark/phase3-pipeline-v1.json",
+    "ast_local_import_counts": {"native-blocked-create-driver": 3, "native-denied-create-sink": 9, "native-blocked-create-verifier": 26},
+    "undeclared_local_imports": [],
+    "extra_driver_inputs": ["benchmark/admission/openclaw-v2026.7.1/native-receipt-read-create-driver-v1.mjs", "benchmark/runtime-action-worker-openclaw-systemd/openclaw-worker-driver.mjs"],
+    "meaning": "Static AST import review plus explicit frozen driver/helper data reads. Existing test modules supply inert data constructors only; historical test methods are not discovered. No source controller or real sink reader executes in the pure-consumer stage."
+  },
+  "developer_node": {
+    "path": "/opt/homebrew/Cellar/node/26.3.1/bin/node",
+    "digest": "sha256:56694c81b093cc8da273fa017cf91765b3653e5f64f16727976ffaa87b2b6b31",
+    "scope": "Bounded definition tests with inert I/O only. Not the fixture's required Node v24.16.0, not deployment compatibility or a full dependency attestation."
+  },
+  "new_live_captures": 0,
+  "vm_actions_executed": 0,
+  "new_performance_samples": 0,
+  "newly_closed_phase3_exit_gates": 0,
+  "decision": {
+    "admission_qualified": false,
+    "run_eligible": false,
+    "quantitative_metrics_eligible": false,
+    "phase3_exit_eligible": false,
+    "production_qualified": false
+  },
+  "next_dependency": "Establish a real same-action denial prerequisite without weakening or relabelling the common request's policy.allow[0] constraint. Wire one owned controller to consume the original prepared measurement commitment/request, provision broker inputs before first activation, invoke the fixed driver once while sink descriptors are held, retain actual receipt/ingress/broker evidence and collect both external clock reads in one process. Setup-only fixtures stay non-resumable; remaining admission/RUN/sensor-health and verifier inventory precede final freeze and required acceptance.",
+  "checkpoint_commit": "Create one signed local commit, verify signature and clean tree, and retain its actual hash in ignored .aragorn/phase3-batch-<short-hash>-checkpoint.json. No automatic push."
+}

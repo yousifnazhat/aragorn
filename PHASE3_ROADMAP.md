@@ -12,6 +12,11 @@ using the [exact dependency pins](docs/design/pi-core-dependency-pins-v1.md).
 Only its new/affected checks are released; no live operations, deployed pilot,
 compiled target build or deployment freeze is claimed.
 
+The next [D2 launch/identity batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md)
+implements protected bundle preparation and a PIDFD-bound accepted-peer guard.
+Actual confined launch, compiled-source custody, provider mediation and native
+integration remain prerequisites; no live operation is released.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

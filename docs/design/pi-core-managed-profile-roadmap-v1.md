@@ -20,6 +20,14 @@ affected capacity checks pass; the retained initial fixture-import failure was
 corrected before only the affected stage reran. See the linked batch record for
 exact fingerprints, evidence limits and remaining D2 integration.
 
+Batch-2 [launch/identity checkpoint](../phase3/coordinator/pi-core-launch-identity-batch-2.md):
+protected admission/tree preparation, one-shot activation publication and a
+PIDFD-bound relay guard are implemented offline. The future confined launcher
+must consume the exact prepared bundle and install this guard; no process is
+launched and no loaded-JavaScript or deployed-identity result is claimed.
+Its 50 new checks and four affected capacity checks passed once; no old suite
+or live operation ran.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -57,6 +65,8 @@ Current entrypoint remains the root Python `aragorn` launcher. The selected
 Pi/Node/build dependency pins now live in the linked step-2 inventory. The
 request-only `packaging/pi-core/worker.ts` is implemented and exercised offline;
 no protected Pi process launcher or compiled target deployment exists yet.
+Supervisor-side preparation and accepted-peer guard APIs now exist as the
+batch-2 integration boundary; their live caller remains the next dependency.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension

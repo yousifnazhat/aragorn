@@ -12,7 +12,10 @@ defines reuse, adaptation and the approved 29-requirement qualification mapping.
 
 This approval changes the forward target, not historical evidence or completion
 claims. The [first connected offline batch](docs/phase3/coordinator/pi-core-connected-batch-1.md)
-implements only Pi-loop/request-protocol composition; no Pi deployment is qualified. The
+implements Pi-loop/request-protocol composition. The subsequent
+[offline launch/identity batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md)
+adds exact bundle preparation and a protected activation/PIDFD relay boundary;
+it neither starts a worker nor installs the new handler. No Pi deployment is qualified. The
 existing Phase 3 manifest and all operational holds remain unchanged. Historical
 status and target-specific sections below remain preserved; the SDD supersedes
 them only where they direct future runtime selection or managed-profile scope.

@@ -17,6 +17,16 @@ low-level helper, then calls that helper once. It opens no socket at constructio
 The old relay's UID/GID and endpoint checks do **not** authenticate an isolated
 Pi bundle/process activation. Do not deploy it as that missing authority join.
 
+The additive Python supervisor boundary now lives in
+`src/aragorn/pi_core_bundle_launch.py` and `pi_core_worker_identity.py`: exact
+admitted-bundle preparation, one-shot protected activation publication and a
+PIDFD-bound accepted-peer handler around the existing relay. These APIs are
+checked offline but are not installed by this package. A future confined
+launcher must consume the prepared prompt/supporting bytes, bind its actual
+child PID and route accepted connections through the new guard; using the old
+UID-only handler does not gain these protections. See the
+[D2 batch checkpoint](../../docs/phase3/coordinator/pi-core-launch-identity-batch-2.md).
+
 Results distinguish completed protocol exchanges from `NOT_SUBMITTED` and
 `INDETERMINATE`. A completed exchange may report BLOCK; it is not automatically a
 successful effect. Failure/uncertainty stops later dispatch. Adapter return or
@@ -52,8 +62,9 @@ measure Phase 3 performance. No source/test helper is production authority.
 
 ## Still required for D2
 
-Protected admitted-bundle loading and consumed-byte custody; fresh isolated
-Linux launch and authenticated peer-to-activation joins; target compilation and
+Connect the prepared admitted-bundle bytes to the actual worker entrypoint and
+establish consumed-code custody; fresh isolated Linux launch using the protected
+peer-to-activation guard; target compilation and
 image inventory; credential-isolated provider mediation with data-scope policy;
 real positive effect/health/cleanup integration. The HTTP reader service remains
 refusal-only. The approved 29-requirement map is not an executable result and no

@@ -5,6 +5,8 @@
 The user approved the [Pi-core managed capability profile](../../design/pi-core-managed-capability-sdd-v1.md)
 and subsequently approved the 29-requirement successor mapping and
 [first connected offline implementation batch](pi-core-connected-batch-1.md).
+The subsequent [D2 bundle/identity batch](pi-core-launch-identity-batch-2.md)
+releases only its named preparation/peer-guard paths and focused offline checks.
 The [managed-profile roadmap](../../design/pi-core-managed-profile-roadmap-v1.md)
 supersedes old forward runtime-selection and automatic implementation instructions
 on this page. This is a replacement target, not permission to run a second

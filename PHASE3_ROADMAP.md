@@ -1,5 +1,27 @@
 # Phase 3 completion roadmap
 
+## Current direction — approved Pi-core managed profile (2026-11-02)
+
+The user approved Pi agent-core as an unprivileged engine in an Aragorn-managed
+Linux capability host. The current forward plan is the
+[managed-profile roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md),
+with its [approved SDD](docs/design/pi-core-managed-capability-sdd-v1.md).
+This is a documentation-only architecture decision; implementation and testing
+are not released. The next deliverable is exact dependency/load-surface pins and
+an explicit acceptance crosswalk, not another OpenClaw capture or leaf campaign.
+
+The original exit manifest remains unchanged and incomplete. Its evaluator
+requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
+Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned
+managed-profile qualification mapping needs separate approval before evaluator
+changes or a revised Phase 3 completion claim. Historical signed work, evidence,
+failure records and operational/cleanup holds remain intact. No Phase 4 release.
+
+**Reading order:** the linked roadmap is current for future implementation
+planning. Everything below records the original deployment plan and checkpoints;
+its old "next" instructions are historical where they conflict with this approved
+target. Do not resume them merely because an older automation prompt names them.
+
 Planning date: 2026-10-04. Assessed implementation: `0a51326` on
 `codex/phase3-runtime-prevention`. This document is a plan, not new test evidence
 or a qualification result. The fixed [exit manifest](benchmark/phase3-exit-gate-manifest-v1.json)

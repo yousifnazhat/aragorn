@@ -1,5 +1,21 @@
 # Aragorn: architecture and roadmap
 
+## Approved forward architecture (2026-11-02)
+
+The [Pi-core managed capability SDD](docs/design/pi-core-managed-capability-sdd-v1.md)
+now defines the approved first controlled-environment product profile: a thin
+untrusted Pi-core worker, one admitted bundle per fresh context, existing Python
+security authority and external Linux enforcement. Aragorn owns the lifecycle;
+arbitrary native in-process plugins and shared multi-skill contexts are excluded
+from this first profile. The [delivery roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md)
+defines reuse, adaptation and the separate qualification-mapping decision.
+
+This approval changes the forward target, not historical evidence or completion
+claims. No Pi runtime is implemented or qualified by this documentation. The
+existing Phase 3 manifest and all operational holds remain unchanged. Historical
+status and target-specific sections below remain preserved; the SDD supersedes
+them only where they direct future runtime selection or managed-profile scope.
+
 Date: 2026-07-27
 
 Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; bounded exercised-profile Phase 2 exit complete; Phase 3 runtime-prevention engineering active; universal capture completeness, general archives, private repositories, trusted runtime/host attestation, runtime conformance, installer eligibility, EDR status, and public release remain blocked

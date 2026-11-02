@@ -1,5 +1,17 @@
 # Phase 3 evidence consumers: ownership and release v2
 
+## Current scope override (2026-11-02)
+
+The user approved the [Pi-core managed capability profile](../../design/pi-core-managed-capability-sdd-v1.md)
+and requested finalized design/roadmap only, with no implementation or tests.
+The [managed-profile roadmap](../../design/pi-core-managed-profile-roadmap-v1.md)
+supersedes old forward runtime-selection and automatic implementation instructions
+on this page. This is a replacement target, not permission to run a second
+runtime campaign. Preserve exact ownership, drafts, signatures, frozen evidence
+and all operational holds. No new lane code scope is released by this update.
+Future code work needs a concrete current contract and user implementation
+direction; do not silently continue historical OpenClaw-specific assignments.
+
 Base: verified signed and published `27e9844e6d5f0924b79382a8a084099ee06e2ed6`.
 This document succeeds v1 only for the next bounded implementation assignments.
 All existing provider and operational holds remain. Worktree capacity follows

@@ -10,6 +10,11 @@ specification-driven implementation. The [roadmap](pi-core-managed-profile-roadm
 orders future work. The existing [Phase 3 manifest](../../benchmark/phase3-exit-gate-manifest-v1.json)
 and historical qualification records are unchanged.
 
+Step-2 follow-up: [exact dependency pins](pi-core-dependency-pins-v1.md) and the
+[complete proposed acceptance crosswalk](pi-core-phase3-acceptance-mapping-v1.md)
+are prepared. The latter needs user approval; it is not an approved gate change.
+Pinning upstream components does not pin the not-yet-built adapter or deployment.
+
 ## Goal and approved decision
 
 Aragorn is a capability-security system: it admits exact reviewed artifacts,
@@ -49,9 +54,10 @@ an effective permission. Unsupported formats or incomplete dependency closure
 must not receive an effective ALLOW. Existing resolver limits still apply; this
 design does not claim general npm/PyPI/archive support.
 
-No architecture-choice question remains open. Exact dependency pins, a concrete
-worker OS policy and operational credentials/endpoints are future delivery
-inputs, not permission to improvise broader scope. The separate **Phase 3
+No architecture-choice question remains open. Upstream dependency pins are now
+selected in the step-2 inventory. A concrete worker OS policy, adapter build and
+operational credentials/endpoints remain future delivery inputs, not permission
+to improvise broader scope. The separate **Phase 3
 qualification-contract decision** remains explicit in the mapping section below.
 
 ## Deployment and trust model
@@ -329,12 +335,13 @@ Repository sources at the research baseline: `ARCHITECTURE.md`,
 `docs/phase3/integration-checkpoint-2026-10-29-run-bootstrap.md`,
 `src/aragorn/phase3_exit_qualification.py` and the reuse anchors above.
 
-Upstream documentation inspected 2026-11-02; **not selected production pins**:
+Architectural upstream references inspected 2026-11-02; exact release selection
+and provenance limits are in the separate step-2 pin inventory:
 
 - [Pi agent-core API](https://github.com/earendil-works/pi/blob/main/packages/agent/README.md): explicit host-supplied tools/context and tool execution callbacks support the request-only adapter design.
 - [Pi security](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/security.md): runtime extension mechanisms do not establish Aragorn's external security boundary.
 - [Agent Skills specification](https://agentskills.io/specification): portable instruction bundles with optional supporting resources and scripts.
 - [NIST reference monitor](https://csrc.nist.gov/glossary/term/reference_monitor): basis for complete mediation outside the untrusted agent.
 
-No package version, installation, build, runtime measurement or qualification is
-implied by these references.
+These general references are not installation, build, runtime-measurement or
+qualification evidence. Selected release pins do not imply any of those results.

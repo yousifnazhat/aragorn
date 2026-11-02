@@ -6,9 +6,11 @@ The user approved Pi agent-core as an unprivileged engine in an Aragorn-managed
 Linux capability host. The current forward plan is the
 [managed-profile roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md),
 with its [approved SDD](docs/design/pi-core-managed-capability-sdd-v1.md).
-This is a documentation-only architecture decision; implementation and testing
-are not released. The next deliverable is exact dependency/load-surface pins and
-an explicit acceptance crosswalk, not another OpenClaw capture or leaf campaign.
+This remains documentation-only; implementation and testing are not released.
+Step 2 has now recorded [exact dependency pins](docs/design/pi-core-dependency-pins-v1.md)
+and the full [proposed acceptance crosswalk](docs/design/pi-core-phase3-acceptance-mapping-v1.md).
+The next decision is approval of that mapping, not another OpenClaw capture or
+leaf campaign. No adapter build or deployment freeze is claimed.
 
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;

@@ -4,6 +4,15 @@ Date: 2026-11-02. Status: **design approved; implementation not authorized in th
 run**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
+Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
+[dependency pins and provenance limits](pi-core-dependency-pins-v1.md) are now
+recorded, including the transitive [pin inventory](pi-core-dependency-pins-v1.json).
+The complete [48-row acceptance crosswalk](pi-core-phase3-acceptance-mapping-v1.md)
+proposes 29 managed-profile logical requirements and is **awaiting user approval**.
+No packages were installed and no implementation, product tests or live operations
+ran. Adapter build and managed OS/deployment identities remain future outputs;
+the complete deployment is not frozen.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -37,8 +46,9 @@ alone do not remove those deployment gaps.
 Modules: `src/aragorn/` security/evidence, `scripts/` staging/collection,
 `packaging/systemd/` containment and service custody, `packaging/openclaw/`
 legacy adapter, `benchmark/` fixed acceptance/workloads, `tests/` focused checks.
-Current entrypoint remains the root Python `aragorn` launcher. No Pi executable
-entrypoint or production dependency pin is selected by this plan.
+Current entrypoint remains the root Python `aragorn` launcher. The selected
+Pi/Node/build dependency pins now live in the linked step-2 inventory; no Pi
+executable entrypoint has been implemented or deployed.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension
@@ -62,9 +72,9 @@ mislabelled historical evidence. The SDD defines the required failure behavior.
 
 The architecture and initial profile exclusions are settled by user approval.
 No implementation is released. The one remaining product decision is approval
-of an exact versioned Phase 3 acceptance crosswalk, because v1 literally names
-21 OpenClaw routes and does not support N/A. Prepare that crosswalk first; do
-not repeatedly reopen the runtime choice or infer approval to weaken gates.
+of the prepared versioned Phase 3 acceptance crosswalk, because v1 literally
+names 21 OpenClaw routes and does not support N/A. Review that crosswalk next;
+do not repeatedly reopen the runtime choice or infer approval to weaken gates.
 
 ## Dependency-ordered delivery plan
 
@@ -76,28 +86,30 @@ interface or observable behavior, not an arbitrary clock interval.
 | Stage | Output and ownership | Exit and next dependency |
 | --- | --- | --- |
 | D0 — approved design | Root: this SDD, roadmap and current-document pointers | **Complete as documentation.** No implementation or gate is closed |
-| D1 — freeze the delivery contract | Root + read-only lane review: exact Pi/Node/adapter/dependency pins; complete allowed/denied load surfaces; minimal broker/launcher contract; original-to-managed acceptance crosswalk | User approves exact qualification mapping; implementation release names writable files, evidence and focused checks. No evaluator edits before that approval |
+| D1 — freeze the delivery contract | Pi/Node/dependency pins and full acceptance crosswalk prepared; design-level load surfaces specified. Adapter/OS build outputs are future identity inputs | **Awaiting mapping approval**, then separate implementation release naming exact paths/interfaces/evidence/checks. No evaluator edits before approval; not a frozen deployment |
 | D2 — one connected useful path | Root owns launcher/deployment/broker/provider wiring; Admission supplies bundle custody; RUN supplies identity/health; Workloads supplies independent positive output/effect observation | One admitted bundle performs an authorized file/API task; changed bytes and forbidden effects refuse; actual consumed-source identity, health, outcome and cleanup are retained. Pilot only |
 | D3 — complete managed lifecycle and required security coverage | Existing Admission, RUN and Workloads lanes under nonoverlapping contracts | Supported/denied activation routes, updates, revocation, all required events/responses, HTTP/DNS/destructive paths, cancellation/unknown outcomes and paired tasks are connected on the same deployment |
 | D4 — independent inventory and freeze | Root with separate verifier review | Every approved requirement maps to real producer, raw evidence and independent consumer; no unknown prerequisite; one exact deployment frozen |
 | D5 — final qualification | Root schedules separately authorized isolated acceptance; independent verifier reviews retained output | Required fresh acceptance under the approved contract, actual metrics, offline semantic replay and verified cleanup. Only then claim that exact profile's Phase 3 result |
 
-### D1: smallest next operation after this documentation run
+### D1: delivery contract scope and prepared state
 
-Prepare a bounded **compatibility-and-acceptance contract**, not another generic
-framework. It must:
+The linked step-2 documents prepare a bounded **compatibility-and-acceptance
+contract**, not another generic framework. The remaining release obligations are:
 
-1. Select immutable Pi-core, Node, adapter build and transitive dependency pins,
-   license/support constraints, and the exact managed worker entrypoint.
+1. Preserve the selected immutable Pi-core, Node and transitive/build-tool pins.
+   Pin the actual adapter build and managed OS closure once implemented; no
+   placeholder digest may stand in for those bytes. Publish the exact worker
+   entrypoint with the later implementation contract.
 2. List every load/activation surface: managed install/replacement/restart;
    direct writes/rename/symlinks; project/home discovery; native extensions;
    dynamic scripts/imports; reload/session restore; model-provider/tool routes.
    Each is supported with a gate or unsupported with an enforceable denial.
-3. Map all 48 original requirement IDs and all 21 old route IDs explicitly.
-   Recommend a versioned managed-profile successor preserving security properties
-   and numeric thresholds. Retain original v1 and its incomplete result. Any
-   route/count replacement must be visible for user approval; no fictional
-   equivalent cases or old PASS flags.
+3. Obtain user approval of the prepared mapping of all 48 original IDs, including
+   all 21 old route IDs. The proposal retains security properties and numeric
+   thresholds under 29 logical managed requirements; it does not set a test-case
+   cap. Retain original v1 and its incomplete result; no fictional equivalents
+   or old PASS flags.
 4. Name concrete reused callers and exact changes. New likely directory:
    `packaging/pi-core/` for only the thin worker and dependency/build manifest;
    target-specific Python changes belong at the existing adapter/launcher
@@ -196,7 +208,8 @@ Always report **designed / implemented / connected / evidence-verified /
 qualified** separately. Do not derive a completion percentage from commits or
 test counts. Restate these stages at each future handoff:
 
-1. Design approved and documented; D1 pins/acceptance mapping is next.
+1. Design approved; dependency pins and acceptance mapping prepared. Mapping
+   approval is next; implementation remains unreleased.
 2. Build and verify the connected useful Pi managed-profile path (D2).
 3. Complete managed admission, RUN/health, workload and verifier coverage (D3).
 4. Freeze and run separately authorized final acceptance (D4–D5).

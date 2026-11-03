@@ -1,0 +1,15 @@
+{
+  "schema": "aragorn/pi-core-os-source/v1",
+  "source_reference": "python@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b",
+  "index_digest": "sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b",
+  "platform": {"os": "linux", "architecture": "arm64", "variant": "v8"},
+  "platform_manifest_digest": "sha256:c18c7a910432dde3311fc54d02e5d5220f3ebe26fec43ff15745982863dd7b3b",
+  "config_digest": "sha256:a0938838407c79b6ff4ea2635398c61b68a3bf58d9d71d0604ab7825086d506a",
+  "layer_diff_ids": [
+    "sha256:12cdff3b039e28c684ffd2097ff5a66df274a8500966a1431038b05f50bcf096",
+    "sha256:10b5151be3c11f9fd9e64043eaf4bf1dffbacf770da5b29e4480b710be81511f",
+    "sha256:cdb2f937b2d0224e8694c43077267d2484502f0e45095b92a24e7eb4f7f484ed",
+    "sha256:705c229bb06a03dde6eebf73743ebcb18dff129274ac3564d114a8926d73a628"
+  ],
+  "authority": "RETAINED_LOCAL_SOURCE_PIN_ONLY_NOT_INSTALLED_OS_OR_NATIVE_QUALIFICATION"
+}

@@ -23,6 +23,13 @@ credential-free entrypoint, guarded confinement plan and authenticated bootstrap
 composition. This is not the native supervisor or a protected OS installation;
 the compiler artifact does not close D2's useful-task/effect/health/cleanup exit.
 
+The subsequent [OS/supervisor batch](docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md)
+implements the protected installer and native supervisor using that same compiled
+artifact, admission preparation and bootstrap binder. Real retained OS bytes are
+assembled statically; target binaries, provisioning and the supervisor are not
+executed. Next D2 work is protected action-identity handoff and credential-isolated
+provider/data mediation, then an explicitly authorized connected useful pilot.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

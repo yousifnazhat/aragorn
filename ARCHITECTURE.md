@@ -18,8 +18,11 @@ adds exact bundle preparation and a protected activation/PIDFD relay boundary;
 it neither starts a worker nor installs the new handler. The
 [compiled/bootstrap batch](docs/phase3/coordinator/pi-core-compiled-launch-batch-3.md)
 adds a real compiler-only Linux artifact and guarded confinement/bootstrap
-composition. Native supervisor execution, OS installation and protected
-identity/provider integration remain outstanding. No Pi deployment is qualified. The
+composition. The [OS/supervisor batch](docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md)
+adds a pinned static OS closure, protected byte provisioner and native lifecycle
+caller with ownership-checked cleanup. These native paths are implemented, not
+operationally exercised. Protected identity/provider integration and useful
+effect/health evidence remain outstanding. No Pi deployment is qualified. The
 existing Phase 3 manifest and all operational holds remain unchanged. Historical
 status and target-specific sections below remain preserved; the SDD supersedes
 them only where they direct future runtime selection or managed-profile scope.

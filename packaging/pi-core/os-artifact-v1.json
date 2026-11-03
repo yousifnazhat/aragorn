@@ -1,0 +1,144 @@
+{
+  "schema": "aragorn/pi-core-os-artifact-checkpoint/v1",
+  "status": "PREPARED_NOT_INSTALLED_OR_EXECUTED",
+  "base_commit": "272232a8d8d99be14ecc2fc7ddcb1514fb5cf2fd",
+  "pipeline_stage": "pi-core-os-root-assemble",
+  "pipeline_fingerprint": "sha256:5da3549aa4e176e04e23236872c34f4484e987c0023255a1372989f562540823",
+  "receipt_local_path": ".aragorn/pi-core-os-inputs/assembled-9c2603fbc1c14646bb42aa828ac3ae5a/os-root-receipt.json",
+  "receipt_file_sha256": "99cdd3ed224d02f2b57530b90eb004292a38fb0d823609781d5f4e441a6c9752",
+  "receipt_file_bytes": 10711,
+  "source_reference": "python@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b",
+  "platform_manifest_digest": "sha256:c18c7a910432dde3311fc54d02e5d5220f3ebe26fec43ff15745982863dd7b3b",
+  "source_config_digest": "sha256:a0938838407c79b6ff4ea2635398c61b68a3bf58d9d71d0604ab7825086d506a",
+  "node_digest": "sha256:b4855de8c4781130b722ceaec9718fed77cca3eed2e5cfc5455e267c0b9ee3b0",
+  "closure_digest": "sha256:a6d0cce8629274d940f9ca0be9242c0ba76badc2210ae4c121bb2e1c5a95e9eb",
+  "protected_tree": {
+    "directories": [
+      "dev",
+      "lib",
+      "lib/aarch64-linux-gnu",
+      "opt",
+      "opt/aragorn",
+      "opt/aragorn/pi-runtime",
+      "proc",
+      "run",
+      "run/aragorn-pi-bootstrap",
+      "sys",
+      "tmp",
+      "usr",
+      "usr/bin",
+      "var",
+      "var/lib",
+      "var/lib/aragorn",
+      "var/lib/aragorn/admitted",
+      "var/tmp"
+    ],
+    "files": [
+      {
+        "digest": "sha256:17538b8f9889a470c061f69a8fea8124da89627311cd16546c133a89f09056df",
+        "executable": true,
+        "path": "lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+        "size": 202912
+      },
+      {
+        "digest": "sha256:e4ac8ae1d81e4865e3aadedb962879cf9415903b3f2ba81ec75e9962b86ab8b0",
+        "executable": true,
+        "path": "lib/aarch64-linux-gnu/libc.so.6",
+        "size": 1651408
+      },
+      {
+        "digest": "sha256:e5e9474a683596d59cc9e13246bc83878433e53c3befbabd73e3da9ccb5fe174",
+        "executable": false,
+        "path": "lib/aarch64-linux-gnu/libdl.so.2",
+        "size": 67528
+      },
+      {
+        "digest": "sha256:046856f95f4636f1fc7c3a12bf4f3cd5634c2fc5145c3fdf7395d4f349fa69c7",
+        "executable": false,
+        "path": "lib/aarch64-linux-gnu/libgcc_s.so.1",
+        "size": 133448
+      },
+      {
+        "digest": "sha256:3c4cb3be0b974edf05f023f85ab15107fb5afc2687163593d0d4cf8e80c17b39",
+        "executable": false,
+        "path": "lib/aarch64-linux-gnu/libm.so.6",
+        "size": 591960
+      },
+      {
+        "digest": "sha256:434dcd27f22fc8bf236c0c00541a1e503d302aa796c333729a2cd15a4cfe4814",
+        "executable": false,
+        "path": "lib/aarch64-linux-gnu/libpthread.so.0",
+        "size": 67528
+      },
+      {
+        "digest": "sha256:532f3a12d7b8fef6cc7a064ea106b6c4ab2365674b73e743e4a385d4ffb6c8ab",
+        "executable": false,
+        "path": "lib/aarch64-linux-gnu/libstdc++.so.6",
+        "size": 2174296
+      },
+      {
+        "digest": "sha256:17538b8f9889a470c061f69a8fea8124da89627311cd16546c133a89f09056df",
+        "executable": true,
+        "path": "lib/ld-linux-aarch64.so.1",
+        "size": 202912
+      },
+      {
+        "digest": "sha256:67a8c7fac47281a5ee335366bcd12f31aa7eeca008cef6eccad38304753ddee9",
+        "executable": true,
+        "path": "usr/bin/env",
+        "size": 68992
+      }
+    ],
+    "schema": "aragorn/pi-core-protected-tree/v1"
+  },
+  "packages": [
+    {
+      "Architecture": "arm64",
+      "Package": "coreutils",
+      "Version": "9.1-1",
+      "copyright_source": "usr/share/doc/coreutils/copyright",
+      "digest": "sha256:24e86c5ca53d6bfd8e0c47988160daa62d10a74997fe11f651e1d9533c78bff6",
+      "retained_path": "provenance/licenses/coreutils.copyright"
+    },
+    {
+      "Architecture": "arm64",
+      "Package": "libc6",
+      "Source": "glibc",
+      "Version": "2.36-9+deb12u14",
+      "copyright_source": "usr/share/doc/libc6/copyright",
+      "digest": "sha256:40c7e1f2118531f038ca22999bd976901254e1bc5cd1b0f0211bdd064c599987",
+      "retained_path": "provenance/licenses/libc6.copyright"
+    },
+    {
+      "Architecture": "arm64",
+      "Package": "libgcc-s1",
+      "Source": "gcc-12",
+      "Version": "12.2.0-14+deb12u1",
+      "copyright_source": "usr/share/doc/gcc-12-base/copyright",
+      "digest": "sha256:da8191658b3452ce9caf31638ba61dab31a38c619fa39df119812e050f592fd3",
+      "retained_path": "provenance/licenses/libgcc-s1.copyright"
+    },
+    {
+      "Architecture": "arm64",
+      "Package": "libstdc++6",
+      "Source": "gcc-12",
+      "Version": "12.2.0-14+deb12u1",
+      "copyright_source": "usr/share/doc/gcc-12-base/copyright",
+      "digest": "sha256:da8191658b3452ce9caf31638ba61dab31a38c619fa39df119812e050f592fd3",
+      "retained_path": "provenance/licenses/libstdc++6.copyright"
+    }
+  ],
+  "elf_dependency_edges": 21,
+  "prior_static_assembly": {
+    "receipt_local_path": ".aragorn/pi-core-os-inputs/assembled-10294d3f619e45508051f04f5fd58d52/os-root-receipt.json",
+    "closure_digest": "sha256:9f8dc3100ad343e10faefc4f754b6969bcb2a9042a058f2404dbd96d3d2bc4b9",
+    "reason_superseded": "Missing empty var/tmp destination required by PrivateTmp; all prior evidence retained"
+  },
+  "limitations": [
+    "STATIC_ELF_CLOSURE_NOT_TARGET_ABI_OR_KERNEL_EXECUTION_PROOF",
+    "NO_PROTECTED_INSTALL_OR_NATIVE_LAUNCH",
+    "NO_PROVIDER_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
+    "LOCAL_OS_BINARY_AND_LICENSE_ARTIFACTS_NOT_PUBLISHED",
+    "NATIVE_SUPERVISOR_REQUIRES_SYSTEMD_257_OR_NEWER_NOT_HOST_VALIDATED"
+  ]
+}

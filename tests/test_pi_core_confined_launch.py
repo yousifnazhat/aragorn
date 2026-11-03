@@ -127,7 +127,7 @@ class ConfinedPlanTests(InertTests):
             confined.lineage, "_open_protected_root", side_effect=open_root))
         os_manifest = {"files": [{"path": "usr/bin/env", "executable": True}]}
         self.tree = self.stack.enter_context(mock.patch.object(confined, "_tree", side_effect=[
-            (os_manifest, (), self.config.root_closure_digest),
+            (os_manifest, confined._EMPTY_MOUNTPOINTS, self.config.root_closure_digest),
             (runtime_manifest(), (), digest("e")),
         ]))
 
@@ -174,7 +174,8 @@ class ConfinedPlanTests(InertTests):
                              "CapabilityBoundingSet=", "AmbientCapabilities=",
                              "PrivateNetwork=yes", "RestrictAddressFamilies=AF_UNIX"):
                 self.assertIn("--property=" + property, args)
-            self.assertIn("--property=InaccessiblePaths=-/run/aragorn-relay/worker.sock", args)
+            self.assertIn("--property=InaccessiblePaths=-/run/aragorn-relay/worker.sock"
+                          " -/dev/shm -/dev/hugepages -/dev/pts", args)
             self.assertIn("--property=BindReadOnlyPaths=" + str(self.profile.skill_path.parent) +
                           ":" + str(self.profile.skill_path.parent), args)
             self.assertNotIn(self.config.task, args)
@@ -231,7 +232,7 @@ class ConfinedPlanTests(InertTests):
         self.tree.assert_not_called()
 
     def test_rootfs_requires_pinned_env_entrypoint(self):
-        self.tree.side_effect = [({"files": []}, (), self.config.root_closure_digest),
+        self.tree.side_effect = [({"files": []}, confined._EMPTY_MOUNTPOINTS, self.config.root_closure_digest),
                                  (runtime_manifest(), (), digest())]
         with self.assertRaisesRegex(ValueError, "env entrypoint"), self.plan():
             pass

@@ -10,7 +10,13 @@ releases only its named preparation/peer-guard paths and focused offline checks.
 The [compiled/bootstrap batch](pi-core-compiled-launch-batch-3.md) releases its
 three nonoverlapping build/entrypoint/confinement owners under this chat's
 coordination. Existing lane drafts/worktrees remain untouched; new native
-supervisor, provider or old lane assignments are not silently released.
+supervisor, provider or old lane assignments are not silently released by batch 3.
+The subsequent [OS/supervisor batch](pi-core-os-supervisor-batch-4.md) explicitly
+releases parallel static OS assembly, protected provisioning and native-supervisor
+implementation owners. This chat owns shared plan/registry changes, source review,
+focused checks, signed integration and push. Existing worktree drafts remain
+untouched. No lane may activate native paths, run old suites, retry unchanged
+failures or widen the provider/effect profile.
 The [managed-profile roadmap](../../design/pi-core-managed-profile-roadmap-v1.md)
 supersedes old forward runtime-selection and automatic implementation instructions
 on this page. This is a replacement target, not permission to run a second

@@ -1,8 +1,8 @@
 """Guarded Pi confinement plan and authenticated bootstrap composition.
 
 This module does NOT start systemd, create sockets, mount a root, stop a process,
-or remove activation records. The native supervisor still needs trusted
-MainPID/InvocationID custody, exclusive socket ownership, and observed cleanup.
+or remove activation records. The separate native supervisor owns trusted
+MainPID/InvocationID custody, exclusive socket ownership, and cleanup attempts.
 A plan is not an installed OS closure or permission to execute its argv.
 Bootstrap observations deliberately cannot establish effects, RUN, or cleanup.
 """
@@ -17,7 +17,7 @@ import socket
 import stat
 import struct
 import time
-from collections.abc import Collection, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,6 +40,10 @@ _PATH = re.compile(r"/[A-Za-z0-9_./-]+\Z")
 _MAX_FRAME = 64 * 1024
 _BOOTSTRAP = "/run/aragorn-pi-bootstrap/bootstrap.sock"
 _RUNTIME = "/opt/aragorn/pi-runtime"
+_ADMITTED = Path("/var/lib/aragorn/admitted")
+_EMPTY_MOUNTPOINTS = ("dev", "proc", "sys", "tmp", "var/tmp",
+                     "opt/aragorn/pi-runtime", "run/aragorn-pi-bootstrap",
+                     "var/lib/aragorn/admitted")
 _RESULT_AUTHORITY = "BOOTSTRAP_STATUS_ONLY_NOT_EFFECT_OR_RUN_AUTHORITY"
 
 
@@ -149,7 +153,7 @@ def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
              "relay gateway must join the confined worker identity")
     _text(config.relay["workerSocketPath"], 4096, "relay socket")
     socket_path = config.relay["workerSocketPath"]
-    _require(socket_path.startswith("/") and "\0" not in socket_path and
+    _require(_PATH.fullmatch(socket_path) is not None and
              all(part not in ("", ".", "..") for part in socket_path.split("/")[1:]) and
              socket_path != _BOOTSTRAP, "invalid relay socket path")
     raw = canonical_json({
@@ -264,21 +268,38 @@ def _systemd_plan(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle,
         "RestrictAddressFamilies=AF_UNIX", "RestrictSUIDSGID=yes", "LockPersonality=yes",
         "SystemCallArchitectures=native", "RestrictNamespaces=yes", "TasksMax=64",
         "MemoryMax=1G", "RuntimeMaxSec=30", "TimeoutStopSec=5",
+        "StandardInput=null", "StandardOutput=null", "StandardError=null",
+        "BindLogSockets=no", "LogNamespace=",
         "User=" + str(config.worker_uid), "Group=" + str(config.worker_gid),
         "RootDirectory=" + str(config.root_directory),
+        # Per-context destination paths are created inside this private tmpfs,
+        # never by mutating the pinned OS tree. Only this version is exposed.
+        "TemporaryFileSystem=" + str(_ADMITTED) + ":ro",
         "WorkingDirectory=" + bundle,
         "BindReadOnlyPaths=" + str(config.runtime_directory) + ":" + _RUNTIME,
         "BindReadOnlyPaths=" + bundle + ":" + bundle,
         "BindReadOnlyPaths=/run/aragorn-pi-bootstrap:/run/aragorn-pi-bootstrap",
         # Neither the legacy action relay nor host credentials are mounted.
         # Explicitly mask the configured endpoint even if an OS closure contains it.
-        "InaccessiblePaths=-" + config.relay["workerSocketPath"],
+        # PrivateDevices still projects shared-memory/hugepage endpoints from
+        # the host. This bootstrap has no POSIX-shm, hugepage or PTY authority.
+        "InaccessiblePaths=-" + config.relay["workerSocketPath"] +
+        " -/dev/shm -/dev/hugepages -/dev/pts",
     )
     argv = ("/usr/bin/systemd-run", "--quiet", "--no-block", "--unit=" + unit,
             *("--property=" + value for value in properties), "--",
             "/usr/bin/env", "-i", "HOME=/nonexistent", "PATH=" + _RUNTIME + "/node/bin",
             _RUNTIME + "/node/bin/node", _RUNTIME + "/pi-core/entrypoint.js")
     return unit, argv
+
+
+def _require_empty_mountpoints(manifest: Mapping, directories: tuple[str, ...]) -> None:
+    for mountpoint in _EMPTY_MOUNTPOINTS:
+        _require(mountpoint in directories and
+                 not any(entry["path"] == mountpoint or entry["path"].startswith(mountpoint + "/")
+                         for entry in manifest["files"]) and
+                 not any(name.startswith(mountpoint + "/") for name in directories),
+                 "protected OS closure lacks an empty fixed mountpoint")
 
 
 @contextmanager
@@ -300,6 +321,7 @@ def hold_confined_pi_launch_plan(
     for name in ("root_directory", "runtime_directory", "activation_directory"):
         _path(getattr(config, name), name)
     _path(protected_root, "admitted bundle root")
+    _require(protected_root == _ADMITTED, "native Pi profile requires the fixed admitted root")
     roots = (config.root_directory, config.runtime_directory, config.activation_directory)
     all_roots = (*roots, protected_root)
     _require(all(not a.is_relative_to(b) for a in all_roots for b in all_roots if a != b) and
@@ -329,9 +351,10 @@ def hold_confined_pi_launch_plan(
             start = _start(config, prepared)
             for root in roots:
                 descriptors.append(lineage._open_protected_root(root, 0))
-            os_manifest, _, os_digest = _tree(descriptors[0])
+            os_manifest, os_directories, os_digest = _tree(descriptors[0])
             runtime_manifest, _, _ = _tree(descriptors[1])
             _require(os_digest == config.root_closure_digest, "protected OS closure differs")
+            _require_empty_mountpoints(os_manifest, os_directories)
             os_files = {entry["path"]: entry for entry in os_manifest["files"]}
             _require("usr/bin/env" in os_files and os_files["usr/bin/env"]["executable"],
                      "pinned OS closure lacks the credential-free env entrypoint")
@@ -362,7 +385,8 @@ def _read_bootstrap(connection: socket.socket, deadline: float) -> dict:
 
 
 def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
-                                  connection: socket.socket, *, expected_pid: int) -> dict:
+                                  connection: socket.socket, *, expected_pid: int,
+                                  on_activation: Callable[[dict], None] | None = None) -> dict:
     """Bind an already-launched child and exchange only provider-unavailable status.
 
     Caller must supply its trusted MainPID and the accepted post-exec socket;
@@ -370,11 +394,14 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
     caller retains process ownership and MUST subsequently withdraw the exact
     published activation and verify process/unit cleanup. This function never
     claims either cleanup or delivery of model/effect work, including on error.
-    A failed bind/exchange cannot be retried with this plan.
+    A failed bind/exchange cannot be retried with this plan. The optional local
+    supervisor callback takes custody of the published document before START;
+    it is never supplied by the worker or serialized onto the channel.
     """
     _require(os.geteuid() == 0, "Pi bootstrap requires the protected supervisor")
     _require(type(plan) is PiConfinedLaunchPlan and plan._lease.active and
              not plan._lease.exchange_attempted, "Pi launch plan is inactive or already consumed")
+    _require(on_activation is None or callable(on_activation), "invalid local activation observer")
     plan._lease.exchange_attempted = True
     _uint(expected_pid, 1, 0xffffffff, "trusted child PID")
     _deadline(plan.deadline)
@@ -390,6 +417,8 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
     activation = bind_pi_worker_activation(plan.prepared, connection, expected_pid=expected_pid,
         expected_uid=plan.worker_uid, expected_gid=plan.worker_gid, profile=plan.profile,
         activation_path=plan.activation_path)
+    if on_activation is not None:
+        on_activation(json.loads(canonical_json(activation)))
     _send_frame(connection, plan.start_bytes, deadline)
     result = _read_bootstrap(connection, deadline)
     expected = {"schema": "aragorn/pi-core-bootstrap-result/v1",

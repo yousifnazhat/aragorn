@@ -52,7 +52,9 @@ edges. Five absent optional peers remain absent. No compiler is installed here;
 the selected compiler is separately supplied by exact reviewed archives. The
 Linux build emits the adapter, preserves the dependency/legacy layout and copies
 the pinned Node24 executable without executing it. See `compiled-artifact-v1.json`
-for the local output/receipt pins; a managed OS/library image is still missing.
+for the local output/receipt pins. The subsequent static OS source assembly is
+recorded in the [OS/supervisor checkpoint](../../docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md);
+it is not an installed or runtime-qualified OS.
 Dependency preparation uses `npm ci --ignore-scripts --no-audit --no-fund` with
 isolated empty npm configuration. Do not run install scripts or silently change
 pins to make a resolver succeed.
@@ -82,11 +84,17 @@ measure Phase 3 performance. No source/test helper is production authority.
 
 ## Still required for D2
 
-Install the compiled closure with a pinned OS/library tree; implement the native
-supervisor consuming the guarded plan/bootstrap with socket, PID/unit and mount
-custody, bounded cleanup and activation withdrawal; connect protected identity
+The static OS assembler, protected absent-only provisioner and native supervisor
+now exist. They reuse the compiled artifact and protected plan/bootstrap APIs;
+the supervisor remains provider-unavailable. Installation and native lifecycle
+must still be exercised in a separately authorized controlled fixture. Connect protected identity
 handoff to the unprivileged action relay; establish consumed-code custody;
 credential-isolated provider mediation with data-scope policy;
 real positive effect/health/cleanup integration. The HTTP reader service remains
 refusal-only. The approved 29-requirement map is not an executable result and no
 final acceptance or Phase 4 readiness is claimed here.
+
+The native supervisor requires Linux arm64, root-owned installed inputs, unified
+cgroups/PIDFDs and **systemd manager plus client 257+**, including explicit
+log-socket isolation. The prepared Debian library closure is not the host's
+systemd version. No host upgrade or native activation has been performed.

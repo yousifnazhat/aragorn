@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation and compiled/bootstrap slices released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation, compiled/bootstrap and OS/supervisor slices released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -12,7 +12,7 @@ defines 29 managed-profile logical requirements and is **approved by the user**.
 The subsequent [batch-1 release](../phase3/coordinator/pi-core-connected-batch-1.md)
 authorizes only offline implementation and new/affected checks, signing and push.
 No live operations are authorized. The compiled adapter now has an artifact
-checkpoint; managed OS/installed deployment identities remain future outputs.
+checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
 Batch-1 checkpoint: the actual pinned Pi loop is now connected offline to the
@@ -36,6 +36,16 @@ compiled/runtime/OS/configuration expectations to admission and the authenticate
 post-exec bootstrap. Native startup remains provider-unavailable and the
 actual supervisor is not implemented. OS installation, lifecycle/cleanup custody,
 action-relay identity handoff and provider mediation remain D2 dependencies.
+
+Batch-4 [OS/supervisor checkpoint](../phase3/coordinator/pi-core-os-supervisor-batch-4.md):
+reuses the retained compiler artifact and cached digest-pinned OS source. A static
+ELF dependency closure, descriptor-safe absent-only installer and one-shot native
+supervisor are implemented. The supervisor composes existing protected admission,
+post-exec activation binding and bootstrap; it owns exact lifecycle resources and
+fails closed on uncertain cleanup. Inert checks do not establish installation,
+actual confinement, runtime compatibility or cleanup. Native startup still reports
+provider-unavailable; action identity handoff, provider/data mediation and the
+connected useful task remain D2 dependencies. No live operation is released.
 
 ## Goal
 

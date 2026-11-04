@@ -61,6 +61,16 @@ lifetime, and Pi-aware effective-receipt recovery/rotation remain next.
 Provider-unavailable bootstrap still issues no request; this is not the useful
 native pilot or Phase 3 qualification.
 
+The [provider/data batch](docs/phase3/coordinator/pi-core-provider-mediation-batch-9.md)
+adds exact full-initial-prompt approval outside Pi, existing policy/health/
+revocation enforcement, a durable single-use data budget and an authenticated
+provider-service handoff. The fixed Pi provider client composes with the native
+action client; no credentials, arbitrary callbacks or later tool results are
+forwarded. This is a bounded data gate and client, **not an HTTP/provider adapter**.
+Actual provider selection, credential custody, send-time egress enforcement and
+service/channel provisioning remain before activation. Native bootstrap stays
+provider-unavailable; no useful pilot or qualification is claimed.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

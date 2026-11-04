@@ -98,7 +98,7 @@ class LinuxBuildTests(unittest.TestCase):
 
     def executor(self) -> tuple[object, list[list[str]], set[str]]:
         output = self.root / "output"
-        for name in ("worker.js", "entrypoint.js"):
+        for name in ("worker.js", "entrypoint.js", "provider.js"):
             self.write(output / "deployment/pi-core" / name, b"// inert output")
         subject = build.DockerBuild(output)
         calls: list[list[str]] = []
@@ -244,6 +244,8 @@ class LinuxBuildTests(unittest.TestCase):
         self.assertEqual(inputs["runtime_package_occurrences"], 89)
         self.assertTrue((output / "deployment/node/bin/node").is_file())
         self.assertTrue((output / "deployment/openclaw/aragorn-runtime-action-worker/index.js").is_file())
+        self.assertEqual((output / "source/pi-core/provider.ts").read_bytes(), b"{}")
+        self.assertEqual(inputs["sources"]["provider.ts"], build.sha256(b"{}"))
         self.assertEqual(build.tree_inventory(output / "source/pi-core/node_modules"),
                          build.tree_inventory(output / "deployment/pi-core/node_modules"))
         self.assertFalse((output / "build-receipt.json").exists())
@@ -382,7 +384,7 @@ class LinuxBuildTests(unittest.TestCase):
         output, node, ts, compiler = self.fixture()
 
         def compile_inert(subject):
-            for name in ("worker.js", "entrypoint.js"):
+            for name in ("worker.js", "entrypoint.js", "provider.js"):
                 (subject.output / "deployment/pi-core" / name).write_bytes(b"// mocked compiler output")
             return {"owned_container_absent": True, "owned_image_absent": True}
 
@@ -408,7 +410,7 @@ class LinuxBuildTests(unittest.TestCase):
 
     def test_compiler_config_has_only_explicit_entrypoints(self):
         config = json.loads((_ROOT / "packaging/pi-core/tsconfig.json").read_bytes())
-        self.assertEqual(config["files"], ["worker.ts", "entrypoint.ts"])
+        self.assertEqual(config["files"], ["worker.ts", "entrypoint.ts", "provider.ts"])
         self.assertEqual(config["compilerOptions"]["target"], "ES2023")
         self.assertEqual(config["compilerOptions"]["lib"], ["ES2024"])
         self.assertEqual(config["compilerOptions"]["module"], "NodeNext")

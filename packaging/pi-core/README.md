@@ -48,6 +48,33 @@ substitute relay. The legacy injectable composition rejects v2 START. This is
 prepared provider integration, not an enabled provider: native bootstrap still
 returns `PROVIDER_UNAVAILABLE`, issues no request and waits for RELEASE.
 
+`provider.ts` adds a separate fixed client for
+`/run/aragorn-pi-bootstrap/provider/provider.sock`. It projects exactly the
+initial system/user messages, full fixed tool declaration and model. Local display
+timestamps are validated then normalized to zero; all semantic data stays in the
+canonical approval payload. It never forwards credentials, Pi options/callbacks,
+assistant continuation or tool results. Its one request slot and original
+deadline cannot be renewed. Root-owned endpoint checks are not portable kernel
+peer-credential proof; the external gate authenticates the accepted Pi process.
+
+`runProtectedNativePiEntry` composes that provider client with the existing fixed
+native action client, without injectable callbacks or transport overrides. It
+caps the initial turn at one. Bounded buffered provider output becomes Pi's real
+terminal events; this is not incremental streaming. Reported token usage is
+untrusted provider data; required zero cost fields mean unpriced, not cost proof.
+The native bootstrap does not call this composition and stays unavailable.
+
+`src/aragorn/pi_core_provider_mediation.py` requires root-held approval for the
+exact payload/model/route and public or fabricated owned-lab data, then reuses
+the existing policy, independent observation, health, revocation and replay
+decision. It retains worker PIDFD/lineage custody, permanently spends an
+activation budget before an authenticated service handoff, and closes its owned
+handles before worker completion. Caller-owned channels must still be closed by
+their owner. This gate reads no credentials and opens no provider connection:
+actual TLS/DNS/proxy/redirect controls and network-send-time policy enforcement
+belong to the still-missing provider adapter. See the
+[batch-9 checkpoint](../../docs/phase3/coordinator/pi-core-provider-mediation-batch-9.md).
+
 The additive Python supervisor boundary now lives in
 `src/aragorn/pi_core_bundle_launch.py` and `pi_core_worker_identity.py`: exact
 admitted-bundle preparation, one-shot protected activation publication and a
@@ -83,7 +110,10 @@ the selected compiler is separately supplied by exact reviewed archives. The
 Linux build emits the adapter, preserves the dependency/legacy layout and copies
 the pinned Node24 executable without executing it. `compiled-artifact-v1.json`
 preserves the earlier bootstrap output; the compiled native-client successor is
-recorded in `compiled-artifact-v2.json`. The static OS source assembly is
+recorded in `compiled-artifact-v2.json`; `compiled-artifact-v3.json` adds the
+provider client and protected composition without altering either predecessor.
+The unchanged Node/static OS closure is reused without another OS assembly.
+The static OS source assembly is
 recorded in the [OS/supervisor checkpoint](../../docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md);
 it is not an installed or runtime-qualified OS.
 Dependency preparation uses `npm ci --ignore-scripts --no-audit --no-fund` with
@@ -108,6 +138,11 @@ composition). `linux-build-toolchain-v1.json` pins local archives and Docker
 metadata for the compiler-only stage. Exact unchanged passes must be reused;
 no old stage is scheduled merely because these files were added.
 
+Batch 9 adds `pi-core-provider-mediation-offline`,
+`pi-core-provider-client-offline` and `pi-core-provider-build-offline`. These
+select only the new data/client behavior and affected assembler checks. Importing
+older fixture helpers does not schedule their historical test classes.
+
 Tests run the actual pinned Pi loop against a scripted provider and in-memory
 relay, with cross-language verification by Aragorn's existing Python parser.
 They do not start listeners, call model providers, execute protected effects or
@@ -122,8 +157,9 @@ must still be exercised in a separately authorized controlled fixture. Protected
 identity, native request dispatch and independent sensor/broker wiring now exist;
 the fixed client/START binding is implemented without activating that path.
 Establish exact service/channel provisioning and lifetime, consumed-code custody,
-Pi-aware effective-receipt recovery/rotation and credential-isolated provider
-mediation with data-scope policy, followed by
+Pi-aware effective-receipt recovery/rotation and the actual credential-isolated
+provider adapter with network-send-time data/egress enforcement (the data gate
+and fixed client exist, but no provider is selected or activated), followed by
 real positive effect/health/cleanup integration. The HTTP reader service remains
 refusal-only. The approved 29-requirement map is not an executable result and no
 final acceptance or Phase 4 readiness is claimed here.

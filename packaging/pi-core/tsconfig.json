@@ -13,5 +13,5 @@
     "declaration": false,
     "sourceMap": false
   },
-  "files": ["worker.ts", "entrypoint.ts"]
+  "files": ["worker.ts", "entrypoint.ts", "provider.ts"]
 }

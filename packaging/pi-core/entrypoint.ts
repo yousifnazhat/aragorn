@@ -197,6 +197,45 @@ export async function runPreparedNativePiEntry(
   });
 }
 
+/**
+ * Protected route composition with no injected provider or effect transport.
+ * This prepares a client only: nativeMain stays UNAVAILABLE until the external
+ * credential/data-policy route and its native lifetime are deployed and proven.
+ */
+export async function runProtectedNativePiEntry(
+  value: unknown,
+  options: { routeDigest: string; signal?: AbortSignal; deadlineMs?: number },
+): Promise<WorkerReport> {
+  const start = parseStart(value);
+  if (start.schema !== NATIVE_START_SCHEMA) throw new TypeError("Protected provider requires exact native START");
+  exact(options, ["routeDigest"], ["signal", "deadlineMs"]);
+  if (typeof options.routeDigest !== "string" || !/^sha256:[a-f0-9]{64}(?![\s\S])/.test(options.routeDigest) ||
+      (options.deadlineMs !== undefined && typeof options.deadlineMs !== "number") ||
+      (options.signal !== undefined && !(options.signal instanceof AbortSignal))) throw new TypeError("Invalid protected route");
+  const now = performance.now();
+  const originalDeadline = options.deadlineMs ?? now + start.limits.maxRunMs;
+  if (typeof originalDeadline !== "number" || !Number.isFinite(originalDeadline) || originalDeadline <= now ||
+      originalDeadline > now + MAX_TOTAL_MS) throw new TypeError("Invalid original protected Pi deadline");
+  const deadline = Math.min(originalDeadline, now + start.limits.maxRunMs);
+  const common = { activationId: start.activation_id, deadlineMs: deadline,
+    ...(options.signal ? { signal: options.signal } : {}) };
+  // Keep existing bootstrap/offline imports inert and independent of this new
+  // optional client. The original deadline includes module preparation time.
+  const { createProtectedProviderStream } = await import("./provider.js");
+  const streamFn = createProtectedProviderStream({ ...common, routeDigest: options.routeDigest,
+    workerUid: start.native_request.worker_uid, workerGid: start.native_request.worker_gid });
+  const relay = createNativeRelay(start.native_request, common);
+  const maxRunMs = Math.min(start.limits.maxRunMs, Math.floor(deadline - performance.now()));
+  if (maxRunMs < 1) throw new TypeError("Original protected Pi deadline exhausted");
+  return runManagedPiWorker({
+    systemPrompt: start.system_prompt, task: start.task, model: start.model,
+    correlation: { sessionId: start.activation_id, runId: start.activation_id },
+    // No continuation or tool-result forwarding is approved in this slice.
+    limits: { ...start.limits, maxTurns: 1, maxRunMs }, streamFn, relay,
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
+}
+
 async function bounded<T>(operation: () => Promise<T>, deadline: number): Promise<T> {
   const remaining = deadline - performance.now();
   if (!Number.isFinite(remaining) || remaining <= 0 || remaining > MAX_TOTAL_MS) {

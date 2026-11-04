@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation through native root-side request/sensor wiring released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through protected provider/data handoff released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -84,6 +84,17 @@ provider-unavailable bootstrap remains inert. Protected provider/data mediation,
 exact service/channel provisioning and lifetime, and effective-receipt
 recovery/rotation still precede the separately authorized useful D2 pilot.
 
+Batch-9 [provider/data checkpoint](../phase3/coordinator/pi-core-provider-mediation-batch-9.md):
+the exact full initial prompt, model and fixed tool declaration require external
+root-held data approval and existing independent policy/health/revocation checks.
+A durable one-use claim precedes an authenticated protected-service handoff.
+The fixed credential-free Pi provider client now composes with the native action
+client. No continuation or tool-result forwarding is implicitly authorized.
+This is not the actual provider adapter: endpoint/credential selection, TLS/DNS/
+proxy/redirect and network-send-time policy enforcement, native service lifetime,
+consumed-code custody and effective-receipt recovery remain before the pilot.
+Native bootstrap remains unavailable. No live request or Phase 3 result exists.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -127,9 +138,11 @@ identity and protected relay registration are composed in source. Batches 6–7 
 root-read request handoff, mandatory create broker enforcement, independent Pi
 sensor measurement, native dispatch and explicit cleanup joins. Batch 8 adds
 the fixed native client/v2 START binding without repointing or loosening the
-legacy relay profile. Pi-aware effective-receipt
-recovery/rotation, exact channel provisioning/lifetime and credential-isolated
-provider routing remain next; no useful native task has run.
+legacy relay profile. Batch 9 adds a protected initial-prompt data gate and
+fixed provider client, with an authenticated service handoff but no provider
+adapter or network egress. Pi-aware effective-receipt recovery/rotation, exact
+channel provisioning/lifetime and credential-isolated actual provider routing
+remain next; no useful native task has run.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension
@@ -179,7 +192,8 @@ The linked step-2 documents prepare a bounded **compatibility-and-acceptance
 contract**, not another generic framework. The remaining release obligations are:
 
 1. Preserve the selected immutable Pi-core, Node and transitive/build-tool pins.
-   The actual adapter artifact is now pinned in `packaging/pi-core/compiled-artifact-v1.json`.
+   The initial adapter artifact is preserved in `packaging/pi-core/compiled-artifact-v1.json`;
+   the provider-client successor is `packaging/pi-core/compiled-artifact-v3.json`.
    Pin the managed OS closure and installed custody once implemented; no
    placeholder digest may stand in for those bytes. Publish the exact worker
    entrypoint with the later implementation contract.

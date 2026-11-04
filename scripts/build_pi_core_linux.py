@@ -33,7 +33,7 @@ DOCKER = "/opt/homebrew/bin/docker"
 CONTEXT = "colima"
 LABEL = "org.aragorn.pi-core-build"
 MAX_ARCHIVE = 512 * 1024 * 1024
-SOURCES = ("worker.ts", "entrypoint.ts", "package.json", "package-lock.json", "tsconfig.json")
+SOURCES = ("worker.ts", "entrypoint.ts", "provider.ts", "package.json", "package-lock.json", "tsconfig.json")
 
 
 class BuildError(RuntimeError):
@@ -329,7 +329,7 @@ class DockerBuild:
             require(status.get("Running") is False and status.get("ExitCode") == 0 and
                     status.get("OOMKilled") is False and not status.get("Error"), "compiler did not exit successfully")
             require(all((self.output / "deployment/pi-core" / name).is_file()
-                        for name in ("worker.js", "entrypoint.js")), "compiler output is incomplete")
+                        for name in ("worker.js", "entrypoint.js", "provider.js")), "compiler output is incomplete")
         except BaseException as exc:
             failure = exc
         finally:

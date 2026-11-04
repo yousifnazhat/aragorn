@@ -38,6 +38,14 @@ This is identity registration only: request-bound broker enforcement and
 credential-isolated provider/data mediation still precede the useful D2 pilot.
 No action listener is unmasked and no live operation is released.
 
+The [request/broker batch](docs/phase3/coordinator/pi-core-request-broker-batch-6.md)
+adds a root-read, request-bound handoff and create-only broker enforcement using
+the existing durable security core. It requires genuine matching Pi sensor
+attribution alongside protected provenance; relay attribution does not qualify.
+Native request/channel/sensor composition, Pi-aware effective-receipt recovery
+and rotation, and protected provider/data mediation remain D2 prerequisites
+before the separately authorized useful pilot.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

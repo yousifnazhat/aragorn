@@ -56,6 +56,17 @@ or effect authority**: exact request provenance, broker-bound enforcement and
 credential-isolated provider/data mediation remain the next D2 work. The legacy
 action endpoint remains masked and native bootstrap stays provider-unavailable.
 
+Batch-6 [request/broker checkpoint](../phase3/coordinator/pi-core-request-broker-batch-6.md):
+root reads the actual authenticated Pi request and holds its identity through an
+independently authenticated broker channel. The create-only broker requires that
+provenance inside its durable grant/effect path and separately verifies matching
+sensor attribution, grants, lineage and current policy/health/revocation. Existing
+relay-attributed sensor output correctly refuses; native request/sensor/channel
+wiring, Pi-aware effective-receipt recovery/rotation, and protected provider/data
+mediation remain before the useful D2 pilot. Frozen recovery/archive routines
+refuse the new effective-BLOCK receipts; this one-shot caller does not use them.
+This is not a deployment or Phase 3 result.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -95,8 +106,11 @@ request-only `packaging/pi-core/worker.ts` is implemented and exercised offline;
 the compiled target artifact and protected native supervisor now exist as
 implementation, but no installed complete OS deployment is evidenced.
 Supervisor-side preparation, guarded confinement, bootstrap, accepted-peer
-identity and protected relay registration are composed in source. Request-bound
-action mediation and credential-isolated provider routing remain next.
+identity and protected relay registration are composed in source. Batch 6 adds
+the source-level root-read request handoff, mandatory create broker enforcement,
+and independent sensor-channel caller. Genuine Pi sensor/native channel wiring,
+Pi-aware effective-receipt recovery/rotation and credential-isolated provider
+routing remain next; no useful native task has run.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension

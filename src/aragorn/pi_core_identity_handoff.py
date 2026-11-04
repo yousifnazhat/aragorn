@@ -140,10 +140,20 @@ def _packet(document):
 
 def send_packet(connection, document, deadline, *, rights=()):
     """One atomic send attempt. Caller retains ownership of all source rights."""
-    raw = _packet(document)
+    _packet(document)
     _require(type(rights) is tuple and all(type(fd) is int and fd >= 0 for fd in rights) and
              len(rights) == (1 if document["kind"] == "HANDOFF" else 0),
              "identity packet has an invalid source-rights count")
+    send_authenticated_packet(connection, document, deadline, rights=rights, max_bytes=MAX_PACKET_BYTES)
+
+
+def send_authenticated_packet(connection, document, deadline, *, rights=(), max_bytes):
+    """Bounded raw transport, not an identity/request authority validator."""
+    _require(type(max_bytes) is int and 0 < max_bytes <= 64 * 1024, "invalid packet byte bound")
+    raw = canonical_json(document)
+    _require(type(document) is dict and 0 < len(raw) <= max_bytes and type(rights) is tuple and
+             len(rights) <= 1 and all(type(fd) is int and fd >= 0 for fd in rights),
+             "invalid authenticated packet or source rights")
     controls = [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", rights).tobytes())] if rights else []
     _timeout(connection, deadline)
     sent = connection.sendmsg([raw], controls, _NOSIGNAL)
@@ -162,11 +172,24 @@ def _close_installed(descriptors):
 
 
 def receive_packet(connection, expected_peer, deadline, *, expected_rights=0):
+    document, installed = receive_authenticated_packet(connection, expected_peer, deadline,
+        expected_rights=expected_rights, max_bytes=MAX_PACKET_BYTES)
+    try:
+        _packet(document)
+        _require(expected_rights == (1 if document["kind"] == "HANDOFF" else 0), "identity packet kind/rights differ")
+        return document, installed
+    except BaseException:
+        _close_installed(installed)
+        raise
+
+
+def receive_authenticated_packet(connection, expected_peer, deadline, *, expected_rights=0, max_bytes):
     """Adopt every installed FD before parsing; return owned rights only on success."""
     _peer(expected_peer)
+    _require(type(max_bytes) is int and 0 < max_bytes <= 64 * 1024, "invalid packet byte bound")
     _require(type(expected_rights) is int and expected_rights in (0, 1), "invalid expected rights count")
     _timeout(connection, deadline)
-    raw, controls, flags, _address = connection.recvmsg(MAX_PACKET_BYTES + 1,
+    raw, controls, flags, _address = connection.recvmsg(max_bytes + 1,
         socket.CMSG_SPACE(_CRED.size) + socket.CMSG_SPACE(16 * struct.calcsize("=i")), _CLOEXEC)
     installed = []
     credential_items = []
@@ -195,14 +218,12 @@ def receive_packet(connection, expected_peer, deadline, *, expected_rights=0):
     try:
         allowed_flags = getattr(socket, "MSG_EOR", 128) | _CLOEXEC
         _require(not invalid and not flags & ~allowed_flags and type(raw) is bytes and
-                 0 < len(raw) <= MAX_PACKET_BYTES, "identity packet controls, flags, or size differ")
+                 0 < len(raw) <= max_bytes, "identity packet controls, flags, or size differ")
         _require(credential_items == [_CRED.pack(*expected_peer)], "identity packet sender credentials differ")
         _require(len(installed) == expected_rights and len(set(installed)) == len(installed) and
                  rights_items == (1 if expected_rights else 0), "identity packet installed-rights count differs")
         _require(all(not os.get_inheritable(fd) for fd in installed), "received identity handles lack CLOEXEC")
         document = _parse_canonical_document(raw, "Pi identity handoff")
-        _packet(document)
-        _require(expected_rights == (1 if document["kind"] == "HANDOFF" else 0), "identity packet kind/rights differ")
         return document, tuple(installed)
     except BaseException:
         _close_installed(installed)

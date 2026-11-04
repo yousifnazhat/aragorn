@@ -46,6 +46,15 @@ Native request/channel/sensor composition, Pi-aware effective-receipt recovery
 and rotation, and protected provider/data mediation remain D2 prerequisites
 before the separately authorized useful pilot.
 
+The [native request/sensor batch](docs/phase3/coordinator/pi-core-native-request-batch-7.md)
+now connects root-owned native request dispatch, independently measured Pi sensor
+issuance and broker result/cleanup acknowledgement. Incomplete remote custody
+blocks RELEASE; a no-request bootstrap is explicitly not useful-task evidence.
+All 137 new/affected checks passed once, with no live operation or test rerun.
+Next: the fixed native Pi client/START endpoint binding, protected provider/data
+mediation, exact service/channel provisioning and effective-receipt recovery.
+The compiled bootstrap remains provider-unavailable and its legacy relay masked.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

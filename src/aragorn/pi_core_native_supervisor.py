@@ -261,6 +261,8 @@ class _Owned:
     cgroup_fd: int = -1
     cgroup_parent_identity: tuple = ()
     cgroup_identity: tuple = ()
+    request_attempted: bool = False
+    request_dispatch_active: bool = False
 
 
 def _missing(parent: int, name: str) -> bool:
@@ -445,7 +447,9 @@ def _resource_ownership(owned: _Owned) -> None:
                  _directory_identity(os.stat(_BOOTSTRAP.name, dir_fd=owned.run_fd, follow_symlinks=False)),
                  "bootstrap directory replaced")
         expected = ["bootstrap.sock"] if owned.socket_identity else []
-        _require(sorted(os.listdir(owned.directory_fd)) == expected, "bootstrap namespace contains unowned residue")
+        if owned.request_dispatch_active:
+            expected.append("requests")
+        _require(sorted(os.listdir(owned.directory_fd)) == sorted(expected), "bootstrap namespace contains unowned residue")
         if owned.socket_identity:
             actual = os.stat("bootstrap.sock", dir_fd=owned.directory_fd, follow_symlinks=False)
             _require(_file_identity(actual) == owned.socket_identity, "owned bootstrap socket replaced")
@@ -459,6 +463,7 @@ def _cleanup(owned: _Owned, original_deadline: float, maximum_seconds: float = 5
               "socket_removed": False, "directory_removed": False}
     try:
         _remaining(deadline)
+        _require(not owned.request_dispatch_active, "native request channel cleanup remains unresolved")
         _resource_ownership(owned)
         if owned.start_attempted:
             _require(owned.started and owned.pidfd >= 0 and owned.invocation and owned.immutable_digest and
@@ -553,6 +558,7 @@ def run_native_pi_worker(
     config: PiConfinedLaunchConfig, cleanup_timeout_seconds: float = 5.0,
     identity_relay_connection: socket.socket | None = None,
     expected_identity_relay_peer: tuple[int, int, int] | None = None,
+    request_channels=None,
 ) -> dict:
     """Run one bootstrap and owned cleanup within the original <=30s deadline.
 
@@ -569,6 +575,9 @@ def run_native_pi_worker(
              0 < cleanup_timeout_seconds <= 5, "native cleanup deadline must be bounded to five seconds")
     operation_deadline = deadline - cleanup_timeout_seconds
     _require(operation_deadline > now, "original deadline cannot reserve the cleanup budget")
+    if request_channels is not None:
+        from .pi_core_native_request import PiNativeRequestChannels, PiNativeRequestError, hold_native_pi_request_dispatch
+        _require(type(request_channels) is PiNativeRequestChannels, "invalid native request channel configuration")
     _require((identity_relay_connection is None) == (expected_identity_relay_peer is None),
              "identity channel and exact relay peer must be supplied together")
     if expected_identity_relay_peer is not None:
@@ -586,9 +595,29 @@ def run_native_pi_worker(
         failure = None
         cleanup = None
         identity_stack = ExitStack()
+        request_stack = ExitStack()
+        request_dispatch = None
+        request_close_attempted = False
+        request_observation = {"status": "NOT_REQUESTED" if request_channels is None else "PENDING"}
         identity_publication = {"authority": IDENTITY_AUTHORITY,
             "status": "NOT_REQUESTED" if identity_relay_connection is None else "PENDING"}
         identity_close_attempted = False
+
+        def close_request_dispatch():
+            nonlocal request_close_attempted, request_observation
+            if request_close_attempted:
+                return
+            request_close_attempted = True
+            try:
+                request_stack.close()
+            finally:
+                if request_dispatch is not None:
+                    request_observation = request_dispatch.observation
+
+        def before_release():
+            # Descriptor/result and listener cleanup must precede RELEASE.
+            close_request_dispatch()
+            revoke_identity()
 
         def register_identity(document):
             nonlocal identity_publication
@@ -628,6 +657,10 @@ def run_native_pi_worker(
             owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
             _require(owned.unit_absence_observed, "fresh Pi unit already exists")
             _prepare_resources(owned)
+            if request_channels is not None:
+                request_dispatch = request_stack.enter_context(hold_native_pi_request_dispatch(
+                    owned, request_channels, grant=grant, protected_root=protected_root,
+                    deadline=operation_deadline, cleanup_deadline=deadline))
             owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
             _require(owned.unit_absence_observed, "Pi unit appeared before exclusive start")
             owned.start_attempted = True
@@ -640,12 +673,20 @@ def run_native_pi_worker(
             owned.connection, _address = owned.listener.accept()
             _same_generation(owned, _unit_state(plan.unit_name, operation_deadline), operation_deadline, live=True)
             exchange_options = {"expected_pid": owned.pid, "on_activation": register_identity}
-            if identity_relay_connection is not None:
-                exchange_options["on_before_release"] = revoke_identity
+            if identity_relay_connection is not None or request_channels is not None:
+                exchange_options["on_before_release"] = before_release
+            if request_dispatch is not None:
+                exchange_options["read_result"] = request_dispatch.read_bootstrap_result
             observation = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
         except Exception as exc:
+            if request_channels is not None and isinstance(exc, PiNativeRequestError) and hasattr(exc, "observation"):
+                request_observation = dict(exc.observation)
             failure = f"{type(exc).__name__}: {str(exc)[:512]}"
         finally:
+            try:
+                close_request_dispatch()
+            except Exception as exc:
+                failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
             try:
                 revoke_identity()
             except Exception as exc:
@@ -659,6 +700,7 @@ def run_native_pi_worker(
             "schema": "aragorn/pi-core-native-supervisor-result/v1",
             "authority": "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
             "status": "CLEANUP_HOLD" if cleanup["status"] == "CLEANUP_HOLD" or
+                       request_observation.get("cleanup") == "CLEANUP_HOLD" or
                        identity_publication["status"] == "HOLD_UNCONFIRMED" else
                       "BOOTSTRAP_COMPLETE" if observation is not None and
                        identity_publication["status"] in {"NOT_REQUESTED", "REVOKED"} else "REFUSED",
@@ -668,5 +710,6 @@ def run_native_pi_worker(
             "activation_digest": ("sha256:" + hashlib.sha256(owned.activation_raw).hexdigest())
                                   if owned.activation_raw is not None else None,
             "bootstrap": observation, "identity_registration": dict(identity_publication),
+            "request_channel": request_observation,
             "failure": failure, "cleanup": cleanup,
         }

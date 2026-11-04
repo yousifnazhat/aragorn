@@ -16,10 +16,11 @@ import secrets
 import socket
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from . import pi_core_identity_handoff as transport
+from . import pi_core_sensor_channel as sensor_transport
 from . import pi_core_worker_identity as identity
 from . import runtime_action_broker as broker
 from . import runtime_action_worker as worker
@@ -264,7 +265,8 @@ def hold_broker_request_authority(connection, *, expected_supervisor_peer, deadl
 
 
 def handle_pi_request_connection(worker_connection, broker_connection, *, activation_path,
-        profile, protected_install_root, grant, binding, expected_broker_peer, deadline):
+        profile, protected_install_root, grant, binding, expected_broker_peer, deadline,
+        sensor_channel=None, native_custody=None):
     """Read one actual Pi stream request and hold root custody through broker DONE.
 
     The worker stream must be separate from multi-turn bootstrap: its canonical
@@ -273,6 +275,17 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
     """
     _require(os.geteuid() == os.getegid() == 0, "Pi request reader requires root")
     transport.validate_deadline(deadline)
+    if sensor_channel is not None:
+        _require(type(sensor_channel) is sensor_transport.PiSensorChannel,
+                 "Pi sensor channel must be protected native configuration")
+        _require(sensor_channel.connection is not broker_connection and
+                 sensor_channel.connection.fileno() != broker_connection.fileno(),
+                 "Pi sensor and broker channels overlap")
+    if native_custody is not None:
+        from .pi_core_native_request import PiNativeRequestCustody
+        _require(type(native_custody) is PiNativeRequestCustody and deadline <= native_custody.deadline,
+                 "Pi native request custody or original deadline differs")
+        native_custody.guard()
     _require(worker_connection is not broker_connection and worker_connection.fileno() != broker_connection.fileno(),
              "Pi worker and broker channels must be distinct")
     _require(worker_connection.getsockopt(socket.SOL_SOCKET, transport._DOMAIN) == socket.AF_UNIX and
@@ -301,10 +314,13 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
         worker_fd = process.open_peer_pidfd(worker_connection, peer[0])
         measured = identity._measured(worker_connection, worker_fd, profile, activation, deadline)
         with identity.lineage.hold_runtime_active_skill_lineage(peer[0], measured, grant,
-                protected_root=protected_install_root, expected_install_uid=0, deadline=deadline) as active:
+                protected_root=protected_install_root, expected_install_uid=0, deadline=deadline) as active, \
+                ExitStack() as secondary:
             identity._lineage_matches(active, activation, profile, protected_install_root)
 
             def guard():
+                if native_custody is not None:
+                    native_custody.guard()
                 identity._remaining(deadline, activation)
                 _require(identity.read_activation(activation_path) == activation and
                          identity._measured(worker_connection, worker_fd, profile, activation, deadline) == measured,
@@ -315,6 +331,12 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
             _require(request["session_id"] == activation["session_id"] and request["run_id"] == activation["run_id"],
                      "Pi request session is not the protected activation")
             guard()
+            sensor_ticket = None
+            if sensor_channel is not None:
+                sensor_ticket = secondary.enter_context(sensor_transport.hold_pi_sensor_channel(
+                    sensor_channel.connection, worker_connection, request,
+                    expected_sensor_peer=sensor_channel.expected_peer, deadline=deadline))
+                guard()
             broker_fd = transport.guard_channel(broker_connection, expected_broker_peer, deadline)
             challenge, _ = _receive(broker_connection, expected_broker_peer, deadline)
             _require(challenge["kind"] == "CHALLENGE", "expected broker request challenge")
@@ -335,6 +357,10 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
                              "broker DONE is not bound to this request")
                     result = _result(document["envelope"], document["result"], request, activation, binding)
                     guard()
+                    if sensor_ticket is not None:
+                        _require(result["status"] == "COMPLETED", "Pi sensor completion cannot attest an unknown result")
+                        sensor_ticket.finish(result["broker_result"])
+                        guard()
                     break
                 sequence += 1
                 expected = _packet("CHECK", **fields, sequence=sequence)

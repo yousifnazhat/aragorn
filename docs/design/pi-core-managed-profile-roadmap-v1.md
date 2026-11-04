@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation, compiled/bootstrap, OS/supervisor and identity-registration slices released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through native root-side request/sensor wiring released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -67,6 +67,17 @@ mediation remain before the useful D2 pilot. Frozen recovery/archive routines
 refuse the new effective-BLOCK receipts; this one-shot caller does not use them.
 This is not a deployment or Phase 3 result.
 
+Batch-7 [native request/sensor checkpoint](../phase3/coordinator/pi-core-native-request-batch-7.md):
+the native supervisor owns the new one-shot request endpoint and retains its
+unit/activation/process custody through root-read request handling and separate
+independent Pi measurement. Sensor cleanup acknowledgement and exact local
+endpoint cleanup precede RELEASE; incomplete remote custody remains a hold.
+All 137 new/affected checks passed once; no live operation or rerun. The compiled
+Pi client still needs its fixed root-authenticated endpoint/START binding, then
+protected provider/data mediation, service/channel provisioning and lifetime,
+and effective-receipt recovery/rotation. Native bootstrap remains unavailable;
+`NO_REQUEST` is not a useful-task pilot or Phase 3 result.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -106,11 +117,13 @@ request-only `packaging/pi-core/worker.ts` is implemented and exercised offline;
 the compiled target artifact and protected native supervisor now exist as
 implementation, but no installed complete OS deployment is evidenced.
 Supervisor-side preparation, guarded confinement, bootstrap, accepted-peer
-identity and protected relay registration are composed in source. Batch 6 adds
-the source-level root-read request handoff, mandatory create broker enforcement,
-and independent sensor-channel caller. Genuine Pi sensor/native channel wiring,
-Pi-aware effective-receipt recovery/rotation and credential-isolated provider
-routing remain next; no useful native task has run.
+identity and protected relay registration are composed in source. Batches 6–7 add
+root-read request handoff, mandatory create broker enforcement, independent Pi
+sensor measurement, native dispatch and explicit cleanup joins. The compiled
+Pi client/START still needs a fixed binding to the new root endpoint; legacy
+relay configuration cannot simply be repointed. Pi-aware effective-receipt
+recovery/rotation, exact channel provisioning/lifetime and credential-isolated
+provider routing remain next; no useful native task has run.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension

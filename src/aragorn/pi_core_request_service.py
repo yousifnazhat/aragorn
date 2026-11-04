@@ -78,6 +78,10 @@ def handle_pi_broker_request(
             result = worker._broker_result(result, envelope, binding)
             channel.require_peer_live(sensor_connection, peer, sensor_pidfd, bounded_deadline)
             broker._send_frame(sensor_connection, canonical_json(result), bounded_deadline)
+            # The reused sensor result reader requires one frame followed by
+            # EOF. Finish this write side before root waits for sensor cleanup;
+            # a borrowed connection is still closed by its caller, never here.
+            sensor_connection.shutdown(socket.SHUT_WR)
             # Complete owned sensor-handle cleanup BEFORE root can see success.
             descriptor, sensor_pidfd = sensor_pidfd, -1
             os.close(descriptor)

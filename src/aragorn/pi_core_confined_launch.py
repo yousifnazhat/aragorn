@@ -386,7 +386,8 @@ def _read_bootstrap(connection: socket.socket, deadline: float) -> dict:
 
 def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
                                   connection: socket.socket, *, expected_pid: int,
-                                  on_activation: Callable[[dict], None] | None = None) -> dict:
+                                  on_activation: Callable[[dict], None] | None = None,
+                                  on_before_release: Callable[[], None] | None = None) -> dict:
     """Bind an already-launched child and exchange only provider-unavailable status.
 
     Caller must supply its trusted MainPID and the accepted post-exec socket;
@@ -402,6 +403,7 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
     _require(type(plan) is PiConfinedLaunchPlan and plan._lease.active and
              not plan._lease.exchange_attempted, "Pi launch plan is inactive or already consumed")
     _require(on_activation is None or callable(on_activation), "invalid local activation observer")
+    _require(on_before_release is None or callable(on_before_release), "invalid local prerelease observer")
     plan._lease.exchange_attempted = True
     _uint(expected_pid, 1, 0xffffffff, "trusted child PID")
     _deadline(plan.deadline)
@@ -425,6 +427,10 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
                 "activation_id": plan.prepared.activation_id,
                 "status": "PROVIDER_UNAVAILABLE", "authority": _RESULT_AUTHORITY}
     _require(result == expected, "unexpected Pi bootstrap result; no effect authority is supported")
+    # Protected identity registration must be revoked while the authenticated
+    # worker is still alive, before RELEASE permits its expected exit.
+    if on_before_release is not None:
+        on_before_release()
     _send_frame(connection, canonical_json({"schema": "aragorn/pi-core-bootstrap-release/v1",
         "activation_id": plan.prepared.activation_id}), deadline)
     return {"schema": "aragorn/pi-core-bootstrap-observation/v1", "authority": _RESULT_AUTHORITY,

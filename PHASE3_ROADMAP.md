@@ -30,6 +30,14 @@ assembled statically; target binaries, provisioning and the supervisor are not
 executed. Next D2 work is protected action-identity handoff and credential-isolated
 provider/data mediation, then an explicitly authorized connected useful pilot.
 
+The [identity-handoff batch](docs/phase3/coordinator/pi-core-identity-handoff-batch-5.md)
+connects protected supervisor registration to an unprivileged relay consumer.
+It transfers a bounded identity record and kernel process handle over an
+authenticated local channel, then requires withdrawal before worker release.
+This is identity registration only: request-bound broker enforcement and
+credential-isolated provider/data mediation still precede the useful D2 pilot.
+No action listener is unmasked and no live operation is released.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

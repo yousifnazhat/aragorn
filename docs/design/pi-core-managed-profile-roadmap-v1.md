@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation, compiled/bootstrap and OS/supervisor slices released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation, compiled/bootstrap, OS/supervisor and identity-registration slices released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -47,6 +47,15 @@ actual confinement, runtime compatibility or cleanup. Native startup still repor
 provider-unavailable; action identity handoff, provider/data mediation and the
 connected useful task remain D2 dependencies. No live operation is released.
 
+Batch-5 [protected identity-handoff checkpoint](../phase3/coordinator/pi-core-identity-handoff-batch-5.md):
+the native supervisor registers its measured worker identity with the unprivileged
+relay over an authenticated, one-use local channel. The relay receives only a
+bounded activation record and PIDFD, not protected process files or credentials.
+Registration is withdrawn before the worker is released. This is **not request
+or effect authority**: exact request provenance, broker-bound enforcement and
+credential-isolated provider/data mediation remain the next D2 work. The legacy
+action endpoint remains masked and native bootstrap stays provider-unavailable.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -83,10 +92,11 @@ legacy adapter, `benchmark/` fixed acceptance/workloads, `tests/` focused checks
 Current entrypoint remains the root Python `aragorn` launcher. The selected
 Pi/Node/build dependency pins now live in the linked step-2 inventory. The
 request-only `packaging/pi-core/worker.ts` is implemented and exercised offline;
-the compiled target artifact now exists, but no protected Pi process launcher
-or complete OS deployment exists yet. Supervisor-side preparation, guarded
-confinement planning, bootstrap and accepted-peer guard APIs now exist; their
-native caller and the protected cross-UID action-identity handoff remain next.
+the compiled target artifact and protected native supervisor now exist as
+implementation, but no installed complete OS deployment is evidenced.
+Supervisor-side preparation, guarded confinement, bootstrap, accepted-peer
+identity and protected relay registration are composed in source. Request-bound
+action mediation and credential-isolated provider routing remain next.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension

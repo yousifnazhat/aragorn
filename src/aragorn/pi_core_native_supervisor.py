@@ -21,11 +21,13 @@ import stat
 import subprocess
 import time
 from collections.abc import Collection, Mapping
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import runtime_active_skill_lineage as lineage
 from . import runtime_process_profile as process
+from . import pi_core_worker_identity as pi_identity
 from .cas import CAS
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .pi_core_confined_launch import (
@@ -33,6 +35,7 @@ from .pi_core_confined_launch import (
     hold_confined_pi_launch_plan,
 )
 from .pi_core_worker_identity import read_activation
+from .pi_core_identity_handoff import AUTHORITY as IDENTITY_AUTHORITY, hold_pi_identity_handoff
 from .runtime_action_broker import _directory_identity, _file_identity, _read_owned_bytes_at
 
 _RUN = Path("/run")
@@ -548,12 +551,16 @@ def run_native_pi_worker(
     protected_root: Path, runtime_conformance_digest: str, deployment: Mapping,
     revoked_context_ids: Collection[str], now_unix: int, deadline: float,
     config: PiConfinedLaunchConfig, cleanup_timeout_seconds: float = 5.0,
+    identity_relay_connection: socket.socket | None = None,
+    expected_identity_relay_peer: tuple[int, int, int] | None = None,
 ) -> dict:
     """Run one bootstrap and owned cleanup within the original <=30s deadline.
 
     There are no automatic effect/start/stop retries. The separate cleanup
     reserve never extends admission or bootstrap authority. The held admission
     and launch plan remain open until cleanup has been attempted and recorded.
+    Optional identity registration is root-attested identity ONLY. Its supplied
+    channel remains caller-owned and must be closed after this single invocation.
     """
     now = time.monotonic()
     _require(type(deadline) in (int, float) and math.isfinite(deadline) and now < deadline <= now + 30,
@@ -562,6 +569,13 @@ def run_native_pi_worker(
              0 < cleanup_timeout_seconds <= 5, "native cleanup deadline must be bounded to five seconds")
     operation_deadline = deadline - cleanup_timeout_seconds
     _require(operation_deadline > now, "original deadline cannot reserve the cleanup budget")
+    _require((identity_relay_connection is None) == (expected_identity_relay_peer is None),
+             "identity channel and exact relay peer must be supplied together")
+    if expected_identity_relay_peer is not None:
+        _require(type(expected_identity_relay_peer) is tuple and len(expected_identity_relay_peer) == 3 and
+                 all(type(value) is int and 0 < value <= 0xffffffff for value in expected_identity_relay_peer) and
+                 expected_identity_relay_peer[0] <= 0x7fffffff,
+                 "identity handoff requires the exact nonroot relay peer")
     _prerequisites(operation_deadline)
     with hold_confined_pi_launch_plan(cas, context, profile=profile, grant=grant,
             protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
@@ -571,6 +585,45 @@ def run_native_pi_worker(
         observation = None
         failure = None
         cleanup = None
+        identity_stack = ExitStack()
+        identity_publication = {"authority": IDENTITY_AUTHORITY,
+            "status": "NOT_REQUESTED" if identity_relay_connection is None else "PENDING"}
+        identity_close_attempted = False
+
+        def register_identity(document):
+            nonlocal identity_publication
+            _capture_activation(owned, document)
+            if identity_relay_connection is None:
+                return
+
+            def guard():
+                _resource_ownership(owned)
+                _same_generation(owned, _unit_state(plan.unit_name, operation_deadline),
+                                 operation_deadline, live=True)
+                pi_identity._measured(owned.connection, owned.pidfd, plan.profile, document, operation_deadline)
+                _require(read_activation(plan.activation_path) == document,
+                         "protected activation changed during identity registration")
+
+            identity_publication["status"] = "REGISTRATION_ATTEMPTED"
+            try:
+                identity_publication = identity_stack.enter_context(hold_pi_identity_handoff(
+                    identity_relay_connection, document, owned.pidfd,
+                    expected_relay_peer=expected_identity_relay_peer,
+                    deadline=operation_deadline, guard=guard))
+            except Exception as exc:
+                identity_publication.update(getattr(exc, "publication", {"status": "HOLD_UNCONFIRMED"}))
+                raise
+
+        def revoke_identity():
+            nonlocal identity_close_attempted
+            if identity_relay_connection is None or identity_close_attempted:
+                return
+            identity_close_attempted = True
+            try:
+                identity_stack.close()
+            except Exception as exc:
+                identity_publication.update(getattr(exc, "publication", {"status": "HOLD_UNCONFIRMED"}))
+                raise
         try:
             owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
             _require(owned.unit_absence_observed, "fresh Pi unit already exists")
@@ -586,11 +639,17 @@ def run_native_pi_worker(
             owned.listener.settimeout(_remaining(operation_deadline))
             owned.connection, _address = owned.listener.accept()
             _same_generation(owned, _unit_state(plan.unit_name, operation_deadline), operation_deadline, live=True)
-            observation = exchange_prepared_pi_bootstrap(plan, owned.connection,
-                expected_pid=owned.pid, on_activation=lambda document: _capture_activation(owned, document))
+            exchange_options = {"expected_pid": owned.pid, "on_activation": register_identity}
+            if identity_relay_connection is not None:
+                exchange_options["on_before_release"] = revoke_identity
+            observation = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
         except Exception as exc:
             failure = f"{type(exc).__name__}: {str(exc)[:512]}"
         finally:
+            try:
+                revoke_identity()
+            except Exception as exc:
+                failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
             cleanup = _cleanup(owned, deadline, cleanup_timeout_seconds)
             try:
                 _close_handles(owned)
@@ -599,12 +658,15 @@ def run_native_pi_worker(
         return {
             "schema": "aragorn/pi-core-native-supervisor-result/v1",
             "authority": "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
-            "status": "CLEANUP_HOLD" if cleanup["status"] == "CLEANUP_HOLD" else
-                      "BOOTSTRAP_COMPLETE" if observation is not None else "REFUSED",
+            "status": "CLEANUP_HOLD" if cleanup["status"] == "CLEANUP_HOLD" or
+                       identity_publication["status"] == "HOLD_UNCONFIRMED" else
+                      "BOOTSTRAP_COMPLETE" if observation is not None and
+                       identity_publication["status"] in {"NOT_REQUESTED", "REVOKED"} else "REFUSED",
             "unit": plan.unit_name, "invocation_id": owned.invocation or None,
             "pid": owned.pid or None, "start_time_ticks": owned.start_ticks or None,
             "immutable_launch_digest": owned.immutable_digest or None,
             "activation_digest": ("sha256:" + hashlib.sha256(owned.activation_raw).hexdigest())
                                   if owned.activation_raw is not None else None,
-            "bootstrap": observation, "failure": failure, "cleanup": cleanup,
+            "bootstrap": observation, "identity_registration": dict(identity_publication),
+            "failure": failure, "cleanup": cleanup,
         }

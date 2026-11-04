@@ -51,9 +51,15 @@ now connects root-owned native request dispatch, independently measured Pi senso
 issuance and broker result/cleanup acknowledgement. Incomplete remote custody
 blocks RELEASE; a no-request bootstrap is explicitly not useful-task evidence.
 All 137 new/affected checks passed once, with no live operation or test rerun.
-Next: the fixed native Pi client/START endpoint binding, protected provider/data
-mediation, exact service/channel provisioning and effective-receipt recovery.
-The compiled bootstrap remains provider-unavailable and its legacy relay masked.
+
+The [native client/START batch](docs/phase3/coordinator/pi-core-native-client-batch-8.md)
+adds the fixed root-owned client endpoint and a distinct v2 START contract,
+reusing the frozen request transport and real Pi loop. Native mode is bound to
+the held launch plan and protected channels; the legacy endpoint stays masked.
+Protected provider/data mediation, exact service/channel provisioning and
+lifetime, and Pi-aware effective-receipt recovery/rotation remain next.
+Provider-unavailable bootstrap still issues no request; this is not the useful
+native pilot or Phase 3 qualification.
 
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;

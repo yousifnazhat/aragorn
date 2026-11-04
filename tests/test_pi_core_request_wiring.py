@@ -6,6 +6,7 @@ processes, sockets, identities and effects are mocked; no live operation occurs.
 
 import unittest
 from contextlib import contextmanager
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
@@ -123,6 +124,10 @@ class NativeRequestIntegrationTests(unittest.TestCase):
         self.fixture = native_fixtures.IdentitySupervisorTests(methodName="runTest")
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.setUp()
+        self.launch_config = replace(bootstrap_fixtures.configuration(), native_request=True,
+            limits={"maxTurns": 1, "maxToolCalls": 1, "maxRunMs": 100})
+        self.fixture.plan = replace(self.fixture.plan,
+            start_bytes=confined._start(self.launch_config, self.fixture.plan.prepared))
         self.config = native_request.PiNativeRequestChannels(mock.Mock(), mock.Mock(),
             (500, 2201, 2202), (600, 2301, 2302), mock.sentinel.binding)
         self.observation = {"status": "NO_REQUEST", "cleanup": "NOT_ATTEMPTED", "phase3_exit_eligible": False}
@@ -164,7 +169,7 @@ class NativeRequestIntegrationTests(unittest.TestCase):
         self.fixture.exchange.side_effect = exchange
 
     def run_worker(self, **kwargs):
-        return self.fixture.run_worker(request_channels=self.config, **kwargs)
+        return self.fixture.run_worker(config=self.launch_config, request_channels=self.config, **kwargs)
 
     def test_native_holds_original_budgets_and_closes_request_before_identity_revoke_release(self):
         result = self.run_worker()

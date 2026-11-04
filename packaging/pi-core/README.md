@@ -18,6 +18,36 @@ low-level helper, then calls that helper once. It opens no socket at constructio
 The old relay's UID/GID and endpoint checks do **not** authenticate an isolated
 Pi bundle/process activation. Do not deploy it as that missing authority join.
 
+The native profile adds `createNativeRelay(endpoint, options)`, which reuses that
+same frozen transport and codec but fixes the root-owned endpoint to
+`/run/aragorn-pi-bootstrap/requests/request.sock`. Its exact v1 endpoint object
+binds the nonroot worker UID/GID, supervisor UID 0 and one request. The factory
+checks the actual caller, binds session/run to the activation, spends its slot
+even on failure and preserves one original deadline. The inherited helper's
+shorter 750 ms transport limit remains; no timeout is refreshed or retried.
+Cancellation is cooperative: synchronous metadata work in the frozen helper
+cannot be preempted by the client timer. Late completion is indeterminate, not
+success or proof that nothing was sent. The protected root/broker deadline is
+the authoritative effect-time boundary; the future pilot must measure whether
+the existing transport cap fits its real workload.
+Protected root-owned ancestors and endpoint identity are checked. Where Node
+lacks a peer-credentials API, this is endpoint-ownership evidence, not a claim
+that the client obtained kernel peer credentials. Root independently authenticates
+the actual accepted Pi process at the security boundary.
+
+Protected launch configuration opts in with `native_request=True`; v2 START
+contains a derived `native_request` object instead of a legacy `relay`. The
+protected configuration still pins and masks the legacy endpoint; it cannot
+overlap the bootstrap or native request endpoint. Native mode requires one tool
+call and matching protected request channels. Default v1 START and configuration
+digest remain distinct; v1 never accepts root as its legacy relay worker.
+
+`runPreparedNativePiEntry` connects v2 START to the actual Pi loop and fixed
+native client. It accepts a reviewed in-process provider function, never a
+substitute relay. The legacy injectable composition rejects v2 START. This is
+prepared provider integration, not an enabled provider: native bootstrap still
+returns `PROVIDER_UNAVAILABLE`, issues no request and waits for RELEASE.
+
 The additive Python supervisor boundary now lives in
 `src/aragorn/pi_core_bundle_launch.py` and `pi_core_worker_identity.py`: exact
 admitted-bundle preparation, one-shot protected activation publication and a
@@ -51,8 +81,9 @@ packages with the same 89 runtime occurrences and 215 effective dependency
 edges. Five absent optional peers remain absent. No compiler is installed here;
 the selected compiler is separately supplied by exact reviewed archives. The
 Linux build emits the adapter, preserves the dependency/legacy layout and copies
-the pinned Node24 executable without executing it. See `compiled-artifact-v1.json`
-for the local output/receipt pins. The subsequent static OS source assembly is
+the pinned Node24 executable without executing it. `compiled-artifact-v1.json`
+preserves the earlier bootstrap output; the compiled native-client successor is
+recorded in `compiled-artifact-v2.json`. The static OS source assembly is
 recorded in the [OS/supervisor checkpoint](../../docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md);
 it is not an installed or runtime-qualified OS.
 Dependency preparation uses `npm ci --ignore-scripts --no-audit --no-fund` with
@@ -87,9 +118,12 @@ measure Phase 3 performance. No source/test helper is production authority.
 The static OS assembler, protected absent-only provisioner and native supervisor
 now exist. They reuse the compiled artifact and protected plan/bootstrap APIs;
 the supervisor remains provider-unavailable. Installation and native lifecycle
-must still be exercised in a separately authorized controlled fixture. Connect protected identity
-handoff to the unprivileged action relay; establish consumed-code custody;
-credential-isolated provider mediation with data-scope policy;
+must still be exercised in a separately authorized controlled fixture. Protected
+identity, native request dispatch and independent sensor/broker wiring now exist;
+the fixed client/START binding is implemented without activating that path.
+Establish exact service/channel provisioning and lifetime, consumed-code custody,
+Pi-aware effective-receipt recovery/rotation and credential-isolated provider
+mediation with data-scope policy, followed by
 real positive effect/health/cleanup integration. The HTTP reader service remains
 refusal-only. The approved 29-requirement map is not an executable result and no
 final acceptance or Phase 4 readiness is claimed here.

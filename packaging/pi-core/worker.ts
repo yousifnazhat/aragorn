@@ -5,8 +5,10 @@
  * join and credential-isolated provider route are still deployment work.
  */
 import { createHash } from "node:crypto";
+import { lstatSync } from "node:fs";
 import { createRequire } from "node:module";
 import { isAbsolute } from "node:path";
+import { performance } from "node:perf_hooks";
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentMessage, AgentTool, StreamFn } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -38,6 +40,15 @@ export interface LegacyRelayConfig {
   expectedGatewayUid: number;
   expectedWorkerUid: number;
   workerSocketPath: string;
+}
+export const NATIVE_REQUEST_SOCKET = "/run/aragorn-pi-bootstrap/requests/request.sock";
+export interface NativeRequestEndpoint {
+  schema: "aragorn/pi-core-native-request-endpoint/v1";
+  socket_path: typeof NATIVE_REQUEST_SOCKET;
+  worker_uid: number;
+  worker_gid: number;
+  supervisor_uid: 0;
+  max_requests: 1;
 }
 export type WorkerRelay = (
   request: Readonly<WorkerRequest>, signal?: AbortSignal,
@@ -194,6 +205,127 @@ export function createLegacyRelay(value: LegacyRelayConfig): WorkerRelay {
       const status = error && typeof error === "object" && "status" in error && error.status === "NOT_SUBMITTED"
         ? "NOT_SUBMITTED" : "INDETERMINATE";
       throw new NativeRelayFailure(status);
+    }
+  };
+}
+
+/** Pure closed bootstrap contract; it opens no file, socket or process. */
+export function parseNativeRequestEndpoint(value: unknown): Readonly<NativeRequestEndpoint> {
+  record(value, ["schema", "socket_path", "worker_uid", "worker_gid", "supervisor_uid", "max_requests"]);
+  if (value.schema !== "aragorn/pi-core-native-request-endpoint/v1" ||
+      value.socket_path !== NATIVE_REQUEST_SOCKET || value.supervisor_uid !== 0 || value.max_requests !== 1) {
+    throw new TypeError("Invalid fixed native request endpoint");
+  }
+  uint(value.worker_uid, 1, 0xffffffff);
+  uint(value.worker_gid, 1, 0xffffffff);
+  return Object.freeze({ ...value }) as unknown as Readonly<NativeRequestEndpoint>;
+}
+
+function nativeWorkerIdentity(endpoint: NativeRequestEndpoint): void {
+  if (process.platform !== "linux" || !process.getuid || !process.getgid ||
+      !process.geteuid || !process.getegid || !process.getgroups ||
+      process.getuid() !== endpoint.worker_uid || process.geteuid() !== endpoint.worker_uid ||
+      process.getgid() !== endpoint.worker_gid || process.getegid() !== endpoint.worker_gid ||
+      process.getgroups().some((gid) => gid !== endpoint.worker_gid)) {
+    throw new NativeRelayFailure("NOT_SUBMITTED");
+  }
+}
+
+function nativeAncestors(): string {
+  // The frozen helper checks the final 0711 directory and 0660 socket before
+  // and after connect. Add the otherwise unchecked fixed ancestor chain only.
+  return ["/", "/run", "/run/aragorn-pi-bootstrap"].map((path) => {
+    const state = lstatSync(path, { bigint: true });
+    if (!state.isDirectory() || state.isSymbolicLink() || state.uid !== 0n || (state.mode & 0o022n) !== 0n) {
+      throw new TypeError("Native request ancestor is not protected");
+    }
+    return [state.dev, state.ino, state.uid, state.gid, state.mode].map(String).join(":");
+  }).join("/");
+}
+
+function nativeRequest(value: unknown, activationId: string): Readonly<WorkerRequest> {
+  record(value, ["schema", "authority", "target_name", "payload_base64", "session_id", "run_id", "tool_call_digest"]);
+  if (value.schema !== "aragorn/runtime-action-worker-request/v1" ||
+      value.authority !== "GATEWAY_REQUEST_ONLY_NOT_EFFECT_AUTHORITY" ||
+      value.session_id !== activationId || value.run_id !== activationId ||
+      typeof value.target_name !== "string" || !TARGET.test(value.target_name) ||
+      typeof value.payload_base64 !== "string" || value.payload_base64.length > Math.ceil(MAX_TEXT_BYTES / 3) * 4 ||
+      typeof value.tool_call_digest !== "string" || !/^sha256:[a-f0-9]{64}(?![\s\S])/.test(value.tool_call_digest)) {
+    throw new TypeError("Native request is not bound to this activation");
+  }
+  const payload = Buffer.from(value.payload_base64, "base64");
+  if (payload.length > MAX_TEXT_BYTES || payload.toString("base64") !== value.payload_base64) {
+    throw new TypeError("Native request payload is not canonical");
+  }
+  return Object.freeze(legacy.buildRequest({ sessionId: activationId, runId: activationId,
+    toolCallDigest: value.tool_call_digest }, value.target_name, payload));
+}
+
+/**
+ * One fixed root-owned endpoint, one request, one original monotonic budget.
+ * The unchanged helper retains its shorter 750 ms transport cap. This factory
+ * does not add a retry, reset that cap, or attest kernel peer credentials where
+ * Node does not expose them: protected endpoint ownership is that claim ceiling.
+ * Abort delivery cannot preempt synchronous filesystem checks in that helper;
+ * late completion is indeterminate. The protected root/broker deadline check,
+ * not this cooperative client timer, is the authoritative effect-time boundary.
+ */
+export function createNativeRelay(
+  value: NativeRequestEndpoint,
+  options: { activationId: string; deadlineMs: number; signal?: AbortSignal },
+): WorkerRelay {
+  const endpoint = parseNativeRequestEndpoint(value);
+  record(options, ["activationId", "deadlineMs"], ["signal"]);
+  const now = performance.now();
+  if (typeof options.activationId !== "string" || !/^[a-f0-9]{32}(?![\s\S])/.test(options.activationId) ||
+      typeof options.deadlineMs !== "number" || !Number.isFinite(options.deadlineMs) ||
+      options.deadlineMs <= now || options.deadlineMs > now + 30_000 ||
+      (options.signal !== undefined && !(options.signal instanceof AbortSignal))) {
+    throw new TypeError("Invalid native activation or original deadline");
+  }
+  nativeWorkerIdentity(endpoint); // Refuse the wrong caller before starting Pi.
+  const { activationId, deadlineMs, signal: originalSignal } = options;
+  const relay = createLegacyRelay({ expectedGatewayUid: endpoint.worker_uid,
+    expectedGatewayGid: endpoint.worker_gid, expectedWorkerUid: 0, workerSocketPath: NATIVE_REQUEST_SOCKET });
+  let consumed = false;
+  return async (value, toolSignal) => {
+    if (consumed) throw new NativeRelayFailure("NOT_SUBMITTED");
+    consumed = true; // Invalid input and uncertain transport both spend the slot.
+    let request: Readonly<WorkerRequest>;
+    let ancestors: string;
+    try {
+      if ((toolSignal !== undefined && !(toolSignal instanceof AbortSignal)) ||
+          originalSignal?.aborted || toolSignal?.aborted || performance.now() >= deadlineMs) {
+        throw new TypeError("Native request was cancelled or expired");
+      }
+      nativeWorkerIdentity(endpoint);
+      request = nativeRequest(value, activationId);
+      ancestors = nativeAncestors();
+      if (performance.now() >= deadlineMs) throw new TypeError("Original native deadline exhausted");
+    } catch {
+      throw new NativeRelayFailure("NOT_SUBMITTED");
+    }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const signals = [...new Set([originalSignal, toolSignal].filter((signal): signal is AbortSignal => signal !== undefined))];
+    for (const signal of signals) signal.addEventListener("abort", abort, { once: true });
+    if (signals.some((signal) => signal.aborted)) controller.abort();
+    const timer = setTimeout(abort, Math.max(0, deadlineMs - performance.now()));
+    if (performance.now() >= deadlineMs) controller.abort();
+    try {
+      const response = await relay(request, controller.signal);
+      if (controller.signal.aborted || performance.now() >= deadlineMs || nativeAncestors() !== ancestors) {
+        throw new NativeRelayFailure("INDETERMINATE");
+      }
+      return response;
+    } catch (error) {
+      // Only the existing local helper can establish a pre-send refusal once
+      // transport was entered. Unknown/post-send failures stay indeterminate.
+      if (error instanceof NativeRelayFailure) throw error;
+      throw new NativeRelayFailure("INDETERMINATE");
+    } finally {
+      clearTimeout(timer);
+      for (const signal of signals) signal.removeEventListener("abort", abort);
     }
   };
 }

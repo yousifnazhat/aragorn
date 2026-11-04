@@ -153,7 +153,8 @@ class IdentitySupervisorTests(InertTests):
         arguments.update(options)
         return native.run_native_pi_worker(object(), {}, profile=self.plan.profile, grant={},
             protected_root=Path("/var/lib/aragorn/admitted"), runtime_conformance_digest="sha256:" + "a" * 64,
-            deployment={}, revoked_context_ids=(), now_unix=1, config=mock.sentinel.config, **arguments)
+            deployment={}, revoked_context_ids=(), now_unix=1,
+            config=arguments.pop("config", mock.sentinel.config), **arguments)
 
     def test_no_channel_keeps_existing_bootstrap_and_explicit_not_requested(self):
         result = self.run_worker(identity=False)

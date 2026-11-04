@@ -39,6 +39,7 @@ _UNIT = re.compile(r"aragorn-pi-[a-f0-9]{32}\.service\Z")
 _PATH = re.compile(r"/[A-Za-z0-9_./-]+\Z")
 _MAX_FRAME = 64 * 1024
 _BOOTSTRAP = "/run/aragorn-pi-bootstrap/bootstrap.sock"
+_NATIVE_REQUEST = "/run/aragorn-pi-bootstrap/requests/request.sock"
 _RUNTIME = "/opt/aragorn/pi-runtime"
 _ADMITTED = Path("/var/lib/aragorn/admitted")
 _EMPTY_MOUNTPOINTS = ("dev", "proc", "sys", "tmp", "var/tmp",
@@ -65,6 +66,11 @@ class PiConfinedLaunchConfig:
     model: Mapping
     limits: Mapping
     relay: Mapping
+    native_request: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.native_request) is not bool:
+            raise PiConfinedLaunchError("native request mode must be an explicit boolean")
 
 
 @dataclass(slots=True)
@@ -124,7 +130,17 @@ def _deadline(deadline: float) -> None:
              now < deadline <= now + 30, "original Pi deadline expired or invalid")
 
 
+def _native_request_endpoint(config: PiConfinedLaunchConfig) -> dict:
+    """Derive the sole root-owned endpoint; no caller-supplied path or role."""
+    _uint(config.worker_uid, 1, 0xffffffff, "worker UID")
+    _uint(config.worker_gid, 1, 0xffffffff, "worker GID")
+    return {"schema": "aragorn/pi-core-native-request-endpoint/v1",
+            "socket_path": _NATIVE_REQUEST, "worker_uid": config.worker_uid,
+            "worker_gid": config.worker_gid, "supervisor_uid": 0, "max_requests": 1}
+
+
 def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
+    _require(type(config.native_request) is bool, "invalid native request mode")
     _require(_ID.fullmatch(prepared.activation_id) is not None, "invalid activation ID")
     _text(prepared.system_prompt, 32 * 1024, "system prompt")
     _text(config.task, 32 * 1024, "task")
@@ -132,6 +148,8 @@ def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
     for name in ("maxTurns", "maxToolCalls"):
         _uint(config.limits[name], 1, 8, name)
     _uint(config.limits["maxRunMs"], 1, 30_000, "maxRunMs")
+    _require(not config.native_request or config.limits["maxToolCalls"] == 1,
+             "native request mode permits exactly one tool call")
     _exact(config.model, {"id", "name", "api", "provider", "baseUrl", "reasoning",
                          "input", "cost", "contextWindow", "maxTokens"}, "model")
     for name in ("id", "name", "api", "provider", "baseUrl"):
@@ -155,13 +173,21 @@ def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
     socket_path = config.relay["workerSocketPath"]
     _require(_PATH.fullmatch(socket_path) is not None and
              all(part not in ("", ".", "..") for part in socket_path.split("/")[1:]) and
-             socket_path != _BOOTSTRAP, "invalid relay socket path")
-    raw = canonical_json({
-        "schema": "aragorn/pi-core-bootstrap-start/v1",
+             not any(Path(endpoint).is_relative_to(Path(socket_path))
+                     for endpoint in (_BOOTSTRAP, _NATIVE_REQUEST)),
+             "invalid relay socket path or overlap with protected Pi endpoints")
+    start = {
+        "schema": "aragorn/pi-core-bootstrap-start/v2" if config.native_request else
+                  "aragorn/pi-core-bootstrap-start/v1",
         "activation_id": prepared.activation_id, "system_prompt": prepared.system_prompt,
         "task": config.task, "model": config.model, "limits": config.limits,
-        "relay": config.relay, "provider_status": "UNAVAILABLE",
-    })
+        "provider_status": "UNAVAILABLE",
+    }
+    if config.native_request:
+        start["native_request"] = _native_request_endpoint(config)
+    else:
+        start["relay"] = config.relay
+    raw = canonical_json(start)
     _require(len(raw) <= _MAX_FRAME, "bootstrap START exceeds frame limit")
     return raw
 
@@ -169,7 +195,8 @@ def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
 def confined_configuration_digest(config: PiConfinedLaunchConfig) -> str:
     """Pin protected launcher expectations, not evidence of installed custody."""
     _require(type(config) is PiConfinedLaunchConfig, "invalid launch configuration")
-    return canonical_digest({
+    _require(type(config.native_request) is bool, "invalid native request mode")
+    document = {
         "schema": "aragorn/pi-core-confined-configuration/v1",
         "root_directory": str(config.root_directory),
         "root_closure_digest": config.root_closure_digest,
@@ -179,7 +206,13 @@ def confined_configuration_digest(config: PiConfinedLaunchConfig) -> str:
         "worker_uid": config.worker_uid, "worker_gid": config.worker_gid,
         "task": config.task, "model": config.model, "limits": config.limits,
         "relay": config.relay, "provider_status": "UNAVAILABLE",
-    })
+    }
+    if config.native_request:
+        # Retain the legacy endpoint pin as denied/masked configuration, but
+        # never put that relay into native START. The legacy digest is unchanged.
+        document["schema"] = "aragorn/pi-core-confined-configuration/v2"
+        document["native_request"] = _native_request_endpoint(config)
+    return canonical_digest(document)
 
 
 def _tree(directory_fd: int) -> tuple[dict, tuple[str, ...], str]:

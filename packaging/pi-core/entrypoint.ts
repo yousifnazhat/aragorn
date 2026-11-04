@@ -11,8 +11,8 @@ import type { Socket } from "node:net";
 import { isAbsolute, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
-import { runManagedPiWorker } from "./worker.js";
-import type { LegacyRelayConfig, WorkerOptions, WorkerReport } from "./worker.js";
+import { createNativeRelay, parseNativeRequestEndpoint, runManagedPiWorker } from "./worker.js";
+import type { LegacyRelayConfig, NativeRequestEndpoint, WorkerOptions, WorkerReport } from "./worker.js";
 
 const require = createRequire(import.meta.url);
 const { canonicalJson } = require("../openclaw/aragorn-runtime-action-worker/index.js").__testing as {
@@ -23,6 +23,7 @@ export const MAX_BOOTSTRAP_FRAME_BYTES = 64 * 1024;
 const MAX_TOTAL_MS = 30_000;
 const ID = /^[a-f0-9]{32}(?![\s\S])/;
 const START_SCHEMA = "aragorn/pi-core-bootstrap-start/v1";
+const NATIVE_START_SCHEMA = "aragorn/pi-core-bootstrap-start/v2";
 
 export interface PreparedPiStart {
   schema: typeof START_SCHEMA;
@@ -33,6 +34,10 @@ export interface PreparedPiStart {
   limits: WorkerOptions["limits"];
   relay: LegacyRelayConfig;
   provider_status: "UNAVAILABLE";
+}
+export interface PreparedNativePiStart extends Omit<PreparedPiStart, "schema" | "relay"> {
+  schema: typeof NATIVE_START_SCHEMA;
+  native_request: NativeRequestEndpoint;
 }
 export interface BootstrapChannel {
   /** Read/write one complete length-prefixed frame, without reconnecting. */
@@ -85,25 +90,33 @@ export function decodeBootstrapFrame(frame: Uint8Array): unknown {
   return value;
 }
 
-export function parseStart(value: unknown): PreparedPiStart {
-  exact(value, ["schema", "activation_id", "system_prompt", "task", "model", "limits", "relay", "provider_status"]);
-  if (value.schema !== START_SCHEMA || value.provider_status !== "UNAVAILABLE") {
+export function parseStart(value: unknown): PreparedPiStart | PreparedNativePiStart {
+  exact(value, ["schema", "activation_id", "system_prompt", "task", "model", "limits", "provider_status"],
+    ["relay", "native_request"]);
+  const native = value.schema === NATIVE_START_SCHEMA;
+  if ((!native && value.schema !== START_SCHEMA) || value.provider_status !== "UNAVAILABLE") {
     throw new TypeError("Unsupported bootstrap schema or provider route");
   }
+  exact(value, ["schema", "activation_id", "system_prompt", "task", "model", "limits", "provider_status",
+    native ? "native_request" : "relay"]);
   identifier(value.activation_id);
   text(value.system_prompt, 32 * 1024);
   text(value.task, 32 * 1024);
   exact(value.limits, ["maxTurns", "maxToolCalls", "maxRunMs"]);
   uint(value.limits.maxTurns, 1, 8);
-  uint(value.limits.maxToolCalls, 1, 8);
+  uint(value.limits.maxToolCalls, 1, native ? 1 : 8);
   uint(value.limits.maxRunMs, 1, MAX_TOTAL_MS);
-  exact(value.relay, ["expectedGatewayGid", "expectedGatewayUid", "expectedWorkerUid", "workerSocketPath"]);
-  for (const key of ["expectedGatewayGid", "expectedGatewayUid", "expectedWorkerUid"]) uint(value.relay[key], 1, 0xffffffff);
-  text(value.relay.workerSocketPath, 4096);
-  if (value.relay.expectedGatewayUid === value.relay.expectedWorkerUid ||
-      !isAbsolute(value.relay.workerSocketPath) || value.relay.workerSocketPath.includes("\0") ||
-      value.relay.workerSocketPath.split("/").slice(1).some((part) => !part || part === "." || part === "..")) {
-    throw new TypeError("Invalid bootstrap relay");
+  if (native) {
+    parseNativeRequestEndpoint(value.native_request);
+  } else {
+    exact(value.relay, ["expectedGatewayGid", "expectedGatewayUid", "expectedWorkerUid", "workerSocketPath"]);
+    for (const key of ["expectedGatewayGid", "expectedGatewayUid", "expectedWorkerUid"]) uint(value.relay[key], 1, 0xffffffff);
+    text(value.relay.workerSocketPath, 4096);
+    if (value.relay.expectedGatewayUid === value.relay.expectedWorkerUid ||
+        !isAbsolute(value.relay.workerSocketPath) || value.relay.workerSocketPath.includes("\0") ||
+        value.relay.workerSocketPath.split("/").slice(1).some((part) => !part || part === "." || part === "..")) {
+      throw new TypeError("Invalid bootstrap relay");
+    }
   }
   exact(value.model, ["id", "name", "api", "provider", "baseUrl", "reasoning", "input", "cost", "contextWindow", "maxTokens"]);
   for (const key of ["id", "name", "api", "provider", "baseUrl"]) text(value.model[key], 2048);
@@ -115,7 +128,7 @@ export function parseStart(value: unknown): PreparedPiStart {
   // The inherited canonical wire protocol represents safe integers only.
   for (const cost of Object.values(value.model.cost)) uint(cost, 0, Number.MAX_SAFE_INTEGER);
   // Copy through the exact bounded wire format; retain no caller-owned objects.
-  return decodeBootstrapFrame(encodeBootstrapFrame(value)) as PreparedPiStart;
+  return decodeBootstrapFrame(encodeBootstrapFrame(value)) as PreparedPiStart | PreparedNativePiStart;
 }
 
 /**
@@ -128,6 +141,7 @@ export async function runPreparedPiEntry(
   dependencies: Pick<WorkerOptions, "streamFn" | "relay" | "signal"> & { deadlineMs?: number },
 ): Promise<WorkerReport> {
   const start = parseStart(value);
+  if (start.schema !== START_SCHEMA) throw new TypeError("Native START cannot inject a relay");
   exact(dependencies, ["streamFn", "relay"], ["signal", "deadlineMs"]);
   if (typeof dependencies.streamFn !== "function" || typeof dependencies.relay !== "function") {
     throw new TypeError("Explicit in-process provider and relay are required");
@@ -144,6 +158,42 @@ export async function runPreparedPiEntry(
     correlation: { sessionId: start.activation_id, runId: start.activation_id },
     limits: { ...start.limits, maxRunMs }, streamFn: dependencies.streamFn,
     relay: dependencies.relay, ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+  });
+}
+
+/**
+ * Explicit future-provider composition: the relay is never caller-injected.
+ * nativeMain/runBootstrapChannel do not call this while provider is UNAVAILABLE.
+ */
+export async function runPreparedNativePiEntry(
+  value: unknown,
+  dependencies: Pick<WorkerOptions, "streamFn" | "signal"> & { deadlineMs?: number },
+): Promise<WorkerReport> {
+  const start = parseStart(value);
+  if (start.schema !== NATIVE_START_SCHEMA) throw new TypeError("Native entry requires exact v2 START");
+  exact(dependencies, ["streamFn"], ["signal", "deadlineMs"]);
+  if (typeof dependencies.streamFn !== "function" ||
+      (dependencies.signal !== undefined && !(dependencies.signal instanceof AbortSignal))) {
+    throw new TypeError("Explicit in-process provider is required");
+  }
+  const now = performance.now();
+  const originalDeadline = dependencies.deadlineMs ?? now + start.limits.maxRunMs;
+  if (typeof originalDeadline !== "number" || !Number.isFinite(originalDeadline) ||
+      originalDeadline <= now || originalDeadline > now + MAX_TOTAL_MS) {
+    throw new TypeError("Invalid original native Pi deadline");
+  }
+  const deadline = Math.min(originalDeadline, now + start.limits.maxRunMs);
+  const relay = createNativeRelay(start.native_request, {
+    activationId: start.activation_id, deadlineMs: deadline,
+    ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+  });
+  const maxRunMs = Math.min(start.limits.maxRunMs, Math.floor(deadline - performance.now()));
+  if (maxRunMs < 1) throw new TypeError("Original native Pi deadline exhausted");
+  return runManagedPiWorker({
+    systemPrompt: start.system_prompt, task: start.task, model: start.model,
+    correlation: { sessionId: start.activation_id, runId: start.activation_id },
+    limits: { ...start.limits, maxRunMs }, streamFn: dependencies.streamFn, relay,
+    ...(dependencies.signal ? { signal: dependencies.signal } : {}),
   });
 }
 

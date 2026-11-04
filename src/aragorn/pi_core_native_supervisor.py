@@ -32,7 +32,7 @@ from .cas import CAS
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .pi_core_confined_launch import (
     PiConfinedLaunchConfig, PiConfinedLaunchPlan, exchange_prepared_pi_bootstrap,
-    hold_confined_pi_launch_plan,
+    hold_confined_pi_launch_plan, _start,
 )
 from .pi_core_worker_identity import read_activation
 from .pi_core_identity_handoff import AUTHORITY as IDENTITY_AUTHORITY, hold_pi_identity_handoff
@@ -567,6 +567,8 @@ def run_native_pi_worker(
     and launch plan remain open until cleanup has been attempted and recorded.
     Optional identity registration is root-attested identity ONLY. Its supplied
     channel remains caller-owned and must be closed after this single invocation.
+    Native request channels are allowed only with the protected native START
+    mode; their presence cannot silently widen the default legacy bootstrap.
     """
     now = time.monotonic()
     _require(type(deadline) in (int, float) and math.isfinite(deadline) and now < deadline <= now + 30,
@@ -575,6 +577,10 @@ def run_native_pi_worker(
              0 < cleanup_timeout_seconds <= 5, "native cleanup deadline must be bounded to five seconds")
     operation_deadline = deadline - cleanup_timeout_seconds
     _require(operation_deadline > now, "original deadline cannot reserve the cleanup budget")
+    native_request = getattr(config, "native_request", False)
+    _require(type(native_request) is bool, "invalid native request mode")
+    _require(native_request == (request_channels is not None),
+             "native request mode and protected channels must be supplied together")
     if request_channels is not None:
         from .pi_core_native_request import PiNativeRequestChannels, PiNativeRequestError, hold_native_pi_request_dispatch
         _require(type(request_channels) is PiNativeRequestChannels, "invalid native request channel configuration")
@@ -590,6 +596,11 @@ def run_native_pi_worker(
             protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
             deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
             deadline=operation_deadline, config=config) as plan:
+        if native_request:
+            _require(type(config) is PiConfinedLaunchConfig and type(plan) is PiConfinedLaunchPlan and
+                     plan.worker_uid == config.worker_uid and plan.worker_gid == config.worker_gid and
+                     plan.start_bytes == _start(config, plan.prepared),
+                     "held Pi START or worker identity differs from protected launch configuration")
         owned = _Owned(plan)
         observation = None
         failure = None

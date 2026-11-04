@@ -72,11 +72,17 @@ the native supervisor owns the new one-shot request endpoint and retains its
 unit/activation/process custody through root-read request handling and separate
 independent Pi measurement. Sensor cleanup acknowledgement and exact local
 endpoint cleanup precede RELEASE; incomplete remote custody remains a hold.
-All 137 new/affected checks passed once; no live operation or rerun. The compiled
-Pi client still needs its fixed root-authenticated endpoint/START binding, then
-protected provider/data mediation, service/channel provisioning and lifetime,
-and effective-receipt recovery/rotation. Native bootstrap remains unavailable;
+All 137 new/affected checks passed once; no live operation or rerun. Native bootstrap remains unavailable;
 `NO_REQUEST` is not a useful-task pilot or Phase 3 result.
+
+Batch-8 [native client/START checkpoint](../phase3/coordinator/pi-core-native-client-batch-8.md):
+Pi now has a fixed root-owned request client and separate v2 START binding,
+with matching protected launch configuration and native request channels. The
+existing request codec/transport, real Pi loop, legacy endpoint masking and v1
+contract are reused. Native composition cannot inject a replacement relay;
+provider-unavailable bootstrap remains inert. Protected provider/data mediation,
+exact service/channel provisioning and lifetime, and effective-receipt
+recovery/rotation still precede the separately authorized useful D2 pilot.
 
 ## Goal
 
@@ -119,9 +125,9 @@ implementation, but no installed complete OS deployment is evidenced.
 Supervisor-side preparation, guarded confinement, bootstrap, accepted-peer
 identity and protected relay registration are composed in source. Batches 6–7 add
 root-read request handoff, mandatory create broker enforcement, independent Pi
-sensor measurement, native dispatch and explicit cleanup joins. The compiled
-Pi client/START still needs a fixed binding to the new root endpoint; legacy
-relay configuration cannot simply be repointed. Pi-aware effective-receipt
+sensor measurement, native dispatch and explicit cleanup joins. Batch 8 adds
+the fixed native client/v2 START binding without repointing or loosening the
+legacy relay profile. Pi-aware effective-receipt
 recovery/rotation, exact channel provisioning/lifetime and credential-isolated
 provider routing remain next; no useful native task has run.
 

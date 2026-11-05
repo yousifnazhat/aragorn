@@ -88,6 +88,24 @@ user key setup are not implemented or performed by this batch. Its handler owns
 transport/peer handles, not the caller's channel or service process lifetime.
 See the [batch-10 checkpoint](../../docs/phase3/coordinator/pi-core-openai-service-batch-10.md).
 
+Batch 11 adds `pi_core_provider_provision.py`: an absent-only protected bundle
+containing exactly the public profile and dedicated CA at their fixed relative
+paths under `<deployment>/root`. It reuses the existing installer, requires
+reviewed exact bytes and preserves partial output on failure. Its receipt is
+explicitly `PROVISIONED_PUBLIC_INPUTS_ONLY_NOT_SERVICE_READY`; it does not supply
+Python/OpenSSL, service code, a unit or credentials. No real CA trust is validated
+by this copy operation.
+
+`pi_core_request_recovery.py` reuses the durable grant core while understanding
+Pi effective-BLOCK receipts. Explicit lifecycle preparation archives exact
+terminal receipts/state before a distinct authorized grant can be published.
+The request-service caller recovers retained state and requires AVAILABLE before
+accepting request custody. It never initializes fresh authority or retries
+effects on an incoming request; unresolved journals, missing receipts and
+uncertain cleanup remain holds. Fresh grant preparation is not fresh admission
+or worker activation. See the
+[batch-11 checkpoint](../../docs/phase3/coordinator/pi-core-provision-recovery-batch-11.md).
+
 The additive Python supervisor boundary now lives in
 `src/aragorn/pi_core_bundle_launch.py` and `pi_core_worker_identity.py`: exact
 admitted-bundle preparation, one-shot protected activation publication and a
@@ -162,6 +180,14 @@ Batch 10 adds four new Python-only stages: `pi-core-openai-responses-offline`,
 No TypeScript artifact changed; compiled-artifact-v3 and OS-v1 are reused,
 without another compiler or assembler run. Native/file/network edges are inert.
 
+Batch 11 selects `pi-core-provider-provision-offline`,
+`pi-core-request-recovery-offline` and `pi-core-service-recovery-offline`, plus
+four affected registry-capacity checks. Provider installation checks write only
+exclusively owned temporary public-input fixtures with mocked Linux/root ancestry;
+recovery uses an inert in-memory file table. Four selected affected caller
+methods are included, not the whole historical request-service suite. No target
+deployment, service or credential is used.
+
 Tests run the actual pinned Pi loop against a scripted provider and in-memory
 relay, with cross-language verification by Aragorn's existing Python parser.
 They do not start listeners, call model providers, execute protected effects or
@@ -176,8 +202,9 @@ must still be exercised in a separately authorized controlled fixture. Protected
 identity, native request dispatch and independent sensor/broker wiring now exist;
 the fixed client/START binding is implemented without activating that path.
 Establish exact service/channel provisioning and lifetime, consumed-code custody,
-Pi-aware effective-receipt recovery/rotation and installed protected provider
-service custody (OpenAI Responses is selected and its source adapter exists,
+native recovery evidence and installed protected provider service custody
+(the public-input provisioner and Pi-aware recovery source now exist;
+OpenAI Responses is selected and its source adapter exists,
 but no concrete model/key deployment or service is activated), followed by
 real positive effect/health/cleanup integration. The HTTP reader service remains
 refusal-only. The approved 29-requirement map is not an executable result and no

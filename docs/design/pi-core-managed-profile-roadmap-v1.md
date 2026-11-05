@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation through the protected OpenAI service handler released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through public provider-input provisioning and Pi receipt recovery released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -107,6 +107,18 @@ no key setup, credential use or native activation occurred. Exact provisioning,
 channel/process lifetime ownership, consumed-code custody and recovery remain
 before the separately authorized useful pilot. No requirement is qualified.
 
+Batch-11 [public-input provisioning/recovery checkpoint](../phase3/coordinator/pi-core-provision-recovery-batch-11.md):
+the existing absent-only installer now supports the exact approved public
+provider profile and CA bundle without reading unknown leaves or credentials.
+Final receipt/parent/root custody and exact owner/mode checks precede completion;
+partial output is retained. A separate Pi-aware recovery API reconciles effective
+BLOCK receipts and explicitly archives terminal grants before fresh rotation.
+Request startup only recovers and requires AVAILABLE state; it cannot initialize
+fresh authority, clear ambiguity or retry effects. This closes those source-level
+gaps, not provider/service installation, loaded-code custody or native recovery
+proof. A reviewed Python/OpenSSL/service-source closure and exact service/channel
+lifetime still precede the separately authorized useful pilot.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -154,9 +166,11 @@ legacy relay profile. Batch 9 adds a protected initial-prompt data gate and
 fixed provider client, with an authenticated service handoff. Batch 10 adds the
 selected OpenAI Responses codec, protected transport and one-shot service
 handler with fresh egress checks; no live egress or installed service exists.
-Pi-aware effective-receipt recovery/rotation, consumed-code custody and exact
-channel/protected-service provisioning and lifetime remain next; no useful
-native task has run.
+Batch 11 adds Pi-aware effective-receipt recovery/rotation, connected to request
+startup and explicit lifecycle preparation, plus exact public provider-input
+provisioning. Consumed-code custody and exact channel/protected-service
+provisioning and lifetime remain next; no useful native task has run. The retained
+Node-only worker OS cannot stand in for a Python/OpenSSL provider-service image.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension

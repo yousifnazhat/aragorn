@@ -5,8 +5,9 @@ composes their grant/profile/lineage and serialized effect primitives; neither
 ordinary JSON nor the sensor's relay attribution can replace the live root
 request channel. It installs no listener and performs no automatic effect retry.
 Effective BLOCK receipts remain readable as terminal state, but frozen recovery
-and archive validators refuse them. Managed recovery/rotation is required before
-repeated native use; this one-shot module does not bypass that retained hold.
+and archive validators refuse them. The separate pi_core_request_recovery API
+reconciles those exact receipts and explicitly archives/rotates terminal grants;
+this one-shot mediator never retries effects or revives old authority itself.
 """
 
 from __future__ import annotations

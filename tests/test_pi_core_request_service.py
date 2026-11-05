@@ -30,6 +30,8 @@ class PiRequestServiceTests(unittest.TestCase):
         self.base = SimpleNamespace(expected_peer_uid=2101, expected_peer_gid=2102)
         self.config = SimpleNamespace(broker=SimpleNamespace(broker=SimpleNamespace(broker=self.base)))
         self.validate = self.stack.enter_context(mock.patch.object(service.v5, "_validate_config"))
+        self.recover = self.stack.enter_context(mock.patch.object(service.recovery,
+            "recover_pi_runtime_capability_grant", return_value={"status": "AVAILABLE"}))
         self.peer = self.stack.enter_context(mock.patch.object(service.broker, "_peer_credentials",
             return_value=(300, 2101, 2102)))
         self.pidfd = self.stack.enter_context(mock.patch.object(service.process, "open_peer_pidfd", return_value=71))

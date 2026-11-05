@@ -82,6 +82,16 @@ lifetime ownership, consumed-code custody and effective-receipt recovery still
 precede the useful pilot. Native bootstrap remains provider-unavailable; D2 and
 Phase 3 are not complete.
 
+The [public-input provisioning/recovery batch](docs/phase3/coordinator/pi-core-provision-recovery-batch-11.md)
+adds absent-only installation of the exact approved public provider profile and
+CA bytes, plus Pi-aware effective-receipt reconciliation and explicit grant
+rotation. Request startup now requires recoverable AVAILABLE authority; it
+never creates a new grant or retries an effect. This does not install provider
+code, credentials or a service. The provider/action/sensor process and channel
+lifetime, complete Python/OpenSSL/source closure and consumed-code identity
+still precede the separately authorized useful pilot. The Node-only worker OS
+closure is not a provider-service OS. Native START remains unavailable.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

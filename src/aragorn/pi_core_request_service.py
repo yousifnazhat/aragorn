@@ -14,12 +14,33 @@ import socket
 
 from . import pi_core_identity_handoff as channel
 from . import pi_core_request_handoff as handoff
+from . import pi_core_request_recovery as recovery
 from . import runtime_action_broker as broker
 from . import runtime_action_broker_v5 as v5
 from . import runtime_action_worker as worker
 from . import runtime_process_profile as process
-from .oci_worker_protocol import canonical_json
+from .oci_worker_protocol import canonical_digest, canonical_json
 from .pi_core_request_broker import mediate_pi_runtime_create
+
+
+def initialize_pi_broker_request_service(config: v5.RuntimeActionBrokerV5Config, *,
+                                        deadline: float, now_unix=None) -> dict:
+    """Explicitly prepare durable grant state, never a listener or activation.
+
+    Only the trusted lifecycle owner calls this after supplying the reviewed
+    grant. Rotation reconciles/archives old terminal state; it does not admit a
+    new bundle or authorize a worker. Request handling never initializes a fresh
+    grant automatically. Missing/uncertain evidence is preserved by recovery.
+    """
+    channel.validate_deadline(deadline)
+    grant = v5._validate_config(config)
+    state = recovery.initialize_pi_runtime_capability_grant(
+        config.broker, now_unix=now_unix, deadline_monotonic=deadline)
+    return {"schema": "aragorn/pi-core-request-service-preparation/v1",
+        "authority": "DURABLE_GRANT_PREPARATION_NOT_ADMISSION_OR_SERVICE_READINESS",
+        "status": state["status"], "grant_digest": canonical_digest(grant),
+        "state_digest": canonical_digest(state), "activation_performed": False,
+        "service_ready": False, "phase3_exit_eligible": False}
 
 
 def handle_pi_broker_request(
@@ -41,6 +62,12 @@ def handle_pi_broker_request(
     if type(expected_supervisor_pid) is not int or not 0 < expected_supervisor_pid < 2**31:
         raise broker.RuntimeActionBrokerError("invalid protected supervisor PID")
     v5._validate_config(config)
+    # Reconcile retained receipt/state only. Never initialize/rotate a grant or
+    # clear an unresolved journal in response to an incoming request.
+    state = recovery.recover_pi_runtime_capability_grant(
+        config.broker, deadline_monotonic=deadline)
+    if state["status"] != "AVAILABLE":
+        raise broker.RuntimeActionBrokerError("Pi grant is terminal; no new request is permitted")
     base = config.broker.broker.broker
     if (supervisor_connection is sensor_connection or
             supervisor_connection.fileno() == sensor_connection.fileno()):

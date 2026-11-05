@@ -1,5 +1,27 @@
 # Pi-core request-only adapter and compiled bootstrap
 
+Latest D2 addition: [protected configuration and native lifecycle](../../docs/phase3/coordinator/pi-core-service-lifecycle-batch-14.md).
+`pi_core_service_configuration.py` installs exactly three canonical role files
+and holds them, or the existing public provider bundle, under pinned custody.
+`hold_native_pi_services` creates only absent owned root skeletons/listeners,
+starts the three fixed image wrappers, waits passively for the same action
+process to LISTEN, authenticates post-exec peers and owns exact unit cleanup.
+`run_native_pi_service_bootstrap` connects those channels to the existing worker
+supervisor. It is an explicit operational API, never activation on import.
+
+The lifecycle-bound channel guard also rechecks configuration/public inputs and
+captured unit generations. Original deadlines include cleanup reserves; stop
+uses SIGINT so Python can unwind, with unresolved child-owned endpoints retained
+as cleanup holds. Existing root-owned prepared grant state must already be
+AVAILABLE: this bootstrap never initializes/rotates authority or retries effects.
+The action handler retains its existing role-local recovery checks.
+
+This profile has no provider credentials, provider egress or enabled START.
+No target service was started by its inert checks or static image assembly.
+Image v2 input/artifact records supersede v1 only for this changed source; the
+v1 records and local artifact remain frozen. Installed/consumed-code identity,
+real cleanup, timing feasibility and useful-task evidence remain separate gates.
+
 `worker.ts` runs one fresh Pi 1.4.0 Agent with one prompt and one bounded
 `aragorn_runtime_create` request tool. The caller must explicitly supply a model,
 provider `StreamFn`, relay, correlation IDs and limits. No discovery, restored

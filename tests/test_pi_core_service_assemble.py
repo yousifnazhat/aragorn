@@ -25,10 +25,12 @@ SPEC.loader.exec_module(assembler)
 
 
 class PiCoreServiceAssemblyTests(unittest.TestCase):
+    input_record_name = "service-assembly-inputs-v1.json"
+
     def test_retained_python_image_and_reviewed_sources_assemble_once(self):
         for target in ("subprocess.Popen", "subprocess.run", "os.system", "os.execve", "socket.socket", "socket.create_connection"):
             self.enterContext(mock.patch(target, side_effect=AssertionError("no process, target or network execution")))
-        record_path = ROOT / "packaging/pi-core/service-assembly-inputs-v1.json"
+        record_path = ROOT / "packaging/pi-core" / self.input_record_name
         record_raw = assembler._build.regular_bytes(record_path)
         record = json.loads(record_raw)
         self.assertEqual(set(record), {"schema", "purpose", "constraints", "archive", "source_pin", "source_root",

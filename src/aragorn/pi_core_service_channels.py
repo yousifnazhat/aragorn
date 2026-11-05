@@ -103,9 +103,9 @@ class PiServiceChannels:
 
     __slots__ = ("_seal", "_active", "_connections", "_descriptors", "_expected", "_binding",
                  "_deployment", "_pins", "_deadline", "_pidfds", "_request_channels",
-                 "_provider_retired", "_cleanup", "_lock")
+                 "_provider_retired", "_cleanup", "_lock", "_lifecycle")
 
-    def __init__(self, seal, connections, expected, binding, deployment, pins, deadline):
+    def __init__(self, seal, connections, expected, binding, deployment, pins, deadline, lifecycle_custody=None):
         _require(seal is _SEAL, "service channel custody requires its protected factory")
         self._seal, self._active = seal, True
         self._connections = tuple(connections[role] for role in _ROLES)
@@ -115,6 +115,7 @@ class PiServiceChannels:
         self._pidfds, self._request_channels = [], None
         self._provider_retired, self._cleanup = False, "HELD"
         self._lock = threading.RLock()
+        self._lifecycle = lifecycle_custody
 
     @property
     def deadline(self):
@@ -154,6 +155,10 @@ class PiServiceChannels:
         bounded = self._deadline if deadline is None else deadline
         transport.validate_deadline(bounded)
         _require(bounded <= self._deadline, "service guard cannot extend its held channel deadline")
+        if self._lifecycle is not None:
+            from .pi_core_service_lifecycle import PiServiceLifecycle
+            _require(type(self._lifecycle) is PiServiceLifecycle, "service lifecycle custody differs")
+            self._lifecycle.guard_inputs_and_units(self, deadline=bounded)
         _require(_deployment_pins(self._deployment, bounded) == self._pins,
                  "installed service runtime custody changed")
         _require(len(self._pidfds) == 3 and len(set(self._pidfds)) == 3,
@@ -217,7 +222,8 @@ class PiServiceChannels:
 
 
 @contextmanager
-def hold_pi_service_channels(connections, expected_processes, binding, *, deployment, deadline):
+def hold_pi_service_channels(connections, expected_processes, binding, *, deployment, deadline,
+                             lifecycle_custody=None):
     """Authenticate borrowed post-exec sockets; close only newly acquired PIDFDs."""
     _require(sys.platform == "linux" and os.geteuid() == os.getegid() == 0,
              "service channel custody requires the Linux root supervisor")
@@ -233,9 +239,13 @@ def hold_pi_service_channels(connections, expected_processes, binding, *, deploy
     _require(len({id(connection) for connection in selected}) == 3 and
              all(type(fd) is int and fd >= 0 for fd in descriptors) and len(set(descriptors)) == 3,
              "service channels alias or are closed")
-    lease = PiServiceChannels(_SEAL, connections, expected, binding, deployment, pins, deadline)
+    lease = PiServiceChannels(_SEAL, connections, expected, binding, deployment, pins, deadline, lifecycle_custody)
     failure = None
     try:
+        if lifecycle_custody is not None:
+            from .pi_core_service_lifecycle import PiServiceLifecycle
+            _require(type(lifecycle_custody) is PiServiceLifecycle, "exact service lifecycle custody required")
+            lifecycle_custody._attach_channels(lease)
         for role, connection in zip(_ROLES, selected):
             item = expected[role]
             descriptor = transport.guard_channel(connection, (item["pid"], item["uid"], item["gid"]), deadline)

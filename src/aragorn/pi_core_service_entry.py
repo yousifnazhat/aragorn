@@ -196,7 +196,7 @@ def validate_configuration(value, role):
             profile = process.runtime_process_profile(binding["runtime_profile"])
             _require(binding["sensor_digest"] == grant["sensor_digest"] and
                      profile.runtime_digest == grant["runtime_digest"] and profile.digest == grant["runtime_profile_digest"] and
-                     profile.skill_path.is_relative_to(ADMITTED_ROOT / "versions"))
+                     profile.skill_path.is_relative_to(ADMITTED_ROOT / ".aragorn-versions"))
     return value
 
 

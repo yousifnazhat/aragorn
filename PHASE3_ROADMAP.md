@@ -113,6 +113,16 @@ prove loaded-code custody. Protected lifecycle/configuration integration,
 native identity/recovery/timing evidence and the separately authorized useful
 pilot remain D2 work. START is still unavailable.
 
+The [protected configuration/lifecycle batch](docs/phase3/coordinator/pi-core-service-lifecycle-batch-14.md)
+connects absent-only role configuration, held public provider inputs and the
+existing service image to fixed native units, passive action-listener readiness,
+authenticated post-exec channels and the existing Pi worker supervisor. Request
+guards retain configuration and unit-generation custody; cleanup withdraws
+channels before stopping only captured services. A source-corrected successor
+image preserves v1. This is credential-free, provider-unavailable bootstrap
+implementation, not installed/loaded-code, live recovery, timing or useful-task
+evidence. The separately authorized D2 pilot and all qualification gates remain.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

@@ -1,0 +1,134 @@
+{
+  "schema": "aragorn/pi-core-service-assembly-inputs/v1",
+  "purpose": "STATIC_SERVICE_IMAGE_ASSEMBLY_ONLY_NO_TARGET_EXECUTION",
+  "archive": {
+    "path": ".aragorn/pi-core-os-inputs/python-bookworm-d50fb761.tar",
+    "bytes": 47692800,
+    "sha256": "e0f568085ac82e4ed8aa84f7550859ae57af5c27f6142b751889cfbd257d5548"
+  },
+  "source_pin": {
+    "path": "packaging/pi-core/os-source-v1.json",
+    "digest": "sha256:cc5aa6f02736749e0a166e8dd08fff1b4b18478022e9064c5f4e0fa3daf28782"
+  },
+  "source_root": "src",
+  "wrapper_root": "packaging/pi-core/services",
+  "expected_source_inventory": {
+    "aragorn/__init__.py": "sha256:4b573d061d6b777ac928a08a368cfbea9dee0e2071b78ffe3d105f9cf1a40c01",
+    "aragorn/acquire.py": "sha256:56942e7c1b10c58f265615c8b7abf3f199c7f98bf016be50eb6d3a98d2bd0f8c",
+    "aragorn/admission_artifact_graph.py": "sha256:05c70d81f1fac7c32ef455397079f9b73d80dfe4dc24d7427ce587f21001af85",
+    "aragorn/admission_decision.py": "sha256:6ff41b17d151b89043757c5d0537e1540bd0c964618a6ea4b77f8b8195ce79ca",
+    "aragorn/analyze.py": "sha256:43796b5fdbca1fd0968ca87c5e8f640e3517867d6eed229c40980451471255a6",
+    "aragorn/analyzer_receipt.py": "sha256:6d4a54c3206e9ab5cc767131f35de7587f7f6d05707a69d9f52028fda5821e45",
+    "aragorn/artifact_closure.py": "sha256:6c3a66ae1270ad2bc2d86d72b5c31c135d00a4cf5f03ce828bcab5a89d459d9a",
+    "aragorn/behavior_capability_diff.py": "sha256:ddbb3ba479e7944a01029e0a061a0b1f0a5c5c889d08625d18e029365f6e878f",
+    "aragorn/benchmark.py": "sha256:c887a14b3dcdd75c588dbba834b834b20bbdcab5c6d806eb0049c6e66d910057",
+    "aragorn/benchmark_authenticated_handoff_v2.py": "sha256:107216418bf2dcb0e18dc778565880985d8bb721a414e58b535d87d9e7ecb8cd",
+    "aragorn/benchmark_handoff_v2.py": "sha256:1044431606919b4781a7cae9bb8be89b20d48deb5ec87168764625bd9a9c3e71",
+    "aragorn/benchmark_protocol_v2.py": "sha256:b4459584d36432c7552ebfa00f0bb6b3dc76a0b9064a57efcc1c093123720be5",
+    "aragorn/benchmark_semantic_closure_v2.py": "sha256:a73c8c3b21c22e62a0e9c919a90dde816f919a224ce8021b23a023e85df0cce6",
+    "aragorn/benchmark_worker_measurement.py": "sha256:e8d170e04f0d25d6d2fe47cc4d0791c3096f937fb33f3425901992817ae1f185",
+    "aragorn/cas.py": "sha256:c5642f910ac4b2d6172a59a02105b359cb43d3a2f2e2240368229d3436ad4859",
+    "aragorn/decision_receipt.py": "sha256:54530efcfe6ed9a09f9a478bd906aaf8148cda66b9df76a5097c588152ff052d",
+    "aragorn/detonation_observation.py": "sha256:3f7ec86d363a54c8d16d9b6e89d41764723cd2828e52a507bbce03c437ad0dba",
+    "aragorn/docker_identity.py": "sha256:6a2e08ea2a12c03152ddc110b411938e79a9c199f1466bae3a045a65f6bcf73f",
+    "aragorn/github_acquire.py": "sha256:1116f93c84fd9caf13348af5acc940f2ecabf43ba52f4f200770236c62b2f8ce",
+    "aragorn/github_expand.py": "sha256:54de77ee57b463d03aa548775914391b616133def7ea63ee4aae3ccfc498ae56",
+    "aragorn/github_expansion_proof.py": "sha256:22cdb2123b6da50ad9578d555b41432e931163944f449df292b62261e537ad26",
+    "aragorn/github_git_protocol.py": "sha256:49bfbaed51731bef2188f7797a4793f4145ab5352fe562dcd33bf901e0c8f2a8",
+    "aragorn/github_quarantine_receipt.py": "sha256:fada31bf9acdb619275ec13d5dd56215ef8aab1a9bf16523de3f21fd2a445211",
+    "aragorn/github_recursive_artifact_graph.py": "sha256:63d6cd1dc9b71606be13ecfc9025e7562d505288a33133df45f206eb56a9e4e4",
+    "aragorn/github_recursive_artifact_graph_v4.py": "sha256:f8a2ac74d85166af4b933c1d190f4b3965d1ccfeb18e421ca751375b4501ecd8",
+    "aragorn/github_recursive_artifact_graph_v5.py": "sha256:b53051a6ca2d57aecf951d6f4b56c2f97db72ed8593f565ef365c828997f8e91",
+    "aragorn/github_recursive_artifact_graph_v6.py": "sha256:1878afb47db62a27e000e8148686f393419fd79a90f328dfaa726bf89b559055",
+    "aragorn/github_release_asset.py": "sha256:c31008bfa7a516d7aca2c3b427077491c590b113ef11f53e8f668746a9a0e40a",
+    "aragorn/github_source_proof.py": "sha256:39beb77924bc2d2c43206f0bb61341ba2be5a7bd4cef407fb5ab1bf67f8e1afd",
+    "aragorn/gvisor_remote_trace_capture.py": "sha256:57b6bfeb45dfcef0830d4cbc7cc9ec17ef178389d9f5059113b028f22e6a7628",
+    "aragorn/gvisor_remote_trace_receiver.py": "sha256:9bbf4b6e8de99cc90ff4b2bfd22340bf104c9f936e0a72c59fab27d2681fcf0f",
+    "aragorn/gvisor_runtime.py": "sha256:8ed9d2ad21d79da12bc245957202a053cbdb2ae6374efa8cab122e9f62460317",
+    "aragorn/label_blind_prepare.py": "sha256:2fbd0a31069c47dc5573e340048c61ddd0481518d9836c87a522d25e801d021d",
+    "aragorn/materialization.py": "sha256:402969526637be53d5a298bf5d523cd4a350c55faab1901d2e923da6a6c2ca63",
+    "aragorn/oci_runtime.py": "sha256:2d1f3da0d001cac79260503e47a9f2a6e3adf0b9143c465d32aac05522f0af74",
+    "aragorn/oci_worker_protocol.py": "sha256:0af6b5fc1fa6b4a3a4b4ec6fd514c2edc475cf339cda01cf9a1b66d3a6e81c2b",
+    "aragorn/phase0_candidate.py": "sha256:47e39a37be4d03b103d55e9da281d3212fd53bd7a6c981a512cd4d91897b05fd",
+    "aragorn/phase2_scenario_contract.py": "sha256:3369496b8cbca1f81ae009965f4d40c5f9c5dad020da243065fadbc5d89805e2",
+    "aragorn/pi_core_bundle_launch.py": "sha256:35070bff1644faf9e924d126ae90660b1202f5583b98f27cefbca10bad70ff9e",
+    "aragorn/pi_core_confined_launch.py": "sha256:c89b41fb544d6553d8ae389b6ea873afb28404c2dfb42c8ce86f8f2c232bdf30",
+    "aragorn/pi_core_identity_handoff.py": "sha256:cd6630d3be19204fbdbb0707b6fe47ad1854f4642dcc20edc6c967b638bc2b87",
+    "aragorn/pi_core_native_request.py": "sha256:666c879b5fcdbf2e744fd6ba6eff86cb5a88678d735389019c7f93884be0e28d",
+    "aragorn/pi_core_native_supervisor.py": "sha256:15073118a552fd44689c4b5490229baa6e1b45d5e53fd75aae4696b4be2d8e34",
+    "aragorn/pi_core_openai_responses.py": "sha256:2199f6eb9360e5a71b804605a6388ff619859c5f6d56ff587f39392089f7ad36",
+    "aragorn/pi_core_openai_transport.py": "sha256:ad991656768a6e2696425ec33aed3cff00b18f9c17ae4d301db6caae86d5f9a4",
+    "aragorn/pi_core_os_provision.py": "sha256:846754fc7a9ea5c9789062990d06fcbb28a74ef8a6b530b3c6eaaf88ec7425e9",
+    "aragorn/pi_core_provider_mediation.py": "sha256:91ec963e5b78dab28d8f94032c3f72cd971134691eaaa560d9fe9c0e9c4ce8a6",
+    "aragorn/pi_core_provider_provision.py": "sha256:2489373abadeb3ae07f6454588af1ac89e6a6ded5e05dd2812d118fb1db6aae2",
+    "aragorn/pi_core_provider_service.py": "sha256:57a6d000e4fbabc4b68031b5d68db3721a5ec0cee8e7e6ea1ffff69f1411b244",
+    "aragorn/pi_core_request_broker.py": "sha256:d0e3fb7fbae56b81dd2c838b14cb560a7f8afa180f2a339ffb29defa09b6f48b",
+    "aragorn/pi_core_request_handoff.py": "sha256:0c574477554c6202a9d8c4ab133a9656c00678a992baa724789678b32b875e09",
+    "aragorn/pi_core_request_recovery.py": "sha256:f2f0d52454ca4745964b19bbb96ce84d04fd59ed7ee1d3f83349127033930aa8",
+    "aragorn/pi_core_request_sensor.py": "sha256:68f66b3450d1cdcdb59f08e2bbe59974838c9ecf7216dc606adf6ca2c9926b37",
+    "aragorn/pi_core_request_service.py": "sha256:aef4f9899328d1f4d69af4370db91b3e2a12343ff4a0b8bf6137d0361f02a2b2",
+    "aragorn/pi_core_sensor_channel.py": "sha256:3445cf5cf4d495afeff9d812f8ae4122197e9d7b4099a99920b802a011052b0a",
+    "aragorn/pi_core_service_channels.py": "sha256:c663c49a348cf51c3cdf329b6023bc7c0abdea86436ed6f4b4d8ccbcfe45cc9a",
+    "aragorn/pi_core_service_configuration.py": "sha256:ea71f18199e0bb14faa85644b8d12d646b3898843838615c58871ce26594bae6",
+    "aragorn/pi_core_service_entry.py": "sha256:706bd8ebefddc6eb288ed58e77546affae45a4c1471d73a76964a90d15105b54",
+    "aragorn/pi_core_service_lifecycle.py": "sha256:5497ea4cb2ca4631a80d37cfc0a95a1483ebac43a7d8c4b8099dca85e1c7e2d9",
+    "aragorn/pi_core_service_provision.py": "sha256:80052d14253c400e43fcc4b1a1488762961b64d61aa9ee107a13b96386a0a45f",
+    "aragorn/pi_core_worker_identity.py": "sha256:6de302ea848baf3b542a208495436b5ce52c7c3960147d4076aa2a877fc1b767",
+    "aragorn/policy.py": "sha256:246a0f93c1c0e2ca803c8d1bda4e50a0bc4d3ab5855242532308396d6ad82d9b",
+    "aragorn/protected_install_context.py": "sha256:100e39f10337c8d829e897e4139eae04658041fd6ab6b3f72d7ad4ea7325499a",
+    "aragorn/protected_skill_quarantine.py": "sha256:fa1297bc05345c85e518be8ac397e35d289c8b1dc30dc4aa4002154af8aeddd0",
+    "aragorn/runtime_action_broker.py": "sha256:94a0da837f3c6562fc53f9c9126170c2d49b3734db21081abd133ea14deeae21",
+    "aragorn/runtime_action_broker_v2.py": "sha256:a77d7c5cc2b607b9234f6758283bdff74c73586651e6aa7d5a9e3c3ab48b14e3",
+    "aragorn/runtime_action_broker_v3.py": "sha256:408f0b5373139c93b13e61fcf4ea6791865841806f0a9aa8a269e095cd0d9f8d",
+    "aragorn/runtime_action_broker_v4.py": "sha256:ab7d08105229ee3dd58f8dca5c20156d5e260e2b79f0ed2b4c08693c3cf6174a",
+    "aragorn/runtime_action_broker_v5.py": "sha256:35c17f92cca01ba064058f6d76223a03072138aa61d060538600f6799af7eca5",
+    "aragorn/runtime_action_decision.py": "sha256:3b3b7beffd331280dfbc8088a1ef28f6b32affe59d0abf75305ff97fe93d459d",
+    "aragorn/runtime_action_observation_publisher.py": "sha256:288714579b5df19c5b3137caee21ede1a5c8bf69f690e3e9434bd3d646806a90",
+    "aragorn/runtime_action_observation_publisher_v2.py": "sha256:39b42a466eb248bbc5d176f9a5350a72f88afe85f98ea492bde882f7a3ba5c8e",
+    "aragorn/runtime_action_observation_publisher_v4.py": "sha256:2f021264b43d4602842134b9d7422105243fbbf594b474a58a6a5ae8290442ae",
+    "aragorn/runtime_action_service.py": "sha256:e9b9fd55fc88aa0c9f5916907465ea7f0f4c01e5ec822293ef0ec8e9d32e4e3e",
+    "aragorn/runtime_action_worker.py": "sha256:a0aa80b0870c18ecb380ca6f7a65663e4046e92f55938b84c9e15284ba221873",
+    "aragorn/runtime_active_skill_lineage.py": "sha256:6d1663d097410838d6c9b69644ffdfb2bd7ace30091d31544f31b04a7f6776d1",
+    "aragorn/runtime_active_skill_lineage_v2.py": "sha256:f1c2c3091a092bc8b0a117c1a8f3853645df3b9d8fb24ecf96b65122b97c27cc",
+    "aragorn/runtime_capability_grant.py": "sha256:058aa743c6bdebffe1660120d88886d465aaaa5192171979e466ba6ce20f5681",
+    "aragorn/runtime_lineage_capability_issuer.py": "sha256:85c4ec36c163648e3d706e5c7c650642caee8b1f6799fd820bc12fb1486ad0ca",
+    "aragorn/runtime_process_profile.py": "sha256:a6cbac4f3eeab0f6b1853a3f77e42a54f53cd711deeb0e5490ab506d70e58f68",
+    "aragorn/vendor_reports.py": "sha256:4f8f0acf22f40c19000705655aecbc96d1ce8e479f8278a703e9037eeac60235",
+    "aragorn/zip_inventory.py": "sha256:582fbf5b28989b315ae4c6cd808efe5c9dc479a29d64aabb1ff624a629aa8d5e"
+  },
+  "expected_wrapper_inventory": {
+    "action.py": "sha256:097cecf3c5024c8cf7063e3df68afb25dc94bfa769346b39c0fd94f22a78030f",
+    "provider.py": "sha256:8c225ae5698a3f95812d9b5ea9e9119368daecea1845c860858995b371ffae3a",
+    "sensor.py": "sha256:33a4658e119c05422f707c0014f1862c807adb3ecbd48b57089740d4d515d6ed"
+  },
+  "unsupported_import_policy": {
+    "aragorn/benchmark_worker_measurement.py": {
+      "verify_worker_measurement": {
+        "cryptography.exceptions": [
+          "InvalidSignature"
+        ],
+        "cryptography.hazmat.primitives.asymmetric.ed25519": [
+          "Ed25519PublicKey"
+        ]
+      },
+      "_cryptography_types": {
+        "cryptography.hazmat.primitives.asymmetric.ed25519": [
+          "Ed25519PrivateKey"
+        ],
+        "cryptography.hazmat.primitives.serialization": [
+          "Encoding",
+          "NoEncryption",
+          "PrivateFormat",
+          "PublicFormat"
+        ]
+      }
+    }
+  },
+  "constraints": {
+    "network": "none",
+    "subprocesses": false,
+    "target_execution": false,
+    "automatic_retry": false,
+    "fresh_output_only": true
+  }
+}

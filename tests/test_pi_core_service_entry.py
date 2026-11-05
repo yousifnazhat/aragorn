@@ -236,7 +236,7 @@ class PiServiceEntryTests(unittest.TestCase):
         elif role == "sensor":
             profile = {"schema": subject.process.PROFILE_SCHEMA, "authority": subject.process.PROFILE_AUTHORITY,
                 "runtime_digest": "sha256:" + "4" * 64, "executable_digest": "sha256:" + "b" * 64,
-                "cgroup": "/system.slice/aragorn-pi-worker.service", "skill_path": "/var/lib/aragorn/admitted/versions/example/SKILL.md"}
+                "cgroup": "/system.slice/aragorn-pi-worker.service", "skill_path": "/var/lib/aragorn/admitted/.aragorn-versions/example/version/SKILL.md"}
             grant = fixtures._grant(runtime_profile_digest=canonical_digest(profile))
             value.update(capability_grant=grant, observation_binding={
                 "schema": "aragorn/runtime-observation-binding/v2", "sensor_digest": grant["sensor_digest"],

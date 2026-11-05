@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation through concrete service-image assembly and fixed executable wrappers released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through protected configuration and native service lifecycle released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -141,6 +141,17 @@ explicitly excludes support for four optional benchmark DSSE import sites, not
 for service handler dependencies. No target code or service runs. Protected
 installation/configuration and unit lifetime, consumed-code identity, native
 recovery/timing and a separately authorized useful pilot are still required.
+
+Batch-14 [protected configuration/lifecycle checkpoint](../phase3/coordinator/pi-core-service-lifecycle-batch-14.md):
+three exact role configurations and the existing public provider bundle receive
+sealed, deadline-bounded custody. Fixed native units reuse the image and wrappers
+inside fresh owned root skeletons; passive same-process LISTEN evidence precedes
+sensor launch. Captured generations and protected inputs join authenticated
+channels and the existing worker supervisor, with request-time guards and exact
+reverse-order cleanup. The changed source requires a successor image; v1 stays
+retained. No target code, service or credential runs. START stays unavailable;
+actual protected installation, consumed-code identity, recovery/timing and a
+model/trust/key/egress-enabled useful pilot still precede D2 closure.
 
 ## Goal
 

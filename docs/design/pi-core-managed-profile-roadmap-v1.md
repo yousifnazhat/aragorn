@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation through public provider-input provisioning and Pi receipt recovery released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through protected service-runtime provisioning and authenticated channel custody released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -119,6 +119,18 @@ gaps, not provider/service installation, loaded-code custody or native recovery
 proof. A reviewed Python/OpenSSL/service-source closure and exact service/channel
 lifetime still precede the separately authorized useful pilot.
 
+Batch-12 [service-runtime/channel checkpoint](../phase3/coordinator/pi-core-service-runtime-batch-12.md):
+an absent-only installer accepts independently approved complete service-tree
+and binding pins, with fixed Python3.12 layout and provider/action/sensor handler
+mapping. An active sealed holder rechecks the installed files, receipt and named
+ancestors. The channel holder binds that custody to exact post-exec service
+peers, PIDFDs, start times, cgroups and interpreter hashes. Native request guards
+and opt-in provider-v2 guards consume the lease. Authenticated provider completion
+irreversibly retires only that peer's live checks, preserving broker/sensor
+custody and preventing further provider use. This is source implementation,
+not a concrete reviewed service image, loaded-module identity or service-unit
+lifetime proof. No services or provider requests ran; START stays unavailable.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -169,7 +181,9 @@ handler with fresh egress checks; no live egress or installed service exists.
 Batch 11 adds Pi-aware effective-receipt recovery/rotation, connected to request
 startup and explicit lifecycle preparation, plus exact public provider-input
 provisioning. Consumed-code custody and exact channel/protected-service
-provisioning and lifetime remain next; no useful native task has run. The retained
+process lifetime remain next; batch 12 supplies the protected runtime/code
+installer and authenticated-channel holder, but not an actual installed service
+artifact or loaded-import proof. No useful native task has run. The retained
 Node-only worker OS cannot stand in for a Python/OpenSSL provider-service image.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and

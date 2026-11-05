@@ -106,6 +106,35 @@ uncertain cleanup remain holds. Fresh grant preparation is not fresh admission
 or worker activation. See the
 [batch-11 checkpoint](../../docs/phase3/coordinator/pi-core-provision-recovery-batch-11.md).
 
+Batch 12 adds `pi_core_service_provision.py`. It accepts an independently reviewed
+complete service-root manifest and binding, copies the exact files to a new
+protected destination and retains all partial output on failure. The fixed
+layout has a regular `usr/bin/python3`, Python3.12 stdlib/native extensions,
+arm64 loader/shared libraries and `opt/aragorn/src/aragorn` source. Fixed roles
+point to the existing provider, request-broker and sensor handlers. Essential
+file checks do not discover all dynamic imports or prove runtime compatibility;
+the caller must supply the complete reviewed closure. No host Python fallback,
+package installation, service wrapper, credential or real image is supplied.
+
+`hold_pi_service_runtime` retains and rechecks installed bytes and named-file
+custody against independent pins. Inside it, `hold_pi_service_channels` accepts
+already-connected post-exec action/sensor/provider packet sockets. It opens only
+new peer PIDFDs, verifies exact kernel peers, process start/cgroup/interpreter
+identity and returns native request channels carrying the same sealed lease.
+The caller retains ownership of sockets and service processes. Native guards
+and opt-in provider-v2 mediation recheck the lease; no plain receipt or arbitrary
+callback is accepted. Provider completion irreversibly retires its live checks
+only after the authenticated terminal, while action/sensor checks remain active.
+Retirement is not unit-exit proof and permits no later provider request.
+
+These APIs do not prove which Python modules a service actually loaded or which
+systemd invocation owns its lifetime. Service wrappers, concrete reviewed image
+assembly, loaded-code joins and native start/stop integration remain before the
+pilot. Complete-tree/interpreter rechecks may exceed the existing short action
+and provider permit budgets; this batch keeps failure closed and does not widen
+limits or claim measured feasibility. See the
+[batch-12 checkpoint](../../docs/phase3/coordinator/pi-core-service-runtime-batch-12.md).
+
 The additive Python supervisor boundary now lives in
 `src/aragorn/pi_core_bundle_launch.py` and `pi_core_worker_identity.py`: exact
 admitted-bundle preparation, one-shot protected activation publication and a
@@ -188,6 +217,12 @@ recovery uses an inert in-memory file table. Four selected affected caller
 methods are included, not the whole historical request-service suite. No target
 deployment, service or credential is used.
 
+Batch 12 selects `pi-core-service-runtime-offline`,
+`pi-core-service-channels-offline` and `pi-core-service-integration-offline` plus
+the affected capacity checks. Installed-tree fixtures are owned temporary files;
+all service/process/socket edges are inert. Four selected affected caller methods
+run with the new integration checks; historical suites are not rescheduled.
+
 Tests run the actual pinned Pi loop against a scripted provider and in-memory
 relay, with cross-language verification by Aragorn's existing Python parser.
 They do not start listeners, call model providers, execute protected effects or
@@ -201,8 +236,9 @@ the supervisor remains provider-unavailable. Installation and native lifecycle
 must still be exercised in a separately authorized controlled fixture. Protected
 identity, native request dispatch and independent sensor/broker wiring now exist;
 the fixed client/START binding is implemented without activating that path.
-Establish exact service/channel provisioning and lifetime, consumed-code custody,
-native recovery evidence and installed protected provider service custody
+Establish concrete reviewed service-image assembly, executable service wrappers,
+unit-generation/lifetime and consumed-code custody, native recovery evidence and
+installed protected provider service custody
 (the public-input provisioner and Pi-aware recovery source now exist;
 OpenAI Responses is selected and its source adapter exists,
 but no concrete model/key deployment or service is activated), followed by

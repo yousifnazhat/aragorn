@@ -51,6 +51,7 @@ class PiNativeRequestChannels:
     broker_peer: tuple[int, int, int]
     sensor_peer: tuple[int, int, int]
     binding: worker.RuntimeActionWorkerBinding
+    service_custody: object | None = None
 
 
 def _plan(owned, deadline):
@@ -71,6 +72,14 @@ def _channels(owned, config, deadline, request_connection=None):
     _plan(owned, deadline)
     _require(type(config) is PiNativeRequestChannels and type(config.binding) is worker.RuntimeActionWorkerBinding,
              "native request channels or binding are invalid")
+    if config.service_custody is not None:
+        # Only the exact factory's held deployment/channel lease can opt in;
+        # an arbitrary callback or serialized receipt is never custody.
+        from .pi_core_service_channels import PiServiceChannels
+        custody = config.service_custody
+        _require(type(custody) is PiServiceChannels and custody.request_channels is config and
+                 deadline <= custody.deadline, "native service custody binding differs")
+        custody.guard(deadline=deadline)
     peers = (channel._peer(config.broker_peer), channel._peer(config.sensor_peer))
     _require(all(uid > 0 and gid > 0 and pid != os.getpid() for pid, uid, gid in peers),
              "native broker and sensor require separate nonroot service identities")

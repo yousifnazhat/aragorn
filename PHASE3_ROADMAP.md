@@ -92,6 +92,16 @@ lifetime, complete Python/OpenSSL/source closure and consumed-code identity
 still precede the separately authorized useful pilot. The Node-only worker OS
 closure is not a provider-service OS. Native START remains unavailable.
 
+The [service-runtime/channel batch](docs/phase3/coordinator/pi-core-service-runtime-batch-12.md)
+adds an absent-only installer and active held verifier for an independently
+reviewed Python/native-library/Aragorn-source closure. A sealed channel holder
+authenticates already-connected action/sensor/provider peers and joins that
+installed-byte custody to native request and opt-in provider guards. Exact
+authenticated provider completion permanently retires its channel without
+removing broker/sensor checks for subsequent tool work. No concrete service
+artifact has been materialized or activated: loaded imports, service wrappers,
+unit-generation/lifetime ownership and useful pilot evidence remain outstanding.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

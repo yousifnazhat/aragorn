@@ -260,9 +260,26 @@ def _claim_once(control_fd, activation, request_digest, approval_digest):
         os.close(descriptor)
 
 
+def _service_custody_guard(custody, connection, peer, deadline, *, terminal=False):
+    """Optional installed-code/channel custody, not loaded-code attestation."""
+    if custody is None:
+        return
+    from .pi_core_service_channels import PiServiceChannels
+    _require(type(custody) is PiServiceChannels and
+             custody.provider_connection is connection and custody.provider_peer == peer and
+             deadline <= custody.deadline, "PROVIDER_SERVICE_CUSTODY_REFUSED")
+    if terminal:
+        # Called only after an exact per-message-authenticated v2 terminal.
+        # Retirement is permanent; later tool work may still need broker/sensor.
+        custody.retire_provider(deadline=deadline)
+    else:
+        _require(not custody.provider_retired, "PROVIDER_SERVICE_ALREADY_RETIRED")
+    custody.guard(deadline=deadline)
+
+
 def handle_pi_provider_connection(worker_connection, provider_connection, config, *, activation_path,
         profile, protected_install_root, grant, expected_provider_peer, deadline,
-        provider_service=False):
+        provider_service=False, service_custody=None):
     """Mediate one actual initial Pi request, opening no listener or network.
 
     Caller owns both channels. This owns only newly opened descriptors and holds
@@ -271,6 +288,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
     """
     _require(os.geteuid() == os.getegid() == 0, "PROVIDER_ROOT_REQUIRED")
     _require(type(provider_service) is bool, "PROVIDER_SERVICE_MODE_REFUSED")
+    _require(service_custody is None or provider_service, "PROVIDER_SERVICE_CUSTODY_REQUIRES_V2")
     channel.validate_deadline(deadline)
     _require(type(config) is broker.RuntimeActionBrokerConfig and config.expected_broker_uid == 0,
              "PROVIDER_ROOT_CONFIG_REQUIRED")
@@ -279,6 +297,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
              protected_install_root.is_absolute() and protected_install_root != Path("/"), "PROVIDER_PROFILE_REFUSED")
     peer = channel._peer(expected_provider_peer)
     _require(peer[1] > 0 and peer[2] > 0 and peer[0] != os.getpid(), "PROVIDER_SERVICE_ROLE_REFUSED")
+    _service_custody_guard(service_custody, provider_connection, peer, deadline)
     _require(worker_connection is not provider_connection and worker_connection.fileno() != provider_connection.fileno() and
              worker_connection.getsockopt(socket.SOL_SOCKET, channel._DOMAIN) == socket.AF_UNIX and
              worker_connection.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_STREAM,
@@ -314,6 +333,8 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
 
         def guard(*, check_provider=True):
             identity._remaining(deadline, activation)
+            _service_custody_guard(service_custody, provider_connection, peer, deadline,
+                                   terminal=not check_provider)
             _require(identity.read_activation(activation_path) == activation and
                      identity._measured(worker_connection, worker_fd, profile, activation, deadline) == measured,
                      "PROVIDER_WORKER_CUSTODY_CHANGED")

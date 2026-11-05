@@ -102,6 +102,17 @@ removing broker/sensor checks for subsequent tool work. No concrete service
 artifact has been materialized or activated: loaded imports, service wrappers,
 unit-generation/lifetime ownership and useful pilot evidence remain outstanding.
 
+The [concrete image/wrapper batch](docs/phase3/coordinator/pi-core-service-image-batch-13.md)
+adds static assembly from the retained pinned Linux arm64 Python archive and
+three fixed one-shot action/sensor/provider entrypoints. The existing installer
+accepts an additive v2 binding with exact wrapper commands and libpython;
+v1 remains unchanged. Wrappers validate protected configuration, role identity
+and post-exec authenticated channels, then reuse the existing handlers. This
+does not install or execute the image, start services, supply credentials or
+prove loaded-code custody. Protected lifecycle/configuration integration,
+native identity/recovery/timing evidence and the separately authorized useful
+pilot remain D2 work. START is still unavailable.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

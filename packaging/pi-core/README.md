@@ -135,6 +135,34 @@ and provider permit budgets; this batch keeps failure closed and does not widen
 limits or claim measured feasibility. See the
 [batch-12 checkpoint](../../docs/phase3/coordinator/pi-core-service-runtime-batch-12.md).
 
+Batch 13 adds a concrete staged service image and fixed wrappers. The assembler
+reuses the retained Python3.12.13-slim-bookworm arm64 archive, existing ELF and
+license inspection, and independently pinned source/wrapper inventories in
+`service-assembly-inputs-v1.json`. No target interpreter, container or service
+executes. The additive v2 binding pins libpython and exactly these commands:
+
+```
+/usr/bin/python3 -I -S -B /opt/aragorn/bin/action.py SUPERVISOR_PID DEADLINE_NS
+/usr/bin/python3 -I -S -B /opt/aragorn/bin/sensor.py SUPERVISOR_PID DEADLINE_NS
+/usr/bin/python3 -I -S -B /opt/aragorn/bin/provider.py SUPERVISOR_PID DEADLINE_NS
+```
+
+The wrappers check fixed root-owned configuration, exact role identities and
+post-exec authenticated channels before invoking existing handlers once. The
+future lifecycle owner must create supervisor listeners, wait for the action
+listener before starting the sensor, and separately verify wrapper/unit exit
+and cleanup. Handler completion is not service-lifetime proof. No stale socket
+is removed and no connection or effect is retried.
+
+Early environment refusal precedes service imports, but cannot undo native
+loader activity before Python starts. Future protected units must supply a
+clean environment and isolate OpenSSL configuration/providers. The image's
+static closure supports the three fixed handlers; four function-local optional
+benchmark DSSE imports are explicitly unsupported. No site-packages or host
+Python fallback is allowed. This is not proof that every API in every copied
+module is supported. See the
+[batch-13 checkpoint](../../docs/phase3/coordinator/pi-core-service-image-batch-13.md).
+
 The additive Python supervisor boundary now lives in
 `src/aragorn/pi_core_bundle_launch.py` and `pi_core_worker_identity.py`: exact
 admitted-bundle preparation, one-shot protected activation publication and a
@@ -223,7 +251,14 @@ the affected capacity checks. Installed-tree fixtures are owned temporary files;
 all service/process/socket edges are inert. Four selected affected caller methods
 run with the new integration checks; historical suites are not rescheduled.
 
-Tests run the actual pinned Pi loop against a scripted provider and in-memory
+Batch 13 selects `pi-core-service-image-offline`, `pi-core-service-entry-offline`,
+`pi-core-service-image-contract-offline` and `pi-core-service-image-assemble`,
+plus affected capacity checks. The assembly stage only reads the retained archive
+and writes a fresh local artifact; it never executes its target bytes. Successful
+unchanged dependencies are reused. `service-artifact-v1.json` records the exact
+retained artifact and its limits, not an installed or qualified deployment.
+
+The initial worker checks run the actual pinned Pi loop against a scripted provider and in-memory
 relay, with cross-language verification by Aragorn's existing Python parser.
 They do not start listeners, call model providers, execute protected effects or
 measure Phase 3 performance. No source/test helper is production authority.
@@ -236,9 +271,10 @@ the supervisor remains provider-unavailable. Installation and native lifecycle
 must still be exercised in a separately authorized controlled fixture. Protected
 identity, native request dispatch and independent sensor/broker wiring now exist;
 the fixed client/START binding is implemented without activating that path.
-Establish concrete reviewed service-image assembly, executable service wrappers,
-unit-generation/lifetime and consumed-code custody, native recovery evidence and
-installed protected provider service custody
+The concrete service image and fixed wrappers are now staged. Connect their
+protected configuration/installation to unit startup, authenticated channel
+acquisition, unit-generation/lifetime and consumed-code custody; establish native
+recovery/timing evidence and installed protected provider service custody
 (the public-input provisioner and Pi-aware recovery source now exist;
 OpenAI Responses is selected and its source adapter exists,
 but no concrete model/key deployment or service is activated), followed by

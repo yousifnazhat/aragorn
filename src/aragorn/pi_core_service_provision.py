@@ -27,6 +27,9 @@ SOURCE_ROOT = IMPORT_ROOT + "/aragorn"
 LOADER = "lib/ld-linux-aarch64.so.1"
 RECEIPT = "service-runtime-receipt.json"
 BINDING_SCHEMA = "aragorn/pi-core-service-runtime-binding/v1"
+BINDING_SCHEMA_V2 = "aragorn/pi-core-service-runtime-binding/v2"
+LIBPYTHON = "usr/lib/libpython3.12.so.1.0"
+WRAPPER_ROOT = "opt/aragorn/bin"
 SCHEMA = "aragorn/pi-core-service-runtime/v1"
 STATUS = "PROVISIONED_SERVICE_BYTES_NOT_EXECUTED_OR_SERVICE_READY"
 AUTHORITY = "HELD_INSTALLED_SERVICE_BYTES_NOT_LOADED_CODE_OR_PROCESS_AUTHORITY"
@@ -65,11 +68,14 @@ def validate_service_runtime_inputs(manifest, manifest_digest, runtime_binding, 
     _require(len(raw) <= 2 * 1024 * 1024, "service binding exceeds bound")
     binding = json.loads(raw)
     _require(canonical_digest(binding) == runtime_binding_digest, "service binding pin mismatch")
-    _require(type(binding) is dict and set(binding) == {
+    _require(type(binding) is dict, "invalid service binding fields")
+    wrapped = binding.get("schema") == BINDING_SCHEMA_V2
+    _require(set(binding) == {
         "schema", "target", "python", "import_root", "stdlib_directory", "loader_path",
-        "native_extension_paths", "shared_library_paths", "source_digests", "roles"},
+        "native_extension_paths", "shared_library_paths", "source_digests", "roles"} |
+        ({"wrappers"} if wrapped else set()),
         "invalid service binding fields")
-    _require(binding["schema"] == BINDING_SCHEMA and binding["target"] == "linux-arm64-glibc" and
+    _require(binding["schema"] in (BINDING_SCHEMA, BINDING_SCHEMA_V2) and binding["target"] == "linux-arm64-glibc" and
              binding["import_root"] == IMPORT_ROOT and binding["stdlib_directory"] == STDLIB and
              binding["loader_path"] == LOADER and binding["roles"] == ROLES,
              "service runtime layout or fixed role mapping differs")
@@ -80,10 +86,22 @@ def validate_service_runtime_inputs(manifest, manifest_digest, runtime_binding, 
     _require(type(python) is dict and set(python) == {"path", "digest"} and python["path"] == PYTHON and
              PYTHON in files and files[PYTHON]["executable"] and python["digest"] == files[PYTHON]["digest"] and
              LOADER in files and files[LOADER]["executable"], "service Python or loader identity is absent or differs")
+    wrapper_paths = {WRAPPER_ROOT + "/" + role + ".py" for role in ROLES} if wrapped else set()
+    if wrapped:
+        _require(LIBPYTHON in files and SOURCE_ROOT + "/pi_core_service_entry.py" in files and
+                 wrapper_paths <= files.keys(), "service image lacks libpython or fixed wrappers")
+        expected_wrappers = {role: {
+            "path": WRAPPER_ROOT + "/" + role + ".py",
+            "digest": files[WRAPPER_ROOT + "/" + role + ".py"]["digest"],
+            "argv": ["/" + PYTHON, "-I", "-S", "-B", "/" + WRAPPER_ROOT + "/" + role + ".py"],
+        } for role in ROLES}
+        _require(binding["wrappers"] == expected_wrappers and
+                 all(files[name]["executable"] and files[name]["size"] > 0 for name in wrapper_paths),
+                 "service wrapper bytes, roles or isolated invocation differ")
     for name in files:
         _require(not any(part == "__pycache__" for part in name.split("/")) and not name.endswith((".pyc", ".pyo")),
                  "service closure contains unreviewable Python caches")
-        _require(name in (PYTHON, LOADER) or name.startswith(STDLIB + "/") or
+        _require(name in (PYTHON, LOADER) or name in wrapper_paths or (wrapped and name == LIBPYTHON) or name.startswith(STDLIB + "/") or
                  name.startswith(SOURCE_ROOT + "/") or any(name.startswith(folder + "/") for folder in _LIB_DIRS),
                  "service closure contains a path outside the fixed runtime/source layout")
     sources = {name: row["digest"] for name, row in files.items() if name.startswith(SOURCE_ROOT + "/")}
@@ -104,10 +122,11 @@ def validate_service_runtime_inputs(manifest, manifest_digest, runtime_binding, 
                      for name in native) for prefix in ("_ssl", "_socket", "_ctypes")),
              "service native extension closure lacks required identities or contains overrides")
     libraries = binding["shared_library_paths"]
-    actual_libraries = sorted(name for name in files if any(name.startswith(folder + "/") for folder in _LIB_DIRS))
+    actual_libraries = sorted(name for name in files if (wrapped and name == LIBPYTHON) or
+                              any(name.startswith(folder + "/") for folder in _LIB_DIRS))
     _require(type(libraries) is list and len(libraries) <= 1024 and all(type(name) is str for name in libraries) and
              libraries == sorted(set(libraries)) and libraries == actual_libraries and
-             all(any(Path(name).parent.as_posix() == folder for folder in _LIB_DIRS) and
+             all(((wrapped and name == LIBPYTHON) or any(Path(name).parent.as_posix() == folder for folder in _LIB_DIRS)) and
                  re.fullmatch(r"lib[A-Za-z0-9_.+-]+\.so(?:\.[0-9]+)*", Path(name).name) for name in libraries) and
              {"libssl.so.3", "libcrypto.so.3", "libc.so.6"}.issubset({Path(name).name for name in libraries}),
              "service shared-library closure lacks reviewed OpenSSL/libc identities")

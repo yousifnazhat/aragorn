@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation through protected service-runtime provisioning and authenticated channel custody released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through concrete service-image assembly and fixed executable wrappers released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -131,6 +131,17 @@ custody and preventing further provider use. This is source implementation,
 not a concrete reviewed service image, loaded-module identity or service-unit
 lifetime proof. No services or provider requests ran; START stays unavailable.
 
+Batch-13 [concrete image/wrapper checkpoint](../phase3/coordinator/pi-core-service-image-batch-13.md):
+static assembly reuses the retained Python3.12.13 archive, existing ELF/license
+inspection and installed-tree contract. A versioned v2 binding pins libpython
+and three fixed isolated Python wrapper commands. The one-shot wrappers reuse
+existing handlers after protected configuration, caller and channel checks;
+they do not initialize grants or retry effects. The copied source inventory
+explicitly excludes support for four optional benchmark DSSE import sites, not
+for service handler dependencies. No target code or service runs. Protected
+installation/configuration and unit lifetime, consumed-code identity, native
+recovery/timing and a separately authorized useful pilot are still required.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -182,9 +193,10 @@ Batch 11 adds Pi-aware effective-receipt recovery/rotation, connected to request
 startup and explicit lifecycle preparation, plus exact public provider-input
 provisioning. Consumed-code custody and exact channel/protected-service
 process lifetime remain next; batch 12 supplies the protected runtime/code
-installer and authenticated-channel holder, but not an actual installed service
-artifact or loaded-import proof. No useful native task has run. The retained
-Node-only worker OS cannot stand in for a Python/OpenSSL provider-service image.
+installer and authenticated-channel holder. Batch 13 supplies concrete staged
+Python/OpenSSL/service-source bytes and fixed one-shot wrappers, not an installed
+service or loaded-import proof. No useful native task has run. The retained
+Node-only worker OS remains separate from this service image.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension
@@ -257,6 +269,14 @@ contract**, not another generic framework. The remaining release obligations are
    SDD. Resolve any new material product choice before coding it.
 
 ### D2: prove the integration risk early
+
+Current next integration: consume the batch-13 image/binding and fixed wrappers
+in protected service configuration and native lifecycle ownership. Provision
+exact role/configuration/endpoint custody, start action before sensor after
+listener readiness, acquire authenticated post-exec channels, and observe exact
+unit/process stop and cleanup. Bind actual consumed code and test native recovery
+and timing only in a separately authorized pilot; do not enable START merely
+because static bytes and offline checks exist.
 
 Use a fabricated owned-lab task with real computation and observable effects,
 for example reading explicitly allowed documents and producing a verified output

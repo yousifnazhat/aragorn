@@ -262,8 +262,9 @@ def read_source(archive_path: Path, source: dict) -> tuple[ImageTree, dict]:
         "layer_diff_ids": source["layer_diff_ids"], "source_annotations": manifest.get("annotations", {})}
 
 
-def elf_dependencies(raw: bytes) -> dict:
+def elf_dependencies(raw: bytes, *, allowed_rpath: tuple[str, ...] = ()) -> dict:
     """Read ELF64 program/dynamic headers only; never load or execute ELF."""
+    require(allowed_rpath in ((), ("$ORIGIN/../lib",)), "unsupported ELF RPATH policy")
     require(len(raw) >= 64 and raw[:7] == b"\x7fELF\x02\x01\x01" and
             struct.unpack_from("<H", raw, 16)[0] in (2, 3) and
             struct.unpack_from("<H", raw, 18)[0] == 183, "ELF is not little-endian Linux arm64 executable/shared object")
@@ -298,7 +299,8 @@ def elf_dependencies(raw: bytes) -> dict:
                 break
             values.setdefault(tag, []).append(value)
         require(terminated, "unterminated ELF dynamic table")
-        require(not any(tag in values for tag in (15, 29, 0x6ffffefb, 0x6ffffefc, 0x7ffffffd, 0x7fffffff)),
+        require(not any(tag in values for tag in (0x6ffffefb, 0x6ffffefc, 0x7ffffffd, 0x7fffffff)) and
+                (bool(allowed_rpath) or not any(tag in values for tag in (15, 29))),
                 "ELF uses unapproved RPATH/RUNPATH/audit/filter loading")
         require(all(not (value & 0x800) for value in values.get(0x6ffffffb, [])), "ELF disables reviewed default library search")
         require(len(values.get(5, [])) == len(values.get(10, [])) == 1 and values[10][0] <= 16 * 1024 * 1024,
@@ -309,6 +311,14 @@ def elf_dependencies(raw: bytes) -> dict:
         require(len(matches) == 1, "ELF string table not in one file-backed load")
         table_offset, _ = matches[0]
         table = raw[table_offset:table_offset + string_size]
+        search = values.get(15, []) + values.get(29, [])
+        require(len(search) <= 1, "ambiguous ELF RPATH/RUNPATH")
+        require(not allowed_rpath or len(search) == 1, "required ELF relative search path is absent")
+        for index in search:
+            require(index < len(table), "ELF RPATH index outside table")
+            end = table.find(b"\0", index)
+            require(end >= 0 and table[index:end] == b"$ORIGIN/../lib" and
+                    allowed_rpath == ("$ORIGIN/../lib",), "unapproved ELF relative search path")
         def string(index: int) -> str:
             require(index < len(table), "ELF string index outside table")
             end = table.find(b"\0", index)

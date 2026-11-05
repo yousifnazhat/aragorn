@@ -71,6 +71,17 @@ Actual provider selection, credential custody, send-time egress enforcement and
 service/channel provisioning remain before activation. Native bootstrap stays
 provider-unavailable; no useful pilot or qualification is claimed.
 
+The [OpenAI service batch](docs/phase3/coordinator/pi-core-openai-service-batch-10.md)
+implements the selected OpenAI Responses protocol, a credential-isolated one-shot
+HTTPS transport and authenticated service handler. The root gate now supports an
+opt-in v2 exchange with fresh CONNECT/SEND policy checks and nonrenewable permits
+of at most 100 ms; this is bounded freshness, not atomic revocation. The intended
+key model is user-supplied credentials held outside Pi. No real key was read and
+no provider call or unit was started. Exact native service/channel provisioning,
+lifetime ownership, consumed-code custody and effective-receipt recovery still
+precede the useful pilot. Native bootstrap remains provider-unavailable; D2 and
+Phase 3 are not complete.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

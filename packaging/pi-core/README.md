@@ -72,8 +72,21 @@ activation budget before an authenticated service handoff, and closes its owned
 handles before worker completion. Caller-owned channels must still be closed by
 their owner. This gate reads no credentials and opens no provider connection:
 actual TLS/DNS/proxy/redirect controls and network-send-time policy enforcement
-belong to the still-missing provider adapter. See the
+were outside batch 9's handoff. See the
 [batch-9 checkpoint](../../docs/phase3/coordinator/pi-core-provider-mediation-batch-9.md).
+
+Batch 10 adds `pi_core_openai_responses.py`, `pi_core_openai_transport.py` and
+`pi_core_provider_service.py`. The root gate opts into service-v2 explicitly;
+legacy v1 stays handoff-only. The new service independently binds the exact
+approved request and profile, obtains fresh one-use CONNECT/SEND permissions,
+and attempts one numeric-address TLS connection and one buffered Responses API
+request. Dedicated CA trust, fixed hostname verification, original deadlines,
+bounded HTTP parsing, no DNS/proxy/redirect/retry and owned-handle cleanup are
+implemented. The maximum 100 ms permit is not atomic revocation. Keys are user
+supplied and read only by the separate service, never by Pi; provisioning and
+user key setup are not implemented or performed by this batch. Its handler owns
+transport/peer handles, not the caller's channel or service process lifetime.
+See the [batch-10 checkpoint](../../docs/phase3/coordinator/pi-core-openai-service-batch-10.md).
 
 The additive Python supervisor boundary now lives in
 `src/aragorn/pi_core_bundle_launch.py` and `pi_core_worker_identity.py`: exact
@@ -143,6 +156,12 @@ Batch 9 adds `pi-core-provider-mediation-offline`,
 select only the new data/client behavior and affected assembler checks. Importing
 older fixture helpers does not schedule their historical test classes.
 
+Batch 10 adds four new Python-only stages: `pi-core-openai-responses-offline`,
+`pi-core-openai-transport-offline`, `pi-core-provider-service-offline` and
+`pi-core-provider-egress-offline`, plus the affected registry-capacity slice.
+No TypeScript artifact changed; compiled-artifact-v3 and OS-v1 are reused,
+without another compiler or assembler run. Native/file/network edges are inert.
+
 Tests run the actual pinned Pi loop against a scripted provider and in-memory
 relay, with cross-language verification by Aragorn's existing Python parser.
 They do not start listeners, call model providers, execute protected effects or
@@ -157,9 +176,9 @@ must still be exercised in a separately authorized controlled fixture. Protected
 identity, native request dispatch and independent sensor/broker wiring now exist;
 the fixed client/START binding is implemented without activating that path.
 Establish exact service/channel provisioning and lifetime, consumed-code custody,
-Pi-aware effective-receipt recovery/rotation and the actual credential-isolated
-provider adapter with network-send-time data/egress enforcement (the data gate
-and fixed client exist, but no provider is selected or activated), followed by
+Pi-aware effective-receipt recovery/rotation and installed protected provider
+service custody (OpenAI Responses is selected and its source adapter exists,
+but no concrete model/key deployment or service is activated), followed by
 real positive effect/health/cleanup integration. The HTTP reader service remains
 refusal-only. The approved 29-requirement map is not an executable result and no
 final acceptance or Phase 4 readiness is claimed here.

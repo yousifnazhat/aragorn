@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation through protected provider/data handoff released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through the protected OpenAI service handler released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -95,6 +95,18 @@ proxy/redirect and network-send-time policy enforcement, native service lifetime
 consumed-code custody and effective-receipt recovery remain before the pilot.
 Native bootstrap remains unavailable. No live request or Phase 3 result exists.
 
+Batch-10 [OpenAI service checkpoint](../phase3/coordinator/pi-core-openai-service-batch-10.md):
+the user selected OpenAI Responses, not a concrete model or live-call permission.
+The protected codec, one-request HTTPS transport and authenticated service
+handler are connected in source to the root gate's opt-in v2 exchange. Root
+rechecks exact input/profile, current policy/revocation/health and independent
+observation before CONNECT and SEND; one-use permits last at most 100 ms and
+never extend the original deadline. This bounds freshness rather than claiming
+atomic revocation. Users will supply their own API keys to the separate service;
+no key setup, credential use or native activation occurred. Exact provisioning,
+channel/process lifetime ownership, consumed-code custody and recovery remain
+before the separately authorized useful pilot. No requirement is qualified.
+
 ## Goal
 
 Deliver a useful controlled-environment capability-security V1 by reusing
@@ -139,10 +151,12 @@ root-read request handoff, mandatory create broker enforcement, independent Pi
 sensor measurement, native dispatch and explicit cleanup joins. Batch 8 adds
 the fixed native client/v2 START binding without repointing or loosening the
 legacy relay profile. Batch 9 adds a protected initial-prompt data gate and
-fixed provider client, with an authenticated service handoff but no provider
-adapter or network egress. Pi-aware effective-receipt recovery/rotation, exact
-channel provisioning/lifetime and credential-isolated actual provider routing
-remain next; no useful native task has run.
+fixed provider client, with an authenticated service handoff. Batch 10 adds the
+selected OpenAI Responses codec, protected transport and one-shot service
+handler with fresh egress checks; no live egress or installed service exists.
+Pi-aware effective-receipt recovery/rotation, consumed-code custody and exact
+channel/protected-service provisioning and lifetime remain next; no useful
+native task has run.
 
 Key contracts to reuse: CAS and admission receipts; action request/decision and
 one-use grants; process/active lineage; broker/reader health; seven-dimension

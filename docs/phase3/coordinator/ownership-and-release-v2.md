@@ -1,5 +1,47 @@
 # Phase 3 evidence consumers: ownership and release v2
 
+## Main integration and publication (2026-11-06)
+
+The user authorizes the coordinator to commit, merge into `main` and push after
+each completed, reviewed implementation batch without another manual merge
+request. Status-only turns and incomplete, failed or unreviewed work do not
+create commits or authorize a merge. Lane agents retain their existing scopes.
+
+Fetch and inspect current remote ancestry first; preserve unrelated changes,
+original signed deliveries and frozen evidence. Run only necessary new/affected
+checks, reusing exact unchanged successes. Make and verify signed batch/merge
+commits, integrate without rewriting history, and push only normal fast-forward
+updates to `main` and the integration branch. Keep the integration branch caught
+up with the published merge. Conflicts, unexpected remote changes or branch
+protection require resolution without force-push or bypass. Read back exact
+remote SHAs after publication. A source merge does not authorize service
+activation, a release, a useful pilot or Phase 3 qualification.
+
+## Current scope override (2026-11-02)
+
+The user approved the [Pi-core managed capability profile](../../design/pi-core-managed-capability-sdd-v1.md)
+and subsequently approved the 29-requirement successor mapping and
+[first connected offline implementation batch](pi-core-connected-batch-1.md).
+The subsequent [D2 bundle/identity batch](pi-core-launch-identity-batch-2.md)
+releases only its named preparation/peer-guard paths and focused offline checks.
+The [compiled/bootstrap batch](pi-core-compiled-launch-batch-3.md) releases its
+three nonoverlapping build/entrypoint/confinement owners under this chat's
+coordination. Existing lane drafts/worktrees remain untouched; new native
+supervisor, provider or old lane assignments are not silently released by batch 3.
+The subsequent [OS/supervisor batch](pi-core-os-supervisor-batch-4.md) explicitly
+releases parallel static OS assembly, protected provisioning and native-supervisor
+implementation owners. This chat owns shared plan/registry changes, source review,
+focused checks, signed integration and push. Existing worktree drafts remain
+untouched. No lane may activate native paths, run old suites, retry unchanged
+failures or widen the provider/effect profile.
+The [managed-profile roadmap](../../design/pi-core-managed-profile-roadmap-v1.md)
+supersedes old forward runtime-selection and automatic implementation instructions
+on this page. This is a replacement target, not permission to run a second
+runtime campaign. Preserve exact ownership, drafts, signatures, frozen evidence
+and all operational holds. Only the exact paths/interfaces in that current
+batch contract are released; no live operations or historical OpenClaw-specific
+assignments are released by this update.
+
 Base: verified signed and published `27e9844e6d5f0924b79382a8a084099ee06e2ed6`.
 This document succeeds v1 only for the next bounded implementation assignments.
 All existing provider and operational holds remain. Worktree capacity follows

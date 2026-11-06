@@ -1,0 +1,18 @@
+{
+  "schema": "aragorn/pi-core-os-assembly-inputs/v1",
+  "purpose": "STATIC_ARCHIVE_AND_ELF_PROCESSING_ONLY_NO_TARGET_EXECUTION",
+  "archive": {
+    "path": ".aragorn/pi-core-os-inputs/python-bookworm-d50fb761.tar",
+    "bytes": 47692800,
+    "sha256": "e0f568085ac82e4ed8aa84f7550859ae57af5c27f6142b751889cfbd257d5548"
+  },
+  "compiled_checkpoint": "packaging/pi-core/compiled-artifact-v1.json",
+  "source_pin": "packaging/pi-core/os-source-v1.json",
+  "constraints": {
+    "network": "none",
+    "subprocesses": false,
+    "target_execution": false,
+    "automatic_retry": false,
+    "fresh_output_only": true
+  }
+}

@@ -2,6 +2,26 @@
 
 **Agent Runtime Admission, Governance, Observation, Response, and Neutralization**
 
+**Architecture decision, 2026-11-02:** the first controlled-environment target is
+the approved [Pi-core managed capability profile](docs/design/pi-core-managed-capability-sdd-v1.md):
+Pi is an unprivileged agent engine; Aragorn retains admission, policy, isolation,
+effect mediation and evidence authority. See the [current delivery roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md)
+for what is reused, what changes and the approved 29-requirement mapping from the
+original OpenClaw-specific Phase 3 gates. The
+[first connected offline batch](docs/phase3/coordinator/pi-core-connected-batch-1.md)
+connects the pinned Pi loop to the existing request/result protocol. It is not
+an authenticated Linux deployment, runtime qualification or release. The next
+[offline D2 batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md) adds
+protected bundle preparation and activation-bound peer handling. The
+[compiled/bootstrap batch](docs/phase3/coordinator/pi-core-compiled-launch-batch-3.md)
+now produces a pinned Linux artifact, credential-free entrypoint and guarded
+confinement/bootstrap APIs. The subsequent
+[OS/supervisor batch](docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md)
+adds a statically assembled OS-library closure, absent-only protected installer
+and native supervisor implementation. Installation and native execution have
+not been exercised; provider and effect-identity integration remain incomplete. Historical
+results below keep their original scope and do not qualify Pi.
+
 Aragorn is a planned open-source admission-control foundation for agent capabilities. It binds evidence to exact artifact digests and fails closed when acquisition or required analysis is incomplete.
 
 Current status: **private qualified Phase 0 validation milestone complete; the bounded Phase 1 acquisition lock is complete for the public-GitHub exact-commit profile; the bounded exercised-profile Phase 2 exit is complete; Phase 3 runtime-prevention engineering is active**. The machine-derived [Phase 1 completion receipt](./benchmark/receipts/phase1-acquisition-lock-completion-v3-2026-07-29.json) derives its numerical gate from the signed `c87b82b9` production ingress and cross-binds request-v4 release-pin custody; the earlier v2 numerical receipt remains historical evidence only. It does not make a runtime admission-conformant, grant installer authority, or authorize public release. Retained evidence includes one fresh hidden efficacy pass, final-candidate maintenance replay, paired acquisition/reference evaluation, and the standards gate. OpenClaw `2026.7.1` passed the explicit install-block probe but failed the mandatory direct-write path, which eliminates it as a standalone admission reference monitor. A separate OS-mediated contained profile passed install, direct-write, rename, symlink, auto-discovery, runtime restart, policy-failure, unprivileged policy-tampering, exact conformance-fixture activation, three of nine inventoried update routes, six of twelve reload routes, and the retained activation and recovery slices. One additional update route failed, so the formal profile is `FAIL` and installer-ineligible; its cumulative ledger still leaves `reload/workshop-invalidation` `NOT_TESTED`. A separately pinned dedicated current-V3 capture now qualifies workshop invalidation only at route level and does not rewrite that formal profile. Formal `ADM-01` passes for the contained conformance fixture. A separate DET-only receipt passes four fixed decision exits across three clean processes each, but is not composed with the runtime receipt. Host/root tampering and Pi also remain dynamically untested. No runtime is admission-conformant yet. This is not EDR, a supported release, an installer-authority claim, a general OpenClaw security finding, or a claim that a skill is safe. Aragorn remains private until every roadmap phase is completed and evaluated and every applicable exit gate has passed.

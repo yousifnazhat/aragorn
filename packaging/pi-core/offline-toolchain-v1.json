@@ -1,0 +1,19 @@
+{
+  "schema": "aragorn/pi-core-offline-toolchain/v1",
+  "purpose": "DEVELOPER_OFFLINE_LOOP_PROTOCOL_CHECK_ONLY_NOT_LINUX_BUILD_OR_QUALIFICATION",
+  "node": {
+    "executable": "/opt/homebrew/bin/node",
+    "version": "v26.3.1",
+    "sha256": "56694c81b093cc8da273fa017cf91765b3653e5f64f16727976ffaa87b2b6b31"
+  },
+  "preparation": {
+    "npm_version": "11.16.0",
+    "command": "npm ci --ignore-scripts --no-audit --no-fund",
+    "package_lock_sha256": "ec3ba79e5d5f2516408311f05e3196efb604179a4421d0364b63527131b72789",
+    "packages": 89,
+    "scripts_executed": false,
+    "note": "Exact pins installed using isolated empty npm configuration. Target Node24.22.2/npm11.19.1/Linux compiler remain unbuilt; no deployment pin change."
+  },
+  "dependency_tree_sha256": "4ea4f2b7eb5408dbe64682a99c9921d42855faa69fdb4511328c444e4afed359",
+  "tree_algorithm": "sorted POSIX relative entries: regular files path/kind/bytes/sha256; links path/kind/target without following; omit directories, reject other types; SHA256 of ASCII canonical sorted-key compact JSON array; include hidden lock and bin links"
+}

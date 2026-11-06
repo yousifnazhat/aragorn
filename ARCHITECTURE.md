@@ -1,5 +1,32 @@
 # Aragorn: architecture and roadmap
 
+## Approved forward architecture (2026-11-02)
+
+The [Pi-core managed capability SDD](docs/design/pi-core-managed-capability-sdd-v1.md)
+now defines the approved first controlled-environment product profile: a thin
+untrusted Pi-core worker, one admitted bundle per fresh context, existing Python
+security authority and external Linux enforcement. Aragorn owns the lifecycle;
+arbitrary native in-process plugins and shared multi-skill contexts are excluded
+from this first profile. The [delivery roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md)
+defines reuse, adaptation and the approved 29-requirement qualification mapping.
+
+This approval changes the forward target, not historical evidence or completion
+claims. The [first connected offline batch](docs/phase3/coordinator/pi-core-connected-batch-1.md)
+implements Pi-loop/request-protocol composition. The subsequent
+[offline launch/identity batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md)
+adds exact bundle preparation and a protected activation/PIDFD relay boundary;
+it neither starts a worker nor installs the new handler. The
+[compiled/bootstrap batch](docs/phase3/coordinator/pi-core-compiled-launch-batch-3.md)
+adds a real compiler-only Linux artifact and guarded confinement/bootstrap
+composition. The [OS/supervisor batch](docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md)
+adds a pinned static OS closure, protected byte provisioner and native lifecycle
+caller with ownership-checked cleanup. These native paths are implemented, not
+operationally exercised. Protected identity/provider integration and useful
+effect/health evidence remain outstanding. No Pi deployment is qualified. The
+existing Phase 3 manifest and all operational holds remain unchanged. Historical
+status and target-specific sections below remain preserved; the SDD supersedes
+them only where they direct future runtime selection or managed-profile scope.
+
 Date: 2026-07-27
 
 Status: private implementation; qualified Phase 0 validation milestone complete; bounded Phase 1 acquisition lock complete for the public-GitHub exact-commit profile; bounded exercised-profile Phase 2 exit complete; Phase 3 runtime-prevention engineering active; universal capture completeness, general archives, private repositories, trusted runtime/host attestation, runtime conformance, installer eligibility, EDR status, and public release remain blocked

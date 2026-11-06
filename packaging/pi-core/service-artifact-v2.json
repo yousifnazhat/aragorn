@@ -1,0 +1,300 @@
+{
+  "schema": "aragorn/pi-core-service-artifact-checkpoint/v1",
+  "status": "PREPARED_NOT_INSTALLED_OR_EXECUTED",
+  "base_commit": "4fdbc19e48e72a4f1f7f4ad0262c873726243726",
+  "pipeline_stage": "pi-core-service-lifecycle-image-assemble",
+  "pipeline_fingerprint": "sha256:82fe17d941c809d8f32eebbcfd6f73c189166fbcc4e1e7bfa75622988a5bff66",
+  "receipt_local_path": ".aragorn/pi-core-service-image/assembled-e76c24ccf0424aefaf3fba6c05bbb58e/service-image-receipt.json",
+  "receipt_file_sha256": "402fa25f634652bf98637a569b03e335c21ba614c8dde5e18b671acaaf7abdff",
+  "receipt_canonical_digest": "sha256:402fa25f634652bf98637a569b03e335c21ba614c8dde5e18b671acaaf7abdff",
+  "receipt_file_bytes": 253432,
+  "manifest_digest": "sha256:a4a41a2215dcf4834f78775bf8e23ca79eb2b8979c0169cf35d37c0b685a564d",
+  "runtime_binding_digest": "sha256:7e67a6701ac6845a3ba9585108f24a07a89c5fcba4966ff07778d9c02a8e2b6d",
+  "source_pin_digest": "sha256:cc5aa6f02736749e0a166e8dd08fff1b4b18478022e9064c5f4e0fa3daf28782",
+  "assembly_inputs_digest": "sha256:d3ed51bbfff75273085026f138b5c763e5af380e8371a04733df0507dffaaa3f",
+  "archive_sha256": "e0f568085ac82e4ed8aa84f7550859ae57af5c27f6142b751889cfbd257d5548",
+  "target": "linux-arm64-glibc",
+  "file_count": 770,
+  "directory_count": 54,
+  "source_count": 82,
+  "wrapper_count": 3,
+  "native_extension_count": 69,
+  "shared_library_count": 27,
+  "root_bytes": 41465539,
+  "provenance_file_count": 34,
+  "provenance_inventory": [
+    {
+      "digest": "sha256:3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "path": "provenance/licenses/CPython-LICENSE.txt",
+      "size": 13936
+    },
+    {
+      "digest": "sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "path": "provenance/licenses/common/Apache-2.0",
+      "size": 11358
+    },
+    {
+      "digest": "sha256:b7fd9b73ea99602016a326e0b62e6646060d18febdd065ceca8bb482208c3d88",
+      "path": "provenance/licenses/common/Artistic",
+      "size": 6111
+    },
+    {
+      "digest": "sha256:110535522396708cea37c72a802c5e7e81391139f5f7985631c93ef242b206a4",
+      "path": "provenance/licenses/common/GFDL",
+      "size": 22955
+    },
+    {
+      "digest": "sha256:3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "path": "provenance/licenses/common/GPL",
+      "size": 35149
+    },
+    {
+      "digest": "sha256:d77d235e41d54594865151f4751e835c5a82322b0e87ace266567c3391a4b912",
+      "path": "provenance/licenses/common/GPL-1",
+      "size": 12632
+    },
+    {
+      "digest": "sha256:8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "path": "provenance/licenses/common/GPL-2",
+      "size": 18092
+    },
+    {
+      "digest": "sha256:3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "path": "provenance/licenses/common/GPL-3",
+      "size": 35149
+    },
+    {
+      "digest": "sha256:e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+      "path": "provenance/licenses/common/LGPL",
+      "size": 7652
+    },
+    {
+      "digest": "sha256:681e386e44a19d7d0674b4320272c90e66b6610b741e7e6305f8219c42e85366",
+      "path": "provenance/licenses/common/LGPL-2",
+      "size": 25381
+    },
+    {
+      "digest": "sha256:dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+      "path": "provenance/licenses/common/LGPL-2.1",
+      "size": 26530
+    },
+    {
+      "digest": "sha256:e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+      "path": "provenance/licenses/common/LGPL-3",
+      "size": 7652
+    },
+    {
+      "digest": "sha256:832ed535ff3c3d025a8d2348eb1b697b89addcf2eaadbc17650262040b9145e2",
+      "path": "provenance/licenses/libbz2-1.0.copyright",
+      "size": 2228
+    },
+    {
+      "digest": "sha256:40c7e1f2118531f038ca22999bd976901254e1bc5cd1b0f0211bdd064c599987",
+      "path": "provenance/licenses/libc6.copyright",
+      "size": 25467
+    },
+    {
+      "digest": "sha256:1ca415a294c0e56958c4f795b3f1f69ea3479bca53d7811f5cdd020a258949db",
+      "path": "provenance/licenses/libcom-err2.copyright",
+      "size": 15209
+    },
+    {
+      "digest": "sha256:5a5e7ca0e9f3f9679977e3a3e9ede45ad92885a3297ea78e766979f9866c5a16",
+      "path": "provenance/licenses/libcrypt1.copyright",
+      "size": 6010
+    },
+    {
+      "digest": "sha256:8b53da37d73289d9df7317b3a2dbe16491f1fa9fec8b77b86d69704b40ce2c26",
+      "path": "provenance/licenses/libdb5.3.copyright",
+      "size": 17177
+    },
+    {
+      "digest": "sha256:f83d2ecba1ea4d99957e81c50bebbd076a128194288a3ec22cc8ccdb77c43087",
+      "path": "provenance/licenses/libffi8.copyright",
+      "size": 10165
+    },
+    {
+      "digest": "sha256:8bea8cf2f94cd8b37a0b8b3a2b974122b9194c1165e6ad508e366c74679e8817",
+      "path": "provenance/licenses/libgdbm6.copyright",
+      "size": 2701
+    },
+    {
+      "digest": "sha256:936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816",
+      "path": "provenance/licenses/libgssapi-krb5-2.copyright",
+      "size": 63047
+    },
+    {
+      "digest": "sha256:936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816",
+      "path": "provenance/licenses/libk5crypto3.copyright",
+      "size": 63047
+    },
+    {
+      "digest": "sha256:c62fe37d22203046611112bc10a9e03a39a7f73bec1b061e7c615326166d9ff5",
+      "path": "provenance/licenses/libkeyutils1.copyright",
+      "size": 2104
+    },
+    {
+      "digest": "sha256:936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816",
+      "path": "provenance/licenses/libkrb5-3.copyright",
+      "size": 63047
+    },
+    {
+      "digest": "sha256:936728f4181718f42951b881c1e8f1386bf6b2723c4fbc533c374d6f42c71816",
+      "path": "provenance/licenses/libkrb5support0.copyright",
+      "size": 63047
+    },
+    {
+      "digest": "sha256:a2dc8fac0f496e1c58aff67018cf0c6b88336316afa5642f9335b71642e28aa8",
+      "path": "provenance/licenses/liblzma5.copyright",
+      "size": 15465
+    },
+    {
+      "digest": "sha256:f0974fb41778e23c94111ff90da0546de8971f8270c58877283d372e6bd7f17e",
+      "path": "provenance/licenses/libncursesw6.copyright",
+      "size": 4670
+    },
+    {
+      "digest": "sha256:7d9c79b73fd956319a90cd210441498b225e00960352c4c6d447436481bb0eec",
+      "path": "provenance/licenses/libnsl2.copyright",
+      "size": 13646
+    },
+    {
+      "digest": "sha256:3591a8e4de849d910c5ee9045388344ef151c23b10cf8c6b1950f89f1ba1569c",
+      "path": "provenance/licenses/libreadline8.copyright",
+      "size": 4414
+    },
+    {
+      "digest": "sha256:78e9df8f8153c91c762ec970b82d224ac4d30f05aa7773e7e17e268141e53873",
+      "path": "provenance/licenses/libsqlite3-0.copyright",
+      "size": 1833
+    },
+    {
+      "digest": "sha256:6a7da622fe0637a334d2a8fc470852d2ffb77d9a2b2f930f854e32a41ad6ef35",
+      "path": "provenance/licenses/libssl3.copyright",
+      "size": 2543
+    },
+    {
+      "digest": "sha256:f0974fb41778e23c94111ff90da0546de8971f8270c58877283d372e6bd7f17e",
+      "path": "provenance/licenses/libtinfo6.copyright",
+      "size": 4670
+    },
+    {
+      "digest": "sha256:401dcf98d8ef2b712ec6ab310dbf727fc2cdce290bfde5b6d0b609a927530217",
+      "path": "provenance/licenses/libtirpc3.copyright",
+      "size": 13121
+    },
+    {
+      "digest": "sha256:30539a2df6a89d844f43c727505a3193a60515f8ec6cdede8cc515ed22941d1c",
+      "path": "provenance/licenses/libuuid1.copyright",
+      "size": 23237
+    },
+    {
+      "digest": "sha256:9e5b96d63773a5d177ba264254390f792be07e41748ebd94730981c6cac31cc6",
+      "path": "provenance/licenses/zlib1g.copyright",
+      "size": 2927
+    }
+  ],
+  "python": {
+    "digest": "sha256:7863a4d5e03fde7791c7f8c2c304cf3522f435e19745364ad18a6b7a0458af57",
+    "path": "usr/bin/python3"
+  },
+  "wrappers": {
+    "action": {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-B",
+        "/opt/aragorn/bin/action.py"
+      ],
+      "digest": "sha256:097cecf3c5024c8cf7063e3df68afb25dc94bfa769346b39c0fd94f22a78030f",
+      "path": "opt/aragorn/bin/action.py"
+    },
+    "provider": {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-B",
+        "/opt/aragorn/bin/provider.py"
+      ],
+      "digest": "sha256:8c225ae5698a3f95812d9b5ea9e9119368daecea1845c860858995b371ffae3a",
+      "path": "opt/aragorn/bin/provider.py"
+    },
+    "sensor": {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-B",
+        "/opt/aragorn/bin/sensor.py"
+      ],
+      "digest": "sha256:33a4658e119c05422f707c0014f1862c807adb3ecbd48b57089740d4d515d6ed",
+      "path": "opt/aragorn/bin/sensor.py"
+    }
+  },
+  "unsupported_import_sites": [
+    {
+      "function": "verify_worker_measurement",
+      "line": 424,
+      "module": "cryptography.exceptions",
+      "names": [
+        "InvalidSignature"
+      ],
+      "path": "aragorn/benchmark_worker_measurement.py",
+      "status": "UNSUPPORTED_BENCHMARK_DSSE_HELPER"
+    },
+    {
+      "function": "verify_worker_measurement",
+      "line": 425,
+      "module": "cryptography.hazmat.primitives.asymmetric.ed25519",
+      "names": [
+        "Ed25519PublicKey"
+      ],
+      "path": "aragorn/benchmark_worker_measurement.py",
+      "status": "UNSUPPORTED_BENCHMARK_DSSE_HELPER"
+    },
+    {
+      "function": "_cryptography_types",
+      "line": 555,
+      "module": "cryptography.hazmat.primitives.asymmetric.ed25519",
+      "names": [
+        "Ed25519PrivateKey"
+      ],
+      "path": "aragorn/benchmark_worker_measurement.py",
+      "status": "UNSUPPORTED_BENCHMARK_DSSE_HELPER"
+    },
+    {
+      "function": "_cryptography_types",
+      "line": 558,
+      "module": "cryptography.hazmat.primitives.serialization",
+      "names": [
+        "Encoding",
+        "NoEncryption",
+        "PrivateFormat",
+        "PublicFormat"
+      ],
+      "path": "aragorn/benchmark_worker_measurement.py",
+      "status": "UNSUPPORTED_BENCHMARK_DSSE_HELPER"
+    }
+  ],
+  "builtin_pwd_basis": {
+    "retained_source": "usr/local/lib/python3.12/config-3.12-aarch64-linux-gnu/config.c",
+    "source_sha256": "30d353782cbaf8de2fed2ba82b1040940386e316b7f41604c49f8f3d6f16bb31",
+    "registration": "_PyImport_Inittab: pwd -> PyInit_pwd",
+    "evidence": "STATIC_GENERATED_CONFIGURATION_AND_INITIALIZER_SYMBOL_NOT_TARGET_EXECUTION"
+  },
+  "limitations": [
+    "STATIC_BYTES_ONLY_NOT_INSTALLED_OR_EXECUTED",
+    "NO_NATIVE_ABI_OR_DYNAMIC_IMPORT_OR_LOADED_CODE_PROOF",
+    "FIXED_SERVICE_HANDLERS_ONLY_NOT_ALL_COPIED_MODULE_APIS",
+    "OPTIONAL_BENCHMARK_DSSE_HELPERS_UNSUPPORTED",
+    "NO_SERVICE_CHANNEL_OR_UNIT_LIFETIME_EXECUTION",
+    "NO_PROVIDER_CREDENTIAL_OR_NETWORK_USE",
+    "NO_TIMING_FEASIBILITY_OR_PHASE3_QUALIFICATION",
+    "LOCAL_BINARY_AND_FULL_INVENTORY_ARTIFACTS_NOT_PUBLISHED"
+  ],
+  "assembly_inputs_path": "packaging/pi-core/service-assembly-inputs-v2.json",
+  "predecessor_artifact": "packaging/pi-core/service-artifact-v1.json",
+  "successor_reason": "Installed-version path correction and lifecycle-bound channel source closure; frozen v1 preserved"
+}

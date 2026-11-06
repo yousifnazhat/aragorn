@@ -1,5 +1,140 @@
 # Phase 3 completion roadmap
 
+## Current direction — approved Pi-core managed profile (2026-11-02)
+
+The user approved Pi agent-core as an unprivileged engine in an Aragorn-managed
+Linux capability host. The current forward plan is the
+[managed-profile roadmap](docs/design/pi-core-managed-profile-roadmap-v1.md),
+with its [approved SDD](docs/design/pi-core-managed-capability-sdd-v1.md).
+The user has now approved the full [29-requirement acceptance mapping](docs/design/pi-core-phase3-acceptance-mapping-v1.md)
+and authorized [the first connected offline Pi batch](docs/phase3/coordinator/pi-core-connected-batch-1.md),
+using the [exact dependency pins](docs/design/pi-core-dependency-pins-v1.md).
+Only new/affected checks are released; no live operations, deployed pilot
+or deployment freeze is claimed.
+
+The next [D2 launch/identity batch](docs/phase3/coordinator/pi-core-launch-identity-batch-2.md)
+implements protected bundle preparation and a PIDFD-bound accepted-peer guard.
+Actual confined launch, compiled-source custody, provider mediation and native
+integration remain prerequisites; no live operation is released.
+
+The [compiled/bootstrap batch](docs/phase3/coordinator/pi-core-compiled-launch-batch-3.md)
+now emits the actual Linux adapter using the pinned isolated compiler, plus a
+credential-free entrypoint, guarded confinement plan and authenticated bootstrap
+composition. This is not the native supervisor or a protected OS installation;
+the compiler artifact does not close D2's useful-task/effect/health/cleanup exit.
+
+The subsequent [OS/supervisor batch](docs/phase3/coordinator/pi-core-os-supervisor-batch-4.md)
+implements the protected installer and native supervisor using that same compiled
+artifact, admission preparation and bootstrap binder. Real retained OS bytes are
+assembled statically; target binaries, provisioning and the supervisor are not
+executed. Next D2 work is protected action-identity handoff and credential-isolated
+provider/data mediation, then an explicitly authorized connected useful pilot.
+
+The [identity-handoff batch](docs/phase3/coordinator/pi-core-identity-handoff-batch-5.md)
+connects protected supervisor registration to an unprivileged relay consumer.
+It transfers a bounded identity record and kernel process handle over an
+authenticated local channel, then requires withdrawal before worker release.
+This is identity registration only: request-bound broker enforcement and
+credential-isolated provider/data mediation still precede the useful D2 pilot.
+No action listener is unmasked and no live operation is released.
+
+The [request/broker batch](docs/phase3/coordinator/pi-core-request-broker-batch-6.md)
+adds a root-read, request-bound handoff and create-only broker enforcement using
+the existing durable security core. It requires genuine matching Pi sensor
+attribution alongside protected provenance; relay attribution does not qualify.
+Native request/channel/sensor composition, Pi-aware effective-receipt recovery
+and rotation, and protected provider/data mediation remain D2 prerequisites
+before the separately authorized useful pilot.
+
+The [native request/sensor batch](docs/phase3/coordinator/pi-core-native-request-batch-7.md)
+now connects root-owned native request dispatch, independently measured Pi sensor
+issuance and broker result/cleanup acknowledgement. Incomplete remote custody
+blocks RELEASE; a no-request bootstrap is explicitly not useful-task evidence.
+All 137 new/affected checks passed once, with no live operation or test rerun.
+
+The [native client/START batch](docs/phase3/coordinator/pi-core-native-client-batch-8.md)
+adds the fixed root-owned client endpoint and a distinct v2 START contract,
+reusing the frozen request transport and real Pi loop. Native mode is bound to
+the held launch plan and protected channels; the legacy endpoint stays masked.
+Protected provider/data mediation, exact service/channel provisioning and
+lifetime, and Pi-aware effective-receipt recovery/rotation remain next.
+Provider-unavailable bootstrap still issues no request; this is not the useful
+native pilot or Phase 3 qualification.
+
+The [provider/data batch](docs/phase3/coordinator/pi-core-provider-mediation-batch-9.md)
+adds exact full-initial-prompt approval outside Pi, existing policy/health/
+revocation enforcement, a durable single-use data budget and an authenticated
+provider-service handoff. The fixed Pi provider client composes with the native
+action client; no credentials, arbitrary callbacks or later tool results are
+forwarded. This is a bounded data gate and client, **not an HTTP/provider adapter**.
+Actual provider selection, credential custody, send-time egress enforcement and
+service/channel provisioning remain before activation. Native bootstrap stays
+provider-unavailable; no useful pilot or qualification is claimed.
+
+The [OpenAI service batch](docs/phase3/coordinator/pi-core-openai-service-batch-10.md)
+implements the selected OpenAI Responses protocol, a credential-isolated one-shot
+HTTPS transport and authenticated service handler. The root gate now supports an
+opt-in v2 exchange with fresh CONNECT/SEND policy checks and nonrenewable permits
+of at most 100 ms; this is bounded freshness, not atomic revocation. The intended
+key model is user-supplied credentials held outside Pi. No real key was read and
+no provider call or unit was started. Exact native service/channel provisioning,
+lifetime ownership, consumed-code custody and effective-receipt recovery still
+precede the useful pilot. Native bootstrap remains provider-unavailable; D2 and
+Phase 3 are not complete.
+
+The [public-input provisioning/recovery batch](docs/phase3/coordinator/pi-core-provision-recovery-batch-11.md)
+adds absent-only installation of the exact approved public provider profile and
+CA bytes, plus Pi-aware effective-receipt reconciliation and explicit grant
+rotation. Request startup now requires recoverable AVAILABLE authority; it
+never creates a new grant or retries an effect. This does not install provider
+code, credentials or a service. The provider/action/sensor process and channel
+lifetime, complete Python/OpenSSL/source closure and consumed-code identity
+still precede the separately authorized useful pilot. The Node-only worker OS
+closure is not a provider-service OS. Native START remains unavailable.
+
+The [service-runtime/channel batch](docs/phase3/coordinator/pi-core-service-runtime-batch-12.md)
+adds an absent-only installer and active held verifier for an independently
+reviewed Python/native-library/Aragorn-source closure. A sealed channel holder
+authenticates already-connected action/sensor/provider peers and joins that
+installed-byte custody to native request and opt-in provider guards. Exact
+authenticated provider completion permanently retires its channel without
+removing broker/sensor checks for subsequent tool work. No concrete service
+artifact has been materialized or activated: loaded imports, service wrappers,
+unit-generation/lifetime ownership and useful pilot evidence remain outstanding.
+
+The [concrete image/wrapper batch](docs/phase3/coordinator/pi-core-service-image-batch-13.md)
+adds static assembly from the retained pinned Linux arm64 Python archive and
+three fixed one-shot action/sensor/provider entrypoints. The existing installer
+accepts an additive v2 binding with exact wrapper commands and libpython;
+v1 remains unchanged. Wrappers validate protected configuration, role identity
+and post-exec authenticated channels, then reuse the existing handlers. This
+does not install or execute the image, start services, supply credentials or
+prove loaded-code custody. Protected lifecycle/configuration integration,
+native identity/recovery/timing evidence and the separately authorized useful
+pilot remain D2 work. START is still unavailable.
+
+The [protected configuration/lifecycle batch](docs/phase3/coordinator/pi-core-service-lifecycle-batch-14.md)
+connects absent-only role configuration, held public provider inputs and the
+existing service image to fixed native units, passive action-listener readiness,
+authenticated post-exec channels and the existing Pi worker supervisor. Request
+guards retain configuration and unit-generation custody; cleanup withdraws
+channels before stopping only captured services. A source-corrected successor
+image preserves v1. This is credential-free, provider-unavailable bootstrap
+implementation, not installed/loaded-code, live recovery, timing or useful-task
+evidence. The separately authorized D2 pilot and all qualification gates remain.
+
+The original exit manifest remains unchanged and incomplete. Its evaluator
+requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
+Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned
+managed-profile qualification mapping is approved as a design; its executable
+contract and independent evidence still precede any completion claim. Historical signed work, evidence,
+failure records and operational/cleanup holds remain intact. No Phase 4 release.
+
+**Reading order:** the linked roadmap is current for future implementation
+planning. Everything below records the original deployment plan and checkpoints;
+its old "next" instructions are historical where they conflict with this approved
+target. Do not resume them merely because an older automation prompt names them.
+
 Planning date: 2026-10-04. Assessed implementation: `0a51326` on
 `codex/phase3-runtime-prevention`. This document is a plan, not new test evidence
 or a qualification result. The fixed [exit manifest](benchmark/phase3-exit-gate-manifest-v1.json)

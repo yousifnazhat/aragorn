@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 benchmark-state/
 graphify-out/
+packaging/pi-core/node_modules/

@@ -1,0 +1,72 @@
+{
+  "schema": "aragorn/pi-core-compiled-artifact-checkpoint/v1",
+  "status": "COMPILED_NOT_DEPLOYED_OR_OS_QUALIFIED",
+  "base_commit": "849ec51fb9ce6dfd3af9ba3c012c7b43d1174a98",
+  "predecessor_checkpoint": "packaging/pi-core/compiled-artifact-v1.json",
+  "pipeline_stage": "pi-core-linux-compile",
+  "pipeline_fingerprint": "sha256:53f62a20e5eb4f70910ea3bdf34d5647a9660b87682f9b028508f77ef649c3f2",
+  "receipt_local_path": ".aragorn/pi-core-build/d2-bd9e3b5327bc46459ee5137e8aaa899a/build-receipt.json",
+  "receipt_file_sha256": "2e43b5502084c239d1c7bfa42dfc3521335ca66b4ffd119d5458d80b261da56a",
+  "receipt_canonical_digest": "sha256:ccb2ec8a7630b8e3e518c22f4d62e5846884580eef451558fe6e76b59a6c00cb",
+  "receipt_file_bytes": 2468270,
+  "deployment_inventory_entries": 12694,
+  "deployment_tree_sha256": "dfbe1d90a12b632bca034cb6727b141a37b20fc82bdb1934ccca95fd0cd2380e",
+  "inputs": {
+    "compiler_archive_sha256": "c83d931ac9dd7549cde6e71246aa9d6a9812843023df3e277fe3b5dcf41dd0ea",
+    "compiler_binary_sha256": "f86e8070c267b12d6c119bf567cb82d8b245e9d93da1864bc7c603cea10a8b2f",
+    "node_archive_sha256": "eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8",
+    "offline_toolchain_sha256": "1b71fb40b6ace80f165471df2cf95b2ed49e444994ae9404222b08e843ec6e9d",
+    "pins_sha256": "49f578cc96b4c8e6a68cb03efdbba0f4ad09d165366982d063f2e3fb2707b5d0",
+    "runtime_dependency_tree_sha256": "4ea4f2b7eb5408dbe64682a99c9921d42855faa69fdb4511328c444e4afed359",
+    "runtime_package_occurrences": 89,
+    "sources": {
+      "entrypoint.ts": "53343ebc1a7145475b0edd8dc2135bfd46476ad576c59e55b197b85a2c3b8360",
+      "package-lock.json": "ec3ba79e5d5f2516408311f05e3196efb604179a4421d0364b63527131b72789",
+      "package.json": "f913fc41b0e32167b11c7253db4ec4a63080b4bfd3e6b6aa7d4b97863f348bab",
+      "tsconfig.json": "5ea2f7a064af994f3ba81e08a88edbc5d1be97d0afae597cc77df0a93af3cbea",
+      "worker.ts": "ae5976631c8060c0e766c5323fdfc74c14b43772f796aab214108b39c3994da5"
+    },
+    "typescript_archive_sha256": "da2513f4b95176d6dde8b51aab7afe8a927656c9d277369793f77f7e59371c08"
+  },
+  "selected_output_files": [
+    {
+      "bytes": 123378856,
+      "kind": "file",
+      "path": "node/bin/node",
+      "sha256": "b4855de8c4781130b722ceaec9718fed77cca3eed2e5cfc5455e267c0b9ee3b0"
+    },
+    {
+      "bytes": 15237,
+      "kind": "file",
+      "path": "pi-core/entrypoint.js",
+      "sha256": "d3b3c2929caa43121b67e40beebb31e4965350dac4c44435e4881e93816d446b"
+    },
+    {
+      "bytes": 24798,
+      "kind": "file",
+      "path": "pi-core/worker.js",
+      "sha256": "3f0a1c7edb7d9a4bf8721a763a5675174afbd6134ac4ddd53ce6724d723bd8df"
+    }
+  ],
+  "compiler_cleanup": {
+    "container": "aragorn-pi-compiler-da8923d18f5b4b9eb42f45de20655eba",
+    "context": "colima",
+    "image": "aragorn-pi-compiler-da8923d18f5b4b9eb42f45de20655eba:owned",
+    "owned_container_absent": true,
+    "owned_image_absent": true
+  },
+  "reused_static_os_closure": {
+    "checkpoint": "packaging/pi-core/os-artifact-v1.json",
+    "node_digest": "sha256:b4855de8c4781130b722ceaec9718fed77cca3eed2e5cfc5455e267c0b9ee3b0",
+    "closure_digest": "sha256:a6d0cce8629274d940f9ca0be9242c0ba76badc2210ae4c121bb2e1c5a95e9eb",
+    "basis": "UNCHANGED_NODE_BYTES_AND_LIBRARY_INPUTS_NOT_FRESH_OS_OR_RUNTIME_QUALIFICATION"
+  },
+  "limitations": [
+    "NO_TARGET_NODE_OR_WORKER_EXECUTION",
+    "NO_PHASE3_QUALIFICATION",
+    "UPSTREAM_DECLARATIONS_SKIP_LIB_CHECK_ADAPTER_SOURCE_STRICT",
+    "LOCAL_BINARY_AND_FULL_INVENTORY_ARTIFACTS_NOT_PUBLISHED",
+    "NO_PROTECTED_INSTALL_OR_NATIVE_SUPERVISOR_EXECUTION",
+    "STATIC_OS_CLOSURE_REUSED_NOT_REASSEMBLED_OR_REQUALIFIED"
+  ]
+}

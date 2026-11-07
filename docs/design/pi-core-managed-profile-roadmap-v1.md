@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-19 [compiled-gate/protected-inventory checkpoint](../phase3/coordinator/pi-core-gate-inventory-batch-19.md):
+the fixed Linux arm64 gate is now compiled and byte-pinned without target
+execution. The read-only preparation API produces the existing source/loader
+inventories and launch profile only from already-installed protected views and
+independently pinned expected content. All 58 new/affected checks passed once.
+Actual installed-view preparation, Node feasibility, provider listener/START,
+recovery/timing and the separately authorized useful pilot still precede D2
+closure. No live operation or Phase 3 qualification is claimed.
+
 Batch-15 [trusted-service source checkpoint](../phase3/coordinator/pi-core-service-source-batch-15.md):
 fixed successor wrappers verify and execute the same pinned Aragorn Python source
 buffers before the existing service handlers run. Authenticated startup receipts

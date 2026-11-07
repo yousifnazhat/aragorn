@@ -157,6 +157,15 @@ compiled gate, actual Node startup/coverage and measured timing/cleanup still
 precede any useful pilot or D2 closure. Native provider START stays unavailable;
 no target build, live operation, freeze or Phase 3 qualification is claimed.
 
+The [compiled-gate/inventory batch](docs/phase3/coordinator/pi-core-gate-inventory-batch-19.md)
+adds a fixed pinned host-tool recipe and produces the actual static Linux arm64
+gate once, without executing it. Read-only installed-view preparation now emits
+the existing source/loader inventories and launch profile from independently
+pinned content and held protected objects. All 58 new/affected checks passed
+once. The actual installed read-only view/profile is still a deployment
+prerequisite; writable staging is not substituted for it. Provider START remains
+unavailable and no live operation, D2 closure or Phase 3 qualification is claimed.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

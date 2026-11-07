@@ -17,6 +17,7 @@ import socket
 import stat
 import sys
 import time
+from types import ModuleType
 
 from . import pi_core_identity_handoff as channel
 from . import pi_core_openai_transport as provider_transport
@@ -31,7 +32,7 @@ from . import runtime_action_observation_publisher_v2 as observation_v2
 from . import runtime_action_observation_publisher_v4 as observation_v4
 from . import runtime_capability_grant as capability
 from . import runtime_process_profile as process
-from .oci_worker_protocol import canonical_json
+from .oci_worker_protocol import canonical_digest, canonical_json
 
 SCHEMA = "aragorn/pi-core-service-entry/v1"
 ROLES = ("action", "sensor", "provider")
@@ -48,6 +49,37 @@ _DECIMAL = re.compile(r"[1-9][0-9]{0,18}\Z")
 _DENIED_ENVIRONMENT = {"http_proxy", "https_proxy", "all_proxy", "no_proxy", "ssl_cert_file", "ssl_cert_dir",
     "requests_ca_bundle", "curl_ca_bundle", "node_extra_ca_certs", "pythonhttpsverify", "pythonpath", "pythonhome",
     "randfile", "glibc_tunables"}
+SOURCE_STARTUP_SCHEMA = "aragorn/pi-core-service-source-startup/v1"
+SOURCE_PACKET_LIMIT = 64 * 1024
+_SOURCE_CHALLENGE_FIELDS = {"schema", "kind", "role", "nonce", "runtime_closure_digest",
+                          "binding_digest", "source_inventory_digest"}
+
+
+def _source_handshake(root, role, supervisor_pid, deadline, source_loader):
+    """A trusted fixed wrapper reports only its successfully executed sources."""
+    bootstrap = sys.modules.get("_aragorn_pi_service_source")
+    _require(type(bootstrap) is ModuleType and
+             type(source_loader) is getattr(bootstrap, "PiServiceSourceLoader", None))
+    challenge, _ = channel.receive_authenticated_packet(root, (supervisor_pid, 0, 0), deadline,
+        expected_rights=0, max_bytes=SOURCE_PACKET_LIMIT)
+    _require(type(challenge) is dict and set(challenge) == _SOURCE_CHALLENGE_FIELDS and
+             challenge["schema"] == SOURCE_STARTUP_SCHEMA and challenge["kind"] == "CHALLENGE" and
+             challenge["role"] == role and type(challenge["nonce"]) is str and
+             re.fullmatch(r"[0-9a-f]{64}", challenge["nonce"]) is not None and
+             all(type(challenge[key]) is str and channel._DIGEST.fullmatch(challenge[key])
+                 for key in ("runtime_closure_digest", "binding_digest", "source_inventory_digest")) and
+             challenge["source_inventory_digest"] == canonical_digest(source_loader.source_digests))
+    sources = source_loader.snapshot()
+    _require(type(sources) is list and 0 < len(sources) <= 512)
+    digest = canonical_digest(sources)
+    base = {key: value for key, value in challenge.items() if key != "kind"}
+    receipt = {**base, "kind": "CONSUMED", "sources": sources, "sources_digest": digest}
+    channel.send_authenticated_packet(root, receipt, deadline, max_bytes=SOURCE_PACKET_LIMIT)
+    accepted, _ = channel.receive_authenticated_packet(root, (supervisor_pid, 0, 0), deadline,
+        expected_rights=0, max_bytes=SOURCE_PACKET_LIMIT)
+    _require(accepted == {**base, "kind": "ACCEPTED", "sources_digest": digest})
+    _require(source_loader.snapshot() == sources)
+    _remaining(deadline)
 
 
 class PiServiceEntryError(RuntimeError):
@@ -347,7 +379,7 @@ def _accept_sensor(value, deadline):
             _require(not failed)
 
 
-def run(role, argv):
+def run(role, argv, *, source_loader=None):
     """Exactly one real handler call; no injected transport, handler or config."""
     _flags()
     _require(role in ROLES)
@@ -364,6 +396,8 @@ def run(role, argv):
     path = CHANNEL_ROOT / role / "supervisor.sock"
     with _connect(path, socket.SOCK_SEQPACKET, (supervisor_pid, 0, 0), deadline,
             parent_identity={"mode": 0o755}, socket_identity=(0, own["gid"])) as root:
+        if source_loader is not None:
+            _source_handshake(root, role, supervisor_pid, deadline, source_loader)
         if role == "provider":
             result = provider.handle_pi_provider_service(root, expected_supervisor_pid=supervisor_pid, deadline=deadline)
         elif role == "action":
@@ -382,9 +416,9 @@ def run(role, argv):
     return result
 
 
-def main(role, argv=None):
+def main(role, argv=None, *, source_loader=None):
     try:
-        run(role, list(sys.argv[1:] if argv is None else argv))
+        run(role, list(sys.argv[1:] if argv is None else argv), source_loader=source_loader)
         return 0
     except BaseException:
         # Never echo request/config/credential/OS error bytes or a traceback.

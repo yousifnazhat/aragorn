@@ -26,6 +26,7 @@ SPEC.loader.exec_module(assembler)
 
 class PiCoreServiceAssemblyTests(unittest.TestCase):
     input_record_name = "service-assembly-inputs-v1.json"
+    wrapper_root_name = "packaging/pi-core/services"
 
     def test_retained_python_image_and_reviewed_sources_assemble_once(self):
         for target in ("subprocess.Popen", "subprocess.run", "os.system", "os.execve", "socket.socket", "socket.create_connection"):
@@ -40,7 +41,7 @@ class PiCoreServiceAssemblyTests(unittest.TestCase):
         self.assertEqual(record["constraints"], {"network": "none", "subprocesses": False, "target_execution": False,
             "automatic_retry": False, "fresh_output_only": True})
         self.assertEqual(record["source_root"], "src")
-        self.assertEqual(record["wrapper_root"], "packaging/pi-core/services")
+        self.assertEqual(record["wrapper_root"], self.wrapper_root_name)
         self.assertEqual(assembler.canonical(record["unsupported_import_policy"]), assembler.canonical(assembler.UNSUPPORTED_IMPORT_POLICY))
         self.assertEqual(set(record["archive"]), {"path", "bytes", "sha256"})
         archive = ROOT / record["archive"]["path"]
@@ -116,7 +117,7 @@ class PiCoreServiceAssemblyTests(unittest.TestCase):
         for name, digest in record["expected_source_inventory"].items():
             assembler._input(ROOT / "src", name, digest)
         for name, digest in record["expected_wrapper_inventory"].items():
-            assembler._input(ROOT / "packaging/pi-core/services", name, digest)
+            assembler._input(ROOT / self.wrapper_root_name, name, digest)
         print(json.dumps({"receipt": str(output / "service-image-receipt.json"), "manifest_digest": receipt["manifest_digest"],
             "runtime_binding_digest": receipt["runtime_binding_digest"], "files": len(actual_files), "directories": len(actual_dirs),
             "status": receipt["status"], "unsupported_import_sites": receipt["unsupported_import_sites"]}), flush=True)

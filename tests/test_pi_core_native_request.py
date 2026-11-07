@@ -14,6 +14,7 @@ from unittest import mock
 from aragorn import pi_core_native_request as route
 from aragorn import pi_core_native_supervisor as native
 from aragorn import pi_core_confined_launch as confined
+from aragorn import pi_core_source_observer as source
 from aragorn.oci_worker_protocol import canonical_json
 from aragorn.runtime_process_profile import RuntimeProcessProfile
 
@@ -80,6 +81,12 @@ class InertTests(unittest.TestCase):
             invocation="c" * 32, immutable_digest="sha256:" + "a" * 64, cgroup_parent_fd=32, cgroup_fd=33)
         self.owned.request_attempted = False
         self.owned.request_dispatch_active = True
+        # Caller fixtures exercise ownership, not native source acquisition.
+        self.source_observer = object.__new__(source.PiSourceObserver)
+        self.source_observer._owned = self.owned
+        self.source_health = self.stack.enter_context(mock.patch.object(
+            source.PiSourceObserver, "guard_source_health", autospec=True))
+        self.channels = replace(self.channels, source_observer=self.source_observer)
         self.dispatch = route.PiNativeRequestDispatch(route._SEAL, self.owned, self.channels, {},
             Path("/var/lib/aragorn/admitted"), 115, 120)
         self.dispatch.created = self.dispatch.active = True
@@ -100,6 +107,9 @@ class InertTests(unittest.TestCase):
             return_value={"status": "COMPLETED", "fixture": "unit-only"}))
 
     def handle(self, **changes):
+        if "source_observer" in changes:
+            self.channels = replace(self.channels, source_observer=changes.pop("source_observer"))
+            self.dispatch.channels = self.channels
         options = dict(grant={}, protected_root=Path("/var/lib/aragorn/admitted"), deadline=115)
         options.update(changes)
         return route.handle_native_pi_request(self.owned, self.worker, self.channels, **options)
@@ -197,10 +207,13 @@ class SelectionTests(InertTests):
             return_value={"status": "PROVIDER_UNAVAILABLE"}))
 
     def test_unavailable_bootstrap_returns_no_request_without_fabricating_work(self):
+        self.channels = replace(self.channels, source_observer=None)
+        self.dispatch.channels = self.channels
         self.selected.return_value = ([self.bootstrap], [], [])
         self.assertEqual(self.dispatch.read_bootstrap_result(self.bootstrap, 115), {"status": "PROVIDER_UNAVAILABLE"})
         self.assertEqual(self.dispatch.observation["status"], "NO_REQUEST")
         self.forward.assert_not_called()
+        self.source_health.assert_not_called()
         self.request_listener.accept.assert_not_called()
 
     def test_one_actual_request_is_dispatched_then_owned_stream_closed_before_result(self):

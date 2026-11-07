@@ -279,7 +279,7 @@ def _service_custody_guard(custody, connection, peer, deadline, *, terminal=Fals
 
 def handle_pi_provider_connection(worker_connection, provider_connection, config, *, activation_path,
         profile, protected_install_root, grant, expected_provider_peer, deadline,
-        provider_service=False, service_custody=None):
+        provider_service=False, service_custody=None, source_observer=None):
     """Mediate one actual initial Pi request, opening no listener or network.
 
     Caller owns both channels. This owns only newly opened descriptors and holds
@@ -290,6 +290,8 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
     _require(type(provider_service) is bool, "PROVIDER_SERVICE_MODE_REFUSED")
     _require(service_custody is None or provider_service, "PROVIDER_SERVICE_CUSTODY_REQUIRES_V2")
     channel.validate_deadline(deadline)
+    from .pi_core_source_observer import PiSourceObserver
+    _require(type(source_observer) is PiSourceObserver, "PROVIDER_SOURCE_OBSERVER_REQUIRED")
     _require(type(config) is broker.RuntimeActionBrokerConfig and config.expected_broker_uid == 0,
              "PROVIDER_ROOT_CONFIG_REQUIRED")
     broker._validate_config(config)
@@ -325,13 +327,16 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
     stage = "IDENTITY"
     held = ExitStack()
     try:
+        stage = "SOURCE_HEALTH"
+        source_observer.guard_source_health(activation=activation, deadline=deadline)
+        stage = "IDENTITY"
         worker_fd = process.open_peer_pidfd(worker_connection, worker_peer[0])
         measured = identity._measured(worker_connection, worker_fd, profile, activation, deadline)
         active = held.enter_context(identity.lineage.hold_runtime_active_skill_lineage(worker_peer[0], measured, grant,
             protected_root=protected_install_root, expected_install_uid=0, deadline=deadline))
         identity._lineage_matches(active, activation, profile, protected_install_root)
 
-        def guard(*, check_provider=True):
+        def guard(*, check_provider=True, check_source=True):
             identity._remaining(deadline, activation)
             _service_custody_guard(service_custody, provider_connection, peer, deadline,
                                    terminal=not check_provider)
@@ -340,6 +345,10 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
                      "PROVIDER_WORKER_CUSTODY_CHANGED")
             if provider_fd >= 0 and check_provider:
                 channel.require_peer_live(provider_connection, peer, provider_fd, deadline)
+            if check_source:
+                # Guard the same actual activation, before dispatch and each
+                # CONNECT/SEND permission. No serialized health claim suffices.
+                source_observer.guard_source_health(activation=activation, deadline=deadline)
 
         stage = "REQUEST"
         request = validate_provider_request(broker._read_frame(worker_connection, deadline))
@@ -499,7 +508,9 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         result = validate_provider_result(reply["result"], canonical_digest(request))
         # The exact per-message-authenticated terminal is allowed to precede
         # service exit. Do not require an already-cleaned one-shot peer to live.
-        guard(check_provider=not provider_service)
+        # Terminal cleanup grants no further effect authority. Do not require a
+        # fresh source challenge after the protected operation has already ended.
+        guard(check_provider=not provider_service, check_source=False)
         _require(read_approval() == approval, "PROVIDER_APPROVAL_CHANGED")
     except BaseException as exc:
         failure = exc

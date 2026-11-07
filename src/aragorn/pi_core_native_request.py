@@ -52,6 +52,7 @@ class PiNativeRequestChannels:
     sensor_peer: tuple[int, int, int]
     binding: worker.RuntimeActionWorkerBinding
     service_custody: object | None = None
+    source_observer: object | None = None
 
 
 def _plan(owned, deadline):
@@ -143,6 +144,14 @@ class PiNativeRequestCustody:
                  "native request activation changed")
         identity._measured(owned.connection, owned.pidfd, owned.plan.profile, self._activation, self._deadline)
         identity._measured(self._request, owned.pidfd, owned.plan.profile, self._activation, self._deadline)
+        # Independent pre-exec acquisition is mandatory for protected work.
+        # Bootstrap NO_REQUEST stays inert; a receipt or callback cannot replace
+        # the observer's held process/source/loss custody.
+        from .pi_core_source_observer import PiSourceObserver
+        observer = self._channels.source_observer
+        _require(type(observer) is PiSourceObserver and observer._owned is owned,
+                 "native request requires its exact held source observer")
+        observer.guard_source_health(activation=self._activation, deadline=self._deadline)
 
 
 def handle_native_pi_request(owned, worker_connection, request_channels, *, grant, protected_root, deadline):

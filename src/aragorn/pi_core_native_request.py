@@ -111,7 +111,7 @@ def _channels(owned, config, deadline, request_connection=None):
 class PiNativeRequestCustody:
     """Local guard minted only by this exact held-native adapter, never wire JSON."""
 
-    __slots__ = ("_seal", "_owned", "_dispatch", "_request", "_channels", "_activation", "_pins", "_active", "_deadline")
+    __slots__ = ("_seal", "_owned", "_dispatch", "_request", "_channels", "_activation", "_pins", "_active", "_deadline", "_source_observer")
 
     def __init__(self, seal=None, *, owned=None, dispatch=None, request=None, channels=None, deadline=None):
         _require(seal is _SEAL, "native request custody requires its protected factory")
@@ -120,6 +120,8 @@ class PiNativeRequestCustody:
         self._activation = identity.validate_activation(broker._parse_canonical_document(owned.activation_raw, "native Pi activation"))
         self._pins = (owned.plan, owned.pid, owned.pidfd, owned.start_ticks, owned.invocation,
                       owned.immutable_digest, owned.connection, owned.activation_raw)
+        launched = getattr(owned, "source_observer", None)
+        self._source_observer = launched if launched is not None else channels.source_observer
         self._active = True
 
     @property
@@ -148,8 +150,13 @@ class PiNativeRequestCustody:
         # Bootstrap NO_REQUEST stays inert; a receipt or callback cannot replace
         # the observer's held process/source/loss custody.
         from .pi_core_source_observer import PiSourceObserver
-        observer = self._channels.source_observer
-        _require(type(observer) is PiSourceObserver and observer._owned is owned,
+        launched = getattr(owned, "source_observer", None)
+        configured = self._channels.source_observer
+        _require(launched is None or configured is None or launched is configured,
+                 "native request source observers disagree")
+        observer = launched if launched is not None else configured
+        _require(observer is self._source_observer and
+                 type(observer) is PiSourceObserver and observer._owned is owned,
                  "native request requires its exact held source observer")
         observer.guard_source_health(activation=self._activation, deadline=self._deadline)
 

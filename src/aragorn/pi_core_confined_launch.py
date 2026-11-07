@@ -67,10 +67,13 @@ class PiConfinedLaunchConfig:
     limits: Mapping
     relay: Mapping
     native_request: bool = False
+    source_observation: Mapping | None = None
+    source_observation_digest: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.native_request) is not bool:
             raise PiConfinedLaunchError("native request mode must be an explicit boolean")
+        _source_observation(self.source_observation, self.source_observation_digest)
 
 
 @dataclass(slots=True)
@@ -94,6 +97,8 @@ class PiConfinedLaunchPlan:
     runtime_inventory_digest: str
     _lease: _PlanLease = field(repr=False, compare=False)
     authority: str = "GUARDED_PLAN_ONLY_NOT_NATIVE_LAUNCH_OR_CONFINEMENT_PROOF"
+    source_observation: Mapping | None = None
+    source_observation_digest: str | None = None
 
 
 def _require(condition: bool, message: str) -> None:
@@ -115,6 +120,45 @@ def _text(value: object, maximum: int, label: str) -> None:
 
 def _exact(value: object, fields: set[str], label: str) -> None:
     _require(isinstance(value, Mapping) and set(value) == fields, f"invalid {label} fields")
+
+
+def _source_observation(value, digest):
+    if value is None:
+        _require(digest is None, "source observation profile and pin must be supplied together")
+        return
+    _require_digest(digest, "source observation profile")
+    _exact(value, {"schema", "pins", "sources", "required_sources", "loader_files"}, "source observation profile")
+    _require(value["schema"] == "aragorn/pi-core-node-source-profile/v1" and
+             canonical_digest(value) == digest, "source observation profile pin or schema differs")
+    _exact(value["pins"], {"gate_digest", "node_digest", "producer_digest", "node_observer_digest",
+                          "source_inventory_digest", "loader_inventory_digest"}, "source observation pins")
+    for name, pin in value["pins"].items():
+        _require_digest(pin, name)
+    for name in ("sources", "loader_files"):
+        rows = value[name]
+        _require(type(rows) is list and 0 < len(rows) <= 512, "source observation inventory bound")
+        names = set()
+        for row in rows:
+            _exact(row, {"path", "digest"}, name)
+            _require(type(row["path"]) is str, "source observation path must be text")
+            # Inventory paths are descriptor-open data, never argv/property
+            # strings. Scoped npm packages and spaces must not be rejected by
+            # the narrower systemd command-path grammar.
+            path = row["path"]
+            _require(path.startswith("/") and len(path) <= 4096 and
+                     not any(part in {"", ".", ".."} for part in path.split("/")[1:]) and
+                     all(ord(char) >= 32 and ord(char) != 127 for char in path),
+                     "source observation path is not canonical")
+            _require(row["path"] not in names, "duplicate source observation path")
+            names.add(row["path"])
+            _require_digest(row["digest"], name)
+    paths = {row["path"] for row in value["sources"]}
+    required = value["required_sources"]
+    _require(type(required) is list and 0 < len(required) <= len(paths) and
+             all(type(path) is str for path in required) and len(set(required)) == len(required) and
+             set(required) <= paths, "required source inventory is incomplete or duplicated")
+    _require(not paths & {row["path"] for row in value["loader_files"]},
+             "source and loader roles overlap")
 
 
 def _path(value: object, label: str) -> None:
@@ -212,6 +256,11 @@ def confined_configuration_digest(config: PiConfinedLaunchConfig) -> str:
         # never put that relay into native START. The legacy digest is unchanged.
         document["schema"] = "aragorn/pi-core-confined-configuration/v2"
         document["native_request"] = _native_request_endpoint(config)
+    _source_observation(config.source_observation, config.source_observation_digest)
+    if config.source_observation is not None:
+        document["schema"] = "aragorn/pi-core-confined-configuration/v3"
+        document["source_observation"] = config.source_observation
+        document["source_observation_digest"] = config.source_observation_digest
     return canonical_digest(document)
 
 
@@ -319,10 +368,17 @@ def _systemd_plan(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle,
         "InaccessiblePaths=-" + config.relay["workerSocketPath"] +
         " -/dev/shm -/dev/hugepages -/dev/pts",
     )
+    command = (_RUNTIME + "/node/bin/node", _RUNTIME + "/pi-core/entrypoint.js")
+    if getattr(config, "source_observation", None) is not None:
+        # Exit-only tracer cleanup must never resume a held effect to deliver
+        # SIGTERM or consume the entire five-second reserve awaiting escalation.
+        # The one owned stop immediately terminates this disposable worker group.
+        properties += ("KillSignal=SIGKILL",)
+        command = (_RUNTIME + "/observer/source-gate", *command)
     argv = ("/usr/bin/systemd-run", "--quiet", "--no-block", "--unit=" + unit,
             *("--property=" + value for value in properties), "--",
             "/usr/bin/env", "-i", "HOME=/nonexistent", "PATH=" + _RUNTIME + "/node/bin",
-            _RUNTIME + "/node/bin/node", _RUNTIME + "/pi-core/entrypoint.js")
+            *command)
     return unit, argv
 
 
@@ -368,7 +424,7 @@ def hold_confined_pi_launch_plan(
     config = PiConfinedLaunchConfig(**{
         **{name: getattr(config, name) for name in config.__dataclass_fields__},
         **{name: json.loads(canonical_json(getattr(config, name)))
-           for name in ("compiled_receipt", "model", "limits", "relay")},
+           for name in ("compiled_receipt", "model", "limits", "relay", "source_observation")},
     })
     pins = json.loads(canonical_json(deployment))
     _require(pins.get("os_profile") == config.root_closure_digest and
@@ -397,11 +453,32 @@ def hold_confined_pi_launch_plan(
             _require(runtime_digest == profile.runtime_digest == pins["runtime_commit_or_image"] and
                      node["digest"] == profile.executable_digest,
                      "compiled runtime and Node executable are not process-profile-bound")
+            if config.source_observation is not None:
+                observed_pins = config.source_observation["pins"]
+                files = {entry["path"]: entry for entry in runtime_manifest["files"]}
+                gate = files.get("observer/source-gate", {})
+                inputs = config.compiled_receipt.get("inputs", {})
+                gate_build = inputs.get("source_gate", {}) if isinstance(inputs, Mapping) else {}
+                _require(gate.get("executable") is True and gate.get("digest") == observed_pins["gate_digest"] and
+                         node["digest"] == observed_pins["node_digest"] and
+                         type(gate_build) is dict and set(gate_build) == {"schema", "target", "source_sha256",
+                             "elf_sha256", "compiler_sha256", "build_command_sha256", "runtime_executed", "receipt_digest"} and
+                         gate_build["schema"] == "aragorn/pi-core-source-gate-build/v1" and
+                         gate_build["target"] == "linux-arm64-static" and gate_build["runtime_executed"] is False,
+                         "protected pre-exec gate artifact is missing or differs")
+                _require_digest(gate_build["receipt_digest"], "source gate build receipt")
+                for name in ("source_sha256", "elf_sha256", "compiler_sha256", "build_command_sha256"):
+                    _require(type(gate_build[name]) is str and re.fullmatch(r"[0-9a-f]{64}", gate_build[name]),
+                             "source gate provenance pin differs")
+                _require("sha256:" + gate_build["elf_sha256"] == gate["digest"],
+                         "protected pre-exec gate artifact is missing or differs")
             unit, argv = _systemd_plan(config, prepared, profile)
             _deadline(deadline)
             yield PiConfinedLaunchPlan(prepared, profile, config.worker_uid, config.worker_gid,
                 unit, argv, config.activation_directory / (prepared.activation_id + ".json"),
-                start, deadline, os_digest, runtime_digest, lease)
+                start, deadline, os_digest, runtime_digest, lease,
+                source_observation=config.source_observation,
+                source_observation_digest=config.source_observation_digest)
     finally:
         lease.active = False
         for descriptor in reversed(descriptors):

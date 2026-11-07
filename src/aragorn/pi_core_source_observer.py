@@ -206,6 +206,7 @@ class PiSourceObserver:
         self._pins = ()
         self._executable_identities = {}
         self._close_attempted = False
+        self._node_session = None
 
     def _event(self, kind, *, _cleanup=False, **fields):
         now = _tick()
@@ -233,12 +234,16 @@ class PiSourceObserver:
                  time.monotonic() < deadline <= self._deadline, "OBSERVER_DEADLINE")
 
     def _tasks(self):
+        if self._node_session is not None:
+            return self._node_session._inventory()
         names = os.listdir(f"/proc/{self._worker['pid']}/task")
         _require(all(name.isdecimal() for name in names) and sorted(map(int, names)) == [self._worker["pid"]],
                  "UNSUPPORTED_THREAD_INVENTORY")
         return [self._worker["pid"]]
 
     def _guard(self, deadline):
+        if self._node_session is not None:
+            return self._node_session._guard(deadline)
         self._budget(deadline)
         owned = self._owned
         _require(type(owned) is native._Owned and type(owned.plan) is confined.PiConfinedLaunchPlan and
@@ -397,6 +402,10 @@ class PiSourceObserver:
             self._fail(error)
 
     def challenge(self, *, nonce, issued_ns, deadline_ns):
+        if self._node_session is not None:
+            self._budget(self._deadline)
+            self._node_session._challenge(nonce, issued_ns, deadline_ns)
+            return self._node_session._snapshot()
         try:
             _require(type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce) and
                      nonce not in self._challenge_nonces and type(issued_ns) is int and type(deadline_ns) is int and
@@ -427,6 +436,8 @@ class PiSourceObserver:
             self._fail(error)
 
     def _complete(self):
+        if self._node_session is not None:
+            return self._node_session._complete()
         for source in self._sources:
             if source["path"] not in self._read_paths:
                 return False
@@ -440,6 +451,8 @@ class PiSourceObserver:
         return True
 
     def guard_source_health(self, *, activation, deadline):
+        if self._node_session is not None and threading.get_native_id() != self._thread:
+            return self._node_session.command("health", activation, deadline)
         try:
             self._guard(deadline)
             value = identity.validate_activation(activation)
@@ -466,6 +479,8 @@ class PiSourceObserver:
 
     @property
     def observation(self):
+        if self._node_session is not None:
+            return self._node_session.snapshot()
         enters = [event for event in self._events if event["kind"] == "READ_ENTER"]
         exits = [event for event in self._events if event["kind"] == "READ_EXIT"]
         value = dict(schema=SCHEMA, architecture="linux-arm64", bindings=self._bindings, worker=self._worker, clock=self._clock,
@@ -477,6 +492,28 @@ class PiSourceObserver:
         _require(len(raw) <= MAX_RAW, "OBSERVATION_BYTE_LIMIT")
         import json
         return json.loads(raw)
+
+    def begin_owned_stop(self, deadline):
+        """Ask the dedicated owner to enter exit-only draining before unit stop."""
+        _require(self._node_session is not None, "NODE_OWNER_REQUIRED")
+        return self._node_session.command("stop", None, deadline)
+
+    @property
+    def health_observation(self):
+        """Latest actual held-boundary snapshot, not a post-cleanup recreation."""
+        if self._node_session is None:
+            return None
+        import json
+        with self._node_session.lock:
+            value = self._node_session.latest_health_observation
+            return None if value is None else json.loads(canonical_json(value))
+
+    def shutdown_after_owned_stop(self, deadline):
+        """Join the tracer only after all captured tasks and owned FDs close."""
+        _require(self._node_session is not None, "NODE_OWNER_REQUIRED")
+        self._node_session.command("close", None, deadline)
+        self._node_session.thread.join(max(0, deadline - time.monotonic()))
+        _require(not self._node_session.thread.is_alive() and self._state == "CLOSED", "NODE_OWNER_NOT_JOINED")
 
     def close_after_exit(self):
         """Close owned handles only after supervisor-confirmed tracee death."""

@@ -288,7 +288,8 @@ def verify_pi_source_observation(
             elif value < 0:
                 _require(value >= -4095, "SOURCE_REPLAY_ERRNO")
             counters["reads_exited"] += 1
-            read_paths.add(entry["path"])
+            if not event["is_error"]:
+                read_paths.add(entry["path"])
             completed.add(call_id)
         elif kind == "CHALLENGE":
             _fields(event, _COMMON | {"nonce", "issued_ns", "deadline_ns", "stops_before", "stops_after", "tasks", "all_stopped"})

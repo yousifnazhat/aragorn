@@ -137,6 +137,16 @@ passed once. Native START remains unavailable; real source observation/health,
 provider listener/dispatch, deployed coverage and independent evidence remain
 open. No deployment, freeze, useful pilot or Phase 3 qualification is claimed.
 
+The [source-observation/health-custody batch](docs/phase3/coordinator/pi-core-source-observation-batch-17.md)
+adds a bounded independent kernel read-acquisition backend, separate raw-evidence
+replay, and mandatory held-observer checks at native action and provider
+authorization boundaries. Its initial single-task read/pread64 subset refuses
+normal dynamically linked/threaded Node startup; protected pre-exec launch and
+full actual Node acquisition remain required. Missing or incomplete custody
+blocks protected work, not bootstrap NO_REQUEST. This is offline implementation,
+not complete pilot sensor health, D2 closure or qualification. Legacy UNKNOWN
+health evidence and predecessor artifacts remain unchanged.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

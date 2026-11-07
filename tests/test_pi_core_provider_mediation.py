@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from aragorn import pi_core_provider_mediation as subject
+from aragorn import pi_core_source_observer as source
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from tests import test_pi_core_confined_launch as launch_fixtures
 from tests import test_pi_core_request_handoff as identity_fixtures
@@ -158,6 +159,10 @@ class ProviderContractTests(InertTests):
 class ProviderMediationTests(InertTests):
     def setUp(self):
         super().setUp()
+        # Explicit inert dependency: no factory, source reads or health proof.
+        self.source_observer = object.__new__(source.PiSourceObserver)
+        self.source_health = self.stack.enter_context(mock.patch.object(
+            source.PiSourceObserver, "guard_source_health", autospec=True))
         self.events = []
         self.request = request()
         self.values = policy_fixtures._fixture()
@@ -274,7 +279,7 @@ class ProviderMediationTests(InertTests):
     def run_request(self, **options):
         arguments = dict(activation_path=Path("/var/lib/aragorn/pi-activations") / ("a" * 32 + ".json"),
             profile=self.profile, protected_install_root=Path("/var/lib/aragorn/admitted"), grant={},
-            expected_provider_peer=self.peer, deadline=120.0)
+            expected_provider_peer=self.peer, deadline=120.0, source_observer=self.source_observer)
         arguments.update(options)
         return subject.handle_pi_provider_connection(self.worker, self.provider, self.config, **arguments)
 

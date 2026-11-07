@@ -103,7 +103,7 @@ class PiServiceChannels:
 
     __slots__ = ("_seal", "_active", "_connections", "_descriptors", "_expected", "_binding",
                  "_deployment", "_pins", "_deadline", "_pidfds", "_request_channels",
-                 "_provider_retired", "_cleanup", "_lock", "_lifecycle")
+                 "_provider_retired", "_provider_retiring", "_cleanup", "_lock", "_lifecycle")
 
     def __init__(self, seal, connections, expected, binding, deployment, pins, deadline, lifecycle_custody=None):
         _require(seal is _SEAL, "service channel custody requires its protected factory")
@@ -114,6 +114,7 @@ class PiServiceChannels:
         self._deployment, self._pins, self._deadline = deployment, pins, deadline
         self._pidfds, self._request_channels = [], None
         self._provider_retired, self._cleanup = False, "HELD"
+        self._provider_retiring = False
         self._lock = threading.RLock()
         self._lifecycle = lifecycle_custody
 
@@ -150,6 +151,10 @@ class PiServiceChannels:
     def _check(self, *, deadline=None, allow_provider_exit=False):
         _require(type(self) is PiServiceChannels and getattr(self, "_seal", None) is _SEAL and
                  getattr(self, "_active", False), "service channel lease is inactive")
+        _require(type(allow_provider_exit) is bool and
+                 allow_provider_exit is self._provider_retiring and
+                 not (allow_provider_exit and self._provider_retired),
+                 "provider exit exception requires the one-shot retirement transition")
         _require(sys.platform == "linux" and os.geteuid() == os.getegid() == 0,
                  "service channel custody requires the Linux root supervisor")
         bounded = self._deadline if deadline is None else deadline
@@ -158,7 +163,8 @@ class PiServiceChannels:
         if self._lifecycle is not None:
             from .pi_core_service_lifecycle import PiServiceLifecycle
             _require(type(self._lifecycle) is PiServiceLifecycle, "service lifecycle custody differs")
-            self._lifecycle.guard_inputs_and_units(self, deadline=bounded)
+            self._lifecycle.guard_inputs_and_units(self, deadline=bounded,
+                                                   allow_provider_exit=allow_provider_exit)
         _require(_deployment_pins(self._deployment, bounded) == self._pins,
                  "installed service runtime custody changed")
         _require(len(self._pidfds) == 3 and len(set(self._pidfds)) == 3,
@@ -204,8 +210,13 @@ class PiServiceChannels:
         _require(type(self) is PiServiceChannels and getattr(self, "_seal", None) is _SEAL and
                  getattr(self, "_active", False), "service channel lease is inactive")
         with self._lock:
-            _require(not self._provider_retired, "provider channel is already terminal")
-            self._check(deadline=deadline, allow_provider_exit=True)
+            _require(not self._provider_retired and not self._provider_retiring,
+                     "provider channel is already terminal or retiring")
+            self._provider_retiring = True
+            try:
+                self._check(deadline=deadline, allow_provider_exit=True)
+            finally:
+                self._provider_retiring = False
             self._provider_retired = True
 
     def _close(self):

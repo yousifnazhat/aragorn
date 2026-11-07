@@ -123,11 +123,25 @@ image preserves v1. This is credential-free, provider-unavailable bootstrap
 implementation, not installed/loaded-code, live recovery, timing or useful-task
 evidence. The separately authorized D2 pilot and all qualification gates remain.
 
+The [trusted-source startup batch](docs/phase3/coordinator/pi-core-service-source-batch-15.md)
+pins and executes the same trusted service source bytes and binds startup
+consumption records to authenticated captured services. This is not independent
+worker source-consumption proof; its static successor image remains unactivated.
+
+The [one-shot/retirement and managed-contract batch](docs/phase3/coordinator/pi-core-managed-completion-batch-16.md)
+fixes clean one-tool Pi completion and authenticated provider retirement while
+retaining action/sensor protection. It also implements the additive fixed
+29-requirement managed qualification entrypoint with source-bound surface,
+campaign and independent-consumer joins. All 97 new/affected focused checks
+passed once. Native START remains unavailable; real source observation/health,
+provider listener/dispatch, deployed coverage and independent evidence remain
+open. No deployment, freeze, useful pilot or Phase 3 qualification is claimed.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned
-managed-profile qualification mapping is approved as a design; its executable
-contract and independent evidence still precede any completion claim. Historical signed work, evidence,
+managed-profile qualification contract is now implemented separately; its full
+independent verifier inventory and real evidence still precede any completion claim. Historical signed work, evidence,
 failure records and operational/cleanup holds remain intact. No Phase 4 release.
 
 **Reading order:** the linked roadmap is current for future implementation

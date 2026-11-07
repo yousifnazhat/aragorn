@@ -62,6 +62,8 @@ export interface WorkerOptions {
   streamFn: StreamFn;
   relay: WorkerRelay;
   signal?: AbortSignal;
+  /** End normally after the sole completed ALLOW reply; never infer effect verification. */
+  completeAfterSingleToolResult?: true;
 }
 export interface OperationRecord {
   toolCallId: string;
@@ -332,7 +334,8 @@ export function createNativeRelay(
 
 /** One call creates one Agent; there is no continuation, discovery or resume API. */
 export async function runManagedPiWorker(options: WorkerOptions): Promise<WorkerReport> {
-  record(options, ["systemPrompt", "task", "model", "correlation", "limits", "streamFn", "relay"], ["signal"]);
+  record(options, ["systemPrompt", "task", "model", "correlation", "limits", "streamFn", "relay"],
+    ["signal", "completeAfterSingleToolResult"]);
   text(options.systemPrompt, MAX_TEXT_BYTES, "systemPrompt");
   text(options.task, MAX_TEXT_BYTES, "task");
   if (typeof options.streamFn !== "function" || typeof options.relay !== "function") throw new TypeError("Explicit provider and relay functions are required");
@@ -345,6 +348,11 @@ export async function runManagedPiWorker(options: WorkerOptions): Promise<Worker
   uint(options.limits.maxTurns, 1, 8);
   uint(options.limits.maxToolCalls, 1, 8);
   uint(options.limits.maxRunMs, 1, 30_000);
+  if (Object.hasOwn(options, "completeAfterSingleToolResult") &&
+      (options.completeAfterSingleToolResult !== true || options.limits.maxTurns !== 1 || options.limits.maxToolCalls !== 1)) {
+    throw new TypeError("Single-tool completion requires exact one-shot limits");
+  }
+  const completeAfterSingleToolResult = options.completeAfterSingleToolResult === true;
   const model = copiedModel(options.model);
   const correlation = Object.freeze({ ...options.correlation });
   const limits = Object.freeze({ ...options.limits });
@@ -432,7 +440,17 @@ export async function runManagedPiWorker(options: WorkerOptions): Promise<Worker
     streamFn: guardedStream,
     toolExecution: "sequential",
     identity: { attribution: null },
-    finishTurn: () => stopReason ? { action: "end" } : undefined,
+    finishTurn: () => {
+      if (stopReason) return { action: "end" };
+      // Pi calls this only after the tool-result messages are finalized. End
+      // through its normal lifecycle, not abort(), which is interruption. The
+      // reply remains correlation-only and is never rewritten as effect proof.
+      if (completeAfterSingleToolResult && providerCalls === 1 && toolCalls === 1 && results.length === 1 &&
+          results[0].transportStatus === "COMPLETED" && results[0].sourceResult?.broker_result?.verdict === "ALLOW") {
+        return { action: "end" };
+      }
+      return undefined;
+    },
   });
   agent.subscribe((event) => {
     if (sealed) { agent.abort(); return; }

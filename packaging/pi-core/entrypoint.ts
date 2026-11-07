@@ -231,7 +231,8 @@ export async function runProtectedNativePiEntry(
     systemPrompt: start.system_prompt, task: start.task, model: start.model,
     correlation: { sessionId: start.activation_id, runId: start.activation_id },
     // No continuation or tool-result forwarding is approved in this slice.
-    limits: { ...start.limits, maxTurns: 1, maxRunMs }, streamFn, relay,
+    limits: { ...start.limits, maxTurns: 1, maxToolCalls: 1, maxRunMs }, streamFn, relay,
+    completeAfterSingleToolResult: true,
     ...(options.signal ? { signal: options.signal } : {}),
   });
 }

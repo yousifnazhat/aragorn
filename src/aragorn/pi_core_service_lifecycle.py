@@ -294,6 +294,28 @@ def _generation(service, deadline, *, live=True):
     _remaining(deadline)
 
 
+def _retired_provider_generation(service, deadline):
+    """Validate captured provider custody after authenticated terminal receipt.
+
+    Retirement is not process-exit proof. A still-running provider retains full
+    generation checks; a dead provider must have no residual/replacement cgroup.
+    systemd may already have collected this exact one-shot transient unit.
+    """
+    _require(service.role == "provider" and service.started and service.pidfd >= 0 and
+             service.invocation and service.immutable_digest, "provider capture is incomplete")
+    if not native._exited(service.pidfd):
+        _generation(service, deadline)
+        return
+    state = _state(service.role, deadline)
+    if not native._absent(state):
+        _require(state["ActiveState"] in {"inactive", "failed"} and
+                 state["MainPID"] == state["ControlPID"] == "0",
+                 "retired provider unit is not terminal")
+        _generation(service, deadline, live=False)
+    native._cgroup_empty(service)  # Retained descriptors reject a reused name.
+    _remaining(deadline)
+
+
 def _capture(service, deadline):
     while True:
         state = _state(service.role, deadline)
@@ -568,17 +590,34 @@ class PiServiceLifecycle:
                  lease._expected == expected, "service channels differ from captured processes")
         self._channels = lease
 
-    def guard_inputs_and_units(self, lease, *, deadline):
+    def guard_inputs_and_units(self, lease, *, deadline, allow_provider_exit=False):
         bounded = self._bounded(deadline)
         _require(self._channels is lease and type(lease) is channels.PiServiceChannels and
                  lease._lifecycle is self, "service lifecycle/channel join differs")
+        _require(type(allow_provider_exit) is bool and
+                 (not allow_provider_exit or
+                  (getattr(lease, "_provider_retiring", False) is True and
+                   lease.provider_retired is False)),
+                 "provider exit exception is not the held retirement transition")
         # The caller channel guard separately hashes the runtime image. Recheck
         # public/configuration custody and exact units here without recursion.
         for value in (self.configuration, self.provider_inputs):
             _require(bounded <= value.deadline, "service inputs extend held deadline")
             value.guard(deadline=bounded)
         self._ownership(bounded)
-        for service in self.services.values(): _generation(service, bounded)
+        retired = getattr(lease, "provider_retired", False)
+        _require(type(retired) is bool, "provider retirement state differs")
+        for service in self.services.values():
+            if service.role == "provider" and (retired or allow_provider_exit):
+                _require(lease._expected["provider"] == {
+                    "pid": service.pid, "uid": service.uid, "gid": service.gid,
+                    "start_ticks": service.start_ticks, "cgroup": service.plan.profile.cgroup,
+                    "executable_digest": self.deployment.observation["python_digest"]} and
+                    lease.provider_connection is service.connection,
+                    "retired provider differs from captured channel generation")
+                _retired_provider_generation(service, bounded)
+            else:
+                _generation(service, bounded)
         _remaining(bounded)
 
     def guard(self, *, deadline=None):

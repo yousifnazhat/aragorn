@@ -39,6 +39,8 @@ ROLES = {
                "path": IMPORT_ROOT + "/aragorn/pi_core_request_sensor.py"},
 }
 SOURCE_SEEDS = ("aragorn.pi_core_service_entry", *(row["module"] for row in ROLES.values()))
+SOURCE_LOADER = "aragorn/pi_core_service_source.py"
+SOURCE_PIN_MARKER = b"_ARAGORN_SOURCE_DIGESTS = None  # assembled source pins\n"
 EXCLUDED_STDLIB = frozenset({"site-packages", "ensurepip", "idlelib", "tkinter", "turtledemo", "test", "tests", "__pycache__"})
 # CPython 3.12 Unix builtins/frozen boot modules not represented by a .py/.so.
 # The pinned image's config-3.12-aarch64-linux-gnu/config.c explicitly registers
@@ -204,6 +206,8 @@ def source_closure(source_root, expected, stdlib):
     require(type(expected) is dict and 0 < len(expected) <= MAX_SOURCE_FILES, "invalid expected source inventory")
     require(all(type(name) is str and name.startswith("aragorn/") and name.endswith(".py") for name in expected), "invalid source inventory member")
     queue = [*SOURCE_SEEDS, "aragorn"]
+    if SOURCE_LOADER in expected:
+        queue.append("aragorn.pi_core_service_source")
     selected, imports, unsupported = {}, set(), []
     while queue:
         module = queue.pop(0)
@@ -291,11 +295,16 @@ def source_closure(source_root, expected, stdlib):
     return selected, sorted(imports), sorted(unsupported, key=lambda row: (row["path"], row["line"]))
 
 
-def _wrappers(root, expected):
+def _wrappers(root, expected, source_inventory=None):
     require(type(expected) is dict and set(expected) == {role + ".py" for role in ROLES}, "fixed wrapper inventory differs")
     result = {}
     for name, digest in sorted(expected.items()):
         raw = _input(root, name, digest)
+        if SOURCE_PIN_MARKER in raw:
+            require(raw.count(SOURCE_PIN_MARKER) == 1 and source_inventory is not None and
+                    SOURCE_LOADER in source_inventory, "verified wrapper requires the source loader inventory")
+            pins = {IMPORT_ROOT + "/" + path: digest for path, digest in sorted(source_inventory.items())}
+            raw = raw.replace(SOURCE_PIN_MARKER, b"_ARAGORN_SOURCE_DIGESTS = " + repr(pins).encode("ascii") + b"\n")
         try:
             ast.parse(raw, filename=name, feature_version=(3, 12))
         except (SyntaxError, UnicodeError, ValueError) as exc:
@@ -313,7 +322,7 @@ def prepare_service_image(archive: Path, *, source_pin: dict, source_root: Path,
     selected, omitted = selected_python_files(tree)
     selected, edges = python_elf_closure(tree, selected)
     local, imported_stdlib, unsupported = source_closure(source_root, expected_source_inventory, stdlib_modules(selected))
-    wrappers = _wrappers(wrapper_root, expected_wrapper_inventory)
+    wrappers = _wrappers(wrapper_root, expected_wrapper_inventory, expected_source_inventory)
     for name, raw in local.items():
         selected[IMPORT_ROOT + "/" + name] = {"raw": raw, "mode": 0o444, "source_path": "@reviewed-source/" + name}
     for name, raw in wrappers.items():
@@ -367,7 +376,7 @@ def prepare_service_image(archive: Path, *, source_pin: dict, source_root: Path,
     # processing. The incomplete fresh artifact is retained, never retried.
     for name, raw in local.items():
         require(_input(source_root, name, expected_source_inventory[name]) == raw, "source changed during assembly")
-    require(_wrappers(wrapper_root, expected_wrapper_inventory) == wrappers, "wrapper changed during assembly")
+    require(_wrappers(wrapper_root, expected_wrapper_inventory, expected_source_inventory) == wrappers, "wrapper changed during assembly")
     for row in files:
         raw = _build.regular_bytes(root / row["path"], os_root.MAX_FILE)
         require(len(raw) == row["size"] and pin(raw) == row["digest"], "assembled image readback differs")

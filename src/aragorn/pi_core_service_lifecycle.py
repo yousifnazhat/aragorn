@@ -19,6 +19,7 @@ import math
 import os
 from pathlib import Path
 import re
+import secrets
 import shlex
 import socket
 import stat
@@ -46,6 +47,9 @@ _DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _FILE = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
 _SAFE_PATH = re.compile(r"/[A-Za-z0-9_./-]+\Z")
 _SEAL = object()
+_SOURCE_LOADER = provision.SOURCE_ROOT + "/pi_core_service_source.py"
+# At most 512 source files plus their package directories remain held by the loader.
+_MAX_SERVICE_FDS = 64 + 2 * 512
 _CAPS = "cap_setgid cap_setuid cap_setpcap"
 _BASE = {**native._STATIC, "ProtectProc": "default", "TasksMax": "1", "MemoryMax": str(256 * 1024**2),
     "PAMName": "", "ReadWritePaths": "", "WorkingDirectory": "/", "RootImage": "",
@@ -326,7 +330,7 @@ def _listener_ready(service, directory_fd, directory_identity, deadline):
         except FileNotFoundError: metadata = None
         raw = process._read_virtual_file(Path(f"/proc/{service.pid}/net/unix"), 49152)
         names = os.listdir(f"/proc/{service.pid}/fd")
-        _require(len(names) <= 64 and all(name.isdigit() for name in names), "action fd inventory exceeds bound")
+        _require(len(names) <= _MAX_SERVICE_FDS and all(name.isdigit() for name in names), "action fd inventory exceeds bound")
         links = {}
         for name in names:
             _remaining(deadline)
@@ -352,6 +356,28 @@ def _listener_ready(service, directory_fd, directory_identity, deadline):
         time.sleep(min(0.02, _remaining(deadline)))
 
 
+def _consumed_sources(records, source_digests, role):
+    """Validate a startup subset, never pretend every installed module ran."""
+    _require(type(records) is list and 0 < len(records) <= 512, "invalid consumed-source inventory")
+    modules, paths = set(), set()
+    for row in records:
+        _require(type(row) is dict and set(row) == {"module", "path", "digest"} and
+                 all(type(row[key]) is str for key in row), "invalid consumed-source record")
+        name, path, digest = row["module"], row["path"], row["digest"]
+        _require(re.fullmatch(r"aragorn(?:\.[A-Za-z_][A-Za-z0-9_]*)*", name) is not None and
+                 name not in modules and path not in paths, "duplicate or invalid consumed module")
+        relative = name.replace(".", "/")
+        _require(path in {provision.IMPORT_ROOT + "/" + relative + suffix
+                          for suffix in (".py", "/__init__.py")} and
+                 path in source_digests and digest == source_digests[path],
+                 "consumed source differs from the held service image")
+        modules.add(name)
+        paths.add(path)
+    _require({"aragorn", "aragorn.pi_core_service_entry", provision.ROLES[role]["module"]} <= modules,
+             "service startup lacks its package, entrypoint or role handler")
+    return records
+
+
 class PiServiceLifecycle:
     def __init__(self, seal, deployment, config, provider_inputs, binding, deadline, cleanup_seconds):
         _require(seal is _SEAL, "service lifecycle requires protected factory")
@@ -373,6 +399,7 @@ class PiServiceLifecycle:
             "provider_mode": "UNAVAILABLE_NO_EGRESS_NO_CREDENTIAL", "provider_dispatched": False,
             "credential_read": False, "loaded_code_verified": False, "phase3_exit_eligible": False,
             "cleanup": {"status": "PENDING"}}
+        self._observation["trusted_source_startup"] = {}
 
     @property
     def channels(self):
@@ -471,6 +498,49 @@ class PiServiceLifecycle:
         _require(broker._peer_credentials(service.connection) == (service.pid, service.uid, service.gid),
                  "post-exec channel does not belong to captured service")
         _generation(service, self.operation_deadline)
+        self._source_startup(service)
+
+    def _source_startup(self, service):
+        """Join the trusted loader report to this already-captured generation."""
+        deadline, connection = self.operation_deadline, service.connection
+        role = service.role
+        _require(role not in self._observation["trusted_source_startup"], "source startup already attempted")
+        startup = {"status": "INCOMPLETE"}
+        self._observation["trusted_source_startup"][role] = startup
+        peer = (service.pid, service.uid, service.gid)
+        peer_fd = transport.guard_channel(connection, peer, deadline)
+        try:
+            pins = channels._deployment_pins(self.deployment, deadline)
+            inventory = self.deployment.binding["source_digests"]
+            base = {"schema": entry.SOURCE_STARTUP_SCHEMA, "role": role,
+                "nonce": secrets.token_hex(32), "runtime_closure_digest": pins["runtime_closure_digest"],
+                "binding_digest": pins["binding_digest"], "source_inventory_digest": canonical_digest(inventory)}
+            challenge = {**base, "kind": "CHALLENGE"}
+            startup.update(challenge=challenge,
+                process={"pid": service.pid, "uid": service.uid, "gid": service.gid,
+                    "start_ticks": service.start_ticks, "cgroup": service.plan.profile.cgroup,
+                    "invocation_id": service.invocation, "unit_properties_digest": service.immutable_digest,
+                    "python_digest": pins["python_digest"]})
+            transport.send_authenticated_packet(connection, challenge, deadline, max_bytes=entry.SOURCE_PACKET_LIMIT)
+            receipt, _ = transport.receive_authenticated_packet(connection, peer, deadline,
+                expected_rights=0, max_bytes=entry.SOURCE_PACKET_LIMIT)
+            # Retain bounded authenticated failure evidence, without logging packet contents.
+            _require(len(canonical_json(receipt)) <= entry.SOURCE_PACKET_LIMIT, "source receipt exceeds retention bound")
+            startup.update(receipt=receipt, receipt_digest=canonical_digest(receipt))
+            _require(type(receipt) is dict and set(receipt) == set(base) | {"kind", "sources", "sources_digest"} and
+                     all(receipt[key] == value for key, value in base.items()) and receipt["kind"] == "CONSUMED",
+                     "service consumed-source startup binding differs")
+            records = _consumed_sources(receipt["sources"], inventory, role)
+            _require(receipt["sources_digest"] == canonical_digest(records), "consumed-source digest differs")
+            self._inputs(deadline)
+            _generation(service, deadline)
+            transport.require_peer_live(connection, peer, peer_fd, deadline)
+            transport.send_authenticated_packet(connection, {**base, "kind": "ACCEPTED",
+                "sources_digest": receipt["sources_digest"]}, deadline, max_bytes=entry.SOURCE_PACKET_LIMIT)
+            startup.update(status="AUTHENTICATED_TRUSTED_SOURCE_STARTUP",
+                authority="TRUSTED_ARAGORN_STARTUP_IMPORTS_NOT_WORKER_STDLIB_OR_LATER_CODE")
+        finally:
+            transport._close_installed([peer_fd])
 
     def _bounded(self, deadline):
         _require(type(self) is PiServiceLifecycle and getattr(self, "_seal", None) is _SEAL and
@@ -618,6 +688,9 @@ def hold_native_pi_services(*, deployment, configuration: configuration.PiServic
         native._prerequisites(held.operation_deadline)
         held._inputs(held.operation_deadline)
         _require(deployment.binding["schema"] == provision.BINDING_SCHEMA_V2, "fixed service wrapper image required")
+        source_pins = deployment.binding.get("source_digests", {})
+        _require(type(source_pins) is dict and _SOURCE_LOADER in source_pins,
+                 "verified-source wrapper successor required before service startup")
         profile = provider_inputs.profile
         _require((profile["service_uid"], profile["service_gid"]) ==
                  (held.identities["provider"]["uid"], held.identities["provider"]["gid"]), "provider role/profile differs")

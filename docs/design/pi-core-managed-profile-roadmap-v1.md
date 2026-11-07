@@ -1,7 +1,7 @@
 # Roadmap: approved Pi-core managed capability profile
 
 Date: 2026-11-02. Status: **design and mapping approved; first connected offline
-implementation through protected configuration and native service lifecycle released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
+implementation through authenticated trusted-service source consumption released**. Authoritative design: [managed capability SDD](pi-core-managed-capability-sdd-v1.md).
 Research baseline: `dc3fc10f38db62343c85bbe2d9c263d843d2e12a`.
 
 Step-2 checkpoint, 2026-11-02, prepared from signed `3c94e48`:
@@ -14,6 +14,15 @@ authorizes only offline implementation and new/affected checks, signing and push
 No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
+
+Batch-15 [trusted-service source checkpoint](../phase3/coordinator/pi-core-service-source-batch-15.md):
+fixed successor wrappers verify and execute the same pinned Aragorn Python source
+buffers before the existing service handlers run. Authenticated startup receipts
+join those consumed modules to the captured service process/unit/interpreter and
+held image; they do not establish worker source consumption, full sensor health
+or later arbitrary code integrity. The changed image is statically assembled;
+92 distinct new/affected checks passed, with only one corrected fixture assertion
+rerun. No service or VM was activated. See the checkpoint for retained evidence.
 
 Batch-1 checkpoint: the actual pinned Pi loop is now connected offline to the
 existing Aragorn request/result protocol. 28 new focused methods and four
@@ -281,18 +290,23 @@ contract**, not another generic framework. The remaining release obligations are
 
 ### D2: prove the integration risk early
 
-Current next integration: consume the batch-13 image/binding and fixed wrappers
-in protected service configuration and native lifecycle ownership. Provision
-exact role/configuration/endpoint custody, start action before sensor after
-listener readiness, acquire authenticated post-exec channels, and observe exact
-unit/process stop and cleanup. Bind actual consumed code and test native recovery
-and timing only in a separately authorized pilot; do not enable START merely
-because static bytes and offline checks exist.
+Current next integration: independently observe the fixed worker's source reads
+and acquire complete applicable sensor progress/loss evidence. Reuse the protected
+reader transport, checkpoint and retained raw stream, without relabeling the legacy
+unknown-loss/refusal-only profile. The trusted-service startup boundary now has a
+source-level implementation; actual installation and observations remain unproven.
 
-Use a fabricated owned-lab task with real computation and observable effects,
-for example reading explicitly allowed documents and producing a verified output
-plus one scoped API interaction. The real selected task/input manifests belong
-to the batch; a prose example is not a measurement sample.
+Connect the existing protected Responses service through an owned provider listener
+and additive provider-enabled START, with exact approved prompt/task/model/tool
+bytes and authenticated completion/retirement. Keep unavailable the default and
+preserve one-shot budgets, cancellation, deadlines and broker/sensor lifetime.
+
+The approved pilot is fabricated numbers, one model call, one authorized JSON-file
+creation and independent result readback, in a fresh dedicated Linux arm64/systemd
+VM. An operator-approved model, trust/address profile, credential setup, spending
+and operation limits, exact VM ownership/cleanup plan and separate live authorization
+are mandatory before activation. Prepare real recovery and full timing collection;
+demonstrate changed-byte and unauthorized-target refusal in separate owned contexts.
 
 Reuse the CAS/admission path; add the thin request-only worker; bind the actual
 loaded deployment; connect the existing broker/reader and protected health;

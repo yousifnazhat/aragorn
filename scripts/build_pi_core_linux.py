@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import posixpath
+import re
 import shutil
 import stat
 import struct
@@ -162,7 +163,52 @@ def require_static_arm64_elf(raw: bytes) -> None:
     require(3 not in types and 1 in types, "compiler requires an unapproved dynamic interpreter")
 
 
-def prepare(root: Path, output: Path, node: Path, typescript: Path, compiler: Path) -> dict:
+def source_gate_input(root: Path, binary: Path, receipt_path: Path, receipt_digest: str) -> tuple[bytes, dict]:
+    """Consume independently reviewed gate bytes; never compile or execute them."""
+    require(type(receipt_digest) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", receipt_digest),
+            "source gate requires an independently pinned receipt")
+    raw_receipt = regular_bytes(receipt_path, 16384)
+    require("sha256:" + sha256(raw_receipt) == receipt_digest, "source gate receipt pin differs")
+    receipt = json.loads(raw_receipt)
+    require(type(receipt) is dict and set(receipt) == {
+        "schema", "target", "source_sha256", "elf_sha256", "compiler_sha256",
+        "build_command_sha256", "runtime_executed"}, "source gate receipt fields differ")
+    require(raw_receipt in (canonical(receipt), canonical(receipt) + b"\n") and
+            receipt["schema"] == "aragorn/pi-core-source-gate-build/v1" and
+            receipt["target"] == "linux-arm64-static" and receipt["runtime_executed"] is False and
+            all(type(receipt[key]) is str and re.fullmatch(r"[0-9a-f]{64}", receipt[key])
+                for key in ("source_sha256", "elf_sha256", "compiler_sha256", "build_command_sha256")),
+            "source gate receipt is not the reviewed static build contract")
+    source = regular_bytes(root / PACKAGE / "source-gate.c", 65536)
+    raw = regular_bytes(binary, 1024 * 1024)
+    require(sha256(source) == receipt["source_sha256"] and sha256(raw) == receipt["elf_sha256"],
+            "source gate source or binary differs")
+    require_static_arm64_elf(raw)
+    require(struct.unpack_from("<H", raw, 16)[0] == 2, "source gate must be a fixed static executable")
+    offset = struct.unpack_from("<Q", raw, 32)[0]
+    size, count = struct.unpack_from("<HH", raw, 54)
+    entry = struct.unpack_from("<Q", raw, 24)[0]
+    executable_entry = False
+    for index in range(count):
+        kind, flags, file_offset, address, _physical, file_size, memory_size, _alignment = \
+            struct.unpack_from("<IIQQQQQQ", raw, offset + size * index)
+        require(kind not in (2, 3), "source gate cannot have a dynamic segment or interpreter")
+        if kind == 1:
+            require(file_size <= memory_size and file_offset + file_size <= len(raw) and
+                    address + memory_size <= 2**64 and flags & 3 != 3,
+                    "source gate segment bounds or permissions differ")
+            executable_entry |= bool(flags & 1 and address <= entry < address + file_size)
+    require(executable_entry, "source gate entrypoint is not in executable file bytes")
+    return raw, {**receipt, "receipt_digest": receipt_digest}
+
+
+def prepare(root: Path, output: Path, node: Path, typescript: Path, compiler: Path, *,
+            source_gate: Path | None = None, source_gate_receipt: Path | None = None,
+            source_gate_receipt_digest: str | None = None) -> dict:
+    supplied = (source_gate, source_gate_receipt, source_gate_receipt_digest)
+    require(all(value is None for value in supplied) or all(value is not None for value in supplied),
+            "source gate binary, receipt and independent pin must be supplied together")
+    gate = None if source_gate is None else source_gate_input(root, *supplied)
     pins_raw = regular_bytes(root / PINS)
     pins = json.loads(pins_raw)
     require(pins["target"]["os"] == "linux" and pins["target"]["architecture"] == "arm64" and
@@ -214,6 +260,12 @@ def prepare(root: Path, output: Path, node: Path, typescript: Path, compiler: Pa
     unpack(node_raw, destination / "deployment/node", "node-v24.22.2-linux-arm64",
            {"node-v24.22.2-linux-arm64/bin/node", "node-v24.22.2-linux-arm64/LICENSE"})
     (destination / "deployment/node/bin/node").chmod(0o755)
+    if gate is not None:
+        gate_path = destination / "deployment/observer/source-gate"
+        gate_path.parent.mkdir()
+        with gate_path.open("xb") as stream:
+            stream.write(gate[0])
+        gate_path.chmod(0o555)
     legacy = destination / "deployment/openclaw/aragorn-runtime-action-worker"
     legacy.mkdir(parents=True)
     for name in ("index.js", "package.json"):
@@ -225,13 +277,16 @@ def prepare(root: Path, output: Path, node: Path, typescript: Path, compiler: Pa
     # Import contains only the compiler package, never Node, sources or runtime.
     with tarfile.open(destination / "compiler-rootfs.tar", "w") as archive:
         archive.add(destination / "compiler", arcname="compiler", recursive=True)
-    return {
+    inputs = {
         "pins_sha256": sha256(pins_raw), "offline_toolchain_sha256": sha256(toolchain_raw),
         "node_archive_sha256": sha256(node_raw), "typescript_archive_sha256": sha256(ts_raw),
         "compiler_archive_sha256": sha256(compiler_raw), "compiler_binary_sha256": sha256(regular_bytes(native)),
         "runtime_dependency_tree_sha256": dependency_digest, "runtime_package_occurrences": 89,
         "sources": {name: sha256(raw) for name, raw in sources.items()},
     }
+    if gate is not None:
+        inputs["source_gate"] = gate[1]
+    return inputs
 
 
 class DockerBuild:
@@ -352,16 +407,26 @@ class DockerBuild:
                 "owned_container_absent": True, "owned_image_absent": True}
 
 
-def build(root: Path, output: Path, node: Path, typescript: Path, compiler: Path, *, timeout: int = 120) -> dict:
+def build(root: Path, output: Path, node: Path, typescript: Path, compiler: Path, *, timeout: int = 120,
+          source_gate: Path | None = None, source_gate_receipt: Path | None = None,
+          source_gate_receipt_digest: str | None = None) -> dict:
     # Deadline starts before input assembly, not afresh for every process.
     output = output.absolute()
     executor = DockerBuild(output, timeout=timeout)
-    inputs = prepare(root, output, node, typescript, compiler)
+    options = {} if source_gate is source_gate_receipt is source_gate_receipt_digest is None else {
+        "source_gate": source_gate, "source_gate_receipt": source_gate_receipt,
+        "source_gate_receipt_digest": source_gate_receipt_digest}
+    inputs = prepare(root, output, node, typescript, compiler, **options)
     cleanup = executor.compile()
     require(sha256(canonical(tree_inventory(output / "deployment/pi-core/node_modules"))) ==
             inputs["runtime_dependency_tree_sha256"], "compiler changed the preserved runtime dependency closure")
     require(all(sha256(regular_bytes(root / PACKAGE / name)) == digest
                 for name, digest in inputs["sources"].items()), "source changed during compilation")
+    if "source_gate" in inputs:
+        raw, pinned = source_gate_input(root, source_gate, source_gate_receipt, source_gate_receipt_digest)
+        require(pinned == inputs["source_gate"] and
+                regular_bytes(output / "deployment/observer/source-gate", 1024 * 1024) == raw,
+                "source gate changed during compiler assembly")
     inventory = tree_inventory(output / "deployment")
     receipt = {
         "schema": "aragorn/pi-core-linux-build/v1", "status": "COMPILED_NOT_DEPLOYED_OR_OS_QUALIFIED",
@@ -383,10 +448,15 @@ def main() -> int:
     parser.add_argument("--compiler-archive", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--timeout", type=int, default=120)
+    parser.add_argument("--source-gate", type=Path)
+    parser.add_argument("--source-gate-receipt", type=Path)
+    parser.add_argument("--source-gate-receipt-digest")
     args = parser.parse_args()
     try:
         result = build(ROOT, args.output, args.node_archive, args.typescript_archive, args.compiler_archive,
-                       timeout=args.timeout)
+                       timeout=args.timeout, source_gate=args.source_gate,
+                       source_gate_receipt=args.source_gate_receipt,
+                       source_gate_receipt_digest=args.source_gate_receipt_digest)
     except (BuildError, OSError, ValueError, KeyError, tarfile.TarError, subprocess.SubprocessError) as exc:
         parser.exit(1, f"Pi Linux build refused or failed: {exc}\n")
     print(json.dumps({"status": result["status"], "deployment_tree_sha256": result["deployment_tree_sha256"],

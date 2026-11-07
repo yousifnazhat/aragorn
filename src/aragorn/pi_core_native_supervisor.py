@@ -173,7 +173,7 @@ def _absent(state: Mapping) -> bool:
 def _property(unit: str, name: str, deadline: float) -> list[str]:
     allowed = {"BindPaths", "BindReadOnlyPaths", "TemporaryFileSystem", "EnvironmentFiles", "ExecCondition", "ExecStart", "ExecStartPre",
                "ExecStartPost", "ExecStop", "ExecStopPost", "LoadCredential", "LoadCredentialEncrypted",
-               "SetCredential", "SetCredentialEncrypted", "RuntimeMaxUSec", "TimeoutStopUSec"}
+               "SetCredential", "SetCredentialEncrypted", "RuntimeMaxUSec", "TimeoutStopUSec", "KillSignal"}
     _require(_UNIT.fullmatch(unit) is not None and name in allowed, "invalid compound unit selector")
     path = "/org/freedesktop/systemd1/unit/" + unit.replace("-", "_2d").replace(".", "_2e")
     code, raw = _command(("/usr/bin/busctl", "get-property", "org.freedesktop.systemd1", path,
@@ -200,6 +200,11 @@ def _readback(plan: PiConfinedLaunchPlan, state: Mapping, deadline: float) -> st
     _require(all(state.get(name) == value for name, value in expected.items()),
              "immutable systemd launch properties differ")
     observed = {"scalar": expected}
+    if plan.source_observation is not None:
+        _require(properties.get("KillSignal") == ["SIGKILL"], "observed worker stop contract differs")
+        value = _property(plan.unit_name, "KillSignal", deadline)
+        _require(value == ["i", "9"], "observed worker stop signal differs")
+        observed["KillSignal"] = value
     for name, expected_value in (("RuntimeMaxUSec", "30000000"), ("TimeoutStopUSec", "5000000")):
         value = _property(plan.unit_name, name, deadline)
         _require(value == ["t", expected_value], "unit lifetime or stop bound differs")
@@ -236,6 +241,8 @@ def _readback(plan: PiConfinedLaunchPlan, state: Mapping, deadline: float) -> st
 @dataclass
 class _Owned:
     plan: PiConfinedLaunchPlan
+    source_observer: object | None = None
+    source_observer_closed: bool = False
     run_fd: int = -1
     directory_fd: int = -1
     directory_identity: tuple = ()
@@ -465,6 +472,11 @@ def _cleanup(owned: _Owned, original_deadline: float, maximum_seconds: float = 5
         _remaining(deadline)
         _require(not owned.request_dispatch_active, "native request channel cleanup remains unresolved")
         _resource_ownership(owned)
+        if owned.source_observer is not None:
+            from .pi_core_source_observer import PiSourceObserver
+            _require(type(owned.source_observer) is PiSourceObserver and owned.source_observer._owned is owned,
+                     "source observer cleanup ownership differs")
+            owned.source_observer.begin_owned_stop(deadline)
         if owned.start_attempted:
             _require(owned.started and owned.pidfd >= 0 and owned.invocation and owned.immutable_digest and
                      owned.cgroup_fd >= 0 and owned.cgroup_parent_fd >= 0,
@@ -484,6 +496,10 @@ def _cleanup(owned: _Owned, original_deadline: float, maximum_seconds: float = 5
                     # Exactly one owned stop; no restart, reset-failed, kill-all, or retry.
                     code, _ = _command(("/usr/bin/systemctl", "stop", "--no-block", owned.plan.unit_name), deadline)
                     _require(code == 0, "owned unit stop was not accepted")
+            if owned.source_observer is not None:
+                # Ptrace EXIT stops must be drained before waiting for PIDFD death.
+                owned.source_observer.shutdown_after_owned_stop(deadline)
+                owned.source_observer_closed = True
             while True:
                 owned.exit_observed = _exited(owned.pidfd)
                 state = _unit_state(owned.plan.unit_name, deadline)
@@ -533,6 +549,8 @@ def _cleanup(owned: _Owned, original_deadline: float, maximum_seconds: float = 5
 
 
 def _close_handles(owned: _Owned) -> None:
+    _require(owned.source_observer is None or owned.source_observer_closed,
+             "source tracer still owns the worker; preserve native handles")
     failures = []
     for connection in (owned.connection, owned.listener):
         if connection is not None:
@@ -679,6 +697,24 @@ def run_native_pi_worker(
             _require(code == 0, "one-shot transient service start failed")
             owned.started = True
             _capture_unit(owned, operation_deadline)
+            if plan.source_observation is not None:
+                from .pi_core_node_source_observer import start_node_observer
+                from .pi_core_source_observer import PiSourceObserver
+                _require(canonical_digest(plan.source_observation) == plan.source_observation_digest,
+                         "held source observation profile changed")
+                try:
+                    observer = start_node_observer(owned, plan.source_observation,
+                        operation_deadline=operation_deadline, cleanup_deadline=deadline)
+                    _require(type(observer) is PiSourceObserver and observer._owned is owned,
+                             "source acquisition did not return owned observer custody")
+                    owned.source_observer = observer
+                except BaseException as exc:
+                    observer = getattr(exc, "observer", None)
+                    if observer is not None:
+                        _require(type(observer) is PiSourceObserver and observer._owned is owned,
+                                 "failed source acquisition lost observer custody")
+                        owned.source_observer = observer
+                    raise
             assert owned.listener is not None
             owned.listener.settimeout(_remaining(operation_deadline))
             owned.connection, _address = owned.listener.accept()
@@ -722,5 +758,11 @@ def run_native_pi_worker(
                                   if owned.activation_raw is not None else None,
             "bootstrap": observation, "identity_registration": dict(identity_publication),
             "request_channel": request_observation,
+            "source_observation": None if owned.source_observer is None else {
+                "profile_digest": plan.source_observation_digest,
+                "closed": owned.source_observer_closed,
+                "capture": owned.source_observer.observation,
+                "latest_health_capture": owned.source_observer.health_observation,
+                "authority": "SOURCE_ACQUISITION_ONLY_NOT_V8_EXECUTION_OR_PHASE3_QUALIFICATION"},
             "failure": failure, "cleanup": cleanup,
         }

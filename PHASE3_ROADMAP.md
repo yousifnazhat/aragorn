@@ -147,6 +147,16 @@ blocks protected work, not bootstrap NO_REQUEST. This is offline implementation,
 not complete pilot sensor health, D2 closure or qualification. Legacy UNKNOWN
 health evidence and predecessor artifacts remain unchanged.
 
+The [protected pre-exec/Node batch](docs/phase3/coordinator/pi-core-preexec-node-batch-18.md)
+connects an opt-in pinned gate, observer-before-HELLO startup, dedicated tracing
+ownership, bounded Node thread/read/loading support and independent replay.
+Source reads, loader mappings and owned non-source IO remain separate claims.
+The native result preserves the latest actual health-boundary snapshot alongside
+the complete final failure/cleanup record. Exact installed inventories, a reviewed
+compiled gate, actual Node startup/coverage and measured timing/cleanup still
+precede any useful pilot or D2 closure. Native provider START stays unavailable;
+no target build, live operation, freeze or Phase 3 qualification is claimed.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

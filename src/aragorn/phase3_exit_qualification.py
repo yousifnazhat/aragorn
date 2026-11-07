@@ -209,6 +209,45 @@ def qualify_phase3_exit(
     failures return a non-eligible result; malformed evidence raises.
     """
     required = required_phase3_evidence_ids(manifest_raw)
+    return _qualify_phase3_requirements(
+        required=required,
+        gate_manifest_digest=GATE_MANIFEST_DIGEST,
+        measurements_id=_MEASUREMENTS,
+        deployment_raw=deployment_raw,
+        expected_deployment_digest=expected_deployment_digest,
+        expected_campaign_contract_digest=expected_campaign_contract_digest,
+        measurement_schedule=measurement_schedule,
+        expected_measurement_schedule_digest=expected_measurement_schedule_digest,
+        expected_metrics_implementation_digest=expected_metrics_implementation_digest,
+        evidence_by_requirement=evidence_by_requirement,
+        verifiers=verifiers,
+        evidence_cas=evidence_cas,
+    )
+
+
+def _qualify_phase3_requirements(
+    *,
+    required: tuple[str, ...],
+    gate_manifest_digest: str,
+    measurements_id: str,
+    deployment_raw: bytes,
+    expected_deployment_digest: str,
+    expected_campaign_contract_digest: str,
+    measurement_schedule: dict[str, Any],
+    expected_measurement_schedule_digest: str,
+    expected_metrics_implementation_digest: str,
+    evidence_by_requirement: dict[str, str],
+    verifiers: dict[str, Phase3SemanticVerifier],
+    evidence_cas: CAS,
+    extra_context: dict[str, str] | None = None,
+    prerequisite_pass: bool = True,
+) -> dict[str, Any]:
+    """Shared composition only; public entrypoints pin their own fixed contract."""
+    if extra_context and set(extra_context) & {
+        "requirement_id", "evidence_digest", "deployment_identity_digest",
+        "gate_manifest_digest", "campaign_contract_digest", "measurement_schedule_digest",
+    }:
+        raise Phase3ExitQualificationError("extra context cannot override core joins")
     if type(evidence_by_requirement) is not dict or type(verifiers) is not dict:
         raise Phase3ExitQualificationError(
             "gate requires exact evidence and verifier maps"
@@ -253,7 +292,7 @@ def qualify_phase3_exit(
             "expected_unattributed_attempt_id": attempt[
                 "unattributed_negative_control_attempt_id"
             ],
-            "expected_gate_manifest_digest": GATE_MANIFEST_DIGEST,
+            "expected_gate_manifest_digest": gate_manifest_digest,
             "expected_campaign_contract_digest": contract_pin,
             "expected_runtime_identity_digest": expected_deployment_digest,
         }
@@ -282,17 +321,21 @@ def qualify_phase3_exit(
             "requirement_id": key,
             "evidence_digest": evidence_pins[key],
             "deployment_identity_digest": expected_deployment_digest,
-            "gate_manifest_digest": GATE_MANIFEST_DIGEST,
+            "gate_manifest_digest": gate_manifest_digest,
             "campaign_contract_digest": contract_pin,
             "measurement_schedule_digest": schedule_pin,
         }
+        if extra_context:
+            context.update(extra_context)
         result = selected[key].verify(raw, dict(context), verifier_cas)
         _verify_source(selected[key])
         results[key] = _result(result, context)
-        if key == _MEASUREMENTS:
+        if key == measurements_id:
             metrics_raw = raw
     # No arithmetic can upgrade unverified observations into an exit PASS.
-    semantic_pass = all(result["status"] == "PASS" for result in results.values())
+    semantic_pass = prerequisite_pass and all(
+        result["status"] == "PASS" for result in results.values()
+    )
     metrics = None
     if semantic_pass:
         metrics = qualify_phase3_quantitative_metrics_bytes(
@@ -320,7 +363,7 @@ def qualify_phase3_exit(
         "authority": "PHASE3_V1_SAME_DEPLOYMENT_EVIDENCE_COMPOSITION_NOT_INSTALLER_EDR_OR_RELEASE_AUTHORITY",
         "deployment": deployment,
         "deployment_identity_digest": expected_deployment_digest,
-        "gate_manifest_digest": GATE_MANIFEST_DIGEST,
+        "gate_manifest_digest": gate_manifest_digest,
         "campaign_contract_digest": contract_pin,
         "measurement_schedule_digest": schedule_pin,
         "metrics_implementation_digest": metrics_pin,

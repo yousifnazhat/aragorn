@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-20 [owned-provider/protected-START checkpoint](../phase3/coordinator/pi-core-provider-start-batch-20.md):
+the native caller now has an additive v3 START and owned provider listener,
+exact prepared-payload approval binding, authenticated retirement before action
+and one externally bounded deadline. The existing high-level lifecycle remains
+credential-free and network-isolated; enabled configuration refuses before
+activation until its exact credential/egress/root-approval successor is prepared.
+Installed protected inventories, actual Node feasibility, recovery/timing and the
+separately authorized pilot still precede D2 closure. No live operation is released.
+
 Batch-19 [compiled-gate/protected-inventory checkpoint](../phase3/coordinator/pi-core-gate-inventory-batch-19.md):
 the fixed Linux arm64 gate is now compiled and byte-pinned without target
 execution. The read-only preparation API produces the existing source/loader

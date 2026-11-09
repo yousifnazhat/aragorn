@@ -166,6 +166,15 @@ once. The actual installed read-only view/profile is still a deployment
 prerequisite; writable staging is not substituted for it. Provider START remains
 unavailable and no live operation, D2 closure or Phase 3 qualification is claimed.
 
+The [owned-provider/START batch](docs/phase3/coordinator/pi-core-provider-start-batch-20.md)
+adds protected START v3, one owned provider listener, exact prepared-payload
+mediation, authenticated provider retirement before action and a shared externally
+bounded deadline. Unavailable defaults and the existing credential-free managed
+lifecycle remain unchanged; the latter refuses enabled configuration before
+activation. Exact credential/egress/root-approval provisioning, changed installed
+inventories, recovery/timing and the authorized useful pilot remain D2 work.
+This offline wiring is not deployed provider availability or qualification.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

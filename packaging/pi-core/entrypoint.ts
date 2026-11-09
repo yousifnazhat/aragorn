@@ -1,7 +1,7 @@
 /**
  * Fixed, credential-free Pi bootstrap entrypoint. Importing this module is inert.
- * Native deployment has no provider route yet and never invokes an Agent or an
- * effect relay. Its bootstrap status is not admission, effect or cleanup proof.
+ * Provider-unavailable remains the default. The additive protected START uses
+ * only fixed local clients. Bootstrap status is not effect or cleanup proof.
  */
 import { randomBytes } from "node:crypto";
 import { lstatSync } from "node:fs";
@@ -24,6 +24,7 @@ const MAX_TOTAL_MS = 30_000;
 const ID = /^[a-f0-9]{32}(?![\s\S])/;
 const START_SCHEMA = "aragorn/pi-core-bootstrap-start/v1";
 const NATIVE_START_SCHEMA = "aragorn/pi-core-bootstrap-start/v2";
+const PROTECTED_START_SCHEMA = "aragorn/pi-core-bootstrap-start/v3";
 
 export interface PreparedPiStart {
   schema: typeof START_SCHEMA;
@@ -38,6 +39,11 @@ export interface PreparedPiStart {
 export interface PreparedNativePiStart extends Omit<PreparedPiStart, "schema" | "relay"> {
   schema: typeof NATIVE_START_SCHEMA;
   native_request: NativeRequestEndpoint;
+}
+export interface PreparedProtectedPiStart extends Omit<PreparedNativePiStart, "schema" | "provider_status"> {
+  schema: typeof PROTECTED_START_SCHEMA;
+  provider_status: "PROTECTED";
+  provider: { route_digest: string; max_requests: 1; request_timeout_ms: number };
 }
 export interface BootstrapChannel {
   /** Read/write one complete length-prefixed frame, without reconnecting. */
@@ -90,22 +96,36 @@ export function decodeBootstrapFrame(frame: Uint8Array): unknown {
   return value;
 }
 
-export function parseStart(value: unknown): PreparedPiStart | PreparedNativePiStart {
+export function parseStart(value: unknown): PreparedPiStart | PreparedNativePiStart | PreparedProtectedPiStart {
   exact(value, ["schema", "activation_id", "system_prompt", "task", "model", "limits", "provider_status"],
-    ["relay", "native_request"]);
-  const native = value.schema === NATIVE_START_SCHEMA;
-  if ((!native && value.schema !== START_SCHEMA) || value.provider_status !== "UNAVAILABLE") {
+    ["relay", "native_request", "provider"]);
+  const protectedProvider = value.schema === PROTECTED_START_SCHEMA;
+  const native = value.schema === NATIVE_START_SCHEMA || protectedProvider;
+  if ((!native && value.schema !== START_SCHEMA) ||
+      value.provider_status !== (protectedProvider ? "PROTECTED" : "UNAVAILABLE")) {
     throw new TypeError("Unsupported bootstrap schema or provider route");
   }
   exact(value, ["schema", "activation_id", "system_prompt", "task", "model", "limits", "provider_status",
-    native ? "native_request" : "relay"]);
+    native ? "native_request" : "relay", ...(protectedProvider ? ["provider"] : [])]);
   identifier(value.activation_id);
   text(value.system_prompt, 32 * 1024);
   text(value.task, 32 * 1024);
   exact(value.limits, ["maxTurns", "maxToolCalls", "maxRunMs"]);
-  uint(value.limits.maxTurns, 1, 8);
+  uint(value.limits.maxTurns, 1, protectedProvider ? 1 : 8);
   uint(value.limits.maxToolCalls, 1, native ? 1 : 8);
   uint(value.limits.maxRunMs, 1, MAX_TOTAL_MS);
+  if (protectedProvider) {
+    exact(value.provider, ["route_digest", "max_requests", "request_timeout_ms"]);
+    if (typeof value.provider.route_digest !== "string" ||
+        !/^sha256:[a-f0-9]{64}(?![\s\S])/.test(value.provider.route_digest)) {
+      throw new TypeError("Invalid protected provider route");
+    }
+    uint(value.provider.max_requests, 1, 1);
+    uint(value.provider.request_timeout_ms, 1, MAX_TOTAL_MS);
+    if (value.provider.request_timeout_ms !== value.limits.maxRunMs) {
+      throw new TypeError("Protected request timeout must match the prepared limit");
+    }
+  }
   if (native) {
     parseNativeRequestEndpoint(value.native_request);
   } else {
@@ -128,7 +148,7 @@ export function parseStart(value: unknown): PreparedPiStart | PreparedNativePiSt
   // The inherited canonical wire protocol represents safe integers only.
   for (const cost of Object.values(value.model.cost)) uint(cost, 0, Number.MAX_SAFE_INTEGER);
   // Copy through the exact bounded wire format; retain no caller-owned objects.
-  return decodeBootstrapFrame(encodeBootstrapFrame(value)) as PreparedPiStart | PreparedNativePiStart;
+  return decodeBootstrapFrame(encodeBootstrapFrame(value)) as PreparedPiStart | PreparedNativePiStart | PreparedProtectedPiStart;
 }
 
 /**
@@ -199,19 +219,24 @@ export async function runPreparedNativePiEntry(
 
 /**
  * Protected route composition with no injected provider or effect transport.
- * This prepares a client only: nativeMain stays UNAVAILABLE until the external
- * credential/data-policy route and its native lifetime are deployed and proven.
+ * The internal v2 composition remains inert unless called explicitly. Native
+ * bootstrap calls it only for the additive, root-owned protected v3 START.
  */
 export async function runProtectedNativePiEntry(
   value: unknown,
   options: { routeDigest: string; signal?: AbortSignal; deadlineMs?: number },
 ): Promise<WorkerReport> {
   const start = parseStart(value);
-  if (start.schema !== NATIVE_START_SCHEMA) throw new TypeError("Protected provider requires exact native START");
+  if (start.schema !== NATIVE_START_SCHEMA && start.schema !== PROTECTED_START_SCHEMA) {
+    throw new TypeError("Protected provider requires exact native START");
+  }
   exact(options, ["routeDigest"], ["signal", "deadlineMs"]);
   if (typeof options.routeDigest !== "string" || !/^sha256:[a-f0-9]{64}(?![\s\S])/.test(options.routeDigest) ||
       (options.deadlineMs !== undefined && typeof options.deadlineMs !== "number") ||
       (options.signal !== undefined && !(options.signal instanceof AbortSignal))) throw new TypeError("Invalid protected route");
+  if (start.schema === PROTECTED_START_SCHEMA && options.routeDigest !== start.provider.route_digest) {
+    throw new TypeError("Protected route differs from prepared START");
+  }
   const now = performance.now();
   const originalDeadline = options.deadlineMs ?? now + start.limits.maxRunMs;
   if (typeof originalDeadline !== "number" || !Number.isFinite(originalDeadline) || originalDeadline <= now ||
@@ -255,21 +280,40 @@ async function bounded<T>(operation: () => Promise<T>, deadline: number): Promis
   }
 }
 
-/** Always fails closed for providers; injection here substitutes only I/O. */
+/** Legacy START remains unavailable; injection here substitutes only I/O. */
 export async function runBootstrapChannel(
   channel: BootstrapChannel,
   options: { workerNonce: string; deadlineMs: number },
-): Promise<{ activationId: string; status: "PROVIDER_UNAVAILABLE"; released: true }> {
+): Promise<{ activationId: string; status: "PROVIDER_UNAVAILABLE" | "WORKER_COMPLETED" | "WORKER_STOPPED"; released: true }> {
   identifier(options.workerNonce);
   const deadline = options.deadlineMs;
   await bounded(() => channel.write(encodeBootstrapFrame({
     schema: "aragorn/pi-core-bootstrap-hello/v1", worker_nonce: options.workerNonce,
   })), deadline);
   const start = parseStart(decodeBootstrapFrame(await bounded(() => channel.read(), deadline)));
-  await bounded(() => channel.write(encodeBootstrapFrame({
+  let status: "PROVIDER_UNAVAILABLE" | "WORKER_COMPLETED" | "WORKER_STOPPED" = "PROVIDER_UNAVAILABLE";
+  let result: Record<string, unknown> = {
     schema: "aragorn/pi-core-bootstrap-result/v1", activation_id: start.activation_id,
-    status: "PROVIDER_UNAVAILABLE", authority: "BOOTSTRAP_STATUS_ONLY_NOT_EFFECT_OR_RUN_AUTHORITY",
-  })), deadline);
+    status, authority: "BOOTSTRAP_STATUS_ONLY_NOT_EFFECT_OR_RUN_AUTHORITY",
+  };
+  if (start.schema === PROTECTED_START_SCHEMA) {
+    const controller = new AbortController();
+    try {
+      const report = await bounded(() => runProtectedNativePiEntry(start, {
+        routeDigest: start.provider.route_digest, signal: controller.signal, deadlineMs: deadline,
+      }), deadline);
+      status = report.status === "COMPLETED" ? "WORKER_COMPLETED" : "WORKER_STOPPED";
+      result = { ...result, schema: "aragorn/pi-core-bootstrap-result/v2", status,
+        worker: { status: report.status, stop_reason: report.stopReason,
+          provider_calls: report.providerCalls, tool_calls: report.toolCalls,
+          agent_settled: report.agentSettled, transcript_complete: report.transcriptComplete } };
+    } finally {
+      // Cancellation asks the clients to stop; only native containment proves
+      // termination. A failed/late operation never becomes a completion report.
+      controller.abort();
+    }
+  }
+  await bounded(() => channel.write(encodeBootstrapFrame(result)), deadline);
   // Keep this same accepted connection/process alive for the supervisor's
   // identity binding and terminal release. No reconnect, Agent or effect retry.
   const release = decodeBootstrapFrame(await bounded(() => channel.read(), deadline));
@@ -277,7 +321,7 @@ export async function runBootstrapChannel(
   if (release.schema !== "aragorn/pi-core-bootstrap-release/v1" || release.activation_id !== start.activation_id) {
     throw new TypeError("Invalid bootstrap release");
   }
-  return { activationId: start.activation_id, status: "PROVIDER_UNAVAILABLE", released: true };
+  return { activationId: start.activation_id, status, released: true };
 }
 
 function socketIdentity(): string {
@@ -355,7 +399,7 @@ async function nativeMain(): Promise<void> {
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   void nativeMain().catch(() => {
     // No task, prompt, provider response or credential is written to logs.
-    process.stderr.write("Pi bootstrap refused or failed; no provider route is enabled.\n");
+    process.stderr.write("Pi bootstrap refused or failed; completion is not established.\n");
     process.exitCode = 1;
   });
 }

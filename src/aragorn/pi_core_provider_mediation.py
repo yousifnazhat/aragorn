@@ -279,7 +279,7 @@ def _service_custody_guard(custody, connection, peer, deadline, *, terminal=Fals
 
 def handle_pi_provider_connection(worker_connection, provider_connection, config, *, activation_path,
         profile, protected_install_root, grant, expected_provider_peer, deadline,
-        provider_service=False, service_custody=None, source_observer=None):
+        provider_service=False, service_custody=None, source_observer=None, expected_request=None):
     """Mediate one actual initial Pi request, opening no listener or network.
 
     Caller owns both channels. This owns only newly opened descriptors and holds
@@ -289,6 +289,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
     _require(os.geteuid() == os.getegid() == 0, "PROVIDER_ROOT_REQUIRED")
     _require(type(provider_service) is bool, "PROVIDER_SERVICE_MODE_REFUSED")
     _require(service_custody is None or provider_service, "PROVIDER_SERVICE_CUSTODY_REQUIRES_V2")
+    expected_request = None if expected_request is None else validate_provider_request(expected_request)
     channel.validate_deadline(deadline)
     from .pi_core_source_observer import PiSourceObserver
     _require(type(source_observer) is PiSourceObserver, "PROVIDER_SOURCE_OBSERVER_REQUIRED")
@@ -353,6 +354,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         stage = "REQUEST"
         request = validate_provider_request(broker._read_frame(worker_connection, deadline))
         _require(request["activation_id"] == activation["activation_id"], "PROVIDER_REQUEST_ACTIVATION_REFUSED")
+        _require(expected_request is None or request == expected_request, "PROVIDER_PREPARED_REQUEST_REFUSED")
         guard()
         stage = "APPROVAL"
         control_fd = broker._open_protected_directory(config.control_root, 0, "provider control root")

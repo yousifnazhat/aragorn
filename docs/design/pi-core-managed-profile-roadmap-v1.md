@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-21 [provider custody checkpoint](../phase3/coordinator/pi-core-provider-custody-batch-21.md):
+the additive managed caller now joins held credential/public inputs, provider-only
+credential and exact-address properties, and one-shot approval publication bound
+to the authenticated activation before START. Root mediation uses the same held
+profile. Default startup remains unavailable. Installed inventories, genuine
+fresh observation/health, actual kernel filtering and credential view, existing
+five-second approval timing, recovery and the separately authorized useful pilot
+remain D2 prerequisites. Offline preparation is not effective enforcement proof.
+
 Batch-20 [owned-provider/protected-START checkpoint](../phase3/coordinator/pi-core-provider-start-batch-20.md):
 the native caller now has an additive v3 START and owned provider listener,
 exact prepared-payload approval binding, authenticated retirement before action

@@ -1,13 +1,16 @@
-"""One owned, credential-free service bootstrap in a controlled Linux VM.
+"""One owned service bootstrap in a controlled Linux VM.
 
 This operational context is never called on import. It starts exactly three
 fixed wrappers, accepts their post-exec channels, then stops only captured unit
 generations. It does not dispatch a provider request, initialize/rotate a grant,
-perform root-side grant recovery, enable Pi START, install credentials or qualify
+perform root-side grant recovery, enable Pi START or qualify
 loaded Python/effects/Phase 3. Read-only readiness is a pre-start snapshot; the
 action handler retains its independent role-local recovery and effect guards.
 Trusted root and the system manager are the TCB; empty manager-environment checks
 cannot make adversarial root changes atomic with process creation.
+The default remains credential-free and network-unavailable. An exact held
+credential optionally prepares only the provider service for a separately
+approved request; unit-property readback is not kernel egress qualification.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from __future__ import annotations
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 import fcntl
+import ipaddress
 import math
 import os
 from pathlib import Path
@@ -58,6 +62,8 @@ _STATE = tuple(sorted({*native._STATE, *_BASE, "ExecMainCode", "ExecMainStatus"}
 _EMPTY = {"EnvironmentFiles": "a(sb)", "LoadCredential": "a(ss)", "LoadCredentialEncrypted": "a(ss)",
     "SetCredential": "a(say)", "SetCredentialEncrypted": "a(say)", "TemporaryFileSystem": "a(ss)",
     **{name: "a(sasbttttuii)" for name in ("ExecCondition", "ExecStartPre", "ExecStartPost", "ExecStop", "ExecStopPost")}}
+_PROVIDER_EMPTY = {"ImportCredential": "as", "ImportCredentialEx": "a(ss)"}
+_CREDENTIAL_SOURCE = re.compile(r"/proc/[1-9][0-9]*/fd/(?:0|[1-9][0-9]*)\Z")
 
 
 class PiServiceLifecycleError(RuntimeError):
@@ -100,13 +106,101 @@ def _state(role, deadline):
 
 def _property(role, name, deadline):
     _require(role in ROLES and name in {*_EMPTY, "BindPaths", "BindReadOnlyPaths", "ExecStart",
-                                       "RuntimeMaxUSec", "TimeoutStopUSec"}, "unknown fixed service property")
+                                       "RuntimeMaxUSec", "TimeoutStopUSec", *_PROVIDER_EMPTY,
+                                       "IPAddressAllow", "IPAddressDeny"}, "unknown fixed service property")
     unit = _UNITS[role]
     path = "/org/freedesktop/systemd1/unit/" + unit.replace("-", "_2d").replace(".", "_2e")
     code, raw = native._command(("/usr/bin/busctl", "get-property", "org.freedesktop.systemd1", path,
         "org.freedesktop.systemd1.Service", name), deadline)
     _require(code == 0, "service property unavailable")
     return shlex.split(raw.decode("ascii"))
+
+
+def _guard_credential(credential, provider_inputs, deadline):
+    from .pi_core_provider_credential import PiProviderCredential
+    _require(type(credential) is PiProviderCredential and credential.provider_inputs is provider_inputs and
+             deadline <= credential.deadline, "provider credential custody or public-input join differs")
+    credential.guard(deadline=deadline)  # Descriptor metadata only; never read/hash the key here.
+    source = credential.source
+    _require(type(source) is str and _CREDENTIAL_SOURCE.fullmatch(source), "provider credential source is not held procfd")
+    return source
+
+
+def _credential_directory_absent(deadline):
+    """Observe the exact manager-owned credential path; never adopt/delete it."""
+    fds = []
+    try:
+        _remaining(deadline)
+        run = lineage._open_protected_root(Path("/run"), 0)
+        fds.append(run)
+        run_identity = broker._directory_identity(os.fstat(run))
+        try:
+            before = os.stat("credentials", dir_fd=run, follow_symlinks=False)
+        except FileNotFoundError:
+            _require(native._missing(run, "credentials"), "manager credential parent appeared")
+        else:
+            _require(stat.S_ISDIR(before.st_mode) and before.st_uid == before.st_gid == 0 and
+                     not stat.S_IMODE(before.st_mode) & 0o7022, "manager credential parent is not protected")
+            parent = os.open("credentials", _DIR, dir_fd=run)
+            fds.append(parent)
+            identity = broker._directory_identity(before)
+            _require(broker._directory_identity(os.fstat(parent)) == identity,
+                     "manager credential parent changed during open")
+            _require(native._missing(parent, _UNITS["provider"]), "manager provider credential directory is not absent")
+            _require(broker._directory_identity(os.stat("credentials", dir_fd=run, follow_symlinks=False)) ==
+                     identity == broker._directory_identity(os.fstat(parent)), "manager credential parent changed")
+        _require(broker._directory_identity(os.lstat("/run")) == run_identity ==
+                 broker._directory_identity(os.fstat(run)), "manager credential ancestry changed")
+        _remaining(deadline)
+    finally:
+        transport._close_installed(list(reversed(fds)))
+
+
+def _provider_manager_prerequisites(deadline):
+    """Known API prerequisites before exposing a credential to the manager.
+
+    This version floor covers ImportCredentialEx, not kernel BPF enforcement.
+    Exact per-unit properties still require the subsequent generation readback.
+    """
+    code, raw = native._command(("/usr/bin/busctl", "get-property", "org.freedesktop.systemd1",
+        "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", "Version"), deadline)
+    tokens = shlex.split(raw.decode("ascii"))
+    _require(code == 0 and len(tokens) == 2 and tokens[0] == "s", "provider manager version unavailable")
+    version = re.fullmatch(r"([1-9][0-9]{2,3})(?:[-.+~ ][A-Za-z0-9().+~_ -]{1,100})?", tokens[1])
+    _require(version is not None and int(version.group(1)) >= 257, "provider requires systemd 257 or newer")
+    _credential_directory_absent(deadline)
+
+
+def _credential_generation(service, deadline):
+    if service.provider_credential is not None:
+        _require(service.role == "provider" and _guard_credential(service.provider_credential,
+            service.provider_inputs, deadline) == service.credential_source, "provider credential generation changed")
+
+
+def _ip_rules(value):
+    """Parse bounded systemd Service a(iayu), with Linux family numbers.
+
+    Array order is not authority. Exact normalized rows reject extra hosts,
+    duplicate rules, broad prefixes, wrong families and malformed byte arrays.
+    """
+    _require(type(value) is list and len(value) >= 2 and value[0] == "a(iayu)" and
+             value[1] in {"1", "2"}, "provider IP property shape differs")
+    rows, offset = [], 2
+    for _ in range(int(value[1])):
+        _require(offset + 2 <= len(value) and value[offset] in {"2", "10"}, "provider IP family differs")
+        family = int(value[offset])
+        size = 4 if family == 2 else 16
+        _require(value[offset + 1] == str(size) and offset + size + 3 <= len(value), "provider IP byte count differs")
+        octets = value[offset + 2:offset + 2 + size]
+        prefix = value[offset + 2 + size]
+        _require(all(type(item) is str and re.fullmatch(r"0|[1-9][0-9]{0,2}", item) and int(item) <= 255
+                     for item in octets) and type(prefix) is str and
+                 re.fullmatch(r"0|[1-9][0-9]{0,2}", prefix) and int(prefix) <= size * 8,
+                 "provider IP bytes or prefix invalid")
+        rows.append((family, tuple(map(int, octets)), int(prefix)))
+        offset += size + 3
+    _require(offset == len(value) and len(set(rows)) == len(rows), "provider IP rules duplicated or trailing")
+    return tuple(sorted(rows))
 
 
 def _read_at(parent, name, uid, deadline, *, maximum=128 * 1024, mode=0o400):
@@ -189,6 +283,10 @@ class _Service:
     argv: tuple = ()
     scalar: dict = field(default_factory=dict)
     binds: dict = field(default_factory=dict)
+    provider_credential: object = None
+    provider_inputs: object = None
+    credential_source: str = ""
+    ip_rules: dict = field(default_factory=dict)
     started: bool = False
     start_attempted: bool = False
     pid: int = 0
@@ -234,6 +332,15 @@ def _plan(service, held):
     if role == "provider":
         ro.extend((held.provider_inputs.root / path, "/" + path) for path in
                   ("etc/aragorn/pi-provider-profile.json", "etc/aragorn/pi-provider-ca.pem"))
+        if held.provider_credential is not None:
+            service.provider_credential, service.provider_inputs = held.provider_credential, held.provider_inputs
+            service.credential_source = _guard_credential(held.provider_credential, held.provider_inputs, held.operation_deadline)
+            address = ipaddress.ip_address(held.provider_inputs.profile["address"])
+            family = 2 if address.version == 4 else 10  # Linux ABI, including when planned on macOS.
+            scalar.update(PrivateNetwork="no", RestrictAddressFamilies="AF_UNIX " +
+                          ("AF_INET" if address.version == 4 else "AF_INET6"))
+            service.ip_rules = {"IPAddressAllow": ((family, tuple(address.packed), address.max_prefixlen),),
+                "IPAddressDeny": ((2, (0,) * 4, 0), (10, (0,) * 16, 0))}
     scalar["ReadWritePaths"] = " ".join(target for _source, target in rw)
     service.scalar = scalar
     service.binds = {"BindReadOnlyPaths": ro, "BindPaths": rw}
@@ -241,6 +348,9 @@ def _plan(service, held):
     properties = {key: value for key, value in scalar.items() if key not in
                   {"Transient", "FragmentPath", "DropInPaths", "ControlPID"}}
     properties.update(Type="exec", RuntimeMaxSec="30", TimeoutStopSec="5")
+    if service.provider_credential is not None:
+        properties.update(LoadCredential="openai-api-key:" + service.credential_source,
+            IPAddressDeny="any", IPAddressAllow=str(address) + "/" + str(address.max_prefixlen))
     args = ["/usr/bin/systemd-run", "--quiet", "--no-block", "--collect", "--unit=" + _UNITS[role]]
     args.extend("--property=" + key + "=" + value for key, value in properties.items())
     for name, entries in service.binds.items():
@@ -253,8 +363,19 @@ def _readback(service, state, deadline):
     observed = {"scalar": service.scalar}
     for name, signature in _EMPTY.items():
         value = _property(service.role, name, deadline)
-        _require(value == [signature, "0"], "service contains unexpected hook/environment/credential")
+        expected = ([signature, "1", "openai-api-key", service.credential_source]
+                    if name == "LoadCredential" and service.provider_credential is not None else [signature, "0"])
+        _require(value == expected, "service contains unexpected hook/environment/credential")
         observed[name] = value
+    if service.provider_credential is not None:
+        for name, signature in _PROVIDER_EMPTY.items():
+            value = _property(service.role, name, deadline)
+            _require(value == [signature, "0"], "provider contains additional imported credentials")
+            observed[name] = value
+        for name, expected in service.ip_rules.items():
+            value = _ip_rules(_property(service.role, name, deadline))
+            _require(value == expected, "provider IP rules differ from exact approved address")
+            observed[name] = value
     for name, expected in (("RuntimeMaxUSec", "30000000"), ("TimeoutStopUSec", "5000000")):
         value = _property(service.role, name, deadline)
         _require(value == ["t", expected], "service lifetime bound differs")
@@ -275,7 +396,8 @@ def _readback(service, state, deadline):
     return canonical_digest(observed)
 
 
-def _generation(service, deadline, *, live=True):
+def _generation(service, deadline, *, live=True, credential_authority=True):
+    if credential_authority: _credential_generation(service, deadline)
     state = _state(service.role, deadline)
     terminal_identity = (not live and native._exited(service.pidfd) and state["MainPID"] == "0" and
                          state["ActiveState"] in {"inactive", "failed"} and state["InvocationID"] == "")
@@ -292,6 +414,7 @@ def _generation(service, deadline, *, live=True):
                  process._process_cgroup(service.pid) == service.plan.profile.cgroup and
                  process._cgroup_processes(service.plan.profile.cgroup) == (service.pid,), "service child identity changed")
     _remaining(deadline)
+    if credential_authority: _credential_generation(service, deadline)
 
 
 def _retired_provider_generation(service, deadline):
@@ -301,6 +424,7 @@ def _retired_provider_generation(service, deadline):
     generation checks; a dead provider must have no residual/replacement cgroup.
     systemd may already have collected this exact one-shot transient unit.
     """
+    _credential_generation(service, deadline)
     _require(service.role == "provider" and service.started and service.pidfd >= 0 and
              service.invocation and service.immutable_digest, "provider capture is incomplete")
     if not native._exited(service.pidfd):
@@ -401,9 +525,11 @@ def _consumed_sources(records, source_digests, role):
 
 
 class PiServiceLifecycle:
-    def __init__(self, seal, deployment, config, provider_inputs, binding, deadline, cleanup_seconds):
+    def __init__(self, seal, deployment, config, provider_inputs, binding, deadline, cleanup_seconds,
+                 provider_credential=None):
         _require(seal is _SEAL, "service lifecycle requires protected factory")
         self.deployment, self.configuration, self.provider_inputs = deployment, config, provider_inputs
+        self.provider_credential = provider_credential
         self.binding, self.deadline = binding, deadline
         self.operation_deadline = deadline - cleanup_seconds
         # Wrappers retain the original reserve for their finally blocks. Root
@@ -422,6 +548,11 @@ class PiServiceLifecycle:
             "credential_read": False, "loaded_code_verified": False, "phase3_exit_eligible": False,
             "cleanup": {"status": "PENDING"}}
         self._observation["trusted_source_startup"] = {}
+        if provider_credential is not None:
+            self._observation.update(provider_mode="CONTROLLED_CREDENTIAL_FIXED_ADDRESS",
+                provider_dispatched=None, credential_read=None,
+                credential_custody="METADATA_ONLY_NO_SECRET_READ",
+                provider_request_observation="NOT_OBSERVED_BY_LIFECYCLE", egress_filter_kernel_verified=False)
 
     @property
     def channels(self):
@@ -437,6 +568,8 @@ class PiServiceLifecycle:
         for value in (self.deployment, self.configuration, self.provider_inputs):
             _require(deadline <= value.deadline, "service inputs extend held deadline")
             value.guard(deadline=deadline)
+        if self.provider_credential is not None:
+            _guard_credential(self.provider_credential, self.provider_inputs, deadline)
 
     def _mkdir(self, path, uid=0, gid=0, mode=0o755):
         parent = self._fds[path.parent]
@@ -476,6 +609,11 @@ class PiServiceLifecycle:
             self._mkdir(_ROOT / role)
             self._mkdir(service.root)
             for relative in (*tree, "run/aragorn-pi-services/" + role): self._mkdir(service.root / relative)
+            if role == "provider" and self.provider_credential is not None:
+                # systemd supplies its private read-only credential mount here;
+                # never bind the original key or copy its bytes into this root.
+                self._mkdir(service.root / "run/credentials")
+                self._mkdir(service.root / "run/credentials" / _UNITS[role])
             # Fixed regular placeholders prevent systemd from modifying the
             # private skeleton to create file mountpoints after custody capture.
             leaves = [configuration.PATHS[role]]
@@ -509,11 +647,15 @@ class PiServiceLifecycle:
         self._ownership(self.operation_deadline)
         _require(native._absent(_state(role, self.operation_deadline)), "fixed service appeared before start")
         _manager_environment(self.operation_deadline)
+        if role == "provider" and self.provider_credential is not None:
+            _credential_directory_absent(self.operation_deadline)
         service.start_attempted = True
         code, _ = native._command(service.argv, self.operation_deadline)
         _require(code == 0, "one service start failed or is uncertain")
         service.started = True
         _capture(service, self.operation_deadline)
+        if self.provider_credential is not None:
+            self._inputs(self.operation_deadline)
         service.listener.settimeout(_remaining(self.operation_deadline))
         service.connection, _ = service.listener.accept()
         service.connection.set_inheritable(False)
@@ -604,6 +746,8 @@ class PiServiceLifecycle:
         for value in (self.configuration, self.provider_inputs):
             _require(bounded <= value.deadline, "service inputs extend held deadline")
             value.guard(deadline=bounded)
+        if self.provider_credential is not None:
+            _guard_credential(self.provider_credential, self.provider_inputs, bounded)
         self._ownership(bounded)
         retired = getattr(lease, "provider_retired", False)
         _require(type(retired) is bool, "provider retirement state differs")
@@ -630,7 +774,8 @@ class PiServiceLifecycle:
         state = _state(service.role, self.deadline)
         if not native._absent(state):
             dead = native._exited(service.pidfd)
-            _generation(service, self.deadline, live=not dead)
+            # Revoked request authority must not prevent exact owned teardown.
+            _generation(service, self.deadline, live=not dead, credential_authority=False)
             _require(not service.stop_attempted, "service stop is already attempted")
             service.stop_attempted = True
             code, _ = native._command(("/usr/bin/systemctl", "stop", "--no-block", _UNITS[service.role]), self.deadline)
@@ -638,7 +783,7 @@ class PiServiceLifecycle:
         while True:
             dead, state = native._exited(service.pidfd), _state(service.role, self.deadline)
             if dead and native._absent(state): break
-            _generation(service, self.deadline, live=not dead)
+            _generation(service, self.deadline, live=not dead, credential_authority=False)
             time.sleep(min(0.02, _remaining(self.deadline)))
         native._cgroup_empty(service)
         service.terminal = True
@@ -657,6 +802,10 @@ class PiServiceLifecycle:
             except BaseException as exc: failures.append(exc)
         try:
             _require(not failures, "service exit/custody cleanup hold")
+            if self.provider_credential is not None and self.services["provider"].start_attempted:
+                _require(self.services["provider"].terminal, "provider credential cleanup requires owned process exit")
+                _credential_directory_absent(self.deadline)
+                self._observation["provider_credential_cleanup"] = "MANAGER_DIRECTORY_ABSENT"
             self._ownership(self.deadline)
             if _ACTION in self._created:
                 _require(_ACTION in self._fds and native._missing(self._fds[_ACTION], "sensor.sock"),
@@ -710,7 +859,8 @@ class PiServiceLifecycle:
 
 @contextmanager
 def hold_native_pi_services(*, deployment, configuration: configuration.PiServiceConfiguration,
-                            provider_inputs, binding, deadline, cleanup_timeout_seconds=5.0):
+                            provider_inputs, binding, deadline, cleanup_timeout_seconds=5.0,
+                            provider_credential=None):
     transport.validate_deadline(deadline)
     _require(type(cleanup_timeout_seconds) in (int, float) and math.isfinite(cleanup_timeout_seconds) and
              0 < cleanup_timeout_seconds <= 5 and time.monotonic() < deadline - cleanup_timeout_seconds,
@@ -721,7 +871,8 @@ def hold_native_pi_services(*, deployment, configuration: configuration.PiServic
     _require(type(deployment) is provision.PiServiceRuntime and type(configuration) is PiServiceConfiguration and
              type(provider_inputs) is PiProviderInputs, "exact held service/runtime/public-input custody required")
     channels._binding(binding)
-    held = PiServiceLifecycle(_SEAL, deployment, configuration, provider_inputs, binding, deadline, cleanup_timeout_seconds)
+    held = PiServiceLifecycle(_SEAL, deployment, configuration, provider_inputs, binding, deadline, cleanup_timeout_seconds,
+                             provider_credential=provider_credential)
     failure = None
     try:
         native._prerequisites(held.operation_deadline)
@@ -739,6 +890,8 @@ def hold_native_pi_services(*, deployment, configuration: configuration.PiServic
                  "worker/grant service binding differs")
         _require(all(native._absent(_state(role, held.operation_deadline)) for role in ROLES), "fixed service already exists")
         _manager_environment(held.operation_deadline)
+        if provider_credential is not None:
+            _provider_manager_prerequisites(held.operation_deadline)
         held._observation["grant_readiness"] = _readiness(configuration.configurations, held.operation_deadline)
         held._prepare()
         held._start("action")
@@ -754,7 +907,8 @@ def hold_native_pi_services(*, deployment, configuration: configuration.PiServic
             deployment=deployment, deadline=held.operation_deadline, lifecycle_custody=held))
         _require(held._channels is lease, "channel factory did not join captured lifecycle")
         held.guard()
-        held._observation["status"] = "AUTHENTICATED_SERVICES_PROVIDER_UNAVAILABLE"
+        held._observation["status"] = ("AUTHENTICATED_SERVICES_PROVIDER_PREPARED" if provider_credential is not None
+                                       else "AUTHENTICATED_SERVICES_PROVIDER_UNAVAILABLE")
         yield held
         held.guard()  # A dead service during NO_REQUEST is not a successful bootstrap.
     except BaseException as exc:

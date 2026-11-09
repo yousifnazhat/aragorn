@@ -175,6 +175,15 @@ activation. Exact credential/egress/root-approval provisioning, changed installe
 inventories, recovery/timing and the authorized useful pilot remain D2 work.
 This offline wiring is not deployed provider availability or qualification.
 
+The [provider custody batch](docs/phase3/coordinator/pi-core-provider-custody-batch-21.md)
+adds the managed credential/egress/approval join while preserving unavailable
+defaults. It pins a key source without reading it, prepares provider-only exact
+unit properties, binds one absent-only approval to the authenticated activation
+before START, and uses the same protected public profile in root mediation.
+Actual installed inventories, fresh root observations/health, kernel filtering,
+credential delivery, startup/recovery/timing and the authorized useful pilot
+remain D2 prerequisites; configured properties are not enforcement proof.
+
 The original exit manifest remains unchanged and incomplete. Its evaluator
 requires 48 exact IDs, including 21 OpenClaw-specific update/reload routes;
 Pi's excluded surfaces cannot silently become their PASS or N/A. A versioned

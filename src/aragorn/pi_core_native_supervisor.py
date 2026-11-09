@@ -270,6 +270,8 @@ class _Owned:
     cgroup_identity: tuple = ()
     request_attempted: bool = False
     request_dispatch_active: bool = False
+    provider_attempted: bool = False
+    provider_dispatch_active: bool = False
 
 
 def _missing(parent: int, name: str) -> bool:
@@ -456,6 +458,8 @@ def _resource_ownership(owned: _Owned) -> None:
         expected = ["bootstrap.sock"] if owned.socket_identity else []
         if owned.request_dispatch_active:
             expected.append("requests")
+        if owned.provider_dispatch_active:
+            expected.append("provider")
         _require(sorted(os.listdir(owned.directory_fd)) == sorted(expected), "bootstrap namespace contains unowned residue")
         if owned.socket_identity:
             actual = os.stat("bootstrap.sock", dir_fd=owned.directory_fd, follow_symlinks=False)
@@ -471,6 +475,7 @@ def _cleanup(owned: _Owned, original_deadline: float, maximum_seconds: float = 5
     try:
         _remaining(deadline)
         _require(not owned.request_dispatch_active, "native request channel cleanup remains unresolved")
+        _require(not owned.provider_dispatch_active, "native provider channel cleanup remains unresolved")
         _resource_ownership(owned)
         if owned.source_observer is not None:
             from .pi_core_source_observer import PiSourceObserver
@@ -577,6 +582,7 @@ def run_native_pi_worker(
     identity_relay_connection: socket.socket | None = None,
     expected_identity_relay_peer: tuple[int, int, int] | None = None,
     request_channels=None,
+    provider_channels=None,
 ) -> dict:
     """Run one bootstrap and owned cleanup within the original <=30s deadline.
 
@@ -602,6 +608,15 @@ def run_native_pi_worker(
     if request_channels is not None:
         from .pi_core_native_request import PiNativeRequestChannels, PiNativeRequestError, hold_native_pi_request_dispatch
         _require(type(request_channels) is PiNativeRequestChannels, "invalid native request channel configuration")
+    provider_enabled = getattr(config, "provider_route_digest", None) is not None
+    _require(provider_enabled == (provider_channels is not None),
+             "protected provider mode and channels must be supplied together")
+    if provider_enabled:
+        from .pi_core_native_provider import PiNativeProviderChannels, hold_native_pi_provider_dispatch
+        _require(native_request and type(provider_channels) is PiNativeProviderChannels and
+                 request_channels is provider_channels.services.request_channels and
+                 getattr(config, "source_observation", None) is not None,
+                 "protected provider requires the same service lease and observed native worker")
     _require((identity_relay_connection is None) == (expected_identity_relay_peer is None),
              "identity channel and exact relay peer must be supplied together")
     if expected_identity_relay_peer is not None:
@@ -625,8 +640,12 @@ def run_native_pi_worker(
         cleanup = None
         identity_stack = ExitStack()
         request_stack = ExitStack()
+        provider_stack = ExitStack()
         request_dispatch = None
+        provider_dispatch = None
         request_close_attempted = False
+        provider_close_attempted = False
+        provider_observation = {"status": "PENDING" if provider_enabled else "NOT_REQUESTED"}
         request_observation = {"status": "NOT_REQUESTED" if request_channels is None else "PENDING"}
         identity_publication = {"authority": IDENTITY_AUTHORITY,
             "status": "NOT_REQUESTED" if identity_relay_connection is None else "PENDING"}
@@ -643,9 +662,21 @@ def run_native_pi_worker(
                 if request_dispatch is not None:
                     request_observation = request_dispatch.observation
 
+        def close_provider_dispatch():
+            nonlocal provider_close_attempted, provider_observation
+            if provider_close_attempted:
+                return
+            provider_close_attempted = True
+            try:
+                provider_stack.close()
+            finally:
+                if provider_dispatch is not None:
+                    provider_observation = provider_dispatch.observation
+
         def before_release():
             # Descriptor/result and listener cleanup must precede RELEASE.
             close_request_dispatch()
+            close_provider_dispatch()
             revoke_identity()
 
         def register_identity(document):
@@ -690,6 +721,10 @@ def run_native_pi_worker(
                 request_dispatch = request_stack.enter_context(hold_native_pi_request_dispatch(
                     owned, request_channels, grant=grant, protected_root=protected_root,
                     deadline=operation_deadline, cleanup_deadline=deadline))
+            if provider_enabled:
+                provider_dispatch = provider_stack.enter_context(hold_native_pi_provider_dispatch(
+                    owned, provider_channels, grant=grant, protected_root=protected_root,
+                    deadline=operation_deadline, cleanup_deadline=deadline))
             owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
             _require(owned.unit_absence_observed, "Pi unit appeared before exclusive start")
             owned.start_attempted = True
@@ -724,6 +759,8 @@ def run_native_pi_worker(
                 exchange_options["on_before_release"] = before_release
             if request_dispatch is not None:
                 exchange_options["read_result"] = request_dispatch.read_bootstrap_result
+            if provider_dispatch is not None:
+                exchange_options["provider_dispatch"] = provider_dispatch
             observation = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
         except Exception as exc:
             if request_channels is not None and isinstance(exc, PiNativeRequestError) and hasattr(exc, "observation"):
@@ -732,6 +769,10 @@ def run_native_pi_worker(
         finally:
             try:
                 close_request_dispatch()
+            except Exception as exc:
+                failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
+            try:
+                close_provider_dispatch()
             except Exception as exc:
                 failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
             try:
@@ -748,6 +789,7 @@ def run_native_pi_worker(
             "authority": "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
             "status": "CLEANUP_HOLD" if cleanup["status"] == "CLEANUP_HOLD" or
                        request_observation.get("cleanup") == "CLEANUP_HOLD" or
+                       provider_observation.get("cleanup") == "CLEANUP_HOLD" or
                        identity_publication["status"] == "HOLD_UNCONFIRMED" else
                       "BOOTSTRAP_COMPLETE" if observation is not None and
                        identity_publication["status"] in {"NOT_REQUESTED", "REVOKED"} else "REFUSED",
@@ -758,6 +800,7 @@ def run_native_pi_worker(
                                   if owned.activation_raw is not None else None,
             "bootstrap": observation, "identity_registration": dict(identity_publication),
             "request_channel": request_observation,
+            "provider_channel": provider_observation,
             "source_observation": None if owned.source_observer is None else {
                 "profile_digest": plan.source_observation_digest,
                 "closed": owned.source_observer_closed,

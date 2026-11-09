@@ -40,6 +40,7 @@ _PATH = re.compile(r"/[A-Za-z0-9_./-]+\Z")
 _MAX_FRAME = 64 * 1024
 _BOOTSTRAP = "/run/aragorn-pi-bootstrap/bootstrap.sock"
 _NATIVE_REQUEST = "/run/aragorn-pi-bootstrap/requests/request.sock"
+_NATIVE_PROVIDER = "/run/aragorn-pi-bootstrap/provider/provider.sock"
 _RUNTIME = "/opt/aragorn/pi-runtime"
 _ADMITTED = Path("/var/lib/aragorn/admitted")
 _EMPTY_MOUNTPOINTS = ("dev", "proc", "sys", "tmp", "var/tmp",
@@ -69,11 +70,13 @@ class PiConfinedLaunchConfig:
     native_request: bool = False
     source_observation: Mapping | None = None
     source_observation_digest: str | None = None
+    provider_route_digest: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.native_request) is not bool:
             raise PiConfinedLaunchError("native request mode must be an explicit boolean")
         _source_observation(self.source_observation, self.source_observation_digest)
+        _provider_profile(self)
 
 
 @dataclass(slots=True)
@@ -183,6 +186,21 @@ def _native_request_endpoint(config: PiConfinedLaunchConfig) -> dict:
             "worker_gid": config.worker_gid, "supervisor_uid": 0, "max_requests": 1}
 
 
+def _provider_profile(config: PiConfinedLaunchConfig) -> dict | None:
+    """Explicit pinned opt-in only; this is configuration, not readiness proof."""
+    if config.provider_route_digest is None:
+        return None
+    _require_digest(config.provider_route_digest, "protected provider route")
+    _require(config.native_request and config.source_observation is not None,
+             "protected provider requires native requests and source observation")
+    _exact(config.limits, {"maxTurns", "maxToolCalls", "maxRunMs"}, "limits")
+    _uint(config.limits["maxTurns"], 1, 1, "protected provider turn budget")
+    _uint(config.limits["maxToolCalls"], 1, 1, "protected provider tool budget")
+    _uint(config.limits["maxRunMs"], 1, 30_000, "protected provider request timeout")
+    return {"route_digest": config.provider_route_digest, "max_requests": 1,
+            "request_timeout_ms": config.limits["maxRunMs"]}
+
+
 def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
     _require(type(config.native_request) is bool, "invalid native request mode")
     _require(_ID.fullmatch(prepared.activation_id) is not None, "invalid activation ID")
@@ -218,7 +236,7 @@ def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
     _require(_PATH.fullmatch(socket_path) is not None and
              all(part not in ("", ".", "..") for part in socket_path.split("/")[1:]) and
              not any(Path(endpoint).is_relative_to(Path(socket_path))
-                     for endpoint in (_BOOTSTRAP, _NATIVE_REQUEST)),
+                     for endpoint in (_BOOTSTRAP, _NATIVE_REQUEST, _NATIVE_PROVIDER)),
              "invalid relay socket path or overlap with protected Pi endpoints")
     start = {
         "schema": "aragorn/pi-core-bootstrap-start/v2" if config.native_request else
@@ -231,6 +249,10 @@ def _start(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle) -> bytes:
         start["native_request"] = _native_request_endpoint(config)
     else:
         start["relay"] = config.relay
+    provider = _provider_profile(config)
+    if provider is not None:
+        start.update(schema="aragorn/pi-core-bootstrap-start/v3",
+                     provider_status="PROTECTED", provider=provider)
     raw = canonical_json(start)
     _require(len(raw) <= _MAX_FRAME, "bootstrap START exceeds frame limit")
     return raw
@@ -261,6 +283,10 @@ def confined_configuration_digest(config: PiConfinedLaunchConfig) -> str:
         document["schema"] = "aragorn/pi-core-confined-configuration/v3"
         document["source_observation"] = config.source_observation
         document["source_observation_digest"] = config.source_observation_digest
+    provider = _provider_profile(config)
+    if provider is not None:
+        document.update(schema="aragorn/pi-core-confined-configuration/v4",
+                        provider_status="PROTECTED", provider=provider)
     return canonical_digest(document)
 
 
@@ -498,8 +524,9 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
                                   connection: socket.socket, *, expected_pid: int,
                                   on_activation: Callable[[dict], None] | None = None,
                                   on_before_release: Callable[[], None] | None = None,
-                                  read_result: Callable[[socket.socket, float], dict] | None = None) -> dict:
-    """Bind an already-launched child and exchange only provider-unavailable status.
+                                  read_result: Callable[[socket.socket, float], dict] | None = None,
+                                  provider_dispatch=None) -> dict:
+    """Bind an already-launched child and exchange bounded bootstrap status.
 
     Caller must supply its trusted MainPID and the accepted post-exec socket;
     bind_pi_worker_activation authenticates peer credentials/PIDFD/profile. The
@@ -516,6 +543,17 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
     _require(on_activation is None or callable(on_activation), "invalid local activation observer")
     _require(on_before_release is None or callable(on_before_release), "invalid local prerelease observer")
     _require(read_result is None or callable(read_result), "invalid protected result reader")
+    start = _parse_canonical_document(plan.start_bytes, "Pi prepared START")
+    enabled = start.get("schema") == "aragorn/pi-core-bootstrap-start/v3"
+    if enabled:
+        from .pi_core_native_provider import PiNativeProviderDispatch
+        _require(type(provider_dispatch) is PiNativeProviderDispatch and
+                 provider_dispatch.owned.plan is plan,
+                 "protected START requires its exact held native provider dispatch")
+        _require(on_activation is not None and on_before_release is not None and
+                 read_result is not None, "protected START requires native lifecycle ownership")
+    else:
+        _require(provider_dispatch is None, "unavailable START cannot enable provider dispatch")
     plan._lease.exchange_attempted = True
     _uint(expected_pid, 1, 0xffffffff, "trusted child PID")
     _deadline(plan.deadline)
@@ -533,15 +571,24 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
         activation_path=plan.activation_path)
     if on_activation is not None:
         on_activation(json.loads(canonical_json(activation)))
+    if enabled:
+        # Fix one protected-work interval outside the worker. Provider/action
+        # dispatch and the remaining bootstrap exchange share this exact bound;
+        # an independently reset client clock cannot extend native authority.
+        deadline = min(deadline, time.monotonic() + start["limits"]["maxRunMs"] / 1000)
+        provider_dispatch.require_start(activation, deadline=deadline)
     _send_frame(connection, plan.start_bytes, deadline)
     # Only the trusted native caller can supply this local dispatcher. It lets
     # an independently framed request complete while bootstrap remains alive;
     # no callback or dispatch authority is accepted from START or worker bytes.
     result = (_read_bootstrap if read_result is None else read_result)(connection, deadline)
-    expected = {"schema": "aragorn/pi-core-bootstrap-result/v1",
-                "activation_id": plan.prepared.activation_id,
-                "status": "PROVIDER_UNAVAILABLE", "authority": _RESULT_AUTHORITY}
-    _require(result == expected, "unexpected Pi bootstrap result; no effect authority is supported")
+    if enabled:
+        _validate_provider_result(result, activation_id=plan.prepared.activation_id)
+    else:
+        expected = {"schema": "aragorn/pi-core-bootstrap-result/v1",
+                    "activation_id": plan.prepared.activation_id,
+                    "status": "PROVIDER_UNAVAILABLE", "authority": _RESULT_AUTHORITY}
+        _require(result == expected, "unexpected Pi bootstrap result; no effect authority is supported")
     # Protected identity registration must be revoked while the authenticated
     # worker is still alive, before RELEASE permits its expected exit.
     if on_before_release is not None:
@@ -552,3 +599,27 @@ def exchange_prepared_pi_bootstrap(plan: PiConfinedLaunchPlan,
             "activation_digest": canonical_digest(activation), "result": result,
             "release_sent": True, "process_exit_observed": False,
             "activation_withdrawn": False, "native_cleanup_verified": False}
+
+
+def _validate_provider_result(result: Mapping, *, activation_id: str) -> None:
+    """Validate worker correlation only, never substitute it for native evidence."""
+    _exact(result, {"schema", "activation_id", "status", "authority", "worker"}, "provider bootstrap result")
+    _require(result["schema"] == "aragorn/pi-core-bootstrap-result/v2" and
+             result["activation_id"] == activation_id and result["authority"] == _RESULT_AUTHORITY,
+             "invalid protected bootstrap identity or authority")
+    worker = result["worker"]
+    _exact(worker, {"status", "stop_reason", "provider_calls", "tool_calls",
+                    "agent_settled", "transcript_complete"}, "worker summary")
+    _require(worker["status"] in ("COMPLETED", "STOPPED") and
+             result["status"] == "WORKER_" + worker["status"], "inconsistent worker completion status")
+    for name in ("provider_calls", "tool_calls"):
+        _uint(worker[name], 0, 1, name)
+    for name in ("agent_settled", "transcript_complete"):
+        _require(type(worker[name]) is bool, "invalid worker settlement summary")
+    if worker["status"] == "COMPLETED":
+        _require(worker["stop_reason"] is None and worker["provider_calls"] == 1 and
+                 worker["agent_settled"], "incomplete worker cannot report completion")
+    else:
+        _text(worker["stop_reason"], 128, "worker stop reason")
+    _require(not worker["transcript_complete"] or worker["agent_settled"],
+             "unsettled worker cannot report complete transcript")

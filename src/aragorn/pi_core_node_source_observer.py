@@ -295,6 +295,14 @@ class _NodeSession:
                          dispatch.active and not dispatch.closed, "NODE_REQUEST_CUSTODY")
                 dispatch._ownership()
                 listeners.append(dispatch.listener)
+            provider = getattr(self.owned, "_pi_provider_dispatch", None)
+            if provider is not None:
+                from .pi_core_native_provider import PiNativeProviderDispatch
+                _require(type(provider) is PiNativeProviderDispatch and provider.owned is self.owned and
+                         provider.active and not provider.closed and self.owned.provider_dispatch_active,
+                         "NODE_PROVIDER_CUSTODY")
+                provider._ownership()
+                listeners.append(provider.listener)
             _require(any(type(listener) is socket.socket and listener.fileno() >= 0 and
                          connection.getpeername() == listener.getsockname() for listener in listeners),
                      "NODE_UNOWNED_ROOT_ENDPOINT")

@@ -1,8 +1,8 @@
 """One-shot native Pi request routing under the supervisor's held custody.
 
-No provider, legacy endpoint or service launcher is enabled here. The fixed new
-socket lives beneath the already projected bootstrap directory. Native bootstrap
-currently produces no requests; NO_REQUEST is not a useful-task qualification.
+No legacy endpoint or service launcher is enabled here. Fixed sockets live
+beneath the already projected bootstrap directory. Provider-enabled START uses
+the separately held provider owner; NO_REQUEST is not useful-task qualification.
 Borrowed supervisor/worker/control handles are never closed by this module.
 """
 
@@ -69,6 +69,21 @@ def _plan(owned, deadline):
     return plan
 
 
+def _provider_dispatch(owned):
+    start = broker._parse_canonical_document(owned.plan.start_bytes, "held Pi START")
+    dispatch = getattr(owned, "_pi_provider_dispatch", None)
+    if start.get("provider_status") != "PROTECTED":
+        _require(dispatch is None and not owned.provider_dispatch_active,
+                 "unavailable START has provider custody")
+        return None
+    from .pi_core_native_provider import PiNativeProviderDispatch
+    _require(type(dispatch) is PiNativeProviderDispatch and dispatch.owned is owned and
+             owned.provider_dispatch_active and dispatch.active and not dispatch.closed,
+             "protected START lost its exact provider custody")
+    dispatch._ownership()
+    return dispatch
+
+
 def _channels(owned, config, deadline, request_connection=None):
     _plan(owned, deadline)
     _require(type(config) is PiNativeRequestChannels and type(config.binding) is worker.RuntimeActionWorkerBinding,
@@ -95,6 +110,9 @@ def _channels(owned, config, deadline, request_connection=None):
     dispatch = getattr(owned, "_pi_request_dispatch", None)
     if type(dispatch) is PiNativeRequestDispatch and dispatch.listener is not None:
         connections.append(dispatch.listener)
+    provider = getattr(owned, "_pi_provider_dispatch", None)
+    if provider is not None and provider.listener is not None:
+        connections.append(provider.listener)
     descriptors = [connection.fileno() for connection in connections]
     _require(all(type(fd) is int and fd >= 0 for fd in descriptors) and
              len(set(descriptors)) == len(descriptors) and len({id(connection) for connection in connections}) == len(connections),
@@ -140,6 +158,9 @@ class PiNativeRequestCustody:
                  owned.request_dispatch_active and getattr(owned, "_pi_request_dispatch", None) is self._dispatch,
                  "native request custody was withdrawn or changed")
         _channels(owned, self._channels, self._deadline, self._request)
+        provider = _provider_dispatch(owned)
+        if provider is not None:
+            provider.require_completed(deadline=self._deadline)
         self._dispatch._ownership()
         native._same_generation(owned, native._unit_state(owned.plan.unit_name, self._deadline), self._deadline, live=True)
         _require(identity.read_activation(owned.plan.activation_path) == self._activation,
@@ -297,9 +318,16 @@ class PiNativeRequestDispatch:
         while True:
             _plan(self.owned, deadline)
             self._ownership()
-            ready, _, _ = select.select([connection, self.listener], [], [], native._remaining(deadline))
+            provider = _provider_dispatch(self.owned)
+            handles = [connection, self.listener] + ([] if provider is None else [provider.listener])
+            ready, _, _ = select.select(handles, [], [], native._remaining(deadline))
             _require(ready, "native request/bootstrap deadline expired")
+            if provider is not None and provider.listener in ready:
+                provider.serve_once(deadline)
+                continue
             if self.listener in ready:
+                if provider is not None:
+                    provider.require_completed(deadline=deadline)
                 _require(not self.owned.request_attempted and not self._observation["request_attempted"],
                          "native request limit reached; no retry")
                 self.listener.settimeout(native._remaining(deadline))
@@ -328,7 +356,13 @@ class PiNativeRequestDispatch:
                     self._close_accepted()
                 continue
             _require(connection in ready, "native request selector returned an unknown handle")
-            return confined._read_bootstrap(connection, deadline)
+            result = confined._read_bootstrap(connection, deadline)
+            if provider is not None and result.get("status") == "WORKER_COMPLETED":
+                provider.require_completed(deadline=deadline)
+                if result.get("worker", {}).get("tool_calls") == 1:
+                    _require(self._observation["status"] == "REQUEST_RETURNED",
+                             "worker completion lacks native request completion")
+            return result
 
     def close(self):
         if self.closed:

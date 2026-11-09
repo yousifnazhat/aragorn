@@ -37,6 +37,8 @@ def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_r
     """
     _require(type(config) is PiConfinedLaunchConfig and config.native_request is True,
              "managed service bootstrap requires the protected native request mode")
+    _require(config.provider_route_digest is None,
+             "provider-enabled lifecycle requires separately prepared credential, egress and approval custody")
     _require(type(profile) is process.RuntimeProcessProfile and
              type(binding) is RuntimeActionWorkerBinding,
              "exact worker profile and binding required")

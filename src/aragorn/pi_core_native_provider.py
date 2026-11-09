@@ -47,6 +47,7 @@ def _require(value, reason):
 class PiNativeProviderChannels:
     config: broker.RuntimeActionBrokerConfig
     services: PiServiceChannels
+    approval: object = None
 
 
 def _expected_request(plan):
@@ -113,6 +114,13 @@ class PiNativeProviderDispatch:
                  type(config) is broker.RuntimeActionBrokerConfig and config.expected_broker_uid == 0,
                  "native provider requires the exact owned service lifetime and root policy")
         broker._validate_config(config)
+        if self.channels.approval is not None:
+            from .pi_core_provider_approval import PiProviderApproval
+            approval = self.channels.approval
+            _require(type(approval) is PiProviderApproval and approval.config == config and
+                     approval.route_digest == self._expected["route_digest"],
+                     "native provider approval differs from held routing")
+            approval.guard(deadline=deadline)
         _require(self.protected_root == Path("/var/lib/aragorn/admitted") and
                  (config.expected_runtime_uid, config.expected_runtime_gid) == (plan.worker_uid, plan.worker_gid) and
                  config.expected_runtime_digest == plan.profile.runtime_digest,
@@ -243,6 +251,8 @@ class PiNativeProviderDispatch:
                  "native provider START already consumed")
         current, pins, observer = self._custody(deadline)
         _require(activation == current, "provider START activation differs from authenticated capture")
+        if self.channels.approval is not None:
+            self.channels.approval.bind(self._expected, current, deadline=deadline)
         self._activation, self._pins, self._observer = current, pins, observer
         self.deadline = deadline  # The START caller anchors maxRunMs once; never renew it.
         # Dynamic provider source loads after START. Full health is mandatory at

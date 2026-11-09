@@ -277,6 +277,23 @@ def _service_custody_guard(custody, connection, peer, deadline, *, terminal=Fals
     custody.guard(deadline=deadline)
 
 
+def _service_profile(custody, deadline):
+    from . import pi_core_openai_transport as transport
+    if custody is None:
+        return transport.read_profile()
+    from .pi_core_service_channels import PiServiceChannels
+    from .pi_core_service_lifecycle import PiServiceLifecycle
+    from .pi_core_service_configuration import PiProviderInputs
+    _require(type(custody) is PiServiceChannels and
+             type(custody._lifecycle) is PiServiceLifecycle,
+             "PROVIDER_PROFILE_LIFETIME_REFUSED")
+    held = custody._lifecycle.provider_inputs
+    _require(type(held) is PiProviderInputs and deadline <= custody.deadline,
+             "PROVIDER_PROFILE_CUSTODY_REFUSED")
+    held.guard(deadline=deadline)
+    return _copy(held.profile)
+
+
 def handle_pi_provider_connection(worker_connection, provider_connection, config, *, activation_path,
         profile, protected_install_root, grant, expected_provider_peer, deadline,
         provider_service=False, service_custody=None, source_observer=None, expected_request=None):
@@ -372,9 +389,8 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         if provider_service:
             # Local imports preserve the v1 path and avoid a codec/validator cycle.
             from . import pi_core_openai_responses as codec
-            from . import pi_core_openai_transport as transport
             from . import pi_core_provider_service as service
-            service_profile = transport.read_profile()
+            service_profile = _service_profile(service_custody, deadline)
             _require((service_profile["service_uid"], service_profile["service_gid"]) == peer[1:],
                      "PROVIDER_SERVICE_PROFILE_ROLE_REFUSED")
             wire = codec.wire_descriptor(request, approval["route"], service_profile)
@@ -456,7 +472,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
                 # Reuse the held identity/lineage/lock and durable one-use claim;
                 # never turn the initial ALLOW into a cached network permission.
                 guard()
-                _require(read_approval() == approval and transport.read_profile() == service_profile,
+                _require(read_approval() == approval and _service_profile(service_custody, deadline) == service_profile,
                          "PROVIDER_APPROVAL_OR_PROFILE_CHANGED")
                 started = time.monotonic()
                 fresh_wall = _wall_time()

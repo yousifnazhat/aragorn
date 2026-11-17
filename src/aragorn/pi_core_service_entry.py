@@ -2,13 +2,16 @@
 
 The lifecycle owner provisions the protected files/directories and root listeners
 before executing one reviewed wrapper under its final nonroot identity. Channels
-are connected after exec, never inherited root-created socketpairs. No grant is
-initialized, service restarted, endpoint retried, or worker START enabled here.
+are connected after exec, never inherited root-created socketpairs. Only the
+fixed authenticated preparation command can invoke the existing grant initializer;
+normal request startup never initializes it. No endpoint is retried or worker
+START enabled here.
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
+import json
 import math
 import os
 from pathlib import Path
@@ -53,6 +56,78 @@ SOURCE_STARTUP_SCHEMA = "aragorn/pi-core-service-source-startup/v1"
 SOURCE_PACKET_LIMIT = 64 * 1024
 _SOURCE_CHALLENGE_FIELDS = {"schema", "kind", "role", "nonce", "runtime_closure_digest",
                           "binding_digest", "source_inventory_digest"}
+ACTION_START_SCHEMA = "aragorn/pi-core-action-start/v1"
+ACTION_START_FIELDS = {"schema", "kind", "nonce", "configuration_digest", "grant_digest", "deadline_ns"}
+
+
+def validate_action_start(document, *, configuration_digest, grant_digest, deadline):
+    """A fixed locally authorized action startup choice, never negotiation."""
+    _remaining(deadline)
+    _require(type(document) is dict and set(document) == ACTION_START_FIELDS and
+             document["schema"] == ACTION_START_SCHEMA and
+             type(document["kind"]) is str and document["kind"] in {"RUN_REQUEST", "PREPARE_GRANT"} and
+             type(document["nonce"]) is str and re.fullmatch(r"[0-9a-f]{64}", document["nonce"]) is not None)
+    for key, expected in (("configuration_digest", configuration_digest), ("grant_digest", grant_digest)):
+        _require(type(expected) is str and channel._DIGEST.fullmatch(expected) is not None and
+                 document[key] == expected)
+    _require(type(document["deadline_ns"]) is int and 0 < document["deadline_ns"] < 2**63 and
+             time.monotonic_ns() < document["deadline_ns"] <= math.floor(deadline * 1_000_000_000))
+    _require(len(canonical_json(document)) <= SOURCE_PACKET_LIMIT)
+    return json.loads(canonical_json(document))
+
+
+def validate_preparation_result(result, *, grant_digest):
+    """Retain the actual initializer result, including existing terminal state.
+
+    AVAILABLE and an independent locked readback are separate root requirements;
+    a well-formed result alone is neither service readiness nor effect authority.
+    """
+    _require(type(result) is dict and set(result) == {"schema", "authority", "status", "grant_digest",
+             "state_digest", "activation_performed", "service_ready", "phase3_exit_eligible"} and
+             result["schema"] == "aragorn/pi-core-request-service-preparation/v1" and
+             result["authority"] == "DURABLE_GRANT_PREPARATION_NOT_ADMISSION_OR_SERVICE_READINESS" and
+             type(result["status"]) is str and result["status"] in {"AVAILABLE", "CONSUMED", "ABANDONED", "EXPIRED"} and
+             type(grant_digest) is str and channel._DIGEST.fullmatch(grant_digest) is not None and
+             result["grant_digest"] == grant_digest and type(result["state_digest"]) is str and
+             channel._DIGEST.fullmatch(result["state_digest"]) is not None and
+             all(result[key] is False for key in ("activation_performed", "service_ready", "phase3_exit_eligible")))
+    return json.loads(canonical_json(result))
+
+
+def _action_root_peer(root, supervisor_pid, deadline, deadline_ns=None):
+    _remaining(deadline)
+    _require(tuple(broker._peer_credentials(root)) == (supervisor_pid, 0, 0))
+    if deadline_ns is not None:
+        _require(time.monotonic_ns() < deadline_ns)
+
+
+def _action_start(root, value, supervisor_pid, deadline):
+    _action_root_peer(root, supervisor_pid, deadline)
+    command, _ = channel.receive_authenticated_packet(root, (supervisor_pid, 0, 0), deadline,
+        expected_rights=0, max_bytes=SOURCE_PACKET_LIMIT)
+    command = validate_action_start(command, configuration_digest=canonical_digest(value),
+        grant_digest=canonical_digest(value["capability_grant"]), deadline=deadline)
+    # As with wrapper argv, never round the integer authorization upward.
+    bounded = min(deadline, math.nextafter(command["deadline_ns"] / 1_000_000_000, 0.0))
+    _action_root_peer(root, supervisor_pid, bounded, command["deadline_ns"])
+    return command, bounded
+
+
+def _prepare_action(root, value, config, command, supervisor_pid, deadline):
+    _action_root_peer(root, supervisor_pid, deadline, command["deadline_ns"])
+    _identity(value)  # No root-side UID substitution or privilege transition.
+    result = action.initialize_pi_broker_request_service(config, deadline=deadline)
+    result = validate_preparation_result(result, grant_digest=command["grant_digest"])
+    _identity(value)
+    _action_root_peer(root, supervisor_pid, deadline, command["deadline_ns"])
+    prepared = {**command, "kind": "PREPARED", "result": result}
+    channel.send_authenticated_packet(root, prepared, deadline, max_bytes=SOURCE_PACKET_LIMIT)
+    _action_root_peer(root, supervisor_pid, deadline, command["deadline_ns"])
+    acknowledged, _ = channel.receive_authenticated_packet(root, (supervisor_pid, 0, 0), deadline,
+        expected_rights=0, max_bytes=SOURCE_PACKET_LIMIT)
+    _require(acknowledged == {**command, "kind": "ACK", "result_digest": canonical_digest(result)})
+    _action_root_peer(root, supervisor_pid, deadline, command["deadline_ns"])
+    return result
 
 
 def _source_handshake(root, role, supervisor_pid, deadline, source_loader):
@@ -402,9 +477,15 @@ def run(role, argv, *, source_loader=None):
         if role == "provider":
             result = provider.handle_pi_provider_service(root, expected_supervisor_pid=supervisor_pid, deadline=deadline)
         elif role == "action":
-            with _accept_sensor(value, deadline) as peer:
-                result = action.handle_pi_broker_request(root, peer, config,
-                    expected_supervisor_pid=supervisor_pid, deadline=deadline, **terminal)
+            command = None
+            if source_loader is not None:
+                command, deadline = _action_start(root, value, supervisor_pid, deadline)
+            if command is not None and command["kind"] == "PREPARE_GRANT":
+                result = _prepare_action(root, value, config, command, supervisor_pid, deadline)
+            else:
+                with _accept_sensor(value, deadline) as peer:
+                    result = action.handle_pi_broker_request(root, peer, config,
+                        expected_supervisor_pid=supervisor_pid, deadline=deadline, **terminal)
         else:
             broker_identity = value["identities"]["action"]
             with _connect(ACTION_SOCKET, socket.SOCK_STREAM,

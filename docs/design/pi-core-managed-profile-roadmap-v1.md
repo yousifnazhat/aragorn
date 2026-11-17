@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-29 [explicit broker-preparation checkpoint](../phase3/coordinator/pi-core-broker-preparation-batch-29.md):
+the protected root caller now prepares the admitted grant through the existing
+action service, with authenticated command/result, independent locked readback
+and owned cleanup. Ordinary requests never initialize grants. All 111 distinct
+new/affected checks passed; only the 14-check wrapper stage reran after correcting
+a fixture privacy assertion, with its failed fingerprint retained. No live
+operation ran. Fresh base controls, separate provider controls, genuine health,
+installed views, raw action evidence/full timing and authorized pilot remain.
+
 Batch-28 [action/sensor terminal checkpoint](../phase3/coordinator/pi-core-terminal-lifetime-batch-28.md):
 the managed source-verified path uses additive v2 DONE/ACK barriers and atomic
 action/sensor retirement before terminal release. V1 defaults remain unchanged;

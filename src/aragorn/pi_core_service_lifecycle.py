@@ -1,6 +1,6 @@
 """One owned service bootstrap in a controlled Linux VM.
 
-This operational context is never called on import. It starts exactly three
+These operational callers are never called on import. Normal startup starts three
 fixed wrappers, accepts their post-exec channels, then stops only captured unit
 generations. It does not dispatch a provider request, initialize/rotate a grant,
 perform root-side grant recovery, enable Pi START or qualify
@@ -11,6 +11,9 @@ cannot make adversarial root changes atomic with process creation.
 The default remains credential-free and network-unavailable. An exact held
 credential optionally prepares only the provider service for a separately
 approved request; unit-property readback is not kernel egress qualification.
+Separate explicit broker preparation starts only the same protected action
+service and invokes its existing grant initializer, never root-side authority
+fabrication or automatic initialization during normal startup.
 """
 
 from __future__ import annotations
@@ -226,18 +229,53 @@ def _read_at(parent, name, uid, deadline, *, maximum=128 * 1024, mode=0o400):
 
 def _readiness(configs, deadline):
     """Read-only AVAILABLE/journal freshness check before any service start."""
+    record = _broker_control_snapshot(configs, deadline, require_available=True)
+    return {"grant_digest": record["grant_digest"], "state_digest": record["state_digest"], "read_only": True}
+
+
+def _broker_control_snapshot(configs, deadline, *, require_available):
+    """Observe existing controls only; never initialize, migrate or recover.
+
+    Preparation's preflight permits an absent or terminal grant without reading
+    or changing it. Positive readback retains the original AVAILABLE/no-current-
+    receipt/archive checks. Every descriptor is owned here and closed once.
+    """
+    _require(type(require_available) is bool, "fixed broker snapshot mode required")
     selected = configs["action"]
     uid, gid = (selected["identities"]["action"][name] for name in ("uid", "gid"))
     grant = capability.parse_runtime_capability_grant(canonical_json(selected["capability_grant"]), int(time.time()))
     digest = canonical_digest(grant)
     descriptors, lock_fd, locked = [], -1, False
+    failure = None
+    record = {"schema": "aragorn/pi-core-broker-control-readback/v1", "status": "INCOMPLETE",
+        "grant_digest": digest, "base_state": None, "base_state_digest": None,
+        "grant_state": None, "state_digest": None, "root_identities": {}, "read_only": True,
+        "owned_handles_closed": False, "reader_cleanup_unknown": False, "acquisition_cleanup_unknown": False}
+
+    def read(name, label):
+        try:
+            raw = _read_at(control, name, uid, deadline)
+        except BaseException:
+            # The existing reader owns an internal descriptor until return;
+            # an exception may be its failed finally-close. Do not guess/retry.
+            record["reader_cleanup_unknown"] = True
+            raise
+        return broker._parse_canonical_document(raw, label)
+
     try:
         for leaf, mode in (("control", 0o710), ("protected", 0o710), ("staging", 0o700)):
             path = entry.EFFECT_ROOT / leaf
-            fd = broker._open_protected_directory(path, uid, "service " + leaf)
+            try:
+                fd = broker._open_protected_directory(path, uid, "service " + leaf)
+            except BaseException:
+                # A failed existing acquisition may be its internal close;
+                # no returned descriptor is available to safely retry here.
+                record["acquisition_cleanup_unknown"] = True
+                raise
             descriptors.append(fd)
             info = os.fstat(fd)
             _require(info.st_gid == gid and stat.S_IMODE(info.st_mode) == mode, "broker role root mode/group differs")
+            record["root_identities"][leaf] = list(broker._directory_identity(info))
         _require(len({broker._directory_identity(os.fstat(fd))[:2] for fd in descriptors}) == 3 and
                  os.fstat(descriptors[1]).st_dev == os.fstat(descriptors[2]).st_dev, "broker roots alias or cross filesystems")
         control = descriptors[0]
@@ -248,30 +286,59 @@ def _readiness(configs, deadline):
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         locked = True
         _remaining(deadline)
-        stored = broker._parse_canonical_document(_read_at(control, "state.json", uid, deadline), "service broker state")
+        stored = read("state.json", "service broker state")
+        record.update(base_state=stored, base_state_digest=canonical_digest(stored))
         state = broker._state(stored)
         _require(state == stored and state["effect_journal"] is None, "broker journal or migration hold")
-        available = grants._state(broker._parse_canonical_document(
-            _read_at(control, "capability-grant-state.json", uid, deadline), "service grant state"), digest)
-        _require(available["status"] == "AVAILABLE", "service grant is not explicitly prepared AVAILABLE")
-        for name in ("profile-pending.json", "profile-receipt.json",
-                     grants._archive_name("state", digest), grants._archive_name("profile-receipt", digest)):
-            _require(native._missing(control, name), "pending, receipt or archived terminal authority exists")
+        if require_available:
+            available = read("capability-grant-state.json", "service grant state")
+            record.update(grant_state=available, state_digest=canonical_digest(available))
+            available = grants._state(available, digest)
+            _require(available["status"] == "AVAILABLE", "service grant is not explicitly prepared AVAILABLE")
+            for name in ("profile-pending.json", "profile-receipt.json",
+                         grants._archive_name("state", digest), grants._archive_name("profile-receipt", digest)):
+                _require(native._missing(control, name), "pending, receipt or archived terminal authority exists")
         _require(broker._file_identity(os.fstat(lock_fd)) == broker._file_identity(metadata) ==
                  broker._file_identity(os.stat("broker.lock", dir_fd=control, follow_symlinks=False)), "broker lock changed")
         for fd, leaf in zip(descriptors, ("control", "protected", "staging")):
             _require(broker._directory_identity(os.fstat(fd)) ==
-                     broker._directory_identity(os.lstat(entry.EFFECT_ROOT / leaf)), "broker root changed")
+                     broker._directory_identity(os.lstat(entry.EFFECT_ROOT / leaf)) ==
+                     tuple(record["root_identities"][leaf]), "broker root changed")
         _remaining(deadline)
-        return {"grant_digest": digest, "state_digest": canonical_digest(available), "read_only": True}
+        record["status"] = "AVAILABLE_READBACK" if require_available else "PREINSTALLED_CONTROLS_ONLY"
+        return record
+    except BaseException as exc:
+        failure = exc
+        raise
     finally:
-        failure = None
+        cleanup = None
         if locked:
             try: fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            except BaseException as exc: failure = exc
+            except BaseException as exc: cleanup = exc
         try: transport._close_installed(([lock_fd] if lock_fd >= 0 else []) + list(reversed(descriptors)))
-        except BaseException as exc: failure = failure or exc
-        if failure is not None: raise PiServiceLifecycleError("readiness handle cleanup uncertain") from failure
+        except BaseException as exc: cleanup = cleanup or exc
+        record["owned_handles_closed"] = cleanup is None and not (
+            record["reader_cleanup_unknown"] or record["acquisition_cleanup_unknown"])
+        if not record["owned_handles_closed"]:
+            record["status"] = "CLEANUP_HOLD"
+        if failure is not None:
+            try: failure.pi_broker_control_snapshot = record
+            except BaseException: pass  # Metadata failure cannot replace the original failure.
+        elif cleanup is not None:
+            error = PiServiceLifecycleError("readiness handle cleanup uncertain")
+            error.pi_broker_control_snapshot = record
+            raise error from cleanup
+
+
+def _control_cleanup_hold(held, snapshot):
+    """Keep external reader uncertainty distinct from verified unit cleanup."""
+    if type(snapshot) is dict and snapshot.get("schema") == "aragorn/pi-core-broker-control-readback/v1" and \
+            snapshot.get("owned_handles_closed") is False:
+        held._observation.update(status="CLEANUP_HOLD",
+            cleanup={"status": "CLEANUP_HOLD", "scope": "BROKER_CONTROL_HANDLES",
+                     "service_resources": held._observation["cleanup"]["status"]})
+        return True
+    return False
 
 
 @dataclass
@@ -602,7 +669,8 @@ class PiServiceLifecycle:
                 _require(broker._file_identity(os.stat("supervisor.sock", dir_fd=self._fds[_ROOT / service.role],
                     follow_symlinks=False)) == service.socket_identity, "owned supervisor endpoint changed")
 
-    def _prepare(self):
+    def _prepare(self, *, action_only=False):
+        _require(type(action_only) is bool, "fixed service preparation mode required")
         self._fds[Path("/run")] = lineage._open_protected_root(Path("/run"), 0)
         self._identities[Path("/run")] = broker._directory_identity(os.fstat(self._fds[Path("/run")]))
         self._mkdir(_ROOT)
@@ -612,6 +680,8 @@ class PiServiceLifecycle:
                 "var/lib/aragorn", "var/lib/aragorn/admitted", "etc", "etc/aragorn", "run", "run/aragorn-pi-services",
                 "run/aragorn-pi-action", "usr", "lib", "opt", "opt/aragorn")
         for role, service in self.services.items():
+            if action_only and role != "action":
+                continue
             self._mkdir(_ROOT / role)
             self._mkdir(service.root)
             for relative in (*tree, "run/aragorn-pi-services/" + role): self._mkdir(service.root / relative)
@@ -711,6 +781,35 @@ class PiServiceLifecycle:
                 authority="TRUSTED_ARAGORN_STARTUP_IMPORTS_NOT_WORKER_STDLIB_OR_LATER_CODE")
         finally:
             transport._close_installed([peer_fd])
+
+    def _action_start(self, kind):
+        """Issue one fixed root command after captured consumed-source startup."""
+        _require(kind in {"RUN_REQUEST", "PREPARE_GRANT"} and
+                 "action_start" not in self._observation, "action startup command already attempted or invalid")
+        service = self.services["action"]
+        deadline, peer = self.operation_deadline, (service.pid, service.uid, service.gid)
+        row = {"status": "INCOMPLETE", "command_attempted": False, "command": None}
+        self._observation["action_start"] = row
+        _require(self._observation["trusted_source_startup"].get("action", {}).get("status") ==
+                 "AUTHENTICATED_TRUSTED_SOURCE_STARTUP", "action command requires captured consumed-source startup")
+        self._inputs(deadline)
+        self._ownership(deadline)
+        _generation(service, deadline)
+        action = self.configuration.configurations["action"]
+        command = {"schema": entry.ACTION_START_SCHEMA, "kind": kind, "nonce": secrets.token_hex(32),
+            "configuration_digest": canonical_digest(action),
+            "grant_digest": canonical_digest(action["capability_grant"]),
+            "deadline_ns": math.floor(deadline * 1_000_000_000)}
+        command = entry.validate_action_start(command, configuration_digest=canonical_digest(action),
+            grant_digest=canonical_digest(action["capability_grant"]), deadline=deadline)
+        row["command"] = command
+        _require(tuple(broker._peer_credentials(service.connection)) == peer, "action startup peer changed")
+        transport.require_peer_live(service.connection, peer, service.pidfd, deadline)
+        row["command_attempted"] = True
+        transport.send_authenticated_packet(service.connection, command, deadline, max_bytes=entry.SOURCE_PACKET_LIMIT)
+        _generation(service, deadline)
+        row["status"] = "SENT"
+        return command
 
     def _bounded(self, deadline):
         _require(type(self) is PiServiceLifecycle and getattr(self, "_seal", None) is _SEAL and
@@ -914,6 +1013,7 @@ def hold_native_pi_services(*, deployment, configuration: configuration.PiServic
         held._observation["grant_readiness"] = _readiness(configuration.configurations, held.operation_deadline)
         held._prepare()
         held._start("action")
+        held._action_start("RUN_REQUEST")
         held._action_socket = _listener_ready(held.services["action"], held._fds[_ACTION], held._identities[_ACTION], held.operation_deadline)
         held._start("sensor")
         held._start("provider")
@@ -936,4 +1036,136 @@ def hold_native_pi_services(*, deployment, configuration: configuration.PiServic
     finally:
         try: held.close()
         finally:
-            if failure is not None: failure.pi_service_lifecycle_observation = held.observation
+            if failure is not None:
+                _control_cleanup_hold(held, getattr(failure, "pi_broker_control_snapshot", None))
+                failure.pi_service_lifecycle_observation = held.observation
+
+
+def prepare_native_pi_broker_control(*, deployment, configuration, provider_inputs,
+                                    binding, deadline, cleanup_timeout_seconds=5.0):
+    """Explicitly prepare one configured grant through the protected action UID.
+
+    The root caller holds admitted-bundle/deployment authority separately. This
+    finite operation starts only action, never drops root identity, and never
+    prepares missing controls or treats an ambiguous result as retry permission.
+    A returned PREPARED result includes verified owned lifecycle cleanup.
+    """
+    transport.validate_deadline(deadline)
+    _require(type(cleanup_timeout_seconds) in (int, float) and math.isfinite(cleanup_timeout_seconds) and
+             0 < cleanup_timeout_seconds <= 5 and time.monotonic() < deadline - cleanup_timeout_seconds,
+             "service cleanup reserve invalid")
+    from .pi_core_service_configuration import PiServiceConfiguration, PiProviderInputs
+    _require(type(deployment) is provision.PiServiceRuntime and type(configuration) is PiServiceConfiguration and
+             type(provider_inputs) is PiProviderInputs, "exact held service/runtime/public-input custody required")
+    channels._binding(binding)
+    held = PiServiceLifecycle(_SEAL, deployment, configuration, provider_inputs, binding, deadline,
+                              cleanup_timeout_seconds)
+    preparation = {"schema": "aragorn/pi-core-broker-preparation/v1",
+        "authority": "EXPLICIT_GRANT_PREPARATION_NOT_ACTIVATION_OR_PHASE3",
+        "status": "NOT_ATTEMPTED", "phase": "PREREQUISITES", "command_attempted": False,
+        "command": None, "result_packet": None, "preflight": None, "readback": None,
+        "ack_attempted": False, "ack_sent": False, "phase3_exit_eligible": False}
+    held._observation["broker_preparation"] = preparation
+    failure = None
+    try:
+        native._prerequisites(held.operation_deadline)
+        held._inputs(held.operation_deadline)
+        _require(deployment.binding["schema"] == provision.BINDING_SCHEMA_V2 and
+                 type(deployment.binding.get("source_digests")) is dict and
+                 _SOURCE_LOADER in deployment.binding["source_digests"],
+                 "verified-source wrapper successor required before broker preparation")
+        grant = configuration.configurations["action"]["capability_grant"]
+        _require(grant == configuration.configurations["sensor"]["capability_grant"] and
+                 (binding.runtime_digest, binding.active_skill_digest, binding.policy_digest, binding.policy_version) ==
+                 (grant["runtime_digest"], grant["active_skill_digest"], grant["policy_digest"], grant["policy_version"]),
+                 "worker/grant preparation binding differs")
+        _require(all(native._absent(_state(role, held.operation_deadline)) for role in ROLES),
+                 "fixed service already exists")
+        _manager_environment(held.operation_deadline)
+        preparation["phase"] = "PREINSTALLED_CONTROLS"
+        preparation["preflight"] = _broker_control_snapshot(configuration.configurations,
+            held.operation_deadline, require_available=False)
+        preparation["phase"] = "ACTION_STARTUP"
+        held._prepare(action_only=True)
+        held._start("action")
+        preparation["phase"] = "PREPARATION_COMMAND"
+        command = held._action_start("PREPARE_GRANT")
+        preparation.update(command=command, command_attempted=True, status="COMMAND_SENT")
+        action = held.services["action"]
+        peer = (action.pid, action.uid, action.gid)
+        bounded = held.operation_deadline
+        preparation["phase"] = "PREPARED_RESULT"
+        packet, _ = transport.receive_authenticated_packet(action.connection, peer, bounded,
+            expected_rights=0, max_bytes=entry.SOURCE_PACKET_LIMIT)
+        _require(type(packet) is dict and len(canonical_json(packet)) <= entry.SOURCE_PACKET_LIMIT,
+                 "broker preparation packet exceeds retention bound")
+        preparation["result_packet"] = packet
+        _require(set(packet) == set(command) | {"result"} and packet["kind"] == "PREPARED" and
+                 all(packet[key] == value for key, value in command.items() if key != "kind"),
+                 "broker preparation result is not the commanded operation")
+        result = entry.validate_preparation_result(packet["result"], grant_digest=command["grant_digest"])
+        _require(result["status"] == "AVAILABLE", "broker preparation did not make the configured grant AVAILABLE")
+        held._inputs(bounded)
+        held._ownership(bounded)
+        _generation(action, bounded)
+        transport.require_peer_live(action.connection, peer, action.pidfd, bounded)
+        preparation["phase"] = "INDEPENDENT_READBACK"
+        readback = _broker_control_snapshot(configuration.configurations, bounded, require_available=True)
+        preparation["readback"] = readback
+        _require(readback["grant_digest"] == result["grant_digest"] == command["grant_digest"] and
+                 readback["state_digest"] == result["state_digest"] and
+                 readback["base_state"] == preparation["preflight"]["base_state"] and
+                 readback["root_identities"] == preparation["preflight"]["root_identities"] and
+                 readback["owned_handles_closed"] is True,
+                 "broker preparation independent control readback differs")
+        held._inputs(bounded)
+        held._ownership(bounded)
+        _generation(action, bounded)
+        _require(tuple(broker._peer_credentials(action.connection)) == peer, "broker preparation peer changed")
+        transport.require_peer_live(action.connection, peer, action.pidfd, bounded)
+        _remaining(bounded)
+        preparation["phase"] = "ACK"
+        preparation["ack_attempted"] = True
+        transport.send_authenticated_packet(action.connection,
+            {**command, "kind": "ACK", "result_digest": canonical_digest(result)}, bounded,
+            max_bytes=entry.SOURCE_PACKET_LIMIT)
+        preparation["ack_sent"] = True
+        preparation.update(status="ACKNOWLEDGED_PENDING_CLEANUP", phase="OWNED_CLEANUP")
+    except BaseException as exc:
+        failure = exc
+        startup = held._observation.get("action_start", {})
+        preparation["command_attempted"] = startup.get("command_attempted", False)
+        preparation["command"] = startup.get("command", preparation["command"])
+        preparation["status"] = "INDETERMINATE" if preparation["command_attempted"] else "REFUSED"
+        snapshot = getattr(exc, "pi_broker_control_snapshot", None)
+        if type(snapshot) is dict and snapshot.get("schema") == "aragorn/pi-core-broker-control-readback/v1":
+            field = "preflight" if preparation["phase"] == "PREINSTALLED_CONTROLS" else "readback"
+            preparation[field] = snapshot
+        # Attach the reached evidence before cleanup can itself fail. The same
+        # original exception is updated below with the final ownership outcome.
+        try:
+            exc.pi_service_lifecycle_observation = held.observation
+        except BaseException:
+            pass  # Evidence failure never replaces the original failure or cleanup.
+    try:
+        held.close()
+    except BaseException as exc:
+        if failure is None:
+            failure = exc
+        preparation["status"] = "CLEANUP_HOLD"
+    if _control_cleanup_hold(held, preparation["preflight"]) or \
+            _control_cleanup_hold(held, preparation["readback"]):
+        preparation["status"] = "CLEANUP_HOLD"
+    if failure is not None:
+        try:
+            failure.pi_service_lifecycle_observation = held.observation
+        except BaseException:
+            pass
+        raise failure
+    if held.observation["cleanup"]["status"] != "VERIFIED_OWNED_CLEANUP":
+        preparation["status"] = "CLEANUP_HOLD"
+        error = PiServiceLifecycleError("broker preparation owned cleanup is not verified")
+        error.pi_service_lifecycle_observation = held.observation
+        raise error
+    preparation.update(status="PREPARED", phase="COMPLETE")
+    return held.observation

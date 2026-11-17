@@ -428,13 +428,13 @@ def _public_observation(observation):
     status = observation.get("status")
     _require(status in {"REFUSED", "REFUSED_OR_INDETERMINATE", "CLEANUP_HOLD",
                         "MANAGED_CALL_RETURNED_NOT_QUALIFIED", "INVENTORIES_PREPARED_NOT_QUALIFIED",
-                        "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED"},
+                        "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED", "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED"},
              "invalid coordinator status")
     report["entry_status"] = status
     stage = observation.get("failure_stage")
     _require(stage is None or stage in {"PREFLIGHT", "PREPARED_INPUTS", "HELD_INPUTS", "MANAGED_CALL",
         "POST_CALL_CUSTODY", "HOLDER_CLEANUP", "INPUT_CLEANUP", "INVENTORY_PREPARATION",
-        "INSTALLATION", "DESTINATION_CLEANUP"},
+        "INSTALLATION", "DESTINATION_CLEANUP", "PREPARATION_CALL"},
         "invalid coordinator failure stage")
     report["entry_failure_stage"] = stage
     for name in ("managed_call_attempted", "owned_inputs_closed"):
@@ -643,15 +643,70 @@ def _public_install(observation):
     return report
 
 
+def _public_broker_preparation(observation):
+    report = _public_observation(observation)
+    report.update(schema="aragorn/pi-core-broker-preparation-report/v1",
+        authority="PROTECTED_GRANT_PREPARATION_ONLY_NOT_ACTIVATION_OR_PHASE3",
+        preparation_attempted=False, owned_holders_closed=False, context_digest=None,
+        preparation_result_digest=None, preparation_status=None, preparation_cleanup_complete=False,
+        input_cleanup_uncertainty_digest=None)
+    if observation is None:
+        return report
+    _require(observation.get("schema") == "aragorn/pi-core-broker-preparation-result/v1" and
+        observation.get("authority") == report["authority"] and observation.get("managed_result") is None and
+        report["managed_call_attempted"] is False, "broker preparation cannot carry managed authority")
+    for name in ("preparation_attempted", "owned_holders_closed"):
+        _require(type(observation.get(name)) is bool, "invalid broker preparation boolean")
+        report[name] = observation[name]
+    pin = observation.get("context_digest")
+    _require(pin is None or type(pin) is str and _PIN.fullmatch(pin), "invalid broker context pin")
+    report["context_digest"] = pin
+    uncertainty = observation.get("input_cleanup_uncertainty")
+    _require(type(uncertainty) is list and len(uncertainty) <= 512, "invalid broker input cleanup uncertainty")
+    raw = _canonical(uncertainty)
+    _require(len(raw) <= 256 * 1024, "broker input uncertainty exceeds bound")
+    report["input_cleanup_uncertainty_digest"] = _digest(raw)
+    value = observation.get("preparation_result")
+    complete = False
+    if value is not None:
+        _require(type(value) is dict and report["preparation_attempted"] and
+            value.get("schema") == "aragorn/pi-core-service-lifecycle/v1" and
+            value.get("phase3_exit_eligible") is False and value.get("loaded_code_verified") is False,
+            "invalid broker preparation lifecycle")
+        raw = _canonical(value)
+        _require(len(raw) <= 4 * 1024 * 1024, "broker preparation result exceeds bound")
+        report["preparation_result_digest"] = _digest(raw)
+        prepared = value.get("broker_preparation")
+        if prepared is not None:
+            _require(type(prepared) is dict and prepared.get("schema") == "aragorn/pi-core-broker-preparation/v1" and
+                prepared.get("authority") == "EXPLICIT_GRANT_PREPARATION_NOT_ACTIVATION_OR_PHASE3" and
+                prepared.get("phase3_exit_eligible") is False and
+                prepared.get("status") in {"PREPARED", "REFUSED", "INDETERMINATE", "CLEANUP_HOLD"},
+                "invalid broker preparation record")
+            report["preparation_status"] = prepared["status"]
+            complete = (prepared["status"] == "PREPARED" and prepared.get("phase") == "COMPLETE" and
+                all(prepared.get(key) is True for key in ("command_attempted", "ack_attempted", "ack_sent")) and
+                all(type(prepared.get(key)) is dict for key in ("command", "result_packet", "readback")))
+        report["preparation_cleanup_complete"] = (value.get("status") == "CLOSED" and
+            type(value.get("cleanup")) is dict and value["cleanup"].get("status") == "VERIFIED_OWNED_CLEANUP")
+    if report["entry_status"] == "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED":
+        _require(complete and report["preparation_cleanup_complete"] and report["preparation_attempted"] and
+            report["owned_inputs_closed"] and report["owned_holders_closed"] and not uncertainty and pin is not None,
+            "broker preparation lacks complete owned custody")
+    _require(len(_canonical(report)) <= 256 * 1024, "broker preparation report exceeds bound")
+    return report
+
+
 def main():
     host = loader = None
     result, observation, phase = 126, None, "PREFLIGHT"
     entry_invoked = False
     prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-inventories"
     install = len(sys.argv) > 1 and sys.argv[1] == "--install-bundle"
-    public = _public_install if install else _public_preparation if prepare else _public_observation
-    attempt_field = "installation_attempted" if install else "preparation_attempted" if prepare else "managed_call_attempted"
-    args = sys.argv[2:] if prepare or install else sys.argv[1:]
+    broker_prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-broker-control"
+    public = _public_broker_preparation if broker_prepare else _public_install if install else _public_preparation if prepare else _public_observation
+    attempt_field = "installation_attempted" if install else "preparation_attempted" if prepare or broker_prepare else "managed_call_attempted"
+    args = sys.argv[2:] if prepare or install or broker_prepare else sys.argv[1:]
     cleanup = {"source_loader": "NOT_ACQUIRED", "host": "NOT_ACQUIRED"}
     try:
         _flags()
@@ -670,7 +725,9 @@ def main():
         phase = "SOURCE_BOOTSTRAP"
         cleanup["source_loader"] = "NOT_RETURNED_CLEANUP_UNVERIFIED"
         loader = _bootstrap(host)
-        if install:
+        if broker_prepare:
+            from aragorn.pi_core_broker_preparation_entry import run
+        elif install:
             from aragorn.pi_core_bundle_install_entry import run
         elif prepare:
             from aragorn.pi_core_installed_inventory_entry import run
@@ -683,7 +740,9 @@ def main():
         phase = "POST_CALL_CUSTODY"
         host.guard()
         report = public(observation)
-        if install:
+        if broker_prepare:
+            result = 0 if report["entry_status"] == "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED" else 126
+        elif install:
             result = 0 if report["entry_status"] == "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED" else 126
         elif prepare:
             result = (0 if report["entry_status"] == "INVENTORIES_PREPARED_NOT_QUALIFIED" and
@@ -718,7 +777,8 @@ def main():
         attempted = observation.get(attempt_field) if type(observation) is dict else None
         report[attempt_field] = attempted if type(attempted) is bool else None if entry_invoked else False
         phase, result = "REPORT_REFUSED", 126
-    report.update(status=("INSTALLED_NOT_ACTIVATED_OR_QUALIFIED" if install else
+    report.update(status=("BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED" if broker_prepare else
+                  "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED" if install else
                   "INVENTORIES_PREPARED_NOT_QUALIFIED" if prepare else
                   "MANAGED_BOOTSTRAP_RETURNED_NOT_QUALIFIED") if result == 0 else "REFUSED_OR_CLEANUP_HOLD",
                   wrapper_stage=phase, wrapper_cleanup=cleanup, entry_call_attempted=entry_invoked)

@@ -355,6 +355,27 @@ def _runtime_inventory(manifest: Mapping, receipt: Mapping, receipt_digest: str)
     return digest
 
 
+def _source_gate_artifact(manifest: Mapping, receipt: Mapping) -> Mapping:
+    """Validate the same pinned gate before installation and protected launch."""
+    files = {entry["path"]: entry for entry in manifest["files"]}
+    gate = files.get("observer/source-gate", {})
+    inputs = receipt.get("inputs", {})
+    gate_build = inputs.get("source_gate", {}) if isinstance(inputs, Mapping) else {}
+    _require(gate.get("executable") is True and
+             type(gate_build) is dict and set(gate_build) == {"schema", "target", "source_sha256",
+                 "elf_sha256", "compiler_sha256", "build_command_sha256", "runtime_executed", "receipt_digest"} and
+             gate_build["schema"] == "aragorn/pi-core-source-gate-build/v1" and
+             gate_build["target"] == "linux-arm64-static" and gate_build["runtime_executed"] is False,
+             "protected pre-exec gate artifact is missing or differs")
+    _require_digest(gate_build["receipt_digest"], "source gate build receipt")
+    for name in ("source_sha256", "elf_sha256", "compiler_sha256", "build_command_sha256"):
+        _require(type(gate_build[name]) is str and re.fullmatch(r"[0-9a-f]{64}", gate_build[name]),
+                 "source gate provenance pin differs")
+    _require("sha256:" + gate_build["elf_sha256"] == gate["digest"],
+             "protected pre-exec gate artifact is missing or differs")
+    return gate
+
+
 def _systemd_plan(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle,
                   profile: RuntimeProcessProfile) -> tuple[str, tuple[str, ...]]:
     # The protected supervisor must choose a fresh unit identifier BEFORE
@@ -481,22 +502,9 @@ def hold_confined_pi_launch_plan(
                      "compiled runtime and Node executable are not process-profile-bound")
             if config.source_observation is not None:
                 observed_pins = config.source_observation["pins"]
-                files = {entry["path"]: entry for entry in runtime_manifest["files"]}
-                gate = files.get("observer/source-gate", {})
-                inputs = config.compiled_receipt.get("inputs", {})
-                gate_build = inputs.get("source_gate", {}) if isinstance(inputs, Mapping) else {}
-                _require(gate.get("executable") is True and gate.get("digest") == observed_pins["gate_digest"] and
-                         node["digest"] == observed_pins["node_digest"] and
-                         type(gate_build) is dict and set(gate_build) == {"schema", "target", "source_sha256",
-                             "elf_sha256", "compiler_sha256", "build_command_sha256", "runtime_executed", "receipt_digest"} and
-                         gate_build["schema"] == "aragorn/pi-core-source-gate-build/v1" and
-                         gate_build["target"] == "linux-arm64-static" and gate_build["runtime_executed"] is False,
-                         "protected pre-exec gate artifact is missing or differs")
-                _require_digest(gate_build["receipt_digest"], "source gate build receipt")
-                for name in ("source_sha256", "elf_sha256", "compiler_sha256", "build_command_sha256"):
-                    _require(type(gate_build[name]) is str and re.fullmatch(r"[0-9a-f]{64}", gate_build[name]),
-                             "source gate provenance pin differs")
-                _require("sha256:" + gate_build["elf_sha256"] == gate["digest"],
+                gate = _source_gate_artifact(runtime_manifest, config.compiled_receipt)
+                _require(gate["digest"] == observed_pins["gate_digest"] and
+                         node["digest"] == observed_pins["node_digest"],
                          "protected pre-exec gate artifact is missing or differs")
             unit, argv = _systemd_plan(config, prepared, profile)
             _deadline(deadline)

@@ -98,9 +98,50 @@ execution; retain failures and reuse unchanged passes. No redundant rebuild or
 whole suite. Signed source/main merge, normal push and exact remote readback after
 the completed reviewed batch.
 
-1. **D2:** base installation caller next; separate provider controls, actual
+1. **D2:** base installation caller connected offline; separate provider controls, actual
    installed views, genuine global health, raw action evidence/full timing and
    separately authorized useful pilot remain.
 2. **D3:** remaining connected admission, RUN/health and workload coverage.
 3. **D4:** complete independent verifier inventory/prerequisites, then freeze.
 4. **D5:** separately authorized fresh acceptance, measurements and cleanup.
+
+## Reviewed implementation checkpoint
+
+The fixed `--install-broker-base` route now selects the existing protected root
+entry's additive local installation branch. It reads the pinned base-state
+reference, holds the existing runtime/configuration/public/admitted-bundle
+custody, verifies consumed installer source, invokes the fresh-only installer
+once and preserves failure evidence through post-call and outer cleanup. Default
+grant preparation rejects installation-only plan fields and remains separate.
+
+The installer creates only the fixed base tree under protected parent custody,
+keeps the root inaccessible until its empty contents are written, independently
+reads back exact names/bytes/identities, and retains reached created-member and
+readback prefixes on failure. Existing/partial/symlink targets are never adopted,
+repaired or deleted. No policy, health, observation or AVAILABLE grant is emitted.
+Public wrapper output is bounded metadata/digests only.
+
+Independent source/caller/fixture/closure review preceded the single pipeline run.
+**All 81 checks passed once: 69 new and 12 affected. No reruns.** The three input
+closures contain 95/98/115 files; registry capacity is now 221. All unchanged
+historical stages were left alone, including the retained batch29 failed result.
+
+| Stage | Checks | Retained passing fingerprint |
+| --- | ---: | --- |
+| `pi-core-broker-base-provision-offline` | 30 | `e1e3f8f3e7c31f006b5bcaede01817b0bdb6aad7f8d1ebc4e360bf3c1216af60` |
+| `pi-core-broker-base-entry-offline` | 31 | `c060d3dcc50eb2ae4a353287cfb0bfed542d998febf283808e1a8cb1e242e5cd` |
+| `pi-core-broker-base-wrapper-offline` | 16 | `19871ac8f7642a77fd2ee949692dab845b935f205937446a1bbf21b657f30d5e` |
+| `pipeline-capacity` | 4 | `e80e1b3f9d9478f1bb361b115816e8a2f5ea5baf735295e39e34a5b24af622c6` |
+
+Raw developer logs remain under `.aragorn/phase3-pipeline/<stage>/<fingerprint>/`.
+The installer checks used owned temporary trees with simulated Linux/root and
+role identities; they do not prove installed Linux ownership or enforcement.
+No broad regression, target build, VM/service/provider activation, live capture
+or qualification ran. All 985 unrelated drafts and frozen predecessors remain.
+Verified signed source/main merge hashes and exact remote readback are recorded
+in the milestone and next batch base, without self-referential commit hashes.
+
+D2 still needs actual installed-view preparation, genuine global health and full
+loss coverage, separate provider control inputs, action raw-effect/full-timing
+retention, recovery and the separately authorized useful pilot. D3 coverage,
+D4 semantic inventory/prerequisites/freeze and D5 fresh qualification remain open.

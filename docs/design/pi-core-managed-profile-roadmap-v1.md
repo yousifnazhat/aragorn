@@ -15,6 +15,17 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-24 [host/inventory checkpoint](../phase3/coordinator/pi-core-host-inventory-batch-24.md):
+retained host-export preparation now verifies the approved exact file set and
+static native dependencies. A fixed protected root preparation route acquires
+an independently pinned, completed read-only worker view and protected observer
+view, reusing the existing inventory helper. Public artifacts are withheld on custody
+or cleanup failure; helper-owned descriptor uncertainty is retained. All 93
+new/affected checks passed once, with no live operation or target execution.
+No concrete export, VM installation or installed inventories were produced.
+Actual host/installed views, genuine observation/health, raw-effect retention,
+recovery/full timing and the separately authorized useful pilot remain D2 work.
+
 Batch-23 [root coordinator checkpoint](../phase3/coordinator/pi-core-root-entry-batch-23.md):
 the user approved the pinned dedicated-VM-host root execution profile and
 its protected entrypoint is implemented offline, reusing the existing verified

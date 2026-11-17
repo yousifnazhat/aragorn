@@ -281,6 +281,29 @@ def _broker_config(document):
     return config
 
 
+def _retain_managed_failure(observation, error):
+    """Keep available owner evidence without replacing the original failure."""
+    observation["managed_failure_evidence"] = "UNAVAILABLE_OR_INVALID"
+    try:
+        value = getattr(error, "pi_managed_bootstrap_observation", None)
+        _require(type(value) is dict and
+                 value.get("schema") == "aragorn/pi-core-managed-bootstrap-result/v1" and
+                 value.get("authority") == "SERVICE_AND_WORKER_BOOTSTRAP_ONLY_NOT_USEFUL_TASK_OR_PHASE3" and
+                 value.get("status") in {"REFUSED", "CLEANUP_HOLD"} and
+                 all(value.get(key) is False for key in
+                     ("provider_available", "useful_task_verified", "loaded_code_verified", "phase3_exit_eligible")) and
+                 type(value.get("provider_configured")) is bool and
+                 all(key in value and (value[key] is None or type(value[key]) is dict)
+                     for key in ("worker", "services")), "COORDINATOR_MANAGED_FAILURE_INVALID")
+        raw = canonical_json(value)
+        _require(len(raw) <= 4 * 1024 * 1024, "COORDINATOR_MANAGED_FAILURE_BOUND")
+        observation["managed_result"] = json.loads(raw)
+        observation["managed_failure_evidence"] = "RETAINED"
+    except BaseException:
+        # Evidence acquisition must not hide the exception or trigger a retry.
+        pass
+
+
 def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_custody):
     """Consume one approved prepared plan; never install, repair, or retry."""
     observation = {"schema": "aragorn/pi-core-coordinator-observation/v1",
@@ -290,7 +313,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
         "plan_digest": None, "deployment_digest": None, "owned_inputs_closed": False,
         "input_cleanup_uncertainty": [],
         "phase3_exit_eligible": False}
-    inputs, failure, phase = None, None, "PREFLIGHT"
+    inputs, failure, managed_failure, phase = None, None, None, "PREFLIGHT"
     try:
         _require(os.geteuid() == os.getegid() == 0, "COORDINATOR_ROOT_REQUIRED")
         deadline = _deadline(deadline_ns)
@@ -343,12 +366,17 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
             _custody(source_loader, host_custody, deadline)
             phase = "MANAGED_CALL"
             observation["managed_call_attempted"] = True
-            observation["managed_result"] = managed.run_native_pi_service_bootstrap(
-                cas, context, profile=profile, grant=grant, protected_root=Path("/var/lib/aragorn/admitted"),
-                runtime_conformance_digest=plan["runtime_conformance_digest"], deployment=deployment,
-                revoked_context_ids=tuple(plan["revoked_context_ids"]), now_unix=int(time.time()), deadline=deadline,
-                config=config, service_runtime=held_runtime, service_configuration=held_configuration,
-                provider_inputs=held_provider, binding=binding, cleanup_timeout_seconds=5.0, **provider)
+            try:
+                observation["managed_result"] = managed.run_native_pi_service_bootstrap(
+                    cas, context, profile=profile, grant=grant, protected_root=Path("/var/lib/aragorn/admitted"),
+                    runtime_conformance_digest=plan["runtime_conformance_digest"], deployment=deployment,
+                    revoked_context_ids=tuple(plan["revoked_context_ids"]), now_unix=int(time.time()), deadline=deadline,
+                    config=config, service_runtime=held_runtime, service_configuration=held_configuration,
+                    provider_inputs=held_provider, binding=binding, cleanup_timeout_seconds=5.0, **provider)
+            except BaseException as exc:
+                managed_failure = exc
+                _retain_managed_failure(observation, exc)
+                raise
             _require(type(observation["managed_result"]) is dict and
                      observation["managed_result"].get("status") in {"BOOTSTRAP_COMPLETE", "REFUSED", "CLEANUP_HOLD"},
                      "COORDINATOR_MANAGED_RESULT_INVALID")
@@ -364,6 +392,8 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                                  else "REFUSED_OR_INDETERMINATE")
     except BaseException as exc:
         failure = exc
+        if managed_failure is not None and exc is not managed_failure:
+            phase = "HOLDER_CLEANUP"
     finally:
         if inputs is not None:
             try:
@@ -374,7 +404,10 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                 phase = "INPUT_CLEANUP"
             observation["input_cleanup_uncertainty"] = json.loads(canonical_json(inputs.cleanup_uncertainty))
     if failure is not None:
-        observation["status"] = "CLEANUP_HOLD" if phase in {"HOLDER_CLEANUP", "INPUT_CLEANUP"} else "REFUSED_OR_INDETERMINATE"
+        child_hold = (type(observation["managed_result"]) is dict and
+                      observation["managed_result"].get("status") == "CLEANUP_HOLD")
+        observation["status"] = ("CLEANUP_HOLD" if child_hold or phase in {"HOLDER_CLEANUP", "INPUT_CLEANUP"}
+                                 else "REFUSED_OR_INDETERMINATE")
         observation["failure_stage"] = phase
         error = PiCoordinatorEntryError("COORDINATOR_REFUSED_OR_CLEANUP_HOLD")
         error.observation = observation

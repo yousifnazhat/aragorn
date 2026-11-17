@@ -82,9 +82,43 @@ code. Fresh provider observations therefore require this root source custody and
 an independently selected producer binding first. Keep all existing health
 checks intact: narrow source challenges cannot refresh global health.
 
+## Signed delivery and material decision hold
+
+Implementation source `dead5a9fcae7a9f1f5bb52a7e6e0f3c27683b8eb` and integration
+`15c83169a96c04e64b64b1da6bf4e52a050525f5` have verified SSH signatures. A normal
+atomic push and exact remote readback confirmed that integration on `main` and
+`codex/phase3-runtime-prevention`. Tracked changes were clean after delivery;
+unrelated untracked drafts were preserved.
+
+Three read-only reviews agree that the next root entrypoint needs an explicit
+execution-view decision, not another health or observation placeholder:
+
+1. **Recommended: pinned dedicated-VM-host coordinator.** Independently pin its
+   Python, standard library, native loader/libraries, control tools and Aragorn
+   source closure. Reuse the existing same-byte source loader before imports.
+   This fits the already-trusted coordinator's required VM systemd/proc/cgroup
+   access, without introducing another privileged root-view mapping.
+2. **Alternative: protected coordinator root/namespace.** Pin its image and an
+   explicit contract exposing the necessary host control and installed-data
+   paths. This is not the existing confined child-service profile.
+
+Neither concrete root execution view is selected by the approved SDD. The
+current child image has absolute ELF loader and fixed source paths; executing
+its Python outside `RootDirectory` may resolve VM-host dependencies. Adding a
+fourth child role, assuming ambient host Python, or hashing already-imported
+source would not prove root consumed-code identity. The source observers also
+expect their fixed `/opt/aragorn/src` origins.
+
+**Stop before root-entry implementation until the operator selects this trust
+profile.** This decision authorizes subsequent offline implementation only,
+not installation, activation, credentials, spending or acceptance. No source
+wrapper, provider observation publisher, root image or live operation was added
+under an assumed selection. Existing health, timing and operational holds remain.
+
 ## Remaining plan
 
-1. **D2:** gate installation repaired offline; connect the protected root caller,
+1. **D2:** gate installation repaired offline; select the root execution view,
+   then connect the protected root caller,
    genuine observation/health and exact
    installed inventories; establish authorized credential/Node/kernel feasibility,
    recovery/full timing and a separately approved useful pilot.

@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-31 [raw action evidence checkpoint](../phase3/coordinator/pi-core-action-evidence-batch-31.md):
+the native caller now retains available raw frame/context/terminal records in the
+existing protected CAS, independently joins original locked action receipts and
+defers worker-result delivery until evidence storage closes cleanly. All 113
+new/affected checks passed once, with no live operations. This is retained-record
+custody, not independent sink, timing or complete health proof. Separate provider
+base controls, actual protected views, genuine health, recovery/full timing and
+the separately authorized pilot remain open.
+
 Batch-30 [fresh broker-base checkpoint](../phase3/coordinator/pi-core-broker-base-batch-30.md):
 the existing protected root entry now connects fresh-only installation of the
 action-owned base roots/lock/pinned empty state. It retains partial identities,

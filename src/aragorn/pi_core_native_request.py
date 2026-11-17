@@ -216,15 +216,62 @@ def handle_native_pi_request(owned, worker_connection, request_channels, *, gran
         owned.request_attempted = True
     custody = PiNativeRequestCustody(_SEAL, owned=owned, dispatch=dispatch,
         request=worker_connection, channels=request_channels, deadline=deadline)
+    evidence_owner = failure = terminal_observation = None
     try:
         custody.guard()
-        return handoff.handle_pi_request_connection(worker_connection, request_channels.broker_connection,
-            activation_path=plan.activation_path, profile=plan.profile, protected_install_root=protected_root,
-            grant=grant, binding=request_channels.binding, expected_broker_peer=request_channels.broker_peer,
-            deadline=deadline, sensor_channel=PiSensorChannel(request_channels.sensor_connection, request_channels.sensor_peer),
-            native_custody=custody, **({"terminal_ack": True} if service is not None else {}))
+        arguments = dict(activation_path=plan.activation_path, profile=plan.profile,
+            protected_install_root=protected_root, grant=grant, binding=request_channels.binding,
+            expected_broker_peer=request_channels.broker_peer, deadline=deadline,
+            sensor_channel=PiSensorChannel(request_channels.sensor_connection, request_channels.sensor_peer),
+            native_custody=custody)
+        if service is None:
+            return handoff.handle_pi_request_connection(worker_connection, request_channels.broker_connection, **arguments)
+        from .pi_core_action_evidence import hold_native_action_evidence
+        with hold_native_action_evidence(custody) as evidence_owner:
+            result = handoff.handle_pi_request_connection(worker_connection, request_channels.broker_connection,
+                **arguments, terminal_ack=True, action_evidence=evidence_owner)
+        observed = evidence_owner.observation
+        _require(type(observed) is dict and
+                 observed.get("schema") == "aragorn/pi-core-native-action-evidence/v1" and
+                 observed.get("authority") == "RETAINED_ACTION_RECORDS_ONLY_NOT_EFFECT_TIMING_HEALTH_OR_PHASE3" and
+                 observed.get("phase3_exit_eligible") is False and len(canonical_json(observed)) <= 4 * 1024 * 1024 and
+                 observed.get("status") == "CLOSED" and observed.get("owned_handles_closed") is True and
+                 observed.get("receipt_join_verified") is True, "native action evidence is incomplete")
+        terminal_observation = json.loads(canonical_json(observed))
+        custody.guard()
+        broker._send_frame(worker_connection, canonical_json(result), deadline)
+        return result
+    except BaseException as exc:
+        failure = exc
+        if service is not None:
+            dispatch._remote_custody_hold = True
+            dispatch._observation.update(status="REQUEST_INDETERMINATE", cleanup="CLEANUP_HOLD")
+        raise
     finally:
         custody._active = False
+        if service is not None:
+            try:
+                observed = getattr(failure, "pi_native_action_evidence_observation", None)
+                if observed is None:
+                    observed = terminal_observation
+                if observed is None and evidence_owner is not None:
+                    observed = evidence_owner.observation
+                _require(type(observed) is dict and
+                         observed.get("schema") == "aragorn/pi-core-native-action-evidence/v1" and
+                         observed.get("authority") == "RETAINED_ACTION_RECORDS_ONLY_NOT_EFFECT_TIMING_HEALTH_OR_PHASE3" and
+                         observed.get("phase3_exit_eligible") is False and
+                         len(canonical_json(observed)) <= 4 * 1024 * 1024,
+                         "native action evidence unavailable or oversized")
+                dispatch._observation["action_evidence"] = json.loads(canonical_json(observed))
+                if failure is None:
+                    _require(observed.get("status") == "CLOSED" and observed.get("owned_handles_closed") is True and
+                             observed.get("receipt_join_verified") is True, "native action evidence is incomplete")
+            except BaseException as evidence_error:
+                dispatch._observation["action_evidence_uncertainty"] = "OWNER_RECORD_UNAVAILABLE_OR_INVALID"
+                dispatch._remote_custody_hold = True
+                dispatch._observation.update(status="REQUEST_INDETERMINATE", cleanup="CLEANUP_HOLD")
+                if failure is None:
+                    raise PiNativeRequestError("native action evidence custody is incomplete") from evidence_error
 
 
 class PiNativeRequestDispatch:
@@ -250,6 +297,7 @@ class PiNativeRequestDispatch:
         self._remote_custody_hold = False
         self._observation = {"schema": "aragorn/pi-core-native-request-observation/v1",
             "status": "NO_REQUEST", "request_attempted": False, "worker_result": None,
+            "action_evidence": None, "action_evidence_uncertainty": None,
             "cleanup": "NOT_ATTEMPTED", "phase3_exit_eligible": False}
 
     @property

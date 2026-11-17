@@ -10,6 +10,7 @@ Uncertain ownership preserves on-disk resources and reports CLEANUP_HOLD.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
 import platform
@@ -574,6 +575,60 @@ def _close_handles(owned: _Owned) -> None:
         raise PiNativeSupervisorError(f"{len(failures)} owned handles could not be closed") from failures[0]
 
 
+def _native_observation(plan, owned, observation, identity_publication,
+        request_observation, provider_observation, source_observation, failure, cleanup, status):
+    return {
+        "schema": "aragorn/pi-core-native-supervisor-result/v1",
+        "authority": "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
+        "status": status,
+        "unit": plan.unit_name if plan is not None else None,
+        "invocation_id": (owned.invocation or None) if owned is not None else None,
+        "pid": (owned.pid or None) if owned is not None else None,
+        "start_time_ticks": (owned.start_ticks or None) if owned is not None else None,
+        "immutable_launch_digest": (owned.immutable_digest or None) if owned is not None else None,
+        "activation_digest": ("sha256:" + hashlib.sha256(owned.activation_raw).hexdigest())
+            if owned is not None and owned.activation_raw is not None else None,
+        "bootstrap": observation, "identity_registration": identity_publication,
+        "request_channel": request_observation, "provider_channel": provider_observation,
+        "source_observation": source_observation, "failure": failure, "cleanup": cleanup,
+    }
+
+
+def _retain_native_failure(error, value, *, stage, terminal, owned, missing_metadata=False):
+    # This private record is evidence from this invocation, not authority or a
+    # new cleanup owner. Copy independent fields so one bad snapshot cannot
+    # erase another owner's already collected record or replace the exception.
+    retained = {
+        "schema": "aragorn/pi-core-native-supervisor-result/v1",
+        "authority": "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
+        "status": "CLEANUP_HOLD"}
+    uncertainty = ["native_metadata"] if missing_metadata else []
+    for key, item in value.items():
+        if key in retained:
+            continue
+        try:
+            raw = canonical_json(item)
+            _require(len(raw) <= 4 * 1024 * 1024, "native observation field exceeds report bound")
+            retained[key] = json.loads(raw)
+        except BaseException:
+            retained[key] = None
+            uncertainty.append(key)
+    retained["failure_evidence"] = {
+        "stage": "LAUNCH_SCOPE_EXIT" if terminal else "INCOMPLETE_NATIVE_SCOPE",
+        "last_stage": stage,
+        "launch_scope_cleanup": "UNVERIFIED_ON_EXCEPTION",
+        "worker_start_attempted": owned.start_attempted if owned is not None else None,
+        "worker_started": owned.started if owned is not None else None,
+        "uncertainty": uncertainty,
+    }
+    try:
+        error.pi_native_supervisor_observation = retained
+    except BaseException:
+        # A caller must treat an unattachable record as unknown. Never replace
+        # cancellation or an existing cleanup failure with a reporting error.
+        pass
+
+
 def run_native_pi_worker(
     cas: CAS, context: Mapping, *, profile: process.RuntimeProcessProfile, grant: Mapping,
     protected_root: Path, runtime_conformance_digest: str, deployment: Mapping,
@@ -625,187 +680,213 @@ def run_native_pi_worker(
                  expected_identity_relay_peer[0] <= 0x7fffffff,
                  "identity handoff requires the exact nonroot relay peer")
     _prerequisites(operation_deadline)
-    with hold_confined_pi_launch_plan(cas, context, profile=profile, grant=grant,
-            protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
-            deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
-            deadline=operation_deadline, config=config) as plan:
-        if native_request:
-            _require(type(config) is PiConfinedLaunchConfig and type(plan) is PiConfinedLaunchPlan and
-                     plan.worker_uid == config.worker_uid and plan.worker_gid == config.worker_gid and
-                     plan.start_bytes == _start(config, plan.prepared),
-                     "held Pi START or worker identity differs from protected launch configuration")
-        owned = _Owned(plan)
-        observation = None
-        failure = None
-        cleanup = None
-        identity_stack = ExitStack()
-        request_stack = ExitStack()
-        provider_stack = ExitStack()
-        request_dispatch = None
-        provider_dispatch = None
-        request_close_attempted = False
-        provider_close_attempted = False
-        provider_observation = {"status": "PENDING" if provider_enabled else "NOT_REQUESTED"}
-        request_observation = {"status": "NOT_REQUESTED" if request_channels is None else "PENDING"}
-        identity_publication = {"authority": IDENTITY_AUTHORITY,
-            "status": "NOT_REQUESTED" if identity_relay_connection is None else "PENDING"}
-        identity_close_attempted = False
+    plan = owned = terminal = value = None
+    observation = failure = cleanup = source_observation = None
+    request_observation = provider_observation = identity_publication = None
+    stage = "LAUNCH_SCOPE_ACQUIRE"
+    try:
+        with hold_confined_pi_launch_plan(cas, context, profile=profile, grant=grant,
+                protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
+                deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
+                deadline=operation_deadline, config=config) as plan:
+            stage = "PLAN_VALIDATION"
+            if native_request:
+                _require(type(config) is PiConfinedLaunchConfig and type(plan) is PiConfinedLaunchPlan and
+                         plan.worker_uid == config.worker_uid and plan.worker_gid == config.worker_gid and
+                         plan.start_bytes == _start(config, plan.prepared),
+                         "held Pi START or worker identity differs from protected launch configuration")
+            owned = _Owned(plan)
+            identity_stack = ExitStack()
+            request_stack = ExitStack()
+            provider_stack = ExitStack()
+            request_dispatch = None
+            provider_dispatch = None
+            request_close_attempted = False
+            provider_close_attempted = False
+            provider_observation = {"status": "PENDING" if provider_enabled else "NOT_REQUESTED"}
+            request_observation = {"status": "NOT_REQUESTED" if request_channels is None else "PENDING"}
+            identity_publication = {"authority": IDENTITY_AUTHORITY,
+                "status": "NOT_REQUESTED" if identity_relay_connection is None else "PENDING"}
+            identity_close_attempted = False
 
-        def close_request_dispatch():
-            nonlocal request_close_attempted, request_observation
-            if request_close_attempted:
-                return
-            request_close_attempted = True
-            try:
-                request_stack.close()
-            finally:
-                if request_dispatch is not None:
-                    request_observation = request_dispatch.observation
-
-        def close_provider_dispatch():
-            nonlocal provider_close_attempted, provider_observation
-            if provider_close_attempted:
-                return
-            provider_close_attempted = True
-            try:
-                provider_stack.close()
-            finally:
-                if provider_dispatch is not None:
-                    provider_observation = provider_dispatch.observation
-
-        def before_release():
-            # Descriptor/result and listener cleanup must precede RELEASE.
-            close_request_dispatch()
-            close_provider_dispatch()
-            revoke_identity()
-
-        def register_identity(document):
-            nonlocal identity_publication
-            _capture_activation(owned, document)
-            if identity_relay_connection is None:
-                return
-
-            def guard():
-                _resource_ownership(owned)
-                _same_generation(owned, _unit_state(plan.unit_name, operation_deadline),
-                                 operation_deadline, live=True)
-                pi_identity._measured(owned.connection, owned.pidfd, plan.profile, document, operation_deadline)
-                _require(read_activation(plan.activation_path) == document,
-                         "protected activation changed during identity registration")
-
-            identity_publication["status"] = "REGISTRATION_ATTEMPTED"
-            try:
-                identity_publication = identity_stack.enter_context(hold_pi_identity_handoff(
-                    identity_relay_connection, document, owned.pidfd,
-                    expected_relay_peer=expected_identity_relay_peer,
-                    deadline=operation_deadline, guard=guard))
-            except Exception as exc:
-                identity_publication.update(getattr(exc, "publication", {"status": "HOLD_UNCONFIRMED"}))
-                raise
-
-        def revoke_identity():
-            nonlocal identity_close_attempted
-            if identity_relay_connection is None or identity_close_attempted:
-                return
-            identity_close_attempted = True
-            try:
-                identity_stack.close()
-            except Exception as exc:
-                identity_publication.update(getattr(exc, "publication", {"status": "HOLD_UNCONFIRMED"}))
-                raise
-        try:
-            owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
-            _require(owned.unit_absence_observed, "fresh Pi unit already exists")
-            _prepare_resources(owned)
-            if request_channels is not None:
-                request_dispatch = request_stack.enter_context(hold_native_pi_request_dispatch(
-                    owned, request_channels, grant=grant, protected_root=protected_root,
-                    deadline=operation_deadline, cleanup_deadline=deadline))
-            if provider_enabled:
-                provider_dispatch = provider_stack.enter_context(hold_native_pi_provider_dispatch(
-                    owned, provider_channels, grant=grant, protected_root=protected_root,
-                    deadline=operation_deadline, cleanup_deadline=deadline))
-            owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
-            _require(owned.unit_absence_observed, "Pi unit appeared before exclusive start")
-            owned.start_attempted = True
-            code, _ = _command(plan.systemd_run_argv, operation_deadline)
-            _require(code == 0, "one-shot transient service start failed")
-            owned.started = True
-            _capture_unit(owned, operation_deadline)
-            if plan.source_observation is not None:
-                from .pi_core_node_source_observer import start_node_observer
-                from .pi_core_source_observer import PiSourceObserver
-                _require(canonical_digest(plan.source_observation) == plan.source_observation_digest,
-                         "held source observation profile changed")
+            def close_request_dispatch():
+                nonlocal request_close_attempted, request_observation
+                if request_close_attempted:
+                    return
+                request_close_attempted = True
                 try:
-                    observer = start_node_observer(owned, plan.source_observation,
-                        operation_deadline=operation_deadline, cleanup_deadline=deadline)
-                    _require(type(observer) is PiSourceObserver and observer._owned is owned,
-                             "source acquisition did not return owned observer custody")
-                    owned.source_observer = observer
-                except BaseException as exc:
-                    observer = getattr(exc, "observer", None)
-                    if observer is not None:
-                        _require(type(observer) is PiSourceObserver and observer._owned is owned,
-                                 "failed source acquisition lost observer custody")
-                        owned.source_observer = observer
-                    raise
-            assert owned.listener is not None
-            owned.listener.settimeout(_remaining(operation_deadline))
-            owned.connection, _address = owned.listener.accept()
-            _same_generation(owned, _unit_state(plan.unit_name, operation_deadline), operation_deadline, live=True)
-            exchange_options = {"expected_pid": owned.pid, "on_activation": register_identity}
-            if identity_relay_connection is not None or request_channels is not None:
-                exchange_options["on_before_release"] = before_release
-            if request_dispatch is not None:
-                exchange_options["read_result"] = request_dispatch.read_bootstrap_result
-            if provider_dispatch is not None:
-                exchange_options["provider_dispatch"] = provider_dispatch
-            observation = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
-        except Exception as exc:
-            if request_channels is not None and isinstance(exc, PiNativeRequestError) and hasattr(exc, "observation"):
-                request_observation = dict(exc.observation)
-            failure = f"{type(exc).__name__}: {str(exc)[:512]}"
-        finally:
-            try:
+                    request_stack.close()
+                finally:
+                    if request_dispatch is not None:
+                        request_observation = request_dispatch.observation
+
+            def close_provider_dispatch():
+                nonlocal provider_close_attempted, provider_observation
+                if provider_close_attempted:
+                    return
+                provider_close_attempted = True
+                try:
+                    provider_stack.close()
+                finally:
+                    if provider_dispatch is not None:
+                        provider_observation = provider_dispatch.observation
+
+            def before_release():
+                # Descriptor/result and listener cleanup must precede RELEASE.
                 close_request_dispatch()
-            except Exception as exc:
-                failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
-            try:
                 close_provider_dispatch()
-            except Exception as exc:
-                failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
-            try:
                 revoke_identity()
-            except Exception as exc:
-                failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
-            cleanup = _cleanup(owned, deadline, cleanup_timeout_seconds)
+
+            def register_identity(document):
+                nonlocal identity_publication
+                _capture_activation(owned, document)
+                if identity_relay_connection is None:
+                    return
+
+                def guard():
+                    _resource_ownership(owned)
+                    _same_generation(owned, _unit_state(plan.unit_name, operation_deadline),
+                                     operation_deadline, live=True)
+                    pi_identity._measured(owned.connection, owned.pidfd, plan.profile, document, operation_deadline)
+                    _require(read_activation(plan.activation_path) == document,
+                             "protected activation changed during identity registration")
+
+                identity_publication["status"] = "REGISTRATION_ATTEMPTED"
+                try:
+                    identity_publication = identity_stack.enter_context(hold_pi_identity_handoff(
+                        identity_relay_connection, document, owned.pidfd,
+                        expected_relay_peer=expected_identity_relay_peer,
+                        deadline=operation_deadline, guard=guard))
+                except Exception as exc:
+                    identity_publication.update(getattr(exc, "publication", {"status": "HOLD_UNCONFIRMED"}))
+                    raise
+
+            def revoke_identity():
+                nonlocal identity_close_attempted
+                if identity_relay_connection is None or identity_close_attempted:
+                    return
+                identity_close_attempted = True
+                try:
+                    identity_stack.close()
+                except Exception as exc:
+                    identity_publication.update(getattr(exc, "publication", {"status": "HOLD_UNCONFIRMED"}))
+                    raise
+            stage = "BOOTSTRAP"
             try:
-                _close_handles(owned)
+                owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
+                _require(owned.unit_absence_observed, "fresh Pi unit already exists")
+                _prepare_resources(owned)
+                if request_channels is not None:
+                    request_dispatch = request_stack.enter_context(hold_native_pi_request_dispatch(
+                        owned, request_channels, grant=grant, protected_root=protected_root,
+                        deadline=operation_deadline, cleanup_deadline=deadline))
+                if provider_enabled:
+                    provider_dispatch = provider_stack.enter_context(hold_native_pi_provider_dispatch(
+                        owned, provider_channels, grant=grant, protected_root=protected_root,
+                        deadline=operation_deadline, cleanup_deadline=deadline))
+                owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
+                _require(owned.unit_absence_observed, "Pi unit appeared before exclusive start")
+                owned.start_attempted = True
+                code, _ = _command(plan.systemd_run_argv, operation_deadline)
+                _require(code == 0, "one-shot transient service start failed")
+                owned.started = True
+                _capture_unit(owned, operation_deadline)
+                if plan.source_observation is not None:
+                    from .pi_core_node_source_observer import start_node_observer
+                    from .pi_core_source_observer import PiSourceObserver
+                    _require(canonical_digest(plan.source_observation) == plan.source_observation_digest,
+                             "held source observation profile changed")
+                    try:
+                        observer = start_node_observer(owned, plan.source_observation,
+                            operation_deadline=operation_deadline, cleanup_deadline=deadline)
+                        _require(type(observer) is PiSourceObserver and observer._owned is owned,
+                                 "source acquisition did not return owned observer custody")
+                        owned.source_observer = observer
+                    except BaseException as exc:
+                        observer = getattr(exc, "observer", None)
+                        if observer is not None:
+                            _require(type(observer) is PiSourceObserver and observer._owned is owned,
+                                     "failed source acquisition lost observer custody")
+                            owned.source_observer = observer
+                        raise
+                assert owned.listener is not None
+                owned.listener.settimeout(_remaining(operation_deadline))
+                owned.connection, _address = owned.listener.accept()
+                _same_generation(owned, _unit_state(plan.unit_name, operation_deadline), operation_deadline, live=True)
+                exchange_options = {"expected_pid": owned.pid, "on_activation": register_identity}
+                if identity_relay_connection is not None or request_channels is not None:
+                    exchange_options["on_before_release"] = before_release
+                if request_dispatch is not None:
+                    exchange_options["read_result"] = request_dispatch.read_bootstrap_result
+                if provider_dispatch is not None:
+                    exchange_options["provider_dispatch"] = provider_dispatch
+                observation = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
             except Exception as exc:
-                cleanup.update(status="CLEANUP_HOLD", reason="owned handle close failed: " + str(exc)[:256])
-        return {
-            "schema": "aragorn/pi-core-native-supervisor-result/v1",
-            "authority": "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
-            "status": "CLEANUP_HOLD" if cleanup["status"] == "CLEANUP_HOLD" or
-                       request_observation.get("cleanup") == "CLEANUP_HOLD" or
-                       provider_observation.get("cleanup") == "CLEANUP_HOLD" or
-                       identity_publication["status"] == "HOLD_UNCONFIRMED" else
-                      "BOOTSTRAP_COMPLETE" if observation is not None and
-                       identity_publication["status"] in {"NOT_REQUESTED", "REVOKED"} else "REFUSED",
-            "unit": plan.unit_name, "invocation_id": owned.invocation or None,
-            "pid": owned.pid or None, "start_time_ticks": owned.start_ticks or None,
-            "immutable_launch_digest": owned.immutable_digest or None,
-            "activation_digest": ("sha256:" + hashlib.sha256(owned.activation_raw).hexdigest())
-                                  if owned.activation_raw is not None else None,
-            "bootstrap": observation, "identity_registration": dict(identity_publication),
-            "request_channel": request_observation,
-            "provider_channel": provider_observation,
-            "source_observation": None if owned.source_observer is None else {
-                "profile_digest": plan.source_observation_digest,
-                "closed": owned.source_observer_closed,
-                "capture": owned.source_observer.observation,
-                "latest_health_capture": owned.source_observer.health_observation,
-                "authority": "SOURCE_ACQUISITION_ONLY_NOT_V8_EXECUTION_OR_PHASE3_QUALIFICATION"},
-            "failure": failure, "cleanup": cleanup,
-        }
+                if request_channels is not None and isinstance(exc, PiNativeRequestError) and hasattr(exc, "observation"):
+                    request_observation = dict(exc.observation)
+                failure = f"{type(exc).__name__}: {str(exc)[:512]}"
+            finally:
+                stage = "REQUEST_CLEANUP"
+                try:
+                    close_request_dispatch()
+                except Exception as exc:
+                    failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
+                stage = "PROVIDER_CLEANUP"
+                try:
+                    close_provider_dispatch()
+                except Exception as exc:
+                    failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
+                stage = "IDENTITY_CLEANUP"
+                try:
+                    revoke_identity()
+                except Exception as exc:
+                    failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
+                stage = "WORKER_CLEANUP"
+                cleanup = _cleanup(owned, deadline, cleanup_timeout_seconds)
+                stage = "HANDLE_CLEANUP"
+                try:
+                    _close_handles(owned)
+                except Exception as exc:
+                    cleanup.update(status="CLEANUP_HOLD", reason="owned handle close failed: " + str(exc)[:256])
+            stage = "TERMINAL_SNAPSHOT"
+            if owned.source_observer is not None:
+                # Keep each successful component before reading the next; the
+                # failure path never repeats a failed source/health read.
+                source_observation = {
+                    "profile_digest": plan.source_observation_digest,
+                    "closed": owned.source_observer_closed,
+                    "capture": None, "latest_health_capture": None,
+                    "authority": "SOURCE_ACQUISITION_ONLY_NOT_V8_EXECUTION_OR_PHASE3_QUALIFICATION"}
+                source_observation["capture"] = owned.source_observer.observation
+                source_observation["latest_health_capture"] = owned.source_observer.health_observation
+            status = ("CLEANUP_HOLD" if cleanup["status"] == "CLEANUP_HOLD" or
+                request_observation.get("cleanup") == "CLEANUP_HOLD" or
+                provider_observation.get("cleanup") == "CLEANUP_HOLD" or
+                identity_publication["status"] == "HOLD_UNCONFIRMED" else
+                "BOOTSTRAP_COMPLETE" if observation is not None and
+                identity_publication["status"] in {"NOT_REQUESTED", "REVOKED"} else "REFUSED")
+            value = _native_observation(plan, owned, observation, identity_publication,
+                request_observation, provider_observation, source_observation, failure, cleanup, status)
+            terminal = json.loads(canonical_json(value))
+            stage = "LAUNCH_SCOPE_EXIT"
+        return terminal
+    except BaseException as error:
+        try:
+            missing_metadata = False
+            if terminal is not None:
+                value = terminal
+            elif value is None:
+                try:
+                    value = _native_observation(plan, owned, observation, identity_publication,
+                        request_observation, provider_observation, source_observation, failure, cleanup, "CLEANUP_HOLD")
+                except BaseException:
+                    missing_metadata = True
+                    value = _native_observation(None, None, observation, identity_publication,
+                        request_observation, provider_observation, source_observation, failure, cleanup, "CLEANUP_HOLD")
+            _retain_native_failure(error, value, stage=stage, terminal=terminal is not None,
+                                   owned=owned, missing_metadata=missing_metadata)
+        except BaseException:
+            # Even malformed owner metadata or a failed evidence attachment may
+            # not replace the original escaped error or resume skipped cleanup.
+            pass
+        raise

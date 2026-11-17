@@ -86,6 +86,24 @@ def _service_failure_observation(services, failure, uncertainty):
         return None
 
 
+def _native_failure_observation(failure, uncertainty):
+    try:
+        value = getattr(failure, "pi_native_supervisor_observation", None)
+        if value is None:
+            return None
+        _require(type(value) is dict and
+                 value.get("schema") == "aragorn/pi-core-native-supervisor-result/v1" and
+                 value.get("authority") == "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION" and
+                 value.get("status") == "CLEANUP_HOLD" and
+                 all(key in value and (value[key] is None or type(value[key]) is dict) for key in
+                     ("bootstrap", "identity_registration", "request_channel", "provider_channel",
+                      "source_observation", "cleanup")), "native failure observation is invalid")
+        return _copy_observation(value)
+    except BaseException:
+        _uncertain(uncertainty, "worker", "INVALID_NATIVE_FAILURE_OBSERVATION")
+        return None
+
+
 def _cleanup_verified(value):
     return (type(value) is dict and value.get("status") != "CLEANUP_HOLD" and
             type(value.get("cleanup")) is dict and
@@ -166,14 +184,18 @@ def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_r
                 **({"provider_credential": provider_credential} if enabled else {})) as services:
             services.guard(deadline=services.operation_deadline)
             worker_call_attempted = True
-            worker = native.run_native_pi_worker(cas, context, profile=profile, grant=approved,
-                protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
-                deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
-                deadline=services.operation_deadline, config=config,
-                cleanup_timeout_seconds=cleanup_timeout_seconds,
-                request_channels=services.channels.request_channels,
-                **({"provider_channels": PiNativeProviderChannels(provider_approval.config,
-                        services.channels, provider_approval)} if enabled else {}))
+            try:
+                worker = native.run_native_pi_worker(cas, context, profile=profile, grant=approved,
+                    protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
+                    deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
+                    deadline=services.operation_deadline, config=config,
+                    cleanup_timeout_seconds=cleanup_timeout_seconds,
+                    request_channels=services.channels.request_channels,
+                    **({"provider_channels": PiNativeProviderChannels(provider_approval.config,
+                            services.channels, provider_approval)} if enabled else {}))
+            except BaseException as failure:
+                worker_snapshot = _native_failure_observation(failure, uncertainty)
+                raise
             # Retain the returned bytes before a later service owner can fail.
             try:
                 worker_snapshot = _copy_observation(worker)
@@ -191,9 +213,8 @@ def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_r
                 worker.get("cleanup", {}).get("status") != "VERIFIED_OWNED_CLEANUP" or
                 service_result.get("cleanup", {}).get("status") != "VERIFIED_OWNED_CLEANUP" else "REFUSED")
     except BaseException as failure:
-        if worker_call_attempted and worker is None:
-            # Native exceptions currently have no retained-result contract.
-            # Do not infer cleanup or adopt arbitrary exception attributes.
+        if worker_call_attempted and worker_snapshot is None:
+            # A missing fixed producer record is unknown, not clean shutdown.
             _uncertain(uncertainty, "worker", "NO_RETURNED_OBSERVATION")
         service_snapshot = (_snapshot(service_result, "services", uncertainty) if service_read_attempted
                             else _service_failure_observation(services, failure, uncertainty))

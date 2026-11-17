@@ -46,8 +46,9 @@ Plan schema `aragorn/pi-core-bundle-install-plan/v1`, exact fields:
 - `candidate_cas_root`, `predecessor_cas_root` (null for install; independently
   retained read-only predecessor CAS for update);
 - `deployment` and `launch`: protected `{path,digest}` references;
-- `runtime_conformance_digest` and `revocations`: protected `{path,digest}`
-  reference with exact `protected-install-revocations/v1` context-ID inventory.
+- `runtime_conformance_digest`: an independently approved digest string;
+- `revocations`: protected `{path,digest}` reference with exact
+  `protected-install-revocations/v1` context-ID inventory.
 
 Operation, target and expected predecessor come only from verified context v2;
 allow install/update, not rollback/force/reload. Destination is fixed to
@@ -118,6 +119,43 @@ authority or expand report ceilings. This remains in-process evidence, not
 durable capture or independently verified cleanup.
 
 ## Verification and continuous delivery
+
+Implementation is now frozen after independent source review. Entry checks
+compose the existing publisher and Pi fresh-start consumer in five temporary
+CAS fixtures (install, update/stale grant, replay, quarantine and wrong
+predecessor). Root/view/analyzer edges remain inert; these are not admission or
+installed-view qualification. Runtime, policy, configuration and OS are joined
+to their actual caller inputs. Adapter, worker and Aragorn-version dimensions
+remain independently pinned declarations, not extra measured attestations.
+
+Reviewed stage closures: entry 96 paths, dispatch 102, native failure 101 and
+managed composition 109. Import-time build-script bytes belong only to the native
+fixture closure; the three service-wrapper sources belong to composition because
+its imported fixture reads them. Explicit `load_tests` selections exclude all
+unselected inherited suites. Scope is 93 new plus 18 affected checks,
+including four finite registry-capacity checks (206 accepted, 207 rejected).
+
+## Completed offline evidence
+
+All **111 checks passed on their first execution**, with zero failed fingerprints
+or reruns in this batch. The existing pipeline ran only the four named stages
+and the changed finite-capacity check. Interpreter: local Python 3.14.6, not the
+Linux target. No target build, live process/service/VM/provider operation,
+historical capture or qualification ran. Retained logs remain under
+`.aragorn/phase3-pipeline/<stage>/<fingerprint-hex>/`; no prior record was erased.
+
+| Stage | Checks | Exact successful fingerprint |
+| --- | ---: | --- |
+| `pi-core-bundle-install-entry-offline` | 50 | `sha256:9bd4879eab87d36f4409f65b2a34ad4a45d4ccb725b3c6b5d2a0df29ce791c5d` |
+| `pi-core-bundle-install-dispatch-offline` | 16 | `sha256:1b379d140ed05fc300d718cf55778e56403f7368dd842ad41cd44788ed01aa65` |
+| `pi-core-native-failure-evidence-offline` | 30 | `sha256:66cdf0e6b8f0aadc1c0e76bf6f22f05a8976782d42440784fc0dd234791b70d2` |
+| `pi-core-native-failure-composition-offline` | 11 | `sha256:3a8dc089b248c1cef70eeaae034dd17b4d6beb39c7a6f919697c842865fd3301` |
+| `pipeline-capacity` | 4 | `sha256:b4073e3d8a40ab2db7e3932ff4651b037424c3da430cfe6e4c109e0315d3f563` |
+
+Signed assignment source `574fe3a`, merge
+`49e563df62cf171fa966cbf01f71b14a89d87f15`, was published before implementation.
+Implementation source/merge hashes and exact remote readback are recorded in the
+coordinator milestone after signing; that signed merge is the next batch base.
 
 Use new focused entry/dispatch/native/composition stages with only selected
 affected cases. Include inert actual existing install/update publisher and Pi

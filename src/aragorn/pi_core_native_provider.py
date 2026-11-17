@@ -290,12 +290,35 @@ class PiNativeProviderDispatch:
             identity._measured(self.accepted, self.owned.pidfd, self._plan.profile, self._activation, deadline)
             self._observer.guard_source_health(activation=self._activation, deadline=deadline)
             self._remote_custody_hold = True
-            result = mediation.handle_pi_provider_connection(self.accepted, self.channels.services.provider_connection,
-                self.channels.config, activation_path=self._plan.activation_path, profile=self._plan.profile,
-                protected_install_root=self.protected_root, grant=self.grant,
-                expected_provider_peer=self.channels.services.provider_peer, deadline=deadline,
-                provider_service=True, service_custody=self.channels.services, source_observer=self._observer,
-                expected_request=self._expected)
+            try:
+                result = mediation.handle_pi_provider_connection(self.accepted, self.channels.services.provider_connection,
+                    self.channels.config, activation_path=self._plan.activation_path, profile=self._plan.profile,
+                    protected_install_root=self.protected_root, grant=self.grant,
+                    expected_provider_peer=self.channels.services.provider_peer, deadline=deadline,
+                    provider_service=True, service_custody=self.channels.services, source_observer=self._observer,
+                    expected_request=self._expected)
+            except BaseException as error:
+                # Capture the exact producer record before accepted-stream close
+                # can replace cancellation or another escaped mediation failure.
+                try:
+                    value = getattr(error, "pi_provider_mediation_observation", None)
+                    _require(type(value) is dict and
+                        value.get("schema") == "aragorn/pi-core-provider-mediation-observation/v1" and
+                        value.get("authority") == "PROVIDER_DATA_GATE_OBSERVATION_NOT_EGRESS_OR_RUN_AUTHORITY" and
+                        value.get("status") in {"NOT_SUBMITTED", "INDETERMINATE"} and
+                        type(value.get("submission_attempted")) is bool and
+                        value.get("activation_digest") == canonical_digest(self._activation) and
+                        value.get("request_digest") in {None, canonical_digest(self._expected)} and
+                        (not value["submission_attempted"] or value["request_digest"] == canonical_digest(self._expected)) and
+                        (not value["submission_attempted"] or value["status"] == "INDETERMINATE") and
+                        value.get("phase3_eligible") is False,
+                        "native provider failure observation differs")
+                    raw = canonical_json(value)
+                    _require(len(raw) <= 4 * 1024 * 1024, "native provider failure observation is oversized")
+                    self._observation["provider_result"] = json.loads(raw)
+                except BaseException:
+                    pass
+                raise
             _require(type(result) is dict and result.get("status") in {"COMPLETED", "NOT_SUBMITTED", "INDETERMINATE"} and
                      type(result.get("submission_attempted")) is bool, "native provider mediator result is invalid")
             self._observation["provider_result"] = json.loads(canonical_json(result))

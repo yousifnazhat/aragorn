@@ -198,10 +198,12 @@ class ProviderSourceHealthTests(unittest.TestCase):
 
     def test_same_activation_and_tightened_budget_are_used_for_each_check(self):
         observed = []
+        acquired = self.health.side_effect
         def checked(held, *, activation, deadline):
             self.assertIs(held, self.observer)
             self.assertEqual(activation, self.f.activation)
             observed.append((len(self.e.sent), deadline, copy.deepcopy(activation)))
+            return acquired(held, activation=activation, deadline=deadline)
         self.health.side_effect = checked
         result = self.run_request()
         self.assertEqual(result["status"], "COMPLETED")

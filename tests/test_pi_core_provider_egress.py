@@ -1,7 +1,9 @@
 """New root/service-v2 checks and selected affected v1 checks; no live I/O."""
 
 import copy
+from contextlib import contextmanager
 import json
+from pathlib import Path
 import unittest
 from unittest import mock
 
@@ -10,6 +12,42 @@ from aragorn import pi_core_openai_transport as transport
 from aragorn import pi_core_provider_service as service
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from tests import test_pi_core_provider_mediation as fixtures
+from tests import test_pi_core_provider_observation as acquired
+
+
+class EvidenceFixture:
+    """An inert storage edge; actual CAS/index custody has its own new stage."""
+    def __init__(self, events):
+        self.events, self.records, self.references = events, [], []
+        self.status, self.close_count = "OPEN", 0
+        self.before_retain = lambda kind, value: None
+        self.close_failure = None
+
+    def retain(self, kind, value):
+        self.before_retain(kind, value)
+        raw = canonical_json(value)
+        ref = dict(kind=kind, digest=canonical_digest(value), bytes=len(raw))
+        self.records.append((kind, copy.deepcopy(value)))
+        self.references.append(ref)
+        self.events.append("retain:" + kind)
+        return copy.deepcopy(ref)
+
+    @property
+    def observation(self):
+        return dict(schema="aragorn/pi-core-provider-evidence-observation/v1",
+            authority="RAW_STORAGE_ONLY_NOT_EXECUTION_OR_PHASE3", status=self.status,
+            references=copy.deepcopy(self.references), index_status="DURABLE_PREFIX",
+            owned_handles_closed=self.close_count == 1 and self.close_failure is None,
+            phase3_eligible=False)
+
+    def close(self):
+        self.close_count += 1
+        self.events.append("evidence_close")
+        self.status = "CLOSED" if self.close_failure is None and self.status != "CLEANUP_HOLD" else "CLEANUP_HOLD"
+        if self.close_failure is not None:
+            raise self.close_failure
+        if self.status == "CLEANUP_HOLD":
+            raise OSError("inert storage uncertainty")
 
 
 class ProviderEgressTests(unittest.TestCase):
@@ -69,9 +107,73 @@ class ProviderEgressTests(unittest.TestCase):
             return self.mutate_reply(index, value), ()
 
         f.send.side_effect, f.receive.side_effect = send, receive
+        self.prepare_acquired_evidence()
+
+    def prepare_acquired_evidence(self):
+        f, values = self.f, acquired.provider_inputs()
+        # Reuse the existing route/wire fixture, but provide complete acquired
+        # identity/lineage to the real new observation publisher.
+        route, model = copy.deepcopy(f.approval["route"]), copy.deepcopy(f.request["payload"]["model"])
+        f.request, f.approval, f.activation = values["request"], values["approval"], values["activation"]
+        f.storage, f.config, self.grant = values["storage"], values["config"], values["grant"]
+        f.request["route_digest"] = canonical_digest(route)
+        f.request["payload"]["model"] = model
+        f.approval.update(route=route, payload_digest=canonical_digest(f.request["payload"]))
+        action = f.approval["request"]
+        action.update(path_digest=canonical_digest(route), payload_digest=f.approval["payload_digest"],
+                      tool_call_id=canonical_digest(f.request))
+        f.storage["policy.json"]["allow"][0].update(path_digest=action["path_digest"], payload_digest=action["payload_digest"])
+        action["policy_digest"] = canonical_digest(f.storage["policy.json"])
+        f.activation["policy_digest"] = action["policy_digest"]
+        self.grant["policy_digest"] = action["policy_digest"]
+        f.grant = self.grant
+        f.approval["activation_digest"] = canonical_digest(f.activation)
+        f.storage[subject.APPROVAL_NAME] = f.approval
+        f.profile = subject.process.RuntimeProcessProfile(values["measured"]["runtime_digest"],
+            values["measured"]["executable_digest"], values["measured"]["cgroup"],
+            Path(values["measured"]["skill_path"]), values["measured"]["profile_digest"])
+        f.measured.return_value = values["measured"]
+        f.stack.enter_context(mock.patch.object(subject.broker, "_peer_credentials",
+            return_value=tuple(f.activation[key] for key in ("pid", "uid", "gid"))))
+        @contextmanager
+        def lineage(*args, **kwargs):
+            f.events.append("lineage_enter")
+            try:
+                yield values["lineage"]
+            finally:
+                f.events.append("lineage_close")
+        f.lineage.side_effect = lineage
+        self.capture, self.capture_count = values["source_capture"], 0
+        def health(*args, **kwargs):
+            self.capture_count += 1
+            captured = copy.deepcopy(self.capture)
+            captured["events"][-1]["nonce"] = f"{self.capture_count:064x}"
+            return captured
+        f.source_health.side_effect = health
+        self.tick = f.stack.enter_context(mock.patch.object(subject.time, "clock_gettime_ns",
+            return_value=values["boundary_boottime_ns"]))
+        f.stack.enter_context(mock.patch.object(subject.time, "CLOCK_BOOTTIME", 7, create=True))
+        self.store = EvidenceFixture(f.events)
+        @contextmanager
+        def evidence(*args, **kwargs):
+            f.events.append("evidence_enter")
+            try:
+                yield self.store
+            finally:
+                self.store.close()
+        self.hold_evidence = f.stack.enter_context(mock.patch.object(subject.evidence, "hold_provider_evidence", side_effect=evidence))
+        def publish(fd, name, raw, **kwargs):
+            f.storage[name] = json.loads(raw)
+            f.events.append("publish:" + name)
+        self.publish = f.stack.enter_context(mock.patch.object(subject.broker, "_atomic_publish_at", side_effect=publish))
+        f.service_result = fixtures.result(f.request)
+        self.claim_read.return_value = canonical_json({"schema": "aragorn/pi-core-provider-activation-claim/v1",
+            "authority": "PERSISTENT_PROVIDER_BUDGET_CONSUMPTION_NOT_EGRESS_AUTHORITY",
+            "activation_digest": canonical_digest(f.activation), "request_digest": canonical_digest(f.request),
+            "approval_digest": canonical_digest(f.approval), "status": "SPENT"})
 
     def run_request(self):
-        return self.f.run_request(provider_service=True)
+        return self.f.run_request(provider_service=True, grant=self.grant)
 
     def test_root_binds_exact_wire_and_checks_twice_under_one_claim(self):
         observed = self.run_request()
@@ -106,9 +208,9 @@ class ProviderEgressTests(unittest.TestCase):
         self.assertEqual(len(self.sent), 2)
 
     def test_observation_expiring_during_preparation_is_not_cached_allow(self):
-        self.f.storage["observation.json"]["expires_at_unix"] = 101
         def changed(index):
             if index == 1:
+                self.f.storage["observation.json"]["expires_at_unix"] = 101
                 self.f.wall.return_value = 101
         self.before_receive = changed
         self.assertEqual(self.run_request()["status"], "INDETERMINATE")

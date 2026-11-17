@@ -146,6 +146,65 @@ sample is promoted to pilot or qualification evidence.
 
 ## Verification, delivery and remaining plan
 
+### Completed offline implementation
+
+The protected provider-service path now publishes the actual acquired request,
+retains the raw inputs and decisions in the existing CAS, and preserves compact
+storage/cancellation evidence through the native caller. Legacy non-service
+mediation remains unchanged. The root entrypoint joins the publisher module to
+its independently pinned consumed-source record before managed execution.
+
+The evidence index retains a `pending_reference` for an attempted/unindexed blob;
+that reference is not a successful durable append. `CLOSED` means the acquired
+index prefix and owned handles closed successfully, not a complete capture.
+Source snapshots have pre-permission storage boundaries and separate final
+freshness-check boundaries. The latter are retained after publication or permit
+delivery and are not independently observed HTTP-send timestamps. Successful
+permit delivery is counted before subsequent retention can fail. All cleanup
+owners are invoked even when an earlier owner reports uncertainty.
+
+Coordinator-owned affected fixtures are `test_pi_core_coordinator_entry.py`,
+`test_pi_core_provider_egress.py`, `test_pi_core_provider_mediation.py` and
+`test_pi_core_source_health_enforcement.py`. They now provide complete inert
+acquired records and return the source guard's actual snapshot. New composition
+and failure-retention files explicitly select only their new/affected methods.
+The source-boundary helper is `validate_provider_source_capture`; it validates
+the acquired final challenge and accounting without claiming full replay.
+
+All **126 checks passed on their first execution: 106 new and 20 affected**.
+No failed fingerprint or retry was introduced. Exact input closures were reviewed
+independently (92/98/103/98 paths); pipeline capacity is 210, not a suite expansion.
+
+| Stage | Checks | Successful fingerprint |
+|---|---:|---|
+| `pi-core-provider-evidence-offline` | 37 | `b39f7ee73064504adcbb57ab15e2228861fd2a0f29cd11bff91a8a5a4ccdeefb` |
+| `pi-core-provider-observation-offline` | 42 | `9233bd0aca392306205eac4051de7be96e61e047795ba0764ca21749f2793d5a` |
+| `pi-core-provider-evidence-composition-offline` | 25 | `e067c50ce45a634b27adadfbb73d48fc824ceb53793cf8508966ad9d713256bd` |
+| `pi-core-provider-failure-retention-offline` | 18 | `5005fa93874e319e0ca1347315d5458ddb59fff78846008f1ec5c7253df055ef` |
+| `pipeline-capacity` | 4 | `2ab3eb876afe7dd80770ac88be519efc0c4a12f90648acf0d9f77b245f697c43` |
+
+Retained pipeline records are under `.aragorn/phase3-pipeline/<stage>/<fingerprint>/`.
+Execution used local Python 3.14.6, not the Linux deployment. No target execution,
+build, installed materialization, provider call, live operation or qualification ran.
+
+### Producer to existing consumer inventory
+
+- `SOURCE_HEALTH` plus `SOURCE_BOUNDARY`: existing
+  `verify_pi_node_source_observation`, with independently pinned expected worker,
+  profile, inventories, gate, clock, root peer, endpoints and challenge/boundary.
+  Root publisher consumption is separate evidence; the policy sensor label is
+  not code identity. These acquired rows do not close full RUN/global health.
+- Actual policy/revocation/global-health/observation and `DECISION`: existing
+  `evaluate_runtime_action`, retaining the evaluated time and required floors for
+  a canonical result comparison. Replay-state/claim-state joins remain open.
+- Authenticated service packets: existing packet/codec validators check syntax
+  and binding, not external network traffic or effect absence. Rendered payloads
+  and authenticated results do not replace independent HTTP/effect observations.
+
+Real acquisition, complete global loss accounting, external effects, full timing
+and the complete independent semantic inventory remain prerequisites. No retained
+unit fixture or shape-valid packet is promoted to pilot or D4/D5 evidence.
+
 New/affected stages only: exact raw CAS/readback and custody refusal; request
 publication from acquired identity; stale/foreign/incomplete source snapshots;
 inactive anchor versus malformed/absent state; unchanged global health; provider

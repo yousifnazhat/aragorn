@@ -74,7 +74,8 @@ class EntryTests(entry_fixtures.PiServiceEntryTests):
     def test_source_verified_action_selects_v2_after_handshake(self):
         loader = object()
         with mock.patch.object(entry, "_source_handshake",
-                side_effect=lambda *_: self.events.append(("source",))) as handshake:
+                side_effect=lambda *_: self.events.append(("source",))) as handshake, \
+                mock.patch.object(entry, "_action_start", return_value=({"kind": "RUN_REQUEST"}, 104.0)):
             entry.run("action", ["9000", "105000000000"], source_loader=loader)
         handshake.assert_called_once()
         self.assertIs(self.action.call_args.kwargs["terminal_ack"], True)

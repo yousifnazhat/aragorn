@@ -101,8 +101,49 @@ artifacts. Reviewed pipeline stages only; unchanged successes are not rerun.
 After review/pass: signed source, signed main merge, normal push and exact remote
 readback. No live operations or target build are released by this contract.
 
-1. **D2:** explicit preparation next; actual installed controls/views, genuine
+1. **D2:** explicit preparation connected offline; actual installed controls/views, genuine
    health, raw action effects, recovery/full timing and authorized pilot remain.
 2. **D3:** remaining connected admission, RUN/health and workload coverage.
 3. **D4:** complete independent semantic inventory/prerequisites, then freeze.
 4. **D5:** separately authorized fresh acceptance, measurement and cleanup.
+
+## Reviewed implementation checkpoint
+
+The fixed root route now holds the admitted bundle and installed-runtime/configuration
+custody, starts only the existing action role, sends the authenticated PREPARE
+command, retains the actual result and independently locked readback, then releases
+its ACK and verifies owned cleanup. Normal source-verified startup sends RUN_REQUEST;
+legacy role entry remains unchanged. Partial starts, original failures, helper
+acquisition/read/close uncertainty and outer-holder cleanup remain honest holds.
+Public reports retain only bounded metadata/digests, not raw private records.
+
+Independent source, caller, fixture and input-closure review preceded execution.
+The four new stages have 97/99/96/113 explicit inputs. Registry capacity is 218.
+**111 distinct checks passed: 96 new and 15 affected.** The first run passed 110;
+the wrapper privacy assertion falsely matched the legitimate macOS `/private/tmp`
+host-executable path. Only that assertion changed to test the actual private
+fixture payloads and absence of the raw result. After review, only its 14-check
+wrapper stage reran; the other 97 passing checks were not rerun. The failed
+fingerprint and full logs remain retained. No source behavior or acceptance
+threshold was relaxed for that correction.
+
+| Stage | Checks | Retained passing fingerprint |
+| --- | ---: | --- |
+| `pi-core-broker-preparation-service-offline` | 32 | `3013f7cb8b41cc4b60bc0dc2fec4552e03be7061fef27f1bf8f42c90de2b9cec` |
+| `pi-core-broker-preparation-lifecycle-offline` | 42 | `a34a37e10bb4148a356133f3cb1243b009863b6d105101bd6d8c117da2dd0e3b` |
+| `pi-core-broker-preparation-entry-offline` | 19 | `4ac93e19c46b0d7779b3cacbe648fd511719d693c4133a9619396b38e59a4385` |
+| `pi-core-broker-preparation-wrapper-offline` | 14 | `ab53c37f5b5785a8b1d3515d59acceded0761d1162e3b6d018b4134d9a9045c5` |
+| `pipeline-capacity` | 4 | `ab9ed9a924a7e1620f72bf9d6f1a76c3fa9ab6e468fe63767274b9210764b243` |
+
+Wrapper failed fingerprint: `43407c119273af97fae5f36b77257c3a8853b1b5509439b8a47c813199be8bcb`.
+Evidence is retained under `.aragorn/phase3-pipeline/<stage>/<fingerprint>/`.
+No broad suite, target build, service/VM/provider activation, capture or qualification
+ran. All 985 unrelated drafts and frozen predecessors remain untouched. Signed
+source/merge hashes and exact remote readback are recorded in the milestone and
+the next batch's base record, avoiding a self-referential commit hash.
+
+The next connected dependency is fresh-only installation of the action-owned
+base controls. Grant preparation does not provision them, manufacture current
+policy/health, rotate an ambiguous effect, or close D2. Separate root-owned
+provider controls, genuine loss/progress, action raw effects/full timing and the
+authorized pilot remain open; D3/D4/D5 retain every existing hold.

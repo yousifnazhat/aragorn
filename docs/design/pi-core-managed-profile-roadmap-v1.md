@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-26 [managed install/native evidence checkpoint](../phase3/coordinator/pi-core-install-caller-batch-26.md):
+the fixed protected root route now connects managed install/update to the existing
+publisher and Pi fresh-start consumer. Native terminal/partial observations survive
+held-plan teardown and reach managed/root failure retention. All 111 new/affected
+checks passed once. No installed materialization or live operation ran; declared
+deployment pins are not extra measured attestations. Genuine global health,
+provider fresh request observation/raw retention, installed views, recovery/full
+timing and the separately authorized useful pilot remain D2 prerequisites.
+
 Batch-25 [failure-evidence checkpoint](../phase3/coordinator/pi-core-failure-evidence-batch-25.md):
 returned worker and available service observations now survive managed/root
 failure paths and outer cleanup replacement. Public output remains digest-only;

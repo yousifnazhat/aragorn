@@ -427,12 +427,14 @@ def _public_observation(observation):
              "invalid coordinator observation")
     status = observation.get("status")
     _require(status in {"REFUSED", "REFUSED_OR_INDETERMINATE", "CLEANUP_HOLD",
-                        "MANAGED_CALL_RETURNED_NOT_QUALIFIED", "INVENTORIES_PREPARED_NOT_QUALIFIED"},
+                        "MANAGED_CALL_RETURNED_NOT_QUALIFIED", "INVENTORIES_PREPARED_NOT_QUALIFIED",
+                        "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED"},
              "invalid coordinator status")
     report["entry_status"] = status
     stage = observation.get("failure_stage")
     _require(stage is None or stage in {"PREFLIGHT", "PREPARED_INPUTS", "HELD_INPUTS", "MANAGED_CALL",
-        "POST_CALL_CUSTODY", "HOLDER_CLEANUP", "INPUT_CLEANUP", "INVENTORY_PREPARATION"},
+        "POST_CALL_CUSTODY", "HOLDER_CLEANUP", "INPUT_CLEANUP", "INVENTORY_PREPARATION",
+        "INSTALLATION", "DESTINATION_CLEANUP"},
         "invalid coordinator failure stage")
     report["entry_failure_stage"] = stage
     for name in ("managed_call_attempted", "owned_inputs_closed"):
@@ -593,13 +595,63 @@ def _public_preparation(observation):
     return report
 
 
+def _public_install(observation):
+    report = _public_observation(observation)
+    report.update(schema="aragorn/pi-core-bundle-install-report/v1",
+        authority="PROTECTED_MATERIALIZATION_ONLY_NOT_ACTIVATION_OR_PHASE3",
+        context_digest=None, installation_attempted=False, owned_destination_closed=False,
+        publication_state="NOT_ATTEMPTED", transaction_digest=None, recovery_digest=None,
+        input_cleanup_uncertainty_digest=None)
+    if observation is None:
+        return report
+    _require(observation.get("schema") == "aragorn/pi-core-bundle-install-result/v1" and
+             observation.get("authority") == report["authority"] and
+             observation.get("managed_result") is None and report["managed_call_attempted"] is False,
+             "installation cannot carry managed authority")
+    for name in ("installation_attempted", "owned_destination_closed"):
+        _require(type(observation.get(name)) is bool, "invalid installation boolean")
+        report[name] = observation[name]
+    pin = observation.get("context_digest")
+    _require(pin is None or type(pin) is str and _PIN.fullmatch(pin), "invalid context pin")
+    report["context_digest"] = pin
+    state = observation.get("publication_state")
+    _require(state in {"NOT_ATTEMPTED", "PUBLISHER_RETURNED", "RECOVERY_RECORD_RETAINED", "UNKNOWN"} and
+             (report["installation_attempted"] or state == "NOT_ATTEMPTED"), "invalid publication state")
+    report["publication_state"] = state
+    for name in ("transaction", "recovery"):
+        value = observation.get(name)
+        if value is not None:
+            _require(type(value) is dict and report["installation_attempted"], "invalid private installation record")
+            if name == "transaction":
+                _require(value.get("schema") == "aragorn/protected-install-transaction/v1",
+                         "invalid installation transaction schema")
+            raw = _canonical(value)
+            _require(len(raw) <= 256 * 1024, "installation record exceeds report bound")
+            report[name + "_digest"] = _digest(raw)
+    uncertainty = observation.get("input_cleanup_uncertainty")
+    _require(type(uncertainty) is list and len(uncertainty) <= 512, "invalid input cleanup uncertainty")
+    raw = _canonical(uncertainty)
+    _require(len(raw) <= 256 * 1024, "input cleanup uncertainty exceeds bound")
+    report["input_cleanup_uncertainty_digest"] = _digest(raw)
+    if report["entry_status"] == "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED":
+        _require(report["installation_attempted"] and report["owned_inputs_closed"] and
+                 report["owned_destination_closed"] and not uncertainty and
+                 state == "PUBLISHER_RETURNED" and report["transaction_digest"] is not None and
+                 report["recovery_digest"] is None and pin is not None,
+                 "installation success lacks complete owned custody")
+    _require(len(_canonical(report)) <= 256 * 1024, "installation report exceeds bound")
+    return report
+
+
 def main():
     host = loader = None
     result, observation, phase = 126, None, "PREFLIGHT"
     entry_invoked = False
     prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-inventories"
-    public = _public_preparation if prepare else _public_observation
-    args = sys.argv[2:] if prepare else sys.argv[1:]
+    install = len(sys.argv) > 1 and sys.argv[1] == "--install-bundle"
+    public = _public_install if install else _public_preparation if prepare else _public_observation
+    attempt_field = "installation_attempted" if install else "preparation_attempted" if prepare else "managed_call_attempted"
+    args = sys.argv[2:] if prepare or install else sys.argv[1:]
     cleanup = {"source_loader": "NOT_ACQUIRED", "host": "NOT_ACQUIRED"}
     try:
         _flags()
@@ -618,7 +670,9 @@ def main():
         phase = "SOURCE_BOOTSTRAP"
         cleanup["source_loader"] = "NOT_RETURNED_CLEANUP_UNVERIFIED"
         loader = _bootstrap(host)
-        if prepare:
+        if install:
+            from aragorn.pi_core_bundle_install_entry import run
+        elif prepare:
             from aragorn.pi_core_installed_inventory_entry import run
         else:
             from aragorn.pi_core_coordinator_entry import run
@@ -629,7 +683,9 @@ def main():
         phase = "POST_CALL_CUSTODY"
         host.guard()
         report = public(observation)
-        if prepare:
+        if install:
+            result = 0 if report["entry_status"] == "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED" else 126
+        elif prepare:
             result = (0 if report["entry_status"] == "INVENTORIES_PREPARED_NOT_QUALIFIED" and
                 report["preparation_attempted"] and report["owned_inputs_closed"] and
                 report["owned_views_closed"] and report["artifacts"] is not None else 126)
@@ -656,14 +712,14 @@ def main():
     try:
         report = public(observation)
         if observation is None and entry_invoked:
-            report["preparation_attempted" if prepare else "managed_call_attempted"] = None
+            report[attempt_field] = None
     except BaseException:
         report = public(None)
-        field = "preparation_attempted" if prepare else "managed_call_attempted"
-        attempted = observation.get(field) if type(observation) is dict else None
-        report[field] = attempted if type(attempted) is bool else None if entry_invoked else False
+        attempted = observation.get(attempt_field) if type(observation) is dict else None
+        report[attempt_field] = attempted if type(attempted) is bool else None if entry_invoked else False
         phase, result = "REPORT_REFUSED", 126
-    report.update(status=("INVENTORIES_PREPARED_NOT_QUALIFIED" if prepare else
+    report.update(status=("INSTALLED_NOT_ACTIVATED_OR_QUALIFIED" if install else
+                  "INVENTORIES_PREPARED_NOT_QUALIFIED" if prepare else
                   "MANAGED_BOOTSTRAP_RETURNED_NOT_QUALIFIED") if result == 0 else "REFUSED_OR_CLEANUP_HOLD",
                   wrapper_stage=phase, wrapper_cleanup=cleanup, entry_call_attempted=entry_invoked)
     if prepare and result != 0:

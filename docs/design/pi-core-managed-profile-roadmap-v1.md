@@ -15,6 +15,22 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-23 [root coordinator checkpoint](../phase3/coordinator/pi-core-root-entry-batch-23.md):
+the user approved the pinned dedicated-VM-host root execution profile and
+its protected entrypoint is implemented offline, reusing the existing verified
+source loader and managed composition. All 78 new/affected checks passed once;
+no fourth child-service role, ambient Python fallback, target build or live
+operation was added. Root-custody metadata is retained separately from the
+managed-result digest; raw effect capture remains outstanding. Concrete
+host/runtime/plan pins, future control-tool dependency closure, genuine health,
+installed views, timing and the separately authorized useful pilot remain open.
+
+Batch-22 [gate provisioning checkpoint](../phase3/coordinator/pi-core-gate-provisioning-batch-22.md):
+installation now preserves the exact reviewed pre-execution gate alongside Node
+while stripping other runtime executable bits. All 28 new/affected checks passed
+once; no build or live installation ran. The earlier root-profile decision hold
+is resolved by the user's batch-23 approval, not by runtime qualification.
+
 Batch-21 [provider custody checkpoint](../phase3/coordinator/pi-core-provider-custody-batch-21.md):
 the additive managed caller now joins held credential/public inputs, provider-only
 credential and exact-address properties, and one-shot approval publication bound

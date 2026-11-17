@@ -1,7 +1,8 @@
 # Pi-core batch 23: protected VM-host coordinator entrypoint
 
 Base: signed published `735e9e35fba6d13d9a5032c0996041c193abbcdb`.
-Status: approved bounded offline implementation assignment, not activation.
+Status: implemented and reviewed offline; 78 focused checks passed first run.
+No activation, installed-host proof or Phase 3 qualification.
 
 ## Approved decision and fixed boundary
 
@@ -101,6 +102,15 @@ Retain root source-consumption/host snapshots and plan/deployment joins separate
 from the managed result. A caller report alone is not independent qualification.
 No provider observation publisher or global health refresh is released here.
 
+The CLI emits bounded redacted root-custody metadata, including the managed
+outcome's digest/status, not raw task/effect evidence. The operator must retain
+that output; connecting the existing raw managed/effect capture is still a D2
+prerequisite. Host checks join current interpreter mappings and pinned control
+tool files; they do not infer the complete ELF dependency closure of future
+control-tool subprocesses. The exact VM tool/loader/library closure must still
+be independently reviewed and pinned before activation. No host profile has
+been accepted or exercised by this offline batch.
+
 ## Review, verification and remaining plan
 
 Review malformed pins/paths/bytecode/runtime substitution, preimported source,
@@ -109,8 +119,53 @@ one-call composition and ownership-safe failure cleanup. Schedule only the new
 wrapper/entry stages and affected capacity cases through the reviewed pipeline;
 no broad regression, target build or live check.
 
-1. **D2:** approved VM-host root entrypoint; then real host/installed inventories,
+### Completed implementation and focused evidence
+
+- `packaging/pi-core/coordinator.py` holds independently pinned host files,
+  checks the current interpreter/mappings and full declared import subtrees,
+  and installs the existing verified source loader before importing Aragorn.
+- `src/aragorn/pi_core_coordinator_entry.py` consumes the fixed prepared plan,
+  holds input/CAS ancestry, derives the worker grant/profile from held service
+  configuration, acquires existing authority holders, and calls the managed
+  bootstrap once. Unavailable remains the default mode; no input provisioning,
+  observation/health fabrication, deadline extension or effect retry is added.
+- Review corrected partial-acquisition cleanup reporting, report loss after
+  post-call failure, and false no-attempt reporting. An uncertain close remains
+  a hold; a returned refusal is never promoted to completion. The bounded CLI
+  report preserves root snapshots and joins while redacting raw managed content.
+- Independent lane review and coordinator review completed before execution.
+  Native identity/root ownership are mocked; temporary files contain inert
+  bytes. These checks did not execute the target Python, Node, gate or services.
+
+Exactly one pipeline invocation ran the following stages; all passed, with no
+failed fingerprint, retry, historical stage or broad regression execution:
+
+| Stage | Checks | Successful fingerprint |
+| --- | ---: | --- |
+| `pi-core-coordinator-wrapper-offline` | 34 new | `sha256:fc15f022ddb391837cb427bf15ad72a39a5649da3101afe10a2a56f3d12c7895` |
+| `pi-core-coordinator-entry-offline` | 40 new | `sha256:033f192484ea9e2efd56345205369fbd088928a6b36f14d49fb80918daa2b016` |
+| `pipeline-capacity` | 4 affected | `sha256:b0b359ce84a6096ef1eddb862c4561acc9fd1243e73b63131a5fcf687e79edf2` |
+
+The reviewed entry closure contains 90 statically reachable source/test files
+plus the wrapper and existing source-loader interface contracts. The wrapper
+stage contains its two owned files and those two source interfaces. No historical
+test module is discovered. Registry capacity grows only from 195 to 197 for these
+two stages. Retained local logs/results remain under
+`.aragorn/phase3-pipeline/<stage>/<fingerprint-without-prefix>/`; unchanged old
+stages were not scheduled. The tests ran under the local Python 3.14 runner,
+not the required Linux-arm64 Python 3.12 deployment.
+
+### Numbered D2–D5 checkpoint
+
+1. **D2:** pinned VM-host profile approved and root entrypoint implemented offline;
+   next real host/installed inventories,
    genuine observation/health, recovery/full timing and separately approved pilot.
 2. **D3:** remaining connected admission, RUN/health and workload coverage.
 3. **D4:** real producer/evidence/independent-consumer inventory and freeze.
 4. **D5:** authorized fresh acceptance, measurements, cleanup and offline replay.
+
+No VM, host manifest, provider model/profile, credential setup or spending bound
+has been selected or activated. No build, live operation, provider request or
+qualification ran. In particular, complete future control-tool dependency
+closure, real sensor health, raw-effect retention and the existing five-second
+approval/timing feasibility remain prerequisites, not implied successes.

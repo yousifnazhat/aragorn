@@ -14,8 +14,9 @@ and historical qualification records are unchanged.
 
 Step-2 follow-up: [exact dependency pins](pi-core-dependency-pins-v1.md) and the
 [complete acceptance crosswalk](pi-core-phase3-acceptance-mapping-v1.md)
-are recorded. The user approved the 29-requirement mapping; executable
-qualification machinery and actual evidence remain outstanding.
+are recorded. The user approved the 29-requirement mapping; the additive
+qualification entrypoint was delivered in batch 16, while real independent
+consumer wiring, freeze and qualification evidence remain outstanding.
 Pinning upstream components does not pin the not-yet-built adapter or deployment.
 
 ## Goal and approved decision
@@ -69,6 +70,18 @@ The initial finished product lives as **Aragorn-managed services plus disposable
 workers on a controlled Linux host or VM**. A developer's Mac may be a client;
 it is not the enforcement boundary. Later hosting location does not change the
 security contract. No service is activated by this documentation update.
+
+**Root execution profile approved 2026-11-16:** the coordinator runs on the
+dedicated Linux VM host with independently pinned Python 3.12, standard library,
+native loader/libraries, control tools and Aragorn sources. The existing verified
+source loader must execute pinned source bytes before any Aragorn import at the
+fixed `/opt/aragorn/src` origins. This is not ambient host Python, a macOS service,
+or a fourth confined child-service role. Exact host/plan pins are supplied by the
+operator; no concrete VM runtime or live authority is selected by approval.
+The [batch-23 contract](../phase3/coordinator/pi-core-root-entry-batch-23.md)
+defines the fixed entrypoint and evidence limits. Initial interpreter, wrapper,
+bootstrap stdlib and native/builtin/frozen code remain the explicitly pinned
+bootstrap TCB; later file checks do not attest arbitrary in-memory execution.
 
 ```text
 Operator -> acquisition / immutable CAS -> admission -> protected launcher

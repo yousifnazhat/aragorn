@@ -58,7 +58,9 @@ approval handles or substitute the action UID. The holder closes only its owned
 handle/storage and preserves original failures plus uncertain cleanup. This
 connects the provider-enabled useful path; unavailable NO_REQUEST stays unchanged.
 
-At completion, retain actual action DONE, sensor DONE and worker result first.
+Retain actual action DONE immediately after authenticated receipt, before binding
+checks; completion joins that retained digest without a duplicate write, then
+retains sensor DONE and worker result before readback.
 Under full live custody, independently open fixed action control root with its
 configured UID/GID/mode0710 and existing broker.lock UID/GID/mode0600/nlink1/size0.
 Acquire the lock once nonblocking; do not retry. Reuse lifecycle `_read_at` for
@@ -89,9 +91,10 @@ protected path; historical bare channels and unavailable NO_REQUEST remain inert
 Handoff takes additive optional `action_evidence`, checks the exact class and
 native-custody join, and uses it only at actual acquisition boundaries. For this
 path compose existing frame header/receive/EOF/parser primitives so bounded raw
-header/body bytes can be retained as base64 before parsing; short-read bytes not
-returned by the existing primitive remain unavailable, never invented complete
-capture. Preserve actual validated request/activation/measurement/lineage/grant
+header/body bytes can be retained as base64 before parsing. Retain an available
+header-only prefix before the bounded body read; short-read bytes not returned by
+the existing primitive remain unavailable, never invented complete capture.
+Preserve actual validated request/activation/measurement/lineage/grant
 context before OFFER, incoming CHECK and outgoing CURRENT_ATTEMPT before send.
 The latter is attempted authority, not proof of delivery.
 
@@ -100,7 +103,10 @@ actual finish and before ACK in an active scope; no new receive or health claim.
 After actual action DONE, sensor finish and full guard, call evidence.complete
 before pair retirement and either ACK. Evidence failure must never release a
 successful terminal barrier or retry the effect. Retain original errors/prefixes;
-public worker/result contracts do not acquire raw private content.
+public worker/result contracts do not acquire raw private content. The protected
+handoff defers worker-result delivery to native ownership; only after the evidence
+scope closes and its detached completion record passes validation does native
+deliver the original result. Legacy handoff delivery is unchanged.
 
 This batch does not add timing estimates or qualify source/global health, sink
 residue, capture completeness, cleanup of external effects, or Phase3. Full
@@ -117,7 +123,51 @@ regression, target rebuild, historical recapture, live operation or qualificatio
 After review/pass: verified signed source and main merge, normal push, exact
 remote readback, preserve every unrelated draft and frozen predecessor.
 
-1. **D2:** action evidence next; actual protected views, separate provider controls,
+## Completed offline implementation
+
+The protected native caller now retains available request-frame prefixes, exact
+request/offer context, CHECK/CURRENT attempts and actual action/sensor terminal
+records in the existing CAS through a separate absent-only action index. The
+fixed native owner independently reads the original locked action controls,
+retains their raw bytes before parsing, and joins CONSUMED state, profile receipt,
+request projection and terminal responses. It never initializes or repairs those
+controls. Effective BLOCK remains distinct from a policy ALLOW and from verified
+sink residue. Storage/handle uncertainty survives the original failure.
+
+Review corrected two caller-order gaps before execution: retain an available
+header before a body read can fail; defer protected worker-result delivery until
+the evidence holder closes. The caller uses one detached validated completion
+record, so a second observation getter cannot fail after successful delivery.
+Historical bare channels and unavailable NO_REQUEST remain unchanged.
+
+Independent source/test/closure review completed. All **113 focused checks passed
+on the first attempt**: 96 new and 17 affected, zero reruns, zero old stage runs.
+The three reviewed input closures contain 94, 94 and 102 paths; the bounded
+registry now contains 224 stages. Retained pipeline records:
+
+| Stage | Checks | Successful fingerprint (sha256) |
+| --- | ---: | --- |
+| pi-core-action-evidence-store-offline | 28 | `79d96a2cf1bd9944d926ab54b75cdd6ad2451bac8bfb078925cd64d4ce72ea1d` |
+| pi-core-action-evidence-offline | 37 | `f1a494a6aa4a9aa2f185a3da29e180eb479612b352440752371812c06d7ba770` |
+| pi-core-action-evidence-composition-offline | 44 | `d81651b2fbc3c7a8c01ddce62247094eb09b73e29d7e19ac07fc911461534c29` |
+| pipeline-capacity | 4 | `44050fe5a8daeb2a5f7cc310b1f1f857f4e950307dee4adb831d3a38a4760236` |
+
+No target build, VM installation, live service, provider call, capture or
+qualification ran. The retained-record join is not independent sink, full
+timing, complete sensor health or deployed-source qualification. No approved
+threshold or operational hold changed; all 985 unrelated drafts remain outside
+this batch. Signed source/merge hashes and exact remote readback accompany the
+delivery milestone; this document cannot contain its own resulting commit hash.
+
+The next connected offline dependency is fresh root-owned provider control/CAS
+base preparation, distinct from the action-owned base delivered in batch30.
+Genuine health and initial pinned control publication remain separate obligations;
+no healthy or authoritative record may be manufactured by the base installer.
+Declared-script task contexts are already within the approved SDD; an additional
+runtime selection is not required, but their actual confined producer and full
+task-boundary measurement connections remain unimplemented.
+
+1. **D2:** raw action retention connected offline; actual protected views, separate provider controls,
    genuine health, recovery/full timing and separately authorized useful pilot.
 2. **D3:** remaining admission/RUN/health and real declared-script task contexts.
 3. **D4:** complete independent semantic inventory/prerequisites, then freeze.

@@ -8,6 +8,7 @@ an in-process Python object is not protection against a compromised broker.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import math
@@ -295,7 +296,7 @@ def hold_broker_request_authority(connection, *, expected_supervisor_peer, deadl
 
 def handle_pi_request_connection(worker_connection, broker_connection, *, activation_path,
         profile, protected_install_root, grant, binding, expected_broker_peer, deadline,
-        sensor_channel=None, native_custody=None, terminal_ack=False):
+        sensor_channel=None, native_custody=None, terminal_ack=False, action_evidence=None):
     """Read one actual Pi stream request and hold root custody through broker DONE.
 
     The worker stream must be separate from multi-turn bootstrap: its canonical
@@ -319,6 +320,10 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
         _require(type(native_custody) is PiNativeRequestCustody and deadline <= native_custody.deadline,
                  "Pi native request custody or original deadline differs")
         native_custody.guard()
+    if action_evidence is not None:
+        from .pi_core_action_evidence import PiNativeActionEvidence
+        _require(terminal_ack and type(action_evidence) is PiNativeActionEvidence and
+                 action_evidence.custody is native_custody, "action evidence lacks exact native custody")
     _require(worker_connection is not broker_connection and worker_connection.fileno() != broker_connection.fileno(),
              "Pi worker and broker channels must be distinct")
     _require(worker_connection.getsockopt(socket.SOL_SOCKET, transport._DOMAIN) == socket.AF_UNIX and
@@ -343,6 +348,7 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
     request = result = None
     offered = False
     failure = None
+    phase = "IDENTITY"
     try:
         worker_fd = process.open_peer_pidfd(worker_connection, peer[0])
         measured = identity._measured(worker_connection, worker_fd, profile, activation, deadline)
@@ -359,12 +365,31 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
                          identity._measured(worker_connection, worker_fd, profile, activation, deadline) == measured,
                          "protected Pi request identity changed")
 
-            raw_request = broker._read_frame(worker_connection, deadline)
+            phase = "REQUEST_FRAME"
+            if action_evidence is None:
+                raw_request = broker._read_frame(worker_connection, deadline)
+            else:
+                header = broker._receive_exact(worker_connection, broker._FRAME_HEADER.size, deadline)
+                action_evidence.retain("REQUEST_FRAME", {"schema": "aragorn/pi-core-action-frame/v1",
+                    "header_base64": base64.b64encode(header).decode("ascii"),
+                    "body_base64": None, "body_complete": False,
+                    "eof_verified": False, "parsed": False})
+                (length,) = broker._FRAME_HEADER.unpack(header)
+                _require(0 < length <= broker._MAX_FRAME_BYTES, "invalid retained request frame length")
+                body = broker._receive_exact(worker_connection, length, deadline)
+                action_evidence.retain("REQUEST_FRAME", {"schema": "aragorn/pi-core-action-frame/v1",
+                    "header_base64": base64.b64encode(header).decode("ascii"),
+                    "body_base64": base64.b64encode(body).decode("ascii"),
+                    "body_complete": True,
+                    "eof_verified": False, "parsed": False})
+                broker._require_eof(worker_connection, deadline)
+                raw_request = broker._parse_canonical_document(body, "runtime broker request frame")
             request, _ = worker._worker_request(raw_request)
             _require(request["session_id"] == activation["session_id"] and request["run_id"] == activation["run_id"],
                      "Pi request session is not the protected activation")
             guard()
             sensor_ticket = None
+            phase = "SENSOR_AND_CHALLENGE"
             if sensor_channel is not None:
                 sensor_ticket = secondary.enter_context(sensor_transport.hold_pi_sensor_channel(
                     sensor_channel.connection, worker_connection, request,
@@ -377,15 +402,24 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
                       "request_digest": canonical_digest(request), "deadline_ns": deadline_ns}
             guard()
             transport.require_peer_live(broker_connection, expected_broker_peer, broker_fd, deadline)
+            offer = _packet("OFFER", **fields, activation=activation, worker_request=request, **mode)
+            if action_evidence is not None:
+                action_evidence.retain("REQUEST_CONTEXT", {"schema": "aragorn/pi-core-action-context/v1",
+                    "request": request, "activation": activation, "measurement": measured,
+                    "lineage": active, "grant": grant, "challenge": challenge, "offer_intent": offer})
+                guard()
+            phase = "OFFER"
             offered = True
-            _send(broker_connection, _packet("OFFER", **fields, activation=activation, worker_request=request, **mode),
-                  deadline, rights=(worker_fd,), **mode)
+            _send(broker_connection, offer, deadline, rights=(worker_fd,), **mode)
             sequence = 0
             while True:
+                phase = "BROKER_RESPONSE"
                 document, _ = _receive(broker_connection, expected_broker_peer, deadline, **mode)
                 transport.require_peer_live(broker_connection, expected_broker_peer, broker_fd, deadline)
                 guard()
                 if document["kind"] == "DONE":
+                    if action_evidence is not None:
+                        action_evidence.retain("ACTION_DONE", document)
                     _require(sequence > 0 and all(document[key] == value for key, value in fields.items()),
                              "broker DONE is not bound to this request")
                     result = _result(document["envelope"], document["result"], request, activation, binding)
@@ -395,6 +429,11 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
                         sensor_ticket.finish(result["broker_result"])
                         guard()
                     if terminal_ack:
+                        if action_evidence is not None:
+                            phase = "EFFECT_EVIDENCE"
+                            action_evidence.complete(done=document, sensor_done=sensor_ticket.terminal_receipt, result=result)
+                            guard()
+                        phase = "TERMINAL_ACK"
                         native_custody.retire_requests()
                         sensor_ticket.acknowledge()
                         _send(broker_connection, _packet("ACK", **fields,
@@ -403,11 +442,25 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
                     break
                 sequence += 1
                 expected = _packet("CHECK", **fields, sequence=sequence, **mode)
+                if action_evidence is not None:
+                    action_evidence.retain("CHECK", document)
                 _require(document == expected and sequence <= 16, "broker request check sequence differs")
                 guard()
+                if action_evidence is not None:
+                    action_evidence.retain("CURRENT_ATTEMPT", {**expected, "kind": "CURRENT"})
+                    guard()
                 _send(broker_connection, {**expected, "kind": "CURRENT"}, deadline, **mode)
-    except (OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:
-        failure = exc
+    except BaseException as exc:
+        if action_evidence is not None:
+            try:
+                action_evidence.retain("FAILURE", {"schema": "aragorn/pi-core-action-failure/v1",
+                    "stage": phase, "offer_attempted": offered, "error_type": type(exc).__name__})
+            except BaseException:
+                pass  # A failed evidence prefix cannot replace the original failure.
+        if isinstance(exc, (OSError, RuntimeError, ValueError, TypeError, KeyError)):
+            failure = exc
+        else:
+            raise
     finally:
         try:
             transport._close_installed([fd for fd in (worker_fd, broker_fd) if fd >= 0])
@@ -417,6 +470,9 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
         raise PiRequestHandoffError("Pi request could not be authenticated and read") from failure
     if failure is not None or result is None:
         result = worker._worker_result(canonical_digest(request), "INDETERMINATE" if offered else "NOT_SUBMITTED", None)
+    if action_evidence is not None:
+        # Native ownership closes retained storage before releasing a worker result.
+        return result
     # Only after admission and newly owned handles are released can success be
     # returned. A failed response never establishes absence of broker submission.
     try:

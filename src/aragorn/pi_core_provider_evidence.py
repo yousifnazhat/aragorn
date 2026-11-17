@@ -1,4 +1,4 @@
-"""Protected raw provider records with an absent-only ordered attempt index.
+"""Protected raw provider/action records with fixed sibling attempt indexes.
 
 This is storage custody, not provider permission, capture completion or an
 independent verifier. Raw content stays in the root-owned existing CAS.
@@ -22,15 +22,19 @@ from .cas import CAS
 from .oci_worker_protocol import canonical_digest, canonical_json
 
 SCHEMA = "aragorn/pi-core-provider-evidence-observation/v1"
+ACTION_SCHEMA = "aragorn/pi-core-action-evidence-observation/v1"
 AUTHORITY = "RAW_STORAGE_ONLY_NOT_EXECUTION_OR_PHASE3"
 _KINDS = frozenset({"SOURCE_HEALTH", "REQUEST", "ACTIVATION", "MEASUREMENT", "LINEAGE", "APPROVAL",
     "POLICY", "REVOCATIONS", "GLOBAL_HEALTH", "OBSERVATION", "DECISION", "SERVICE_REQUEST",
     "SERVICE_CHECK", "SERVICE_PERMIT", "SERVICE_RESULT", "PROVIDER_RESULT", "SOURCE_BOUNDARY", "FAILURE"})
+_ACTION_KINDS = frozenset({"REQUEST_FRAME", "REQUEST_CONTEXT", "CHECK", "CURRENT_ATTEMPT",
+    "ACTION_DONE", "SENSOR_DONE", "ACTION_RESULT", "CONTROL_READBACK", "FAILURE"})
 _MAX_RECORD = 4 * 1024 * 1024
 _MAX_RECORDS = 64
 _MAX_INDEX = 64 * 1024
 _DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _SEAL = object()
+_PROVIDER_STORAGE, _ACTION_STORAGE = object(), object()
 
 
 class PiProviderEvidenceError(RuntimeError):
@@ -102,6 +106,7 @@ class PiProviderEvidence:
         self._activation_digest = None
         self._owned_closed = False
         self._cleanup_hold = False
+        self._storage, self._opened_storage = _PROVIDER_STORAGE, None
 
     def _own(self, descriptor):
         self._fds.append(descriptor)
@@ -126,7 +131,9 @@ class PiProviderEvidence:
 
     def _role(self):
         _require(type(self) is PiProviderEvidence and self._seal is _SEAL and self._active and
-            not self._closed and os.getpid() == self._pid and os.geteuid() == os.getegid() == 0,
+            not self._closed and os.getpid() == self._pid and os.geteuid() == os.getegid() == 0 and
+            self._storage is self._opened_storage and
+            (self._storage is _PROVIDER_STORAGE or self._storage is _ACTION_STORAGE),
             "PROVIDER_EVIDENCE_CUSTODY_REQUIRED")
         channel.validate_deadline(self._deadline)
         _require(time.monotonic_ns() < self._activation_expiry, "PROVIDER_EVIDENCE_ACTIVATION_EXPIRED")
@@ -199,7 +206,8 @@ class PiProviderEvidence:
         self._activation_expiry = activation["expires_at_monotonic_ns"]
         self._control_path = config.control_root
         self._path = config.control_root / "provider-evidence"
-        self._name = "attempt-" + activation["activation_id"] + ".jsonl"
+        self._opened_storage = self._storage
+        self._name = ("action-attempt-" if self._storage is _ACTION_STORAGE else "attempt-") + activation["activation_id"] + ".jsonl"
         self._activation_digest = canonical_digest(activation)
         self._active = True
         try:
@@ -232,7 +240,8 @@ class PiProviderEvidence:
         os.fchmod(self._index, 0o400)
         state = os.fstat(self._index)
         self._index_identity = (state.st_dev, state.st_ino)
-        self._append({"schema": "aragorn/pi-core-provider-evidence-index/v1",
+        self._append({"schema": ("aragorn/pi-core-action-evidence-index/v1" if self._storage is _ACTION_STORAGE
+                                 else "aragorn/pi-core-provider-evidence-index/v1"),
             "authority": "DURABLE_REFERENCE_PREFIX_ONLY_NOT_COMPLETED_CAPTURE", "sequence": 0, "kind": "HEADER",
             "activation_id": activation["activation_id"], "activation_digest": self._activation_digest}, header=True)
 
@@ -288,7 +297,8 @@ class PiProviderEvidence:
         """Retain one actual JSON record, then commit its ordered reference."""
         try:
             self._guard()
-            _require(not self._failed and type(kind) is str and kind in _KINDS and type(value) is dict and
+            kinds = _ACTION_KINDS if self._storage is _ACTION_STORAGE else _KINDS
+            _require(not self._failed and type(kind) is str and kind in kinds and type(value) is dict and
                      len(self._references) < _MAX_RECORDS, "PROVIDER_EVIDENCE_RECORD_REFUSED")
             raw = canonical_json(value)
             _require(0 < len(raw) <= _MAX_RECORD, "PROVIDER_EVIDENCE_RECORD_BOUND")
@@ -306,7 +316,8 @@ class PiProviderEvidence:
             self._guard()
             self._temporary_absent()
             self._durable_blob(digest, raw)
-            self._append({"schema": "aragorn/pi-core-provider-evidence-reference/v1",
+            self._append({"schema": ("aragorn/pi-core-action-evidence-reference/v1" if self._storage is _ACTION_STORAGE
+                                     else "aragorn/pi-core-provider-evidence-reference/v1"),
                 "sequence": len(self._references) + 1, "previous_prefix_digest": self._index_digest, **ref})
             self._references.append(ref)
             self._pending_reference = None
@@ -318,7 +329,9 @@ class PiProviderEvidence:
     @property
     def observation(self):
         status = "CLEANUP_HOLD" if self._cleanup_hold else "REFUSED" if self._failed else "CLOSED" if self._closed else "OPEN"
-        return json.loads(canonical_json({"schema": SCHEMA, "authority": AUTHORITY,
+        action = (self._opened_storage is _ACTION_STORAGE or
+                  self._opened_storage is None and self._storage is _ACTION_STORAGE)
+        return json.loads(canonical_json({"schema": ACTION_SCHEMA if action else SCHEMA, "authority": AUTHORITY,
             "status": status, "activation_digest": self._activation_digest, "references": self._references,
             "pending_reference": self._pending_reference,
             "index_digest": self._index_digest, "index_bytes": self._index_bytes,
@@ -369,6 +382,34 @@ def hold_provider_evidence(config, control_fd, *, activation, deadline):
     if failure is not None:
         try:
             failure.pi_provider_evidence_observation = owner.observation
+        except BaseException:
+            pass
+        raise failure
+
+
+@contextmanager
+def hold_action_evidence(config, control_fd, *, activation, deadline):
+    """Retain only fixed action records in a fresh sibling index, without retries."""
+    owner = PiProviderEvidence(_seal=_SEAL)
+    owner._storage = _ACTION_STORAGE  # Fixed caller selection, never a wire/namespace argument.
+    failure = None
+    entered = False
+    try:
+        owner._open(config, control_fd, activation, deadline)
+        entered = True
+        yield owner
+    except BaseException as exc:
+        failure = exc
+        if not entered:
+            owner._mark("ACQUISITION", "PRECONDITION_OR_INDEX_REFUSED",
+                        hold=owner._index_status == "UNCONFIRMED")
+    try:
+        owner._close()
+    except BaseException as exc:
+        failure = failure or exc
+    if failure is not None:
+        try:
+            failure.pi_action_evidence_observation = owner.observation
         except BaseException:
             pass
         raise failure

@@ -271,6 +271,15 @@ class SensorTicket:
         self._close_owned()
         self._finished = True
 
+    @property
+    def terminal_receipt(self):
+        """Return only the actual joined DONE while its terminal barrier is held."""
+        _require(self._terminal_ack and self._scope_active and self._finished and
+                 self._done is not None and not self._ack_attempted,
+                 "sensor terminal receipt is not available")
+        self._terminal_peer()
+        return _copy(self._done)
+
     def acknowledge(self):
         """One terminal release after the caller's full guard and retirement.
 

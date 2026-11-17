@@ -103,7 +103,8 @@ class PiServiceChannels:
 
     __slots__ = ("_seal", "_active", "_connections", "_descriptors", "_expected", "_binding",
                  "_deployment", "_pins", "_deadline", "_pidfds", "_request_channels",
-                 "_provider_retired", "_provider_retiring", "_cleanup", "_lock", "_lifecycle")
+                 "_provider_retired", "_provider_retiring", "_requests_retired",
+                 "_requests_retirement_attempted", "_cleanup", "_lock", "_lifecycle")
 
     def __init__(self, seal, connections, expected, binding, deployment, pins, deadline, lifecycle_custody=None):
         _require(seal is _SEAL, "service channel custody requires its protected factory")
@@ -115,6 +116,7 @@ class PiServiceChannels:
         self._pidfds, self._request_channels = [], None
         self._provider_retired, self._cleanup = False, "HELD"
         self._provider_retiring = False
+        self._requests_retired = self._requests_retirement_attempted = False
         self._lock = threading.RLock()
         self._lifecycle = lifecycle_custody
 
@@ -140,11 +142,16 @@ class PiServiceChannels:
         return self._provider_retired
 
     @property
+    def requests_retired(self):
+        return self._requests_retired
+
+    @property
     def observation(self):
         return _copy({"schema": "aragorn/pi-core-service-channels/v1",
             "authority": "AUTHENTICATED_CHANNEL_CUSTODY_NOT_LOADED_CODE_OR_SERVICE_READINESS",
             "expected_processes_digest": canonical_digest(self._expected), **self._pins,
-            "active": self._active, "provider_retired": self._provider_retired, "cleanup": self._cleanup,
+            "active": self._active, "provider_retired": self._provider_retired,
+            "requests_retired": self._requests_retired, "cleanup": self._cleanup,
             "service_ready": False, "unit_lifetime_verified": False, "loaded_code_verified": False,
             "phase3_exit_eligible": False})
 
@@ -155,6 +162,11 @@ class PiServiceChannels:
                  allow_provider_exit is self._provider_retiring and
                  not (allow_provider_exit and self._provider_retired),
                  "provider exit exception requires the one-shot retirement transition")
+        _require(type(self._requests_retired) is bool and
+                 type(self._requests_retirement_attempted) is bool and
+                 (not self._requests_retired or
+                  (self._requests_retirement_attempted and self._lifecycle is not None)),
+                 "request retirement requires its captured lifecycle transition")
         _require(sys.platform == "linux" and os.geteuid() == os.getegid() == 0,
                  "service channel custody requires the Linux root supervisor")
         bounded = self._deadline if deadline is None else deadline
@@ -180,6 +192,11 @@ class PiServiceChannels:
                      "service channel descriptor, type or kernel peer changed")
             if role == "provider" and (self._provider_retired or allow_provider_exit):
                 continue  # Exact authenticated terminal custody only, never new egress authority.
+            if role in {"action", "sensor"} and self._requests_retired:
+                # The exact attached lifecycle checked the captured generation
+                # and, after exit, its empty retained cgroup above. Requiring a
+                # live PID again here would race the already-acknowledged exit.
+                continue
             transport.require_peer_live(connection, peer, self._pidfds[index], bounded)
             _require(_observe(bounded, process._process_start_time, peer[0]) == expected["start_ticks"] and
                      _observe(bounded, process._process_cgroup, peer[0]) == expected["cgroup"] and
@@ -218,6 +235,28 @@ class PiServiceChannels:
             finally:
                 self._provider_retiring = False
             self._provider_retired = True
+
+    def retire_requests(self, *, deadline=None):
+        """Retire action and sensor atomically after both authenticated DONEs.
+
+        Their v2 ACK barriers keep both services live through the full check.
+        There is no preterminal exit waiver. The trusted native caller validates
+        the exact result join before invoking this one-shot transition and must
+        prohibit new requests afterwards. PIDFD custody and cleanup remain held.
+        """
+        _require(type(self) is PiServiceChannels and getattr(self, "_seal", None) is _SEAL and
+                 getattr(self, "_active", False), "service channel lease is inactive")
+        with self._lock:
+            _require(not self._requests_retirement_attempted and not self._requests_retired,
+                     "request channels already attempted terminal retirement")
+            # Even a failed check cannot make the caller's terminal attempt
+            # available again; it must preserve the original failure instead.
+            self._requests_retirement_attempted = True
+            from .pi_core_service_lifecycle import PiServiceLifecycle
+            _require(type(self._lifecycle) is PiServiceLifecycle,
+                     "request retirement requires exact service lifecycle custody")
+            self._check(deadline=deadline)
+            self._requests_retired = True
 
     def _close(self):
         with self._lock:

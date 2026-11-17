@@ -50,6 +50,7 @@ def handle_pi_broker_request(
     *,
     expected_supervisor_pid: int,
     deadline: float,
+    terminal_ack: bool = False,
 ) -> dict:
     """Require two authenticated inputs and complete exactly one mediated create.
 
@@ -59,6 +60,8 @@ def handle_pi_broker_request(
     After possible mediation, response/custody failures remain indeterminate.
     """
     channel.validate_deadline(deadline)
+    handoff._schema(terminal_ack)
+    mode = {"terminal_ack": True} if terminal_ack else {}
     if type(expected_supervisor_pid) is not int or not 0 < expected_supervisor_pid < 2**31:
         raise broker.RuntimeActionBrokerError("invalid protected supervisor PID")
     v5._validate_config(config)
@@ -87,7 +90,7 @@ def handle_pi_broker_request(
         sensor_pidfd = process.open_peer_pidfd(sensor_connection, peer[0])
         with handoff.hold_broker_request_authority(supervisor_connection,
                 expected_supervisor_peer=(expected_supervisor_pid, 0, 0),
-                deadline=deadline) as authority:
+                deadline=deadline, **mode) as authority:
             bounded_deadline = min(deadline, authority.deadline)
             channel.require_peer_live(sensor_connection, peer, sensor_pidfd, bounded_deadline)
             value = broker._read_frame(sensor_connection, bounded_deadline)

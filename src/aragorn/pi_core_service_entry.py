@@ -398,12 +398,13 @@ def run(role, argv, *, source_loader=None):
             parent_identity={"mode": 0o755}, socket_identity=(0, own["gid"])) as root:
         if source_loader is not None:
             _source_handshake(root, role, supervisor_pid, deadline, source_loader)
+        terminal = {"terminal_ack": True} if source_loader is not None else {}
         if role == "provider":
             result = provider.handle_pi_provider_service(root, expected_supervisor_pid=supervisor_pid, deadline=deadline)
         elif role == "action":
             with _accept_sensor(value, deadline) as peer:
                 result = action.handle_pi_broker_request(root, peer, config,
-                    expected_supervisor_pid=supervisor_pid, deadline=deadline)
+                    expected_supervisor_pid=supervisor_pid, deadline=deadline, **terminal)
         else:
             broker_identity = value["identities"]["action"]
             with _connect(ACTION_SOCKET, socket.SOCK_STREAM,
@@ -411,7 +412,7 @@ def run(role, argv, *, source_loader=None):
                     parent_identity={"uid": broker_identity["uid"], "gid": broker_identity["gid"], "mode": 0o750},
                     socket_identity=(broker_identity["uid"], broker_identity["gid"])) as peer:
                 result = sensor.run_pi_sensor_request(root, peer, config,
-                    expected_supervisor_pid=supervisor_pid, deadline=deadline)
+                    expected_supervisor_pid=supervisor_pid, deadline=deadline, **terminal)
         _remaining(deadline)
     return result
 

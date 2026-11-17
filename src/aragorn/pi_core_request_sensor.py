@@ -77,7 +77,7 @@ def _stream(connection, label):
 
 def handle_pi_sensor_request(custody_connection, broker_connection,
         config: configured.RuntimeActionObservationPublisherV4Config, *,
-        expected_supervisor_pid: int, deadline: float) -> dict:
+        expected_supervisor_pid: int, deadline: float, terminal_ack: bool = False) -> dict:
     """Consume one candidate under an already-prepared sensor FS identity.
 
     Both supplied connections remain caller-owned. The caller must close them
@@ -87,12 +87,12 @@ def handle_pi_sensor_request(custody_connection, broker_connection,
     """
     return _handle(custody_connection, broker_connection, config,
         expected_supervisor_pid=expected_supervisor_pid, deadline=deadline,
-        restore_identity_before_finish=False)
+        restore_identity_before_finish=False, terminal_ack=terminal_ack)
 
 
 def run_pi_sensor_request(custody_connection, broker_connection,
         config: configured.RuntimeActionObservationPublisherV4Config, *,
-        expected_supervisor_pid: int, deadline: float) -> dict:
+        expected_supervisor_pid: int, deadline: float, terminal_ack: bool = False) -> dict:
     """Dedicated one-shot caller: adopt once, drop capabilities, restore once.
 
     Run only in the dedicated sensor process with its existing limited setup
@@ -100,6 +100,7 @@ def run_pi_sensor_request(custody_connection, broker_connection,
     before DONE on success and exactly once on failure; uncertain restoration is
     never retried automatically.
     """
+    custody._mode(terminal_ack)
     selected = _configuration(config)
     transport.validate_deadline(deadline)
     _require(sys.platform == "linux", "Pi sensor identity setup requires Linux")
@@ -109,11 +110,12 @@ def run_pi_sensor_request(custody_connection, broker_connection,
         selected.expected_observer_gid)
     return _handle(custody_connection, broker_connection, config,
         expected_supervisor_pid=expected_supervisor_pid, deadline=deadline,
-        restore_identity_before_finish=True)
+        restore_identity_before_finish=True, terminal_ack=terminal_ack)
 
 
 def _handle(custody_connection, broker_connection, config, *,
-        expected_supervisor_pid, deadline, restore_identity_before_finish):
+        expected_supervisor_pid, deadline, restore_identity_before_finish, terminal_ack=False):
+    mode = custody._mode(terminal_ack)
     selected = getattr(config, "publisher", None)
     owned = []
     restoration_attempted = False
@@ -150,7 +152,7 @@ def _handle(custody_connection, broker_connection, config, *,
         broker_fd = process.open_peer_pidfd(broker_connection, broker_peer[0])
         owned.append(broker_fd)
         with custody.hold_sensor_candidate(custody_connection,
-                expected_supervisor_pid=expected_supervisor_pid, deadline=deadline) as candidate:
+                expected_supervisor_pid=expected_supervisor_pid, deadline=deadline, **mode) as candidate:
             bounded = candidate.deadline
             _require(bounded <= deadline, "Pi sensor custody extended the original deadline")
             transport.validate_deadline(bounded)

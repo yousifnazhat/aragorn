@@ -15,6 +15,14 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-28 [action/sensor terminal checkpoint](../phase3/coordinator/pi-core-terminal-lifetime-batch-28.md):
+the managed source-verified path uses additive v2 DONE/ACK barriers and atomic
+action/sensor retirement before terminal release. V1 defaults remain unchanged;
+the original custody guards and deadlines are preserved. All 131 new/affected
+checks passed once, with no live operations. Explicit broker-state preparation,
+action raw-effect retention, genuine health, installed views and full timing
+remain; a mid-read service exit may still conservatively hold cleanup.
+
 Batch-27 [provider observation/raw evidence checkpoint](../phase3/coordinator/pi-core-provider-evidence-batch-27.md):
 the protected service path publishes actual acquired request observations without
 renewing global health, retains raw source/control/decision/service records through

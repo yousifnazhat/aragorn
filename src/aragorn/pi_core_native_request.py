@@ -181,11 +181,22 @@ class PiNativeRequestCustody:
                  "native request requires its exact held source observer")
         observer.guard_source_health(activation=self._activation, deadline=self._deadline)
 
+    def retire_requests(self):
+        """Called only after both authenticated terminal results have joined."""
+        self.guard()
+        from .pi_core_service_channels import PiServiceChannels
+        custody = self._channels.service_custody
+        _require(type(custody) is PiServiceChannels and custody.request_channels is self._channels,
+                 "terminal request lacks its exact held service lease")
+        custody.retire_requests(deadline=self._deadline)
+
 
 def handle_native_pi_request(owned, worker_connection, request_channels, *, grant, protected_root, deadline):
     """Consume one actual Pi stream while the exact supervisor-owned unit lives."""
     plan = _plan(owned, deadline)
     _channels(owned, request_channels, deadline, worker_connection)
+    service = request_channels.service_custody
+    _require(service is None or not service.requests_retired, "request service pair is terminal")
     dispatch = getattr(owned, "_pi_request_dispatch", None)
     _require(type(dispatch) is PiNativeRequestDispatch and dispatch.owned is owned and
              dispatch.channels is request_channels and dispatch.active and owned.request_dispatch_active and
@@ -211,7 +222,7 @@ def handle_native_pi_request(owned, worker_connection, request_channels, *, gran
             activation_path=plan.activation_path, profile=plan.profile, protected_install_root=protected_root,
             grant=grant, binding=request_channels.binding, expected_broker_peer=request_channels.broker_peer,
             deadline=deadline, sensor_channel=PiSensorChannel(request_channels.sensor_connection, request_channels.sensor_peer),
-            native_custody=custody)
+            native_custody=custody, **({"terminal_ack": True} if service is not None else {}))
     finally:
         custody._active = False
 
@@ -262,6 +273,8 @@ class PiNativeRequestDispatch:
     def _open(self):
         _plan(self.owned, self.deadline)
         _channels(self.owned, self.channels, self.deadline)
+        service = self.channels.service_custody
+        _require(service is None or not service.requests_retired, "request service pair is terminal")
         _require(not self.owned.request_dispatch_active and getattr(self.owned, "_pi_request_dispatch", None) is None,
                  "native request dispatch already exists")
         native._resource_ownership(self.owned)

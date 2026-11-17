@@ -2,7 +2,10 @@
 
 Base: verified signed and published
 `c8e81b32cf9b1d5cba6f3f8c41bf79ae83abe4ce`.
-Status: offline source assignment; no live operations authorized.
+Assignment: signed source `b7984e4`, published in verified signed merge
+`375b6d44967f20161ea198702fb9e11eb9e1418e` before implementation.
+Status: implemented and independently reviewed; 58 new/affected checks passed
+once. No live operations authorized or performed.
 
 ## Named dependency and scope
 
@@ -63,7 +66,40 @@ remote hashes. Preserve all unrelated drafts, predecessor artifacts and records.
 
 ## Continuous campaign position
 
-1. **D2:** preserve connected failure observations, then remaining protected
+### Completed source and validation
+
+Managed composition now snapshots returned worker evidence before service
+teardown and attaches structured partial observations to the same escaped
+exception. Existing service acquisition observations survive ordinary OS errors,
+and a final observation-getter/classification failure retains the worker snapshot
+without retrying the getter. Missing/malformed owner records remain null with
+fixed uncertainty reasons; borrowed authorities are untouched.
+
+The root caller consumes this exact failure interface at its call boundary before
+outer holders can substitute a cleanup exception. It retains child cleanup holds,
+reports replacing holder failures as cleanup holds and preserves the original
+exception chain. The existing public CLI projection remains unchanged and
+digest-only. This is private in-process propagation, not durable raw retention.
+
+| Stage | Checks | Result | Fingerprint |
+|---|---:|---|---|
+| `pi-core-managed-failure-evidence-offline` | 26 new + 10 affected | PASS | `sha256:226c8133aab31a0e44ed9853dd58c21b34f382808f7eae7794b6c5c2d23cfb54` |
+| `pi-core-coordinator-failure-evidence-offline` | 13 new + 5 affected | PASS | `sha256:be1f7457bdde24d9cd75c08024306599113101cc8738599d3f532c3f5dba8c47` |
+| `pipeline-capacity` | 4 affected | PASS | `sha256:38a9f34c2baefc6b8f7450f969f79f3104834a15ced697a0561f7738c0c045aa` |
+
+All 58 checks (39 new, 19 affected) passed first execution with no reruns. Reviewed
+closures contain 104 and 94 paths, including the fixture's import-time build-script
+module; no compiler or target code executes. Capacity increased only 200 to 202.
+Logs and results remain under `.aragorn/phase3-pipeline/<stage>/<fingerprint>/`.
+Local Python 3.14.6 checks are not Linux arm64 Python 3.12 execution evidence.
+
+The existing 4 MiB public managed-result ceiling is unchanged. A larger aggregate
+failure envelope is not trimmed to fit; the root marks it unavailable while the
+original private exception retains it. No snapshot or report establishes durable
+storage. Native launch-context teardown can still lose its own not-yet-returned
+observation; that narrower producer gap remains before complete raw retention.
+
+1. **D2:** connected managed/root failure propagation implemented; next protected
    install/caller, real health, durable raw capture and full timing dependencies;
    separately approved VM/provider inputs and useful pilot still required.
 2. **D3:** connected managed admission, RUN/health and workload coverage pending.

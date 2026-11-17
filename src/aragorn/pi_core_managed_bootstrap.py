@@ -5,6 +5,8 @@ import. This explicit operational entrypoint retains each owner's cleanup result
 neither a service connection nor a NO_REQUEST bootstrap is a useful-task result.
 """
 
+import json
+
 from . import pi_core_native_supervisor as native
 from . import pi_core_service_lifecycle as lifecycle
 from . import pi_core_service_configuration as configuration
@@ -27,6 +29,76 @@ class PiManagedBootstrapError(RuntimeError):
 def _require(value, reason):
     if not value:
         raise PiManagedBootstrapError(reason)
+
+
+def _uncertain(uncertainty, owner, reason):
+    # Only fixed owner/reason pairs from this module enter the public metadata.
+    row = {"owner": owner, "reason": reason}
+    if row not in uncertainty:
+        uncertainty.append(row)
+
+
+def _copy_observation(value):
+    _require(type(value) is dict, "owner observation is not an object")
+    raw = canonical_json(value)
+    _require(len(raw) <= 4 * 1024 * 1024, "owner observation exceeds the managed report bound")
+    return json.loads(raw)
+
+
+def _snapshot(value, owner, uncertainty):
+    try:
+        return _copy_observation(value)
+    except BaseException:
+        _uncertain(uncertainty, owner, "SNAPSHOT_UNAVAILABLE")
+        return None
+
+
+def _service_failure_observation(services, failure, uncertainty):
+    if services is not None:
+        try:
+            value = services.observation
+        except BaseException:
+            _uncertain(uncertainty, "services", "SNAPSHOT_UNAVAILABLE")
+        else:
+            retained = _snapshot(value, "services", uncertainty)
+            if retained is not None:
+                return retained
+    # The existing factory attaches this record even to an OSError before
+    # yielding. Its call boundary, not the exception's class, owns that record.
+    try:
+        value = getattr(failure, "pi_service_lifecycle_observation", None)
+        if value is None:
+            _uncertain(uncertainty, "services", "NO_OWNED_OBSERVATION")
+            return None
+        if (type(value) is not dict or
+                value.get("schema") != "aragorn/pi-core-service-lifecycle/v1" or
+                value.get("status") not in ("PREPARING", "CLOSED", "CLEANUP_HOLD",
+                    "AUTHENTICATED_SERVICES_PROVIDER_PREPARED",
+                    "AUTHENTICATED_SERVICES_PROVIDER_UNAVAILABLE") or
+                value.get("loaded_code_verified") is not False or
+                value.get("phase3_exit_eligible") is not False or
+                type(value.get("cleanup")) is not dict):
+            _uncertain(uncertainty, "services", "INVALID_EXCEPTION_OBSERVATION")
+            return None
+        return _snapshot(value, "services", uncertainty)
+    except BaseException:
+        _uncertain(uncertainty, "services", "SNAPSHOT_UNAVAILABLE")
+        return None
+
+
+def _cleanup_verified(value):
+    return (type(value) is dict and value.get("status") != "CLEANUP_HOLD" and
+            type(value.get("cleanup")) is dict and
+            value["cleanup"].get("status") == "VERIFIED_OWNED_CLEANUP")
+
+
+def _result(worker, services, enabled, status):
+    return {"schema": "aragorn/pi-core-managed-bootstrap-result/v1",
+        "authority": "SERVICE_AND_WORKER_BOOTSTRAP_ONLY_NOT_USEFUL_TASK_OR_PHASE3",
+        "status": status, "worker": worker, "services": services,
+        "provider_available": False, "provider_configured": enabled,
+        "useful_task_verified": False, "loaded_code_verified": False,
+        "phase3_exit_eligible": False}
 
 
 def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_root,
@@ -83,32 +155,60 @@ def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_r
                  not root.control_root.is_relative_to(entry.EFFECT_ROOT) and
                  not entry.EFFECT_ROOT.is_relative_to(root.control_root),
                  "root provider approval differs from the worker or aliases action control")
-    worker = None
-    with lifecycle.hold_native_pi_services(deployment=service_runtime,
-            configuration=service_configuration, binding=binding,
-            provider_inputs=provider_inputs, deadline=deadline,
-            cleanup_timeout_seconds=cleanup_timeout_seconds,
-            **({"provider_credential": provider_credential} if enabled else {})) as services:
-        services.guard(deadline=services.operation_deadline)
-        worker = native.run_native_pi_worker(cas, context, profile=profile, grant=approved,
-            protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
-            deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
-            deadline=services.operation_deadline, config=config,
-            cleanup_timeout_seconds=cleanup_timeout_seconds,
-            request_channels=services.channels.request_channels,
-            **({"provider_channels": PiNativeProviderChannels(provider_approval.config,
-                    services.channels, provider_approval)} if enabled else {}))
-    service_result = services.observation
-    complete = (worker.get("status") == "BOOTSTRAP_COMPLETE" and
-                worker.get("cleanup", {}).get("status") == "VERIFIED_OWNED_CLEANUP" and
-                service_result.get("cleanup", {}).get("status") == "VERIFIED_OWNED_CLEANUP")
-    return {"schema": "aragorn/pi-core-managed-bootstrap-result/v1",
-        "authority": "SERVICE_AND_WORKER_BOOTSTRAP_ONLY_NOT_USEFUL_TASK_OR_PHASE3",
-        "status": "BOOTSTRAP_COMPLETE" if complete else "CLEANUP_HOLD" if
-            worker.get("status") == "CLEANUP_HOLD" or
-            worker.get("cleanup", {}).get("status") != "VERIFIED_OWNED_CLEANUP" or
-            service_result.get("cleanup", {}).get("status") != "VERIFIED_OWNED_CLEANUP" else "REFUSED",
-        "worker": worker, "services": service_result, "provider_available": False,
-        "provider_configured": enabled,
-        "useful_task_verified": False, "loaded_code_verified": False,
-        "phase3_exit_eligible": False}
+    worker = services = worker_snapshot = service_result = None
+    worker_call_attempted = service_read_attempted = False
+    uncertainty = []
+    try:
+        with lifecycle.hold_native_pi_services(deployment=service_runtime,
+                configuration=service_configuration, binding=binding,
+                provider_inputs=provider_inputs, deadline=deadline,
+                cleanup_timeout_seconds=cleanup_timeout_seconds,
+                **({"provider_credential": provider_credential} if enabled else {})) as services:
+            services.guard(deadline=services.operation_deadline)
+            worker_call_attempted = True
+            worker = native.run_native_pi_worker(cas, context, profile=profile, grant=approved,
+                protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
+                deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
+                deadline=services.operation_deadline, config=config,
+                cleanup_timeout_seconds=cleanup_timeout_seconds,
+                request_channels=services.channels.request_channels,
+                **({"provider_channels": PiNativeProviderChannels(provider_approval.config,
+                        services.channels, provider_approval)} if enabled else {}))
+            # Retain the returned bytes before a later service owner can fail.
+            try:
+                worker_snapshot = _copy_observation(worker)
+            except BaseException:
+                _uncertain(uncertainty, "worker", "SNAPSHOT_UNAVAILABLE")
+                raise
+        service_read_attempted = True
+        service_result = services.observation
+        complete = (worker.get("status") == "BOOTSTRAP_COMPLETE" and
+                    worker.get("cleanup", {}).get("status") == "VERIFIED_OWNED_CLEANUP" and
+                    service_result.get("cleanup", {}).get("status") == "VERIFIED_OWNED_CLEANUP")
+        return _result(worker, service_result, enabled,
+            "BOOTSTRAP_COMPLETE" if complete else "CLEANUP_HOLD" if
+                worker.get("status") == "CLEANUP_HOLD" or
+                worker.get("cleanup", {}).get("status") != "VERIFIED_OWNED_CLEANUP" or
+                service_result.get("cleanup", {}).get("status") != "VERIFIED_OWNED_CLEANUP" else "REFUSED")
+    except BaseException as failure:
+        if worker_call_attempted and worker is None:
+            # Native exceptions currently have no retained-result contract.
+            # Do not infer cleanup or adopt arbitrary exception attributes.
+            _uncertain(uncertainty, "worker", "NO_RETURNED_OBSERVATION")
+        service_snapshot = (_snapshot(service_result, "services", uncertainty) if service_read_attempted
+                            else _service_failure_observation(services, failure, uncertainty))
+        clean = (not uncertainty and _cleanup_verified(service_snapshot) and
+                 (not worker_call_attempted or _cleanup_verified(worker_snapshot)))
+        observation = _result(worker_snapshot, service_snapshot, enabled,
+                              "REFUSED" if clean else "CLEANUP_HOLD")
+        observation["failure_evidence"] = {
+            "service_scope_acquired": services is not None,
+            "worker_call_attempted": worker_call_attempted,
+            "uncertainty": uncertainty}
+        try:
+            failure.pi_managed_bootstrap_observation = observation
+        except BaseException:
+            # An exception that forbids attachment must still escape unchanged;
+            # its caller will retain unknown evidence rather than false success.
+            pass
+        raise

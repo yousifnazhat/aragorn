@@ -15,6 +15,14 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-25 [failure-evidence checkpoint](../phase3/coordinator/pi-core-failure-evidence-batch-25.md):
+returned worker and available service observations now survive managed/root
+failure paths and outer cleanup replacement. Public output remains digest-only;
+unknown owner evidence never becomes verified cleanup. All 58 new/affected checks
+passed once. This does not supply durable raw capture or repair every underlying
+native producer failure path. Managed install/update caller, genuine global
+health, actual protected views, timing and the authorized pilot remain open.
+
 Batch-24 [host/inventory checkpoint](../phase3/coordinator/pi-core-host-inventory-batch-24.md):
 retained host-export preparation now verifies the approved exact file set and
 static native dependencies. A fixed protected root preparation route acquires

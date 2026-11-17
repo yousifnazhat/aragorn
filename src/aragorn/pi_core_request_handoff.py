@@ -28,6 +28,7 @@ from . import runtime_process_profile as process
 from .oci_worker_protocol import canonical_digest, canonical_json
 
 SCHEMA = "aragorn/pi-core-request-handoff/v1"
+TERMINAL_SCHEMA = "aragorn/pi-core-request-handoff/v2"
 AUTHORITY = "PROTECTED_WORKER_REQUEST_ONLY_NOT_EFFECT_AUTHORITY"
 MAX_PACKET_BYTES = 64 * 1024
 _SEAL = object()
@@ -55,14 +56,21 @@ def _copy(value):
     return json.loads(canonical_json(value))
 
 
-def _packet(kind, **fields):
-    return {"schema": SCHEMA, "authority": AUTHORITY, "kind": kind, **fields}
+def _schema(terminal_ack):
+    _require(type(terminal_ack) is bool, "request terminal mode must be local boolean")
+    return TERMINAL_SCHEMA if terminal_ack else SCHEMA
 
 
-def _validate_packet(value):
+def _packet(kind, *, terminal_ack=False, **fields):
+    return {"schema": _schema(terminal_ack), "authority": AUTHORITY, "kind": kind, **fields}
+
+
+def _validate_packet(value, *, terminal_ack=False):
+    schema = _schema(terminal_ack)
+    fields = {**_FIELDS, "ACK": _BOUND | {"done_digest"}} if terminal_ack else _FIELDS
     _require(type(value) is dict and type(value.get("kind")) is str and
-             value["kind"] in _FIELDS and set(value) == _FIELDS[value["kind"]] and
-             value["schema"] == SCHEMA and value["authority"] == AUTHORITY,
+             value["kind"] in fields and set(value) == fields[value["kind"]] and
+             value["schema"] == schema and value["authority"] == AUTHORITY,
              "protected request packet fields differ")
     _require(type(value["nonce"]) is str and transport._NONCE.fullmatch(value["nonce"]) is not None,
              "protected request nonce differs")
@@ -74,6 +82,8 @@ def _validate_packet(value):
     if value["kind"] in {"CHECK", "CURRENT"}:
         _require(type(value["sequence"]) is int and 1 <= value["sequence"] <= 16,
                  "protected request challenge sequence exhausted")
+    if value["kind"] == "ACK":
+        worker._worker_digest(value["done_digest"], "terminal request receipt")
     if value["kind"] == "OFFER":
         activation = identity.validate_activation(value["activation"])
         request, _ = worker._worker_request(value["worker_request"])
@@ -86,17 +96,18 @@ def _validate_packet(value):
     return value
 
 
-def _send(connection, document, deadline, *, rights=()):
-    _validate_packet(document)
+def _send(connection, document, deadline, *, rights=(), terminal_ack=False):
+    _validate_packet(document, terminal_ack=terminal_ack)
     _require(len(rights) == (1 if document["kind"] == "OFFER" else 0), "request packet rights differ")
     transport.send_authenticated_packet(connection, document, deadline, rights=rights, max_bytes=MAX_PACKET_BYTES)
 
 
-def _receive(connection, peer, deadline, *, rights=0):
+def _receive(connection, peer, deadline, *, rights=0, terminal_ack=False):
+    _schema(terminal_ack)
     document, descriptors = transport.receive_authenticated_packet(connection, peer, deadline,
         expected_rights=rights, max_bytes=MAX_PACKET_BYTES)
     try:
-        _validate_packet(document)
+        _validate_packet(document, terminal_ack=terminal_ack)
         _require(rights == (1 if document["kind"] == "OFFER" else 0), "request packet kind/rights differ")
         return document, descriptors
     except BaseException:
@@ -156,10 +167,13 @@ class PiRequestAuthority:
     """Scoped, exact-type authority minted by the authenticated receiver only."""
 
     __slots__ = ("_seal", "_connection", "_peer", "_peer_fd", "_worker_fd", "_offer",
-                 "_deadline", "_active", "_begun", "_finished", "_sequence", "_lock")
+                 "_deadline", "_active", "_begun", "_finished", "_sequence", "_lock", "_mode")
 
-    def __init__(self, seal=None, *, connection=None, peer=None, peer_fd=-1, worker_fd=-1, offer=None, deadline=None):
+    def __init__(self, seal=None, *, connection=None, peer=None, peer_fd=-1, worker_fd=-1, offer=None, deadline=None,
+                 terminal_ack=False):
         _require(seal is _SEAL, "request authority requires authenticated channel custody")
+        _require(offer["schema"] == _schema(terminal_ack), "request authority schema differs")
+        self._mode = {"terminal_ack": True} if terminal_ack else {}
         self._seal, self._connection, self._peer = seal, connection, peer
         self._peer_fd, self._worker_fd, self._offer = peer_fd, worker_fd, _copy(offer)
         self._deadline, self._active = deadline, True
@@ -204,9 +218,9 @@ class PiRequestAuthority:
             try:
                 self._live()
                 self._sequence += 1
-                document = _packet("CHECK", **self._fields(), sequence=self._sequence)
-                _send(self._connection, document, self._deadline)
-                reply, _ = _receive(self._connection, self._peer, self._deadline)
+                document = _packet("CHECK", **self._fields(), sequence=self._sequence, **self._mode)
+                _send(self._connection, document, self._deadline, **self._mode)
+                reply, _ = _receive(self._connection, self._peer, self._deadline, **self._mode)
                 _require(reply == {**document, "kind": "CURRENT"}, "protected current-request check differs")
                 self._live()
             except BaseException:
@@ -221,7 +235,20 @@ class PiRequestAuthority:
             self.guard()
             self._finished, self._active = True, False  # No retry even if DONE is uncertain.
             self._close_owned()
-            _send(self._connection, _packet("DONE", **self._fields(), envelope=_copy(envelope), result=outcome), self._deadline)
+            done = _packet("DONE", **self._fields(), envelope=_copy(envelope), result=outcome, **self._mode)
+            _send(self._connection, done, self._deadline, **self._mode)
+            if self._mode:
+                self._terminal_peer()
+                reply, _ = _receive(self._connection, self._peer, self._deadline, **self._mode)
+                _require(reply == _packet("ACK", **self._fields(), done_digest=canonical_digest(done), **self._mode),
+                         "protected request terminal acknowledgment differs")
+                self._terminal_peer()
+
+    def _terminal_peer(self):
+        transport.validate_deadline(self._deadline)
+        _require(time.monotonic_ns() < self._offer["deadline_ns"] and
+                 tuple(broker._peer_credentials(self._connection)) == self._peer,
+                 "terminal request peer or original deadline changed")
 
     def _close_owned(self):
         descriptors = [fd for fd in (self._worker_fd, self._peer_fd) if fd >= 0]
@@ -230,9 +257,11 @@ class PiRequestAuthority:
 
 
 @contextmanager
-def hold_broker_request_authority(connection, *, expected_supervisor_peer, deadline):
+def hold_broker_request_authority(connection, *, expected_supervisor_peer, deadline, terminal_ack=False):
     """Own newly received handles until exit; never trust relay JSON as provenance."""
     transport.validate_deadline(deadline)
+    _schema(terminal_ack)
+    mode = {"terminal_ack": True} if terminal_ack else {}
     peer = transport._peer(expected_supervisor_peer)
     _require(peer[1:] == (0, 0), "request publisher must be protected root")
     publisher_fd = worker_fd = -1
@@ -240,8 +269,8 @@ def hold_broker_request_authority(connection, *, expected_supervisor_peer, deadl
     try:
         publisher_fd = transport.guard_channel(connection, peer, deadline)
         nonce = secrets.token_hex(16)
-        _send(connection, _packet("CHALLENGE", nonce=nonce), deadline)
-        offer, descriptors = _receive(connection, peer, deadline, rights=1)
+        _send(connection, _packet("CHALLENGE", nonce=nonce, **mode), deadline, **mode)
+        offer, descriptors = _receive(connection, peer, deadline, rights=1, **mode)
         (worker_fd,) = descriptors
         if worker_fd == publisher_fd:
             worker_fd = -1
@@ -252,7 +281,7 @@ def hold_broker_request_authority(connection, *, expected_supervisor_peer, deadl
                  "request offer challenge or lifetime differs")
         bounded = min(deadline, offer["deadline_ns"] / 1_000_000_000)
         authority = PiRequestAuthority(_SEAL, connection=connection, peer=peer,
-            peer_fd=publisher_fd, worker_fd=worker_fd, offer=offer, deadline=bounded)
+            peer_fd=publisher_fd, worker_fd=worker_fd, offer=offer, deadline=bounded, **mode)
         authority._live()
         yield authority
     finally:
@@ -266,7 +295,7 @@ def hold_broker_request_authority(connection, *, expected_supervisor_peer, deadl
 
 def handle_pi_request_connection(worker_connection, broker_connection, *, activation_path,
         profile, protected_install_root, grant, binding, expected_broker_peer, deadline,
-        sensor_channel=None, native_custody=None):
+        sensor_channel=None, native_custody=None, terminal_ack=False):
     """Read one actual Pi stream request and hold root custody through broker DONE.
 
     The worker stream must be separate from multi-turn bootstrap: its canonical
@@ -275,6 +304,10 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
     """
     _require(os.geteuid() == os.getegid() == 0, "Pi request reader requires root")
     transport.validate_deadline(deadline)
+    _schema(terminal_ack)
+    mode = {"terminal_ack": True} if terminal_ack else {}
+    _require(not terminal_ack or (native_custody is not None and sensor_channel is not None),
+             "terminal request requires exact native and sensor custody")
     if sensor_channel is not None:
         _require(type(sensor_channel) is sensor_transport.PiSensorChannel,
                  "Pi sensor channel must be protected native configuration")
@@ -335,21 +368,21 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
             if sensor_channel is not None:
                 sensor_ticket = secondary.enter_context(sensor_transport.hold_pi_sensor_channel(
                     sensor_channel.connection, worker_connection, request,
-                    expected_sensor_peer=sensor_channel.expected_peer, deadline=deadline))
+                    expected_sensor_peer=sensor_channel.expected_peer, deadline=deadline, **mode))
                 guard()
             broker_fd = transport.guard_channel(broker_connection, expected_broker_peer, deadline)
-            challenge, _ = _receive(broker_connection, expected_broker_peer, deadline)
+            challenge, _ = _receive(broker_connection, expected_broker_peer, deadline, **mode)
             _require(challenge["kind"] == "CHALLENGE", "expected broker request challenge")
             fields = {"nonce": challenge["nonce"], "activation_digest": canonical_digest(activation),
                       "request_digest": canonical_digest(request), "deadline_ns": deadline_ns}
             guard()
             transport.require_peer_live(broker_connection, expected_broker_peer, broker_fd, deadline)
             offered = True
-            _send(broker_connection, _packet("OFFER", **fields, activation=activation, worker_request=request),
-                  deadline, rights=(worker_fd,))
+            _send(broker_connection, _packet("OFFER", **fields, activation=activation, worker_request=request, **mode),
+                  deadline, rights=(worker_fd,), **mode)
             sequence = 0
             while True:
-                document, _ = _receive(broker_connection, expected_broker_peer, deadline)
+                document, _ = _receive(broker_connection, expected_broker_peer, deadline, **mode)
                 transport.require_peer_live(broker_connection, expected_broker_peer, broker_fd, deadline)
                 guard()
                 if document["kind"] == "DONE":
@@ -361,12 +394,18 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
                         _require(result["status"] == "COMPLETED", "Pi sensor completion cannot attest an unknown result")
                         sensor_ticket.finish(result["broker_result"])
                         guard()
+                    if terminal_ack:
+                        native_custody.retire_requests()
+                        sensor_ticket.acknowledge()
+                        _send(broker_connection, _packet("ACK", **fields,
+                            done_digest=canonical_digest(document), **mode), deadline, **mode)
+                        guard()
                     break
                 sequence += 1
-                expected = _packet("CHECK", **fields, sequence=sequence)
+                expected = _packet("CHECK", **fields, sequence=sequence, **mode)
                 _require(document == expected and sequence <= 16, "broker request check sequence differs")
                 guard()
-                _send(broker_connection, {**expected, "kind": "CURRENT"}, deadline)
+                _send(broker_connection, {**expected, "kind": "CURRENT"}, deadline, **mode)
     except (OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:
         failure = exc
     finally:

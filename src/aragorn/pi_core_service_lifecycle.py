@@ -418,15 +418,21 @@ def _generation(service, deadline, *, live=True, credential_authority=True):
 
 
 def _retired_provider_generation(service, deadline):
-    """Validate captured provider custody after authenticated terminal receipt.
+    """Preserve the provider's existing exact terminal-generation contract."""
+    _require(service.role == "provider", "provider capture is incomplete")
+    _retired_service_generation(service, deadline)
 
-    Retirement is not process-exit proof. A still-running provider retains full
-    generation checks; a dead provider must have no residual/replacement cgroup.
+
+def _retired_service_generation(service, deadline):
+    """Validate captured service custody after authenticated terminal receipt.
+
+    Retirement is not process-exit proof. A still-running service retains full
+    generation checks; a dead service must have no residual/replacement cgroup.
     systemd may already have collected this exact one-shot transient unit.
     """
     _credential_generation(service, deadline)
-    _require(service.role == "provider" and service.started and service.pidfd >= 0 and
-             service.invocation and service.immutable_digest, "provider capture is incomplete")
+    _require(service.role in ROLES and service.started and service.pidfd >= 0 and
+             service.invocation and service.immutable_digest, "terminal service capture is incomplete")
     if not native._exited(service.pidfd):
         _generation(service, deadline)
         return
@@ -434,7 +440,7 @@ def _retired_provider_generation(service, deadline):
     if not native._absent(state):
         _require(state["ActiveState"] in {"inactive", "failed"} and
                  state["MainPID"] == state["ControlPID"] == "0",
-                 "retired provider unit is not terminal")
+                 "retired service unit is not terminal")
         _generation(service, deadline, live=False)
     native._cgroup_empty(service)  # Retained descriptors reject a reused name.
     _remaining(deadline)
@@ -751,6 +757,10 @@ class PiServiceLifecycle:
         self._ownership(bounded)
         retired = getattr(lease, "provider_retired", False)
         _require(type(retired) is bool, "provider retirement state differs")
+        requests_retired = getattr(lease, "requests_retired", False)
+        _require(type(requests_retired) is bool and
+                 (not requests_retired or lease._requests_retirement_attempted is True),
+                 "request retirement state differs")
         for service in self.services.values():
             if service.role == "provider" and (retired or allow_provider_exit):
                 _require(lease._expected["provider"] == {
@@ -760,6 +770,15 @@ class PiServiceLifecycle:
                     lease.provider_connection is service.connection,
                     "retired provider differs from captured channel generation")
                 _retired_provider_generation(service, bounded)
+            elif service.role in {"action", "sensor"} and requests_retired:
+                index = ROLES.index(service.role)
+                _require(lease._expected[service.role] == {
+                    "pid": service.pid, "uid": service.uid, "gid": service.gid,
+                    "start_ticks": service.start_ticks, "cgroup": service.plan.profile.cgroup,
+                    "executable_digest": self.deployment.observation["python_digest"]} and
+                    lease._connections[index] is service.connection,
+                    "retired request service differs from captured channel generation")
+                _retired_service_generation(service, bounded)
             else:
                 _generation(service, bounded)
         _remaining(bounded)

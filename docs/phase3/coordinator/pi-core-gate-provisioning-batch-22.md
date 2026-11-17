@@ -1,7 +1,9 @@
 # Pi-core batch 22: preserve the pinned pre-execution gate at installation
 
 Base: signed published `cf6aa2c9fb5435c78f1291f2a17c056937f4e339`.
-Status: bounded offline implementation assignment; no live operation released.
+Status: implemented and reviewed offline; 28 new/affected checks passed once.
+No live operation released. Assignment source `f3548d5` was signed and published
+in signed merge `6db58ab` before lane writes began.
 
 ## Concrete dependency and ownership
 
@@ -41,7 +43,49 @@ Passing inert file/mode checks proves installer/launcher compatibility only, not
 an installed protected view, consumed source or a qualified deployment. Keep all
 qualification flags false and preserve every earlier result and draft.
 
-1. **D2:** fix gate installation; connect genuine observation/health and exact
+## Delivered and verified
+
+The installer now invokes the same strict gate validator used by the held launch
+plan before creating a destination. Exactly Node plus the pinned optional gate
+retain executable mode; the legacy Node-only policy remains unchanged. The
+receipt distinguishes these policies. Gate absence, malformed provenance,
+changed bytes and nonexecutable source refuse before installation. Existing
+partial-write retention and no-adoption behavior remain intact.
+
+Independent review found no blocker. The coordinator reviewed the 94-file static
+Python/import closure, including the newly reachable provider modules; no target
+resource or source-gate build was scheduled. Explicit `load_tests` selects 15 new
+cases, one affected legacy mode case and eight affected held-gate cases. Four
+bounded registry checks cover capacity 194 to 195.
+
+| Stage | Checks | PASS fingerprint |
+| --- | ---: | --- |
+| `pi-core-gate-provisioning-offline` | 24 | `37b5c2ca6bbd6af4df86f121cd69c78017afc3e564e181371de62099b77b22bf` |
+| `pipeline-capacity` | 4 | `d28c2d7f85e53c647a28b3b833496a96dc4f97e31e7771b0a213bb3fbdb424a4` |
+
+Only this behavioral command ran; both stages passed on their first execution:
+
+```sh
+/opt/homebrew/bin/python3 -B scripts/phase3_pipeline.py run pi-core-gate-provisioning-offline pipeline-capacity
+```
+
+Results and logs remain under each exact stage/fingerprint in
+`.aragorn/phase3-pipeline/`. No broad suite, old stage, build, VM, service, provider
+request or live installation ran. Temporary fixture root ownership/installed
+custody is mocked and does not qualify a real deployment.
+
+Dependency review identified the next missing caller: the managed bootstrap API
+has no operational root entrypoint outside tests. Existing verified-source loader
+logic must run before any Aragorn import at that entrypoint. A later file hash or
+the child-service/source-observer pin cannot attest the root mediator's consumed
+code. Fresh provider observations therefore require this root source custody and
+an independently selected producer binding first. Keep all existing health
+checks intact: narrow source challenges cannot refresh global health.
+
+## Remaining plan
+
+1. **D2:** gate installation repaired offline; connect the protected root caller,
+   genuine observation/health and exact
    installed inventories; establish authorized credential/Node/kernel feasibility,
    recovery/full timing and a separately approved useful pilot.
 2. **D3:** remaining connected admission, RUN/health and workload paths.

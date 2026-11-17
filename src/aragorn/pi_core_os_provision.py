@@ -304,8 +304,15 @@ def provision_pi_os_runtime(*, os_source: Path, os_manifest: Mapping, os_manifes
         runtime_pin["directories"] = sorted(set().union(*(_parents(row["path"]) for row in runtime_pin["files"])))
         _require(runtime_pin["directories"] == observed_runtime["directories"],
                  "compiled runtime contains unbound empty directories")
+        inputs = compiled.get("inputs", {})
+        has_gate = (any(entry["path"] == "observer/source-gate" for entry in runtime_pin["files"]) or
+                    isinstance(inputs, Mapping) and "source_gate" in inputs)
+        executable_paths = {"node/bin/node"}
+        if has_gate:
+            gate = confined._source_gate_artifact(observed_runtime, compiled)
+            executable_paths.add(gate["path"])
         for entry in runtime_pin["files"]:
-            entry["executable"] = entry["path"] == "node/bin/node"
+            entry["executable"] = entry["path"] in executable_paths
         _deadline(deadline)
         # mkdir is the exclusive no-replace boundary. Existing partial or complete
         # deployments fail identically; never accept, repair, erase or overwrite.
@@ -342,7 +349,8 @@ def provision_pi_os_runtime(*, os_source: Path, os_manifest: Mapping, os_manifes
             "runtime_root": str(target / "runtime"), "runtime_inventory_digest": runtime_digest,
             "runtime_protected_tree_digest": runtime_closure,
             "compiled_receipt_digest": compiled_receipt_digest,
-            "runtime_executable_policy": "ONLY_NODE_BIN_NODE_EXECUTABLE_OTHER_RUNTIME_FILES_0444",
+            "runtime_executable_policy": "ONLY_NODE_AND_PINNED_SOURCE_GATE_EXECUTABLE_OTHER_RUNTIME_FILES_0444" if has_gate else
+                                         "ONLY_NODE_BIN_NODE_EXECUTABLE_OTHER_RUNTIME_FILES_0444",
             "activation_performed": False, "runtime_executed": False, "phase3_exit_eligible": False,
         }
         raw = canonical_json(receipt)

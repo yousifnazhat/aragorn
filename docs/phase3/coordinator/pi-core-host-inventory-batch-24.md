@@ -1,7 +1,10 @@
 # Pi-core batch 24: protected host and installed-inventory preparation
 
 Base: signed published `e03a8e106e73223d2a802588e09a2b17361d2dc3`.
-Status: bounded offline implementation assignment; no live operation released.
+Assignment: signed `80956a1`, published in signed merge
+`b9dc9de211c6b424376f717d2e0fdfca4438b8f8` before implementation.
+Status: implemented and independently reviewed offline; 93 new/affected checks
+passed on first execution. No live operation released.
 
 ## Scope and nonoverlapping ownership
 
@@ -98,13 +101,43 @@ separately authorized VM operation, not performed by this implementation batch.
 
 ## Focused verification and remaining plan
 
-Register only the new host, installed-entry and fixed-dispatch stages, plus four
-affected capacity checks. Reuse existing fixtures/helpers without discovering
-historical suites; select only existing dispatch cases affected by this branch.
-Review exact input closures before scheduling. No unchanged failed fingerprint
-may rerun; diagnose/fix its cause and retain the old record.
+Registered only the new host, installed-entry and fixed-dispatch stages, plus
+four affected capacity checks. The registry now contains 200 stages, matching
+the minimally increased capacity. Existing fixture helpers are reused without
+discovering historical suites; dispatch selects 13 new cases and exactly nine
+affected existing cases. The reviewed input closures contain 8, 96 and 99 paths
+respectively, including statically reachable source and fixture dependencies.
 
-1. **D2:** offline host/export and installed-view preparation; then real selected
+The coordinator ran only these stages through `scripts/phase3_pipeline.py`:
+
+| Stage | Checks | Result | Fingerprint |
+|---|---:|---|---|
+| `pi-core-coordinator-host-prepare-offline` | 33 new | PASS | `sha256:792904b3b9c7694127407be9de0d393f1d231050500040e6f52ac24aad98b7e4` |
+| `pi-core-installed-inventory-entry-offline` | 34 new | PASS | `sha256:c80e4be438f0d9ae86891b09f9df4b49a2f2b33960ad6c67b53933fa8ff8ccfd` |
+| `pi-core-inventory-dispatch-offline` | 13 new + 9 affected | PASS | `sha256:b9a8603638734e840332e538f613fbac8996f65c148572789f6d81edd3470ee0` |
+| `pipeline-capacity` | 4 affected | PASS | `sha256:3f55e412704d41b6463e5b6e14c1367591a1cc538a3f18f587acfc73726a7cf3` |
+
+All 93 checks (80 new, 13 affected) passed once; zero reruns. Logs and exact
+result records remain in `.aragorn/phase3-pipeline/<stage>/<fingerprint>/`.
+Local checks used Python 3.14.6, not the selected Linux arm64 Python 3.12 target.
+The composed inert check runs the new installed entry, existing preparation
+helper and public projection together; its artifacts are not installed evidence.
+No full historical stage, broad suite, build, target program or live operation
+was run. Existing successes and failure records remain unchanged.
+
+Independent review closed schema/projection mismatches and ensured artifact
+release is withheld on post-call custody or cleanup failure. Helper-owned
+descriptor uncertainty is preserved without an automatic close retry. The
+original managed-bootstrap dispatch remains selected when the fixed preparation
+prefix is absent. Neither route derives fresh health or effect authority.
+
+The strict no-symlink host profile can refuse merged-/usr layouts or interpreter
+aliases. The concrete VM must satisfy the approved paths or require a material
+profile decision; flattening an export cannot prove the actual host layout.
+Static dependency edges do not establish loader/cache/dlopen resolution or ABI
+execution. No concrete retained export or installed inventory was prepared here.
+
+1. **D2:** offline host/export and installed-view preparation implemented; next real selected
    host/installed views, genuine observation/health, raw-effect retention,
    recovery/full timing and separately authorized useful pilot.
 2. **D3:** remaining connected admission, RUN/health and workload coverage.

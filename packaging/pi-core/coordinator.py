@@ -427,11 +427,13 @@ def _public_observation(observation):
              "invalid coordinator observation")
     status = observation.get("status")
     _require(status in {"REFUSED", "REFUSED_OR_INDETERMINATE", "CLEANUP_HOLD",
-                        "MANAGED_CALL_RETURNED_NOT_QUALIFIED"}, "invalid coordinator status")
+                        "MANAGED_CALL_RETURNED_NOT_QUALIFIED", "INVENTORIES_PREPARED_NOT_QUALIFIED"},
+             "invalid coordinator status")
     report["entry_status"] = status
     stage = observation.get("failure_stage")
     _require(stage is None or stage in {"PREFLIGHT", "PREPARED_INPUTS", "HELD_INPUTS", "MANAGED_CALL",
-        "POST_CALL_CUSTODY", "HOLDER_CLEANUP", "INPUT_CLEANUP"}, "invalid coordinator failure stage")
+        "POST_CALL_CUSTODY", "HOLDER_CLEANUP", "INPUT_CLEANUP", "INVENTORY_PREPARATION"},
+        "invalid coordinator failure stage")
     report["entry_failure_stage"] = stage
     for name in ("managed_call_attempted", "owned_inputs_closed"):
         _require(type(observation.get(name)) is bool, "invalid coordinator boolean")
@@ -482,37 +484,157 @@ def _public_observation(observation):
     return report
 
 
+def _public_preparation(observation):
+    report = _public_observation(observation)
+    report.update(schema="aragorn/pi-core-installed-inventory-report/v1",
+        authority="INSTALLED_VIEW_PREPARATION_ONLY_NOT_SOURCE_CONSUMPTION_HEALTH_OR_LAUNCH",
+        preparation_attempted=False, owned_views_closed=False, artifacts=None, artifact_digests=None,
+        input_cleanup_uncertainty=[])
+    if observation is None:
+        return report
+    _require(observation.get("schema") == "aragorn/pi-core-installed-inventory-result/v1" and
+             observation.get("managed_result") is None and report["managed_call_attempted"] is False and
+             report["deployment_digest"] is None, "preparation cannot carry execution authority")
+    for name in ("preparation_attempted", "owned_views_closed"):
+        _require(type(observation.get(name)) is bool, "invalid preparation boolean")
+        report[name] = observation[name]
+    uncertainty = observation.get("input_cleanup_uncertainty", [])
+    _require(type(uncertainty) is list and len(uncertainty) <= 512, "cleanup uncertainty bound")
+    fields = {"INVENTORY_HELPER_DESCRIPTORS": {"scope", "held_fds", "ambiguous_fds"},
+              "OBSERVER_ROOT_CLOSE": {"scope", "descriptors"},
+              "DESCRIPTOR_CLOSE": {"scope", "descriptors"},
+              "ANCESTRY_ACQUISITION": {"scope", "path"}}
+    for row in uncertainty:
+        _require(type(row) is dict and type(row.get("scope")) is str and
+                 row["scope"] in fields and set(row) == fields[row["scope"]], "invalid cleanup uncertainty")
+        for name in set(row) - {"scope"}:
+            if name == "path":
+                _path(row[name])
+            else:
+                _require(type(row[name]) is list and len(row[name]) <= 8192 and
+                         all(type(fd) is int and 0 <= fd < 2**31 for fd in row[name]),
+                         "invalid cleanup descriptor metadata")
+    _require(len(_canonical(uncertainty)) <= 256 * 1024, "cleanup uncertainty byte bound")
+    report["input_cleanup_uncertainty"] = json.loads(_canonical(uncertainty))
+    artifacts, pins = observation.get("artifacts"), observation.get("artifact_digests")
+    if artifacts is None:
+        _require(pins is None and report["entry_status"] != "INVENTORIES_PREPARED_NOT_QUALIFIED",
+                 "preparation artifacts absent")
+        return report
+    _require(report["entry_status"] == "INVENTORIES_PREPARED_NOT_QUALIFIED" and
+             report["preparation_attempted"] and report["owned_views_closed"] and
+             report["owned_inputs_closed"] and not uncertainty, "unreleased preparation artifacts")
+    shapes = {
+        "source_inventory": ("aragorn/pi-core-node-source-inventory/v2", {"schema", "sources"}),
+        "loader_inventory": ("aragorn/pi-core-loader-inventory/v1", {"schema", "loaders"}),
+        "profile": ("aragorn/pi-core-node-source-profile/v1",
+                    {"schema", "pins", "sources", "required_sources", "loader_files"}),
+        "preparation": ("aragorn/pi-core-source-inventory-preparation/v1",
+            {"schema", "authority", "phase3_exit_eligible", "expected_manifest_digest", "profile_digest",
+             "source_inventory_digest", "loader_inventory_digest", "worker_root_identity",
+             "observer_root_identity", "code", "source_files", "loader_files"})}
+    _require(type(artifacts) is dict and type(pins) is dict and set(artifacts) == set(pins) == set(shapes),
+             "fixed preparation artifacts required")
+    for name, (schema, fields) in shapes.items():
+        value = artifacts[name]
+        _require(type(value) is dict and set(value) == fields and value["schema"] == schema and
+                 type(pins[name]) is str and _PIN.fullmatch(pins[name]) and
+                 _digest(_canonical(value)) == pins[name], "preparation artifact fields or digest differ")
+
+    def identity(value):
+        _require(type(value) is dict and set(value) ==
+            {"device", "inode", "mode", "nlink", "uid", "gid", "size", "mtime_ns", "ctime_ns"} and
+            all(type(number) is int and 0 <= number < 2**63 for number in value.values()),
+            "invalid public inventory identity")
+
+    def rows(value, installed=False):
+        _require(type(value) is list and 0 < len(value) <= 512, "public inventory row bound")
+        for row in value:
+            _require(type(row) is dict and set(row) == ({"path", "digest", "identity", "readonly_view"}
+                if installed else {"path", "digest"}) and type(row["digest"]) is str and
+                _PIN.fullmatch(row["digest"]), "invalid public inventory row")
+            _path(row["path"])
+            if installed:
+                identity(row["identity"])
+                _require(row["readonly_view"] is True, "inventory lacks read-only view")
+
+    rows(artifacts["source_inventory"]["sources"], True)
+    rows(artifacts["loader_inventory"]["loaders"], True)
+    profile, receipt = artifacts["profile"], artifacts["preparation"]
+    rows(profile["sources"])
+    rows(profile["loader_files"])
+    _require(type(profile["required_sources"]) is list and 0 < len(profile["required_sources"]) <= 512 and
+             all(type(path) is str and path in {row["path"] for row in profile["sources"]}
+                 for path in profile["required_sources"]), "invalid public required sources")
+    _require(type(profile["pins"]) is dict and set(profile["pins"]) == {"gate_digest", "node_digest",
+        "producer_digest", "node_observer_digest", "source_inventory_digest", "loader_inventory_digest"} and
+        all(type(pin) is str and _PIN.fullmatch(pin) for pin in profile["pins"].values()), "invalid profile pins")
+    for name in ("source_inventory", "loader_inventory"):
+        _require(profile["pins"][name + "_digest"] == receipt[name + "_digest"] == pins[name],
+                 "inventory output join differs")
+    _require(receipt["profile_digest"] == pins["profile"] and receipt["phase3_exit_eligible"] is False and
+        receipt["authority"] == report["authority"] and type(receipt["expected_manifest_digest"]) is str and
+        _PIN.fullmatch(receipt["expected_manifest_digest"]), "invalid preparation receipt")
+    for name in ("worker_root_identity", "observer_root_identity"):
+        identity(receipt[name])
+    for name, key in (("source_files", "source_inventory"), ("loader_files", "loader_inventory")):
+        _require(type(receipt[name]) is int and receipt[name] == len(artifacts[key]["sources" if key == "source_inventory" else "loaders"]),
+                 "inventory output count differs")
+    _require(type(receipt["code"]) is list and len(receipt["code"]) == 4, "invalid public code inventory")
+    for row in receipt["code"]:
+        _require(type(row) is dict and set(row) == {"view", "path", "digest", "identity", "protection"} and
+            row["view"] in {"worker", "observer"} and row["protection"] ==
+            ("ROOT_OWNED_READONLY_VIEW" if row["view"] == "worker" else "ROOT_OWNED_NO_WRITE_BITS") and
+            type(row["digest"]) is str and _PIN.fullmatch(row["digest"]), "invalid public code record")
+        _path(row["path"])
+        identity(row["identity"])
+    report.update(artifacts=artifacts, artifact_digests=pins)
+    _require(len(_canonical(report)) <= 4 * 1024 * 1024, "preparation report exceeds bound")
+    return report
+
+
 def main():
     host = loader = None
     result, observation, phase = 126, None, "PREFLIGHT"
     entry_invoked = False
+    prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-inventories"
+    public = _public_preparation if prepare else _public_observation
+    args = sys.argv[2:] if prepare else sys.argv[1:]
     cleanup = {"source_loader": "NOT_ACQUIRED", "host": "NOT_ACQUIRED"}
     try:
         _flags()
-        _require(len(sys.argv) == 6 and type(sys.argv[5]) is str and sys.argv[5].isascii() and
-                 sys.argv[5].isdecimal() and 0 < int(sys.argv[5]) < 2**63, "fixed coordinator arguments required")
-        profile_path, plan_path = _path(sys.argv[1]), _path(sys.argv[3])
-        _require(all(_PIN.fullmatch(value) for value in (sys.argv[2], sys.argv[4])), "independent pins required")
-        deadline_ns = int(sys.argv[5])
+        _require(len(args) == 5 and type(args[4]) is str and args[4].isascii() and
+                 args[4].isdecimal() and 0 < int(args[4]) < 2**63, "fixed coordinator arguments required")
+        profile_path, plan_path = _path(args[0]), _path(args[2])
+        _require(all(_PIN.fullmatch(value) for value in (args[1], args[3])), "independent pins required")
+        deadline_ns = int(args[4])
         deadline = math.nextafter(deadline_ns / 1_000_000_000, 0.0)
         _require(time.monotonic() < deadline <= time.monotonic() + 30, "original bounded coordinator deadline required")
         _require(Path(__file__) == _WRAPPER and _PRIVATE not in sys.modules, "fixed coordinator origin required")
         sys.modules[_PRIVATE] = sys.modules[__name__]
         phase = "HOST_CUSTODY"
         cleanup["host"] = "NOT_RETURNED_CLEANUP_UNVERIFIED"
-        host = _hold_host(profile_path, sys.argv[2], deadline)
+        host = _hold_host(profile_path, args[1], deadline)
         phase = "SOURCE_BOOTSTRAP"
         cleanup["source_loader"] = "NOT_RETURNED_CLEANUP_UNVERIFIED"
         loader = _bootstrap(host)
-        from aragorn.pi_core_coordinator_entry import run
+        if prepare:
+            from aragorn.pi_core_installed_inventory_entry import run
+        else:
+            from aragorn.pi_core_coordinator_entry import run
         host.guard()
         phase = "ENTRY_CALL"
         entry_invoked = True
-        observation = run(plan_path, sys.argv[4], deadline_ns=deadline_ns, source_loader=loader, host_custody=host)
+        observation = run(plan_path, args[3], deadline_ns=deadline_ns, source_loader=loader, host_custody=host)
         phase = "POST_CALL_CUSTODY"
         host.guard()
-        report = _public_observation(observation)
-        result = (0 if report["entry_status"] == "MANAGED_CALL_RETURNED_NOT_QUALIFIED" and
+        report = public(observation)
+        if prepare:
+            result = (0 if report["entry_status"] == "INVENTORIES_PREPARED_NOT_QUALIFIED" and
+                report["preparation_attempted"] and report["owned_inputs_closed"] and
+                report["owned_views_closed"] and report["artifacts"] is not None else 126)
+        else:
+            result = (0 if report["entry_status"] == "MANAGED_CALL_RETURNED_NOT_QUALIFIED" and
             report["managed_call_attempted"] and report["owned_inputs_closed"] and
             report["managed_status"] == "BOOTSTRAP_COMPLETE" and report["managed_cleanup_complete"] else 126)
     except BaseException as error:
@@ -532,16 +654,20 @@ def main():
                     phase = "WRAPPER_CLEANUP"
                     result = 126
     try:
-        report = _public_observation(observation)
+        report = public(observation)
         if observation is None and entry_invoked:
-            report["managed_call_attempted"] = None
+            report["preparation_attempted" if prepare else "managed_call_attempted"] = None
     except BaseException:
-        report = _public_observation(None)
-        attempted = observation.get("managed_call_attempted") if type(observation) is dict else None
-        report["managed_call_attempted"] = attempted if type(attempted) is bool else None if entry_invoked else False
+        report = public(None)
+        field = "preparation_attempted" if prepare else "managed_call_attempted"
+        attempted = observation.get(field) if type(observation) is dict else None
+        report[field] = attempted if type(attempted) is bool else None if entry_invoked else False
         phase, result = "REPORT_REFUSED", 126
-    report.update(status="MANAGED_BOOTSTRAP_RETURNED_NOT_QUALIFIED" if result == 0 else "REFUSED_OR_CLEANUP_HOLD",
+    report.update(status=("INVENTORIES_PREPARED_NOT_QUALIFIED" if prepare else
+                  "MANAGED_BOOTSTRAP_RETURNED_NOT_QUALIFIED") if result == 0 else "REFUSED_OR_CLEANUP_HOLD",
                   wrapper_stage=phase, wrapper_cleanup=cleanup, entry_call_attempted=entry_invoked)
+    if prepare and result != 0:
+        report.update(artifacts=None, artifact_digests=None)
     print(_canonical(report).decode("ascii"))
     return result
 

@@ -71,6 +71,47 @@ deadlines return no prepared profile. An ambiguous close is attempted once and
 reported with `held_fds`/`ambiguous_fds`; the caller must preserve that ownership
 hold, not automatically retry a possibly reused descriptor.
 
+## Protected root caller (batch 24)
+
+The fixed root wrapper now accepts the additive literal prefix
+`--prepare-inventories PROFILE_PATH PROFILE_DIGEST PLAN_PATH PLAN_DIGEST DEADLINE_NS`.
+It retains the original managed-bootstrap route when the prefix is absent.
+Both routes establish the same pinned VM-host and verified source custody before
+importing Aragorn; the preparation entry is fixed to
+`aragorn.pi_core_installed_inventory_entry.run`.
+
+Its canonical `aragorn/pi-core-installed-inventory-plan/v1` has exactly:
+
+- `schema` and the independently approved `host_profile_digest`;
+- `source_plan`: the existing protected `{path,digest}` reference above;
+- `worker_view`: `{path,identity}` for an already completed protected read-only
+  worker view, not `/`, a staging tree or future bind specification;
+- `observer_root_identity`: the independently approved complete identity of `/`
+  in the pinned VM host.
+
+The entry owns only its acquired root/ancestry descriptors. It checks source
+intent before acquiring views, calls the existing helper once with borrowed
+descriptors, then rechecks view, source and host custody before closing its own
+handles once. The root caller keeps its original at-most-30-second deadline;
+the helper's larger bound does not extend it. Helper-owned uncertain descriptors
+remain an explicit hold, never adopted or retried.
+
+The entry observation is `aragorn/pi-core-installed-inventory-result/v1`; the
+wrapper emits `aragorn/pi-core-installed-inventory-report/v1` with success status
+`INVENTORIES_PREPARED_NOT_QUALIFIED` only after complete owned cleanup. It contains
+the four existing parsed artifacts and pins, not replacement inventory formats.
+The wrapper validates bounded, fixed schemas and nested fields and suppresses
+artifacts on any custody, cleanup or report failure. Managed call authority,
+deployment completion and Phase 3 eligibility remain false/absent.
+
+`scripts/prepare_pi_core_coordinator_host.py` separately prepares only the
+approved host profile from a retained export: exact namespace, bytes, modes and
+static arm64 dependency edges. This does not install the host or prove actual
+loader resolution. Neither entry prepares missing mounts, writes CAS, starts a
+process, creates health or approves a launch. See the
+[batch-24 checkpoint](coordinator/pi-core-host-inventory-batch-24.md) for exact
+focused checks and remaining operational prerequisites.
+
 ## Validation scope
 
 The new focused tests use an inert descriptor/filesystem fixture to cover pinned

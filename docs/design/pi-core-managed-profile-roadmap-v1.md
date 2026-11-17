@@ -15,6 +15,14 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-30 [fresh broker-base checkpoint](../phase3/coordinator/pi-core-broker-base-batch-30.md):
+the existing protected root entry now connects fresh-only installation of the
+action-owned base roots/lock/pinned empty state. It retains partial identities,
+readback and cleanup uncertainty; no current policy/health/grant authority is
+generated. All 81 new/affected checks passed once with no reruns or live operation.
+Actual protected views, separate provider controls, genuine health, action raw
+evidence/full timing, recovery and the separately authorized pilot remain open.
+
 Batch-29 [explicit broker-preparation checkpoint](../phase3/coordinator/pi-core-broker-preparation-batch-29.md):
 the protected root caller now prepares the admitted grant through the existing
 action service, with authenticated command/result, independent locked readback

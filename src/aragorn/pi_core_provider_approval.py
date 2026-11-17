@@ -140,8 +140,13 @@ class PiProviderApproval:
         # This existing observation is not claimed to describe the future worker.
         observation = load(config.observation_path, "provider approval observation")
         broker._observation(observation, observation.get("observed_at_unix"))
-        decision._active(observation["active"])
-        decision._measured_action(observation["measured_action"])
+        _require(observation["sensor_digest"] == policy["sensor_digest"],
+                 "PROVIDER_APPROVAL_OBSERVATION_SENSOR_MISMATCH")
+        _require((observation["active"] is None) == (observation["measured_action"] is None),
+                 "PROVIDER_APPROVAL_OBSERVATION_PARTIAL")
+        if observation["active"] is not None:
+            decision._active(observation["active"])
+            decision._measured_action(observation["measured_action"])
         self._custody(deadline)
 
     def _absent(self):

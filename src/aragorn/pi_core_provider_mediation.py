@@ -24,6 +24,8 @@ from pathlib import Path
 from . import pi_core_confined_launch as confined
 from . import pi_core_identity_handoff as channel
 from . import pi_core_worker_identity as identity
+from . import pi_core_provider_evidence as evidence
+from . import pi_core_provider_observation as observation_publisher
 from . import runtime_action_broker as broker
 from . import runtime_process_profile as process
 from .oci_worker_protocol import canonical_digest, canonical_json
@@ -342,6 +344,9 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
     service_receipt = wire = None
     egress_checks = 0
     failure = cleanup_failure = None
+    evidence_owner = evidence_snapshot = None
+    evidence_stack = ExitStack()
+    retained_source_nonces = set()
     stage = "IDENTITY"
     held = ExitStack()
     try:
@@ -366,7 +371,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
             if check_source:
                 # Guard the same actual activation, before dispatch and each
                 # CONNECT/SEND permission. No serialized health claim suffices.
-                source_observer.guard_source_health(activation=activation, deadline=deadline)
+                return source_observer.guard_source_health(activation=activation, deadline=deadline)
 
         stage = "REQUEST"
         request = validate_provider_request(broker._read_frame(worker_connection, deadline))
@@ -387,6 +392,51 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
 
         approval, digests = _approval(read_approval(), request, activation)
         if provider_service:
+            try:
+                evidence_owner = evidence_stack.enter_context(evidence.hold_provider_evidence(
+                    config, control_fd, activation=activation, deadline=deadline))
+            except BaseException as error:
+                evidence_snapshot = getattr(error, "pi_provider_evidence_observation", None)
+                raise
+
+        def retain(kind, value):
+            if provider_service:
+                _require(evidence_owner is not None, "PROVIDER_EVIDENCE_OWNER_REQUIRED")
+                return evidence_owner.retain(kind, value)
+
+        for kind, value in (("REQUEST", request), ("ACTIVATION", activation),
+                ("MEASUREMENT", measured), ("LINEAGE", active), ("APPROVAL", approval)):
+            retain(kind, value)
+
+        def retain_source(phase, capture):
+            ref = retain("SOURCE_HEALTH", capture)
+            boundary = observation_publisher.validate_provider_source_capture(capture, activation,
+                boundary_boottime_ns=time.clock_gettime_ns(time.CLOCK_BOOTTIME))
+            _require(boundary["challenge"]["nonce"] not in retained_source_nonces,
+                     "PROVIDER_SOURCE_CHALLENGE_REPLAY")
+            retained_source_nonces.add(boundary["challenge"]["nonce"])
+            retain("SOURCE_BOUNDARY", {"phase": phase,
+                "source_digest": ref["digest"], **boundary})
+            # Retention consumes the same freshness budget; never challenge again
+            # merely to replace a stale retained boundary with a convenient one.
+            return {"source_digest": ref["digest"],
+                **observation_publisher.validate_provider_source_capture(capture, activation,
+                    boundary_boottime_ns=time.clock_gettime_ns(time.CLOCK_BOOTTIME))}
+
+        def retain_decision(value, observed_digest):
+            if not provider_service:
+                return
+            for kind, path, digest in (
+                ("POLICY", config.policy_path, value["policy_digest"]),
+                ("REVOCATIONS", config.revocations_path, value["revocation_snapshot_digest"]),
+                ("GLOBAL_HEALTH", config.health_path, value["mediator_health_digest"]),
+                ("OBSERVATION", config.observation_path, observed_digest),
+            ):
+                document = broker._load_control(control_fd, path, config, "provider retained decision input")
+                _require(canonical_digest(document) == digest, "PROVIDER_EVIDENCE_SNAPSHOT_CHANGED")
+                retain(kind, document)
+            retain("DECISION", value)
+        if provider_service:
             # Local imports preserve the v1 path and avoid a codec/validator cycle.
             from . import pi_core_openai_responses as codec
             from . import pi_core_provider_service as service
@@ -402,10 +452,18 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         action = approval["request"]
         _require(action["issued_at_unix"] <= wall_time < action["expires_at_unix"], "PROVIDER_ACTION_EXPIRED")
         deadline = min(deadline, sampled_monotonic + action["expires_at_unix"] - wall_time)
-        guard()
+        source_capture = guard()
         _absent_claim(control_fd, _claim_name(activation))
         stage = "POLICY"
+        if provider_service:
+            boundary = retain_source("PRE_POLICY", source_capture)
+            observation_publisher.publish_provider_observation(control_fd, config,
+                request=request, approval=approval, activation=activation, measured=measured,
+                lineage=active, grant=grant, source_capture=source_capture,
+                boundary_boottime_ns=boundary["boundary_boottime_ns"], now_unix=now)
+            retain("SOURCE_BOUNDARY", {"phase": "POLICY_PUBLICATION", **boundary})
         state, observation_digest, decision, reasons = broker._evaluate_snapshot(control_fd, config, action, digests, now)
+        retain_decision(decision, observation_digest)
         _require(state["effect_journal"] is None, "PROVIDER_PENDING_EFFECT_REFUSED")
         _require(decision["verdict"] == "ALLOW" and not reasons, "PROVIDER_POLICY_REFUSED")
         action_digest = canonical_digest(action)
@@ -429,6 +487,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         _require(wall_time <= final_wall_time < action["expires_at_unix"], "PROVIDER_CLOCK_ROLLBACK_OR_EXPIRED")
         current, current_observation, decision, reasons = broker._evaluate_snapshot(
             control_fd, config, action, digests, final_now, minimum_state=state)
+        retain_decision(decision, current_observation)
         _require(current["effect_journal"] is None and current_observation == observation_digest and
                  decision["verdict"] == "ALLOW" and not reasons and any(
                      entry["request_digest"] == action_digest and entry["observation_digest"] == observation_digest
@@ -449,6 +508,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         identity._remaining(deadline, activation)
         _require(final_wall_time <= _wall_time() < action["expires_at_unix"], "PROVIDER_CLOCK_ROLLBACK_OR_EXPIRED")
         stage = "SERVICE"
+        retain("SERVICE_REQUEST", packet)
         submitted = True  # An attempted send is never retried or called not-submitted on failure.
         channel.send_authenticated_packet(provider_connection, packet, deadline, max_bytes=MAX_FRAME)
         if provider_service:
@@ -457,6 +517,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
                 _require(not rights and all(reply[key] == value for key, value in fields.items()),
                          "PROVIDER_SERVICE_REPLY_REFUSED")
                 if reply["kind"] == "RESULT":
+                    retain("SERVICE_RESULT", reply)
                     _require(reply["cleanup"] == "OWNED_TRANSPORT_CLOSED" and
                              (not reply["connect_attempted"] or egress_checks >= 1) and
                              (not reply["send_attempted"] or egress_checks == 2) and
@@ -469,6 +530,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
                     **fields, "kind": "CHECK", "sequence": expected_sequence,
                     "phase": "CONNECT" if expected_sequence == 1 else "SEND"},
                     "PROVIDER_SERVICE_CHECK_SEQUENCE_REFUSED")
+                retain("SERVICE_CHECK", reply)
                 # Reuse the held identity/lineage/lock and durable one-use claim;
                 # never turn the initial ALLOW into a cached network permission.
                 guard()
@@ -480,6 +542,7 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
                          "PROVIDER_CLOCK_ROLLBACK_OR_EXPIRED")
                 fresh_state, fresh_observation, decision, reasons = broker._evaluate_snapshot(
                     control_fd, config, action, digests, int(fresh_wall), minimum_state=current)
+                retain_decision(decision, fresh_observation)
                 _require(fresh_state["effect_journal"] is None and fresh_observation == observation_digest and
                          decision["verdict"] == "ALLOW" and not reasons and any(
                              entry["request_digest"] == action_digest and entry["observation_digest"] == observation_digest
@@ -509,13 +572,23 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
                 # cross-process check/send gap. It is not atomic revocation.
                 expires = min(deadline, fields["deadline_ns"] / 1_000_000_000,
                               started + 0.1, started + min(expiries) - fresh_wall)
-                guard()
+                source_capture = guard()
+                boundary = retain_source(reply["phase"], source_capture)
                 _require(fresh_wall <= _wall_time() < min(expiries) and time.monotonic() < expires,
                          "PROVIDER_EGRESS_PERMIT_EXPIRED")
-                service.send_packet(provider_connection, {**reply, "kind": "CURRENT",
-                    "permit_expires_monotonic_ns": math.floor(expires * 1_000_000_000)}, deadline)
+                permit = {**reply, "kind": "CURRENT",
+                    "permit_expires_monotonic_ns": math.floor(expires * 1_000_000_000)}
+                retain("SERVICE_PERMIT", permit)
+                final_boundary = observation_publisher.validate_provider_source_capture(source_capture, activation,
+                    boundary_boottime_ns=time.clock_gettime_ns(time.CLOCK_BOOTTIME))
+                _require(time.monotonic() < expires, "PROVIDER_EGRESS_PERMIT_EXPIRED")
+                service.send_packet(provider_connection, permit, deadline)
                 current, final_wall_time = fresh_state, fresh_wall
                 egress_checks = expected_sequence
+                # This is the actual final freshness check, not the earlier
+                # pre-permission storage boundary or independent send timing.
+                retain("SOURCE_BOUNDARY", {"phase": reply["phase"] + "_PERMIT_CHECK",
+                    "source_digest": boundary["source_digest"], **final_boundary})
             _require(service_receipt is not None, "PROVIDER_SERVICE_TERMINAL_MISSING")
         else:
             reply, rights = channel.receive_authenticated_packet(provider_connection, peer, deadline,
@@ -523,7 +596,9 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
             _exact(reply, {*fields, "kind", "result"})
             _require(not rights and all(reply[key] == value for key, value in fields.items()) and reply["kind"] == "RESULT",
                      "PROVIDER_SERVICE_REPLY_REFUSED")
+            retain("SERVICE_RESULT", reply)
         result = validate_provider_result(reply["result"], canonical_digest(request))
+        retain("PROVIDER_RESULT", result)
         # The exact per-message-authenticated terminal is allowed to precede
         # service exit. Do not require an already-cleaned one-shot peer to live.
         # Terminal cleanup grants no further effect authority. Do not require a
@@ -533,12 +608,29 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
     except BaseException as exc:
         failure = exc
     finally:
+        if failure is not None and evidence_owner is not None:
+            try:
+                if evidence_owner.observation["status"] == "OPEN":
+                    evidence_owner.retain("FAILURE", {"stage": stage,
+                        "submission_attempted": submitted, "reason": "OPERATION_FAILED"})
+            except BaseException as exc:
+                cleanup_failure = exc
+        try:
+            evidence_stack.close()
+        except BaseException as exc:
+            cleanup_failure = cleanup_failure or exc
+        if evidence_owner is not None:
+            try:
+                evidence_snapshot = evidence_owner.observation
+            except BaseException as exc:
+                cleanup_failure = cleanup_failure or exc
         # The lineage lock was acquired first. Release control lock/FDs before
         # lineage, then both retained process handles; attempt every owned close.
         try:
-            cleanup_failure = broker._release_lock_and_close(lock_fd, locked, control_fd)
+            release_failure = broker._release_lock_and_close(lock_fd, locked, control_fd)
+            cleanup_failure = cleanup_failure or release_failure
         except BaseException as exc:
-            cleanup_failure = exc
+            cleanup_failure = cleanup_failure or exc
         try:
             held.close()
         except BaseException as exc:
@@ -551,19 +643,20 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         failure = failure or cleanup_failure
         stage = "CLEANUP"
     status = ("INDETERMINATE" if submitted else "NOT_SUBMITTED") if failure is not None else result["status"]
-    if failure is not None and not isinstance(failure, Exception):
-        raise failure
     delivery = "NOT_ATTEMPTED"
-    if request is not None:
+    if request is not None and (failure is None or isinstance(failure, Exception)):
         response = _result(canonical_digest(request), status) if failure is not None else result
         try:
             channel.validate_deadline(deadline)
             broker._send_frame(worker_connection, canonical_json(response), deadline)
             worker_connection.shutdown(socket.SHUT_WR)
             delivery = "FRAME_AND_EOF_SENT_NOT_ACKNOWLEDGED"
-        except Exception:
+        except BaseException as exc:
             delivery = "UNCONFIRMED"
             status = "INDETERMINATE" if submitted else "NOT_SUBMITTED"
+            if not isinstance(exc, Exception):
+                failure = exc
+                stage = "CLIENT_DELIVERY"
     observation = {"schema": "aragorn/pi-core-provider-mediation-observation/v1",
         "authority": "PROVIDER_DATA_GATE_OBSERVATION_NOT_EGRESS_OR_RUN_AUTHORITY",
         "status": status, "request_digest": canonical_digest(request) if request is not None else None,
@@ -575,7 +668,14 @@ def handle_pi_provider_connection(worker_connection, provider_connection, config
         "client_delivery": delivery, "failure_stage": stage if failure is not None else None,
         "provider_transport_implemented": provider_service, "phase3_eligible": False}
     if provider_service:
-        observation.update(egress_wire_digest=canonical_digest(wire) if wire is not None else None,
+        observation.update(retained_evidence=evidence_snapshot,
+            egress_wire_digest=canonical_digest(wire) if wire is not None else None,
             egress_checks=egress_checks,
             provider_service_receipt_digest=canonical_digest(service_receipt) if service_receipt is not None else None)
+    if failure is not None and not isinstance(failure, Exception):
+        try:
+            failure.pi_provider_mediation_observation = _copy(observation)
+        except BaseException:
+            pass
+        raise failure
     return observation

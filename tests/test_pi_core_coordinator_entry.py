@@ -80,8 +80,12 @@ class CoordinatorEntryTests(InertTests):
         self.plan, self.documents = prepared()
         self.events = []
         self.source, self.host = mock.Mock(), mock.Mock()
+        publisher_path = "opt/aragorn/src/aragorn/pi_core_provider_observation.py"
+        self.source.source_digests = {publisher_path: pin("f")}
         self.custody = self.enterContext(mock.patch.object(subject, "_custody",
-            return_value=(pin("c"), [{"module": "retained source"}], {"host": "retained"})))
+            return_value=(pin("c"), [{"module": "retained source"},
+                {"module": "aragorn.pi_core_provider_observation", "path": publisher_path,
+                 "digest": pin("f")}], {"host": "retained"})))
         self.input_holder = mock.Mock()
         self.input_holder.cleanup_uncertainty = []
         def read(path, expected, maximum):

@@ -278,7 +278,7 @@ class ProviderMediationTests(InertTests):
 
     def run_request(self, **options):
         arguments = dict(activation_path=Path("/var/lib/aragorn/pi-activations") / ("a" * 32 + ".json"),
-            profile=self.profile, protected_install_root=Path("/var/lib/aragorn/admitted"), grant={},
+            profile=self.profile, protected_install_root=Path("/var/lib/aragorn/admitted"), grant=getattr(self, "grant", {}),
             expected_provider_peer=self.peer, deadline=120.0, source_observer=self.source_observer)
         arguments.update(options)
         return subject.handle_pi_provider_connection(self.worker, self.provider, self.config, **arguments)

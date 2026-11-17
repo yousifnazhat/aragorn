@@ -358,6 +358,13 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                 ("runtime_digest", "active_skill_digest", "policy_digest", "policy_version")))
             provider = {}
             if root_config is not None:
+                publisher_path = "opt/aragorn/src/aragorn/pi_core_provider_observation.py"
+                publisher_pin = _pin(source_loader.source_digests.get(publisher_path))
+                _, consumed, _ = _custody(source_loader, host_custody, deadline)
+                _require(sum(type(row) is dict and row.get("module") == "aragorn.pi_core_provider_observation" and
+                    row.get("path") == publisher_path and row.get("digest") == publisher_pin
+                    for row in consumed) == 1, "COORDINATOR_PROVIDER_PUBLISHER_NOT_CONSUMED")
+                observation["source_before"] = consumed
                 provider["provider_credential"] = stack.enter_context(credentials.hold_provider_credential(
                     _path(plan["provider"]["credential_source"]), provider_inputs=held_provider, deadline=deadline))
                 provider["provider_approval"] = stack.enter_context(approvals.hold_provider_approval(

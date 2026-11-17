@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-27 [provider observation/raw evidence checkpoint](../phase3/coordinator/pi-core-provider-evidence-batch-27.md):
+the protected service path publishes actual acquired request observations without
+renewing global health, retains raw source/control/decision/service records through
+the existing CAS, and preserves cancellation/storage uncertainty in native reports.
+The root caller binds the publisher to consumed pinned source. All 126 new/affected
+checks passed once. No provider call or installed deployment ran. Terminal
+action/sensor lifetime, genuine global health, installed views, complete effect
+evidence, recovery/full timing and the separately authorized useful pilot remain.
+
 Batch-26 [managed install/native evidence checkpoint](../phase3/coordinator/pi-core-install-caller-batch-26.md):
 the fixed protected root route now connects managed install/update to the existing
 publisher and Pi fresh-start consumer. Native terminal/partial observations survive

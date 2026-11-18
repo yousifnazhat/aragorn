@@ -24,6 +24,56 @@ from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from tests import test_runtime_capability_grant as fixtures
 
 
+def _receipt_descriptors(test):
+    """Extend the predecessor's in-memory name table with a held inode, not a name alias."""
+    test.named_ino = 83
+    test.receipt_fd = None
+    original_stat = os.stat.side_effect
+
+    def metadata(ino, raw, links):
+        return SimpleNamespace(st_dev=10, st_ino=ino, st_mode=0o100400, st_uid=2201, st_gid=2201,
+            st_nlink=links, st_size=len(raw), st_mtime_ns=3, st_ctime_ns=4)
+
+    def open_receipt(name, flags, *, dir_fd):
+        test.assertTrue(test.held)
+        test.assertEqual((name, dir_fd), ("profile-receipt.json", 77))
+        for required in (os.O_NOFOLLOW, os.O_CLOEXEC, os.O_NONBLOCK):
+            test.assertEqual(flags & required, required)
+        test.assertEqual(flags & os.O_ACCMODE, os.O_RDONLY)
+        test.assertIsNone(test.receipt_fd)
+        if name not in test.files:
+            raise FileNotFoundError(name)
+        test.receipt_fd = (test.named_ino, test.files[name])
+        return 84
+
+    def named_stat(name, *, dir_fd, follow_symlinks):
+        found = original_stat(name, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+        return metadata(test.named_ino, test.files[name], 1) if name == "profile-receipt.json" else found
+
+    def held_stat(fd):
+        test.assertTrue(test.held)
+        if fd == 77:
+            return SimpleNamespace(st_gid=2201)
+        test.assertEqual(fd, 84)
+        ino, raw = test.receipt_fd
+        return metadata(ino, raw, int("profile-receipt.json" in test.files and ino == test.named_ino))
+
+    def pread(fd, size, offset):
+        test.assertTrue(test.held)
+        test.assertEqual(fd, 84)
+        return test.receipt_fd[1][offset:offset + size]
+
+    def close(fd):
+        test.assertEqual(fd, 84)
+        test.assertIsNotNone(test.receipt_fd)
+        test.receipt_fd = None
+
+    for op, func in (("open", open_receipt), ("fstat", held_stat), ("stat", named_stat),
+                     ("pread", pread), ("close", close)):
+        test.stack.enter_context(mock.patch.object(os, op, side_effect=func))
+    test.stack.enter_context(mock.patch.object(os, "supports_dir_fd", {os.link, os.open, os.stat, os.unlink}))
+
+
 class PiRequestRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.stack = ExitStack()
@@ -149,6 +199,7 @@ class PiRequestRecoveryTests(unittest.TestCase):
         for owner, name in ((subject.broker, "_recover_effect_journal"), (subject.broker, "_commit_state"),
                             (subject.pi, "mediate_pi_runtime_create"), (subject.grants, "mediate_granted_profiled_runtime_create")):
             self.stack.enter_context(mock.patch.object(owner, name, side_effect=AssertionError("effect or implicit recovery forbidden")))
+        _receipt_descriptors(self)
 
     def state(self):
         return json.loads(self.files[self.config.grant_state_path.name])
@@ -381,7 +432,7 @@ class PiRequestRecoveryTests(unittest.TestCase):
         self.files["capability-grant-state.json"] = canonical_json(old)
         self.files[subject.grants._archive_name("state", old["grant_digest"])] = canonical_json(old)
         self.files.pop("capability-grant-state.json")
-        self.files.pop("profile-receipt.json")
+        self.assertNotIn("profile-receipt.json", self.files)
         with self.assertRaises(subject.broker.RuntimeActionBrokerError): self.initialize()
         self.assertNotIn("capability-grant-state.json", self.files)
 
@@ -389,6 +440,7 @@ class PiRequestRecoveryTests(unittest.TestCase):
         self.receipt(consumed=True)
         terminal = self.state()
         self.files[subject.grants._archive_name("state", terminal["grant_digest"])] = canonical_json(terminal)
+        self.files.pop("profile-receipt.json")  # Test archived authority, not an unrelated active orphan.
         restored = self.put_state("AVAILABLE", claim=False)
         before = copy.deepcopy(self.files)
         with self.assertRaises(subject.broker.RuntimeActionEffectIndeterminate): self.recover()

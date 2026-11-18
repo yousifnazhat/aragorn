@@ -11,3 +11,16 @@ Verified base `fafa55b6a614dc028f22d3a2b79dc308d249c62d` on main and the integra
 2. D3: admission, runtime coverage and actual confined workloads remain.
 3. D4: independent semantic inventory and freeze pending.
 4. D5: gated on freeze and separate execution approval.
+
+## Reviewed offline delivery
+
+The signed assignment was `7b01236`, merged at `f859b28`. All three paths above are connected in source. The installer additionally joins the provider config’s worker, sensor and runtime identities to the held service configuration. Empty installation and failure retain distinct role-specific receipts. An installed tree with even one unexpected nested member does not pass readback; an existing tree is never adopted. The public wrapper emits only a digest of the installation record.
+
+| Reviewed stage | Checks passed once | SHA-256 fingerprint |
+| --- | ---: | --- |
+| pi-core-provider-base-provision-offline | 16 | `601aa93259e9dfbb2875f6968cebe00d3fbf1e9e53e636cb3929795d7e07ef66` |
+| pi-core-provider-base-entry-offline | 16 | `75b8f4bcc2a213cb69218900f42d82cbe5513dddca5563b4809537d80512ef6a` |
+| pi-core-provider-base-wrapper-offline | 8 | `be4e8cb75cd8aee4805e21f67b983351b5adbb96e7f03b824ff7b267450217e9` |
+| pipeline-capacity | 4 | `0fb0f3951e961050dc136b6898bfa5743c54e27a5758c800df7ecb846b1f41cd` |
+
+The reviewed registry has 227 stages. Only the four above ran. No VM root, service, policy, health, API key, model request or target deployment was used. Initial trusted policy/revocation publication and a genuinely sourced observation remain separate requirements; the installer cannot manufacture them. No exit gate closed.

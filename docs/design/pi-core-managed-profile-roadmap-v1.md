@@ -15,6 +15,12 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-32 [provider storage checkpoint](../phase3/coordinator/pi-core-provider-base-batch-32.md):
+the protected root caller now supports fresh-only installation of the separate
+provider control roots, pinned empty state and empty evidence store. All 44
+focused checks passed once. The route grants no policy, health or approval;
+actual installed views, initial trusted controls, observation and timing remain open.
+
 Batch-31 [raw action evidence checkpoint](../phase3/coordinator/pi-core-action-evidence-batch-31.md):
 the native caller now retains available raw frame/context/terminal records in the
 existing protected CAS, independently joins original locked action receipts and

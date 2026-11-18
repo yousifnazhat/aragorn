@@ -22,6 +22,10 @@ individual npm source reads or arbitrary in-memory execution. The predecessor's
 static graph has **709** JS modules; keep the **512** source and **4,096** trace
 event limits. See the [decision](../phase3/coordinator/pi-core-worker-observation-decision.md)
 and [successor assignment](../phase3/coordinator/pi-core-worker-bundle-batch-35.md).
+The first successor emitted one 755,592-byte JavaScript file. Independent
+static inspection refused the reachable TypeBox string-code path; the original
+is retained, not reproduced or deployed. The successor checkpoint records the
+native-gate versus build-time interpreter decision and exact evidence hashes.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant
 to pass the existing readiness reader. D2 remains open; no freeze or live run.

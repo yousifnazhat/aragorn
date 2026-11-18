@@ -15,6 +15,11 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+Batch-33 [initial provider policy](../phase3/coordinator/pi-core-provider-initial-policy-batch-33.md):
+the protected entry can publish operator-pinned policy and current revocations
+once under the existing lock. All 44 focused checks passed once. No sensor
+observation, execution rights or health record is created by this route.
+
 Batch-32 [provider storage checkpoint](../phase3/coordinator/pi-core-provider-base-batch-32.md):
 the protected root caller now supports fresh-only installation of the separate
 provider control roots, pinned empty state and empty evidence store. All 44

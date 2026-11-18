@@ -11,3 +11,18 @@ Signed integration base: `b403bc589d19df7ecacaa586d593a783eb26894c`; source `61b
 2. D3: remaining admission, runtime coverage and confined workloads.
 3. D4: independent executable inventory and freeze open.
 4. D5: separate fresh execution approval after freeze.
+
+## Reviewed implementation
+
+Assignment `02f69ca` merged at `ee831a1`. The first-publication path now reads the four separately pinned documents, joins the policy to the admitted grant and verifies the original revocation source, lifetime and generation. It never creates an observation, health, grant, approval or effect. Direct readback validates exact protected bytes, roles, modes, link counts, file sizes and distinct identities. A partial exclusive write is retained; unknown creation and descriptor cleanup failure remain explicit. This proves continuity while held, not historical inode identity across two commands.
+
+| Stage | Checks | Successful SHA-256 fingerprint |
+| --- | ---: | --- |
+| pi-core-provider-initial-policy-offline | 17 | `38090add63ea2e577ce2c9befe5a82241c9af50f5b142ec61f8ac1ccbcf5cae8` |
+| pi-core-provider-initial-policy-entry-offline | 16 | `51e8c89b8231a4f8d301010510b56ffd8c8b497043d863475d5fe6444d4c378e` |
+| pi-core-provider-initial-policy-wrapper-offline | 7 | `132504608f89ae6f6c390029a01aab45358cd89daa12778c46c64d7ad8331ca1` |
+| pipeline-capacity | 4 | `f5d4b565a4565fa617f13d32c3712d2fabe763475c14d3118e90efb4996eac93` |
+
+All 44 checks passed once. There are 230 registered stages, bounded at 256; increasing the runner limit for every new registration would change every stage's fingerprint. This headroom does not authorize more checks, loosen the evidence contract or change the schedule. No VM, credentials, provider, capture, historical tests, or qualifications were run.
+
+A subsequent grant is a separately authorized input, never a renewal. The fixed action receipt left after a consumed grant currently conflicts with the independent preparation readback even when the terminal receipt/state are archived. Recovery must retain the original evidence, refuse ambiguous ownership, and never replay an effect.

@@ -29,6 +29,7 @@ _MAX_FILES, _MAX_BYTES, _MAX_FILE = 4096, 512 * 1024 * 1024, 128 * 1024 * 1024
 _SEAL = object()
 _ACTION_BASE_OK = "BASE_CONTROLS_INSTALLED_NOT_READY_OR_QUALIFIED"
 _PROVIDER_BASE_OK = "PROVIDER_BASE_INSTALLED_NOT_READY_OR_QUALIFIED"
+_PROVIDER_POLICY_OK = "INITIAL_PROVIDER_POLICY_RECORDED_NOT_READY_OR_QUALIFIED"
 
 
 def _require(value, reason):
@@ -431,7 +432,7 @@ def _public_observation(observation):
     _require(status in {"REFUSED", "REFUSED_OR_INDETERMINATE", "CLEANUP_HOLD",
                         "MANAGED_CALL_RETURNED_NOT_QUALIFIED", "INVENTORIES_PREPARED_NOT_QUALIFIED",
                         "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED", "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED",
-                        _ACTION_BASE_OK, _PROVIDER_BASE_OK},
+                        _ACTION_BASE_OK, _PROVIDER_BASE_OK, _PROVIDER_POLICY_OK},
              "invalid coordinator status")
     report["entry_status"] = status
     stage = observation.get("failure_stage")
@@ -700,19 +701,29 @@ def _public_broker_preparation(observation):
     return report
 
 
-def _public_broker_base_install(observation, *, provider=False):
-    role = "provider" if provider else "broker"
-    success = _PROVIDER_BASE_OK if provider else _ACTION_BASE_OK
+def _public_broker_base_install(observation, *, provider=False, initial_policy=False):
+    _require(not (provider and initial_policy), "ambiguous broker preparation result")
+    if initial_policy:
+        route = "provider-initial-policy"
+        success = _PROVIDER_POLICY_OK
+        entry_authority = "PROTECTED_INITIAL_PROVIDER_POLICY_ONLY_NOT_HEALTH_OR_EXECUTION"
+        inner_schema = "aragorn/pi-core-provider-initial-policy/v1"
+        inner_authority = "PINNED_INITIAL_POLICY_AND_REVOCATIONS_ONLY_NOT_HEALTH_OR_EXECUTION"
+    else:
+        route = "provider-base" if provider else "broker-base"
+        success = _PROVIDER_BASE_OK if provider else _ACTION_BASE_OK
+        entry_authority = ("PROTECTED_PROVIDER_BASE_INSTALLATION_ONLY_NOT_ACTIVATION_OR_PHASE3" if provider else
+                           "PROTECTED_BASE_INSTALLATION_ONLY_NOT_ACTIVATION_OR_PHASE3")
+        inner_schema = f"aragorn/pi-core-{route}-installation/v1"
+        inner_authority = "FRESH_BASE_CONTROLS_ONLY_NOT_POLICY_HEALTH_GRANT_OR_PHASE3"
     report = _public_observation(observation)
-    report.update(schema=f"aragorn/pi-core-{role}-base-report/v1",
-        authority=("PROTECTED_PROVIDER_BASE_INSTALLATION_ONLY_NOT_ACTIVATION_OR_PHASE3" if provider else
-                   "PROTECTED_BASE_INSTALLATION_ONLY_NOT_ACTIVATION_OR_PHASE3"),
+    report.update(schema=f"aragorn/pi-core-{route}-report/v1", authority=entry_authority,
         base_installation_attempted=False, owned_holders_closed=False, context_digest=None,
         base_installation_result_digest=None, base_installation_status=None, base_cleanup_complete=False,
         input_cleanup_uncertainty_digest=None)
     if observation is None:
         return report
-    _require(observation.get("schema") == f"aragorn/pi-core-{role}-base-result/v1" and
+    _require(observation.get("schema") == f"aragorn/pi-core-{route}-result/v1" and
         report["entry_status"] in {success, "REFUSED", "REFUSED_OR_INDETERMINATE", "CLEANUP_HOLD"} and
         observation.get("authority") == report["authority"] and observation.get("managed_result") is None and
         report["managed_call_attempted"] is False and observation.get("preparation_attempted") is False and
@@ -732,8 +743,7 @@ def _public_broker_base_install(observation, *, provider=False):
     complete = False
     if value is not None:
         _require(type(value) is dict and report["base_installation_attempted"] and
-            value.get("schema") == f"aragorn/pi-core-{role}-base-installation/v1" and
-            value.get("authority") == "FRESH_BASE_CONTROLS_ONLY_NOT_POLICY_HEALTH_GRANT_OR_PHASE3" and
+            value.get("schema") == inner_schema and value.get("authority") == inner_authority and
             value.get("status") in {"INSTALLED", "REFUSED", "PARTIAL_OR_INDETERMINATE", "CLEANUP_HOLD"} and
             all(value.get(key) is False for key in ("activation_performed", "service_ready",
                                                    "current_grant_authority", "phase3_exit_eligible")),
@@ -761,12 +771,13 @@ def main():
     install = len(sys.argv) > 1 and sys.argv[1] == "--install-bundle"
     broker_prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-broker-control"
     provider_base = len(sys.argv) > 1 and sys.argv[1] == "--install-provider-base"
-    base_install = provider_base or (len(sys.argv) > 1 and sys.argv[1] == "--install-broker-base")
-    base_success = _PROVIDER_BASE_OK if provider_base else _ACTION_BASE_OK
+    initial_policy = len(sys.argv) > 1 and sys.argv[1] == "--initialize-provider-policy"
+    base_install = initial_policy or provider_base or (len(sys.argv) > 1 and sys.argv[1] == "--install-broker-base")
+    base_success = _PROVIDER_POLICY_OK if initial_policy else _PROVIDER_BASE_OK if provider_base else _ACTION_BASE_OK
     public = (_public_broker_preparation if broker_prepare else _public_install if install else
               _public_preparation if prepare else _public_observation)
     if base_install:
-        public = lambda value: _public_broker_base_install(value, provider=provider_base)
+        public = lambda value: _public_broker_base_install(value, provider=provider_base, initial_policy=initial_policy)
     attempt_field = "base_installation_attempted" if base_install else "installation_attempted" if install else "preparation_attempted" if prepare or broker_prepare else "managed_call_attempted"
     args = sys.argv[2:] if prepare or install or broker_prepare or base_install else sys.argv[1:]
     cleanup = {"source_loader": "NOT_ACQUIRED", "host": "NOT_ACQUIRED"}
@@ -798,8 +809,9 @@ def main():
         host.guard()
         phase = "ENTRY_CALL"
         entry_invoked = True
-        observation = run(plan_path, args[3], deadline_ns=deadline_ns, source_loader=loader, host_custody=host,
-                          **({"install_provider_base": True} if provider_base else {"install_base": True} if base_install else {}))
+        mode = ({"initialize_provider_policy": True} if initial_policy else {"install_provider_base": True}
+                if provider_base else {"install_base": True} if base_install else {})
+        observation = run(plan_path, args[3], deadline_ns=deadline_ns, source_loader=loader, host_custody=host, **mode)
         phase = "POST_CALL_CUSTODY"
         host.guard()
         report = public(observation)

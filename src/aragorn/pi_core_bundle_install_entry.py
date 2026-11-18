@@ -80,6 +80,7 @@ def _supported_bundle(cas, manifest_digest):
     raw = cas.read(skill["digest"], max_bytes=32 * 1024)
     coordinator._require(len(raw) == skill["size"], "BUNDLE_INSTALL_SKILL_SIZE")
     raw.decode("utf-8", errors="strict")
+    return manifest
 
 
 class _Destination:
@@ -175,16 +176,91 @@ def _record(value):
     return json.loads(raw)
 
 
-def _readback(destination, transaction):
+def _readback(destination, transaction, cas, verified, manifest, deadline):
     # Publishers unlock the shared open-file description in their finally.
     destination.lock()
-    raw = lineage._read_owned_bytes_at(destination.fd, lineage.ACTIVE_RUNTIME_RECORD,
+    uid, gid = os.geteuid(), os.getegid()  # run() requires both to be root.
+    root = destination.fd
+    def named(parent, name):
+        return lineage._file_identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
+
+    record_before = named(root, lineage.ACTIVE_RUNTIME_RECORD)
+    raw = lineage._read_owned_bytes_at(root, lineage.ACTIVE_RUNTIME_RECORD,
         max_bytes=lineage._MAX_RECORD_BYTES, expected_uid=0, exact_mode=0o444,
         label="managed installed active record")
     retained = lineage.parse_active_runtime_record(raw)
-    coordinator._require(retained["transaction"] == transaction, "BUNDLE_INSTALL_ACTIVE_RECORD_CHANGED")
-    publisher.legacy._verify_active_link(destination.fd, transaction["destination"]["target_name"],
-                                        transaction["version_path"])
+    target, digest = verified.target_name, verified.manifest_digest
+    expected_active = None if verified.expected_active_context_id is None else {
+        "context_id": verified.expected_active_context_id, "manifest_digest": verified.expected_active_manifest_digest}
+    version = publisher.legacy._version_name(verified.context_id, digest)
+    version_path = publisher.legacy._version_path(target, verified.context_id, digest)
+    coordinator._require(retained["transaction"] == transaction and
+        transaction["destination"] == {"root_device": verified.root_device, "root_inode": verified.root_inode,
+                                       "target_name": target} and
+        (transaction["context_digest"], transaction["context_id"], transaction["manifest_digest"],
+         transaction["operation"], transaction["expected_active"], transaction["version_path"]) ==
+        (verified.context_digest, verified.context_id, digest, verified.operation, expected_active, version_path)
+        and record_before == named(root, lineage.ACTIVE_RUNTIME_RECORD), "BUNDLE_INSTALL_ACTIVE_RECORD_CHANGED")
+    link_before = lineage._file_identity(publisher.legacy._verify_active_link(root, target, version_path))
+    held, directory_rows, member_rows = [], [], []
+    def directory(parent, name, mode):
+        fd = lineage._open_directory_at(parent, name, uid, mode, "managed published directory")
+        held.append(fd)
+        meta = os.fstat(fd)
+        bound = lineage._file_identity(meta)
+        coordinator._require(meta.st_gid == gid and bound == named(parent, name), "BUNDLE_INSTALL_DIRECTORY_CHANGED")
+        directory_rows.append((parent, name, fd, bound))
+        return fd
+
+    failure = None
+    try:
+        versions = directory(root, ".aragorn-versions", 0o755)
+        target_fd = directory(versions, target, 0o755)
+        version_fd = directory(target_fd, version, 0o555)
+        parents, declared = {"": version_fd}, {"": set()}
+        for row in manifest["files"]:
+            coordinator.runtime.provision._deadline(deadline)
+            subdirectory, _, name = row["path"].rpartition("/")
+            if subdirectory not in parents:
+                parents[subdirectory] = directory(version_fd, subdirectory, 0o555)
+                declared[""].add(subdirectory)
+                declared[subdirectory] = set()
+            declared[subdirectory].add(name)
+            parent = parents[subdirectory]
+            info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            coordinator._require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o444 and
+                info.st_uid == uid and info.st_gid == gid and info.st_nlink == 1 and info.st_size == row["size"],
+                "BUNDLE_INSTALL_MEMBER_CHANGED")
+            member_rows.append((parent, name, lineage._file_identity(info)))
+        for path, parent in parents.items():
+            coordinator.runtime._exact_names(parent, declared[path], deadline)
+        # Rehash the named immutable version against the independently verified
+        # manifest/CAS, never a manifest chosen by the publisher's return record.
+        measured = publisher.legacy._verify_version_tree(cas, digest, target_fd, version)
+        coordinator._require(measured == manifest["tree_digest"] == transaction["tree_digest"],
+                             "BUNDLE_INSTALL_POST_PUBLICATION_TREE_CHANGED")
+        for parent, name, expected in member_rows:
+            coordinator._require(named(parent, name) == expected, "BUNDLE_INSTALL_MEMBER_CHANGED")
+        for parent, name, fd, expected in reversed(directory_rows):
+            coordinator._require(named(parent, name) == expected == lineage._file_identity(os.fstat(fd)),
+                                 "BUNDLE_INSTALL_DIRECTORY_CHANGED")
+        coordinator._require(link_before == lineage._file_identity(publisher.legacy._verify_active_link(
+            root, target, version_path)) and named(root, lineage.ACTIVE_RUNTIME_RECORD) == record_before,
+            "BUNDLE_INSTALL_ACTIVE_RECORD_CHANGED")
+        destination.guard()
+    except BaseException as exc:
+        failure = exc
+    finally:
+        for fd in reversed(held):
+            try:
+                os.close(fd)
+            except BaseException as exc:
+                destination.cleanup_uncertainty.append({"scope": "POSTPUBLICATION_DIRECTORY_CLOSE", "descriptors": [fd]})
+                if failure is None:
+                    failure = exc
+    if failure is not None:
+        raise failure
+    return measured
 
 
 def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_custody):
@@ -197,7 +273,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
         "owned_inputs_closed": False, "owned_destination_closed": False,
         "input_cleanup_uncertainty": [], "phase3_exit_eligible": False,
         "installation_attempted": False, "publication_state": "NOT_ATTEMPTED",
-        "transaction": None, "recovery": None}
+        "transaction": None, "recovery": None, "observed_tree_digest": None}
     inputs = destination = failure = None
     phase = "PREFLIGHT"
     try:
@@ -254,7 +330,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
             expected_target_name=context["destination"]["target_name"],
             expected_runtime_conformance_digest=plan["runtime_conformance_digest"],
             measured_target_runtime_digest=runtime_digest, revoked_context_ids=revoked_ids)
-        _supported_bundle(cas, verified.manifest_digest)
+        manifest = _supported_bundle(cas, verified.manifest_digest)
         claim_state()
         phase = "INSTALLATION"
         observation["installation_attempted"] = True
@@ -276,10 +352,10 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                 # A malformed recovery record is not permission to retry.
                 pass
             raise
-        observation["transaction"] = _record(result)
         observation["publication_state"] = "PUBLISHER_RETURNED"
         phase = "POST_CALL_CUSTODY"
-        _readback(destination, observation["transaction"])
+        observation["transaction"] = _record(result)
+        observation["observed_tree_digest"] = _readback(destination, observation["transaction"], cas, verified, manifest, deadline)
         claim_state()
         after_pin, observation["source_after"], observation["host_after"] = _custody(
             source_loader, host_custody, deadline)

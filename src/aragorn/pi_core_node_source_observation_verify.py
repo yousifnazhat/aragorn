@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import stat
 
+from . import pi_core_restricted_profile as restricted
 from .oci_worker_protocol import canonical_json
 from .pi_core_source_observation_verify import (
     PiSourceObservationVerificationError, _clock, _digest, _document, _fields,
@@ -90,7 +91,10 @@ def _inventory(raw, pin, cas, *, loaders=False):
 def _profile(raw, bindings, sources, loaders, cas):
     value = _fields(_retained(raw, bindings["profile_digest"], cas, "NODE_REPLAY_PROFILE_PIN"),
                     {"schema", "pins", "sources", "required_sources", "loader_files"})
-    _require(value["schema"] == "aragorn/pi-core-node-source-profile/v1", "NODE_REPLAY_PROFILE_SCHEMA")
+    _require(value["schema"] in ("aragorn/pi-core-node-source-profile/v1", restricted.PROFILE_SCHEMA),
+             "NODE_REPLAY_PROFILE_SCHEMA")
+    _require((bindings["runtime_digest"] == restricted.RUNTIME_DIGEST) ==
+             (value["schema"] == restricted.PROFILE_SCHEMA), "NODE_REPLAY_RESTRICTED_RUNTIME")
     _fields(value["pins"], _PINS)
     _same(value["pins"], {key: bindings[key] for key in _PINS}, "NODE_REPLAY_PROFILE_BINDINGS")
     for key, inventory in (("sources", sources), ("loader_files", loaders)):
@@ -107,7 +111,27 @@ def _profile(raw, bindings, sources, loaders, cas):
     _require(type(required) is list and required and all(type(path) is str for path in required)
              and len(required) == len(set(required)) and set(required) <= set(sources),
              "NODE_REPLAY_REQUIRED_SOURCES")
+    if value["schema"] == restricted.PROFILE_SCHEMA:
+        try:
+            restricted.validate_profile(value)
+        except ValueError as exc:
+            raise PiSourceObservationVerificationError("NODE_REPLAY_RESTRICTED_PROFILE") from exc
+    else:
+        _require(not restricted.uses_restricted_inputs(value), "NODE_REPLAY_RESTRICTED_PROFILE_DOWNGRADE")
     return value, set(required)
+
+
+def _exec_record(event, profile, leader, node_pin, stop, prior, executed):
+    bundled = profile["schema"] == restricted.PROFILE_SCHEMA
+    fields = _COMMON | {"pid", "digest"}
+    _fields(event, fields | {"raw_cmdline_hex"} if bundled else fields)
+    _require(not executed and event["pid"] == leader and event["digest"] == node_pin
+             and stop is not None and stop["event"] == 4 and prior is stop, "NODE_REPLAY_EXEC_JOIN")
+    if bundled:
+        # Compare retained kernel argv to the compiled profile constants, never to
+        # a caller-selected argv, its planned representation or a producer PASS.
+        expected = b"\x00".join(arg.encode("ascii") for arg in restricted.NODE_ARGV) + b"\x00"
+        _require(event["raw_cmdline_hex"] == expected.hex(), "NODE_REPLAY_RESTRICTED_ARGV")
 
 
 def _task(value):
@@ -386,11 +410,8 @@ def verify_pi_node_source_observation(
             tasks[event["pid"]]["virgin"] = False
             awaiting_thread_start = None
         elif kind == "EXEC":
-            _fields(event, _COMMON | {"pid", "digest"})
-            stop = tasks[leader]["stop"]
-            _require(not executed and event["pid"] == leader and event["digest"] == expected_bindings["node_digest"]
-                     and stop is not None and stop["event"] == 4 and events[index - 2] is stop,
-                     "NODE_REPLAY_EXEC_JOIN")
+            _exec_record(event, profile, leader, expected_bindings["node_digest"],
+                         tasks[leader]["stop"], events[index - 2], executed)
             executed = True
         elif kind == "THREAD":
             _fields(event, _COMMON | {"pid", "start_ticks", "parent_pid", "flags", "clone_call_seq"})

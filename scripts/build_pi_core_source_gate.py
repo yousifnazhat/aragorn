@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import struct
 import subprocess
 import time
 
@@ -25,6 +26,14 @@ BuildError, require = shared.BuildError, shared.require
 canonical, sha256, regular_bytes = shared.canonical, shared.sha256, shared.regular_bytes
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = "aragorn/pi-core-source-gate-toolchain/v1"
+RESTRICTED_SCHEMA = "aragorn/pi-core-source-gate-toolchain/v2"
+RESTRICTED_RECEIPT = "aragorn/pi-core-source-gate-build/v2"
+RESTRICTED_SOURCE = "source-gate-noeval-v2.c"
+RESTRICTED_SOURCE_SHA = "29b9242f40b2a611560d2aa97170d47f07284a76a3d489b3e90287ef1c1ef491"
+RESTRICTED_TOOLCHAIN_PIN = "sha256:7fdaa9b7d5f80903b5f758458bca4457f4e8b8d025c8f113aac0f6d53f13ce5f"
+RESTRICTED_GATE = "/opt/aragorn/pi-runtime/observer/source-gate"
+RESTRICTED_ARGV = ("/opt/aragorn/pi-runtime/node/bin/node", "--disallow-code-generation-from-strings",
+                   "/opt/aragorn/pi-runtime/pi-core/entrypoint.js")
 PROFILE = "clang-rust-lld-gnu/v1"
 ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
 MAX_LOG = 1024 * 1024
@@ -65,9 +74,15 @@ def load_toolchain(root, path, digest):
     raw = regular_bytes(path, 16384)
     require("sha256:" + sha256(raw) == digest, "toolchain manifest pin differs")
     value = json.loads(raw)
-    require(type(value) is dict and set(value) == {
-        "schema", "target", "command_profile", "source_sha256", "compiler", "linker", "linker_library"} and
-        raw in (canonical(value), canonical(value) + b"\n") and value["schema"] == SCHEMA and
+    restricted = type(value) is dict and value.get("schema") == RESTRICTED_SCHEMA
+    fields = {"schema", "target", "command_profile", "source_sha256", "compiler", "linker", "linker_library"}
+    if restricted:
+        fields |= {"gate_path", "node_argv"}
+        require(digest == RESTRICTED_TOOLCHAIN_PIN and value.get("gate_path") == RESTRICTED_GATE and
+                value.get("node_argv") == list(RESTRICTED_ARGV) and value.get("source_sha256") == RESTRICTED_SOURCE_SHA,
+                "restricted gate requires its fixed toolchain, original source and complete argv")
+    require(type(value) is dict and set(value) == fields and
+        raw in (canonical(value), canonical(value) + b"\n") and value["schema"] in (SCHEMA, RESTRICTED_SCHEMA) and
         value["target"] == "linux-arm64-static" and value["command_profile"] == PROFILE,
         "toolchain manifest is not the fixed reviewed contract")
     compiler, linker = _tool(value["compiler"]), _tool(value["linker"])
@@ -75,7 +90,7 @@ def load_toolchain(root, path, digest):
     require(len(linker.parents) >= 4 and linker.name == "rust-lld" and linker.parent.name == "bin" and
             linker.parents[1].name == "aarch64-apple-darwin" and linker.parents[2].name == "rustlib" and
             library == linker.parents[3] / "libLLVM.dylib", "pinned linker library is not the reviewed adjacent runtime")
-    source = regular_bytes(root / shared.PACKAGE / "source-gate.c", 65536)
+    source = regular_bytes(root / shared.PACKAGE / (RESTRICTED_SOURCE if restricted else "source-gate.c"), 65536)
     require(sha256(source) == _pin(value["source_sha256"]), "reviewed source gate bytes differ")
     return value, source, compiler, linker
 
@@ -92,6 +107,46 @@ def commands(compiler, linker, output):
          "--fatal-warnings", "--entry=_start", "--build-id=none", "-z", "noexecstack",
          "-o", str(output / "source-gate"), str(output / "gate.o")],
     )
+
+
+def restricted_gate_input(root, binary, receipt_path, receipt_digest):
+    """Offline source/ELF/argv custody, not execution or proof of V8 enforcement."""
+    raw_receipt = regular_bytes(receipt_path, 16384)
+    require(type(receipt_digest) is str and "sha256:" + sha256(raw_receipt) == receipt_digest,
+            "restricted gate receipt pin differs")
+    receipt = json.loads(raw_receipt)
+    require(type(receipt) is dict and set(receipt) == {"schema", "target", "source_sha256", "elf_sha256",
+            "compiler_sha256", "build_command_sha256", "runtime_executed", "node_argv"} and
+            raw_receipt == canonical(receipt) + b"\n" and receipt["schema"] == RESTRICTED_RECEIPT and
+            receipt["node_argv"] == list(RESTRICTED_ARGV) and receipt["target"] == "linux-arm64-static" and
+            receipt["runtime_executed"] is False, "restricted gate receipt fields, target or argv differ")
+    for key in ("source_sha256", "elf_sha256", "compiler_sha256", "build_command_sha256"):
+        _pin(receipt[key])
+    source = regular_bytes(root / shared.PACKAGE / RESTRICTED_SOURCE, 65536)
+    elf = regular_bytes(binary, 1024 * 1024)
+    require(sha256(source) == receipt["source_sha256"] == RESTRICTED_SOURCE_SHA and
+            sha256(elf) == receipt["elf_sha256"] and
+            receipt["compiler_sha256"] == "1220c0afafa12a6ae599d097ee7cf8b87c6b4d8e3fbb9783cee6b319a80683ba",
+            "restricted gate source, compiler or ELF differs")
+    shared.require_static_arm64_elf(elf)
+    require(struct.unpack_from("<H", elf, 16)[0] == 2, "restricted gate must be a fixed executable")
+    entry, offset = struct.unpack_from("<QQ", elf, 24)
+    size, count = struct.unpack_from("<HH", elf, 54)
+    executable_entry, literals = False, set()
+    required_literals = {RESTRICTED_GATE, *RESTRICTED_ARGV, "HOME=/nonexistent", "PATH=/opt/aragorn/pi-runtime/node/bin"}
+    for index in range(count):
+        kind, flags, start, address, _, file_size, memory_size = struct.unpack_from("<IIQQQQQ", elf, offset + index * size)
+        require(kind not in (2, 3), "restricted gate has a dynamic section or interpreter")
+        if kind != 1:
+            continue
+        require(file_size <= memory_size and start + file_size <= len(elf) and address + memory_size <= 2**64 and
+                flags & 3 != 3, "restricted gate segment bounds or permissions differ")
+        executable_entry |= bool(flags & 1 and address <= entry < address + file_size)
+        if flags & 4 and not flags & 2:
+            region = elf[start:start + file_size]
+            literals.update(text for text in required_literals if text.encode("ascii") + b"\0" in region)
+    require(executable_entry and required_literals == literals, "restricted gate lacks executable entry or pinned literals")
+    return elf, {**receipt, "receipt_digest": receipt_digest}
 
 
 def _remaining(deadline):
@@ -170,12 +225,18 @@ def build(root, output, toolchain_manifest, toolchain_digest, *, timeout_seconds
             output != root / ".aragorn/pi-core-build" and not output.exists(),
             "gate build output must be a new unlinked named directory in .aragorn/pi-core-build")
     manifest, source, compiler, linker = load_toolchain(root, toolchain_manifest, toolchain_digest)
+    restricted = manifest["schema"] == RESTRICTED_SCHEMA
+    if restricted:
+        require(output == root / ".aragorn/pi-core-build/gate-batch-36", "restricted gate output differs")
+    source_name = RESTRICTED_SOURCE if restricted else "source-gate.c"
     inputs = (compiler, linker, Path(manifest["linker_library"]["path"]),
-              root / shared.PACKAGE / "source-gate.c", Path(toolchain_manifest))
+              root / shared.PACKAGE / source_name, Path(toolchain_manifest))
     identities = _identities(inputs)
     _remaining(operation_deadline)
     recipe = {"profile": PROFILE, "argv": commands(compiler, linker, output), "environment": ENV,
               "working_directory": str(output), "toolchain_digest": toolchain_digest}
+    if restricted:
+        recipe.update(source=source_name, gate_path=RESTRICTED_GATE, node_argv=list(RESTRICTED_ARGV))
     records = []
     output.mkdir(parents=True, exist_ok=False)
     try:
@@ -199,12 +260,15 @@ def build(root, output, toolchain_manifest, toolchain_digest, *, timeout_seconds
             "source_sha256": sha256(source), "elf_sha256": sha256(elf),
             "compiler_sha256": manifest["compiler"]["sha256"], "build_command_sha256": sha256(canonical(recipe)),
             "runtime_executed": False}
+        if restricted:
+            receipt.update(schema=RESTRICTED_RECEIPT, node_argv=list(RESTRICTED_ARGV))
         candidate = _json(output / "candidate-receipt.json", receipt)
         receipt_digest = "sha256:" + sha256(candidate)
-        shared.source_gate_input(root, output / "source-gate", output / "candidate-receipt.json", receipt_digest)
+        reader = restricted_gate_input if restricted else shared.source_gate_input
+        reader(root, output / "source-gate", output / "candidate-receipt.json", receipt_digest)
         _remaining(operation_deadline)
         (output / "source-gate").chmod(0o555)
-        provenance = {"schema": "aragorn/pi-core-source-gate-provenance/v1",
+        provenance = {"schema": "aragorn/pi-core-source-gate-provenance/v2" if restricted else "aragorn/pi-core-source-gate-provenance/v1",
             "status": "COMPILED_STATIC_GATE_NOT_EXECUTED", "toolchain_digest": toolchain_digest,
             "toolchain": manifest, "input_identities": identities, "recipe": recipe, "commands": records,
             "artifacts": {"gate.o": {"sha256": sha256(obj), "bytes": len(obj)},

@@ -32,3 +32,8 @@ Two static reviews distinguish false positives (the lexical CommonJS initializer
 2. D3: admission post-publication readback integrated in `bf1385c`; boundary-health and real confined workload producers remain open.
 3. D4: finish independent evidence and surface inventory; no freeze.
 4. D5: no final authorization, capture or qualification.
+
+**Later disposition:** the operator selected the managed launcher restriction.
+[Batch 36](pi-core-restricted-launch-batch-36.md) records the conditional review,
+one independent reproduction, and offline assembly from this retained original.
+The original refusal and the predecessor gate remain unchanged.

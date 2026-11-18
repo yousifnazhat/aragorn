@@ -21,6 +21,7 @@ import threading
 import time
 
 from . import pi_core_source_observer as base
+from . import pi_core_restricted_profile as restricted
 
 SCHEMA = "aragorn/pi-core-node-source-observation/v2"
 PROFILE_SCHEMA = "aragorn/pi-core-node-source-profile/v1"
@@ -47,7 +48,7 @@ _require = base._require
 def validate_node_profile(value):
     _require(type(value) is dict and set(value) == {
         "schema", "pins", "sources", "required_sources", "loader_files"} and
-        value["schema"] == PROFILE_SCHEMA and type(value["pins"]) is dict and
+        value["schema"] in (PROFILE_SCHEMA, restricted.PROFILE_SCHEMA) and type(value["pins"]) is dict and
         set(value["pins"]) == _PINS and all(type(pin) is str and base._PIN.fullmatch(pin)
         for pin in value["pins"].values()), "NODE_PROFILE")
     for field in ("sources", "loader_files"):
@@ -69,6 +70,10 @@ def validate_node_profile(value):
              "NODE_REQUIRED_SOURCES")
     _require(not ({r["path"] for r in value["sources"]} & {r["path"] for r in value["loader_files"]}),
              "NODE_SOURCE_LOADER_ALIAS")
+    if value["schema"] == restricted.PROFILE_SCHEMA:
+        restricted.validate_profile(value)
+    else:
+        _require(not restricted.uses_restricted_inputs(value), "NODE_RESTRICTED_PROFILE_DOWNGRADE")
     return json.loads(base.canonical_json(value))
 
 
@@ -168,6 +173,21 @@ class _NodeSession:
         for tid, task in self.tasks.items():
             _require(self._tid_identity(tid) == task["start_ticks"], "NODE_TID_REUSED")
         return actual
+
+    def _stopped_cmdline(self, tid, stop_event, expected, deadline):
+        """Read the sole stopped generation, before resuming it into user code."""
+        self._budget(deadline)
+        task = self.tasks[tid]
+        _require(tid == self.owned.pid and set(self.tasks) == {tid} and task["joined"] and
+                 task["stopped"] and task["stop_event"] == stop_event and
+                 task["start_ticks"] == self.owned.start_ticks == self._tid_identity(tid),
+                 "NODE_RESTRICTED_ARGV_CUSTODY")
+        expected_bytes = b"\x00".join(arg.encode("ascii") for arg in expected) + b"\x00"
+        raw = base.process._read_virtual_file(Path(f"/proc/{tid}/cmdline"), len(expected_bytes))
+        _require(raw == expected_bytes and self._tid_identity(tid) == self.owned.start_ticks,
+                 "NODE_RESTRICTED_ARGV_MISMATCH")
+        self._budget(deadline)
+        return raw.hex()
 
     def _resume(self, tid, request="SYSCALL"):
         task = self.tasks[tid]
@@ -514,8 +534,11 @@ class _NodeSession:
                      base.process._executable_digest(tid) == self.observer._bindings["node_digest"] and
                      base._file_identity(os.stat(f"/proc/{tid}/exe")) == self.observer._executable_identities["node"],
                      "NODE_EXEC_SCOPE")
+            evidence = {}
+            if self.profile["schema"] == restricted.PROFILE_SCHEMA:
+                evidence["raw_cmdline_hex"] = self._stopped_cmdline(tid, 4, restricted.NODE_ARGV, deadline)
+            self._event("EXEC", pid=tid, digest=self.observer._bindings["node_digest"], **evidence)
             self.observer._executed = True
-            self._event("EXEC", pid=tid, digest=self.observer._bindings["node_digest"])
             return
         _require(event["event"] == 0 and (event["status"] >> 8 & 255) == 133, "NODE_SIGNAL_REFUSED")
         if event["op"] == "ENTRY":
@@ -812,8 +835,10 @@ def _arm(session):
              session.operation_deadline <= owned.plan.deadline and
              session.operation_deadline < session.cleanup_deadline <= session.operation_deadline+5, "NODE_PREEXEC_OWNER")
     argv = owned.plan.systemd_run_argv
+    restricted_launch = profile["schema"] == restricted.PROFILE_SCHEMA
+    node_argv = restricted.NODE_ARGV if restricted_launch else (str(base.NODE_PATH), base.ENTRY_PATH)
     _require(argv[argv.index("--") + 1:] == ("/usr/bin/env", "-i", "HOME=/nonexistent",
-             "PATH=/opt/aragorn/pi-runtime/node/bin", str(base.GATE_PATH), str(base.NODE_PATH), base.ENTRY_PATH),
+             "PATH=/opt/aragorn/pi-runtime/node/bin", str(base.GATE_PATH), *node_argv),
              "NODE_GATE_ARGV")
     _require(type(owned.plan._lease) is base.confined._PlanLease and owned.plan._lease.active and
              type(owned.plan.prepared._lease) is base.bundle._Lease and owned.plan.prepared._lease.active and
@@ -876,6 +901,8 @@ def _arm(session):
         if not session._wait_one(owned.pid): time.sleep(0.001)
     initial=session.pending_events.pop()
     _require(initial["event"]==128 and initial["op"]=="NONE" and initial["status"]>>8&255 in {5,19},"NODE_GATE_INITIAL_STOP")
+    if restricted_launch:
+        session._stopped_cmdline(owned.pid, 128, (restricted.GATE_PATH, *node_argv), session.operation_deadline)
     stdio = []
     session._barrier(session.operation_deadline)
     for fd in (0, 1, 2):

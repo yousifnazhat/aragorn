@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import runtime_active_skill_lineage as lineage
+from . import pi_core_restricted_profile as restricted
 from .acquire import inventory_open_directory
 from .cas import CAS
 from .oci_worker_protocol import canonical_digest, canonical_json
@@ -76,6 +77,7 @@ class PiConfinedLaunchConfig:
         if type(self.native_request) is not bool:
             raise PiConfinedLaunchError("native request mode must be an explicit boolean")
         _source_observation(self.source_observation, self.source_observation_digest)
+        _require_paired_runtime(self)
         _provider_profile(self)
 
 
@@ -131,7 +133,7 @@ def _source_observation(value, digest):
         return
     _require_digest(digest, "source observation profile")
     _exact(value, {"schema", "pins", "sources", "required_sources", "loader_files"}, "source observation profile")
-    _require(value["schema"] == "aragorn/pi-core-node-source-profile/v1" and
+    _require(value["schema"] in ("aragorn/pi-core-node-source-profile/v1", restricted.PROFILE_SCHEMA) and
              canonical_digest(value) == digest, "source observation profile pin or schema differs")
     _exact(value["pins"], {"gate_digest", "node_digest", "producer_digest", "node_observer_digest",
                           "source_inventory_digest", "loader_inventory_digest"}, "source observation pins")
@@ -162,6 +164,19 @@ def _source_observation(value, digest):
              set(required) <= paths, "required source inventory is incomplete or duplicated")
     _require(not paths & {row["path"] for row in value["loader_files"]},
              "source and loader roles overlap")
+    if value["schema"] == restricted.PROFILE_SCHEMA:
+        restricted.validate_profile(value)
+    else:
+        _require(not restricted.uses_restricted_inputs(value), "restricted artifacts require the restricted source profile")
+
+
+def _require_paired_runtime(config):
+    _require(isinstance(config.compiled_receipt, Mapping), "invalid compiled receipt")
+    bundled = config.compiled_receipt.get("schema") == restricted.RUNTIME_SCHEMA
+    observed = (config.source_observation is not None and
+                config.source_observation["schema"] == restricted.PROFILE_SCHEMA)
+    _require(bundled == observed and (not bundled or config.native_request is True),
+             "restricted bundle requires native request and its restricted source profile")
 
 
 def _path(value: object, label: str) -> None:
@@ -279,6 +294,7 @@ def confined_configuration_digest(config: PiConfinedLaunchConfig) -> str:
         document["schema"] = "aragorn/pi-core-confined-configuration/v2"
         document["native_request"] = _native_request_endpoint(config)
     _source_observation(config.source_observation, config.source_observation_digest)
+    _require_paired_runtime(config)
     if config.source_observation is not None:
         document["schema"] = "aragorn/pi-core-confined-configuration/v3"
         document["source_observation"] = config.source_observation
@@ -331,6 +347,9 @@ def _tree(directory_fd: int) -> tuple[dict, tuple[str, ...], str]:
 
 def _runtime_inventory(manifest: Mapping, receipt: Mapping, receipt_digest: str) -> str:
     _require(canonical_digest(receipt) == receipt_digest, "compiled receipt pin mismatch")
+    if receipt.get("schema") == restricted.RUNTIME_SCHEMA:
+        return restricted.validate_runtime(receipt, manifest, receipt_digest)
+    _require(not restricted.uses_restricted_inputs(manifest), "restricted artifact in predecessor runtime")
     _require(receipt.get("schema") == "aragorn/pi-core-linux-build/v1" and
              receipt.get("status") == "COMPILED_NOT_DEPLOYED_OR_OS_QUALIFIED" and
              receipt.get("target") == "linux-arm64-glibc" and
@@ -361,6 +380,12 @@ def _source_gate_artifact(manifest: Mapping, receipt: Mapping) -> Mapping:
     gate = files.get("observer/source-gate", {})
     inputs = receipt.get("inputs", {})
     gate_build = inputs.get("source_gate", {}) if isinstance(inputs, Mapping) else {}
+    if receipt.get("schema") == restricted.RUNTIME_SCHEMA:
+        restricted.validate_gate(gate_build)
+        _require(gate.get("executable") is True and gate.get("digest") == "sha256:" + restricted.GATE_SHA256,
+                 "restricted pre-exec gate artifact is missing or differs")
+        return gate
+    _require(not restricted.uses_restricted_inputs(manifest), "restricted artifact in predecessor runtime")
     _require(gate.get("executable") is True and
              type(gate_build) is dict and set(gate_build) == {"schema", "target", "source_sha256",
                  "elf_sha256", "compiler_sha256", "build_command_sha256", "runtime_executed", "receipt_digest"} and
@@ -416,11 +441,15 @@ def _systemd_plan(config: PiConfinedLaunchConfig, prepared: PreparedPiBundle,
         " -/dev/shm -/dev/hugepages -/dev/pts",
     )
     command = (_RUNTIME + "/node/bin/node", _RUNTIME + "/pi-core/entrypoint.js")
+    if isinstance(config, PiConfinedLaunchConfig):
+        _require_paired_runtime(config)
     if getattr(config, "source_observation", None) is not None:
         # Exit-only tracer cleanup must never resume a held effect to deliver
         # SIGTERM or consume the entire five-second reserve awaiting escalation.
         # The one owned stop immediately terminates this disposable worker group.
         properties += ("KillSignal=SIGKILL",)
+        if config.source_observation["schema"] == restricted.PROFILE_SCHEMA:
+            command = restricted.NODE_ARGV
         command = (_RUNTIME + "/observer/source-gate", *command)
     argv = ("/usr/bin/systemd-run", "--quiet", "--no-block", "--unit=" + unit,
             *("--property=" + value for value in properties), "--",

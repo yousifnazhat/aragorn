@@ -14,12 +14,14 @@ import platform
 import stat
 
 from . import pi_core_node_source_observer as node
+from . import pi_core_restricted_profile as restricted
 from . import pi_core_source_observer as base
 from . import pi_core_os_provision as provision
 from .pi_core_source_observation_verify import _document, _fields, _identity, _pin
 
 
 PLAN_SCHEMA = "aragorn/pi-core-source-plan/v1"
+RESTRICTED_PLAN_SCHEMA = restricted.PLAN_SCHEMA
 RECEIPT_SCHEMA = "aragorn/pi-core-source-inventory-preparation/v1"
 AUTHORITY = "INSTALLED_VIEW_PREPARATION_ONLY_NOT_SOURCE_CONSUMPTION_HEALTH_OR_LAUNCH"
 _CODE_PINS = {"gate_digest", "node_digest", "producer_digest", "node_observer_digest"}
@@ -61,7 +63,7 @@ def _plan(raw, pin):
     value = _document(raw)
     _require(base.canonical_digest(value) == pin, "SOURCE_PLAN_PIN")
     _fields(value, {"schema", "pins", "sources", "required_sources", "loader_files"})
-    _require(value["schema"] == PLAN_SCHEMA, "SOURCE_PLAN_SCHEMA")
+    _require(value["schema"] in (PLAN_SCHEMA, RESTRICTED_PLAN_SCHEMA), "SOURCE_PLAN_SCHEMA")
     _fields(value["pins"], _CODE_PINS)
     for digest in value["pins"].values():
         _pin(digest)
@@ -85,6 +87,15 @@ def _plan(raw, pin):
     for row in value["sources"] + value["loader_files"]:
         if row["path"] in fixed:
             _require(row["digest"] == value["pins"][fixed[row["path"]]], "SOURCE_PLAN_FIXED_CODE_CONFLICT")
+    if value["schema"] == PLAN_SCHEMA:
+        _require(not restricted.uses_restricted_inputs(value), "SOURCE_PLAN_RESTRICTED_DOWNGRADE")
+    else:
+        # Validate preapproved content intent before opening any installed file.
+        # FS identity/inventory pins exist only after the actual preparation.
+        try:
+            restricted.validate_profile({**value, "schema": restricted.PROFILE_SCHEMA})
+        except ValueError as exc:
+            raise PiSourceInventoryPreparationError("SOURCE_PLAN_RESTRICTED_CODE") from exc
     return value
 
 
@@ -231,7 +242,7 @@ def prepare_pi_source_inventories(expected_manifest_raw: bytes, *, expected_mani
 
         source_raw = base.canonical_json(dict(schema=node.SOURCE_SCHEMA, sources=source_rows))
         loader_raw = base.canonical_json(dict(schema=node.LOADER_SCHEMA, loaders=loader_rows))
-        profile = dict(schema=node.PROFILE_SCHEMA,
+        profile = dict(schema=restricted.PROFILE_SCHEMA if plan["schema"] == RESTRICTED_PLAN_SCHEMA else node.PROFILE_SCHEMA,
             pins={**plan["pins"], "source_inventory_digest": base.canonical_digest(_document(source_raw)),
                   "loader_inventory_digest": base.canonical_digest(_document(loader_raw))},
             sources=plan["sources"], required_sources=plan["required_sources"], loader_files=plan["loader_files"])

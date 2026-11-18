@@ -77,7 +77,7 @@ class InstallEntryTests(unittest.TestCase):
         self.transaction = {"schema": "aragorn/protected-install-transaction/v1", "context_digest": self.plan["context"]["digest"]}
         self.publish = self.enterContext(mock.patch.object(subject.publisher, "_publish_protected_install_transaction",
             return_value=self.transaction))
-        self.readback = self.enterContext(mock.patch.object(subject, "_readback"))
+        self.readback = self.enterContext(mock.patch.object(subject, "_readback", return_value=pin("b")))
 
     def invoke(self):
         return subject.run(Path("/var/lib/pi/plan.json"), canonical_digest(self.plan),
@@ -103,6 +103,9 @@ class InstallEntryTests(unittest.TestCase):
         self.cas.assert_called_once_with(Path(self.plan["candidate_cas_root"]), read_only=True)
         self.assertEqual(result["status"], "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED")
         self.assertEqual(result["publication_state"], "PUBLISHER_RETURNED")
+        self.assertEqual(result["observed_tree_digest"], pin("b"))
+        self.assertIs(self.readback.call_args.args[2], self.cas.return_value)
+        self.assertIs(self.readback.call_args.args[3], self.verify.return_value)
         self.assertFalse(result["managed_call_attempted"])
         self.assertIsNone(result["managed_result"])
         self.assertFalse(result["phase3_exit_eligible"])
@@ -237,6 +240,8 @@ class InstallEntryTests(unittest.TestCase):
         result = self.refuse(True)
         self.assertEqual(result["transaction"], self.transaction)
         self.assertEqual(result["status"], "CLEANUP_HOLD")
+        self.assertEqual(result["publication_state"], "PUBLISHER_RETURNED")
+        self.assertIsNone(result["observed_tree_digest"])
         self.readback.assert_called_once()
 
     def test_post_return_readonly_loss_stays_hold(self):

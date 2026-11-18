@@ -16,6 +16,8 @@ AUTHORITY = "PROTECTED_GRANT_PREPARATION_ONLY_NOT_ACTIVATION_OR_PHASE3"
 _SOURCE = "opt/aragorn/src/aragorn/pi_core_broker_preparation_entry.py"
 BASE_SCHEMA = "aragorn/pi-core-broker-base-result/v1"
 BASE_AUTHORITY = "PROTECTED_BASE_INSTALLATION_ONLY_NOT_ACTIVATION_OR_PHASE3"
+PROVIDER_BASE_SCHEMA = "aragorn/pi-core-provider-base-result/v1"
+PROVIDER_BASE_AUTHORITY = "PROTECTED_PROVIDER_BASE_INSTALLATION_ONLY_NOT_ACTIVATION_OR_PHASE3"
 _BASE_SOURCE = "opt/aragorn/src/aragorn/pi_core_broker_base_provision.py"
 
 
@@ -59,9 +61,10 @@ def _completed(value):
         all(type(prepared.get(key)) is dict for key in ("command", "result_packet", "readback")))
 
 
-def _base_record(value):
+def _base_record(value, provider=False):
     coordinator._require(type(value) is dict and
-        value.get("schema") == "aragorn/pi-core-broker-base-installation/v1" and
+        value.get("schema") == ("aragorn/pi-core-provider-base-installation/v1" if provider else
+                                "aragorn/pi-core-broker-base-installation/v1") and
         value.get("authority") == "FRESH_BASE_CONTROLS_ONLY_NOT_POLICY_HEALTH_GRANT_OR_PHASE3" and
         value.get("status") in {"INSTALLED", "REFUSED", "PARTIAL_OR_INDETERMINATE", "CLEANUP_HOLD"} and
         type(value.get("mutation_attempted")) is bool and type(value.get("owned_handles_closed")) is bool and
@@ -73,11 +76,14 @@ def _base_record(value):
     return json.loads(raw)
 
 
-def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_custody, install_base=False):
-    """The literal local selector installs fresh controls; default prepares a grant."""
-    installing = install_base is True
-    observation = {"schema": BASE_SCHEMA if installing else SCHEMA,
-        "authority": BASE_AUTHORITY if installing else AUTHORITY, "status": "REFUSED",
+def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_custody,
+        install_base=False, install_provider_base=False):
+    """Install one fixed fresh base or, by default, prepare the admitted action grant."""
+    provider = install_provider_base is True
+    installing = install_base is True or provider
+    schema, authority = ((PROVIDER_BASE_SCHEMA, PROVIDER_BASE_AUTHORITY) if provider else
+                         (BASE_SCHEMA, BASE_AUTHORITY) if installing else (SCHEMA, AUTHORITY))
+    observation = {"schema": schema, "authority": authority, "status": "REFUSED",
         "managed_call_attempted": False, "managed_result": None,
         "preparation_attempted": False, "preparation_result": None,
         "host_before": None, "host_after": None, "source_before": None, "source_after": None,
@@ -91,7 +97,8 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
     inputs = failure = body_failure = None
     phase = "PREFLIGHT"
     try:
-        coordinator._require(type(install_base) is bool, "BROKER_BASE_LOCAL_BOOLEAN_REQUIRED")
+        coordinator._require(type(install_base) is bool and type(install_provider_base) is bool
+                             and not (install_base and provider), "BROKER_BASE_LOCAL_BOOLEAN_REQUIRED")
         coordinator._require(os.geteuid() == os.getegid() == 0, "BROKER_PREPARATION_ROOT_REQUIRED")
         deadline = coordinator._deadline(deadline_ns)
         host_pin, observation["source_before"], observation["host_before"] = _custody(
@@ -99,18 +106,22 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
         path, pin = coordinator._path(str(plan_path)), coordinator._pin(expected_plan_digest)
         inputs = coordinator._Inputs(deadline)
         candidate = inputs.read(path, pin, coordinator._PLAN_LIMIT)
-        base_reference = None
+        base_reference = config_reference = None
         if installing:
-            coordinator._require(type(candidate) is dict and "broker_base_state" in candidate,
+            state_key = "provider_base_state" if provider else "broker_base_state"
+            coordinator._require(type(candidate) is dict and state_key in candidate,
                                  "BROKER_BASE_STATE_REFERENCE_REQUIRED")
-            base_reference = coordinator._reference(candidate["broker_base_state"])
-            candidate = {key: value for key, value in candidate.items() if key != "broker_base_state"}
+            candidate = dict(candidate)
+            base_reference = coordinator._reference(candidate.pop(state_key))
+            if provider:
+                config_reference = coordinator._reference(candidate.pop("provider_root_broker_config", None))
         plan = coordinator._plan(candidate, host_pin, path)
         coordinator._require(plan["mode"] == "UNAVAILABLE" and plan["provider"] is None,
                              "BROKER_PREPARATION_CANNOT_CARRY_PROVIDER_AUTHORITY")
         observation["plan_digest"] = pin
         phase = "PREPARED_INPUTS"
         base_state = inputs.ref(base_reference) if installing else None
+        provider_config = coordinator._broker_config(inputs.ref(config_reference)) if provider else None
         context, deployment = inputs.ref(plan["context"]), inputs.ref(plan["deployment"])
         observation["deployment_digest"] = plan["deployment"]["digest"]
         observation["context_digest"] = plan["context"]["digest"]
@@ -156,13 +167,16 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                     phase = "BASE_INSTALLATION"
                     observation["base_installation_attempted"] = True
                     try:
-                        observation["base_installation_result"] = _base_record(base.provision_pi_broker_base(
-                            configuration=config, base_state=base_state, base_state_digest=base_reference["digest"],
-                            deadline=deadline))
+                        args = dict(configuration=config, base_state=base_state,
+                                    base_state_digest=base_reference["digest"], deadline=deadline)
+                        value = (base.provision_pi_provider_base(provider_config=provider_config, **args)
+                                 if provider else base.provision_pi_broker_base(**args))
+                        observation["base_installation_result"] = _base_record(value, provider)
                     except BaseException as exc:
                         observation["base_installation_failure_evidence"] = "UNAVAILABLE_OR_INVALID"
                         try:
-                            observation["base_installation_result"] = _base_record(getattr(exc, "pi_broker_base_observation", None))
+                            attr = "pi_provider_base_observation" if provider else "pi_broker_base_observation"
+                            observation["base_installation_result"] = _base_record(getattr(exc, attr, None), provider)
                             observation["base_installation_failure_evidence"] = "RETAINED"
                         except BaseException:
                             pass  # Never replace an original installation or cleanup failure.
@@ -171,7 +185,9 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                     coordinator._require(installed["status"] == "INSTALLED" and
                         installed["mutation_attempted"] is installed["owned_handles_closed"] is True and
                         type(installed.get("readback")) is dict and installed.get("cleanup_uncertainty") == [] and
-                        installed.get("destination") == "/var/lib/aragorn-runtime-action" and
+                        installed.get("destination") == ("/var/lib/aragorn-runtime-provider" if provider
+                                                         else "/var/lib/aragorn-runtime-action") and
+                        (not provider or installed.get("provider_config_digest") == config_reference["digest"]) and
                         installed.get("configuration_digest") == canonical_digest(configs) and
                         installed.get("base_state_digest") == base_reference["digest"], "BROKER_BASE_NOT_COMPLETE")
                 else:
@@ -201,7 +217,8 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                 body_failure = exc
                 raise
         observation["owned_holders_closed"] = True
-        observation["status"] = ("BASE_CONTROLS_INSTALLED_NOT_READY_OR_QUALIFIED" if installing else
+        observation["status"] = ("PROVIDER_BASE_INSTALLED_NOT_READY_OR_QUALIFIED" if provider else
+                                 "BASE_CONTROLS_INSTALLED_NOT_READY_OR_QUALIFIED" if installing else
                                  "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED")
     except BaseException as exc:
         failure = body_failure or exc

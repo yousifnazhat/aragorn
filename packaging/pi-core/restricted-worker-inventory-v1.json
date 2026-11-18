@@ -1,0 +1,56 @@
+{
+  "loader_files": [
+    {
+      "digest": "sha256:17538b8f9889a470c061f69a8fea8124da89627311cd16546c133a89f09056df",
+      "path": "/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
+    },
+    {
+      "digest": "sha256:e4ac8ae1d81e4865e3aadedb962879cf9415903b3f2ba81ec75e9962b86ab8b0",
+      "path": "/lib/aarch64-linux-gnu/libc.so.6"
+    },
+    {
+      "digest": "sha256:e5e9474a683596d59cc9e13246bc83878433e53c3befbabd73e3da9ccb5fe174",
+      "path": "/lib/aarch64-linux-gnu/libdl.so.2"
+    },
+    {
+      "digest": "sha256:046856f95f4636f1fc7c3a12bf4f3cd5634c2fc5145c3fdf7395d4f349fa69c7",
+      "path": "/lib/aarch64-linux-gnu/libgcc_s.so.1"
+    },
+    {
+      "digest": "sha256:3c4cb3be0b974edf05f023f85ab15107fb5afc2687163593d0d4cf8e80c17b39",
+      "path": "/lib/aarch64-linux-gnu/libm.so.6"
+    },
+    {
+      "digest": "sha256:434dcd27f22fc8bf236c0c00541a1e503d302aa796c333729a2cd15a4cfe4814",
+      "path": "/lib/aarch64-linux-gnu/libpthread.so.0"
+    },
+    {
+      "digest": "sha256:532f3a12d7b8fef6cc7a064ea106b6c4ab2365674b73e743e4a385d4ffb6c8ab",
+      "path": "/lib/aarch64-linux-gnu/libstdc++.so.6"
+    },
+    {
+      "digest": "sha256:17538b8f9889a470c061f69a8fea8124da89627311cd16546c133a89f09056df",
+      "path": "/lib/ld-linux-aarch64.so.1"
+    }
+  ],
+  "pins": {
+    "gate_digest": "sha256:7bbb6d6ad10732747f8145abc51b9732598bb0e926acd82f14196469ec316620",
+    "node_digest": "sha256:b4855de8c4781130b722ceaec9718fed77cca3eed2e5cfc5455e267c0b9ee3b0",
+    "node_observer_digest": "sha256:3c6e056a6740b0c3caff93f1c6806b8dde29cf81d3f176f9d05cfa4189753f48",
+    "producer_digest": "sha256:ee9c6fad39901275fa17d2908c265e7ac4715bfa4a3608499e12cde60dc093cb"
+  },
+  "required_sources": [
+    "/opt/aragorn/pi-runtime/pi-core/entrypoint.js"
+  ],
+  "schema": "aragorn/pi-core-source-plan/v2",
+  "sources": [
+    {
+      "digest": "sha256:0806d07ae9110eaa1d98d97b49d4ee305deaf95b82c0c0b61ca905f24bf73c44",
+      "path": "/opt/aragorn/pi-runtime/pi-core/entrypoint.js"
+    },
+    {
+      "digest": "sha256:f913fc41b0e32167b11c7253db4ec4a63080b4bfd3e6b6aa7d4b97863f348bab",
+      "path": "/opt/aragorn/pi-runtime/pi-core/package.json"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "aragorn/pi-core-restricted-inventory-checkpoint/v1",
+  "base": "fb49c72f9381aee050cc51547fb4ff180db9f7c2",
+  "host_files": 104,
+  "host_file_rows_digest": "sha256:505223fe3c2aa501fdeac925c64e874b6f1adf3b38f82ecd73a48f8c13e45808",
+  "wrapper_digest": "sha256:9d2ae4bfb4153d29c90768da46fd971f344990a25e0dea5a83ed695890f9b8cb",
+  "source_plan_digest": "sha256:305679f5a4891465d0820e2f2adfb3402e60b9d50489c1ccd93bb6ea8bd66ac4",
+  "runtime_digest": "sha256:5629ad71c1665dcf2da51fabae3969e4e9ed84db6a648dbdfebbdb52492a4e9e",
+  "worker_loader_paths": 8,
+  "host_profile_approved": false,
+  "installed_view_observed": false,
+  "phase3_exit_eligible": false
+}

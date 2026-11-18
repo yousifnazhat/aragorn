@@ -28,8 +28,14 @@ The operator approved the fixed Node argument `--disallow-code-generation-from-s
 runtime. The ordinary static verifier still refuses the TypeBox string-code path.
 Only this exact bundle, Node, gate and argv pass the conditional static review;
 neither enforcement nor the interpreted fallback has been observed on Linux.
-Next: prepare the new protected host/source pins and installed-view plan, then obtain
-separate authority for actual startup, source observation, health and pilot evidence.
+[Batch 37](../phase3/coordinator/pi-core-host-worker-inventory-batch-37.md) pins
+the coordinator wrapper and 103 trusted Python files. It prepared the canonical
+worker source plan from the retained four-file runtime and its eight declared
+ELF loader paths. This is content intent, **not** an installed inventory.
+Next: obtain the independently approved complete Linux host profile and matching
+export, then the separately authorized read-only worker view and approved root
+identities. Actual source reads, sensor health, recovery/timing and pilot evidence
+are still outstanding.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant
 to pass the existing readiness reader. D2 remains open; no freeze or live run.

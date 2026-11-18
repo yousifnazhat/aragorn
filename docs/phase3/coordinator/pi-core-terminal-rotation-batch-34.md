@@ -7,6 +7,8 @@ Published signed base `e60767863026439921c4145745ae8e30143f59fb`, source `4183b8
 - Workloads/verifiers owner: new `tests/test_pi_core_terminal_rotation_readback.py`. Connect actual initializer and existing independent root `_broker_control_snapshot(require_available=True)` in one isolated temporary filesystem fixture. Show distinct preauthorized grant succeeds after prior CONSUMED with both original documents archived, no live receipt/pending, original raw bytes retained, and readiness refuses a foreign/orphan residue unchanged. Do not mock the rotation or independent snapshot itself. No new grant minting in production. Developer unit fixture only, not an acceptance sample.
 - Coordinator owns registry, checks, documentation and delivery. Each lane reports scope, static input closure and selected method count. No lane Git, test/build or live operations. Keep original signed legacy broker versions untouched.
 
+Fixture amendment: RUN/health may also adjust only the affected mock custody plumbing and obsolete fixed-receipt assumptions in `tests/test_pi_core_request_recovery.py`, preserving test objectives and every retained result. Select those affected methods in the new stage; do not run the entire old module. The actual snapshot/rotation composition must still exercise real temporary files.
+
 1. D2: connected metadata-only recovery; genuine sensor health, installed views, full timing and separate pilot still pending.
 2. D3: remaining admission, runtime evidence and actual confined workloads.
 3. D4: independent mapping and one frozen deployment.

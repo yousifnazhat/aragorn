@@ -15,11 +15,13 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
-**Current D2 decision:** the pinned worker's static entrypoint imports **709**
-separate JS modules; the current observer accepts at most **512** source files.
-Choose a reproducible bundled successor with an explicit bundle-consumption
-claim, or keep per-module proof and version acquisition and replay. See the
-[decision and evidence](../phase3/coordinator/pi-core-worker-observation-decision.md).
+**Approved D2 worker proof:** use a reproducible bundled successor. Independently
+verify how pinned build inputs produce the emitted JavaScript, and independently
+witness the worker reading the exact admitted emitted bytes. This does not prove
+individual npm source reads or arbitrary in-memory execution. The predecessor's
+static graph has **709** JS modules; keep the **512** source and **4,096** trace
+event limits. See the [decision](../phase3/coordinator/pi-core-worker-observation-decision.md)
+and [successor assignment](../phase3/coordinator/pi-core-worker-bundle-batch-35.md).
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant
 to pass the existing readiness reader. D2 remains open; no freeze or live run.

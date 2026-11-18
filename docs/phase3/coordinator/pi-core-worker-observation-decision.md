@@ -1,6 +1,6 @@
 # D2 decision: the pinned worker does not fit the approved source observer
 
-**Decision required before the next worker artifact or observer profile is prepared.** This is a source-level incompatibility, not an inference from slow tests, an observed Linux trace, or permission to activate. No evidence threshold has been changed.
+**Decision: option 1 approved for the managed V1.** The implementation request releases offline build and independent verification only. Retain the source and event limits. An emitted bundle must be independently observed in a separately authorized installed context; build provenance is not that observation. No evidence threshold has been changed.
 
 ## Retained artifact and independent finding
 
@@ -10,7 +10,7 @@ Two read-only methods agreed: a literal static import/re-export walk, and a host
 
 The [inventory preparer](../../../src/aragorn/pi_core_source_inventory_prepare.py) and [Node observer](../../../src/aragorn/pi_core_node_source_observer.py) admit at most **512 source files**, separately from loader files. A regular file read must have exactly one matching inventory identity. The [replay contract](pi-core-node-source-replay-handoff.md) distinguishes JS source delivery from ELF/loader activity. Omitting 197 modules or misclassifying them as native loader data would not prove the required property. The observer also caps the trace at 4,096 events; even one ordinary traced source read per file needs at least two stops, two resumptions and a read-entry/read-exit pair. That is 4,254 events before other startup, thread and cleanup events. This is a structural budget argument, not a measurement of task latency.
 
-## Choices for approval
+## Considered choices
 
 1. **Recommended for the controlled V1: a pinned, reproducible bundled worker.** Preserve Pi-core, the broker, external source observer, role separation and all quantitative gates. Pin the bundler, configuration and complete dependency inputs. Independently verify the build relationship, admit the emitted executable JS bytes, and observe the worker consuming those exact bytes. Audit dynamic and external loads; do not presume the result fits until its actual closure is inspected. The claim becomes “independently observed the admitted bundle being read,” **not** “observed the worker reading each original npm source.” The existing compiler emits separate modules and copies dependencies; this is a versioned deployment/provenance choice, not a flag to toggle on the current artifact.
 2. **Preserve per-module observation.** Keep the current unbundled dependency graph. Version acquisition, loss accounting, bounded storage and independent replay to cover the graph plus actual startup and cleanup. Retain failures on overflow, gaps or stale health. A larger array alone does not address event volume or prove the five-second authority window or final latency/overhead thresholds.
@@ -23,7 +23,7 @@ The operator has not identified an exact owned VM/snapshot, approved model, publ
 
 Paid requests authorized now: **zero**. Proposed pilot only after separate approval: fabricated numbers, **one** model request with an explicit operator-approved spend ceiling, **one** authorized JSON creation, independent readback and separate changed-byte/unauthorized-target refusal contexts. No automatic effect/request retries. Specify owned unit/process/mount/socket/credential paths and prior state before the run, verify cleanup and restoration, and retain private ambiguous/failed outcomes. D5 requires separate approval again after freeze.
 
-1. **D2:** resolve the worker/observer representation; continue actual protected views, genuine loss-accounted health, recovery/full timing and independently observed useful pilot.
+1. **D2:** build and verify the selected bundled representation; continue actual protected views, genuine loss-accounted health, recovery/full timing and independently observed useful pilot.
 2. **D3:** connect remaining admission, seven event classes/six responses and the four actual confined workloads on the selected common deployment.
 3. **D4:** close sources, surfaces and independent consumers for all 29 requirements; freeze once.
 4. **D5:** only then authorize the fresh surface inventory, 100 attempts and 100 baseline-first pairs, serialized measurements, cleanup and independent replay.

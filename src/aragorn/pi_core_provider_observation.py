@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from . import pi_core_provider_mediation as mediation
+from . import pi_core_restricted_profile as restricted
 from . import pi_core_source_observation_verify as source_fields
 from . import pi_core_worker_identity as identity
 from . import runtime_action_broker as broker
@@ -100,6 +101,41 @@ def _read_coverage(record, events):
         _require(end == rows[path]["identity"]["size"], "PROVIDER_SOURCE_DELIVERY_INCOMPLETE")
 
 
+def _restricted_capture(record):
+    # The predecessor uses the same capture schema. The authenticated runtime,
+    # either restricted artifact (including a mislabeled loader), or captured
+    # argv requires the complete join; no caller-selected compatibility flag.
+    sources, loaders, events = record["sources"], record["loaders"], record["events"]
+    _require(type(sources) is list and type(loaders) is list, "PROVIDER_SOURCE_INVENTORY")
+    if not (restricted.uses_restricted_inputs({"bindings": record["bindings"], "sources": sources,
+                                               "loader_files": loaders}) or
+            any(type(e) is dict and "raw_cmdline_hex" in e for e in events)):
+        return False
+    bindings = record["bindings"]
+    _require(bindings["runtime_digest"] == restricted.RUNTIME_DIGEST, "PROVIDER_RESTRICTED_RUNTIME")
+    _require(0 < len(sources) <= 512 and 0 < len(loaders) <= 512 and all(type(row) is dict and
+        type(row.get("path")) is str and row.get("readonly_view") is True for row in sources + loaders),
+        "PROVIDER_RESTRICTED_INVENTORY")
+    _require(len({row["path"] for row in sources + loaders}) == len(sources) + len(loaders),
+             "PROVIDER_RESTRICTED_INVENTORY_ALIAS")
+    def declarations(rows):
+        return [{"path": row["path"], "digest": row.get("digest")} for row in rows]
+    shape = {"schema": restricted.PROFILE_SCHEMA, "pins": bindings, "sources": declarations(sources),
+        "loader_files": declarations(loaders), "required_sources": record["required_sources"]}
+    try:
+        restricted.validate_profile(shape)
+        bundle_size = next(row["size"] for row in restricted.expected_files() if row["path"] == "pi-core/entrypoint.js")
+    except ValueError as error:
+        raise PiProviderObservationError("PROVIDER_RESTRICTED_PROFILE") from error
+    entry = next(row for row in sources if row["path"] == restricted.ENTRY_PATH)
+    _require(source_fields._identity(entry["identity"])["size"] == bundle_size and
+        bindings["source_inventory_digest"] == canonical_digest({
+            "schema": "aragorn/pi-core-node-source-inventory/v2", "sources": sources}) and
+        bindings["loader_inventory_digest"] == canonical_digest({
+            "schema": "aragorn/pi-core-loader-inventory/v1", "loaders": loaders}), "PROVIDER_RESTRICTED_INVENTORY_PIN")
+    return True
+
+
 def validate_provider_source_capture(source_capture, activation, *, boundary_boottime_ns):
     """Check the actual owner's bounded HELD boundary, not independent replay."""
     activation = identity.validate_activation(activation)
@@ -124,9 +160,10 @@ def validate_provider_source_capture(source_capture, activation, *, boundary_boo
     boundary = _uint(boundary_boottime_ns, 1)
     events = record["events"]
     _require(type(events) is list and 0 < len(events) <= _MAX_EVENTS, "PROVIDER_SOURCE_EVENT_BOUND")
+    bundled = _restricted_capture(record)
     counts = {kind: 0 for kind in _KINDS}
     tasks = {worker["pid"]: worker["start_ticks"]}
-    stops, resumes, calls, io_calls = {}, {}, {}, {}
+    stops, resumes, calls, io_calls, restricted_reads = {}, {}, {}, {}, {}
     barrier = None
     challenges, last_challenge, stamp = set(), -1, 0
     for sequence, event in enumerate(events, 1):
@@ -145,12 +182,18 @@ def validate_provider_source_capture(source_capture, activation, *, boundary_boo
             pid = event["pid"]
             _require(pid in tasks and pid != worker["pid"] and tasks[pid] == event["start_ticks"],
                      "PROVIDER_SOURCE_THREAD")
+            _require(pid not in restricted_reads, "PROVIDER_RESTRICTED_PENDING_READ")
             del tasks[pid]
             calls.pop(pid, None)
         elif kind == "STOP":
             pid = event["pid"]
             _require(pid in tasks and event["start_ticks"] == tasks[pid], "PROVIDER_SOURCE_STOP")
             stops[pid] = event
+            if pid in restricted_reads:
+                enter, exit_stop = restricted_reads[pid]
+                _require(exit_stop is None and event["op"] == "EXIT" and calls.get(pid) is enter,
+                         "PROVIDER_RESTRICTED_READ_STOP")
+                restricted_reads[pid] = (enter, event)
             if event["op"] == "ENTRY":
                 _require(pid not in calls, "PROVIDER_SOURCE_PENDING_CALL")
                 calls[pid] = event
@@ -163,6 +206,42 @@ def validate_provider_source_capture(source_capture, activation, *, boundary_boo
         elif kind == "EXEC":
             _require(event["pid"] == worker["pid"] and event["digest"] == bindings["node_digest"],
                      "PROVIDER_SOURCE_EXECUTABLE")
+            if bundled:
+                _exact(event, {"seq", "boottime_ns", "kind", "pid", "digest", "raw_cmdline_hex"})
+                prior = events[sequence - 2] if sequence > 1 else None
+                pid = worker["pid"]
+                _require(type(prior) is dict and prior.get("kind") == "STOP" and stops.get(pid) is prior and
+                    prior["pid"] == pid and prior["start_ticks"] == worker["start_ticks"] and
+                    prior["op"] == "NONE" and prior["event"] == 4 and prior["event_message"] == pid and
+                    prior["status"] == (4 << 16 | 5 << 8 | 127) and
+                    all(key in prior and prior[key] is None for key in ("syscall", "args", "result", "is_error")) and
+                    calls.get(pid, {}).get("syscall") == 221 and calls[pid]["start_ticks"] == worker["start_ticks"] and
+                    calls[pid]["event"] == 0 and calls[pid]["status"] == (133 << 8 | 127) and
+                    event["raw_cmdline_hex"] == (b"\0".join(s.encode("ascii") for s in restricted.NODE_ARGV) + b"\0").hex(),
+                    "PROVIDER_RESTRICTED_EXEC_STOP_OR_ARGV")
+        elif bundled and kind == "READ_ENTER":
+            call = calls.get(event["pid"])
+            _require(counts["EXEC"] == 1 and event["pid"] in tasks and event["pid"] not in restricted_reads and
+                call is not None and stops.get(event["pid"]) is call and
+                call["start_ticks"] == tasks[event["pid"]] and call["seq"] == event["call_id"] and
+                call["event"] == 0 and call["status"] == (133 << 8 | 127) and
+                {63: "read", 65: "readv", 67: "pread64", 69: "preadv"}.get(call["syscall"]) == event["syscall"] and
+                type(call["args"]) is list and len(call["args"]) == 6 and
+                type(event["fd"]) is int and 0 <= event["fd"] < 2**31 and event["fd"] == call["args"][0] and
+                (call["syscall"] in (65, 69) or event["count"] == call["args"][2]) and
+                (call["syscall"] not in (67, 69) or event["offset"] == call["args"][3]) and
+                (call["syscall"] != 69 or call["args"][4] == 0),
+                "PROVIDER_RESTRICTED_READ_STOP")
+            restricted_reads[event["pid"]] = (call, None)
+        elif bundled and kind == "READ_EXIT":
+            stop = stops.get(event["pid"])
+            pair = restricted_reads.pop(event["pid"], None)
+            _require(counts["EXEC"] == 1 and pair is not None and pair[0]["seq"] == event["call_id"] and
+                stop is not None and stop is pair[1] and stop["op"] == "EXIT" and
+                event["pid"] in tasks and stop["start_ticks"] == tasks[event["pid"]] and
+                stop["event"] == 0 and stop["status"] == (133 << 8 | 127) and
+                stop["result"] == event["result"] and stop["is_error"] is event["is_error"],
+                "PROVIDER_RESTRICTED_READ_STOP")
         elif kind == "IO_ENTER":
             pid, call_id = event["pid"], _uint(event["call_id"], 1)
             _require(pid in calls and calls[pid]["seq"] == call_id and call_id not in io_calls,
@@ -213,6 +292,7 @@ def validate_provider_source_capture(source_capture, activation, *, boundary_boo
              counts["IO_ENTER"] - counts["IO_EXIT"] == len(io_calls) and
              all(pid in calls and calls[pid]["seq"] == call_id for call_id, pid in io_calls.items()),
              "PROVIDER_SOURCE_LOSS_ACCOUNTING")
+    _require(not restricted_reads, "PROVIDER_RESTRICTED_PENDING_READ")
     _read_coverage(record, events)
     challenge = {key: events[-1][key] for key in ("nonce", "issued_ns", "deadline_ns")}
     return dict(challenge=challenge, clock=clock, boundary_boottime_ns=boundary)

@@ -1,0 +1,35 @@
+{
+  "schema": "aragorn/pi-core-worker-bundle-toolchain/v1",
+  "purpose": "BUILD_ONLY_DARWIN_ARM64_TO_NODE24_ESM_NOT_RUNTIME_AUTHORITY",
+  "archive": {
+    "package": "@esbuild/darwin-arm64@0.27.0",
+    "bytes": 4348595,
+    "sha256": "58044064b395eb3f9a2aececc5518f29a8590533756a0bbcc5fcd228227af270",
+    "integrity": "sha512-uJOQKYCcHhg07DL7i8MzjvS2LaP7W7Pn/7uA0B5S1EnqAirJtbyw4yC5jQ5qcFjHK9l6o/MX9QisBg12kNkdHg=="
+  },
+  "binary": {
+    "member": "package/bin/esbuild",
+    "bytes": 10349346,
+    "sha256": "734cac3a18b8b5ed6a9a0e73f227ab94321f2859d2e65d700d83d19121860ee6"
+  },
+  "sandbox": {
+    "path": "/usr/bin/sandbox-exec",
+    "sha256": "abc5bb136d6b5cce8fa85d789f78e3326c51ca60cae637b2064adfb67a1dcd9a",
+    "profile": "PI_PRIVATE_TREE_DEFAULT_DENY_V1",
+    "timeout_seconds": 60
+  },
+  "predecessor_receipt": ".aragorn/pi-core-build/d2-73e34727a1f04044a7b74381e5bbb32d/build-receipt.json",
+  "predecessor_receipt_sha256": "1bfae9d5726f1ea61dbc70d58867c8666e4fc4318a7a92ccff160cc0c6e544fc",
+  "dependency_tree_sha256": "4ea4f2b7eb5408dbe64682a99c9921d42855faa69fdb4511328c444e4afed359",
+  "sources": {
+    "packaging/pi-core/entrypoint.ts": "96ef34d8be1953ab74220e33b202913bb69948a3e92fbb023e4fe7f69b3507b2",
+    "packaging/pi-core/provider.ts": "e8945f054183eaea900ca15848f07003ac0e25b1b8b5a9a9e912ab969e8bfce3",
+    "packaging/pi-core/worker.ts": "de31f5c3d7a72578feecc65e755e02d712bc4da77e796cff98ed2caec90449a0",
+    "packaging/pi-core/package.json": "f913fc41b0e32167b11c7253db4ec4a63080b4bfd3e6b6aa7d4b97863f348bab",
+    "packaging/pi-core/package-lock.json": "ec3ba79e5d5f2516408311f05e3196efb604179a4421d0364b63527131b72789",
+    "packaging/pi-core/tsconfig.json": "9222899231369a98a5cb56214eb3f96c5520b93ec6e1b1842404e090ff35ebe4",
+    "packaging/openclaw/aragorn-runtime-action-worker/index.js": "71dfcdc6d2f1d51472230e9cda240c25d0b316fee39434e6761bb2e7b411467b",
+    "packaging/openclaw/aragorn-runtime-action-worker/package.json": "0097f2e532b1a5d99e3cfc4990d4bbf83a01c10ee11d567b139bd9144a859ad2"
+  },
+  "options": ["input/pi-core/entrypoint.ts", "--bundle", "--platform=node", "--target=node24.22", "--format=esm", "--tree-shaking=true", "--charset=utf8", "--legal-comments=inline", "--tsconfig=input/pi-core/tsconfig.json", "--log-level=warning", "--color=false", "--outfile=out/entrypoint.js", "--metafile=out/meta.json"]
+}

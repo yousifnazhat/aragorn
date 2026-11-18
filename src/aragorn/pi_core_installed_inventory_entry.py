@@ -101,16 +101,32 @@ class _Views:
             raise PiInstalledInventoryEntryError("INSTALLED_VIEW_CLEANUP_UNCONFIRMED") from failure
 
 
-def _artifacts(prepared, source_pin, plan):
+def _artifacts(prepared, source_pin, plan, approved_source):
     coordinator._require(type(prepared) is inventory.PreparedPiSourceInventories,
                          "INSTALLED_INVENTORY_RESULT_TYPE")
+    coordinator._require(canonical_digest(approved_source) == source_pin and approved_source["schema"] in
+                         (inventory.PLAN_SCHEMA, inventory.RESTRICTED_PLAN_SCHEMA), "INSTALLED_INVENTORY_SOURCE_BINDING")
     documents = {name: inventory._document(getattr(prepared, name + "_raw")) for name in _ARTIFACTS}
+    bundled = approved_source["schema"] == inventory.RESTRICTED_PLAN_SCHEMA
     schemas = {"source_inventory": inventory.node.SOURCE_SCHEMA,
                "loader_inventory": inventory.node.LOADER_SCHEMA,
-               "profile": inventory.node.PROFILE_SCHEMA, "preparation": inventory.RECEIPT_SCHEMA}
+               "profile": inventory.restricted.PROFILE_SCHEMA if bundled else inventory.node.PROFILE_SCHEMA,
+               "preparation": inventory.RECEIPT_SCHEMA}
     coordinator._require(all(documents[name].get("schema") == schemas[name] for name in _ARTIFACTS),
                          "INSTALLED_INVENTORY_RESULT_SCHEMA")
     digests = {name: canonical_digest(document) for name, document in documents.items()}
+    profile = inventory.node.validate_node_profile(documents["profile"])
+    coordinator._require(profile["pins"] == {**approved_source["pins"],
+        "source_inventory_digest": digests["source_inventory"], "loader_inventory_digest": digests["loader_inventory"]} and
+        all(profile[key] == approved_source[key] for key in ("sources", "required_sources", "loader_files")),
+        "INSTALLED_INVENTORY_PROFILE_BINDING")
+    for artifact, member, declaration in (("source_inventory", "sources", "sources"),
+                                         ("loader_inventory", "loaders", "loader_files")):
+        measured = documents[artifact][member]
+        coordinator._require(type(measured) is list and all(type(row) is dict and
+            row.get("readonly_view") is True for row in measured) and
+            sorted([{"path": row["path"], "digest": row["digest"]} for row in measured], key=lambda row: row["path"]) ==
+            sorted(approved_source[declaration], key=lambda row: row["path"]), "INSTALLED_INVENTORY_ROW_BINDING")
     receipt = documents["preparation"]
     coordinator._require(receipt.get("authority") == inventory.AUTHORITY and
         receipt.get("phase3_exit_eligible") is False and receipt.get("expected_manifest_digest") == source_pin and
@@ -145,7 +161,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
         phase = "PREPARED_INPUTS"
         source_plan = inputs.ref(plan["source_plan"])
         source_raw, source_pin = canonical_json(source_plan), plan["source_plan"]["digest"]
-        inventory._plan(source_raw, source_pin)
+        approved_source = inventory._plan(source_raw, source_pin)
         inputs.guard()
         _custody(source_loader, host_custody, deadline)
         phase = "HELD_INPUTS"
@@ -160,7 +176,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
             expected_worker_root_identity=plan["worker_view"]["identity"],
             observer_root_fd=views.observer, expected_observer_root_identity=plan["observer_root_identity"],
             deadline=deadline)
-        artifacts, digests = _artifacts(prepared, source_pin, plan)
+        artifacts, digests = _artifacts(prepared, source_pin, plan, approved_source)
         phase = "POST_CALL_CUSTODY"
         views.guard()
         inputs.guard()

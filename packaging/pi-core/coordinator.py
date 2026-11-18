@@ -30,6 +30,18 @@ _SEAL = object()
 _ACTION_BASE_OK = "BASE_CONTROLS_INSTALLED_NOT_READY_OR_QUALIFIED"
 _PROVIDER_BASE_OK = "PROVIDER_BASE_INSTALLED_NOT_READY_OR_QUALIFIED"
 _PROVIDER_POLICY_OK = "INITIAL_PROVIDER_POLICY_RECORDED_NOT_READY_OR_QUALIFIED"
+# This bootstrap also formats receipts after the protected import loader closes.
+# Keep the public report boundary independent of imports (and of producer flags).
+_WORKER_ROOT = "/opt/aragorn/pi-runtime/"
+_WORKER_GATE = _WORKER_ROOT + "observer/source-gate"
+_WORKER_NODE = _WORKER_ROOT + "node/bin/node"
+_WORKER_ENTRY = _WORKER_ROOT + "pi-core/entrypoint.js"
+_RESTRICTED_MEMBERS = {
+    _WORKER_GATE: "sha256:7bbb6d6ad10732747f8145abc51b9732598bb0e926acd82f14196469ec316620",
+    _WORKER_NODE: "sha256:b4855de8c4781130b722ceaec9718fed77cca3eed2e5cfc5455e267c0b9ee3b0",
+    _WORKER_ENTRY: "sha256:0806d07ae9110eaa1d98d97b49d4ee305deaf95b82c0c0b61ca905f24bf73c44",
+    _WORKER_ROOT + "pi-core/package.json": "sha256:f913fc41b0e32167b11c7253db4ec4a63080b4bfd3e6b6aa7d4b97863f348bab",
+}
 
 
 def _require(value, reason):
@@ -533,7 +545,7 @@ def _public_preparation(observation):
     shapes = {
         "source_inventory": ("aragorn/pi-core-node-source-inventory/v2", {"schema", "sources"}),
         "loader_inventory": ("aragorn/pi-core-loader-inventory/v1", {"schema", "loaders"}),
-        "profile": ("aragorn/pi-core-node-source-profile/v1",
+        "profile": (("aragorn/pi-core-node-source-profile/v1", "aragorn/pi-core-node-source-profile/v2"),
                     {"schema", "pins", "sources", "required_sources", "loader_files"}),
         "preparation": ("aragorn/pi-core-source-inventory-preparation/v1",
             {"schema", "authority", "phase3_exit_eligible", "expected_manifest_digest", "profile_digest",
@@ -543,7 +555,8 @@ def _public_preparation(observation):
              "fixed preparation artifacts required")
     for name, (schema, fields) in shapes.items():
         value = artifacts[name]
-        _require(type(value) is dict and set(value) == fields and value["schema"] == schema and
+        _require(type(value) is dict and set(value) == fields and value["schema"] in
+                 (schema if type(schema) is tuple else (schema,)) and
                  type(pins[name]) is str and _PIN.fullmatch(pins[name]) and
                  _digest(_canonical(value)) == pins[name], "preparation artifact fields or digest differ")
 
@@ -594,6 +607,39 @@ def _public_preparation(observation):
             type(row["digest"]) is str and _PIN.fullmatch(row["digest"]), "invalid public code record")
         _path(row["path"])
         identity(row["identity"])
+    restricted = profile["schema"] == "aragorn/pi-core-node-source-profile/v2"
+    marks = {_RESTRICTED_MEMBERS[_WORKER_ENTRY], _RESTRICTED_MEMBERS[_WORKER_GATE]}
+    has_marker = profile["pins"]["gate_digest"] in marks or any(
+        row["digest"] in marks for rows_ in (profile["sources"], profile["loader_files"],
+            artifacts["source_inventory"]["sources"], artifacts["loader_inventory"]["loaders"], receipt["code"])
+        for row in rows_)
+    _require(restricted == has_marker, "restricted inventory profile version differs")
+    if restricted:
+        required = profile["required_sources"]
+        _require(profile["pins"]["gate_digest"] == _RESTRICTED_MEMBERS[_WORKER_GATE] and
+                 profile["pins"]["node_digest"] == _RESTRICTED_MEMBERS[_WORKER_NODE] and
+                 _WORKER_ENTRY in required and len(required) == len(set(required)), "restricted profile pins differ")
+        seen = set()
+        for field, installed in (("sources", artifacts["source_inventory"]["sources"]),
+                                 ("loader_files", artifacts["loader_inventory"]["loaders"])):
+            _require(sorted((row["path"], row["digest"]) for row in profile[field]) ==
+                     sorted((row["path"], row["digest"]) for row in installed), "restricted installed rows differ")
+            for row in profile[field]:
+                path, pin = row["path"], row["digest"]
+                _require(path not in seen and (not path.startswith(_WORKER_ROOT) or _RESTRICTED_MEMBERS.get(path) == pin)
+                         and (path != _WORKER_ENTRY or field == "sources") and
+                         (pin not in marks or _RESTRICTED_MEMBERS.get(path) == pin), "restricted source role differs")
+                seen.add(path)
+        fixed = {("worker", _WORKER_GATE): "gate_digest", ("worker", _WORKER_NODE): "node_digest",
+                 ("observer", "/opt/aragorn/src/aragorn/pi_core_source_observer.py"): "producer_digest",
+                 ("observer", "/opt/aragorn/src/aragorn/pi_core_node_source_observer.py"): "node_observer_digest"}
+        _require({(row["view"], row["path"]): row["digest"] for row in receipt["code"]} ==
+                 {key: profile["pins"][name] for key, name in fixed.items()}, "restricted installed code differs")
+        # Reconstruct intent, not a second acquisition or a new trusted plan.
+        source_plan = {**profile, "schema": "aragorn/pi-core-source-plan/v2",
+                       "pins": {key: profile["pins"][key] for key in fixed.values()}}
+        _require(_digest(_canonical(source_plan)) == receipt["expected_manifest_digest"],
+                 "restricted source intent differs")
     report.update(artifacts=artifacts, artifact_digests=pins)
     _require(len(_canonical(report)) <= 4 * 1024 * 1024, "preparation report exceeds bound")
     return report

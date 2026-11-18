@@ -1,0 +1,14 @@
+{
+  "schema": "aragorn/pi-core-restricted-runtime-checkpoint/v1",
+  "status": "ASSEMBLED_NOT_DEPLOYED_OR_OS_QUALIFIED",
+  "output": ".aragorn/pi-core-build/restricted-runtime-b36",
+  "files": {
+    "build-receipt.json": "d9b71c0817075cb5c5a645a9c1e16362fc9aff75abf5bc53c1e90f5487a1b726",
+    "manifest.json": "457409ea8e39e02dc9e44c7522020f1643a8f3f9997239fc6f48051aaf0504b7",
+    "outcome.json": "eb7ec13611c3f2d7132b9739c3cad5c0c3de3882ab672a24885da6b33839f614"
+  },
+  "canonical_receipt_digest": "sha256:11a2ba77f5161fe554ce57ef001429b4efa50ffab1617e1226e848d67fdbdf6c",
+  "runtime_digest": "sha256:5629ad71c1665dcf2da51fabae3969e4e9ed84db6a648dbdfebbdb52492a4e9e",
+  "target_executed": false,
+  "phase3_exit_eligible": false
+}

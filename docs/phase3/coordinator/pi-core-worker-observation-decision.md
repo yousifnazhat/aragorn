@@ -1,0 +1,29 @@
+# D2 decision: the pinned worker does not fit the approved source observer
+
+**Decision required before the next worker artifact or observer profile is prepared.** This is a source-level incompatibility, not an inference from slow tests, an observed Linux trace, or permission to activate. No evidence threshold has been changed.
+
+## Retained artifact and independent finding
+
+The [v3 compiler checkpoint](../../../packaging/pi-core/compiled-artifact-v3.json) points to receipt file SHA-256 `1bfae9d5726f1ea61dbc70d58867c8666e4fc4318a7a92ccff160cc0c6e544fc`. The deployment contains 12,695 inventory entries; that total is **not** the number of imports. Starting at its `pi-core/entrypoint.js`, the statically linked ESM graph alone contains **709 distinct JS/MJS files** and 2,381 static import/re-export edges. This excludes builtins, dynamic imports, CommonJS loads, package metadata, native libraries, and later task-specific source. It is not a claim that 709 file reads have been observed on a VM.
+
+Two read-only methods agreed: a literal static import/re-export walk, and a host Node syntax parser (`vm.SourceTextModule.moduleRequests`) with parent-relative ESM resolution, without linking or evaluating target modules. The parser walk checked all 709 file lengths and SHA-256 values against the retained receipt; all used distinct local inodes. SHA-256 of sorted UTF-8 `deployment-relative-path + " " + file-sha256 + LF` rows: `e30a1b82c9a17eb55705166650fa07f029e1ee86ec37f1b4ef8a06c6b763d10a`. The 709 comprise 668 TypeBox, 38 Pi package modules, two adapter modules and one partial-json module. Independent review also verified the 668-file lower bound from TypeBox’s public root, compile and value entrypoints. Pi imports those branches itself; editing only the adapter's TypeBox import does not remove that dependency.
+
+The [inventory preparer](../../../src/aragorn/pi_core_source_inventory_prepare.py) and [Node observer](../../../src/aragorn/pi_core_node_source_observer.py) admit at most **512 source files**, separately from loader files. A regular file read must have exactly one matching inventory identity. The [replay contract](pi-core-node-source-replay-handoff.md) distinguishes JS source delivery from ELF/loader activity. Omitting 197 modules or misclassifying them as native loader data would not prove the required property. The observer also caps the trace at 4,096 events; even one ordinary traced source read per file needs at least two stops, two resumptions and a read-entry/read-exit pair. That is 4,254 events before other startup, thread and cleanup events. This is a structural budget argument, not a measurement of task latency.
+
+## Choices for approval
+
+1. **Recommended for the controlled V1: a pinned, reproducible bundled worker.** Preserve Pi-core, the broker, external source observer, role separation and all quantitative gates. Pin the bundler, configuration and complete dependency inputs. Independently verify the build relationship, admit the emitted executable JS bytes, and observe the worker consuming those exact bytes. Audit dynamic and external loads; do not presume the result fits until its actual closure is inspected. The claim becomes “independently observed the admitted bundle being read,” **not** “observed the worker reading each original npm source.” The existing compiler emits separate modules and copies dependencies; this is a versioned deployment/provenance choice, not a flag to toggle on the current artifact.
+2. **Preserve per-module observation.** Keep the current unbundled dependency graph. Version acquisition, loss accounting, bounded storage and independent replay to cover the graph plus actual startup and cleanup. Retain failures on overflow, gaps or stale health. A larger array alone does not address event volume or prove the five-second authority window or final latency/overhead thresholds.
+
+Neither option grants live authority. The signed predecessors stay available. Do not freeze the current candidate, increase caps, skip source challenges, or substitute unit results.
+
+## Operational inputs still required later — not a pilot readiness claim
+
+The operator has not identified an exact owned VM/snapshot, approved model, public address/CA pin, or spending ceiling. Before requesting a pilot, record the dedicated Linux arm64 VM identity and restore point, systemd 257+ and kernel prerequisites; pin the actual model, TLS trust/CA and one approved address for `api.openai.com:443/v1/responses`. The operator supplies a private, root-owned 0400 single-link credential on the VM via the existing service credential mechanism (`LoadCredential=openai-api-key:…`); never put the key in chat, Git, an environment variable or the worker.
+
+Paid requests authorized now: **zero**. Proposed pilot only after separate approval: fabricated numbers, **one** model request with an explicit operator-approved spend ceiling, **one** authorized JSON creation, independent readback and separate changed-byte/unauthorized-target refusal contexts. No automatic effect/request retries. Specify owned unit/process/mount/socket/credential paths and prior state before the run, verify cleanup and restoration, and retain private ambiguous/failed outcomes. D5 requires separate approval again after freeze.
+
+1. **D2:** resolve the worker/observer representation; continue actual protected views, genuine loss-accounted health, recovery/full timing and independently observed useful pilot.
+2. **D3:** connect remaining admission, seven event classes/six responses and the four actual confined workloads on the selected common deployment.
+3. **D4:** close sources, surfaces and independent consumers for all 29 requirements; freeze once.
+4. **D5:** only then authorize the fresh surface inventory, 100 attempts and 100 baseline-first pairs, serialized measurements, cleanup and independent replay.

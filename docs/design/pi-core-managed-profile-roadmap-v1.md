@@ -15,6 +15,15 @@ No live operations are authorized. The compiled adapter now has an artifact
 checkpoint; a static OS closure is prepared while installed deployment identities remain future outputs.
 The complete deployment is not frozen.
 
+**Current D2 decision:** the pinned worker's static entrypoint imports **709**
+separate JS modules; the current observer accepts at most **512** source files.
+Choose a reproducible bundled successor with an explicit bundle-consumption
+claim, or keep per-module proof and version acquisition and replay. See the
+[decision and evidence](../phase3/coordinator/pi-core-worker-observation-decision.md).
+The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
+retains the original terminal evidence and allows a separately authorized grant
+to pass the existing readiness reader. D2 remains open; no freeze or live run.
+
 Batch-33 [initial provider policy](../phase3/coordinator/pi-core-provider-initial-policy-batch-33.md):
 the protected entry can publish operator-pinned policy and current revocations
 once under the existing lock. All 44 focused checks passed once. No sensor

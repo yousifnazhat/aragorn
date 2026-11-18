@@ -13,3 +13,17 @@ Fixture amendment: RUN/health may also adjust only the affected mock custody plu
 2. D3: remaining admission, runtime evidence and actual confined workloads.
 3. D4: independent mapping and one frozen deployment.
 4. D5: separately authorized serialized measurements, cleanup and replay.
+
+## Reviewed result and decision hold
+
+Assignment `3f1f083` (merge `45f4d7a`); affected-fixture amendment `089f529` (merge `04a21e0`). The Pi successor now verifies the exact original single-link receipt under lock, preserves the canonical receipt and terminal-state archives, retires only the matching fixed name, verifies directory durability and absence, then rechecks liveness before publishing the distinct separately authorized grant. Existing predecessor/incoming archives or ambiguous retirement stay held. An AVAILABLE state with an orphan receipt cannot authorize ordinary work. No grant mint, rotation from a request, effect execution, or automatic reconciliation was added. The original broker and independent readiness reader are unchanged.
+
+| Stage run | Checks | SHA-256 fingerprint |
+| --- | ---: | --- |
+| pi-core-terminal-rotation-offline | 23 | `847e40d7df9a8fd5a70236225a95ef57e6425bc3985c155c90b6b2ec6c43da19` |
+| pi-core-terminal-rotation-readback-offline | 2 | `67e1bc8092c550691f44228fb7604c1694e41a5beee49a9c366e2785c4d17ebf` |
+| pi-core-terminal-rotation-lock-cleanup-offline | 5 | `d7d8dab0e37459edfb9083a7b9dd4ce856f40cc2968f7482c4397c598f266661` |
+
+The first two stages passed on the initial implementation. A subsequent review found that simultaneous callback and outer-lock cleanup failures could obscure the original cause. Only the five-case delta ran on the final fix: both double failures, a single refusal, and one success on each public path including independent readback. All five passed. Earlier fingerprints remain historical; no old full stage, capacity test, effect, service or live measurement reran.
+
+**Worker architecture hold:** see the [source-observation decision and operator inputs](pi-core-worker-observation-decision.md). The current emitted JavaScript graph cannot fit the approved source inventory. This is separate from the successful metadata recovery batch. No Linux feasibility claim, freeze, qualification, or pilot approval follows from either.

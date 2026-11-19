@@ -47,9 +47,13 @@ six required ELF providers. Reuse the pinned installed-form artifacts.
 assembled the immutable ARM64 disk, complete root inventory and coordinator
 host profile/export with the pinned clients, libraries and CPython. The pinned
 kernel and initramfs bind the root by content. This is an offline candidate,
-not an approved installed host profile. Next: settle firmware trust and
-read-only attachment for a separately authorized boot, observe PID 1, mounts
-and loaded identities; prepare the protected worker view and writable state.
+not an approved installed host profile. [Batch 42](../phase3/coordinator/pi-core-firmware-trust-batch-42.md)
+prepares a per-image firmware hash entry; it does not enroll it. The installed
+Apple framework accepted the retained raw disk in a read-only NVMe descriptor.
+Next: establish a supported trust/enrollment path on the same backend and
+approve an isolated compatibility boot. Independently observe guest read-only
+flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
+prepare the protected worker view and writable state for a later pilot.
 Actual source reads, sensor health, recovery/timing and pilot evidence remain open.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant

@@ -2,6 +2,54 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-host-watchdog-offline",
+      "description": "Exercise the external one-child watchdog, fixed deadlines, stop controls, containment and retained terminal/indeterminate records; inert children only.",
+      "tests": ["test_pi_core_host_watchdog"],
+      "inputs": ["scripts/build_pi_core_linux.py", "scripts/pi_core_host_watchdog.py", "tests/test_pi_core_host_watchdog.py"],
+      "needs": [], "timeout_seconds": 45
+    },
+    {
+      "id": "pi-core-vm-stop-bridge-offline",
+      "description": "Compile and exercise the owned Virtualization stop bridge against an inert machine on a private queue. No VM creation, enrollment or boot.",
+      "tests": ["test_pi_core_vm_stop_bridge"],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b46/vm-stop.h",
+        "packaging/pi-core/immutable-host-b46/vm-stop.m",
+        "scripts/build_pi_core_linux.py",
+        "scripts/pi_core_host_watchdog.py",
+        "tests/test_pi_core_vm_stop_bridge.py"
+      ],
+      "needs": [], "timeout_seconds": 75
+    },
+    {
+      "id": "pi-core-host-export-offline",
+      "description": "Export and independently read bounded host evidence, retaining failed or ambiguous attempt files; refuse unsafe cleanup. Only inert file fixtures.",
+      "tests": ["test_pi_core_host_evidence_export"],
+      "inputs": ["scripts/build_pi_core_linux.py", "scripts/pi_core_host_evidence_export.py", "scripts/pi_core_host_watchdog.py", "tests/test_pi_core_host_evidence_export.py"],
+      "needs": [], "timeout_seconds": 45
+    },
+    {
+      "id": "pi-core-host-lifecycle-offline",
+      "description": "Supervise one authenticated B45 preview with the exact B44 disk; bind external timing and stdout to the retained receipt, export and independently read back. No firmware, VM or network.",
+      "tests": ["test_pi_core_host_lifecycle"],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b44/media-output.json",
+        "packaging/pi-core/immutable-host-b45/runner-output.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/pi_core_host_evidence_export.py",
+        "scripts/pi_core_host_watchdog.py",
+        "scripts/prepare_pi_core_bound_host_runner.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py",
+        "scripts/prepare_pi_core_host_lifecycle.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/verify_pi_core_host_binding.py",
+        "tests/test_pi_core_host_lifecycle.py"
+      ],
+      "needs": [], "timeout_seconds": 245
+    },
+    {
       "id": "pi-core-bound-host-runner-offline",
       "description": "Authenticate the pinned B45 ARM64 code and entitlement, bind B44 media and the actual isolated graph to an empty serial preview and check offline binding refusals. No store opening, VM, enrollment or boot.",
       "tests": [
@@ -14431,7 +14479,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 267-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 271-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

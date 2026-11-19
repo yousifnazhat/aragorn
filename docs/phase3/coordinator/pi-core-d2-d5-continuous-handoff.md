@@ -8,13 +8,16 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 41: immutable ARM64 disk and inventory](pi-core-immutable-guest-image-batch-41.md).
+Current D2 host handoff: [batch 42: proposed image trust and read-only NVMe preflight](pi-core-firmware-trust-batch-42.md).
+Reuse the [batch 41 immutable ARM64 disk and inventory](pi-core-immutable-guest-image-batch-41.md).
 The disk contains the [batch-40 clients](pi-core-immutable-host-clients-batch-40.md),
 retained CPython, and [batch-39 physical loader layout](pi-core-immutable-host-layout-batch-39.md).
 Reuse the output pins and retained media; do not rebuild them for a status check.
-The outer EFI image is unsigned. Firmware trust, read-only attachment, actual
-PID 1 and installed identities are unverified. Do not boot or enable a provider
-without separate authorization.
+The outer EFI image remains unsigned; its proposed firmware hash entry is not
+enrolled. The Apple host accepted read-only NVMe attachment descriptors, not
+a booted namespace. Guest read-only flags, logical geometry, effective firmware
+policy, actual PID 1 and installed identities remain unverified. Do not enroll,
+boot or enable a provider without separate authorization.
 The older starting point below is historical; do not reset to it. Reuse the
 retained [batch-38 CPython and patched client sources](pi-core-host-client-inputs-batch-38.md).
 The immutable lifecycle is approved; boot readiness, pilot authorization and

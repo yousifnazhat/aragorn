@@ -1,0 +1,20 @@
+{
+  "schema": "aragorn/immutable-guest-firmware-hash-proposal/v1",
+  "status": "inert-proposal-only",
+  "source": "packaging/pi-core/immutable-host-b41/media-output.json",
+  "uki_bytes": 25254400,
+  "uki_sha256": "233069bd7b0e4b74287f96557622c08d1995d0544059709557c938020f90c6d8",
+  "authenticode_sha256": "76c2fe6d0dca7a7345c47d7409eca573ad2598d147b60caf0136fb6a9461de62",
+  "signature_type": "c1c41626-504c-4092-aca9-41f936934328",
+  "signature_owner": "8c440a88-a3da-5b7e-b369-9287006c9e91",
+  "esl_bytes": 76,
+  "esl_sha256": "4b731d896c635fb5fdccbd89a5202b16e1598c64b91749d164b8772c22845acd",
+  "note": "The raw file pin is stricter than the UEFI image digest. The owner GUID is a label, not an authority. This ESL is not a signed variable update or enrollment.",
+  "firmware_db": "unknown",
+  "firmware_dbx": "unknown",
+  "firmware_policy": "unknown",
+  "firmware_grant": false,
+  "enrolled": false,
+  "boot_observed": false,
+  "phase3_exit_eligible": false
+}

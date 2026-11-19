@@ -2,6 +2,39 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-firmware-hash-offline",
+      "description": "Check only the proposed B41 image hash/EFI signature list and independent LIEF digest. No keys, firmware variables, enrollment, boot or qualification.",
+      "tests": ["test_pi_core_guest_firmware_trust", "test_pi_core_guest_firmware_reference"],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b41/media-output.json",
+        "packaging/pi-core/immutable-host-b42/firmware-trust.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "tests/test_pi_core_guest_firmware_reference.py",
+        "tests/test_pi_core_guest_firmware_trust.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 75
+    },
+    {
+      "id": "pi-core-nvme-attachment-offline",
+      "description": "Construct two host-only Darwin storage descriptors on the retained B41 raw path. No VM, boot, variable store, disk write or guest read-only claim.",
+      "tests": ["test_pi_core_guest_nvme_attachment"],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b41/media-output.json",
+        "packaging/pi-core/immutable-host-b42/vz-attachment.m",
+        "scripts/build_pi_core_linux.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "tests/test_pi_core_guest_nvme_attachment.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 75
+    },
+    {
       "id": "pi-core-immutable-payload-offline",
       "description": "Verify the sealed coordinator payload, physical projection, static dependency and custody receipts only; no target execution or boot.",
       "tests": [
@@ -14285,7 +14318,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 260-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 262-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

@@ -32,6 +32,11 @@ neither enforcement nor the interpreted fallback has been observed on Linux.
 the coordinator wrapper and 103 trusted Python files. It prepared the canonical
 worker source plan from the retained four-file runtime and its eight declared
 ELF loader paths. This is content intent, **not** an installed inventory.
+[Batch 38](../phase3/coordinator/pi-core-host-client-inputs-batch-38.md)
+retains the separate host Python inputs, source-prepared (not built) systemd
+clients and two selected libc symbol checks. The normal Ubuntu upgrade path
+requires a symlink at precisely the path the verifier requires to be a real
+directory. Settle the image maintenance contract before VM creation.
 Next: obtain the independently approved complete Linux host profile and matching
 export, then the separately authorized read-only worker view and approved root
 identities. Actual source reads, sensor health, recovery/timing and pilot evidence

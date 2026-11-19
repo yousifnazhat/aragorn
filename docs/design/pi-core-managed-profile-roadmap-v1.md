@@ -73,8 +73,10 @@ refused before target access.
 and exports original owner/watchdog records and distinguishes a held refusal
 from a missing or contradictory transcript. The actual B47 refusal was archived;
 there is no real guest capture. Host loss remains unresolved without separate
-external custody and restoration evidence. Next: establish target custody, cost,
-signer and operator authority before seeking separate enrollment and boot approval.
+external custody and restoration evidence. [Batch 49: boot approval packet](../phase3/coordinator/pi-core-boot-approval-packet-batch-49.md)
+separates the pinned candidate from unfilled private host, budget/window, firmware,
+evidence and cleanup assignments. Nomination goes first; the single-use release
+and matching verifier, enrollment and boot are separate gates. No spend is authorized.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

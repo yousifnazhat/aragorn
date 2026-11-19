@@ -1,0 +1,18 @@
+--- a/meson.build
++++ b/meson.build
+@@ -2545,6 +2545,15 @@
+                 kwargs += { key : val }
+         endforeach
+ 
++        if name in ['systemctl', 'systemd-run', 'busctl']
++                kwargs += {
++                        'install_rpath' : '',
++                        'install_tag' : 'aragorn-coordinator-client',
++                        'link_with' : [libc_wrapper_static, libbasic_static,
++                                       libshared_static, libsystemd_static],
++                }
++        endif
++
+         foreach key, val : executable_additional_kwargs
+                 kwargs += { key : [ kwargs.get(key, []), val ]}
+         endforeach

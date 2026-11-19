@@ -2,6 +2,111 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-host-versioned-symbols-offline",
+      "description": "Refusal tests for one nominated provider of versioned undefined ELF symbols (not runtime or full ABI).",
+      "tests": [
+        "test_pi_core_host_abi"
+      ],
+      "inputs": [
+        "scripts/build_pi_core_linux.py",
+        "scripts/check_pi_core_host_abi.py",
+        "tests/test_pi_core_host_abi.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "pi-core-host-real-libc-edges-offline",
+      "description": "Compare pinned Ubuntu and retained Bookworm libc for stock systemctl and the relocated CPython input; no guest execution.",
+      "tests": [
+        "test_pi_core_host_real_libc_edge"
+      ],
+      "inputs": [
+        "scripts/build_pi_core_linux.py",
+        "scripts/check_pi_core_host_abi.py",
+        "tests/test_pi_core_host_real_libc_edge.py"
+      ],
+      "needs": [
+        "pi-core-host-python-materialization-offline"
+      ],
+      "timeout_seconds": 45
+    },
+    {
+      "id": "pi-core-host-python-inputs-offline",
+      "description": "Authenticate and relocate only the pinned host Python subset; reject source, archive and mode changes.",
+      "tests": [
+        "test_pi_core_host_python_inputs"
+      ],
+      "inputs": [
+        "packaging/pi-core/os-source-v1.json",
+        "packaging/pi-core/service-assembly-inputs-v3.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/prepare_pi_core_host_python_inputs.py",
+        "scripts/prepare_pi_core_os_root.py",
+        "scripts/prepare_pi_core_restricted_host_sources.py",
+        "scripts/prepare_pi_core_service_image.py",
+        "tests/test_pi_core_host_python_inputs.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "pi-core-host-python-materialization-offline",
+      "description": "Freshly retain real Python inputs under the separate host prefix without selecting the Bookworm OS.",
+      "tests": [
+        "test_pi_core_host_python_materialization"
+      ],
+      "inputs": [
+        "packaging/pi-core/os-source-v1.json",
+        "packaging/pi-core/service-assembly-inputs-v3.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/build_pi_core_source_gate.py",
+        "scripts/prepare_pi_core_host_python_inputs.py",
+        "scripts/prepare_pi_core_os_root.py",
+        "scripts/prepare_pi_core_restricted_host_sources.py",
+        "scripts/prepare_pi_core_restricted_runtime.py",
+        "scripts/prepare_pi_core_service_image.py",
+        "scripts/verify_pi_core_worker_bundle.py",
+        "src/aragorn/__init__.py",
+        "src/aragorn/acquire.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/pi_core_restricted_profile.py",
+        "tests/test_pi_core_host_python_materialization.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 90
+    },
+    {
+      "id": "pi-core-host-tool-targets-offline",
+      "description": "Refuse unpinned vendor sources and occupied destinations without modifying them.",
+      "tests": [
+        "test_pi_core_host_tool_targets"
+      ],
+      "inputs": [
+        "packaging/pi-core/host-tools-b38/coordinator-tools.patch",
+        "scripts/build_pi_core_linux.py",
+        "scripts/prepare_pi_core_host_tool_targets.py",
+        "tests/test_pi_core_host_tool_targets.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
+      "id": "pi-core-host-tool-source-prep-offline",
+      "description": "Prepare actual Ubuntu quilted sources with a reviewed three-client overlay; no configuration or compilation.",
+      "tests": [
+        "test_pi_core_host_tool_source_preparation"
+      ],
+      "inputs": [
+        "packaging/pi-core/host-tools-b38/coordinator-tools.patch",
+        "scripts/build_pi_core_linux.py",
+        "scripts/prepare_pi_core_host_tool_targets.py",
+        "tests/test_pi_core_host_tool_source_preparation.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "pi-core-restricted-host-sources-offline",
       "description": "Restricted host source pinning, full-profile projection and single guarded delegation; inert inputs only.",
       "tests": [

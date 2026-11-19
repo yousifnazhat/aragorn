@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+Current D2 host handoff: [batch 38](pi-core-host-client-inputs-batch-38.md).
+The older starting point below is historical; do not reset to it. Reuse the
+retained CPython and patched client sources and preserve the host-lifecycle hold.
+
 - Repository: `/Users/yousi/Documents/Commits/aragorn`.
 - Coordinator branch: `codex/phase3-runtime-prevention`; delivery branch: `main`.
 - Implementation checkpoint: signed merge

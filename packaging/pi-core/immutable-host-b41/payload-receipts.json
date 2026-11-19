@@ -1,0 +1,18 @@
+{
+  "schema": "aragorn/pi-core-immutable-payload-receipts/v1",
+  "host_preparation_sha256": "65368507ee3936f327a6a880dde5457235b994b932d340d5d28c89031da21b73",
+  "payload_abi_sha256": "ec0576b5ba3dac22324c19094743689747862a80b80447fd67f13d7fc79bdfc0",
+  "physical_files": 794,
+  "physical_directories": 59,
+  "host_files": 793,
+  "host_bytes": 54401615,
+  "native_files": 102,
+  "declared_edges": 249,
+  "new_versioned_edges": 213,
+  "new_edge_symbol_total": 3831,
+  "reused_b40_versioned_edges": 20,
+  "reused_b38_versioned_edges": 1,
+  "target_executed": false,
+  "installed_identity_verified": false,
+  "phase3_exit_eligible": false
+}

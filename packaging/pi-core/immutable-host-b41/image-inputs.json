@@ -1,0 +1,19 @@
+{
+  "schema": "aragorn/pi-core-immutable-root-inputs/v1",
+  "signed_media": "ubuntu-26.04-desktop-arm64.iso",
+  "media_sha256": "c2afd538d66fdd77377d03f1ed2ac76a34f1c116baecc9a8170d68f833121f57",
+  "base_member": "casper/minimal.squashfs",
+  "base_sha256": "82613d06f973778f6d49c817d7eb764a7fd812016a30a7f8006e8f61d718b393",
+  "base_pseudo_sha256": "c433bb553896671b04f8de460cb95104b20acc7fe121a550e5abd41f70f2950f",
+  "stock_manager_sha256": "61cee375b05e8f2666a441322163788f470b2499d785d8d434ae5d68becfd541",
+  "bottle": "https://ghcr.io/v2/homebrew/core/squashfs/blobs/sha256:4457ab0b11eff5278270c2bcf8de450879d4e8d9d3b6b3c2aac3d3aef822e5db",
+  "bottle_sha256": "4457ab0b11eff5278270c2bcf8de450879d4e8d9d3b6b3c2aac3d3aef822e5db",
+  "tools": {
+    "mksquashfs": "7b7b4a2693e02ae7390b6cb017641bde229507065b8f30c7f7de817b164bdef5",
+    "unsquashfs": "b2cdec158a600d24551fccd454449abb2f4d7fd0096ae766e43263928b8126cd",
+    "lib/liblzo2.2.dylib": "80338b3d2ab5d6654d09c5fd82fd423795a69ea88eb7553bbf009485f03536fa",
+    "lib/liblz4.1.dylib": "be3414171e667ff38a542d6dcdef1e2f0f04028e4a6080f2c164afff38b0d9b7",
+    "lib/liblzma.5.dylib": "41cdf225f3e10fb54f952c8eca11c8a847d095470540dc42736ae7bd761beaa4",
+    "lib/libzstd.1.dylib": "e2847c4613b386683c234913ae3b7b04299254096caf7616e3b3cd9bb97a39ab"
+  }
+}

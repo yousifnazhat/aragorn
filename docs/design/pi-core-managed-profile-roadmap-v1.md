@@ -43,10 +43,14 @@ mountpoint. No mount has been made and no image has been booted.
 [Batch 40](../phase3/coordinator/pi-core-immutable-host-clients-batch-40.md)
 built and statically verified the three ARM64 coordinator clients and their
 six required ELF providers. Reuse the pinned installed-form artifacts.
-Next: obtain the independently approved complete Linux host profile and matching
-export, then the separately authorized read-only worker view and approved root
-identities. Actual source reads, sensor health, recovery/timing and pilot evidence
-are still outstanding.
+[Batch 41](../phase3/coordinator/pi-core-immutable-guest-image-batch-41.md)
+assembled the immutable ARM64 disk, complete root inventory and coordinator
+host profile/export with the pinned clients, libraries and CPython. The pinned
+kernel and initramfs bind the root by content. This is an offline candidate,
+not an approved installed host profile. Next: settle firmware trust and
+read-only attachment for a separately authorized boot, observe PID 1, mounts
+and loaded identities; prepare the protected worker view and writable state.
+Actual source reads, sensor health, recovery/timing and pilot evidence remain open.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant
 to pass the existing readiness reader. D2 remains open; no freeze or live run.

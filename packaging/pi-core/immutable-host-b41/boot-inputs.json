@@ -1,0 +1,18 @@
+{
+  "release": "7.0.0-14-generic",
+  "version": "7.0.0-14.14",
+  "packages": {
+    "kernel": ["pool/main/l/linux-signed/linux-image-7.0.0-14-generic_7.0.0-14.14_arm64.deb",17654500,"836616ee80c53ca3f03e87ba8809aac855fa357cfd9e901247567500820e735e"],
+    "modules": ["pool/main/l/linux/linux-modules-7.0.0-14-generic_7.0.0-14.14_arm64.deb",284795072,"3de8c40e3260fa59338cde86c80379226d4405dfe778a3ad6ff7031483f8f58f"]
+  },
+  "kernel_sha256": "9a3baf125237a503fe47e8d36429e328307340e85ba371aa52e64b1b7d1c8d1e",
+  "config_sha256": "71c16348b6d60ce2d255836de36d20dbb64e54fdf6617d09489d9b7c0aa313e9",
+  "modules": [
+    ["crypto/hkdf", "", "dc33004f87b2f7a98a30c816fceb515bbfe13f39add249900f07883d11394e74"],
+    ["drivers/nvme/common/nvme-auth", "hkdf", "50cf59c094faef7ddb7ccca13d7e226938f952fc0e4de47d8aa4696ac35063de"],
+    ["drivers/nvme/common/nvme-keyring", "", "67e4516e993f947ec1bc1863c21c5a4dedeff5415b7bed8611cc370495c34338"],
+    ["drivers/nvme/host/nvme-core", "nvme-auth,nvme-keyring", "bedf07446370ddaac0451ea3f5a320c8b7d37384fda5d5b298ac97bc1d8af2d3"],
+    ["drivers/nvme/host/nvme", "nvme-core", "417a120db9f379984c8dd1a3eeb781fba37eaf6efa1c6f8dda810943a0901175"]
+  ],
+  "manager_sha256":"61cee375b05e8f2666a441322163788f470b2499d785d8d434ae5d68becfd541"
+}

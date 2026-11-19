@@ -60,9 +60,12 @@ reporting path. Offline checks verify the changed media and reader, not the
 runtime observations. [Batch 45](../phase3/coordinator/pi-core-bound-host-runner-batch-45.md)
 binds the B44 disk and exact output-only pipe to a signed no-boot host runner.
 The target mode requires a separately approved existing EFI store and a complete
-policy match; neither was available locally. Next: prepare the separate bounded
-VM lifecycle and cleanup, establish target custody and cost, then approve enrollment
-and boot separately.
+policy match; neither was available locally.
+[Batch 46](../phase3/coordinator/pi-core-host-lifecycle-batch-46.md) adds an
+external watchdog, a native VM stop interface and a local export/readback/cleanup
+path. B45 still cannot create or boot a VM. Next: connect the exact machine
+owner, recorder and stop observer in a separately pinned successor, and establish
+target custody and cost **before** seeking separate enrollment and boot approval.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

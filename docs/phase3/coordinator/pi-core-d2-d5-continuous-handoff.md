@@ -8,12 +8,19 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 46: external watchdog and evidence custody](pi-core-host-lifecycle-batch-46.md).
+Current D2 host handoff: [batch 47: pinned and supervised machine owner](pi-core-vm-owner-batch-47.md).
+The owner, watchdog, recorder and stop bridge are wired. The signed release
+contains no approved boot attempt. Next offline batch: an independent reader and
+export path for owner events, supervisor decision, terminal record and original
+serial bytes, including refusal of loss, mismatched identity and partial shutdown;
+define how an external operator reconciles host loss. Do not reuse the B46
+preview cleanup command for this evidence. Do not activate, enroll or allocate.
+
+Predecessor: [batch 46: external watchdog and evidence custody](pi-core-host-lifecycle-batch-46.md).
 Its local preview uses the unchanged signed B45 executable. Stand-in stop calls
 and an empty serial stream do not demonstrate guest shutdown or cleanup of a
-dedicated host. Before any boot, connect a signed machine owner to the control
-channel, recorder and independent stop readback; obtain private target bindings
-and the separate operational approvals. No automatic attempt or effect retry.
+dedicated host. Independent verification of target outcomes, private bindings
+and separate operational approvals remain necessary. No automatic attempt or effect retry.
 
 Predecessor: [batch 45: code-signed no-boot runner and raw recorder](pi-core-bound-host-runner-batch-45.md).
 The runner can verify the exact disk and construct the isolated graph. Its

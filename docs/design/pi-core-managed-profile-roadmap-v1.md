@@ -63,9 +63,14 @@ The target mode requires a separately approved existing EFI store and a complete
 policy match; neither was available locally.
 [Batch 46](../phase3/coordinator/pi-core-host-lifecycle-batch-46.md) adds an
 external watchdog, a native VM stop interface and a local export/readback/cleanup
-path. B45 still cannot create or boot a VM. Next: connect the exact machine
-owner, recorder and stop observer in a separately pinned successor, and establish
-target custody and cost **before** seeking separate enrollment and boot approval.
+path. B45 still cannot create or boot a VM.
+[Batch 47](../phase3/coordinator/pi-core-vm-owner-batch-47.md) pins the new
+machine-owning executable. Its sole start call requires a locally armed recorder
+and stop observer plus a timely acknowledgment from the external watchdog. The
+positive path was exercised with an inert machine; the signed executable itself
+refused before target access. Next: independently verify/export the new owner
+journal and record host-loss restoration rules, then establish target custody,
+cost and operator authority before seeking separate enrollment and boot approval.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

@@ -2,6 +2,46 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id":"pi-core-host-owner-supervision-offline",
+      "description":"Owned direct child, one bounded READY/ARM exchange after durable supervision. Inert processes only.",
+      "tests":["test_pi_core_host_owner_supervision"],
+      "inputs":["scripts/build_pi_core_linux.py","scripts/pi_core_host_watchdog.py","scripts/pi_core_host_owner_supervision.py","tests/test_pi_core_host_owner_supervision.py"],
+      "needs":[],"timeout_seconds":45
+    },
+    {
+      "id":"pi-core-vm-owner-offline",
+      "description":"Exact native lifecycle and watchdog, real recorder/bridge, link-time inert machine only. No real VM or firmware store.",
+      "tests":["test_pi_core_vm_owner"],
+      "inputs":[
+        "packaging/pi-core/immutable-host-b45/serial-recorder.h","packaging/pi-core/immutable-host-b45/serial-recorder.m",
+        "packaging/pi-core/immutable-host-b46/vm-stop.h","packaging/pi-core/immutable-host-b46/vm-stop.m",
+        "packaging/pi-core/immutable-host-b47/vm-owner.h","packaging/pi-core/immutable-host-b47/vm-owner.m",
+        "scripts/build_pi_core_linux.py","scripts/pi_core_host_owner_supervision.py","scripts/pi_core_host_watchdog.py",
+        "tests/b47-vm-owner-fixture.m","tests/test_pi_core_vm_owner.py"
+      ],
+      "needs":[],"timeout_seconds":80
+    },
+    {
+      "id":"pi-core-vm-owner-artifact-offline",
+      "description":"Verify the retained ARM64 production owner, signed artifact properties and compiled source closure, then run its no-grant refusal only; no target access.",
+      "tests":["test_pi_core_vm_owner_artifact"],
+      "inputs":[
+        "packaging/pi-core/immutable-host-b44/boot-request.json","packaging/pi-core/immutable-host-b44/media-output.json",
+        "packaging/pi-core/immutable-host-b45/host-runner.m","packaging/pi-core/immutable-host-b45/runner.entitlements.plist",
+        "packaging/pi-core/immutable-host-b45/serial-recorder.h","packaging/pi-core/immutable-host-b45/serial-recorder.m",
+        "packaging/pi-core/immutable-host-b46/vm-stop.h","packaging/pi-core/immutable-host-b46/vm-stop.m",
+        "packaging/pi-core/immutable-host-b47/owner-release.json","packaging/pi-core/immutable-host-b47/owner-runner.m",
+        "packaging/pi-core/immutable-host-b47/runner-output.json","packaging/pi-core/immutable-host-b47/vm-owner.h",
+        "packaging/pi-core/immutable-host-b47/vm-owner.m","scripts/build_pi_core_linux.py","scripts/check_pi_core_held_vm_owner.py",
+        "scripts/inspect_pi_core_guest_disk.py","scripts/pi_core_host_evidence_export.py","scripts/pi_core_host_owner_supervision.py",
+        "scripts/pi_core_host_watchdog.py","scripts/prepare_pi_core_bound_host_runner.py","scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py","scripts/prepare_pi_core_host_lifecycle.py",
+        "scripts/prepare_pi_core_host_sysroot.py","scripts/prepare_pi_core_vm_owner.py","scripts/verify_pi_core_host_binding.py",
+        "tests/test_pi_core_vm_owner_artifact.py"
+      ],
+      "needs":[],"timeout_seconds":45
+    },
+    {
       "id": "pi-core-host-watchdog-offline",
       "description": "Exercise the external one-child watchdog, fixed deadlines, stop controls, containment and retained terminal/indeterminate records; inert children only.",
       "tests": ["test_pi_core_host_watchdog"],
@@ -14479,7 +14519,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 271-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 274-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

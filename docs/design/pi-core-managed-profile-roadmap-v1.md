@@ -36,7 +36,10 @@ ELF loader paths. This is content intent, **not** an installed inventory.
 retains the separate host Python inputs, source-prepared (not built) systemd
 clients and two selected libc symbol checks. The normal Ubuntu upgrade path
 requires a symlink at precisely the path the verifier requires to be a real
-directory. Settle the image maintenance contract before VM creation.
+directory. The operator selected whole-image replacement, not in-guest
+package upgrades. [Batch 39](../phase3/coordinator/pi-core-immutable-host-layout-batch-39.md)
+staged the authenticated loader and libc once, with a real empty `/lib`
+mountpoint. No mount has been made and no image has been booted.
 Next: obtain the independently approved complete Linux host profile and matching
 export, then the separately authorized read-only worker view and approved root
 identities. Actual source reads, sensor health, recovery/timing and pilot evidence

@@ -2,6 +2,21 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-immutable-host-layout-offline",
+      "description": "Stage only the two authenticated Ubuntu filesystem payloads and empty physical mountpoint. No mount, target execution or boot.",
+      "tests": [
+        "test_pi_core_immutable_host_layout"
+      ],
+      "inputs": [
+        "scripts/build_pi_core_linux.py",
+        "scripts/prepare_pi_core_immutable_host_layout.py",
+        "scripts/prepare_pi_core_restricted_host_sources.py",
+        "tests/test_pi_core_immutable_host_layout.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 30
+    },
+    {
       "id": "pi-core-host-versioned-symbols-offline",
       "description": "Refusal tests for one nominated provider of versioned undefined ELF symbols (not runtime or full ABI).",
       "tests": [

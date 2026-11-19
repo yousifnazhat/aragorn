@@ -8,9 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 38](pi-core-host-client-inputs-batch-38.md).
+Current D2 host handoff: [batch 39](pi-core-immutable-host-layout-batch-39.md).
 The older starting point below is historical; do not reset to it. Reuse the
-retained CPython and patched client sources and preserve the host-lifecycle hold.
+retained [batch-38 CPython and patched client sources](pi-core-host-client-inputs-batch-38.md).
+The immutable lifecycle is approved; boot readiness, pilot authorization and
+public Git delivery are distinct gates.
 
 - Repository: `/Users/yousi/Documents/Commits/aragorn`.
 - Coordinator branch: `codex/phase3-runtime-prevention`; delivery branch: `main`.

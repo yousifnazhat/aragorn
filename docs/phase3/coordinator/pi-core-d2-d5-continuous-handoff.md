@@ -8,7 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 42: proposed image trust and read-only NVMe preflight](pi-core-firmware-trust-batch-42.md).
+Current D2 host handoff: [batch 43: dedicated backend and isolated boot approval packet](pi-core-isolated-boot-approval-batch-43.md).
+An EC2 M4 Mac Dedicated Host running the named macOS 27 release is a catalog
+candidate, not an allocated machine. No trust store or VM has been created.
+Before spending, choose an observation objective: the retained guest has
+refusal messages but no positive disk/mount/PID 1 receipt. Keep acquisition,
+per-guest enrollment, one compatibility boot and the pilot separately gated.
+Reuse [batch 42: proposed image trust and read-only NVMe preflight](pi-core-firmware-trust-batch-42.md).
 Reuse the [batch 41 immutable ARM64 disk and inventory](pi-core-immutable-guest-image-batch-41.md).
 The disk contains the [batch-40 clients](pi-core-immutable-host-clients-batch-40.md),
 retained CPython, and [batch-39 physical loader layout](pi-core-immutable-host-layout-batch-39.md).

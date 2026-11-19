@@ -50,8 +50,13 @@ kernel and initramfs bind the root by content. This is an offline candidate,
 not an approved installed host profile. [Batch 42](../phase3/coordinator/pi-core-firmware-trust-batch-42.md)
 prepares a per-image firmware hash entry; it does not enroll it. The installed
 Apple framework accepted the retained raw disk in a read-only NVMe descriptor.
-Next: establish a supported trust/enrollment path on the same backend and
-approve an isolated compatibility boot. Independently observe guest read-only
+[Batch 43](../phase3/coordinator/pi-core-isolated-boot-approval-batch-43.md)
+identifies a dedicated M4 Mac offering and macOS 27 guest EFI enrollment and
+readback APIs. An inert host preview joins one read-only NVMe disk and one
+output-only serial port. No assigned host, enrollment or boot is evidenced.
+Next: bind custody and cost, choose a positive observation path (or explicitly
+accept compatibility-only results), and approve enrollment and boot separately.
+Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.
 Actual source reads, sensor health, recovery/timing and pilot evidence remain open.

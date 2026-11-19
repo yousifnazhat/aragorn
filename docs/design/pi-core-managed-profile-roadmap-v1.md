@@ -57,8 +57,12 @@ output-only serial port. No assigned host, enrollment or boot is evidenced.
 [Batch 44](../phase3/coordinator/pi-core-observable-guest-batch-44.md) built and
 re-pinned the guest with a positive read-only/geometry, mount and post-exec PID 1
 reporting path. Offline checks verify the changed media and reader, not the
-runtime observations. Next: bind the B44 host runner, capture, custody and cost,
-then approve enrollment and boot separately.
+runtime observations. [Batch 45](../phase3/coordinator/pi-core-bound-host-runner-batch-45.md)
+binds the B44 disk and exact output-only pipe to a signed no-boot host runner.
+The target mode requires a separately approved existing EFI store and a complete
+policy match; neither was available locally. Next: prepare the separate bounded
+VM lifecycle and cleanup, establish target custody and cost, then approve enrollment
+and boot separately.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

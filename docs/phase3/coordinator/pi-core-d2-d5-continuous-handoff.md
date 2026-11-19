@@ -8,10 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 40](pi-core-immutable-host-clients-batch-40.md).
-The three ARM64 clients are built and verified offline. Reuse their pins and
-the [batch-39 physical loader layout](pi-core-immutable-host-layout-batch-39.md)
-when assembling the full immutable host image; do not rebuild the clients.
+Current D2 host handoff: [batch 41: immutable ARM64 disk and inventory](pi-core-immutable-guest-image-batch-41.md).
+The disk contains the [batch-40 clients](pi-core-immutable-host-clients-batch-40.md),
+retained CPython, and [batch-39 physical loader layout](pi-core-immutable-host-layout-batch-39.md).
+Reuse the output pins and retained media; do not rebuild them for a status check.
+The outer EFI image is unsigned. Firmware trust, read-only attachment, actual
+PID 1 and installed identities are unverified. Do not boot or enable a provider
+without separate authorization.
 The older starting point below is historical; do not reset to it. Reuse the
 retained [batch-38 CPython and patched client sources](pi-core-host-client-inputs-batch-38.md).
 The immutable lifecycle is approved; boot readiness, pilot authorization and

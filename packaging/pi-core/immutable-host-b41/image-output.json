@@ -1,0 +1,13 @@
+{
+  "schema": "aragorn/pi-core-immutable-root-pins/v1",
+  "fingerprint": "59122196cb507ab4182468b525cde753482c3429407ca457585fed6c832af806",
+  "receipt_sha256": "b6684db3802a3e6472182f767b6187b60b86065e010585adf4a3cbc9009d694f",
+  "root_sha256": "42f38fc97f01248623fb69f2720d24a42b7e6a405a50124bc7cbe9542601409a",
+  "root_bytes": 3406943909,
+  "inventory_sha256": "421801ead2c04324f04ab7c7d4d0d7e8f093cfc7fedf82b96d769558e6bf1208",
+  "inventory_entries": 181293,
+  "xattr_records": 8,
+  "alias_targets_relocated": 21,
+  "boot_verified": false,
+  "phase3_exit_eligible": false
+}

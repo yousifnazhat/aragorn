@@ -2,6 +2,103 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-immutable-payload-offline",
+      "description": "Verify the sealed coordinator payload, physical projection, static dependency and custody receipts only; no target execution or boot.",
+      "tests": [
+        "test_pi_core_immutable_payload"
+      ],
+      "inputs": [
+        "docs/phase3/coordinator/pi-core-immutable-host-clients-batch-40.static-elf.json",
+        "packaging/pi-core/coordinator.py",
+        "packaging/pi-core/host-tools-b40/clients.json",
+        "packaging/pi-core/host-tools-b40/sysroot-packages.json",
+        "packaging/pi-core/host-tools-b40/sysroot-tree.json",
+        "packaging/pi-core/immutable-host-b41/payload-pins.json",
+        "packaging/pi-core/immutable-host-b41/payload-receipts.json",
+        "packaging/pi-core/restricted-host-sources-v1.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/check_pi_core_host_abi.py",
+        "scripts/inspect_pi_core_host_clients.py",
+        "scripts/prepare_pi_core_coordinator_host.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/prepare_pi_core_immutable_host_layout.py",
+        "scripts/prepare_pi_core_immutable_payload.py",
+        "scripts/prepare_pi_core_os_root.py",
+        "scripts/prepare_pi_core_restricted_host_sources.py",
+        "tests/test_pi_core_immutable_payload.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "pi-core-immutable-root-offline",
+      "description": "Verify readback inventory pins, namespace and Linux metadata for the assembled SquashFS; no rebuild, mounts or boot.",
+      "tests": [
+        "test_pi_core_immutable_image"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b41/image-inputs.json",
+        "packaging/pi-core/immutable-host-b41/image-output.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/prepare_pi_core_host_build_tools.py",
+        "scripts/prepare_pi_core_immutable_image.py",
+        "tests/test_pi_core_immutable_image.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "pi-core-immutable-boot-offline",
+      "description": "Inspect only the real kernel, initramfs, embedded policy and artifact substitution refusals; no target execution.",
+      "tests": [
+        "test_pi_core_immutable_boot"
+      ],
+      "inputs": [
+        "packaging/pi-core/host-tools-b40/alpine-bpf-packages.json",
+        "packaging/pi-core/host-tools-b40/alpine-bpf-tree.json",
+        "packaging/pi-core/host-tools-b40/sysroot-packages.json",
+        "packaging/pi-core/host-tools-b40/sysroot-tree.json",
+        "packaging/pi-core/host-tools-b40/tools.json",
+        "packaging/pi-core/immutable-host-b41/boot-artifacts.json",
+        "packaging/pi-core/immutable-host-b41/boot-init.c",
+        "packaging/pi-core/immutable-host-b41/boot-inputs.json",
+        "packaging/pi-core/source-gate-toolchain-v2.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/check_pi_core_host_abi.py",
+        "scripts/prepare_pi_core_host_bpf_inputs.py",
+        "scripts/prepare_pi_core_host_build_tools.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/prepare_pi_core_immutable_boot.py",
+        "scripts/prepare_pi_core_immutable_host_layout.py",
+        "scripts/prepare_pi_core_restricted_host_sources.py",
+        "tests/test_pi_core_immutable_boot.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "pi-core-immutable-disk-offline",
+      "description": "Read the retained raw disk as data, join EFI kernel/initramfs and root inventory pins, verify both GPTs and refusal boundaries. No mount, rebuild or boot.",
+      "tests": [
+        "test_pi_core_guest_disk",
+        "test_pi_core_guest_disk_firmware"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b41/boot-artifacts.json",
+        "packaging/pi-core/immutable-host-b41/image-output.json",
+        "packaging/pi-core/immutable-host-b41/media-output.json",
+        "packaging/pi-core/immutable-host-b41/payload-pins.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "tests/test_pi_core_guest_disk.py",
+        "tests/test_pi_core_guest_disk_firmware.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "pi-core-immutable-host-clients-offline",
       "description": "Only the new immutable-guest cross-toolchain, sysroot, client recipe and installed-ELF checks. No rebuild, target execution, host installation or qualification.",
       "tests": [
@@ -14188,7 +14285,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Only four affected inert registry-capacity checks for the required bounded increase from 200 to 202 stages; no child execution, cache reset, unrelated stage run or qualification.",
+      "description": "Four inert checks at the 260-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

@@ -1,0 +1,18 @@
+{
+  "boot_observed": false,
+  "cmdline": "rdinit=/init init=/aragorn-no-fallback root=/dev/aragorn-no-kernel-fallback ro panic=0",
+  "disk_bytes": 3542227456,
+  "disk_sha256": "4ab772f03800e430eed9aba1bc690508413072d41fdba009b0b6e492c7510288",
+  "esp_sha256": "cf61613361fd3acbe53cfb9004f80e204b46110810f2cb7c918f3ebbc7eff3a1",
+  "initramfs_sha256": "e59ae34a7437dc04671ca6c2e879b03c4cd082c91c41a142e2b70d6df724aa34",
+  "kernel_sha256": "9a3baf125237a503fe47e8d36429e328307340e85ba371aa52e64b1b7d1c8d1e",
+  "kernel_version": "7.0.0-14-generic",
+  "phase3_exit_eligible": false,
+  "root_sha256": "42f38fc97f01248623fb69f2720d24a42b7e6a405a50124bc7cbe9542601409a",
+  "root_size": 3406943909,
+  "schema": "aragorn/immutable-guest-disk/v1",
+  "sector_size": 512,
+  "secure_boot_enrollment": false,
+  "uki_sha256": "233069bd7b0e4b74287f96557622c08d1995d0544059709557c938020f90c6d8",
+  "directory": "media-v1"
+}

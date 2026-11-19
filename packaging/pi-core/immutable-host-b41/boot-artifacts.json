@@ -1,0 +1,12 @@
+{
+  "booted": false,
+  "build": "build-a7c591f3e8d225f304a71b1b7ea709ba1bc7e511991d50cbf5ca05fb8397fab2",
+  "cmdline": "rdinit=/init init=/aragorn-no-fallback root=/dev/aragorn-no-kernel-fallback ro panic=0",
+  "init_sha256": "5428181029250d44325286f88f253e56106bece78df57d2bc7287530639d9509",
+  "initramfs_sha256": "e59ae34a7437dc04671ca6c2e879b03c4cd082c91c41a142e2b70d6df724aa34",
+  "kernel_sha256": "9a3baf125237a503fe47e8d36429e328307340e85ba371aa52e64b1b7d1c8d1e",
+  "loader_sha256": "058b11f959fd1006abfc289a7fa9e2df86892e8a05f2d8b79a137e6a29c11a78",
+  "manager_sha256": "61cee375b05e8f2666a441322163788f470b2499d785d8d434ae5d68becfd541",
+  "root_bytes": 3406943909,
+  "root_sha256": "42f38fc97f01248623fb69f2720d24a42b7e6a405a50124bc7cbe9542601409a"
+}

@@ -1,0 +1,17 @@
+{
+  "approval_commit": null,
+  "boot_authorized": false,
+  "build_seal_sha256": "61839c1fd002a89444b49c50b7a8c6f0658a4989dc0a521c4af94869a7a1f0ab",
+  "cdhash": "077cd83bf5e4f856f3b8cf632e3b9a9627fe22a0",
+  "directory": "build-a426add90b8e98d6b3dc62f2cb99433428df0456d8a4e21a38edcf12215598e3",
+  "disk_sha256": "c87cf6ef3a6f728958256bd278a748f5f71fae78b3f0de91c02ee1dba1a4837c",
+  "entitlements": {"com.apple.security.virtualization": true},
+  "identifier": "org.aragorn.pi-core.b50.host-owner",
+  "inputs_sha256": "a426add90b8e98d6b3dc62f2cb99433428df0456d8a4e21a38edcf12215598e3",
+  "macho_uuid_hex": "5b483dd639b53fdda9dbf8fe127ad600",
+  "release_sha256": "4201dfb855b85919d77f83a85afc6fd6a4783093afcc3b29ab58c9d94d98a45d",
+  "runner_bytes": 142752,
+  "runner_sha256": "f2c6059cdfd639e4c5cff80abff7598be50b8f90cf1ac1adba28597804a4ba0b",
+  "schema": "aragorn/b50-single-use-owner/v1",
+  "signing": "ad-hoc-local-integrity"
+}

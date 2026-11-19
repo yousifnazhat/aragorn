@@ -8,12 +8,18 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 49: compatibility-boot approval packet](pi-core-boot-approval-packet-batch-49.md).
+Current D2 host handoff: [batch 50: single-use runner and matching offline verifier](pi-core-single-use-boot-batch-50.md).
+The exact shipped binary refused before target access; its build seal and
+embedded list grant no boot. Do not recapture that refusal. A private single-use
+build requires the signed digest-only seal and matching original decisions;
+no nonempty artifact was built. Continue with the private B49 bindings.
+
+Predecessor: [batch 49: compatibility-boot approval packet](pi-core-boot-approval-packet-batch-49.md).
 The candidate and firmware image are pinned, not the physical host or enrolled
 trust store. The next operator step is a private nomination with funding/window,
 firmware policy, evidence custodian/destination and cleanup/release assignments.
-An approved single-use runner and matching verifier are also needed before a
-compatibility boot. This packet authorizes no spend or operations.
+The release for the exact nominated attempt, target signing policy and
+independent acceptance of custody remain prerequisites. This packet authorizes no spend or operations.
 
 Predecessor: [batch 48: independent owner-evidence replay and host-loss reconciliation](pi-core-owner-evidence-batch-48.md).
 The retained B47 refusal was exported and matched the signed zero-boot release.

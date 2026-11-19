@@ -77,6 +77,10 @@ external custody and restoration evidence. [Batch 49: boot approval packet](../p
 separates the pinned candidate from unfilled private host, budget/window, firmware,
 evidence and cleanup assignments. Nomination goes first; the single-use release
 and matching verifier, enrollment and boot are separate gates. No spend is authorized.
+[Batch 50](../phase3/coordinator/pi-core-single-use-boot-batch-50.md) prepares
+the one-slot runner and matching verifier offline. Its signed executable has
+zero slots. Only the no-target refusal was observed; private enrollment and
+boot decisions, actual target bindings and evidence remain outstanding.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

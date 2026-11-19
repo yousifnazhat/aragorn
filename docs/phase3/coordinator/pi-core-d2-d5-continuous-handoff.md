@@ -8,11 +8,16 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 43: dedicated backend and isolated boot approval packet](pi-core-isolated-boot-approval-batch-43.md).
+Current D2 media handoff: [batch 44: observable guest and successor pins](pi-core-observable-guest-batch-44.md).
+Use its exact request and disk/UKI/firmware pins, not the B41 image or B42 ESL.
+The new witness is designed to report disk state and PID 1 mounts/executable
+after exec. No guest has run. Bind the host runner, stream and cleanup record
+to this successor before seeking live approvals.
+The [batch 43 dedicated backend and approval gates](pi-core-isolated-boot-approval-batch-43.md) still apply.
 An EC2 M4 Mac Dedicated Host running the named macOS 27 release is a catalog
 candidate, not an allocated machine. No trust store or VM has been created.
-Before spending, choose an observation objective: the retained guest has
-refusal messages but no positive disk/mount/PID 1 receipt. Keep acquisition,
+The older B41 guest has refusal messages but no positive disk/mount/PID 1
+receipt. Retain it as a predecessor, not a fallback candidate. Keep acquisition,
 per-guest enrollment, one compatibility boot and the pilot separately gated.
 Reuse [batch 42: proposed image trust and read-only NVMe preflight](pi-core-firmware-trust-batch-42.md).
 Reuse the [batch 41 immutable ARM64 disk and inventory](pi-core-immutable-guest-image-batch-41.md).

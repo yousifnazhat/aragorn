@@ -54,8 +54,11 @@ Apple framework accepted the retained raw disk in a read-only NVMe descriptor.
 identifies a dedicated M4 Mac offering and macOS 27 guest EFI enrollment and
 readback APIs. An inert host preview joins one read-only NVMe disk and one
 output-only serial port. No assigned host, enrollment or boot is evidenced.
-Next: bind custody and cost, choose a positive observation path (or explicitly
-accept compatibility-only results), and approve enrollment and boot separately.
+[Batch 44](../phase3/coordinator/pi-core-observable-guest-batch-44.md) built and
+re-pinned the guest with a positive read-only/geometry, mount and post-exec PID 1
+reporting path. Offline checks verify the changed media and reader, not the
+runtime observations. Next: bind the B44 host runner, capture, custody and cost,
+then approve enrollment and boot separately.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

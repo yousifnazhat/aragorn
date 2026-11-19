@@ -2,6 +2,49 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-immutable-host-clients-offline",
+      "description": "Only the new immutable-guest cross-toolchain, sysroot, client recipe and installed-ELF checks. No rebuild, target execution, host installation or qualification.",
+      "tests": [
+        "test_pi_core_host_sysroot",
+        "test_pi_core_host_bpf_inputs",
+        "test_pi_core_host_build_tools",
+        "test_pi_core_host_client_build",
+        "test_pi_core_host_client_staged_elf",
+        "test_pi_core_host_client_inspection"
+      ],
+      "inputs": [
+        "packaging/pi-core/host-tools-b38/coordinator-tools.patch",
+        "packaging/pi-core/host-tools-b40/alpine-bpf-packages.json",
+        "packaging/pi-core/host-tools-b40/alpine-bpf-tree.json",
+        "packaging/pi-core/host-tools-b40/clients.json",
+        "packaging/pi-core/host-tools-b40/meson-bpf-version.py",
+        "packaging/pi-core/host-tools-b40/sysroot-packages.json",
+        "packaging/pi-core/host-tools-b40/sysroot-tree.json",
+        "packaging/pi-core/host-tools-b40/tools.json",
+        "packaging/pi-core/host-tools-b40/ubuntu-client-options.txt",
+        "packaging/pi-core/source-gate-toolchain-v2.json",
+        "scripts/build_pi_core_host_clients.py",
+        "scripts/build_pi_core_linux.py",
+        "scripts/check_pi_core_host_abi.py",
+        "scripts/inspect_pi_core_host_clients.py",
+        "scripts/prepare_pi_core_host_bpf_inputs.py",
+        "scripts/prepare_pi_core_host_build_tools.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/prepare_pi_core_host_tool_targets.py",
+        "scripts/prepare_pi_core_immutable_host_layout.py",
+        "scripts/prepare_pi_core_os_root.py",
+        "scripts/prepare_pi_core_restricted_host_sources.py",
+        "tests/test_pi_core_host_bpf_inputs.py",
+        "tests/test_pi_core_host_build_tools.py",
+        "tests/test_pi_core_host_client_build.py",
+        "tests/test_pi_core_host_client_inspection.py",
+        "tests/test_pi_core_host_client_staged_elf.py",
+        "tests/test_pi_core_host_sysroot.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "pi-core-immutable-host-layout-offline",
       "description": "Stage only the two authenticated Ubuntu filesystem payloads and empty physical mountpoint. No mount, target execution or boot.",
       "tests": [

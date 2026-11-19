@@ -87,6 +87,7 @@ class _Journal:
                 if remaining <= 0:
                     raise TimeoutError("watchdog evidence I/O unresolved; retain attempt")
                 done.wait(min(0.02, remaining))
+        return done  # Optional B47 arm decision may only be used after async fsync completes.
 
 
 def _request(fd, which, when):
@@ -100,7 +101,7 @@ def _request(fd, which, when):
     return message
 
 
-def supervise(spawn, *, record: Path, attempt_uuid: str):
+def supervise(spawn, *, record: Path, attempt_uuid: str, _owner=None):
     """Return the durable terminal host receipt. Never interpret it as VM stop proof.
 
     The coordinator supplies the same canonical UUID to this call and the child's
@@ -125,6 +126,8 @@ def supervise(spawn, *, record: Path, attempt_uuid: str):
                graceful=None, force=None, start_raw_ns=None, run_deadline_raw_ns=None,
                graceful_deadline_raw_ns=None, force_deadline_raw_ns=None, exit_observed_raw_ns=None,
                vm_stopped_verified=False)
+    if _owner is not None:
+        row["owner_arm"] = _owner.state
 
     def interrupt(signum, _frame):
         if not pending:
@@ -210,6 +213,9 @@ def supervise(spawn, *, record: Path, attempt_uuid: str):
                         next_time = deadlines[2] if now >= deadlines[1] else deadlines[1]
                     else:
                         next_time = deadlines[0]
+                        if _owner is not None:
+                            _owner.tick(child, row, journal, lambda: not pending and not journal.failure.is_set()
+                                        and child.poll() is None and _raw() < deadlines[0])
                     time.sleep(max(0, min(0.02, (next_time - _raw()) / _NS)))
             except (Exception, KeyboardInterrupt, SystemExit) as exc:
                 row.update(outcome="host-error", error_type=type(exc).__name__)

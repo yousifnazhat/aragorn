@@ -1,0 +1,17 @@
+{
+  "boot_authorized": false,
+  "cdhash": "e8d543da657b914f7bb28c69aeee14c759a16352",
+  "directory": "build-2ef1ca18f4c73f181030376b135f65b89262e9eacec5a7db41bf7d2d0940aff1",
+  "disk_sha256": "c87cf6ef3a6f728958256bd278a748f5f71fae78b3f0de91c02ee1dba1a4837c",
+  "entitlements": {
+    "com.apple.security.virtualization": true
+  },
+  "identifier": "org.aragorn.pi-core.b47.host-owner",
+  "inputs_sha256": "2ef1ca18f4c73f181030376b135f65b89262e9eacec5a7db41bf7d2d0940aff1",
+  "macho_uuid_hex": "bb68d3bcb22638cca842eaa2a5921960",
+  "release_sha256": "2c5ffefd4eb65b93c6a818f546e3aa1fbbaa0e1be610e60fc5aef4fca985f87a",
+  "runner_bytes": 125888,
+  "runner_sha256": "a396b63bc16b52699b2ae82884199652a6506dab3896f99bec27285698bb33ea",
+  "schema": "aragorn/b47-held-vm-owner/v1",
+  "signing": "ad-hoc-local-integrity"
+}

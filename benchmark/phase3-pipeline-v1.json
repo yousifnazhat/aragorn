@@ -2,6 +2,23 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-isolated-boot-preview-offline",
+      "description": "Check the inert B43 approval request, and build and inspect the host-only VZ configuration and refusals. No VM instance, store, enrollment, remote host or guest execution.",
+      "tests": ["test_pi_core_isolated_boot_preview"],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b41/media-output.json",
+        "packaging/pi-core/immutable-host-b42/firmware-trust.json",
+        "packaging/pi-core/immutable-host-b43/boot-config-preview.m",
+        "packaging/pi-core/immutable-host-b43/boot-request.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "tests/test_pi_core_isolated_boot_preview.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 75
+    },
+    {
       "id": "pi-core-firmware-hash-offline",
       "description": "Check only the proposed B41 image hash/EFI signature list and independent LIEF digest. No keys, firmware variables, enrollment, boot or qualification.",
       "tests": ["test_pi_core_guest_firmware_trust", "test_pi_core_guest_firmware_reference"],
@@ -14318,7 +14335,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 262-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 263-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

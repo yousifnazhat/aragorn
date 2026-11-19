@@ -2,6 +2,47 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-bound-host-runner-offline",
+      "description": "Authenticate the pinned B45 ARM64 code and entitlement, bind B44 media and the actual isolated graph to an empty serial preview and check offline binding refusals. No store opening, VM, enrollment or boot.",
+      "tests": [
+        "test_pi_core_bound_host_runner"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b44/boot-request.json",
+        "packaging/pi-core/immutable-host-b44/media-output.json",
+        "packaging/pi-core/immutable-host-b45/host-runner.m",
+        "packaging/pi-core/immutable-host-b45/runner-output.json",
+        "packaging/pi-core/immutable-host-b45/runner.entitlements.plist",
+        "packaging/pi-core/immutable-host-b45/serial-recorder.h",
+        "packaging/pi-core/immutable-host-b45/serial-recorder.m",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_bound_host_runner.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/verify_pi_core_host_binding.py",
+        "tests/b45-firmware-readback-fixture.m",
+        "tests/test_pi_core_bound_host_runner.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "pi-core-bound-serial-recorder-offline",
+      "description": "Exercise the exact bounded host serial recorder on private inert pipes only: bytes, EOF, limits, timeouts, partial failures and retention. No VM or target operations.",
+      "tests": [
+        "test_pi_core_bound_serial_recorder"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b45/serial-recorder.h",
+        "packaging/pi-core/immutable-host-b45/serial-recorder.m",
+        "tests/test_pi_core_bound_serial_recorder.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 45
+    },
+    {
       "id": "pi-core-observable-guest-media-offline",
       "description": "Read the B44 sealed disk, changed initramfs and source/tool lineage, EFI digest/ESL, isolated request and unchanged root pins. No build, guest execution, store or device.",
       "tests": ["test_pi_core_observable_guest_media"],
@@ -14390,7 +14431,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 265-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 267-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

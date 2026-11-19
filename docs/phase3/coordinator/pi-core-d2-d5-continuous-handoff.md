@@ -8,11 +8,16 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 media handoff: [batch 44: observable guest and successor pins](pi-core-observable-guest-batch-44.md).
+Current D2 host handoff: [batch 45: code-signed no-boot runner and raw recorder](pi-core-bound-host-runner-batch-45.md).
+The runner can verify the exact disk and construct the isolated graph. Its
+recorder arms before the graph is released. The local run used no variable
+store; it retained only empty EOF, not a guest observation. Target custody,
+approved store/policy readback, a supervised VM lifetime and cleanup remain gated.
+Current media: [batch 44: observable guest and successor pins](pi-core-observable-guest-batch-44.md).
 Use its exact request and disk/UKI/firmware pins, not the B41 image or B42 ESL.
 The new witness is designed to report disk state and PID 1 mounts/executable
-after exec. No guest has run. Bind the host runner, stream and cleanup record
-to this successor before seeking live approvals.
+after exec. No guest has run. Do not confuse B45's signed preparation binary
+with a boot-capable, authorized supervisor.
 The [batch 43 dedicated backend and approval gates](pi-core-isolated-boot-approval-batch-43.md) still apply.
 An EC2 M4 Mac Dedicated Host running the named macOS 27 release is a catalog
 candidate, not an allocated machine. No trust store or VM has been created.

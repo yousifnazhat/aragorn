@@ -8,12 +8,17 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 48: independent owner-evidence replay and host-loss reconciliation](pi-core-owner-evidence-batch-48.md).
+Current D2 host handoff: [batch 49: compatibility-boot approval packet](pi-core-boot-approval-packet-batch-49.md).
+The candidate and firmware image are pinned, not the physical host or enrolled
+trust store. The next operator step is a private nomination with funding/window,
+firmware policy, evidence custodian/destination and cleanup/release assignments.
+An approved single-use runner and matching verifier are also needed before a
+compatibility boot. This packet authorizes no spend or operations.
+
+Predecessor: [batch 48: independent owner-evidence replay and host-loss reconciliation](pi-core-owner-evidence-batch-48.md).
 The retained B47 refusal was exported and matched the signed zero-boot release.
 There was no owner journal, ARM decision, guest serial or owner terminal in that
-attempt. Do not recapture it. Next: bind the target host and operator roles,
-time/spend limit, signing policy, firmware baseline and independent evidence
-destination, then review a single-use compatibility-boot authorization. No
+attempt. Do not recapture it or use its local archive as off-host custody. No
 allocation, enrollment, boot, useful pilot or D5 acceptance is authorized.
 
 Predecessor: [batch 47: pinned and supervised machine owner](pi-core-vm-owner-batch-47.md).

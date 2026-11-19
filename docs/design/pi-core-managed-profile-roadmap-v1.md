@@ -68,9 +68,13 @@ path. B45 still cannot create or boot a VM.
 machine-owning executable. Its sole start call requires a locally armed recorder
 and stop observer plus a timely acknowledgment from the external watchdog. The
 positive path was exercised with an inert machine; the signed executable itself
-refused before target access. Next: independently verify/export the new owner
-journal and record host-loss restoration rules, then establish target custody,
-cost and operator authority before seeking separate enrollment and boot approval.
+refused before target access.
+[Batch 48](../phase3/coordinator/pi-core-owner-evidence-batch-48.md) verifies
+and exports original owner/watchdog records and distinguishes a held refusal
+from a missing or contradictory transcript. The actual B47 refusal was archived;
+there is no real guest capture. Host loss remains unresolved without separate
+external custody and restoration evidence. Next: establish target custody, cost,
+signer and operator authority before seeking separate enrollment and boot approval.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

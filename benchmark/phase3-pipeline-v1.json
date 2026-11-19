@@ -2,6 +2,44 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id":"pi-core-owner-records-offline",
+      "description":"Independently join the B47 owner terminal, original JSONL, prebound identities and exact serial bytes. Parser fixtures only.",
+      "tests":["test_pi_core_owner_records"],
+      "inputs":["packaging/pi-core/immutable-host-b45/serial-recorder.m","packaging/pi-core/immutable-host-b46/vm-stop.m",
+                "packaging/pi-core/immutable-host-b47/owner-runner.m","packaging/pi-core/immutable-host-b47/vm-owner.m",
+                "scripts/build_pi_core_linux.py","scripts/verify_pi_core_owner_records.py","tests/test_pi_core_owner_records.py"],
+      "needs":[],"timeout_seconds":30
+    },
+    {
+      "id":"pi-core-owner-watchdog-records-offline",
+      "description":"Independently join persisted reservation, ARM intent, child identity and deadline intervals; distinguish held and normal records from escalation or loss.",
+      "tests":["test_pi_core_owner_watchdog_records"],
+      "inputs":["scripts/build_pi_core_linux.py","scripts/pi_core_host_owner_supervision.py","scripts/pi_core_host_watchdog.py",
+                "scripts/verify_pi_core_owner_watchdog.py","tests/test_pi_core_owner_watchdog_records.py"],
+      "needs":[],"timeout_seconds":30
+    },
+    {
+      "id":"pi-core-owner-archive-offline",
+      "description":"Private bounded original/copy custody, disjoint roots, incomplete archives and digest-anchored local/portable readback. No deletion.",
+      "tests":["test_pi_core_owner_archive"],
+      "inputs":["scripts/build_pi_core_linux.py","scripts/pi_core_host_evidence_export.py","scripts/pi_core_host_watchdog.py",
+                "scripts/pi_core_owner_archive.py","tests/test_pi_core_owner_archive.py"],
+      "needs":[],"timeout_seconds":30
+    },
+    {
+      "id":"pi-core-owner-replay-offline",
+      "description":"Run the offline CLI and semantic verifiers over original-format test records with out-of-band bindings; enforce the held signed release and host-loss disposition.",
+      "tests":["test_pi_core_owner_replay"],
+      "inputs":["packaging/pi-core/immutable-host-b47/runner-output.json","packaging/pi-core/immutable-host-b47/owner-release.json",
+                "scripts/build_pi_core_linux.py","scripts/inspect_pi_core_guest_disk.py","scripts/pi_core_host_evidence_export.py",
+                "scripts/pi_core_host_watchdog.py","scripts/pi_core_owner_archive.py","scripts/prepare_pi_core_bound_host_runner.py",
+                "scripts/prepare_pi_core_guest_disk.py","scripts/prepare_pi_core_guest_firmware_trust.py","scripts/prepare_pi_core_host_lifecycle.py",
+                "scripts/prepare_pi_core_host_sysroot.py","scripts/prepare_pi_core_vm_owner.py","scripts/replay_pi_core_owner_evidence.py",
+                "scripts/verify_pi_core_host_binding.py","scripts/verify_pi_core_owner_records.py","scripts/verify_pi_core_owner_watchdog.py",
+                "tests/test_pi_core_owner_records.py","tests/test_pi_core_owner_watchdog_records.py","tests/test_pi_core_owner_replay.py"],
+      "needs":[],"timeout_seconds":30
+    },
+    {
       "id":"pi-core-host-owner-supervision-offline",
       "description":"Owned direct child, one bounded READY/ARM exchange after durable supervision. Inert processes only.",
       "tests":["test_pi_core_host_owner_supervision"],
@@ -14519,7 +14557,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 274-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 278-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

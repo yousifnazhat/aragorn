@@ -8,13 +8,19 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 47: pinned and supervised machine owner](pi-core-vm-owner-batch-47.md).
+Current D2 host handoff: [batch 48: independent owner-evidence replay and host-loss reconciliation](pi-core-owner-evidence-batch-48.md).
+The retained B47 refusal was exported and matched the signed zero-boot release.
+There was no owner journal, ARM decision, guest serial or owner terminal in that
+attempt. Do not recapture it. Next: bind the target host and operator roles,
+time/spend limit, signing policy, firmware baseline and independent evidence
+destination, then review a single-use compatibility-boot authorization. No
+allocation, enrollment, boot, useful pilot or D5 acceptance is authorized.
+
+Predecessor: [batch 47: pinned and supervised machine owner](pi-core-vm-owner-batch-47.md).
 The owner, watchdog, recorder and stop bridge are wired. The signed release
-contains no approved boot attempt. Next offline batch: an independent reader and
-export path for owner events, supervisor decision, terminal record and original
-serial bytes, including refusal of loss, mismatched identity and partial shutdown;
-define how an external operator reconciles host loss. Do not reuse the B46
-preview cleanup command for this evidence. Do not activate, enroll or allocate.
+contains no approved boot attempt. Do not use the B46 preview cleanup command
+for owner evidence. A matching B48 transcript is not independent live guest or
+restoration evidence.
 
 Predecessor: [batch 46: external watchdog and evidence custody](pi-core-host-lifecycle-batch-46.md).
 Its local preview uses the unchanged signed B45 executable. Stand-in stop calls

@@ -1,0 +1,22 @@
+{
+  "branch": "v3.20",
+  "architecture": "x86_64",
+  "key": "alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+  "key_sha256": "207e4696d3c05f7cb05966aee557307151f1f00217af4143c1bcaf33b8df733f",
+  "indexes": {
+    "main": "85cc20ba8f0c7ac174d88f6db3f0b689c61109332ff8fa39f317316555a6feb5",
+    "community": "989cd517e0a7d49bd514cf8d6829c28d966f13a8665e80cea7b3f311bc0b151e"
+  },
+  "packages": {
+    "binutils-2.42-r1.apk": ["main",3107495,"95ff0ecfed3ca185bf7e04f15abc36b6c23d5645b0b8d1f7ab56e4bee425ec64"],
+    "bpftool-6.6.31-r0.apk": ["community",263532,"df76f1d5e8887099b31127ec069b10a8fd232cc054b046b0a378278deabec093"],
+    "jansson-2.14-r4.apk": ["main",24819,"475260d29922e9de90cfc31a2dff36b43d89d54adf6328d8d445bedf362a71e7"],
+    "libcap2-2.78-r0.apk": ["main",21849,"8ec50cd7887f19c6936dd25a48796c5aa60dec019809b7813f9173aecabd1b43"],
+    "libelf-0.191-r0.apk": ["main",43616,"e461982ca43d02056977d2d2442b87ef6a938f97802ba3590e1439ebbd502430"],
+    "libgcc-13.2.1_git20240309-r1.apk": ["main",64048,"f348d99e10b5267566afe6f80861661b08cb5aa43a6d4d1c8f1792b5001d0995"],
+    "libstdc++-13.2.1_git20240309-r1.apk": ["main",916001,"af0fe894ef5051116e321bf4753a10fffa85abc2b71f30b2e949467775421ace"],
+    "musl-1.2.5-r4.apk": ["main",408411,"b255cdcf4f64eb301f4dbd40d1fbdc0fcb021613b3f0d124a41eeff62e2bc7d8"],
+    "zlib-1.3.2-r0.apk": ["main",55434,"39c506b74e5bf4b693179d0aefd10b161278063261ffdaa8fe704d075c64429b"],
+    "zstd-libs-1.5.6-r0.apk": ["main",376935,"69793fd27f1b83c4ab1b31e02bc3f8b5a6d4f9c3508aece8a259f475e196c475"]
+  }
+}

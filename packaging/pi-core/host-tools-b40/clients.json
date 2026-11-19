@@ -1,0 +1,8 @@
+{
+  "fingerprint": "d6904d891442f7a667d324507b2e79256092a74e8ae4d4b0d1bf3858754f2f37",
+  "clients": {
+    "busctl": "7c16a123e03d4d15669cbc1d10bee2419c3626d355b6b502602b2b1757fa6b3c",
+    "systemctl": "ee06b0a632c7a8c1d51dd3820e9be1a369934bf675c2db72ac60166ed1e3cdbd",
+    "systemd-run": "3956a81ec60c5801dbb67848fe247961f22a868f67c51d09abebb011af4e5ee0"
+  }
+}

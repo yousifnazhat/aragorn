@@ -40,6 +40,9 @@ directory. The operator selected whole-image replacement, not in-guest
 package upgrades. [Batch 39](../phase3/coordinator/pi-core-immutable-host-layout-batch-39.md)
 staged the authenticated loader and libc once, with a real empty `/lib`
 mountpoint. No mount has been made and no image has been booted.
+[Batch 40](../phase3/coordinator/pi-core-immutable-host-clients-batch-40.md)
+built and statically verified the three ARM64 coordinator clients and their
+six required ELF providers. Reuse the pinned installed-form artifacts.
 Next: obtain the independently approved complete Linux host profile and matching
 export, then the separately authorized read-only worker view and approved root
 identities. Actual source reads, sensor health, recovery/timing and pilot evidence

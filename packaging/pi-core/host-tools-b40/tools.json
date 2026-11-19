@@ -1,0 +1,268 @@
+{
+  "aliases": [
+    "awk",
+    "bash",
+    "clang",
+    "date",
+    "gperf",
+    "llvm-ar",
+    "llvm-objcopy",
+    "llvm-ranlib",
+    "llvm-readobj",
+    "msgfmt",
+    "msgmerge",
+    "ninja",
+    "pkg-config",
+    "readlink",
+    "realpath",
+    "sed",
+    "sha256sum",
+    "sort",
+    "stat",
+    "xgettext"
+  ],
+  "blink_sha256": "9d3bbe01f0cc3225825f7e47ec6adc2c861017c6c87ebbce6bb3fc7fd9eaa5f1",
+  "bottles": {
+    "bash": {
+      "filename": "bash--5.3.20.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "bin/bash": "native/bash"
+      },
+      "sha256": "ac5b291d5571c2aaf30bd17e0df16f0a43723dad8aac2023b9c5904742fdd2da",
+      "size": 3435449,
+      "url": "https://ghcr.io/v2/homebrew/core/bash/blobs/sha256:ac5b291d5571c2aaf30bd17e0df16f0a43723dad8aac2023b9c5904742fdd2da"
+    },
+    "blink": {
+      "filename": "blink--1.1.0.arm64_tahoe.bottle.2.tar.gz",
+      "members": {
+        "bin/blink": "private/blink"
+      },
+      "sha256": "fe96f01e4cb3db83a0d8fe235ce54e5a00ff81d82da4872ac75772d93b49fe02",
+      "size": 552529,
+      "url": "https://ghcr.io/v2/homebrew/core/blink/blobs/sha256:fe96f01e4cb3db83a0d8fe235ce54e5a00ff81d82da4872ac75772d93b49fe02"
+    },
+    "coreutils": {
+      "filename": "coreutils--9.12_1.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "bin/gdate": "native/date",
+        "bin/greadlink": "native/readlink",
+        "bin/grealpath": "native/realpath",
+        "bin/gsha256sum": "native/sha256sum",
+        "bin/gsort": "native/sort",
+        "bin/gstat": "native/stat"
+      },
+      "sha256": "38e01cd05410c44aa21fac5ae1700164771cd2028a9e1506f07a743b53a7b73d",
+      "size": 4874605,
+      "url": "https://ghcr.io/v2/homebrew/core/coreutils/blobs/sha256:38e01cd05410c44aa21fac5ae1700164771cd2028a9e1506f07a743b53a7b73d"
+    },
+    "gawk": {
+      "filename": "gawk--5.4.1.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "bin/gawk": "native/awk"
+      },
+      "sha256": "73633c61674c5ab754b70403f14eb57d21d750fe8629eecc8023d5e4228f26fe",
+      "size": 2301020,
+      "url": "https://ghcr.io/v2/homebrew/core/gawk/blobs/sha256:73633c61674c5ab754b70403f14eb57d21d750fe8629eecc8023d5e4228f26fe"
+    },
+    "gettext": {
+      "filename": "gettext--1.0.arm64_tahoe.bottle.2.tar.gz",
+      "members": {
+        "bin/msgfmt": "native/msgfmt",
+        "bin/msgmerge": "native/msgmerge",
+        "bin/xgettext": "native/xgettext",
+        "lib/libgettextlib-1.0.dylib": "lib/libgettextlib-1.0.dylib",
+        "lib/libgettextsrc-1.0.dylib": "lib/libgettextsrc-1.0.dylib",
+        "lib/libintl.8.dylib": "lib/libintl.8.dylib",
+        "lib/libtextstyle.0.dylib": "lib/libtextstyle.0.dylib"
+      },
+      "sha256": "3af5392939e50a6ef73e42799fc3ead6ef72fe0040c0a45183d04a4008306d6a",
+      "size": 10286772,
+      "url": "https://ghcr.io/v2/homebrew/core/gettext/blobs/sha256:3af5392939e50a6ef73e42799fc3ead6ef72fe0040c0a45183d04a4008306d6a"
+    },
+    "gmp": {
+      "filename": "gmp--6.3.0.arm64_tahoe.bottle.1.tar.gz",
+      "members": {
+        "lib/libgmp.10.dylib": "lib/libgmp.10.dylib"
+      },
+      "sha256": "fa46330de5d003bd9294ae042c8f4ae0a51bcb8c57de2c94c073ff4a7ffa10c3",
+      "size": 1037068,
+      "url": "https://ghcr.io/v2/homebrew/core/gmp/blobs/sha256:fa46330de5d003bd9294ae042c8f4ae0a51bcb8c57de2c94c073ff4a7ffa10c3"
+    },
+    "gnu-sed": {
+      "filename": "gnu-sed--4.10.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "bin/gsed": "native/sed"
+      },
+      "sha256": "046672d06b2dd62a59d7088c58cec29749e436366e81dbe18f1b42cbad96fbb2",
+      "size": 224259,
+      "url": "https://ghcr.io/v2/homebrew/core/gnu-sed/blobs/sha256:046672d06b2dd62a59d7088c58cec29749e436366e81dbe18f1b42cbad96fbb2"
+    },
+    "gperf": {
+      "filename": "gperf--3.3.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "bin/gperf": "native/gperf"
+      },
+      "sha256": "8431153ec71d07fd4f1ca9609c1c11e9f6cc487000cb2f5e4cbec971c0814536",
+      "size": 175159,
+      "url": "https://ghcr.io/v2/homebrew/core/gperf/blobs/sha256:8431153ec71d07fd4f1ca9609c1c11e9f6cc487000cb2f5e4cbec971c0814536"
+    },
+    "libunistring": {
+      "filename": "libunistring--1.5.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "lib/libunistring.5.dylib": "lib/libunistring.5.dylib"
+      },
+      "sha256": "b803434415743b204ffc6bc5415ebfceeaf3dbcb86c0c4ea8a6fc63d2a04f441",
+      "size": 1899270,
+      "url": "https://ghcr.io/v2/homebrew/core/libunistring/blobs/sha256:b803434415743b204ffc6bc5415ebfceeaf3dbcb86c0c4ea8a6fc63d2a04f441"
+    },
+    "llvm": {
+      "filename": "llvm--23.1.5_1.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "bin/clang-23": "native/clang",
+        "bin/llvm-ar": "native/llvm-ar",
+        "bin/llvm-objcopy": "native/llvm-objcopy",
+        "bin/llvm-readobj": "native/llvm-readobj",
+        "lib/libLLVM.23.1.dylib": "lib/libLLVM.23.1.dylib",
+        "lib/libclang-cpp.23.1.dylib": "lib/libclang-cpp.23.1.dylib"
+      },
+      "sha256": "3d6415f071bd2eaeaee71d137f6899e1dd37c43d4a336db4a4cf4082c4d70b9c",
+      "size": 457096332,
+      "url": "https://ghcr.io/v2/homebrew/core/llvm/blobs/sha256:3d6415f071bd2eaeaee71d137f6899e1dd37c43d4a336db4a4cf4082c4d70b9c"
+    },
+    "mpfr": {
+      "filename": "mpfr--4.2.2.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "lib/libmpfr.6.dylib": "lib/libmpfr.6.dylib"
+      },
+      "sha256": "495b04c82ef8638368a5cc62141e7ac195377d292503f5b30e5915b1ff478dda",
+      "size": 1069432,
+      "url": "https://ghcr.io/v2/homebrew/core/mpfr/blobs/sha256:495b04c82ef8638368a5cc62141e7ac195377d292503f5b30e5915b1ff478dda"
+    },
+    "ncurses": {
+      "filename": "ncurses--6.6.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "lib/libncursesw.6.dylib": "lib/libncursesw.6.dylib"
+      },
+      "sha256": "b43443ba3c3c8728e79413c7c3fed4a0eb293bd77c8492c1ec4c5d05233a97f1",
+      "size": 2533863,
+      "url": "https://ghcr.io/v2/homebrew/core/ncurses/blobs/sha256:b43443ba3c3c8728e79413c7c3fed4a0eb293bd77c8492c1ec4c5d05233a97f1"
+    },
+    "ninja": {
+      "filename": "ninja--1.13.2.arm64_tahoe.bottle.1.tar.gz",
+      "members": {
+        "bin/ninja": "native/ninja"
+      },
+      "sha256": "7bb261a70d9337d765956329580e10f16a0d1ea4eef5a106db39c9e1f8917f00",
+      "size": 158782,
+      "url": "https://ghcr.io/v2/homebrew/core/ninja/blobs/sha256:7bb261a70d9337d765956329580e10f16a0d1ea4eef5a106db39c9e1f8917f00"
+    },
+    "openssl@4": {
+      "filename": "openssl@4--4.1.0.arm64_tahoe.bottle.tar.gz",
+      "members": {"lib/libcrypto.4.dylib": "lib/libcrypto.4.dylib"},
+      "sha256": "382f63e829b116d5fb9a2b186147e489631b5bbbb06ac0089f795a3fed1085c4",
+      "size": 11500908,
+      "url": "https://ghcr.io/v2/homebrew/core/openssl/4/blobs/sha256:382f63e829b116d5fb9a2b186147e489631b5bbbb06ac0089f795a3fed1085c4"
+    },
+    "pkgconf": {
+      "filename": "pkgconf--3.0.10.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "bin/pkgconf": "native/pkg-config",
+        "lib/libpkgconf.8.dylib": "lib/libpkgconf.8.dylib"
+      },
+      "sha256": "eb608cba2f4fb787c34720920e2bc734114c7b90778730640edfe649bd42ea08",
+      "size": 194229,
+      "url": "https://ghcr.io/v2/homebrew/core/pkgconf/blobs/sha256:eb608cba2f4fb787c34720920e2bc734114c7b90778730640edfe649bd42ea08"
+    },
+    "readline": {
+      "filename": "readline--8.3.6.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "lib/libhistory.8.3.dylib": "lib/libhistory.8.dylib",
+        "lib/libreadline.8.3.dylib": "lib/libreadline.8.dylib"
+      },
+      "sha256": "15cdd69af824537192843db389cbfd2459b3797cf4f36c906f8f8ab617d7d59f",
+      "size": 757034,
+      "url": "https://ghcr.io/v2/homebrew/core/readline/blobs/sha256:15cdd69af824537192843db389cbfd2459b3797cf4f36c906f8f8ab617d7d59f"
+    },
+    "z3": {
+      "filename": "z3--5.4.1.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "lib/libz3.5.4.1.0.dylib": "lib/libz3.5.4.dylib"
+      },
+      "sha256": "0a1edb2cc2d6a9d6a0cab646e75f5ea8ce909f2ea80f0f38c96ab57ebd429a3d",
+      "size": 16484959,
+      "url": "https://ghcr.io/v2/homebrew/core/z3/blobs/sha256:0a1edb2cc2d6a9d6a0cab646e75f5ea8ce909f2ea80f0f38c96ab57ebd429a3d"
+    },
+    "zstd": {
+      "filename": "zstd--1.5.7_1.arm64_tahoe.bottle.tar.gz",
+      "members": {
+        "lib/libzstd.1.5.7.dylib": "lib/libzstd.1.dylib"
+      },
+      "sha256": "628a4ef53428d0078e3d76d297171ce8d0294f5ec1de3f20305e08c4dd333565",
+      "size": 793560,
+      "url": "https://ghcr.io/v2/homebrew/core/zstd/blobs/sha256:628a4ef53428d0078e3d76d297171ce8d0294f5ec1de3f20305e08c4dd333565"
+    }
+  },
+  "host": [
+    "Darwin",
+    "arm64",
+    "25.6.0"
+  ],
+  "host_files": {
+    "/bin/cat": "2b6e8f3f90c42a9d8d1e5471efb4173ad3499fc8ca4039b39327b394616cf39e",
+    "/bin/chmod": "b0451fa7b5995805519855783cc208a2ade4925b30735258639bc0cca68da10d",
+    "/bin/cp": "f0629f462c6535f7b1a19f559b7093638e714961bea9228cfb2ae7896f8557f4",
+    "/bin/echo": "d2d4d70e62f249417d70cd1cee1a9c623213ccfb6445c82d9de6b9021edacc27",
+    "/bin/ln": "f2d62321fa81f2cea627a53f73ff65d14aae04cdfa93d5a5622207d88ef0ceec",
+    "/bin/mkdir": "a84382b7827e7bfb285321413f9a89b7d2805fa6afd0369a8f32f4f0241e18cd",
+    "/bin/rm": "4faf0408bb0c5dcb8ea47c08ff03cb44aedfe2712220111586b71cb93cd1d43f",
+    "/bin/sh": "c0eaf44f9242d5bbc2e14f4e8b7dccc1eff7f2976d64dc18914d5ef9f373e100",
+    "/opt/homebrew/Cellar/openssl@3/3.6.5/lib/libcrypto.3.dylib": "31180b62269748133aaa870deedce8037a9b51547887c6c0be56a58e3a6a9a4a",
+    "/opt/homebrew/Cellar/python@3.12/3.12.13_4/Frameworks/Python.framework/Versions/3.12/Python": "6f53775e55bc224fb5b607dbb0adb0d95185b40146707e15580c66eb827f308b",
+    "/opt/homebrew/Cellar/python@3.12/3.12.13_4/Frameworks/Python.framework/Versions/3.12/bin/python3.12": "1ce7aea77992ab97bb6225339a1d72a79925d5641e461cdfc2584916119a7edb",
+    "/opt/homebrew/opt/mpdecimal/lib/libmpdec.4.dylib": "14286ba02244c25537b3b5c74902c5fa81959d5d2c1fcf06f89808badb67dea8",
+    "/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib": "31180b62269748133aaa870deedce8037a9b51547887c6c0be56a58e3a6a9a4a",
+    "/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib": "014b05445f628540dbb80d755d8ffbfc0e3ec7af475f888afc5bc5f7a52d8ffb",
+    "/opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/Python": "6f53775e55bc224fb5b607dbb0adb0d95185b40146707e15580c66eb827f308b",
+    "/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib": "996baaf61d06ff542bf73a2455027af5ed1af6b2065581bd4deba96a9a018a92",
+    "/opt/homebrew/opt/xz/lib/liblzma.5.dylib": "41cdf225f3e10fb54f952c8eca11c8a847d095470540dc42736ae7bd761beaa4",
+    "/usr/bin/diff": "41633210c3bbe75c1c871f4ea87ad5ef7dd3cf2bbeb47c798e2a1e322e8159c4",
+    "/usr/bin/env": "75690864f0e7397db05bcc0f4439915559ce24c2d834d530e4e619c14b938556",
+    "/usr/bin/find": "9cd3b4bbb80ac290fd188172e5fcbc48a6fe10ff3374313e4f01efea0101be1b",
+    "/usr/bin/git": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+    "/usr/bin/grep": "e70a05960005b01d94abb0715bddafe20473e5854a6ef461ea12915801596550",
+    "/usr/bin/id": "77c738fb7a80a8a3198d3c544d3d0342cb387989c88f6166f1b5dedc7eb5d6b3",
+    "/usr/bin/rsync": "6c4eff16c816cc8a309560982c60fc47857f9852ff54a067f98f0cf88b1d2923",
+    "/usr/bin/sandbox-exec": "abc5bb136d6b5cce8fa85d789f78e3326c51ca60cae637b2064adfb67a1dcd9a",
+    "/usr/bin/uname": "e12b51fe01f02007b15dfd9ee72d273d553656fa75d2e2800e13ec7714c5d615"
+  },
+  "schema": "aragorn/pi-core-host-tools-darwin-arm64/v1",
+  "scope": "build-host generators only; Darwin system frameworks and OS are platform trust, not guest provenance",
+  "sealed_sha256": "c964914e58ff6a3c57cb24a68793c3068d60e789b71f907e3b87327a8307599f",
+  "stdlib_sha256": "fad94057d5944d80af4c1c0d93a0234061478a9c01af3ece6e323ebef9191438",
+  "wheels": {
+    "jinja2": {
+      "filename": "jinja2-3.1.6-py3-none-any.whl",
+      "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67",
+      "size": 134899,
+      "url": "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl"
+    },
+    "markupsafe": {
+      "filename": "markupsafe-3.0.3-cp312-cp312-macosx_11_0_arm64.whl",
+      "sha256": "1872df69a4de6aead3491198eaf13810b565bdbeec3ae2dc8780f14458ec73ce",
+      "size": 12020,
+      "url": "https://files.pythonhosted.org/packages/9a/81/7e4e08678a1f98521201c3079f77db69fb552acd56067661f8c2f534a718/markupsafe-3.0.3-cp312-cp312-macosx_11_0_arm64.whl"
+    },
+    "meson": {
+      "filename": "meson-1.9.1-py3-none-any.whl",
+      "sha256": "f824ab770c041a202f532f69e114c971918ed2daff7ea56583d80642564598d0",
+      "size": 1030356,
+      "url": "https://files.pythonhosted.org/packages/9c/07/b48592d325cb86682829f05216e4efb2dc881762b8f1bafb48b57442307a/meson-1.9.1-py3-none-any.whl"
+    },
+    "pyelftools": {
+      "filename": "pyelftools-0.32-py3-none-any.whl",
+      "sha256": "013df952a006db5e138b1edf6d8a68ecc50630adbd0d83a2d41e7f846163d738",
+      "size": 188525,
+      "url": "https://files.pythonhosted.org/packages/af/43/700932c4f0638c3421177144a2e86448c0d75dbaee2c7936bda3f9fd0878/pyelftools-0.32-py3-none-any.whl"
+    }
+  }
+}

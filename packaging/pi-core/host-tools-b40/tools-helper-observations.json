@@ -1,0 +1,16 @@
+{
+  "schema": "aragorn/pi-core-build-host-generator-candidate-observations/v1",
+  "scope": "Local offline build-host capability discovery only; not guest evidence or qualification.",
+  "translator": {"name":"Homebrew Darwin arm64 blink 1.1.0","binary_sha256":"9d3bbe01f0cc3225825f7e47ec6adc2c861017c6c87ebbce6bb3fc7fd9eaa5f1"},
+  "rejected": {
+    "release":"https://github.com/libbpf/bpftool/releases/download/v7.7.0/bpftool-v7.7.0-amd64.tar.gz",
+    "archive_sha256":"09150596f09356b0ff632dd7f9856e0ea86bf96b269e9bc94278d9a9432a268c",
+    "static_x86_64_binary_sha256":"74bd16335aa1c40714fb50287a42766c6faa4958f969cce32fef89485ce4934c",
+    "distinct_incompatibilities":[
+      {"argv":["blink","-j","-m","-L","/dev/null","/bpftool","--version"],"returncode":-6,"stderr":"malloc(): corrupted top size"},
+      {"argv":["blink","-j","-L","/dev/null","/bpftool","--version"],"returncode":127,"diagnostic":"p_vaddr p_offset skew unequal w.r.t. page size"},
+      {"argv":["blink","-j","-m","-s","-e","-L","/dev/null","/bpftool","--version"],"environment_delta":{"GLIBC_TUNABLES":"glibc.cpu.hwcaps=-AVX2,-AVX,-SSE4_2:glibc.pthread.rseq=0"},"returncode":-11,"diagnostic":"terminating due to SIGSEGV (rip=0x147dc73 code=1 faultaddr=0x500000000000)"}
+    ]
+  },
+  "selected":{"inventory":"alpine-bpf-tree.json","x86_64_userspace_only":true,"argv":["blink","-j","-m","-L","/dev/null","/usr/sbin/bpftool","--version"],"returncode":0,"stdout":"bpftool v7.3.0\nusing libbpf v1.3\nfeatures: libbfd\n","arm64_target_executed":false,"kernel_bpf_used":false}
+}

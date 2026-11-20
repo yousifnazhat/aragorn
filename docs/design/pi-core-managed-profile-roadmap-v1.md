@@ -96,8 +96,10 @@ installation and restart/restore decisions. [Batch 55](../phase3/coordinator/pi-
 implements the read-only comparison of externally pinned volume, role mounts
 and Pi exposure records. Actual acquisition, current independent custody and
 guest enforcement remain unproven.
-Before a positive acquisition, resolve the [worker mask proof decision](../phase3/coordinator/pi-core-worker-mask-decision.md);
-do not remove protections or treat access failures as empty directories.
+The [worker mask decision](../phase3/coordinator/pi-core-worker-mask-decision.md)
+selects unchanged confinement and a [v2 offline reader](../phase3/coordinator/pi-core-mask-witness-batch-58.md).
+Do not remove protections or treat access failures as empty directories. Acquire
+current, independently anchored evidence before relying on the proposed view.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

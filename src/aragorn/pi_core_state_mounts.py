@@ -32,7 +32,7 @@ def _options(raw):
 
 
 def verify_mounts(role: str, raw: bytes, *, device: str, fs_type: str, backing_devices=(),
-                  namespace=None) -> dict[str, int]:
+                  namespace=None, mount_details=None) -> dict[str, int]:
     """Return admitted state mounts by target/ID. Caller authenticates capture, volume and role."""
     _need(type(role) is str and role in _EXPECTED and type(device) is str and device.isascii()
           and _DEVICE.fullmatch(device.encode()) and not device.startswith("0:") and fs_type in ("ext4", "xfs"),
@@ -44,6 +44,9 @@ def verify_mounts(role: str, raw: bytes, *, device: str, fs_type: str, backing_d
     _need(len(backing) == len(backing_devices), "duplicate backing device")
     _need(type(raw) is bytes and 0 < len(raw) <= 1 << 20 and raw.endswith(b"\n"), "incomplete mountinfo")
     _need(namespace is None or (type(namespace) is dict and not namespace), "expected fresh namespace projection")
+    _need(mount_details is None or (type(mount_details) is dict and not mount_details
+          and mount_details is not namespace), "expected separate empty mount detail projection")
+    details = {} if mount_details is not None else None
     lines = raw[:-1].split(b"\n")
     _need(len(lines) <= 8192, "mountinfo row limit")
     dev = device.encode()
@@ -72,6 +75,9 @@ def verify_mounts(role: str, raw: bytes, *, device: str, fs_type: str, backing_d
         _need(ident not in ids and path not in paths, "stacked or duplicate mount")
         ids.add(ident)
         paths[path] = (ident, parent, left[2].decode("ascii"))
+        if details is not None:
+            details[path] = dict(mount_id=ident, dev=paths[path][2], fs_type=right[0].decode("ascii"),
+                                 root=root, options=frozenset(flag.decode("ascii") for flag in flags))
         if path == "/var/lib" or any(path.startswith(t + "/") for t in _TARGETS):
             raise ValueError("state parent overmount or nested shadow")
         if left[2] != dev and path not in _TARGETS:
@@ -98,4 +104,6 @@ def verify_mounts(role: str, raw: bytes, *, device: str, fs_type: str, backing_d
         _need(paths[ancestor][0] == parent, "incomplete or shadowed mount topology")
     if namespace is not None:
         namespace.update({path: (ident, devnum) for path, (ident, _, devnum) in paths.items()})
+    if mount_details is not None:
+        mount_details.update(details)
     return admitted

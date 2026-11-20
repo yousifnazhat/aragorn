@@ -8,7 +8,14 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-**Current D2 handoff — [batch 53, offline worker view and separate state seed](pi-core-worker-filesystem-batch-53.md).**
+**Current D2 handoff — [batch 54, service-state placement and recovery](pi-core-service-state-recovery-batch-54.md).**
+The pilot successor design separates a persistent service data volume from Pi
+and the compatibility boot disk. It distinguishes fresh installation, restart
+and host-loss recovery; a restored snapshot never authorizes an effect.
+Next offline step: the read-only backing/role-mount admission check. No volume,
+freshness witness or live recovery exists by virtue of this design. B49 stays held.
+
+**Batch 53, [offline worker view and separate state seed](pi-core-worker-filesystem-batch-53.md).**
 The exact retained OS, restricted runtime and source plan were packaged and read back
 as an inventory projection. A separate empty service-state seed grants no worker
 write access. The B44 image and private B49 worksheet did not change. Use the

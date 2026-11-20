@@ -90,6 +90,10 @@ flags and 512-byte geometry before relying on PID 1, mounts or loaded identities
 offline worker-view archive and a separate service-state seed for a later pilot.
 Neither is mounted: installed file identities, effective read-only mounts and a
 service-only writable backing arrangement still need independent verification.
+[Batch 54](../phase3/coordinator/pi-core-service-state-recovery-batch-54.md)
+specifies the separate pilot data volume, role-specific views, fresh-only
+installation and restart/restore decisions. Next: check volume identity and
+mount visibility offline; no backing or recovery behavior was activated.
 Actual source reads, sensor health, recovery/timing and pilot evidence remain open.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant

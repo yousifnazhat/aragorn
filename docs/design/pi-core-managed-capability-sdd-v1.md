@@ -235,6 +235,11 @@ request/response limits; do not describe it as already implemented.
 
 ### Failure, cancellation and recovery
 
+The [pilot service-state specification](../phase3/coordinator/pi-core-service-state-recovery-batch-54.md)
+defines where action/provider state persists outside Pi, how fresh installs
+differ from restarts, and why a restored backup cannot revive grant authority.
+It is a successor design, not a change to the compatibility-boot profile.
+
 Admission denial/error/incomplete closure prevents launch. Missing identity,
 expired authority, stale policy, unknown/lost health and revocation prevent new
 protected effects. Denial-only behavior is insufficient for product usefulness.

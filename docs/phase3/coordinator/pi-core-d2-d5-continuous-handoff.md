@@ -8,7 +8,26 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-Current D2 host handoff: [batch 50: single-use runner and matching offline verifier](pi-core-single-use-boot-batch-50.md).
+**Current D2 handoff — batch 51, private B49 nomination intake (HOLD).**
+At signed baseline `7db80ea`, an editable, owner-only worksheet was prepared
+outside Git from the [B49 decision packet](pi-core-boot-approval-packet-batch-49.md).
+The candidate profile is recorded; **0 of 4 operational bindings** could be
+substantiated from the supplied records:
+
+| Missing binding | Next private operator input |
+|---|---|
+| Host nomination | Existing exclusive asset or proposed acquisition, account/asset owner, zone, exact regional AMI/publisher and access scope. Physical host/instance receipts can follow a separately approved allocation. |
+| Budget/window | Dated all-in quote, billing owner, approved USD ceiling, allocation and boot windows in UTC and release deadline. The historical host-only minimum is not a cap. |
+| Evidence destination | Exact local and independent off-host destinations, named observer/custodian/recipient, retention and authenticated readback channel. The previous local refusal archives are not that destination. |
+| Cleanup owner | Named, accepting primary and backup, independent reviewer, scope covering the instance, volumes and Dedicated Host, and someone accountable for release and billing readback. |
+
+Resume when the operator supplies the completed private worksheet or signed
+decision references with scope and acceptance times. A general instruction to
+proceed does not identify a host, a dollar limit, an endpoint or an owner.
+Do not put private values or a draft digest in Git. The B50 seal remains empty:
+no allocation, enrollment, boot, cleanup or spending is granted by this intake.
+
+Predecessor: [batch 50: single-use runner and matching offline verifier](pi-core-single-use-boot-batch-50.md).
 The exact shipped binary refused before target access; its build seal and
 embedded list grant no boot. Do not recapture that refusal. A private single-use
 build requires the signed digest-only seal and matching original decisions;

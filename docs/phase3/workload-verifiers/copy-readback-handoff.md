@@ -1,5 +1,9 @@
 # BENIGN_COPY_READBACK — reviewed and focused checks passed
 
+**Subsequent integration:** [D3 batch 56](../coordinator/pi-core-portable-copy-batch-56.md)
+adds optional portable evidence and a read-only verifier. The original handoff
+below is historical; neither stage supplies a real managed task pair.
+
 Source assignment: 2026-10-12. Implementation base:
 `55a87ea1f7ab3924ade5fa629935ffc03962ba05`, branch
 `codex/phase3-workload-verifiers`. Implements the published context contract and

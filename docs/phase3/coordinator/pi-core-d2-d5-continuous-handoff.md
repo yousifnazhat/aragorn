@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**Current D3 handoff — [batch 56, portable copy/readback](pi-core-portable-copy-batch-56.md).**
+Three retained objects can now be verified after fixture removal. The managed
+acquisition paths and independent custody of the observation pin are still owed.
+
 **Current D2 handoff — [batch 55, read-only state admission](pi-core-storage-admission-batch-55.md).**
 Pilot profile, independent latest witness, role mountinfo and Pi handle/tree
 records now have an offline reader. No real capture, volume or current witness

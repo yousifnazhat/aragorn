@@ -8,7 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-**Current D2 handoff — [batch 52, B50 host replay and separate B44 guest finding](pi-core-guest-replay-batch-52.md).**
+**Current D2 handoff — [batch 53, offline worker view and separate state seed](pi-core-worker-filesystem-batch-53.md).**
+The exact retained OS, restricted runtime and source plan were packaged and read back
+as an inventory projection. A separate empty service-state seed grants no worker
+write access. The B44 image and private B49 worksheet did not change. Use the
+signed archive pins; do not regenerate a successful preparation or treat it as a mount.
+
+**Batch 52, [B50 host replay and separate B44 guest finding](pi-core-guest-replay-batch-52.md).**
 The replay can now read the same serial bytes that passed owner/watchdog verification
 against the signed media catalog. A matching guest report is not independent proof
 of boot. The shipped runner still has zero slots and there is no real guest capture.

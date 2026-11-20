@@ -85,8 +85,11 @@ boot decisions, actual target bindings and evidence remain outstanding.
 B50 archive replay to the B44 guest reader using signed media pins. The two
 findings are reported separately; no new guest observation or boot approval exists.
 Independently observe guest read-only
-flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
-prepare the protected worker view and writable state for a later pilot.
+flags and 512-byte geometry before relying on PID 1, mounts or loaded identities.
+[Batch 53](../phase3/coordinator/pi-core-worker-filesystem-batch-53.md) prepared the
+offline worker-view archive and a separate service-state seed for a later pilot.
+Neither is mounted: installed file identities, effective read-only mounts and a
+service-only writable backing arrangement still need independent verification.
 Actual source reads, sensor health, recovery/timing and pilot evidence remain open.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant

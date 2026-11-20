@@ -8,7 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-**Current D2 handoff — batch 51, private B49 nomination intake (HOLD).**
+**Current D2 handoff — [batch 52, B50 host replay and separate B44 guest finding](pi-core-guest-replay-batch-52.md).**
+The replay can now read the same serial bytes that passed owner/watchdog verification
+against the signed media catalog. A matching guest report is not independent proof
+of boot. The shipped runner still has zero slots and there is no real guest capture.
+The private B49 hold below is unchanged; do not recapture the historical refusal.
+
+**Batch 51, private B49 nomination intake (HOLD).**
 At signed baseline `7db80ea`, an editable, owner-only worksheet was prepared
 outside Git from the [B49 decision packet](pi-core-boot-approval-packet-batch-49.md).
 The candidate profile is recorded; **0 of 4 operational bindings** could be

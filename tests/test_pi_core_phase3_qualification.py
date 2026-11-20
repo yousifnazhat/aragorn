@@ -12,6 +12,7 @@ import unittest
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 from aragorn import pi_core_phase3_qualification as subject
 from aragorn.cas import CASError
@@ -135,12 +136,13 @@ class PiCorePhase3QualificationTests(unittest.TestCase):
             task = self.campaign["pair_tasks"][pair_id]
             binding = schedule["overhead_schedule"]["pair_bindings"][pair_id]
             binding.update(task_digest=self.campaign["task_descriptors"][task], input_digest=descriptors[task]["input"]["digest"])
+        after_attempts = max(s["decision_finalized_boottime_ns"] for s in self.metrics["attempts"]) + 1_000_000_000
         for name in ("baseline_samples", "instrumented_samples"):
             for sample in self.metrics[name]:
                 sample.update(schedule["overhead_schedule"]["pair_bindings"][sample["pair_id"]])
-                if name == "instrumented_samples":
-                    sample["started_boottime_ns"] += 2000
-                    sample["completed_boottime_ns"] += 2000
+                offset = after_attempts + (2000 if name == "instrumented_samples" else 0)
+                sample["started_boottime_ns"] += offset
+                sample["completed_boottime_ns"] += offset
         self.bind_campaign()
 
     def put(self, value):
@@ -426,6 +428,74 @@ class PiCorePhase3QualificationTests(unittest.TestCase):
         self.bind_campaign()
         with self.assertRaisesRegex(Phase3ExitQualificationError, "baseline first"):
             self.qualify()
+
+    @staticmethod
+    def shift_window(row, start, *, attempt=False):
+        first, last = (("request_accepted_boottime_ns", "decision_finalized_boottime_ns") if attempt
+                       else ("started_boottime_ns", "completed_boottime_ns"))
+        row[last] += start - row[first]
+        row[first] = start
+
+    def test_two_attempts_cannot_overlap_by_one_nanosecond(self):
+        first, second = self.metrics["attempts"][:2]
+        self.shift_window(second, first["decision_finalized_boottime_ns"] - 1, attempt=True)
+        self.bind_campaign()
+        with self.assertRaisesRegex(Phase3ExitQualificationError, "windows overlap"):
+            self.qualify()
+
+    def test_task_cannot_overlap_the_last_attempt_by_one_nanosecond(self):
+        self.shift_window(self.metrics["baseline_samples"][0], self.metrics["attempts"][-1]["decision_finalized_boottime_ns"] - 1)
+        self.bind_campaign()
+        with self.assertRaisesRegex(Phase3ExitQualificationError, "windows overlap"):
+            self.qualify()
+
+    def test_individually_baseline_first_pairs_cannot_overlap_each_other(self):
+        first = self.metrics["instrumented_samples"][0]
+        self.shift_window(self.metrics["baseline_samples"][1], first["completed_boottime_ns"] - 1)
+        self.bind_campaign()
+        with self.assertRaisesRegex(Phase3ExitQualificationError, "windows overlap"):
+            self.qualify()
+
+    def test_touching_attempt_and_pair_boundaries_are_serialized(self):
+        previous = self.metrics["attempts"][-1]["decision_finalized_boottime_ns"]
+        for index in (0, 1):
+            for group in ("baseline_samples", "instrumented_samples"):
+                sample = self.metrics[group][index]
+                self.shift_window(sample, previous)
+                previous = sample["completed_boottime_ns"]
+        self.bind_campaign()
+        self.assertTrue(self.qualify()["decision"]["phase3_exit_eligible"])
+
+    def test_disjoint_attempts_may_run_in_reverse_id_order(self):
+        first, second = self.metrics["attempts"][:2]
+        first_start, second_start = (s["request_accepted_boottime_ns"] for s in (first, second))
+        self.shift_window(first, second_start, attempt=True)
+        self.shift_window(second, first_start, attempt=True)
+        self.bind_campaign()
+        self.assertTrue(self.qualify()["decision"]["phase3_exit_eligible"])
+
+    def test_outer_chronology_uses_shared_checked_pin_after_caller_map_mutation(self):
+        evidence = self.arguments["evidence_by_requirement"]
+        disjoint_pin = evidence[_METRICS]
+        first, second = self.metrics["attempts"][:2]
+        self.shift_window(second, first["decision_finalized_boottime_ns"] - 1, attempt=True)
+        self.bind_campaign()
+        overlap_pin = evidence[_METRICS]
+        self.assertNotEqual(overlap_pin, disjoint_pin)
+        compose = subject._qualify_phase3_requirements
+
+        def compose_then_switch(**kwargs):
+            result = compose(**kwargs)
+            self.assertTrue(result["decision"]["phase3_exit_eligible"])
+            self.assertEqual(result["requirements"][_METRICS]["bindings"]["evidence_digest"], overlap_pin)
+            evidence[_METRICS] = disjoint_pin
+            return result
+
+        with patch.object(subject, "_qualify_phase3_requirements", side_effect=compose_then_switch) as wrapped:
+            with self.assertRaisesRegex(Phase3ExitQualificationError, "windows overlap"):
+                self.qualify()
+        wrapped.assert_called_once()
+        self.assertEqual(evidence[_METRICS], disjoint_pin)
 
     def test_strict_500ms_boundary_reuses_numeric_rejection(self):
         for sample in self.metrics["attempts"]:

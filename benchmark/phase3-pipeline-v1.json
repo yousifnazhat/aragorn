@@ -2,6 +2,39 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-managed-timing-serialization-offline",
+      "description": "Managed qualification refuses overlaps across decision and paired-task intervals. Only affected composition and timing checks, no capture or measurements.",
+      "tests": [
+        "test_pi_core_managed_timing_serialization"
+      ],
+      "inputs": [
+        "benchmark/phase3-exit-gate-manifest-v1.json",
+        "benchmark/pi-core-managed-phase3-v1.json",
+        "docs/design/pi-core-phase3-acceptance-mapping-v1.md",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/native_phase3_http_canary_contract.py",
+        "src/aragorn/native_phase3_http_fixture.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_deployment.py",
+        "src/aragorn/phase3_exit_gate_manifest.py",
+        "src/aragorn/phase3_exit_qualification.py",
+        "src/aragorn/phase3_quantitative_metrics.py",
+        "src/aragorn/phase3_reference_tasks.py",
+        "src/aragorn/pi_core_phase3_qualification.py",
+        "src/aragorn/runtime_action_broker.py",
+        "src/aragorn/runtime_action_decision.py",
+        "src/aragorn/runtime_action_observation_publisher.py",
+        "src/aragorn/runtime_process_profile.py",
+        "tests/test_phase3_exit_qualification.py",
+        "tests/test_phase3_quantitative_metrics.py",
+        "tests/test_pi_core_managed_timing_serialization.py",
+        "tests/test_pi_core_phase3_qualification.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 120
+    },
+    {
       "id": "native-workload-copy-portable-offline",
       "description": "Retain independent copy output after fixture and descriptor guards, and replay it from read-only CAS after the disposable fixture is gone. Inert tempfiles only; never a real task pair.",
       "tests": [
@@ -14872,7 +14905,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 285-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 286-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

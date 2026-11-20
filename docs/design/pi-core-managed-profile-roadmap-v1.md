@@ -99,6 +99,9 @@ guest enforcement remain unproven.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.
+[D4 batch 57](../phase3/coordinator/pi-core-serial-measurements-batch-57.md)
+rejects overlapping reported decision/task windows across the managed campaign;
+there is still no freeze or measured campaign.
 Actual source reads, sensor health, recovery/timing and pilot evidence remain open.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant

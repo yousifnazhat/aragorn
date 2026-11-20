@@ -81,6 +81,9 @@ fields: `schema`, `profile`, `deployment_identity_digest`,
   and the semantic consumer contract.
 - `pair_ordering` is `BASELINE_FIRST`. Actual baseline completion must precede or
   equal its instrumented start; overlap is rejected after strict numeric parsing.
+  [Batch 57](pi-core-serial-measurements-batch-57.md) also rejects overlaps
+  across all 300 reported decision and task intervals, using the exact
+  quantitative evidence checked by the shared composer.
 - The existing arithmetic remains unchanged: attribution at least 99%; 100%
   residue-free pre-effect blocking separately per family; nearest-rank p95 below
   500 ms; aggregate overhead below 10%; one actual unattributed control; exact

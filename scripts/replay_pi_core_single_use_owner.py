@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from scripts import pi_core_boot_build_seal as seal
+from scripts import inspect_pi_core_observable_serial as guest_serial
 from scripts.build_pi_core_linux import ROOT, BuildError, canonical, require, sha256
 from scripts.pi_core_owner_archive import OWNER, export_owner_archive, read_owner_archive
 from scripts.pi_core_single_use_release import DISK_SHA256, SCHEMA, release_digest
@@ -62,6 +63,21 @@ def authenticated_release(commit, signer, release_path):
         release = HELD
     checked_release(pin, release)
     return pin, release
+
+
+def authenticated_media(commit, pin, signer):
+    """Use the artifact and prebuild commits authenticated by authenticated_release, never the checkout."""
+    bound = signed_pin(commit, signer)
+    raw = seal._blob(commit, guest_serial.PINS)
+    digest = sha256(raw)
+    require(type(bound) is dict and bound.get("schema") == "aragorn/bound-host-runner-artifact/v1"
+            and bound.get("disk_sha256") == pin["disk_sha256"] and bound.get("media_pins_sha256") == digest,
+            "B44 media catalog or disk differs from signed host runner pin")
+    require(raw == seal._blob(pin["approval_commit"], guest_serial.PINS),
+            "B44 prebuild and artifact media catalogs differ")
+    media = _object(raw)
+    require(media.get("disk_sha256") == pin["disk_sha256"], "B44 and B50 disk pins differ")
+    return media, digest
 
 
 def held_watchdog(uid, files):
@@ -183,8 +199,20 @@ def main(argv=None):
         require(sha256(raw) == a.bindings[1], "independent bindings digest mismatch")
         bindings = _object(raw)
     report = assess(archive, files, commit=a.commit, pin=pin, release=release, bindings=bindings, host_loss=a.host_loss)
+    # A consistent host transcript permits inspection, not a positive guest finding.
+    host = report["disposition"]
+    guest = {"status": "not-evaluated", "reason": host}
+    if host == "consistent-single-use-transcript":
+        guest = {"status": "indeterminate"}
+        try:
+            media, catalog_digest = authenticated_media(a.commit, pin, a.signer)
+            guest.update(media_pins_sha256=catalog_digest, approval_commit=pin["approval_commit"])
+            guest.update(guest_serial.inspect_serial_with_pins(files["serial.raw"], media))
+        except (BuildError, OSError, ValueError, subprocess.SubprocessError) as exc:
+            guest["reason"] = str(exc)
+    report["guest"] = guest
     print(json.dumps(report | {"manifest_sha256": digest}, sort_keys=True))
-    return 0 if report["disposition"] in ("consistent-held-refusal", "consistent-single-use-transcript") else 2
+    return 0 if host == "consistent-held-refusal" or guest["status"] == "matching_guest_record_only" else 2
 
 
 if __name__ == "__main__":

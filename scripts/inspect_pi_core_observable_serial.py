@@ -19,7 +19,13 @@ RECORD = re.compile(
 
 
 def inspect_serial(raw: bytes, *, expected_boot_id: str | None = None) -> dict:
-    """Compare to pins in the reviewed checkout; offsets are into original bytes, including line endings."""
+    """Standalone reader: use the B44 catalog from the reviewed checkout."""
+    return inspect_serial_with_pins(raw, json.loads(regular_bytes(PINS, 32768)),
+                                    expected_boot_id=expected_boot_id)
+
+
+def inspect_serial_with_pins(raw: bytes, pins: dict, *, expected_boot_id: str | None = None) -> dict:
+    """Compare original serial bytes to a caller-authenticated B44 catalog; never load substitute pins."""
     require(type(raw) is bytes and 0 < len(raw) < LIMIT, "empty or at/over serial capture limit")
     require(b"aragorn early boot refused" not in raw and b"Kernel panic - not syncing" not in raw,
             "guest refusal or panic in capture")
@@ -31,11 +37,19 @@ def inspect_serial(raw: bytes, *, expected_boot_id: str | None = None) -> dict:
     match = RECORD.fullmatch(raw, start, end)
     require(match is not None, "malformed or conflicting guest record")
     boot = match["boot"].decode("ascii")
-    require(expected_boot_id is None or boot == expected_boot_id, "boot ID mismatch")
+    require(expected_boot_id is None or (type(expected_boot_id) is str and boot == expected_boot_id),
+            "boot ID mismatch")
     # The same boot policy pins the manager and root. A serial line cannot attest its containing UKI.
-    pins = json.loads(regular_bytes(PINS, 32768))
-    require(pins["boot_observed"] is False and pins["sector_size"] == 512
-            and int(match["size"]) == (pins["root_size"] + 511) // 512 * 512
+    require(type(pins) is dict and pins.get("schema") == "aragorn/observable-guest-disk/v1"
+            and all(pins.get(key) is False for key in ("boot_observed", "secure_boot_enrollment", "phase3_exit_eligible")),
+            "invalid B44 media catalog schema or evidence flags")
+    require(all(type(pins.get(key)) is str and re.fullmatch(r"[0-9a-f]{64}", pins[key])
+                for key in ("disk_sha256", "uki_sha256", "root_sha256", "manager_sha256")),
+            "invalid B44 media digest pins")
+    require(all(type(pins.get(key)) is int for key in ("sector_size", "root_size", "disk_bytes"))
+            and pins["sector_size"] == 512 and 0 < pins["root_size"] <= pins["disk_bytes"] < 1 << 63
+            and pins["disk_bytes"] % 512 == 0, "invalid B44 media geometry pins")
+    require(int(match["size"]) == (pins["root_size"] + 511) // 512 * 512
             and match["root"].decode("ascii") == pins["root_sha256"]
             and match["manager"].decode("ascii") == pins["manager_sha256"],
             "guest record does not match the signed successor pins")

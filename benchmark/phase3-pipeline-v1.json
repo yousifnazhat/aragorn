@@ -69,15 +69,17 @@
     },
     {
       "id":"pi-core-single-use-replay-offline",
-      "description":"Original B50 envelope and watchdog, signed release/issue gate provenance, independent bindings and archive limits. Only inert transcripts.",
+      "description":"Original B50 envelope, watchdog and release bindings; separate B44 guest reading from the verified capture and signed media catalog. Inert archive fixtures only.",
       "tests":["test_pi_core_single_use_replay"],
       "inputs":[
+        "packaging/pi-core/immutable-host-b44/media-output.json",
         "packaging/pi-core/immutable-host-b45/runner-output.json",
         "packaging/pi-core/immutable-host-b50/build-seal.json",
         "packaging/pi-core/immutable-host-b50/owner-release.json",
         "packaging/pi-core/immutable-host-b50/runner-output.json",
         "scripts/build_pi_core_linux.py",
         "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/inspect_pi_core_observable_serial.py",
         "scripts/pi_core_boot_build_seal.py",
         "scripts/pi_core_host_evidence_export.py",
         "scripts/pi_core_host_watchdog.py",

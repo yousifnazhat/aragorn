@@ -41,6 +41,14 @@ class SerialReaderTests(unittest.TestCase):
                 with self.assertRaisesRegex(BuildError, "refusal or panic"):
                     serial.inspect_serial(raw)
 
+    def test_matching_line_cannot_override_invalid_supplied_media_pins(self):
+        pins = json.loads(serial.PINS.read_bytes())
+        for field, value in (("schema", "unrelated"), ("boot_observed", 0), ("secure_boot_enrollment", True),
+                             ("phase3_exit_eligible", True), ("disk_sha256", ""), ("uki_sha256", None),
+                             ("root_size", True), ("sector_size", 4096), ("disk_bytes", pins["disk_bytes"] + 1)):
+            with self.subTest(field=field), self.assertRaises(BuildError):
+                serial.inspect_serial_with_pins(self.line, pins | {field: value})
+
     def test_no_inference_from_partial_duplicate_mixed_or_embedded_record(self):
         for raw in (b"", b"started\n", self.line[:-1], self.line + b"incomplete console", self.line + self.line,
                     b"ARAGORN_B43_V1\n" + self.line, b"noise " + self.line,

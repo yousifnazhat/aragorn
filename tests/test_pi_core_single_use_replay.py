@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from scripts import replay_pi_core_single_use_owner as replay
 from scripts.build_pi_core_linux import BuildError, canonical, sha256
@@ -18,6 +18,22 @@ from test_pi_core_single_use_release import entry, envelope
 COMMIT = "7" * 40
 SIGNER = "SHA256:" + "A" * 43
 PREBUILD = "3" * 40
+MEDIA_PATH = replay.ROOT / "packaging/pi-core/immutable-host-b44/media-output.json"
+# Deliberately unlike the checkout's root, manager and geometry: a checkout fallback must fail.
+MEDIA = {"schema": "aragorn/observable-guest-disk/v1", "disk_sha256": replay.DISK_SHA256,
+         "root_sha256": "a" * 64, "manager_sha256": "b" * 64, "uki_sha256": "c" * 64,
+         "root_size": 513, "disk_bytes": 2048, "sector_size": 512, "boot_observed": False,
+         "phase3_exit_eligible": False, "secure_boot_enrollment": False}
+PREFIX = b"\xff other console text\r\n"
+GUEST_BOOT = "d9c5f0ce-113c-48d0-8b55-2a70a7a1b968"
+SERIAL = PREFIX + (f"ARAGORN_B44_V1 boot={GUEST_BOOT} disk_ro=1 part_ro=1 sector=512 part_bytes=1024 "
+                  f"root_ro=1 lib_ro=1 lib_same=1 pid=1 manager_sha256={'b' * 64} "
+                  f"root_sha256={'a' * 64}\r\n").encode("ascii")
+
+
+def b45_pin(raw):
+    return {"schema": "aragorn/bound-host-runner-artifact/v1", "identifier": "org.aragorn.pi-core.b45.host-runner",
+            "boot_authorized": False, "disk_sha256": replay.DISK_SHA256, "media_pins_sha256": sha256(raw)}
 
 
 def issued_seal(e):
@@ -25,7 +41,7 @@ def issued_seal(e):
                      **{k: e[k] for k in ("nomination_sha256", "enrollment_sha256", "boot_approval_sha256")}}})
 
 
-def example(e, attempt):
+def example(e, attempt, *, serial=None):
     release = envelope(e)
     digest = sha256(canonical(release))
     pin = {"schema": "aragorn/b50-single-use-owner/v1", "identifier": "org.aragorn.pi-core.b50.host-owner",
@@ -44,6 +60,9 @@ def example(e, attempt):
     wrap = {"schema": "aragorn/b50-owner-terminal/v1", "release_sha256": digest, "host_identity_sha256": e["host_identity_sha256"],
             "consumed_identity": attempt, "start_check_utc_s": e["not_before_utc"], "start_check_raw_ns": 1005,
             "terminal": json.loads(files["owner-terminal.json"])}
+    if serial is not None:
+        files["serial.raw"] = serial
+        wrap["terminal"]["owner"]["capture"].update(capture_bytes=len(serial), capture_sha256=sha256(serial))
     files |= {"owner-terminal.json": canonical(wrap), **watch}
     manifest = {"attempt_uuid": uid, "fixture_identity": e["fixture_identity"], "attempt_identity": attempt,
                 "ledger_attempt_identity": {"dev": 1, "ino": 12}, "files": {k: {"source": {"mode": 0o400}} for k in files}}
@@ -68,7 +87,8 @@ class SingleUseReplay(unittest.TestCase):
                 p.mkdir(mode=0o700)
             def ident(p):
                 return {"dev": p.stat().st_dev, "ino": p.stat().st_ino}
-            _, files, cfg = example(self.e | {"fixture": str(fixture), "fixture_identity": ident(fixture)}, ident(fixture / uid))
+            _, files, cfg = example(self.e | {"fixture": str(fixture), "fixture_identity": ident(fixture)},
+                                    ident(fixture / uid), serial=SERIAL)
             def seal(p, data):
                 p.write_bytes(data)
                 p.chmod(0o400)
@@ -80,16 +100,25 @@ class SingleUseReplay(unittest.TestCase):
                     str(root / "bindings"), sha256(canonical(cfg["bindings"]))]
             raw = issued_seal(cfg["bindings"]["entry"])
             # Mock only the unavailable future signed artifacts. This is a protocol fixture, not issuance.
+            media = canonical(MEDIA)
+            blobs = {(COMMIT, replay.seal.SEAL): raw, (COMMIT, MEDIA_PATH): media, (PREBUILD, MEDIA_PATH): media}
             with patch.object(replay, "authenticated_pin", return_value=cfg["pin"]) as lookup, \
-                    patch.object(replay.seal, "_blob", return_value=raw) as blob, \
+                    patch.object(replay.seal, "_blob", side_effect=lambda rev, path: blobs[rev, path]) as blob, \
+                    patch.object(replay, "signed_pin", return_value=b45_pin(media)) as signed, \
                     patch.object(replay, "source_seal", return_value=raw) as source:
                 with redirect_stdout(StringIO()) as out:
                     self.assertEqual(replay.main(["export", str(ledger), "--fixture", str(fixture), *opts]), 0)
                     lookup.assert_called_once_with(COMMIT, SIGNER)
-                    blob.assert_called_once_with(COMMIT, replay.seal.SEAL)
+                    blob.assert_has_calls([call(*key) for key in blobs], any_order=True)
+                    signed.assert_called_once_with(COMMIT, SIGNER)
                     source.assert_called_once_with(PREBUILD, COMMIT, SIGNER)
                 result = json.loads(out.getvalue())
                 self.assertEqual(result["disposition"], "consistent-single-use-transcript")
+                guest = result["guest"]
+                self.assertEqual((guest["status"], guest["capture_bytes"], guest["capture_sha256"], guest["record_offset"],
+                                  guest["boot_id"]), ("matching_guest_record_only", len(SERIAL), sha256(SERIAL), len(PREFIX), GUEST_BOOT))
+                self.assertFalse(guest["host_custody_verified"] or guest["external_boot_id_compared"] or guest["phase3_exit_eligible"])
+                self.assertEqual((guest["media_pins_sha256"], guest["approval_commit"]), (sha256(media), PREBUILD))
                 self.assertFalse(any(result[k] for k in ("boot_verified", "boot_authorized_by_replay", "phase3_exit_eligible",
                                                          "retry_authorized", "cleanup_authorized", "restoration_verified")))
                 self.assertEqual((dest / uid / "serial.raw").read_bytes(), files["serial.raw"])
@@ -97,7 +126,57 @@ class SingleUseReplay(unittest.TestCase):
                     self.assertEqual(replay.main(["replay", result["manifest_sha256"], "--host-loss", *opts]), 2)
                     with self.assertRaisesRegex(BuildError, "bindings digest mismatch"):
                         replay.main(["replay", result["manifest_sha256"], *opts[:-1], "0" * 64])
-                self.assertEqual(json.loads(out.getvalue())["disposition"], "unresolved-host-loss")
+                lost = json.loads(out.getvalue())
+                self.assertEqual((lost["disposition"], lost["guest"]["status"]), ("unresolved-host-loss", "not-evaluated"))
+                signed.assert_called_once_with(COMMIT, SIGNER)
+                opts = ["replay", result["manifest_sha256"], *opts]
+                for problem in ("signed guest roots disagree with serial", "signed source missing"):
+                    if problem.startswith("signed guest"):
+                        other = canonical(MEDIA | {"root_sha256": "d" * 64})
+                        blobs[COMMIT, MEDIA_PATH] = blobs[PREBUILD, MEDIA_PATH] = other
+                        signed.return_value = b45_pin(other)
+                    else:
+                        signed.side_effect = FileNotFoundError("missing signed source")
+                    with self.subTest(problem=problem), redirect_stdout(StringIO()) as out:
+                        self.assertEqual(replay.main(opts), 2)
+                        result = json.loads(out.getvalue())
+                        self.assertEqual((result["transcript"], result["disposition"], result["guest"]["status"]),
+                                         ("consistent-single-use-transcript", "consistent-single-use-transcript", "indeterminate"))
+                        self.assertFalse(result["boot_verified"])
+
+    def test_guest_pins_require_exact_signed_blob_in_both_commits_and_matching_candidate(self):
+        media = canonical(MEDIA)
+        other = canonical(MEDIA | {"root_sha256": "d" * 64})
+        bad_disk = canonical(MEDIA | {"disk_sha256": "e" * 64})
+        for desc, source, artifact, b45 in (
+                ("source changed", other, media, b45_pin(media)),
+                ("artifact and source differ only in whitespace", media, media + b"\n", b45_pin(media + b"\n")),
+                ("wrong signed digest despite identical disk", other, other, b45_pin(media)),
+                ("wrong disk despite authenticated digest", bad_disk, bad_disk, b45_pin(bad_disk))):
+            blobs = {(PREBUILD, MEDIA_PATH): source, (COMMIT, MEDIA_PATH): artifact}
+            with self.subTest(case=desc), patch.object(replay, "signed_pin", return_value=b45), \
+                    patch.object(replay.seal, "_blob", side_effect=lambda rev, path: blobs[rev, path]), self.assertRaises(BuildError):
+                replay.authenticated_media(COMMIT, self.cfg["pin"], SIGNER)
+
+    def test_held_refusal_and_capture_mismatch_never_consult_guest_pins(self):
+        uid = self.e["attempt_uuid"]
+        held = self.cfg["pin"] | {"boot_authorized": False, "release_sha256": sha256(canonical(replay.HELD))}
+        bindings = canonical(self.cfg["bindings"])
+        cases = [
+            (held, replay.HELD, self.m | {"fixture_identity": None, "attempt_identity": None},
+             watchdog_files(uid) | {"refusal.stderr": replay.REFUSAL}, [], "consistent-held-refusal", 0),
+            (self.cfg["pin"], self.cfg["release"], self.m, self.files | {"serial.raw": SERIAL},
+             ["--bindings", "/not-used", sha256(bindings)], "indeterminate", 2),
+        ]
+        for pin, release, manifest, files, options, disposition, code in cases:
+            with self.subTest(host=disposition), patch.object(replay, "authenticated_release", return_value=(pin, release)), \
+                    patch.object(replay, "read_owner_archive", return_value=(manifest, files)), \
+                    patch.object(replay, "retained", return_value=bindings), patch.object(replay, "authenticated_media") as media, \
+                    redirect_stdout(StringIO()) as out:
+                self.assertEqual(replay.main(["replay", "0" * 64, "/not-used", uid, COMMIT, SIGNER, *options]), code)
+                report = json.loads(out.getvalue())
+                self.assertEqual((report["disposition"], report["guest"]["status"]), (disposition, "not-evaluated"))
+                media.assert_not_called()
 
     def test_artifact_pin_alone_cannot_substitute_for_two_matching_signed_seals(self):
         raw = issued_seal(self.e)

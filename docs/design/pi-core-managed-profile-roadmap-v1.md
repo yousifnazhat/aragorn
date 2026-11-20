@@ -81,6 +81,9 @@ and matching verifier, enrollment and boot are separate gates. No spend is autho
 the one-slot runner and matching verifier offline. Its signed executable has
 zero slots. Only the no-target refusal was observed; private enrollment and
 boot decisions, actual target bindings and evidence remain outstanding.
+[Batch 52](../phase3/coordinator/pi-core-guest-replay-batch-52.md) connects the
+B50 archive replay to the B44 guest reader using signed media pins. The two
+findings are reported separately; no new guest observation or boot approval exists.
 Independently observe guest read-only
 flags and 512-byte geometry before relying on PID 1, mounts or loaded identities;
 prepare the protected worker view and writable state for a later pilot.

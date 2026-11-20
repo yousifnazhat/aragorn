@@ -96,6 +96,9 @@ installation and restart/restore decisions. [Batch 55](../phase3/coordinator/pi-
 implements the read-only comparison of externally pinned volume, role mounts
 and Pi exposure records. Actual acquisition, current independent custody and
 guest enforcement remain unproven.
+[D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
+copy/readback observation portable after fixture removal. No managed pair has
+been run or qualified by this change.
 Actual source reads, sensor health, recovery/timing and pilot evidence remain open.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant

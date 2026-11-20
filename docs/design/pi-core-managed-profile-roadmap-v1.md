@@ -92,8 +92,10 @@ Neither is mounted: installed file identities, effective read-only mounts and a
 service-only writable backing arrangement still need independent verification.
 [Batch 54](../phase3/coordinator/pi-core-service-state-recovery-batch-54.md)
 specifies the separate pilot data volume, role-specific views, fresh-only
-installation and restart/restore decisions. Next: check volume identity and
-mount visibility offline; no backing or recovery behavior was activated.
+installation and restart/restore decisions. [Batch 55](../phase3/coordinator/pi-core-storage-admission-batch-55.md)
+implements the read-only comparison of externally pinned volume, role mounts
+and Pi exposure records. Actual acquisition, current independent custody and
+guest enforcement remain unproven.
 Actual source reads, sensor health, recovery/timing and pilot evidence remain open.
 The independent [batch-34 rotation fix](../phase3/coordinator/pi-core-terminal-rotation-batch-34.md)
 retains the original terminal evidence and allows a separately authorized grant

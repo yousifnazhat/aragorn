@@ -2,6 +2,30 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-pilot-state-admission-offline",
+      "description": "Compare separately pinned pilot storage and witness records, kernel mountinfo, file identities and stopped Pi exposure. Private inert CAS only; no acquisition, activation or deployment qualification.",
+      "tests": ["test_pi_core_state_mounts", "test_pi_core_state_exposure", "test_pi_core_state_admission"],
+      "inputs": [
+        "packaging/pi-core/source-gate-noeval-v2.c",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_exit_gate_manifest.py",
+        "src/aragorn/pi_core_broker_base_provision.py",
+        "src/aragorn/pi_core_confined_launch.py",
+        "src/aragorn/pi_core_service_lifecycle.py",
+        "src/aragorn/pi_core_state_admission.py",
+        "src/aragorn/pi_core_state_exposure.py",
+        "src/aragorn/pi_core_state_mounts.py",
+        "src/aragorn/runtime_tetragon_stats_map.py",
+        "tests/test_pi_core_state_admission.py",
+        "tests/test_pi_core_state_exposure.py",
+        "tests/test_pi_core_state_mounts.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 45
+    },
+    {
       "id": "pi-core-worker-filesystem-offline",
       "description": "Package retained B3/B36 worker bytes for the B37 plan and a separate empty state seed for B44; reject unsafe or changed archive members. No mount, rebuild, boot or installation.",
       "tests": [
@@ -14821,7 +14845,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 283-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 284-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

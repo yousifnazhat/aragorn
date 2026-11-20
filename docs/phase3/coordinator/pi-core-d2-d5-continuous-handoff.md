@@ -8,7 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-**Current D2 handoff — [batch 54, service-state placement and recovery](pi-core-service-state-recovery-batch-54.md).**
+**Current D2 handoff — [batch 55, read-only state admission](pi-core-storage-admission-batch-55.md).**
+Pilot profile, independent latest witness, role mountinfo and Pi handle/tree
+records now have an offline reader. No real capture, volume or current witness
+exists from this work. B49, the compatibility-boot release and the live gates stay held.
+
+**Batch 54, [service-state placement and recovery](pi-core-service-state-recovery-batch-54.md).**
 The pilot successor design separates a persistent service data volume from Pi
 and the compatibility boot disk. It distinguishes fresh installation, restart
 and host-loss recovery; a restored snapshot never authorizes an effect.

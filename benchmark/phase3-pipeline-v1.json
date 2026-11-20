@@ -2,6 +2,36 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-pilot-state-mask-witness-offline",
+      "description": "Require independently pinned worker-equivalent denial and the exact empty systemd mask backing; v1 stays strict. Read-only inert comparison, no mount, activation, credential or qualification.",
+      "tests": [
+        "test_pi_core_state_masks",
+        "test_pi_core_state_mask_archive"
+      ],
+      "inputs": [
+        "packaging/pi-core/source-gate-noeval-v2.c",
+        "src/aragorn/__init__.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/phase3_exit_gate_manifest.py",
+        "src/aragorn/pi_core_broker_base_provision.py",
+        "src/aragorn/pi_core_confined_launch.py",
+        "src/aragorn/pi_core_service_lifecycle.py",
+        "src/aragorn/pi_core_state_admission.py",
+        "src/aragorn/pi_core_state_exposure.py",
+        "src/aragorn/pi_core_state_masks.py",
+        "src/aragorn/pi_core_state_mounts.py",
+        "src/aragorn/runtime_tetragon_stats_map.py",
+        "tests/test_pi_core_state_admission.py",
+        "tests/test_pi_core_state_exposure.py",
+        "tests/test_pi_core_state_mask_archive.py",
+        "tests/test_pi_core_state_masks.py",
+        "tests/test_pi_core_state_mounts.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 45
+    },
+    {
       "id": "pi-core-managed-timing-serialization-offline",
       "description": "Managed qualification refuses overlaps across decision and paired-task intervals. Only affected composition and timing checks, no capture or measurements.",
       "tests": [
@@ -14905,7 +14935,7 @@
     },
     {
       "id": "pipeline-capacity",
-      "description": "Four inert checks at the 286-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
+      "description": "Four inert checks at the 287-stage registry boundary; no product checks launched by the fixtures, cache reset or qualification.",
       "tests": ["test_phase3_pipeline_capacity"],
       "inputs": ["scripts/phase3_pipeline.py", "tests/test_phase3_pipeline_capacity.py"],
       "needs": [],

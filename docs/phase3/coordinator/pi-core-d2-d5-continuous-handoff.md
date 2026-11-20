@@ -8,10 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-**D2 decision needed — [worker mask proof](pi-core-worker-mask-decision.md).**
-The current confinement and literal worker-visible walk cannot both produce
-the expected positive observation of a mode-0000 mask. Keep B55 fail-closed
-until the operator chooses a successor evidence format or worker layout.
+**D2 — [approved worker mask proof](pi-core-worker-mask-decision.md),
+[batch 58 offline reader](pi-core-mask-witness-batch-58.md).** Keep the worker
+confined. V2 compares a separate witness for named masks; v1 remains strict.
+Current independent acquisition, trusted custody and installed evidence are
+still missing. Do not use an observer's generic permission error as a pass.
 
 **D4 — [batch 57, serial measurement windows](pi-core-serial-measurements-batch-57.md).**
 The managed qualifier refuses cross-sample overlap. Clock-domain and raw

@@ -17,6 +17,11 @@ ROLES = {"manager", "action", "sensor", "provider", "pi"}
 PROFILE = "aragorn/pilot-state-profile/v1"
 LATEST = "aragorn/pilot-state-independent-head/v1"
 CAPTURE = "aragorn/pilot-state-role-capture/v1"
+MASK_PROFILE = "aragorn/pilot-state-profile/v2"
+MASK_LATEST = "aragorn/pilot-state-independent-head/v2"
+MASK_CAPTURE = "aragorn/pilot-state-role-capture/v2"
+MASK_WALK = "aragorn/pilot-state-pi-walk/v2"
+MASK_WITNESS = "aragorn/pilot-state-independent-masks/v1"
 
 
 def _need(ok, reason):
@@ -68,12 +73,23 @@ def _volume(volume):
 
 def verify_state_archive(cas, profile_pin, latest_pin):
     """Both pins come from independent custody; latest_pin must not be selected by the volume."""
+    return _verify_archive(cas, profile_pin, latest_pin, None)
+
+
+def verify_state_archive_v2(cas, profile_pin, latest_pin, mask_witness_pin):
+    """Compare a distinctly pinned independent observer's evidence for the exact stopped gate."""
+    return _verify_archive(cas, profile_pin, latest_pin, _pin(mask_witness_pin))
+
+
+def _verify_archive(cas, profile_pin, latest_pin, mask_pin):
     _need(type(cas) is CAS and cas.read_only is True, "read-only CAS required")
+    masked = mask_pin is not None
+    schemas = (MASK_PROFILE, MASK_LATEST, MASK_CAPTURE) if masked else (PROFILE, LATEST, CAPTURE)
     p, head = _doc(cas, profile_pin), _doc(cas, latest_pin)
     _keys(p, ("schema", "deployment", "image", "configuration", "volume", "roles"))
     _keys(head, ("schema", "profile", "capture", "boot_id", "attachment", "generation", "state_digest",
                  "unresolved_attempts", "subjects", "worker_root", "admitted_cwd"))
-    _need(p["schema"] == PROFILE and head["schema"] == LATEST and head["profile"] == profile_pin,
+    _need((p["schema"], head["schema"]) == schemas[:2] and head["profile"] == profile_pin,
           "independent head and selected pilot profile differ")
     for k in ("deployment", "image", "configuration"):
         _pin(p[k])
@@ -90,7 +106,7 @@ def verify_state_archive(cas, profile_pin, latest_pin):
     c = _doc(cas, head["capture"])
     _keys(c, ("schema", "profile", "deployment", "image", "configuration", "boot_id", "attachment", "volume", "mapping", "generation", "state_digest",
               "unresolved_attempts", "roles", "source_roots", "pi_exposure"))
-    _need(c["schema"] == CAPTURE and c["profile"] == profile_pin, "wrong observation profile")
+    _need(c["schema"] == schemas[2] and c["profile"] == profile_pin, "wrong observation profile")
     for k in ("deployment", "image", "configuration"):
         _same(c[k], p[k], "observed deployment does not match profile: " + k)
     for k in ("boot_id", "attachment", "generation", "state_digest", "unresolved_attempts"):
@@ -116,6 +132,7 @@ def verify_state_archive(cas, profile_pin, latest_pin):
               [dev, 0, 0, stat.S_IFDIR | (0o755 if target == ACTION else 0o700)], "wrong backing directory identity or mode")
     _need(len({v["ino"] for v in source.values()}) == len(source), "backing directories alias")
     pids, namespaces, pi_mounts = set(), set(), {}
+    mount_details = {"pi": {}, "manager": {}} if masked else {}
     for role in sorted(ROLES):
         ids, subject, obs = p["roles"][role], head["subjects"][role], c["roles"][role]
         _keys(ids, ("uid", "gid"))
@@ -123,7 +140,12 @@ def verify_state_archive(cas, profile_pin, latest_pin):
             _uint(ident, 0 if role == "manager" else 1, 1 << 31)
         if role == "manager":
             _need(ids == {"uid": 0, "gid": 0}, "root manager required")
-        _keys(subject, ("pid", "start_ticks", "mount_namespace", "uid", "gid"))
+        fields = ("pid", "start_ticks", "mount_namespace", "uid", "gid")
+        if masked and role in mount_details:
+            fields += ("user_namespace",)
+        _keys(subject, fields)
+        if "user_namespace" in fields:
+            _uint(subject["user_namespace"])
         pids.add(_uint(subject["pid"], 1, 1 << 31))
         namespaces.add(_uint(subject["mount_namespace"]))
         _uint(subject["start_ticks"])
@@ -133,7 +155,7 @@ def verify_state_archive(cas, profile_pin, latest_pin):
         _same(subject, obs["after"], "process or namespace changed")
         raw = cas.read(_pin(obs["mountinfo"]), max_bytes=1 << 20)
         mounts = verify_mounts(role, raw, device=dev, fs_type=p["volume"]["fs_type"], backing_devices=backing,
-                               namespace=pi_mounts if role == "pi" else None)
+                               namespace=pi_mounts if role == "pi" else None, mount_details=mount_details.get(role))
         _keys(obs["targets"], mounts)
         for target, mid in mounts.items():
             _same(obs["targets"][target], {**source[target], "mount_id": mid},
@@ -146,10 +168,30 @@ def verify_state_archive(cas, profile_pin, latest_pin):
     raw = cas.read(_pin(c["pi_exposure"]), max_bytes=32 << 20)
     exposure = json.loads(raw.decode("ascii"))
     _need(canonical_json(exposure) + b"\n" == raw, "noncanonical or duplicate Pi exposure fields")
-    verify_pi_exposure(exposure, namespace=pi_mounts, device=dev, backing_devices=backing, pid=pi["pid"],
-                       start_ticks=pi["start_ticks"], mount_namespace=pi["mount_namespace"],
-                       worker_root=head["worker_root"], admitted_cwd=head["admitted_cwd"])
-    return {"status": "consistent-offline-records-only", "profile": profile_pin, "independent_head": latest_pin,
+    context = dict(namespace=pi_mounts, device=dev, backing_devices=backing, pid=pi["pid"],
+                   start_ticks=pi["start_ticks"], mount_namespace=pi["mount_namespace"],
+                   worker_root=head["worker_root"], admitted_cwd=head["admitted_cwd"])
+    if masked:
+        from .pi_core_state_exposure import _verify_pi_exposure
+        from .pi_core_state_masks import verify_masks
+
+        _keys(exposure, ("schema", "walk"))
+        _need(exposure["schema"] == MASK_WALK, "versioned mask walk required")
+        witness = _doc(cas, mask_pin)
+        joins = dict(schema=MASK_WITNESS, profile=profile_pin, independent_head=latest_pin,
+                     capture=head["capture"], pi_exposure=c["pi_exposure"], boot_id=head["boot_id"])
+        _keys(witness, (*joins, "proof"))
+        _same({k: witness[k] for k in joins}, joins, "independent mask witness belongs to another capture")
+        walk = exposure["walk"]
+        leaves = verify_masks(walk, witness["proof"], subject=pi, manager_subject=head["subjects"]["manager"],
+                              namespace=pi_mounts, device=dev, backing_devices=backing,
+                              worker_mounts=mount_details["pi"], manager_mounts=mount_details["manager"])
+        _need(witness["proof"]["before"]["probe"]["pid"] not in pids, "mask probe aliases a protected role")
+        _verify_pi_exposure(walk, verified_masks=leaves, **context)
+    else:
+        verify_pi_exposure(exposure, **context)
+    return {**({"mask_witness": mask_pin} if masked else {}),
+            "status": "consistent-offline-records-only", "profile": profile_pin, "independent_head": latest_pin,
             "capture": head["capture"], "installed_isolation_verified": False, "activation_authorized": False,
             "recovery_authorized": False, "phase3_exit_eligible": False}
 
@@ -159,9 +201,13 @@ def main(argv=None):
     parser.add_argument("cas", help="existing private, read-only evidence store")
     parser.add_argument("profile", help="out-of-band pin of approved pilot profile")
     parser.add_argument("latest", help="out-of-band pin of latest independently retained witness")
+    parser.add_argument("--mask-witness", help="select v2: separately held mask-observer witness digest")
     args = parser.parse_args(argv)
     try:
-        print(json.dumps(verify_state_archive(CAS(args.cas, read_only=True), args.profile, args.latest), sort_keys=True))
+        cas = CAS(args.cas, read_only=True)
+        report = (verify_state_archive(cas, args.profile, args.latest) if args.mask_witness is None else
+                  verify_state_archive_v2(cas, args.profile, args.latest, args.mask_witness))
+        print(json.dumps(report, sort_keys=True))
     except (CASError, ValueError, OSError, RecursionError) as exc:
         print("State evidence refused: " + str(exc), file=sys.stderr)
         return 2

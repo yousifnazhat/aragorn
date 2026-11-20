@@ -303,13 +303,23 @@ def qualify_pi_core_phase3_exit(
     )
     if result["decision"]["phase3_exit_eligible"]:
         # The shared metrics parser already established canonical complete samples.
-        metrics = json.loads(_blob(evidence_cas, evidence_by_requirement[_MEASUREMENTS], _EVIDENCE_LIMIT))
+        qualified_pin = result["requirements"][_MEASUREMENTS]["bindings"]["evidence_digest"]
+        metrics = json.loads(_blob(evidence_cas, qualified_pin, _EVIDENCE_LIMIT))
         baseline = {sample["pair_id"]: sample for sample in metrics["baseline_samples"]}
         for sample in metrics["instrumented_samples"]:
             _require(
                 baseline[sample["pair_id"]]["completed_boottime_ns"] <= sample["started_boottime_ns"],
                 "managed paired tasks must execute baseline first without overlap",
             )
+        # Input order identifies cases, not elapsed time. Independent measurement
+        # verification must establish a common boot/clock domain for these stamps.
+        windows = [(a["request_accepted_boottime_ns"], a["decision_finalized_boottime_ns"])
+                   for a in metrics["attempts"]]
+        windows.extend((s["started_boottime_ns"], s["completed_boottime_ns"])
+                       for mode in ("baseline_samples", "instrumented_samples") for s in metrics[mode])
+        windows.sort()
+        _require(all(end <= next_start for (_, end), (next_start, _) in zip(windows, windows[1:])),
+                 "managed attempt and task measurement windows overlap")
     # Re-read all managed joins after consumers; CAS presence is not semantic proof.
     _inventory(_blob(evidence_cas, inventory_pin, _DOCUMENT_LIMIT), inventory_pin, deployment_pin, manifest, evidence_cas)
     _surface_evidence(_blob(evidence_cas, surface_pin, _DOCUMENT_LIMIT), inventory_pin, deployment_pin, surface_ids, evidence_cas)

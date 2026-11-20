@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D4 — [batch 57, serial measurement windows](pi-core-serial-measurements-batch-57.md).**
+The managed qualifier refuses cross-sample overlap. Clock-domain and raw
+timing verification are independent obligations, not a freeze or measurement.
+
 **Current D3 handoff — [batch 56, portable copy/readback](pi-core-portable-copy-batch-56.md).**
 Three retained objects can now be verified after fixture removal. The managed
 acquisition paths and independent custody of the observation pin are still owed.

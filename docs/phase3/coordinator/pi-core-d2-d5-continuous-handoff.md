@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [mounted filesystem UUID, batch 74](pi-core-mounted-state-uuid-batch-74.md).**
+A future protected plan may require two kernel reads on the same held state
+directory, joined to the independent volume profile. The backing asset, encryption
+identity, writer fence and current external head are still separate.
+
 **D2 — [sensor configuration, batch 73](pi-core-sensor-config-mounts-batch-73.md).**
 The opted-in path and independent reader now require the mounted configuration
 disk and sensor's single read-only file projection before a positive result.

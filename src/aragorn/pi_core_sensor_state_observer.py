@@ -4,6 +4,7 @@ No task is started, joined, signalled or stopped. Return raw mount streams and
 partial observations, not evidence of absent paths, end-to-end health or authority.
 """
 from contextlib import ExitStack, contextmanager
+import fcntl
 import hashlib
 import os
 import re
@@ -11,11 +12,15 @@ import threading
 import time
 
 from . import pi_core_stopped_mask_view as kernel
-from .pi_core_state_admission import _keys, _need, _same, _uint, _uuid
-from .pi_core_state_mounts import ACTION, ANCHOR, PROVIDER
+from .pi_core_manager_state_view import _object
+from .pi_core_state_admission import _dev, _keys, _need, _same, _uint, _uuid
+from .pi_core_state_mounts import ACTION, ANCHOR, PROVIDER, verify_mounts
 
 
 SCHEMA = "aragorn/pi-core-sensor-state-view/v1"
+UUID_SCHEMA = "aragorn/pi-core-sensor-state-view/v2"
+_FS_IOC_GETFSUUID = 0x80111500  # ARM64 Linux _IOR(0x15, 0, struct fsuuid2)
+_STATE_MAGIC = {"ext4": 0xef53, "xfs": 0x58465342}
 _UNIT = "aragorn-pi-sensor.service"
 _CGROUP = ("0::/system.slice/" + _UNIT + "\n").encode("ascii")
 
@@ -88,7 +93,46 @@ def _action_fds(stack, root):
     return held
 
 
-def _edge(stack, subjects, mroot, sroot, held, roles, mount, deadline):
+def _uuid_storage(storage):
+    _keys(storage, ("device", "backing_devices", "fs_type"))
+    device = _dev(storage["device"])
+    backing = storage["backing_devices"]
+    _need(type(backing) is list and 1 <= len(backing) <= 16, "invalid UUID storage backing")
+    back = [_dev(d) for d in backing]
+    _need(device not in back and len(set(back)) == len(back) and
+          type(storage["fs_type"]) is str and storage["fs_type"] in _STATE_MAGIC, "unapproved UUID storage")
+    return dict(device=device, backing_devices=back, fs_type=storage["fs_type"])
+
+
+def _uuid_reply(raw):
+    _need(type(raw) is bytes and len(raw) == 17 and raw[0] == 16 and any(raw[1:]),
+          "unsupported or incomplete filesystem UUID reply")
+    return raw.hex()
+
+
+def _observed_uuid(stack, anchor, expected, raw, storage, deadline):
+    # B55 verifies parentage, mount flags, source, aliases and the role's target
+    # inventory. A filesystem name in mountinfo alone cannot authorize the ioctl.
+    mounts = verify_mounts("manager", raw, **storage)
+    _object(expected, ANCHOR, storage["device"], mounts[ANCHOR])
+    magic = _STATE_MAGIC[storage["fs_type"]]
+    def match(fd):
+        kernel._check(deadline)
+        _same(kernel._stat(fd, owner=True), expected, "filesystem UUID descriptor is not the observed anchor")
+        _need(kernel._filesystem(fd) == magic, "wrong actual filesystem for UUID observation")
+    match(anchor)
+    # O_PATH cannot service this ioctl. Open only "." at the held anchor;
+    # never open a device or resolve an operator-supplied path.
+    fd = kernel._own(stack, ".", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, anchor)
+    match(fd)
+    kernel._check(deadline)
+    result = _uuid_reply(fcntl.ioctl(fd, _FS_IOC_GETFSUUID, bytes(17)))
+    match(fd)
+    match(anchor)
+    return result
+
+
+def _edge(stack, subjects, mroot, sroot, held, roles, mount, deadline, uuid_storage=None):
     # Compare fresh component walks to all the original descriptors, not just
     # a pathname string or a fresh inode from an independently resolved root.
     manager = kernel._manager_state_stats(held[0])
@@ -97,7 +141,14 @@ def _edge(stack, subjects, mroot, sroot, held, roles, mount, deadline):
           sensor == kernel._manager_state_stats(_action_fds(stack, sroot)), "held sensor state paths changed")
     raw = _streams(roles, mount, deadline)
     kernel._check(deadline)
-    return subjects, manager, sensor, raw
+    result = subjects, manager, sensor, raw
+    if uuid_storage is not None:
+        reply = _observed_uuid(stack, held[0][ANCHOR], manager[ANCHOR], raw["manager"], uuid_storage, deadline)
+        fresh_anchor = kernel._manager_state_fds(stack, mroot)[ANCHOR]
+        _same(kernel._stat(fresh_anchor, owner=True), manager[ANCHOR], "named UUID anchor changed during observation")
+        _need(_streams(roles, mount, deadline) == raw, "mount streams changed during UUID observation")
+        return (*result, reply)
+    return result
 
 
 def _manager_record(stats):
@@ -120,9 +171,10 @@ def _streams(roles, mount, deadline):
     return raw
 
 
-def capture_sensor_state(*, identity, guard, deadline):
+def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None):
     """The protected caller supplies a live pidfd/InvocationID guard; the sensor cannot nominate itself."""
     expected = _identity(identity)
+    storage = None if uuid_storage is None else _uuid_storage(uuid_storage)
     kernel._check(deadline)
     kernel._platform()
     kernel._generation(expected["pid"], expected["start_ticks"])
@@ -135,9 +187,9 @@ def capture_sensor_state(*, identity, guard, deadline):
         first, mroot, sroot = _subjects(stack, *args)
         held = kernel._manager_state_fds(stack, mroot), _action_fds(stack, sroot)
         with ExitStack() as edge:
-            before = _edge(edge, first, mroot, sroot, held, roles, mount, deadline)
+            before = _edge(edge, first, mroot, sroot, held, roles, mount, deadline, storage)
         with ExitStack() as edge:
-            after = _edge(edge, *_subjects(edge, *args), held, roles, mount, deadline)
+            after = _edge(edge, *_subjects(edge, *args), held, roles, mount, deadline, storage)
         _need(before == after, "sensor state, namespace, identities, or mount streams changed")
         end = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
         _need(start > 0 and 0 < end - start <= 5_000_000_000, "sensor capture outside observation window")
@@ -151,6 +203,8 @@ def capture_sensor_state(*, identity, guard, deadline):
                     sensor_targets={k:{ACTION:e[2][ACTION]}
                                     for k,e in (("before",before), ("after",after))},
                     **{k+"_mountinfo_digest":"sha256:"+hashlib.sha256(v).hexdigest() for k,v in raw.items()})
+        if storage is not None:
+            view.update(schema=UUID_SCHEMA, filesystem_uuid_observation={"before": before[4], "after": after[4]})
     kernel._check(deadline)
     return view, raw["manager"], raw["sensor"]
 
@@ -160,7 +214,13 @@ def hold_sensor_mount_guard(*, identity, view, manager_raw, sensor_raw, guard, d
     """Sample the owned namespaces at each publication boundary. Not continuous monitoring."""
     expected = _identity(identity)
     _same(view["identity"], expected, "foreign sensor capture owner")
-    _need(view["schema"] == SCHEMA, "foreign sensor observation")
+    _need(view["schema"] in (SCHEMA, UUID_SCHEMA) and
+          ("filesystem_uuid_observation" in view) == (view["schema"] == UUID_SCHEMA), "foreign sensor observation")
+    if view["schema"] == UUID_SCHEMA:
+        u = view["filesystem_uuid_observation"]
+        _keys(u, ("before", "after"))
+        _need(type(u["before"]) is str and re.fullmatch("[0-9a-f]{34}", u["before"])
+              and u["after"] == _uuid_reply(bytes.fromhex(u["before"])), "unstable filesystem UUID observation")
     raw = {"manager": manager_raw, "sensor": sensor_raw}
     for role, data in raw.items():
         _need(type(data) is bytes and 0 < len(data) <= 1 << 20 and data.endswith(b"\n")

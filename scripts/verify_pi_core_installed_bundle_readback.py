@@ -11,9 +11,10 @@ import re
 import sys
 
 from aragorn.cas import CAS, CASError
+from aragorn.decision_receipt import verify_decision_v3
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.phase3_deployment import build_phase3_deployment_identity
-from aragorn.pi_core_bundle_install_entry import _plan, _supported_bundle
+from aragorn.pi_core_bundle_install_entry import _plan, _revocations, _supported_bundle
 from aragorn.pi_core_service_source import _inventory
 from aragorn import protected_install_context as admission
 from aragorn.runtime_action_broker import _parse_canonical_document
@@ -99,8 +100,9 @@ def _historical_context(context):
           "invalid protected install target name")
 
 
-def verify_installed_bundle_readback(archive, *, owner_pin, plan_pin, context_pin, manifest_pin):
+def verify_installed_bundle_readback(archive, *, owner_pin, plan_pin, context_pin, manifest_pin, replay_admission=False):
     """All four pins must be selected externally. Supplied guest paths are identifiers only."""
+    _need(type(replay_admission) is bool, "explicit historical admission replay mode required")
     _need(type(archive) is CAS and archive.read_only is True, "read-only archive required")
     owner = _document(archive, owner_pin, (256 << 10) + 8192, stdout=True)
     _need(owner.keys() == host_contract._public_install(None).keys() | {
@@ -147,17 +149,39 @@ def verify_installed_bundle_readback(archive, *, owner_pin, plan_pin, context_pi
     # and applies the supported text-only Pi layout. The publisher's tree digest is not the expected value.
     manifest = _supported_bundle(archive, _pin(manifest_pin))
     _need(measured == manifest["tree_digest"], "reported installed bytes differ from approved retained source tree")
-    return dict(schema="aragorn/pi-core-installed-bundle-readback-finding/v1", owner=owner_pin, plan=plan_pin,
+    finding = dict(schema="aragorn/pi-core-installed-bundle-readback-finding/v1", owner=owner_pin, plan=plan_pin,
                 context=context_pin, manifest=manifest_pin, deployment=owner["deployment_digest"], operation=operation,
                 observed_tree_digest=measured, verified_retained_members=len(manifest["files"]),
                 reported_installed_tree_matches_approved_bytes=True, private_transaction_replayed=False,
                 live_filesystem_readback_reperformed=False, decision_or_revocation_replayed=False,
                 worker_consumption_verified=False, activation_authorized=False, phase3_exit_eligible=False)
+    if replay_admission:
+        # The nominated plan and context select the originals, not the submitted decision.
+        revocations_pin = plan["revocations"]["digest"]
+        revoked = _revocations(_document(archive, revocations_pin, 2 << 20))
+        _need(context["context_id"] not in revoked, "installed context appears in pinned revocations")
+        receipt, gateway = admission._context_github_trust_digests(context)
+        decision = verify_decision_v3(archive, context["decision_digest"],
+            expected_manifest_digest=manifest_pin, expected_artifact_graph_digest=context["artifact_graph_digest"],
+            expected_policy_digest=deployment["policy"],
+            expected_analyzer_run_receipt_digests=context["analyzer_run_receipt_digests"],
+            expected_analyzer_verifier_digest=context["analyzer_verifier_digest"],
+            expected_artifact_graph_verifier_digest=context["artifact_graph_verifier_digest"],
+            expected_quarantine_receipt_digest=receipt, expected_gateway_profile_digest=gateway)
+        _need(decision["verdict"] == "ALLOW" and decision["tree_digest"] == measured,
+              "retained decision does not allow the reported tree")
+        finding.update(schema="aragorn/pi-core-installed-bundle-admission-finding/v1",
+                       retained_decision_verdict="ALLOW", decision_digest=context["decision_digest"],
+                       revocations_digest=revocations_pin, context_absent_from_pinned_revocations=True,
+                       decision_or_revocation_replayed=True, current_context_validity_verified=False)
+    return finding
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", required=True, type=Path)
+    parser.add_argument("--replay-admission", action="store_true",
+                        help="also replay the retained decision and the install plan's revocation snapshot; never authorize a start")
     for key in ("owner-pin", "plan-pin", "context-pin", "manifest-pin"):
         parser.add_argument("--" + key, required=True)
     args = vars(parser.parse_args(argv))
@@ -165,7 +189,9 @@ def main(argv=None):
         args["archive"] = CAS(args["archive"], read_only=True)
         print(json.dumps(verify_installed_bundle_readback(**args), sort_keys=True))
     except (CASError, OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
-        print(f"Install readback refused: {exc}", file=sys.stderr)
+        # Admission parsers can put private archive member names in diagnostics.
+        print("Install admission replay refused." if args["replay_admission"] else
+              f"Install readback refused: {exc}", file=sys.stderr)
         return 1
     return 0
 

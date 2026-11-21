@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [read-only state sensor and original role assignment, batch 91](pi-core-configured-sensor-role-batch-91.md).**
+Strict volume replay requires the original service configuration and its
+installation context, not two archives agreeing on the wrong role.
+
 **D3/D4 — [scheduled reference outputs and execution-carrier decision, batch 90](pi-core-managed-task-output-batch-90.md).**
 One-pass replay checks the four fixed task outcomes. Choose the real paired
 execution path and copy fixture before provisioning; the managed worker has

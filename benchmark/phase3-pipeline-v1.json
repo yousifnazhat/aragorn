@@ -1147,7 +1147,7 @@
     },
     {
       "id": "pi-core-current-volume-sensor-replay-offline",
-      "description": "B84: current volume and read-only sensor from original pre-capture custody, matching role records and v5 media. Inert private archive fixtures only.",
+      "description": "B84/B91: replay pinned volume and read-only sensor against the original role configuration and installation context. Inert private archive fixtures only.",
       "tests": [
         "test_pi_core_current_volume_sensor_join"
       ],
@@ -1303,6 +1303,7 @@
         "tests/test_pi_core_sensor_state_evidence.py",
         "tests/test_pi_core_sensor_state_observer.py",
         "tests/test_pi_core_service_channels.py",
+        "tests/test_pi_core_service_configuration.py",
         "tests/test_pi_core_service_entry.py",
         "tests/test_pi_core_state_admission.py",
         "tests/test_pi_core_state_backing_leaf.py",

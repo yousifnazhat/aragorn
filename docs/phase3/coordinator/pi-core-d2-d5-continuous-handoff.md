@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [spent lease and terminal action replay, batch 98](pi-core-recorded-action-lease-batch-98.md).**
+The B93 reader compares the recorded lease and action using the existing
+originals. No new capture, live authority or physical-output claim.
+
 **D2 — [admission dependency record for the public pilot candidate, batch 97](pi-core-public-candidate-closure-batch-97.md).**
 Reuse the original manifest, retained local Markdown graph and independent
 verifier pin when preparing a policy decision. Do not regenerate the source

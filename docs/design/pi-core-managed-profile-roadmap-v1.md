@@ -103,6 +103,10 @@ connects that comparison to a stopped worker generation and keeps the exact
 mask records outside Pi. It is source wiring, not an installed capture, a
 complete worker walk, or an independently held latest head. Do not remove
 protections or treat access failures as empty directories.
+[B60](../phase3/coordinator/pi-core-mask-host-successor-batch-60.md) prepares the
+changed host payload and matching worker source plan without changing the B44
+disk. The helper's interpreter and selected dependency bytes are pinned; the
+root invocation, installed view, complete evidence and external freshness are not established.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

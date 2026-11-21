@@ -1,0 +1,9 @@
+{
+  "schema": "aragorn/pi-core-mask-host-successor-inputs/v1",
+  "source_revision": "241427f8cf1237015b7dba2df214bc843b17ed99",
+  "files": {
+    "coordinator-host.json": "196c83779a50be791477d269a44b6095dfe02939ebb62f44a9b21aae04ca277c",
+    "payload.json": "4040b02c5deafc78f5416951942923c22b0f6f2ddb51244dd46129943260d6be",
+    "worker-source-plan.json": "2f61a4a6bb4f4dc6f5554435fe3825a3390990af759e9cb9826bf18fcaea90ec"
+  }
+}

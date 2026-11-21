@@ -179,9 +179,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
         runtime_args = dict(deployment_path=coordinator._path(r["deployment_path"]), receipt_digest=r["receipt_digest"],
             manifest=inputs.ref(r["manifest"]), manifest_digest=r["manifest"]["digest"],
             runtime_binding=inputs.ref(r["runtime_binding"]), runtime_binding_digest=r["runtime_binding"]["digest"], deadline=deadline)
-        config_args = dict(deployment_path=coordinator._path(c["deployment_path"]), receipt_digest=c["receipt_digest"],
-            manifest=inputs.ref(c["manifest"]), manifest_digest=c["manifest"]["digest"],
-            configurations=inputs.ref(c["configurations"]), configurations_digest=c["configurations"]["digest"], deadline=deadline)
+        config_args = coordinator._configuration_args(c, inputs, deadline)
         public_args = dict(deployment_path=coordinator._path(p["deployment_path"]), receipt_digest=p["receipt_digest"],
             manifest=inputs.ref(p["manifest"]), manifest_digest=p["manifest"]["digest"], deadline=deadline)
         inputs.guard()

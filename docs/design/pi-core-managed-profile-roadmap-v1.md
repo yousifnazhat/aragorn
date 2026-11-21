@@ -130,6 +130,10 @@ manager-only attachment and actual guest readback are not demonstrated.
 [B67](../phase3/coordinator/pi-core-manager-state-observation-batch-67.md)
 measures both ends of the manager's state binds during the stopped gate
 and compares them with the independent archive. No guest evidence was acquired.
+[B68](../phase3/coordinator/pi-core-configuration-carrier-batch-68.md) connects
+the configuration disk to its three protected readers. Each checks the approved
+bytes and guest device before use. Neither an actual attachment nor isolation
+from Pi has been demonstrated.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

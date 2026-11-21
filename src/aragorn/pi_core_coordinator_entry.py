@@ -80,6 +80,32 @@ def _reference(value):
     return value
 
 
+def _configuration_section(section):
+    _require(type(section) is dict, "COORDINATOR_CONFIGURATION_SECTION")
+    carrier = {"carrier": section["carrier"]} if "carrier" in section else {}
+    _exact(section, {"deployment_path", "receipt_digest", "manifest", "configurations", *carrier})
+    pin = configuration.configuration_carrier(_path(section["deployment_path"]), **carrier)
+    _pin(section["receipt_digest"])
+    for field in ("manifest", "configurations"):
+        ref = _reference(section[field])
+        path = _path(ref["path"])
+        root = configuration.carrier_media.ROOT
+        _require(path == root / "inputs" / (field + ".json") if pin is not None else not path.is_relative_to(root),
+                 "COORDINATOR_CONFIGURATION_REFERENCE_LOCATION")
+    return section
+
+
+def _configuration_args(section, inputs, deadline):
+    args = dict(deployment_path=_path(section["deployment_path"]), receipt_digest=section["receipt_digest"],
+                manifest_digest=section["manifest"]["digest"], configurations_digest=section["configurations"]["digest"],
+                deadline=deadline)
+    if "carrier" in section:
+        # The holder reads both fixed references from its own authenticated
+        # mount, never from ambient paths opened before device custody.
+        return dict(args, carrier=section["carrier"])
+    return dict(args, manifest=inputs.ref(section["manifest"]), configurations=inputs.ref(section["configurations"]))
+
+
 def _deadline(value):
     _require(type(value) is int and 0 < value < 2**63,
              "COORDINATOR_ORIGINAL_DEADLINE_REQUIRED")
@@ -236,9 +262,10 @@ def _plan(value, host_pin, plan_path):
     for item in ids:
         _pin(item)
     refs = [_reference(value[name]) for name in ("context", "deployment", "launch")]
+    service = _configuration_section(value["service_configuration"])
+    refs.extend(service[key] for key in ("manifest", "configurations"))
     for name, fields in (
         ("service_runtime", {"deployment_path", "receipt_digest", "manifest", "runtime_binding"}),
-        ("service_configuration", {"deployment_path", "receipt_digest", "manifest", "configurations"}),
         ("provider_inputs", {"deployment_path", "receipt_digest", "manifest"}),
     ):
         section = value[name]
@@ -331,9 +358,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
         runtime_args = dict(deployment_path=_path(r["deployment_path"]), receipt_digest=r["receipt_digest"],
             manifest=inputs.ref(r["manifest"]), manifest_digest=r["manifest"]["digest"],
             runtime_binding=inputs.ref(r["runtime_binding"]), runtime_binding_digest=r["runtime_binding"]["digest"], deadline=deadline)
-        config_args = dict(deployment_path=_path(c["deployment_path"]), receipt_digest=c["receipt_digest"],
-            manifest=inputs.ref(c["manifest"]), manifest_digest=c["manifest"]["digest"],
-            configurations=inputs.ref(c["configurations"]), configurations_digest=c["configurations"]["digest"], deadline=deadline)
+        config_args = _configuration_args(c, inputs, deadline)
         public_args = dict(deployment_path=_path(p["deployment_path"]), receipt_digest=p["receipt_digest"],
             manifest=inputs.ref(p["manifest"]), manifest_digest=p["manifest"]["digest"], deadline=deadline)
         root_config = intent = None

@@ -22,7 +22,8 @@ _PYTHON = Path("/opt/aragorn-cpython/bin/python3.12")
 _CORE = ("pi_core_mask_capture_entry", "pi_core_mask_capture_release", "pi_core_native_supervisor",
          "pi_core_node_source_observer", "pi_core_source_observer", "pi_core_stopped_mask_capture",
          "pi_core_stopped_mask_view", "pi_core_mask_probe", "pi_core_mask_custody", "pi_core_state_admission",
-         "pi_core_state_masks", "pi_core_state_mounts", "pi_core_state_exposure")
+         "pi_core_state_masks", "pi_core_state_mounts", "pi_core_state_exposure", "pi_core_manager_state_view",
+         "pi_core_configuration_carrier")
 
 
 def _custody(source_loader, host_custody, deadline):
@@ -43,11 +44,8 @@ def _plan(plan, host_pin):
     entry._require(plan["schema"] == PLAN and plan["host_profile_digest"] == host_pin, "MASK_PLAN_BINDING")
     entry._path(plan["cas_root"])
     entry._pin(plan["runtime_conformance_digest"])
-    service = plan["service_configuration"]
-    entry._exact(service, ("deployment_path", "receipt_digest", "manifest", "configurations"))
-    entry._path(service["deployment_path"])
-    entry._pin(service["receipt_digest"])
-    for ref in (plan["context"], plan["deployment"], plan["launch"], service["manifest"], service["configurations"]):
+    service = entry._configuration_section(plan["service_configuration"])
+    for ref in (plan["context"], plan["deployment"], plan["launch"]):
         entry._reference(ref)
     revoked = plan["revoked_context_ids"]
     entry._require(type(revoked) is list and len(revoked) <= 4096 and
@@ -59,6 +57,9 @@ def _plan(plan, host_pin):
     entry._require(type(c["attempt_id"]) is str and re.fullmatch(r"[0-9a-f]{32}", c["attempt_id"])
                    and int(c["attempt_id"], 16) and type(c["backing_devices"]) is list, "MASK_CAPTURE_BINDING")
     stopped._volume(c["volume_device"], c["backing_devices"], c["fs_type"])
+    if "carrier" in service:
+        entry._require(service["carrier"]["device"] not in (c["volume_device"], *c["backing_devices"]),
+                       "MASK_CONFIGURATION_CARRIER_ALIASES_STATE")
     return plan
 
 
@@ -124,10 +125,7 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
         cas_root, config_root = entry._path(plan["cas_root"]), entry._path(service["deployment_path"])
         inputs.hold_directory(cas_root)
         cas = CAS(cas_root, read_only=True)
-        args = dict(deployment_path=config_root, receipt_digest=service["receipt_digest"],
-                    manifest=inputs.ref(service["manifest"]), manifest_digest=service["manifest"]["digest"],
-                    configurations=inputs.ref(service["configurations"]), configurations_digest=service["configurations"]["digest"],
-                    deadline=deadline)
+        args = entry._configuration_args(service, inputs, deadline)
         opening = True
         with entry.configuration.hold_pi_service_configuration(**args) as held:
             opening = False

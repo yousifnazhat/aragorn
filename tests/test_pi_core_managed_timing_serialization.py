@@ -14,6 +14,6 @@ def load_tests(loader, tests, pattern):
         "test_task_cannot_overlap_the_last_attempt_by_one_nanosecond",
         "test_individually_baseline_first_pairs_cannot_overlap_each_other",
         "test_touching_attempt_and_pair_boundaries_are_serialized",
-        "test_disjoint_attempts_may_run_in_reverse_id_order",
+        "test_original_receipts_refuse_reverse_schedule_even_when_intervals_are_disjoint",
         "test_outer_chronology_uses_shared_checked_pin_after_caller_map_mutation",
     ))

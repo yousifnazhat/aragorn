@@ -49,38 +49,13 @@ def synthetic_receipt_verifier(raw, request, boundaries):
     }
 
 
-class Phase3MeasurementReplayTests(unittest.TestCase):
-    def setUp(self):
-        _CALLS.clear()
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.cas = CAS(temporary.name)
-        self.deployment = build_phase3_deployment_identity(
-            {
-                key: self.cas.put(BytesIO(key.encode()), max_bytes=128)
-                for key in BINDING_DIMENSIONS
-            }
-        )
-        ids = [f"attempt-{index:03d}" for index in range(100)]
-        self.schedule = metrics.build_phase3_measurement_schedule(
-            expected_attempt_ids=ids,
-            expected_attempt_families={
-                key: "EXFILTRATION" if index < 50 else "DESTRUCTIVE"
-                for index, key in enumerate(ids)
-            },
-            expected_overhead_pair_bindings={
-                f"pair-{index:03d}": {
-                    "task_digest": "sha256:" + "a" * 64,
-                    "input_digest": f"sha256:{index + 1:064x}",
-                    "host_profile_digest": self.deployment["bindings"]["os_profile"],
-                }
-                for index in range(100)
-            },
-            expected_unattributed_attempt_id=ids[0],
-            expected_gate_manifest_digest="sha256:" + "b" * 64,
-            expected_campaign_contract_digest="sha256:" + "c" * 64,
-            expected_runtime_identity_digest=canonical_digest(self.deployment),
-        )
+class RetainedReceiptDocuments:
+    """Build inert CAS records, never call an executor, collector or verifier."""
+
+    def populate(self, *, windows=None, collector_digest="sha256:" + "1" * 64,
+                 collection_authority="SYNTHETIC_UNIT_FIXTURE_NOT_RUNTIME_EVIDENCE"):
+        attempt_schedule = self.schedule["attempt_schedule"]
+        ids = attempt_schedule["attempt_ids"]
         self.source_pins = {
             "execute": "sha256:" + "d" * 64,
             "identity_reader": "sha256:" + "e" * 64,
@@ -111,7 +86,7 @@ class Phase3MeasurementReplayTests(unittest.TestCase):
                     for key in ("execute", "identity_reader")
                 },
             },
-            "collector_digest": "sha256:" + "1" * 64,
+            "collector_digest": collector_digest,
             "metrics_implementation_digest": metrics.metrics_implementation_digest(),
             "clock_id": "CLOCK_BOOTTIME",
             "prepared_boottime_ns": 1,
@@ -136,7 +111,7 @@ class Phase3MeasurementReplayTests(unittest.TestCase):
                 "kind": "attempt",
                 "attempt_id": key,
                 "family": self.schedule["attempt_schedule"]["attempt_families"][key],
-                "negative_control": key == ids[0],
+                "negative_control": key == attempt_schedule["unattributed_negative_control_attempt_id"],
             }
             for key in ids
         ]
@@ -154,7 +129,12 @@ class Phase3MeasurementReplayTests(unittest.TestCase):
                 "collection_digest": commitment_pin,
                 "deployment_digest": canonical_digest(self.deployment),
             }
-            start, end = 10 + index * 1000, 110 + index * 1000
+            if windows is None:
+                start, end = 10 + index * 1000, 110 + index * 1000
+            elif base["kind"] == "attempt":
+                start, end = windows[("attempt", base["attempt_id"])]
+            else:
+                start, end = windows[(base["mode"], base["pair_id"])]
             if base["kind"] == "attempt":
                 boundaries = {"REQUEST_ACCEPTED": start, "DECISION_FINALIZED": end}
                 observation = {
@@ -215,7 +195,7 @@ class Phase3MeasurementReplayTests(unittest.TestCase):
             )
         self.collection = {
             "schema": "aragorn/phase3-measurement-collection/v1",
-            "authority": "SYNTHETIC_UNIT_FIXTURE_NOT_RUNTIME_EVIDENCE",
+            "authority": collection_authority,
             "commitment_digest": commitment_pin,
             "commitment_readback_boottime_ns": 2,
             "evidence_digest": self.put(self.evidence),
@@ -240,6 +220,41 @@ class Phase3MeasurementReplayTests(unittest.TestCase):
     def put(self, value):
         raw = canonical_json(value)
         return self.cas.put(BytesIO(raw), max_bytes=len(raw))
+
+
+class Phase3MeasurementReplayTests(RetainedReceiptDocuments, unittest.TestCase):
+    def setUp(self):
+        _CALLS.clear()
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.cas = CAS(temporary.name)
+        self.deployment = build_phase3_deployment_identity(
+            {
+                key: self.cas.put(BytesIO(key.encode()), max_bytes=128)
+                for key in BINDING_DIMENSIONS
+            }
+        )
+        ids = [f"attempt-{index:03d}" for index in range(100)]
+        self.schedule = metrics.build_phase3_measurement_schedule(
+            expected_attempt_ids=ids,
+            expected_attempt_families={
+                key: "EXFILTRATION" if index < 50 else "DESTRUCTIVE"
+                for index, key in enumerate(ids)
+            },
+            expected_overhead_pair_bindings={
+                f"pair-{index:03d}": {
+                    "task_digest": "sha256:" + "a" * 64,
+                    "input_digest": f"sha256:{index + 1:064x}",
+                    "host_profile_digest": self.deployment["bindings"]["os_profile"],
+                }
+                for index in range(100)
+            },
+            expected_unattributed_attempt_id=ids[0],
+            expected_gate_manifest_digest="sha256:" + "b" * 64,
+            expected_campaign_contract_digest="sha256:" + "c" * 64,
+            expected_runtime_identity_digest=canonical_digest(self.deployment),
+        )
+        self.populate()
 
     def replay(self, collection=None, **overrides):
         arguments = {**self.arguments, **overrides}

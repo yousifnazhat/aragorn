@@ -10,6 +10,7 @@ import hashlib
 import json
 import unittest
 from copy import deepcopy
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
@@ -20,14 +21,17 @@ from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.phase3_deployment import Phase3DeploymentError
 from aragorn.phase3_exit_gate_manifest import Phase3ExitGateManifestError
 from aragorn.phase3_exit_qualification import Phase3ExitQualificationError, Phase3SemanticVerifier, VERIFICATION_SCHEMA
+from aragorn.phase3_measurement_replay import Phase3MeasurementReplayError
 from aragorn.phase3_quantitative_metrics import Phase3QuantitativeMetricsError, build_phase3_measurement_schedule
 from aragorn.phase3_reference_tasks import describe_tasks, reference_inputs
 from tests import test_phase3_exit_qualification as legacy_fixture
+from tests.pi_core_managed_receipt_fixture import prepare_receipts, replay_calls
 
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CALLS = []
 _STATUSES = {}
+_MUTATE_AT_SURFACE = None
 _METRICS = "MP1/MEASUREMENT_SEMANTICS"
 _ERRORS = (Phase3ExitQualificationError, Phase3ExitGateManifestError, Phase3DeploymentError, Phase3QuantitativeMetricsError, CASError)
 
@@ -39,6 +43,8 @@ def synthetic_managed_consumer(raw, context, cas):
     key = context.get("verification_scope", context["requirement_id"])
     _CALLS.append(key)
     if key == "SOURCE_BOUND_SURFACE_COMPLETENESS":
+        if _MUTATE_AT_SURFACE is not None:
+            _MUTATE_AT_SURFACE['verify'] = canonical_digest('untrusted post-submission substitution')
         for pin in json.loads(raw)["evidence_by_surface"].values():
             if json.loads(cas.read(pin)) != {"synthetic_surface": True}:
                 raise ValueError("a supplied PASS record is not semantic surface evidence")
@@ -194,7 +200,24 @@ class PiCorePhase3QualificationTests(unittest.TestCase):
             subject.required_pi_core_phase3_evidence_ids(legacy_raw)
 
     def test_complete_synthetic_contract_composes_without_claiming_other_profiles(self):
-        result = self.qualify()
+        receipts = self.arguments['measurement_receipts'] = prepare_receipts(self)
+        original_pins = dict(receipts.source_pins)
+        with patch(__name__ + '._MUTATE_AT_SURFACE', receipts.source_pins):
+            result = self.qualify()
+        self.assertNotEqual(receipts.source_pins, original_pins)
+        linkage = result['measurement_receipt_linkage']
+        for key in ('collection_digest','commitment_digest','collector_digest','replay_source_digest'):
+            self.assertEqual(linkage[key], getattr(receipts, key))
+        self.assertEqual(linkage['source_pins'], original_pins)
+        self.assertEqual(linkage['evidence_digest'], self.arguments['evidence_by_requirement'][_METRICS])
+        self.assertEqual(linkage['measurement_schedule_digest'], self.arguments['expected_measurement_schedule_digest'])
+        self.assertEqual(linkage['deployment_identity_digest'], self.arguments['expected_deployment_digest'])
+        self.assertEqual(linkage['counts'], {'attempts':100, 'baseline_samples':100, 'instrumented_samples':100})
+        self.assertEqual([r['attempt_id'] for r in replay_calls if r['kind'] == 'attempt'],
+                         self.arguments['measurement_schedule']['attempt_schedule']['attempt_ids'])
+        self.assertEqual([(r['pair_id'],r['mode']) for r in replay_calls if r['kind'] == 'task'],
+                         [(key,mode) for key in sorted(self.arguments['measurement_schedule']['overhead_schedule']['pair_bindings'])
+                          for mode in ('baseline','instrumented')])
         self.assertTrue(result["decision"]["phase3_exit_eligible"])
         self.assertFalse(result["decision"]["release_eligible"])
         self.assertFalse(result["decision"]["edr_eligible"])
@@ -464,15 +487,22 @@ class PiCorePhase3QualificationTests(unittest.TestCase):
                 self.shift_window(sample, previous)
                 previous = sample["completed_boottime_ns"]
         self.bind_campaign()
-        self.assertTrue(self.qualify()["decision"]["phase3_exit_eligible"])
+        # Touching boundaries clear the ordering check, but aggregate-only evidence cannot qualify.
+        with self.assertRaisesRegex(Phase3ExitQualificationError, 'requires independent measurement receipts'):
+            self.qualify()
 
-    def test_disjoint_attempts_may_run_in_reverse_id_order(self):
+    def test_original_receipts_refuse_reverse_schedule_even_when_intervals_are_disjoint(self):
         first, second = self.metrics["attempts"][:2]
         first_start, second_start = (s["request_accepted_boottime_ns"] for s in (first, second))
         self.shift_window(first, second_start, attempt=True)
         self.shift_window(second, first_start, attempt=True)
         self.bind_campaign()
-        self.assertTrue(self.qualify()["decision"]["phase3_exit_eligible"])
+        # The overlap checker allows disjoint windows, but the original receipt stream
+        # must have monotone intervals in the collector's independently scheduled order.
+        self.arguments['measurement_receipts'] = prepare_receipts(self)
+        with self.assertRaisesRegex(Phase3MeasurementReplayError, 'chronology'):
+            self.qualify()
+        self.assertEqual(len(replay_calls), 1)
 
     def test_outer_chronology_uses_shared_checked_pin_after_caller_map_mutation(self):
         evidence = self.arguments["evidence_by_requirement"]
@@ -491,11 +521,82 @@ class PiCorePhase3QualificationTests(unittest.TestCase):
             evidence[_METRICS] = disjoint_pin
             return result
 
-        with patch.object(subject, "_qualify_phase3_requirements", side_effect=compose_then_switch) as wrapped:
+        with patch.object(subject, "_qualify_phase3_requirements", side_effect=compose_then_switch) as wrapped, \
+             patch.object(subject, "_receipt_linkage", side_effect=AssertionError('overlap must refuse before receipt replay')):
             with self.assertRaisesRegex(Phase3ExitQualificationError, "windows overlap"):
                 self.qualify()
         wrapped.assert_called_once()
         self.assertEqual(evidence[_METRICS], disjoint_pin)
+
+    def test_missing_original_receipt_collection_refuses_before_any_receipt_callback(self):
+        receipts = prepare_receipts(self)
+        missing = canonical_digest('absent original')
+        self.arguments['measurement_receipts'] = replace(receipts, collection_digest=missing)
+        with self.assertRaises(CASError) as failure:
+            self.qualify()
+        cause = failure.exception.__cause__
+        self.assertIsInstance(cause, FileNotFoundError)
+        self.assertIn(cause.filename, (missing[7:9], missing[9:]))
+        self.assertEqual(replay_calls, [])
+
+    def test_unapproved_collection_authority_refuses_before_receipt_callbacks(self):
+        receipts = prepare_receipts(self)
+        collection = json.loads(self.cas.read(receipts.collection_digest))
+        collection['authority'] = 'SYNTHETIC_OR_UNKNOWN_NOT_A_COLLECTOR'
+        self.arguments['measurement_receipts'] = replace(receipts, collection_digest=self.put(collection))
+        with self.assertRaisesRegex(Phase3ExitQualificationError, 'collection authority'):
+            self.qualify()
+        self.assertEqual(replay_calls, [])
+
+    def test_even_resealed_passing_aggregate_must_equal_the_original_receipt_measurements(self):
+        receipts = prepare_receipts(self)
+        collection = json.loads(self.cas.read(receipts.collection_digest))
+        original_pin = collection['evidence_digest']
+        # Shortening an already-passing interval does not cross a threshold or create overlap.
+        self.metrics['attempts'][0]['decision_finalized_boottime_ns'] -= 1
+        self.bind_campaign()
+        changed_pin = self.arguments['evidence_by_requirement'][_METRICS]
+        self.assertNotEqual(changed_pin, original_pin)
+        self.arguments['measurement_receipts'] = replace(receipts, collection_digest=self.put(collection | {'evidence_digest':changed_pin}))
+        with self.assertRaisesRegex(Phase3MeasurementReplayError, 'raw metrics differ from replayed receipt evidence'):
+            self.qualify()
+        self.assertEqual(len(replay_calls), 300)
+
+    def test_failed_prerequisite_skips_receipt_reads_and_yields_no_receipt_finding(self):
+        receipts = prepare_receipts(self)
+        self.arguments['measurement_receipts'] = replace(receipts, collection_digest=canonical_digest('never read'))
+        _STATUSES['MP1/RUN-02'] = 'FAIL'
+        result = self.qualify()
+        self.assertFalse(result['decision']['phase3_exit_eligible'])
+        self.assertIsNone(result['measurement_receipt_linkage'])
+        self.assertEqual(replay_calls, [])
+
+    def test_independently_selected_receipt_verifier_and_source_pins_are_not_exchangeable(self):
+        r = prepare_receipts(self)
+        wrong = canonical_digest('unrelated bytes')
+        for label, selected in (('replayer',replace(r,replay_source_digest=wrong)),
+                                ('callback',replace(r,verify_receipt=synthetic_managed_consumer)),
+                                ('verify source',replace(r,source_pins=r.source_pins | {'verify':wrong}))):
+            self.arguments['measurement_receipts'] = selected
+            with self.subTest(label=label), self.assertRaises(Phase3ExitQualificationError):
+                self.qualify()
+            self.assertEqual(_CALLS, [])
+        self.arguments['measurement_receipts'] = replace(r,source_pins=r.source_pins | {'execute':wrong})
+        with self.assertRaisesRegex(Phase3MeasurementReplayError, 'source identity differs'):
+            self.qualify()
+        self.assertEqual(replay_calls, [])
+
+    def test_resealed_receipt_collection_for_another_schedule_or_collector_refuses(self):
+        r = prepare_receipts(self)
+        collection = json.loads(self.cas.read(r.collection_digest))
+        commitment = json.loads(self.cas.read(r.commitment_digest))
+        for field in ('schedule_digest','collector_digest'):
+            substituted = self.put(commitment | {field:canonical_digest('different selection')})
+            self.arguments['measurement_receipts'] = replace(r,commitment_digest=substituted,
+                collection_digest=self.put(collection | {'commitment_digest':substituted}))
+            with self.subTest(field=field), self.assertRaisesRegex(Phase3MeasurementReplayError, 'frozen collection plan'):
+                self.qualify()
+        self.assertEqual(replay_calls, [])
 
     def test_strict_500ms_boundary_reuses_numeric_rejection(self):
         for sample in self.metrics["attempts"]:

@@ -1,5 +1,10 @@
 # D4 source handoff: managed-profile qualification composition
 
+**Current interface:** [batch 89](pi-core-required-measurement-replay-batch-89.md)
+also requires the independent receipt-replay inputs before the managed entrypoint
+can return a positive decision. The initial handoff and its test counts below
+describe the original composition batch.
+
 Status: implementation prepared for coordinator review and the new focused stage.
 No check, build, live operation, freeze, qualification, or Git operation was run by
 this lane. D2/D3 evidence prerequisites and the real independent-verifier inventory

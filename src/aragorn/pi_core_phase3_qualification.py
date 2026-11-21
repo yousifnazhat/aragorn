@@ -1,7 +1,8 @@
 """Additive managed-profile composition; not a verifier registry or a live runner.
 
-Every expected pin and callable comes from the operator's independently reviewed
-freeze. Inventory shape/source custody cannot prove surface completeness: a pinned
+Use operator-held pins: freeze the plan and code before capture, retain the
+commitment before work and the collection after it. Inventory shape/source custody
+cannot prove surface completeness: a pinned
 semantic consumer must establish that from retained raw observations. No default
 consumer is provided, and absent D2/D3 evidence cannot qualify this profile.
 """
@@ -11,6 +12,8 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -18,6 +21,7 @@ from .cas import CAS
 from .oci_worker_protocol import canonical_json
 from .phase3_deployment import resolve_phase3_deployment_identity
 from .phase3_exit_gate_manifest import load_phase3_exit_gate_manifest_bytes
+from .phase3_measurement_replay import replay_phase3_measurement_collection
 from .phase3_exit_qualification import (
     Phase3ExitQualificationError,
     Phase3SemanticVerifier,
@@ -38,6 +42,19 @@ _MEASUREMENTS = "MP1/MEASUREMENT_SEMANTICS"
 _DOCUMENT_LIMIT = 64 * 1024 - 1
 _SOURCE_LIMIT = 1024 * 1024
 _EVIDENCE_LIMIT = 16 * 1024 * 1024
+_COLLECTION_AUTHORITY = "LOCAL_ADAPTER_MEASUREMENTS_AND_ARITHMETIC_ONLY_NOT_SOURCE_SEMANTIC_OR_PHASE3_QUALIFICATION"
+
+
+@dataclass(frozen=True)
+class ManagedMeasurementReceipts:
+    """Independent freeze inputs, never a caller-provided replay result."""
+
+    collection_digest: str
+    commitment_digest: str
+    collector_digest: str
+    replay_source_digest: str
+    source_pins: dict[str, str]
+    verify_receipt: Callable[[bytes, dict, dict], dict]
 
 
 def _require(condition: bool, reason: str) -> None:
@@ -74,6 +91,61 @@ def _blob(cas: CAS, pin: str, limit: int) -> bytes:
     raw = cas.read(_pin(pin), max_bytes=limit)
     _require(bool(raw), "managed artifact must be nonempty")
     return raw
+
+
+def _receipt_inputs(request):
+    if request is None:
+        return None, None
+    _require(type(request) is ManagedMeasurementReceipts and type(request.source_pins) is dict
+             and set(request.source_pins) == {"execute", "verify", "identity_reader"},
+             "independently frozen receipt collection and exact source pins required")
+    selected = ManagedMeasurementReceipts(
+        _pin(request.collection_digest), _pin(request.commitment_digest), _pin(request.collector_digest),
+        _pin(request.replay_source_digest), {k: _pin(v) for k, v in request.source_pins.items()}, request.verify_receipt,
+    )
+    replay = Phase3SemanticVerifier(replay_phase3_measurement_collection, selected.replay_source_digest)
+    _verify_source(replay)
+    _verify_source(Phase3SemanticVerifier(selected.verify_receipt, selected.source_pins["verify"]))
+    return selected, replay
+
+
+def _receipt_linkage(cas, selected, replay, result, schedule, qualified_pin):
+    _require(selected is not None and replay is not None, "managed qualification requires independent measurement receipts")
+    raw = _blob(cas, selected.collection_digest, 1 << 20)
+    collection = json.loads(raw)
+    _require(type(collection) is dict and collection.get("authority") == _COLLECTION_AUTHORITY,
+             "not the original local-adapter measurement collection authority")
+    # Reject a collection for another aggregate before asking the semantic verifier to do any work.
+    numeric = result["quantitative_metrics"]
+    _require(collection.get("evidence_digest") == numeric["input_digest"] == qualified_pin
+             and collection.get("commitment_digest") == selected.commitment_digest,
+             "collection does not commit to the qualified metrics and nominated commitment")
+    _verify_source(replay)
+    report = replay.verify(
+        evidence_cas=cas, expected_collection_digest=selected.collection_digest,
+        expected_commitment_digest=selected.commitment_digest, expected_deployment_digest=result["deployment_identity_digest"],
+        expected_measurement_schedule_digest=result["measurement_schedule_digest"],
+        expected_metrics_implementation_digest=result["metrics_implementation_digest"],
+        expected_collector_digest=selected.collector_digest, expected_source_pins=dict(selected.source_pins),
+        verify=selected.verify_receipt,
+    )
+    _verify_source(replay)
+    bindings = dict(collection_digest=selected.collection_digest, commitment_digest=selected.commitment_digest,
+                    collector_digest=selected.collector_digest, evidence_digest=qualified_pin,
+                    deployment_identity_digest=result["deployment_identity_digest"],
+                    measurement_schedule_digest=result["measurement_schedule_digest"],
+                    metrics_implementation_digest=result["metrics_implementation_digest"], **schedule["bindings"])
+    inventory = numeric["inventory"]
+    counts = dict(attempts=inventory["attempt_count"], baseline_samples=inventory["overhead_pair_count"],
+                  instrumented_samples=inventory["overhead_pair_count"])
+    _require(report["schema"] == "aragorn/phase3-measurement-semantic-replay/v1" and
+             canonical_json(report["bindings"]) == canonical_json(bindings) and
+             canonical_json(report["counts"]) == canonical_json(counts) and
+             canonical_json(report["decision"]) == canonical_json(dict(status="PASS", phase3_exit_eligible=False,
+                                                                       quantitative_thresholds_qualified=False)),
+             "independent measurement replay differs from the qualified collection")
+    return {**bindings, "replay_source_digest": selected.replay_source_digest,
+            "source_pins": dict(selected.source_pins), "counts": counts}
 
 
 def _inventory(raw, pin, deployment_pin, manifest, cas):
@@ -224,6 +296,7 @@ def qualify_pi_core_phase3_exit(
     evidence_by_requirement: dict[str, str], verifiers: dict[str, Phase3SemanticVerifier],
     surface_inventory_raw: bytes, expected_surface_inventory_digest: str,
     surface_evidence_digest: str, surface_verifier: Phase3SemanticVerifier, evidence_cas: CAS,
+    measurement_receipts: ManagedMeasurementReceipts | None = None,
 ) -> dict[str, Any]:
     """Compose only the managed profile; all pins/callables are operator inputs.
 
@@ -235,6 +308,9 @@ def qualify_pi_core_phase3_exit(
     """
     manifest = _manifest(manifest_raw)
     required = required_pi_core_phase3_evidence_ids(manifest_raw)
+    # Secure the input store and all caller-selected policies before invoking any verifier.
+    evidence_cas = CAS(evidence_cas.root, read_only=True)
+    selected_receipts, replay = _receipt_inputs(measurement_receipts)
     deployment_pin = _pin(expected_deployment_digest)
     inventory_pin = _pin(expected_surface_inventory_digest)
     reference_source_pin = _pin(expected_reference_task_source_digest)
@@ -269,11 +345,14 @@ def qualify_pi_core_phase3_exit(
             and _digest(canonical_json(rebuilt_schedule)) == _pin(expected_measurement_schedule_digest),
             "managed schedule differs from frozen pin",
         )
+        measurement_schedule = json.loads(canonical_json(rebuilt_schedule))
     except (KeyError, TypeError, ValueError) as exc:
         raise Phase3ExitQualificationError("managed schedule is invalid") from exc
     # Preflight every explicit semantic consumer before calling any of them.
     for label, mapping in (("evidence", evidence_by_requirement), ("verifiers", verifiers)):
         _require(type(mapping) is dict and set(mapping) == set(required), f"incomplete managed {label}")
+    evidence_by_requirement = {key: _pin(evidence_by_requirement[key]) for key in required}
+    verifiers = dict(verifiers)
     for key in required:
         _blob(evidence_cas, evidence_by_requirement[key], _EVIDENCE_LIMIT)
         _verify_source(verifiers[key])
@@ -301,6 +380,7 @@ def qualify_pi_core_phase3_exit(
         evidence_by_requirement=evidence_by_requirement, verifiers=verifiers, evidence_cas=evidence_cas,
         extra_context=joins, prerequisite_pass=surface_result["status"] == "PASS",
     )
+    linkage = None
     if result["decision"]["phase3_exit_eligible"]:
         # The shared metrics parser already established canonical complete samples.
         qualified_pin = result["requirements"][_MEASUREMENTS]["bindings"]["evidence_digest"]
@@ -320,6 +400,13 @@ def qualify_pi_core_phase3_exit(
         windows.sort()
         _require(all(end <= next_start for (_, end), (next_start, _) in zip(windows, windows[1:])),
                  "managed attempt and task measurement windows overlap")
+        linkage = _receipt_linkage(CAS(evidence_cas.root, read_only=True), selected_receipts, replay,
+                                   result, measurement_schedule, qualified_pin)
+        # Replay rechecks its own receipt inventory, deployment artifacts and metrics code after its
+        # final receipt callback. Recheck the requirement inputs and consumers it does not own.
+        for key in required:
+            _verify_source(verifiers[key])
+            evidence_cas.verify(evidence_by_requirement[key], max_bytes=_EVIDENCE_LIMIT)
     # Re-read all managed joins after consumers; CAS presence is not semantic proof.
     _inventory(_blob(evidence_cas, inventory_pin, _DOCUMENT_LIMIT), inventory_pin, deployment_pin, manifest, evidence_cas)
     _surface_evidence(_blob(evidence_cas, surface_pin, _DOCUMENT_LIMIT), inventory_pin, deployment_pin, surface_ids, evidence_cas)
@@ -330,6 +417,7 @@ def qualify_pi_core_phase3_exit(
         authority="PI_CORE_MANAGED_PHASE3_ONLY_NOT_OPENCLAW_UNIVERSAL_EDR_OR_RELEASE_AUTHORITY",
         surface_inventory_digest=inventory_pin, surface_evidence_digest=surface_pin,
         reference_task_source_digest=reference_source_pin,
+        measurement_receipt_linkage=linkage,
         surface_verifier=surface_verifier_identity, surface_verification=surface_result,
         surface_count=len(inventory["surfaces"]),
     )

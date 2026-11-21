@@ -1,0 +1,7 @@
+{
+  "schema": "aragorn/pi-core-service-successor-inputs/v1",
+  "payload_sha256": "156c94630eec1fe9285e8732fd7574c14f2fd9926aa3dd6d0e5f95cb408ceb51",
+  "manifest_sha256": "241e54fad4ee738851c3693ec5f6b62bf5edcf20da977df09b1c12313f299b41",
+  "binding_sha256": "f230797b5cf63274b1e0b2ef0791189dbb90f08b1004a4fc117924c570922296",
+  "layout_receipt_sha256": "3b4a05099bb86ecdd7a9605a275f339fdbb27965b8e63b13f4f851cf1b4d6d9b"
+}

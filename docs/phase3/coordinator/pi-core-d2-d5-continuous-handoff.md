@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [protected service runtime packaged, batch 65](pi-core-service-successor-batch-65.md).**
+Use B65's full host/worker/service tree and exact `service_runtime` plan
+section. No late-bound grant, service configuration, storage nomination or
+installed identity has been supplied. Do not put a fabricated grant in the image.
+
 **D2 — [split guest payload, batch 64](pi-core-split-guest-payload-batch-64.md).**
 The image assembler now has one complete host/worker input tree including
 the five empty protected destinations. Reuse it. Next join the protected

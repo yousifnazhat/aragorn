@@ -151,12 +151,15 @@ def replay_phase3_measurement_collection(
     expected_collector_digest: str,
     expected_source_pins: dict[str, str],
     verify: Callable,
+    validate_task_output: Callable[[bytes, dict, dict], None] | None = None,
 ) -> dict[str, Any]:
     """Rebuild exactly 100 attempts and 200 task samples without executing them.
 
     ``verify(raw_receipt, request, boundaries)`` has the collector callback
     contract. Its output is recalculated for every retained receipt. Recorded
     verifier outputs must match, but are never used as the semantic authority.
+    An optional profile guard may reject a scheduled task's raw output. It
+    cannot replace the committed verifier or supply any replayed semantics.
     Arithmetic qualification is intentionally separate; a replay PASS means
     linkage is intact, not that measurements meet any Phase 3 thresholds.
     """
@@ -359,6 +362,11 @@ def replay_phase3_measurement_collection(
         start, end = (_integer(boundaries[name]) for name in names)
         _expect(previous <= start < end, "receipt boottime chronology changed")
         previous = end
+        if names == _TASK and validate_task_output is not None:
+            _expect(
+                validate_task_output(raw, json.loads(canonical_json(bound_request)), dict(boundaries)) is None,
+                "task output guard may reject but not supply a result",
+            )
         _expect(
             _source(verify, source_pins["verify"]) == verifier_source,
             "receipt verifier changed",

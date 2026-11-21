@@ -60,7 +60,8 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
           "read-only independent evidence store required")
     paths = (archive.root, store, receipt_directory)
     identities = _separate(paths)
-    admitted = verify_state_archive_v2(archive, profile_pin, latest_pin, witness_pin)
+    admitted = verify_state_archive_v2(archive, profile_pin, latest_pin, witness_pin,
+                                       strict_worker_devices=require_current_volume_and_sensor)
     capture = _doc(archive, admitted["capture"])
     head = _doc(archive, latest_pin)
     plan = _object(archive, plan_pin, 1 << 20)

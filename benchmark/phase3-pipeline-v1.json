@@ -87,7 +87,7 @@
     },
     {
       "id": "pi-core-stopped-worker-socket-mounts-offline",
-      "description": "B87: inspect only inert held-worker socket bind, fixed no-follow metadata, owner substitution, writable mount and cleanup refusals; no guest or socket operations.",
+      "description": "B87/B92: inspect the inert stopped-worker socket bind, including the supervisor's bootstrap endpoint, fixed no-follow metadata, substitution, writable mount and cleanup refusals; no guest or socket operations.",
       "tests": [
         "test_pi_core_stopped_socket_mounts"
       ],

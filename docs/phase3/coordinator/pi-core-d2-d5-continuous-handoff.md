@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [pilot blocked on conflicting policy identities, batch 102](pi-core-policy-binding-decision-batch-102.md).**
+The existing deployment policy pin is consumed as two mutually exclusive
+document types. Resolve the binding design before joining install and action
+records or promoting a pilot candidate. No prior acceptance gate changed.
+
 **D2 — [grant freshness after lock release, batch 101](pi-core-grant-return-deadlines-batch-101.md).**
 The broker and manager's readback no longer return a stale positive result
 after publication or cleanup overruns the original window. No grant is renewed.

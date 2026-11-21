@@ -182,6 +182,10 @@ the four-file candidate without changing the accepted launch profiles.
 [B84](../phase3/coordinator/pi-core-current-volume-sensor-replay-batch-84.md)
 adds strict offline comparison of the current volume, original manager and
 read-only sensor. It does not prove either Pi's view or a shared capture interval.
+[B85](../phase3/coordinator/pi-core-owned-worker-spine-batch-85.md)
+compares the stopped worker's read-only root, admitted cwd and inherited handles
+with its exact capture, owner and spent release. No managed-worker start,
+socket access, process-relative link observation or storage admission follows.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

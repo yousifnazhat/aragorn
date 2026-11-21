@@ -854,8 +854,9 @@ def _public_mask_capture(value):
     if value is None:
         return report
     fields = set(report) - {"schema", "entry_status"}
-    _require(type(value) is dict and set(value) == fields | {"schema", "status"}
-             and value["schema"] == "aragorn/pi-core-mask-capture-entry/v1"
+    spine = type(value) is dict and value.get("schema") == "aragorn/pi-core-mask-capture-entry/v2"
+    _require(type(value) is dict and set(value) == fields | {"schema", "status"} | ({"capture_authority"} if spine else set())
+             and (spine or value["schema"] == "aragorn/pi-core-mask-capture-entry/v1")
              and value["status"] in ("REFUSED", "CLEANUP_HOLD", "CAPTURE_RETAINED_ONLY",
                                      "CAPTURE_RETAINED_INCONSISTENT")
              and value["activation_authorized"] is False and value["phase3_exit_eligible"] is False
@@ -876,6 +877,13 @@ def _public_mask_capture(value):
                  and value["mask_consistent"] is (value["status"] == "CAPTURE_RETAINED_ONLY"),
                  "unverified capture result")
     report.update({k: value[k] for k in fields}, entry_status=value["status"])
+    if spine:
+        authority = value["capture_authority"]
+        _require(value["status"] == "CAPTURE_RETAINED_ONLY" and type(authority) is dict
+                 and set(authority) == {"host_profile_digest", "plan_digest", "release_digest", "claim_digest"}
+                 and all(type(p) is str and _PIN.fullmatch(p) and int(p[7:], 16) for p in authority.values())
+                 and len({*authority.values(), *pins}) == 6, "invalid stopped-worker authority binding")
+        report.update(schema="aragorn/pi-core-mask-capture-report/v2", capture_authority=dict(authority))
     if not retained:
         report.update(capture_digest=None, receipt_digest=None, mask_consistent=None)
     return report
@@ -947,6 +955,10 @@ def main():
         host.guard()
         report = public(observation)
         if capture:
+            if "capture_authority" in report:
+                a = report["capture_authority"]
+                _require((a["host_profile_digest"], a["plan_digest"], a["release_digest"]) ==
+                         (args[1], args[3], release_digest), "capture authority differs from held inputs")
             capture_returned = report
             result = 0 if report["entry_status"] == "CAPTURE_RETAINED_ONLY" else 126
         elif base_install:
@@ -1019,6 +1031,8 @@ def main():
                     and report["entry_status"] in ("CAPTURE_RETAINED_ONLY", "CAPTURE_RETAINED_INCONSISTENT"))
         if not retained:
             result = 126
+            report.pop("capture_authority", None)
+            report["schema"] = "aragorn/pi-core-mask-capture-report/v1"
             if report["entry_status"].startswith("CAPTURE_RETAINED_") or phase == "WRAPPER_CLEANUP":
                 report["entry_status"] = "CLEANUP_HOLD"
             report.update(capture_digest=None, receipt_digest=None, mask_consistent=None, cleanup_verified=False)

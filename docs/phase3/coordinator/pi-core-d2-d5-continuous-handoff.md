@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [stopped worker and spent-release comparison, batch 85](pi-core-owned-worker-spine-batch-85.md).**
+Use the strict option only with the original v2 public report, independently
+nominated records and B71 private receipt. Do not splice its capture-only
+worker into the B84 sensor run or treat manager socket membership as Pi access.
+
 **D2 — [strict current volume/sensor replay, batch 84](pi-core-current-volume-sensor-replay-batch-84.md).**
 Use the strict option when matching admission to protected sensor evidence:
 the same directory observed by a replacement sensor is insufficient.

@@ -24,6 +24,8 @@ from scripts.prepare_pi_core_coordinator_host import host_contract  # trusted ch
 # needs review; a profile pin or a "v2" label alone cannot upgrade v1 code.
 WRAPPER = "/opt/aragorn/bin/coordinator.py"
 WRAPPER_PIN = "sha256:9466bbe553b557a710a9d7ee2e2164a4fbf0e4f8a1442d4683ea2e8516ab5cfa"
+# Only the capture report changed in B85; its install path is still the B76 path.
+SPINE_V2_WRAPPER_PIN = "sha256:0333694744366d04d060431db3ef47f766d09150d26a1cec4fe6554b43f22eb5"
 ENTRY = "/opt/aragorn/src/aragorn/pi_core_bundle_install_entry.py"
 ENTRY_PIN = "sha256:d74ff1cb8c0b8626ad388eacd6255ad640fa00896b2d86eae2848d533da00564"
 
@@ -51,7 +53,7 @@ def _custody(owner, profile, profile_pin):
     # _profile validates the original protected profile's pure schema, inventory, paths
     # and limits. It constructs Path values but performs no guest filesystem operation.
     files = {str(p): _pin(row["digest"]) for p, row in host_contract._profile(profile).items()}
-    _need(files.get(WRAPPER) == WRAPPER_PIN, "unreviewed wrapper")
+    _need(files.get(WRAPPER) in (WRAPPER_PIN, SPINE_V2_WRAPPER_PIN), "unreviewed wrapper")
     _need(files.get(ENTRY) == ENTRY_PIN, "unreviewed materialization readback entry")
     sources = _inventory({k[1:]: v for k, v in files.items() if k.startswith("/opt/aragorn/src/aragorn/")})
     before, after = owner["host_before"], owner["host_after"]

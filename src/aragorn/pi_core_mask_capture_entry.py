@@ -212,4 +212,8 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
         error = entry.PiCoordinatorEntryError("MASK_CAPTURE_REFUSED_OR_CLEANUP_HOLD")
         error.observation = obs
         raise error from failure
+    if worker_spine and obs["status"] == "CAPTURE_RETAINED_ONLY" and obs["owned_inputs_closed"]:
+        # Bind the actual spent claim on this return, not a claim reconstructed later from the plan.
+        obs.update(schema="aragorn/pi-core-mask-capture-entry/v2", capture_authority=dict(
+            host_profile_digest=host_pin, plan_digest=plan_pin, release_digest=release_pin, claim_digest=claim))
     return obs

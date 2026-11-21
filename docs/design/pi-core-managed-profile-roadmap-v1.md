@@ -117,6 +117,9 @@ is an offline implementation; B60 does not contain the new coordinator.
 [B63](../phase3/coordinator/pi-core-protected-capture-payload-batch-63.md) now
 packages the caller and verifies all changed guest payload files without
 rebuilding the bundle or boot media. The common deployment is still not installed.
+[B64](../phase3/coordinator/pi-core-split-guest-payload-batch-64.md) composes a
+full host/worker payload with the OS and runtime in their real, separate launch
+locations. Empty service, admission and capture placeholders provide no authority.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

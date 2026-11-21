@@ -33,6 +33,16 @@ def verify_action_current_boundaries(*, evidence_cas, expected_activation, expec
                                      expected_deadline_ns, expected_summary_digest, selections, source_expectations):
     """Verify every recorded send from sequence 1; a missing return never proves non-submission."""
     _require(type(evidence_cas) is CAS and evidence_cas.read_only is True, "ACTION_REPLAY_READ_ONLY_CAS")
+
+    def fetch(pin, maximum):
+        return _document(evidence_cas.read(_pin(pin), max_bytes=maximum))
+
+    return _current(evidence_cas, expected_activation, expected_request, expected_broker_nonce,
+                    expected_deadline_ns, expected_summary_digest, selections, source_expectations, fetch)
+
+
+def _current(evidence_cas, expected_activation, expected_request, expected_broker_nonce,
+             expected_deadline_ns, expected_summary_digest, selections, source_expectations, fetch):
     _require(type(selections) in (tuple, list) and 1 <= len(selections) <= 16, "ACTION_REPLAY_SEQUENCE_COUNT")
     _fields(source_expectations, _SOURCE_ARGS)
     # Validate deployment/source expectations independently of the embedded
@@ -51,9 +61,6 @@ def verify_action_current_boundaries(*, evidence_cas, expected_activation, expec
              and _uint(expected_deadline_ns, 1) <= activation["expires_at_monotonic_ns"], "ACTION_REPLAY_ACTIVATION")
     fields = dict(nonce=expected_broker_nonce, activation_digest=canonical_digest(activation),
                   request_digest=canonical_digest(request), deadline_ns=expected_deadline_ns)
-
-    def fetch(pin, maximum):
-        return _document(evidence_cas.read(_pin(pin), max_bytes=maximum))
 
     summary = _fields(fetch(expected_summary_digest, 64 << 10), {"schema", "activation_digest", "rows"})
     _require(summary["schema"] == "aragorn/pi-core-action-current-sends/v1" and

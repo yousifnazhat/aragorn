@@ -17,7 +17,8 @@ from aragorn import pi_core_node_source_observer as node
 from aragorn import pi_core_stopped_mask_capture as cap
 from aragorn.cas import CAS
 from aragorn.oci_worker_protocol import canonical_json
-from aragorn.pi_core_state_mounts import verify_mounts
+from aragorn.pi_core_state_mounts import ACTION, verify_mounts
+from test_pi_core_manager_state_view import manager_record
 from test_pi_core_state_masks import _PI, _MANAGER, mask_sample, masked_pi_mountinfo
 from test_pi_core_state_mounts import sample_mountinfo
 
@@ -89,7 +90,8 @@ class StoppedCapture(unittest.TestCase):
         walk, self.witness = mask_sample(subject=_PI, manager_subject=_MANAGER)
         w = self.witness
         self.names = list(walk["tree"]["/dev"]["before"])
-        self.view = dict(schema="aragorn/pi-core-stopped-mask-view/v1", worker=_PI.copy(), manager=_MANAGER.copy(),
+        self.view = dict(schema="aragorn/pi-core-stopped-mask-view/v2", manager_state=manager_record(),
+            worker=_PI.copy(), manager=_MANAGER.copy(),
             dev_names=self.names, worker_root=walk["root"], worker_dev=walk["tree"]["/dev"]["stat"],
             opened_boottime_ns=9000, closed_boottime_ns=21000, source=w["source"],
             directories={p: {k:v for k,v in r.items() if k != "probe"} for p,r in w["directories"].items()},
@@ -161,6 +163,21 @@ class StoppedCapture(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.acquire()
         self.opened.assert_called_once()
+        self.probe.assert_called_once()
+
+    def test_new_capture_cannot_publish_a_legacy_mask_only_view(self):
+        self.view["schema"] = "aragorn/pi-core-stopped-mask-view/v1"
+        del self.view["manager_state"]
+        with self.assertRaisesRegex(ValueError, "requires manager"):
+            self.acquire()
+        self.assertEqual(list(self.cfg.receipt_directory.iterdir()), [])
+
+    def test_stable_but_wrong_manager_target_is_retained_as_negative(self):
+        for edge in self.view["manager_state"].values():
+            edge["targets"][ACTION]["ino"] += 42
+        result = self.acquire()
+        self.assertFalse(result["mask_consistent"])
+        self.assertEqual(cap.replay_stopped_masks(**self.keys(result)), result)
         self.probe.assert_called_once()
 
     def test_offline_replay_rejects_receipted_but_inconsistent_bindings_bytes_and_types(self):

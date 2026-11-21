@@ -11,6 +11,7 @@ import threading
 import time
 
 from .oci_worker_protocol import canonical_json
+from .pi_core_manager_state_view import verify_manager_state
 from .pi_core_mask_custody import check_mask_destinations, replay_mask_observation, retain_mask_observation
 from .pi_core_mask_probe import _PROGRAM, _names, observe_mask_denials
 from .pi_core_state_admission import _dev, _keys, _pin, _uint, _uuid
@@ -140,12 +141,15 @@ def _destination_coordinates(capture, roots, pi_details, manager_details):
 def _verify_slice(bindings, view, proof, worker_raw, manager_raw, projections=None):
     _keys(bindings, ("schema", "attempt_id", "deployment", "profile", "interpreter", "probe_source",
                      "unit", "invocation", "launch", "clock", "worker", "manager", "storage"))
-    _keys(view, ("schema", "worker", "manager", "source", "directories", "ptmx", "dev_names", "worker_root",
-                 "worker_dev", "opened_boottime_ns", "closed_boottime_ns", "worker_mountinfo_digest",
-                 "manager_mountinfo_digest"))
+    versions = {"aragorn/pi-core-stopped-mask-binding/v1": 1, "aragorn/pi-core-stopped-mask-binding/v2": 2}
+    version = versions.get(bindings["schema"])
+    _need(version is not None and type(view) is dict and
+          view.get("schema") == f"aragorn/pi-core-stopped-mask-view/v{version}", "unknown or mixed capture format")
+    fields = ("schema", "worker", "manager", "source", "directories", "ptmx", "dev_names", "worker_root",
+              "worker_dev", "opened_boottime_ns", "closed_boottime_ns", "worker_mountinfo_digest",
+              "manager_mountinfo_digest")
+    _keys(view, fields + (("manager_state",) if version == 2 else ()))
     _keys(proof, ("witness", "names_before", "names_after"))
-    _need(bindings["schema"] == "aragorn/pi-core-stopped-mask-binding/v1" and
-          view["schema"] == "aragorn/pi-core-stopped-mask-view/v1", "unknown capture format")
     for key in ("deployment", "profile", "interpreter", "launch"):
         _pin(bindings[key])
     for key in ("attempt_id", "invocation"):
@@ -189,6 +193,8 @@ def _verify_slice(bindings, view, proof, worker_raw, manager_raw, projections=No
     verify_masks({"root": view["worker_root"], "tree": tree}, witness, subject=bindings["worker"],
                  manager_subject=bindings["manager"], device=vol["device"], backing_devices=vol["backing_devices"],
                  namespace=namespace, worker_mounts=pi, manager_mounts=manager)
+    # Historical mask-only records remain replayable; they cannot produce a storage projection.
+    return verify_manager_state(view["manager_state"], vol, manager) if version == 2 else None
 
 
 def _finding(bindings, view, proof, worker_raw, manager_raw, projections=None):
@@ -212,7 +218,9 @@ def capture_stopped_masks(session, capture, *, deadline):
                                       interpreter_digest=capture.interpreter_digest)
         view, worker_raw, manager_raw = live.finish()
     _stopped(session, deadline)
-    bindings = dict(schema="aragorn/pi-core-stopped-mask-binding/v1", attempt_id=capture.attempt_id,
+    _need(view.get("schema") == "aragorn/pi-core-stopped-mask-view/v2" and "manager_state" in view,
+          "new capture requires manager source and target observations")
+    bindings = dict(schema="aragorn/pi-core-stopped-mask-binding/v2", attempt_id=capture.attempt_id,
                     deployment=capture.deployment_digest, profile=capture.profile_digest,
                     interpreter=capture.interpreter_digest, probe_source=_digest(_PROGRAM.encode("ascii")),
                     unit=owned.plan.unit_name, invocation=owned.invocation, launch=owned.immutable_digest,
@@ -232,7 +240,7 @@ def capture_stopped_masks(session, capture, *, deadline):
 
 
 def replay_stopped_masks(*, store, receipt_directory, capture_digest, receipt_digest):
-    """Recompute only the named-mask finding. No worker input, resumption or acquisition."""
+    """Replay the recorded version's checks; never turn a v1 mask into a manager-state observation."""
     raw = replay_mask_observation(store=store, receipt_directory=receipt_directory,
                                   capture_digest=capture_digest, receipt_digest=receipt_digest)
     ok, why = _finding(json.loads(raw["bindings"]), json.loads(raw["vantage"]), json.loads(raw["proof"]),

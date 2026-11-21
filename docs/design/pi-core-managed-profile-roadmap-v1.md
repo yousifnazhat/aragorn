@@ -127,6 +127,9 @@ coordinator's exact input references. Services have not run.
 prepares a separate read-only image for an externally approved, short-lived
 service configuration. The guest need not be rebuilt for a new grant. Its
 manager-only attachment and actual guest readback are not demonstrated.
+[B67](../phase3/coordinator/pi-core-manager-state-observation-batch-67.md)
+measures both ends of the manager's state binds during the stopped gate
+and compares them with the independent archive. No guest evidence was acquired.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

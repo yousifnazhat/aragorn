@@ -18,6 +18,9 @@ class Kernel:
 
     def __init__(self):
         self.fds, self.flags, self.calls, self.next = {}, {}, [], 10
+        # Unlike a mutable name, an already-held directory descriptor continues to
+        # refer to the object pinned at open time if the path is later retargeted.
+        self.renamed, self.pinned, self.missing = {}, {}, set()
         self.now, self.boot, self.tick = 10, 1000, 1173
         self.dev_names, self.source_entries, self.link = ["null", "ptmx", "pts", "shm"], [], "pts/ptmx"
         self.changed, self.state, self.cap, self.count = {}, "t", 0, 1
@@ -27,14 +30,18 @@ class Kernel:
     def open(self, name, flags, dir_fd=None):
         path = name if dir_fd is None else self.fds[dir_fd] + "/" + name
         self.calls.append((path, flags))
+        if path in self.missing:
+            raise FileNotFoundError(path)
         self.next += 1
         self.fds[self.next] = path.removesuffix("/.")
         self.flags[self.next] = flags
+        self.pinned[self.next] = self.renamed.get(path, {}).copy()
         return self.next
 
     def close(self, fd):
         del self.fds[fd]
         del self.flags[fd]
+        del self.pinned[fd]
 
     def getpid(self):
         return 23
@@ -66,9 +73,14 @@ class Kernel:
                           mnt_id=33 if path == self.SOURCE else (36 if path.endswith("/pts") else 39))
         if path.endswith("/ptmx"):
             result.update(mode=stat.S_IFLNK | 0o777, dev="0:11", ino=57, mnt_id=7)
+        ids = {m.ANCHOR: (100, 70), m.ANCHOR + m.ACTION: (101, 70), m.ANCHOR + m.PROVIDER: (102, 70),
+               m.ACTION: (101, 71), m.PROVIDER: (102, 72)}
+        if path.removeprefix(self.MAN) in ids:
+            ino, mid = ids[path.removeprefix(self.MAN)]
+            result.update(mode=stat.S_IFDIR | 0o700, dev="8:2", ino=ino, mnt_id=mid)
         if owner:
             result.update(uid=0, gid=0)
-        return {**result, **self.changed.get(path, {})}
+        return {**result, **self.changed.get(path, {}), **self.pinned[fd]}
 
     def read(self, proc, name, maximum, mount, deadline):
         pid = int(self.fds[proc].split("/")[-1])
@@ -126,6 +138,21 @@ class KernelMaskViewTests(unittest.TestCase):
         self.assertFalse(self.k.fds)
         self.assertEqual((worker, manager), (b"worker rows\n", b"manager rows\n"))
         self.assertEqual(record["source"]["before"], record["source"]["path_after"])
+        self.assertEqual(record["schema"], "aragorn/pi-core-stopped-mask-view/v2")
+        before = record["manager_state"]["before"]
+        self.assertEqual(set(record["manager_state"]), {"before", "after"})
+        self.assertEqual(record["manager_state"]["after"], before)
+        self.assertEqual(set(before), {"sources", "targets"})
+        self.assertEqual(set(before["sources"]), {m.ANCHOR, m.ACTION, m.PROVIDER})
+        self.assertEqual(set(before["targets"]), {m.ACTION, m.PROVIDER})
+        for side, expectations in (("sources", {m.ANCHOR: (100, 70), m.ACTION: (101, 70), m.PROVIDER: (102, 70)}),
+                                   ("targets", {m.ACTION: (101, 71), m.PROVIDER: (102, 72)})):
+            for name, (ino, mount_id) in expectations.items():
+                self.assertEqual(before[side][name], dict(dev="8:2", ino=ino, rdev="0:0", uid=0, gid=0,
+                                                          mode=stat.S_IFDIR | 0o700, mnt_id=mount_id))
+                path = self.k.MAN + (m.ANCHOR if side == "sources" and name != m.ANCHOR else "") + name
+                flags = [flags for n, flags in self.k.calls if n == path]
+                self.assertEqual(flags, [self.k.O_NOFOLLOW | self.k.O_DIRECTORY | self.k.O_PATH | self.k.O_CLOEXEC] * 3)
         self.assertEqual(record["ptmx"]["readlink_after"], "pts/ptmx")
         self.assertEqual(set(record["directories"]["/dev/pts"]), {"before", "after"})
         self.assertEqual(record["dev_names"], ["null", "ptmx", "pts", "shm"])
@@ -165,6 +192,24 @@ class KernelMaskViewTests(unittest.TestCase):
                 self.k.source_entries.append("unexpected")
                 with self.assertRaises(ValueError):
                     v.finish()
+        self.assertFalse(self.k.fds)
+
+    def test_replaced_source_bind_or_intermediate_refuses_even_while_original_descriptors_remain_valid(self):
+        for name, change in ((m.ANCHOR + m.ACTION, {"ino": 999}), (m.PROVIDER, {"mnt_id": 999}),
+                             (m.ANCHOR + "/var/lib", {"ino": 999})):
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, "held and named manager state paths differ"):
+                    with self.hold() as view:
+                        self.k.renamed[self.k.MAN + name] = change
+                        view.finish()
+                self.assertFalse(self.k.fds)
+                self.k.renamed.clear()
+
+    def test_missing_manager_path_does_not_allow_partial_observation(self):
+        self.k.missing.add(self.k.MAN + m.ANCHOR + m.PROVIDER)
+        with self.assertRaises(FileNotFoundError):
+            with self.hold():
+                self.fail("missing source must not open a usable view")
         self.assertFalse(self.k.fds)
 
     def test_capture_thread_must_observe_the_manager_view_and_remain_in_its_task_group(self):

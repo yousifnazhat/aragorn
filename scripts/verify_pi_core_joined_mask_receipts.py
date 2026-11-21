@@ -27,9 +27,10 @@ def _separate(roots):
 
 
 def verify_joined_masks(*, archive, profile_pin, latest_pin, witness_pin, store, receipt_directory,
-                        capture_pin, receipt_pin, require_manager_state=False):
+                        capture_pin, receipt_pin, require_manager_state=False, require_worker_spine=False):
     """Validate both original formats, then join their overlapping facts; do not manufacture either witness."""
-    _need(type(require_manager_state) is bool, "invalid manager-state requirement")
+    _need(type(require_manager_state) is bool and type(require_worker_spine) is bool,
+          "invalid manager-state or worker-spine requirement")
     _need(type(archive) is CAS and archive.read_only is True, "admission CAS must already be read-only")
     paths = (archive.root, store, receipt_directory)
     roots = _separate(paths)
@@ -37,9 +38,15 @@ def verify_joined_masks(*, archive, profile_pin, latest_pin, witness_pin, store,
     local = replay_mask_observation(store=store, receipt_directory=receipt_directory,
                                     capture_digest=capture_pin, receipt_digest=receipt_pin)
     binding, view, proof = (json.loads(local[key]) for key in ("bindings", "vantage", "proof"))
-    manager_state = _verify_slice(binding, view, proof, local["worker"], local["manager"])
-    has_manager_state = binding["schema"] == "aragorn/pi-core-stopped-mask-binding/v2"
+    has_spine = binding["schema"] == "aragorn/pi-core-stopped-mask-binding/v3"
+    has_manager_state = has_spine or binding["schema"] == "aragorn/pi-core-stopped-mask-binding/v2"
+    spine = {}
+    _need(has_spine == ("worker_spine" in local), "mismatched worker-spine custody version")
+    manager_state = _verify_slice(binding, view, proof, local["worker"], local["manager"],
+                                  **({"worker_spine_raw": local["worker_spine"], "spine_projection": spine}
+                                     if has_spine else {}))
     _need(not require_manager_state or has_manager_state, "manager-state evidence required; legacy mask receipt")
+    _need(not require_worker_spine or has_spine, "worker-spine evidence required; legacy mask receipt")
 
     head, capture, outer = (_doc(archive, pin) for pin in (latest_pin, admitted["capture"], witness_pin))
     # Each dereference is content-addressed. The two capture and profile digest *types* differ.
@@ -62,10 +69,20 @@ def verify_joined_masks(*, archive, profile_pin, latest_pin, witness_pin, store,
     _same(walk["root"], view["worker_root"], "different worker root")
     _same(walk["tree"]["/dev"], dict(stat=view["worker_dev"], before=proof["names_before"],
                                      after=proof["names_after"]), "different /dev view")
+    if has_spine:
+        for key in ("before", "after", "root", "cwd", "fds"):
+            _same(walk[key], spine[key], "different external stopped-worker " + key)
+        # B58 accepts a cwd anywhere within the versions tree. B71 requires
+        # the specific installed path, not an unrelated directory or an alias.
+        path = spine["admitted_path"]
+        _need(path in walk["tree"] and "before" in walk["tree"][path], "missing exact external admitted cwd")
+        _same(walk["tree"][path]["stat"], spine["cwd"], "different external admitted cwd object")
     # B58 already checked every marked leaf against this exact proof and rejected extra/hidden paths.
     _need(_separate(paths) == roots, "evidence directory changed")
     return {**admitted, "mask_capture_binding": capture_pin, "local_receipt": receipt_pin,
             "manager_state_roots_and_targets_matched": has_manager_state,
+            "stopped_worker_handles_and_admitted_cwd_matched": has_spine,
+            "local_full_namespace_walk_observed": False,
             "same_capture_interval_verified": False, "external_freshness_verified": False}
 
 
@@ -77,6 +94,8 @@ def main(argv=None):
         parser.add_argument("--" + arg, required=True)
     parser.add_argument("--require-manager-state", action="store_true",
                         help="refuse historical mask receipts without measured manager state roots and bind targets")
+    parser.add_argument("--require-worker-spine", action="store_true",
+                        help="require actual stopped-worker handles and the admitted cwd to match the independent walk")
     args = vars(parser.parse_args(argv))
     try:
         args["archive"] = CAS(args["archive"], read_only=True)

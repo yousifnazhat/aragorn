@@ -21,8 +21,10 @@ from .phase3_exit_gate_manifest import load_phase3_exit_gate_manifest_bytes
 
 
 _SCHEMA = "aragorn/pi-core-mask-local-custody/v1"
+_SPINE_SCHEMA = "aragorn/pi-core-mask-local-custody/v2"
 _LIMITS = dict(bindings=65535, manager=1 << 20, worker=1 << 20, vantage=65535, proof=65535)
-_DOCS = {"bindings", "vantage", "proof"}
+_SPINE_LIMITS = dict(_LIMITS, worker_spine=65535)
+_DOCS = {"bindings", "vantage", "proof", "worker_spine"}
 _PIN = re.compile(r"sha256:[0-9a-f]{64}")
 
 
@@ -41,7 +43,7 @@ def _digest(raw):
 
 
 def _validate(key, raw):
-    _need(type(raw) is bytes and 0 < len(raw) <= _LIMITS[key], "missing or oversized " + key)
+    _need(type(raw) is bytes and 0 < len(raw) <= _SPINE_LIMITS[key], "missing or oversized " + key)
     if key in _DOCS:
         # Reuse the strict canonical integer-only parser. The supplied blob,
         # unlike the parser envelope, has no trailing LF. Do not reserialize it.
@@ -51,7 +53,7 @@ def _validate(key, raw):
 
 
 @contextmanager
-def _roots(store, receipt_directory, deadline):
+def _roots(store, receipt_directory, deadline, *, mount_ids=None):
     paths = (store, receipt_directory)
     for p in paths:
         _need(isinstance(p, Path) and p.is_absolute() and p.anchor == "/" and p != Path("/")
@@ -68,6 +70,10 @@ def _roots(store, receipt_directory, deadline):
         store_ids, receipt_ids = [[ident[:2] for ident in ids] for _, _, ids in roots]
         _need(store_ids[-1] not in receipt_ids and receipt_ids[-1] not in store_ids, "directory alias")
 
+        if mount_ids is not None:
+            _need(type(mount_ids) is tuple and len(mount_ids) == 2 and
+                  all(type(i) is int and 0 < i < (1 << 64) for i in mount_ids), "invalid evidence mount pins")
+
         def guard():
             # Parent timestamps legitimately change during publication; pin all
             # named and held devices, inodes, types, ownership and modes instead.
@@ -79,9 +85,25 @@ def _roots(store, receipt_directory, deadline):
                                                                follow_symlinks=False)
                     _need(identities[i] == files._directory_identity(os.fstat(fd)) ==
                           files._directory_identity(named), "private ancestry changed")
+            if mount_ids is not None:
+                for (path, chain, identities), mid in zip(roots, mount_ids, strict=True):
+                    # An alias of the same directory can have identical st_dev and inode while
+                    # sitting on a different mount. Re-open from /, not an old parent fd.
+                    current = held._open_chain(path, deadline)
+                    try:
+                        _need(_mount_id(chain[-1]) == mid == _mount_id(current[-1]) and
+                              identities[-1] == files._directory_identity(os.fstat(current[-1])),
+                              "evidence location no longer on the measured mount")
+                    finally:
+                        held.provision._close_all(list(reversed(current)))
         guard()
         yield roots[1][1][-1], guard, tuple(ids[-1] for _, _, ids in roots)
         guard()
+
+
+def _mount_id(fd):
+    from .pi_core_stopped_mask_view import _stat
+    return _stat(fd)["mnt_id"]
 
 
 def _receipt_name(capture_digest):
@@ -103,26 +125,28 @@ def _replay(reader, fd, name, capture_digest, receipt_digest, guard):
     guard()
     raw = _receipt(fd, name, receipt_digest)
     doc = load_phase3_exit_gate_manifest_bytes(raw + b"\n")
-    _need(set(doc) == {"schema", "capture_digest", "members"} and doc["schema"] == _SCHEMA
+    limits = _SPINE_LIMITS if doc.get("schema") == _SPINE_SCHEMA else _LIMITS
+    _need(set(doc) == {"schema", "capture_digest", "members"} and doc["schema"] in (_SCHEMA, _SPINE_SCHEMA)
           and doc["capture_digest"] == capture_digest and type(doc["members"]) is dict
-          and doc["members"].keys() == _LIMITS.keys(), "incomplete or mixed capture")
+          and doc["members"].keys() == limits.keys(), "incomplete or mixed capture")
     output = {}
     for key, row in doc["members"].items():
         guard()
         _need(type(row) is dict and set(row) == {"sha256", "size"} and type(row["size"]) is int
-              and 0 < row["size"] <= _LIMITS[key], "invalid member metadata")
+              and 0 < row["size"] <= limits[key], "invalid member metadata")
         data = reader.read(_pin(row["sha256"]), max_bytes=row["size"])
         _need(len(data) == row["size"], "member length mismatch")
         _validate(key, data)
         output[key] = data
     _need(_digest(output["bindings"]) == capture_digest and _receipt(fd, name, receipt_digest) == raw,
           "capture identity or external receipt changed")
+    _match_spine(output)
     guard()
     return output
 
 
 def replay_mask_observation(*, store, receipt_directory, capture_digest, receipt_digest):
-    """Read the exclusive local receipt and verify the five original blobs; never write."""
+    """Read the exclusive receipt and its exact versioned member set; never write."""
     name = _receipt_name(capture_digest)
     _pin(receipt_digest)
     with _roots(store, receipt_directory, time.monotonic() + 30.0) as (fd, guard, _):
@@ -137,16 +161,40 @@ def check_mask_destinations(*, store, receipt_directory, deadline):
         return roots
 
 
+def _match_spine(original):
+    binding = load_phase3_exit_gate_manifest_bytes(original["bindings"] + b"\n")
+    vantage = load_phase3_exit_gate_manifest_bytes(original["vantage"] + b"\n")
+    expected = ("aragorn/pi-core-stopped-mask-binding/v3", "aragorn/pi-core-stopped-mask-view/v3")
+    has = "worker_spine" in original
+    for doc, schema in zip((binding, vantage), expected):
+        _need((doc.get("schema") == schema) == ("worker_spine_digest" in doc) == has,
+              "missing or mixed worker spine custody")
+        if has:
+            _need(doc["worker_spine_digest"] == _digest(original["worker_spine"]), "worker spine pin differs")
+
+
 def retain_mask_observation(*, store, receipt_directory, capture_digest, worker_raw, manager_raw,
-                            vantage_raw, bindings_raw, proof_raw, expected_roots, deadline):
+                            vantage_raw, bindings_raw, proof_raw, expected_roots, deadline,
+                            worker_spine_raw=None, topology_guard=None, expected_mounts=None):
     """One no-replace receipt per capture. On error preserve evidence; do not retry."""
     name = _receipt_name(capture_digest)
     original = dict(worker=worker_raw, manager=manager_raw, vantage=vantage_raw,
                     bindings=bindings_raw, proof=proof_raw)
+    spine = worker_spine_raw is not None
+    _need(callable(topology_guard) and expected_mounts is not None if spine else
+          topology_guard is None and expected_mounts is None, "wrong custody guard for version")
+    if spine:
+        original["worker_spine"] = worker_spine_raw
     for key, raw in original.items():
         _validate(key, raw)
     _need(_digest(bindings_raw) == capture_digest, "capture pin does not bind the exact supplied identities")
-    with _roots(store, receipt_directory, deadline) as (fd, guard, roots):
+    _match_spine(original)
+    with _roots(store, receipt_directory, deadline, **({"mount_ids": expected_mounts} if spine else {})) as (fd, path_guard, roots):
+        def guard():
+            path_guard()
+            if spine:
+                topology_guard()
+        guard()
         _need(type(expected_roots) is tuple and len(expected_roots) == 2
               and all(type(row) is tuple and len(row) == 5 and all(type(v) is int for v in row) for row in expected_roots)
               and expected_roots == roots, "nominated private roots changed after preflight")
@@ -164,7 +212,9 @@ def retain_mask_observation(*, store, receipt_directory, capture_digest, worker_
             pin = writer.put_expected(BytesIO(raw), expected_digest=_digest(raw), max_bytes=len(raw))
             _need(reader.read(pin, max_bytes=len(raw)) == raw, "private member readback mismatch")
             rows[key] = {"sha256": pin, "size": len(raw)}
-        receipt_raw = canonical_json(dict(schema=_SCHEMA, capture_digest=capture_digest, members=rows))
+        guard()
+        receipt_raw = canonical_json(dict(schema=_SPINE_SCHEMA if spine else _SCHEMA,
+                                          capture_digest=capture_digest, members=rows))
         receipt_pin = writer.put_expected(BytesIO(receipt_raw), expected_digest=_digest(receipt_raw),
                                           max_bytes=len(receipt_raw))
         guard()

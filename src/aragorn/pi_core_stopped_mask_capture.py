@@ -1,4 +1,5 @@
 """Protected stopped-worker acquisition and local replay. Not a launcher or a B58 independent head."""
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 import hashlib
 from itertools import chain
@@ -11,6 +12,7 @@ import threading
 import time
 
 from .oci_worker_protocol import canonical_json
+from .phase3_exit_gate_manifest import load_phase3_exit_gate_manifest_bytes
 from .pi_core_manager_state_view import verify_manager_state
 from .pi_core_mask_custody import check_mask_destinations, replay_mask_observation, retain_mask_observation
 from .pi_core_mask_probe import _PROGRAM, _names, observe_mask_denials
@@ -41,6 +43,7 @@ class StoppedMaskCapture:
     volume_device: str
     backing_devices: tuple[str, ...]
     fs_type: str
+    worker_spine: bool = False
     _lock: object = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     _state: str = field(default="new", init=False, repr=False, compare=False)
     _roots: tuple = field(default=(), init=False, repr=False, compare=False)
@@ -51,6 +54,7 @@ class StoppedMaskCapture:
         with self._lock:
             _need(self._state == "new", "capture request already used")
             object.__setattr__(self, "_state", "spent")
+            _need(type(self.worker_spine) is bool, "invalid worker spine selection")
             _need(type(deadline) in (int, float) and math.isfinite(deadline) and time.monotonic() < deadline,
                   "invalid operation deadline")
             _need(type(self.attempt_id) is str and re.fullmatch(r"[a-f0-9]{32}", self.attempt_id)
@@ -86,7 +90,7 @@ def _volume(device, backing, fs_type):
           and fs_type in ("ext4", "xfs"), "unrecognized storage mapping")
 
 
-def _stopped(session, deadline):
+def _sole_stop(session):
     from .pi_core_node_source_observer import _NodeSession
     owned, ob = session.owned, session.observer
     _need(type(session) is _NodeSession and threading.get_native_id() == ob._thread and
@@ -95,6 +99,10 @@ def _stopped(session, deadline):
           session.tasks[owned.pid]["stopped"] and session.tasks[owned.pid]["joined"] and
           session.tasks[owned.pid]["start_ticks"] == owned.start_ticks and
           not session.pending_events and session._inventory() == [owned.pid], "gate is not in sole, unreleased custody")
+
+
+def _stopped(session, deadline):
+    _sole_stop(session)
     session._guard(deadline)
 
 
@@ -119,7 +127,7 @@ def _mount_views(vol, worker_raw, manager_raw):
 
 def _destination_coordinates(capture, roots, pi_details, manager_details):
     # A different pathname or mount ID need not mean different backing bytes.
-    coordinates = []
+    coordinates, mount_ids = [], []
     mounts = {Path(p): row for p, row in manager_details.items()}
     visible = tuple((m["dev"], Path(m["root"])) for m in pi_details.values())
     for directory, identity in zip((capture.store, capture.receipt_directory), roots, strict=True):
@@ -136,19 +144,26 @@ def _destination_coordinates(capture, roots, pi_details, manager_details):
             _need(dev != other_dev or not (subtree.is_relative_to(other) or other.is_relative_to(subtree)),
                   "evidence reachable through a worker or custody mount alias")
         coordinates.append((dev, subtree))
+        mount_ids.append(row["mount_id"])
+    return tuple(mount_ids)
 
 
-def _verify_slice(bindings, view, proof, worker_raw, manager_raw, projections=None):
-    _keys(bindings, ("schema", "attempt_id", "deployment", "profile", "interpreter", "probe_source",
-                     "unit", "invocation", "launch", "clock", "worker", "manager", "storage"))
-    versions = {"aragorn/pi-core-stopped-mask-binding/v1": 1, "aragorn/pi-core-stopped-mask-binding/v2": 2}
+def _verify_slice(bindings, view, proof, worker_raw, manager_raw, projections=None, *,
+                  worker_spine_raw=None, spine_projection=None):
+    versions = {f"aragorn/pi-core-stopped-mask-binding/v{i}": i for i in (1, 2, 3)}
     version = versions.get(bindings["schema"])
+    _keys(bindings, ("schema", "attempt_id", "deployment", "profile", "interpreter", "probe_source",
+                     "unit", "invocation", "launch", "clock", "worker", "manager", "storage") +
+          (("capture_mode", "admitted_path", "worker_spine_digest") if version == 3 else ()))
     _need(version is not None and type(view) is dict and
           view.get("schema") == f"aragorn/pi-core-stopped-mask-view/v{version}", "unknown or mixed capture format")
+    _need((worker_spine_raw is not None) == (version == 3) and
+          (spine_projection is None or type(spine_projection) is dict and not spine_projection),
+          "missing or unexpected worker spine")
     fields = ("schema", "worker", "manager", "source", "directories", "ptmx", "dev_names", "worker_root",
               "worker_dev", "opened_boottime_ns", "closed_boottime_ns", "worker_mountinfo_digest",
               "manager_mountinfo_digest")
-    _keys(view, fields + (("manager_state",) if version == 2 else ()))
+    _keys(view, fields + (("manager_state",) if version >= 2 else ()) + (("worker_spine_digest",) if version == 3 else ()))
     _keys(proof, ("witness", "names_before", "names_after"))
     for key in ("deployment", "profile", "interpreter", "launch"):
         _pin(bindings[key])
@@ -193,13 +208,25 @@ def _verify_slice(bindings, view, proof, worker_raw, manager_raw, projections=No
     verify_masks({"root": view["worker_root"], "tree": tree}, witness, subject=bindings["worker"],
                  manager_subject=bindings["manager"], device=vol["device"], backing_devices=vol["backing_devices"],
                  namespace=namespace, worker_mounts=pi, manager_mounts=manager)
-    # Historical mask-only records remain replayable; they cannot produce a storage projection.
-    return verify_manager_state(view["manager_state"], vol, manager) if version == 2 else None
+    manager_state = verify_manager_state(view["manager_state"], vol, manager) if version >= 2 else None
+    if version == 3:
+        from .pi_core_worker_walk_evidence import verify_worker_spine
+        _need(bindings["capture_mode"] == "STOPPED_WORKER_HANDLE_SPINE" and
+              type(worker_spine_raw) is bytes and 0 < len(worker_spine_raw) <= 65535 and
+              _pin(bindings["worker_spine_digest"]) == view["worker_spine_digest"] == _digest(worker_spine_raw),
+              "worker spine bytes or selected capture mode differs")
+        spine = load_phase3_exit_gate_manifest_bytes(worker_spine_raw + b"\n")
+        verified = verify_worker_spine(spine, binding=bindings, view=view, namespace=namespace, worker_mounts=pi)
+        _need(spine["opened_boottime_ns"] <= witness["before"]["boottime_ns"] <
+              witness["after"]["boottime_ns"] <= spine["closed_boottime_ns"], "worker spine did not bracket mask probes")
+        if spine_projection is not None:
+            spine_projection.update(verified)
+    return manager_state
 
 
-def _finding(bindings, view, proof, worker_raw, manager_raw, projections=None):
+def _finding(bindings, view, proof, worker_raw, manager_raw, projections=None, *, worker_spine_raw=None):
     try:
-        _verify_slice(bindings, view, proof, worker_raw, manager_raw, projections)
+        _verify_slice(bindings, view, proof, worker_raw, manager_raw, projections, worker_spine_raw=worker_spine_raw)
     except (KeyError, ValueError, TypeError) as error:
         return False, str(error)[:256]
     return True, None
@@ -210,14 +237,52 @@ def capture_stopped_masks(session, capture, *, deadline):
     _need(type(capture) is StoppedMaskCapture and session._mask_capture is capture, "wrong capture owner")
     roots = capture._claim(session, deadline)
     _stopped(session, deadline)
-    owned, observer = session.owned, session.observer
-    with hold_stopped_mask_view(pid=owned.pid, start_ticks=owned.start_ticks, deadline=deadline) as live:
+    owned = session.owned
+    with ExitStack() as scope:
+        live = scope.enter_context(hold_stopped_mask_view(pid=owned.pid, start_ticks=owned.start_ticks, deadline=deadline))
         _need((live.worker["pid"], live.worker["start_ticks"], live.worker["uid"], live.worker["gid"]) ==
               (owned.pid, owned.start_ticks, owned.plan.worker_uid, owned.plan.worker_gid), "different worker")
-        frames = observe_mask_denials(live, deadline=deadline, cleanup_deadline=session.cleanup_deadline,
-                                      interpreter_digest=capture.interpreter_digest)
+        def sample_masks():
+            return observe_mask_denials(live, deadline=deadline, cleanup_deadline=session.cleanup_deadline,
+                                        interpreter_digest=capture.interpreter_digest)
+        if capture.worker_spine:
+            from . import pi_core_node_source_observer as node
+            from .pi_core_stopped_worker_walk import hold_worker_spine
+            # No caller-supplied lookup or PID: only the actual admitted worker's exact cwd.
+            admitted = owned.plan.prepared.skill_path.parent
+            with hold_worker_spine(live, admitted_path=admitted, deadline=deadline) as finish:
+                frames = sample_masks()
+                spine_raw = canonical_json(finish())
+            view, worker_raw, manager_raw = live.finish()
+            _stopped(session, deadline)
+            pidfd = session.observer._pidfd
+            def guard():
+                _sole_stop(session)
+                _need(session._mask_capture is capture and session.owned is owned and session.observer._pidfd == pidfd,
+                      "different stopped-worker owner during retention")
+                node.base.process.require_live_pidfd(pidfd)
+                live.guard_retained_topology(worker_raw, manager_raw)
+            result = _retain(session, capture, roots, deadline, view, worker_raw, manager_raw, frames,
+                             spine_raw=spine_raw, admitted=admitted, guard=guard)
+            try:
+                _stopped(session, deadline)
+                scope.close()
+            except BaseException:
+                # Final owned-generation or descriptor cleanup failed after verified
+                # publication. Keep known pins available to the existing supervisor.
+                session._mask_receipt = dict(result, mask_consistent=False,
+                                             reason="post-publication custody or cleanup unconfirmed")
+                raise
+            return result
+        frames = sample_masks()
         view, worker_raw, manager_raw = live.finish()
     _stopped(session, deadline)
+    return _retain(session, capture, roots, deadline, view, worker_raw, manager_raw, frames)
+
+
+def _retain(session, capture, roots, deadline, view, worker_raw, manager_raw, frames, *,
+            spine_raw=None, admitted=None, guard=None):
+    owned, observer = session.owned, session.observer
     _need(view.get("schema") == "aragorn/pi-core-stopped-mask-view/v2" and "manager_state" in view,
           "new capture requires manager source and target observations")
     bindings = dict(schema="aragorn/pi-core-stopped-mask-binding/v2", attempt_id=capture.attempt_id,
@@ -226,24 +291,37 @@ def capture_stopped_masks(session, capture, *, deadline):
                     unit=owned.plan.unit_name, invocation=owned.invocation, launch=owned.immutable_digest,
                     clock=dict(observer._clock), worker=view["worker"], manager=view["manager"],
                     storage=dict(device=capture.volume_device, backing_devices=list(capture.backing_devices), fs_type=capture.fs_type))
+    extra = {}
+    if spine_raw is not None:
+        _need(capture.worker_spine is True and isinstance(admitted, Path) and admitted == owned.plan.prepared.skill_path.parent
+              and callable(guard) and 0 < len(spine_raw) <= 65535, "spine is not from this protected invocation")
+        extra["worker_spine_digest"] = _digest(spine_raw)
+        view = dict(view, schema="aragorn/pi-core-stopped-mask-view/v3", **extra)
+        bindings.update(schema="aragorn/pi-core-stopped-mask-binding/v3", capture_mode="STOPPED_WORKER_HANDLE_SPINE",
+                        admitted_path=str(admitted), **extra)
+    else:
+        _need(capture.worker_spine is False and admitted is None and guard is None, "missing requested spine")
     proof = _assemble(view, frames)
     views = _mount_views(bindings["storage"], worker_raw, manager_raw)
-    _destination_coordinates(capture, roots, views[1], views[2])
-    consistent, reason = _finding(bindings, view, proof, worker_raw, manager_raw, views)
+    mount_ids = _destination_coordinates(capture, roots, views[1], views[2])
+    consistent, reason = _finding(bindings, view, proof, worker_raw, manager_raw, views, worker_spine_raw=spine_raw)
     raw = canonical_json(bindings)
     pin = _digest(raw)
     receipt = retain_mask_observation(store=capture.store, receipt_directory=capture.receipt_directory,
         capture_digest=pin, bindings_raw=raw, worker_raw=worker_raw, manager_raw=manager_raw,
-        proof_raw=canonical_json(proof), vantage_raw=canonical_json(view), expected_roots=roots, deadline=deadline)
+        proof_raw=canonical_json(proof), vantage_raw=canonical_json(view), expected_roots=roots, deadline=deadline,
+        **(dict(worker_spine_raw=spine_raw, topology_guard=guard, expected_mounts=mount_ids) if extra else {}))
     return dict(capture_digest=pin, receipt_digest=receipt, mask_consistent=consistent, reason=reason,
-                activation_authorized=False, installed_isolation_verified=False, phase3_exit_eligible=False)
+                activation_authorized=False, installed_isolation_verified=False, phase3_exit_eligible=False, **extra)
 
 
 def replay_stopped_masks(*, store, receipt_directory, capture_digest, receipt_digest):
     """Replay the recorded version's checks; never turn a v1 mask into a manager-state observation."""
     raw = replay_mask_observation(store=store, receipt_directory=receipt_directory,
                                   capture_digest=capture_digest, receipt_digest=receipt_digest)
+    spine_raw = raw.get("worker_spine")
     ok, why = _finding(json.loads(raw["bindings"]), json.loads(raw["vantage"]), json.loads(raw["proof"]),
-                       raw["worker"], raw["manager"])
+                       raw["worker"], raw["manager"], worker_spine_raw=spine_raw)
     return dict(capture_digest=capture_digest, receipt_digest=receipt_digest, mask_consistent=ok, reason=why,
-                activation_authorized=False, installed_isolation_verified=False, phase3_exit_eligible=False)
+                activation_authorized=False, installed_isolation_verified=False, phase3_exit_eligible=False,
+                **({"worker_spine_digest": _digest(spine_raw)} if spine_raw is not None else {}))

@@ -141,6 +141,11 @@ single pinned guest payload. Installed observation remains outstanding.
 the owned sensor's mount observation to protected startup. It can retain a
 stable mismatch without dispatching the worker. B69 does not contain this code;
 service health, independent storage custody and Pi isolation remain unproven.
+[B71](../phase3/coordinator/pi-core-stopped-worker-handles-batch-71.md) adds
+measurement and independent replay of the stopped task's actual root, admitted
+working directory and descriptors. Completing the worker-visible tree requires
+a [decision](../phase3/coordinator/pi-core-worker-visible-tree-decision.md);
+the lookup rules and worker permissions have not been changed.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

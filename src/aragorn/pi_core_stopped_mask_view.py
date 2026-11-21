@@ -416,6 +416,24 @@ class _View:
         finally:
             self._done = True
 
+    def guard_retained_topology(self, worker_raw, manager_raw):
+        """Bounded samples of this still-held stop while publishing its new spine receipt."""
+        _require(self._done and self._ok and not self._closed and threading.get_native_id() == self._caller[0],
+                 "completed view no longer held by its original observer")
+        _check(self._deadline)
+        with ExitStack() as s:
+            for key, ticks, ctx, raw in (("worker", self._ticks, self._ctx, worker_raw),
+                                         ("manager", self._manager["start_ticks"], self._manager_context, manager_raw)):
+                role = self._roles[key]
+                _, current, _, _ = _frame(s, role, self._mount, self._deadline, kind=key, ticks=ticks)
+                _require(current == ctx and raw == self._first["mounts"][key] ==
+                         _read(role[1], "mountinfo", 1 << 20, self._mount, self._deadline),
+                         "subject or mounting changed during evidence publication")
+            self._caller_context(self._caller_ticks)
+            _require(_read(self._caller[1], "mountinfo", 1 << 20, self._mount, self._deadline) == manager_raw,
+                     "publishing thread no longer shares the manager mounting")
+        _check(self._deadline)
+
 
 @contextmanager
 def hold_stopped_mask_view(*, pid, start_ticks, deadline):

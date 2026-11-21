@@ -16,6 +16,7 @@ from .runtime_capability_grant import parse_runtime_capability_grant
 
 
 PLAN = "aragorn/pi-core-stopped-mask-coordinator-plan/v1"
+SPINE_PLAN = "aragorn/pi-core-stopped-mask-and-handles-plan/v1"
 REPORT = "aragorn/pi-core-mask-capture-entry/v1"
 _ADMITTED = Path("/var/lib/aragorn/admitted")
 _PYTHON = Path("/opt/aragorn-cpython/bin/python3.12")
@@ -26,10 +27,16 @@ _CORE = ("pi_core_mask_capture_entry", "pi_core_mask_capture_release", "pi_core_
          "pi_core_configuration_carrier")
 
 
-def _custody(source_loader, host_custody, deadline):
+_SPINE_CORE = ("pi_core_stopped_worker_walk", "pi_core_worker_walk_evidence")
+
+
+def _custody(source_loader, host_custody, deadline, *, worker_spine=False):
+    if worker_spine:
+        # The protected loader must have executed these pinned bytes before the claim.
+        from . import pi_core_stopped_worker_walk, pi_core_worker_walk_evidence
     host_pin, rows, host = entry._custody(source_loader, host_custody, deadline)
     pins = source_loader.source_digests
-    for name in _CORE:
+    for name in _CORE + (_SPINE_CORE if worker_spine else ()):
         path = "opt/aragorn/src/aragorn/" + name + ".py"
         pin = entry._pin(pins.get(path))
         entry._require(sum(row.get("module") == "aragorn." + name and row.get("path") == path and
@@ -41,10 +48,11 @@ def _custody(source_loader, host_custody, deadline):
 def _plan(plan, host_pin):
     entry._exact(plan, ("schema", "host_profile_digest", "cas_root", "context", "deployment",
                         "launch", "revoked_context_ids", "runtime_conformance_digest", "service_configuration", "capture"))
-    entry._require(plan["schema"] == PLAN and plan["host_profile_digest"] == host_pin, "MASK_PLAN_BINDING")
+    entry._require(plan["schema"] in (PLAN, SPINE_PLAN) and plan["host_profile_digest"] == host_pin, "MASK_PLAN_BINDING")
     entry._path(plan["cas_root"])
     entry._pin(plan["runtime_conformance_digest"])
     service = entry._configuration_section(plan["service_configuration"])
+    entry._require(plan["schema"] != SPINE_PLAN or "carrier" in service, "HANDLE_CAPTURE_REQUIRES_PROTECTED_CONFIGURATION")
     for ref in (plan["context"], plan["deployment"], plan["launch"]):
         entry._reference(ref)
     revoked = plan["revoked_context_ids"]
@@ -63,7 +71,7 @@ def _plan(plan, host_pin):
     return plan
 
 
-def _result(raw, obs):
+def _result(raw, obs, *, worker_spine=False):
     entry._require(type(raw) is dict and raw.get("schema") == "aragorn/pi-core-stopped-mask-supervisor/v1"
                    and raw.get("authority") == "RETAINED_CAPTURE_ONLY_NOT_GATE_DENIAL_STORAGE_ADMISSION_OR_PHASE3_QUALIFICATION"
                    and raw.get("status") in ("CAPTURE_RETAINED_ONLY", "CAPTURE_RETAINED_INCONSISTENT", "REFUSED", "CLEANUP_HOLD"),
@@ -74,10 +82,14 @@ def _result(raw, obs):
     retained = status in ("CAPTURE_RETAINED_ONLY", "CAPTURE_RETAINED_INCONSISTENT")
     receipt = raw.get("retention")
     if retained or receipt is not None:
-        entry._exact(receipt, ("capture_digest", "receipt_digest", "mask_consistent", "reason",
-                               "activation_authorized", "installed_isolation_verified", "phase3_exit_eligible"))
+        fields = ("capture_digest", "receipt_digest", "mask_consistent", "reason",
+                  "activation_authorized", "installed_isolation_verified", "phase3_exit_eligible")
+        entry._exact(receipt, fields + (("worker_spine_digest",) if worker_spine else ()))
         consistent = receipt["mask_consistent"]
         pins = (entry._pin(receipt["capture_digest"]), entry._pin(receipt["receipt_digest"]))
+        if worker_spine:
+            spine = entry._pin(receipt["worker_spine_digest"])
+            entry._require(int(spine[7:], 16) and spine not in pins, "HANDLE_CAPTURE_MISSING_SEPARATE_MEMBER")
         entry._require(type(consistent) is bool and all(int(p[7:], 16) for p in pins) and pins[0] != pins[1]
                        and all(receipt[k] is False for k in ("activation_authorized", "installed_isolation_verified",
                                                              "phase3_exit_eligible"))
@@ -109,6 +121,7 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
         entry._require(len({host_pin, plan_pin, release_pin}) == 3, "MASK_SEPARATE_RELEASE_REQUIRED")
         inputs = entry._Inputs(deadline)
         plan = _plan(inputs.read(path, plan_pin, entry._PLAN_LIMIT), host_pin)
+        worker_spine = plan["schema"] == SPINE_PLAN
         context, deployment = inputs.ref(plan["context"]), inputs.ref(plan["deployment"])
         config = entry._launch(inputs.ref(plan["launch"]), "UNAVAILABLE")
         source = config.source_observation
@@ -121,7 +134,7 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
         c, service = plan["capture"], plan["service_configuration"]
         capture = stopped.StoppedMaskCapture(entry._path(c["store"]), entry._path(c["receipt_directory"]),
             c["attempt_id"], plan["deployment"]["digest"], config.source_observation_digest, interpreter,
-            c["volume_device"], tuple(c["backing_devices"]), c["fs_type"])
+            c["volume_device"], tuple(c["backing_devices"]), c["fs_type"], worker_spine=worker_spine)
         cas_root, config_root = entry._path(plan["cas_root"]), entry._path(service["deployment_path"])
         inputs.hold_directory(cas_root)
         cas = CAS(cas_root, read_only=True)
@@ -139,7 +152,10 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
                                held.identities["worker"] == {"uid": config.worker_uid, "gid": config.worker_gid},
                                "MASK_HELD_CONFIGURATION_DIFFERS")
                 inputs.guard()
-                entry._require(_custody(source_loader, host_custody, deadline) == (host_pin, interpreter), "MASK_HOST_CHANGED")
+                def check_sources():
+                    entry._require(_custody(source_loader, host_custody, deadline, worker_spine=worker_spine) ==
+                                   (host_pin, interpreter), "MASK_HOST_CHANGED")
+                check_sources()
                 held.guard(deadline=deadline)
                 claim_started = True
                 claim = release.claim_capture_release(inputs, release_digest=release_pin, plan_digest=plan_pin,
@@ -152,12 +168,11 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
                 def before_start():
                     inputs.guard()
                     held.guard(deadline=deadline)
-                    entry._require(_custody(source_loader, host_custody, deadline) == (host_pin, interpreter),
-                                   "MASK_HOST_CHANGED")
+                    check_sources()
                     # The installed grant may expire during native setup, independently of the release.
                     parse_runtime_capability_grant(canonical_json(grant), int(time.time()))
-                    release.guard_capture_start(inputs, release_digest=release_pin, claim_digest=claim,
-                                                capture=capture, deadline=deadline)
+                    return release.guard_capture_start(inputs, release_digest=release_pin, claim_digest=claim,
+                                                      capture=capture, deadline=deadline)
 
                 obs["capture_attempted"] = True
                 try:
@@ -169,11 +184,11 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
                 except BaseException as exc:
                     partial = getattr(exc, "pi_stopped_mask_observation", None)
                     if type(partial) is dict:
-                        _result(partial, obs)
+                        _result(partial, obs, worker_spine=worker_spine)
                     raise
-                _result(raw, obs)
+                _result(raw, obs, worker_spine=worker_spine)
                 inputs.guard()
-                entry._require(_custody(source_loader, host_custody, deadline) == (host_pin, interpreter), "MASK_HOST_CHANGED")
+                check_sources()
             except BaseException as exc:
                 body_failure = exc
                 raise

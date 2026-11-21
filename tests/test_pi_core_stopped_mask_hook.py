@@ -14,7 +14,8 @@ from aragorn import pi_core_stopped_mask_capture as capture_module
 def custody():
     # Native capture and its custody validator are replaced at the kernel
     # boundary; this object must not supply a callback or open a store.
-    return object.__new__(capture_module.StoppedMaskCapture)
+    return capture_module.StoppedMaskCapture(Path("/evidence/objects"), Path("/evidence/receipts"), "a"*32,
+        *("sha256:" + c*64 for c in "123"), "253:7", ("259:0",), "ext4")
 
 
 class OwnerHook(TestCase):

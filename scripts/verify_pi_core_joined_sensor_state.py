@@ -3,11 +3,12 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import time
 
 from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.pi_core_configuration_carrier import ROOT as CARRIER_ROOT, validate_carrier
-from aragorn.pi_core_sensor_state_evidence import verify_sensor_state
+from aragorn.pi_core_sensor_state_evidence import validate_sensor_configuration_mounts, verify_sensor_state
 from aragorn.pi_core_state_admission import _doc, _keys, _need, _pin, _same, verify_state_archive_v2
 from aragorn.pi_core_state_mounts import ACTION
 from scripts.verify_pi_core_joined_mask_receipts import _separate
@@ -91,6 +92,8 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     finding = verify_sensor_state(view, raw["manager"], raw["sensor"], identity=identity, storage=c["storage"])
     guest_evidence = sensor_evidence_mount(raw["manager"], raw["sensor"], c["storage"])
     _need(guest_evidence.device != carrier["device"], "evidence medium aliases the approved configuration carrier")
+    # Bound local parsing effort, not the original guest observation interval.
+    validate_sensor_configuration_mounts(raw["manager"], raw["sensor"], carrier["device"], deadline=time.monotonic() + 30.0)
 
     _same([r["deployment_digest"], r["configuration_digest"], r["clock"]["boot_id"], r["storage"]],
           [capture["deployment"], capture["configuration"], head["boot_id"], dict(device=capture["mapping"]["device"],
@@ -113,6 +116,8 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     return {**admitted, "capture_binding": capture_pin, "local_receipt": receipt_pin, "plan": plan_pin, "owner": owner_pin,
             "sensor_read_only_bind_matched": True, "independent_state_source_roots_matched": True,
             "guest_evidence_mount_topology_matched": True,
+            "manager_configuration_carrier_mount_matched": True, "sensor_configuration_file_mount_matched": True,
+            "configuration_image_bytes_verified_by_replay": False,
             "owner_sensor_generation_matched": True, "archive_sensor_subject_and_mount_bytes_matched": matched("sensor"),
             "archive_manager_subject_and_mount_bytes_matched": manager_same, "sensor_health_verified": False,
             "same_capture_interval_verified": False, "physical_asset_verified": False, "external_freshness_verified": False,

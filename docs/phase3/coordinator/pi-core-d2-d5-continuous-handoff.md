@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [sensor configuration, batch 73](pi-core-sensor-config-mounts-batch-73.md).**
+The opted-in path and independent reader now require the mounted configuration
+disk and sensor's single read-only file projection before a positive result.
+
 **D2 — [stopped-worker receipt consistency, batch 72](pi-core-worker-null-mount-check-batch-72.md).**
 Replay refuses a null handle whose mount ID and filesystem device contradict
 the saved worker mount table. No installed observation or change to B49.

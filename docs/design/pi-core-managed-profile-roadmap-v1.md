@@ -149,6 +149,8 @@ the lookup rules and worker permissions have not been changed.
 [B72](../phase3/coordinator/pi-core-worker-null-mount-check-batch-72.md)
 checks the device of a stopped worker's null handle against its recorded mount ID;
 it does not establish the rest of the worker's view.
+[B73](../phase3/coordinator/pi-core-sensor-config-mounts-batch-73.md) joins
+the manager's configuration mount to the sensor's file before dispatch and in replay.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

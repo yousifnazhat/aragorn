@@ -3,9 +3,11 @@ import hashlib
 import re
 
 from .pi_core_manager_state_view import _object, verify_manager_state
-from .pi_core_state_admission import _keys, _need, _pin, _same, _uint, _uuid
+from .pi_core_configuration_carrier import _mounts as carrier_mounts
+from .pi_core_state_admission import _dev, _keys, _need, _pin, _same, _uint, _uuid
 from .pi_core_state_masks import _subject
-from .pi_core_state_mounts import ACTION, verify_mounts
+from .pi_core_state_mounts import ACTION, direct_mount_inventory, verify_mounts
+from .pi_core_stopped_mask_view import _check
 
 
 UNIT = "aragorn-pi-sensor.service"
@@ -26,6 +28,26 @@ def _validate_identity(value):
     for key in ("pid", "uid", "gid"):
         _uint(value[key], high=1 << 31)
     _uint(value["start_ticks"])
+
+
+def validate_sensor_configuration_mounts(manager_raw, sensor_raw, device, *, deadline):
+    """Compare mount records only; no device reads, inode attribution or image-byte claim."""
+    _, basename = carrier_mounts(manager_raw, _dev(device), deadline)
+    source = ("/dev/" + basename).encode("ascii")
+    # The unit binds one file from the installed tree, not the manager's full
+    # carrier. Mount IDs are local; the device, source and filesystem root
+    # tie the two namespace projections together.
+    target = "/etc/aragorn/pi-sensor-service.json"
+    _check(deadline)
+    mounts = direct_mount_inventory(sensor_raw)
+    row = mounts.get(target)
+    _need(row is not None and row.device == device and row.source == source and row.filesystem == b"squashfs"
+          and row.root == "/installed/root" + target and b"ro" in row.options and b"ro" in row.super_options,
+          "retained sensor configuration file does not match the manager carrier")
+    _need(all(path == target or (other.device != device and other.source != source
+                                 and not path.startswith(target + "/")) for path, other in mounts.items()),
+          "sensor configuration carrier is aliased or the file mount is shadowed")
+    _check(deadline)
 
 
 def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage):

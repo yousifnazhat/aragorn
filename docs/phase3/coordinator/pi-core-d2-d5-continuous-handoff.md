@@ -8,11 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
-**D2 — [approved worker mask proof](pi-core-worker-mask-decision.md),
-[batch 58 offline reader](pi-core-mask-witness-batch-58.md).** Keep the worker
-confined. V2 compares a separate witness for named masks; v1 remains strict.
-Current independent acquisition, trusted custody and installed evidence are
-still missing. Do not use an observer's generic permission error as a pass.
+**D2 — [stopped-worker capture and local custody, batch 59](pi-core-stopped-mask-observer-batch-59.md).**
+The capture-only supervisor calls the observer before the gate resumes and retains
+the records independently of Pi. No capture has run. Next, pin the successor
+observer and helper dependency closure for the protected deployment, then join
+the complete worker walk and externally controlled current witness to the
+[B58 reader](pi-core-mask-witness-batch-58.md). Local replay cannot create that
+witness. Keep the [approved masks](pi-core-worker-mask-decision.md), B49 null and live gates closed.
 
 **D4 — [batch 57, serial measurement windows](pi-core-serial-measurements-batch-57.md).**
 The managed qualifier refuses cross-sample overlap. Clock-domain and raw

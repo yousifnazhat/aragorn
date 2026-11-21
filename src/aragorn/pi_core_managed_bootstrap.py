@@ -122,7 +122,7 @@ def _result(worker, services, enabled, status):
 def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_root,
         runtime_conformance_digest, deployment, revoked_context_ids, now_unix,
         deadline, config, service_runtime, service_configuration, provider_inputs,
-        binding, cleanup_timeout_seconds=5.0, provider_credential=None, provider_approval=None):
+        binding, cleanup_timeout_seconds=5.0, provider_credential=None, provider_approval=None, sensor_state_request=None):
     """Run one explicit managed lifetime; unavailable remains the default.
 
     Borrowed runtime/config/public-input holders remain caller-owned. The service
@@ -132,6 +132,10 @@ def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_r
     _require(type(config) is PiConfinedLaunchConfig and config.native_request is True,
              "managed service bootstrap requires the protected native request mode")
     enabled = config.provider_route_digest is not None
+    if sensor_state_request is not None:
+        from .pi_core_sensor_state_entry import SensorStateRequest
+        _require(not enabled and type(sensor_state_request) is SensorStateRequest,
+                 "sensor state requires an explicit protected unavailable-provider request")
     if enabled:
         _require(type(provider_credential) is credentials.PiProviderCredential and
                  type(provider_approval) is approvals.PiProviderApproval,
@@ -176,6 +180,11 @@ def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_r
     worker = services = worker_snapshot = service_result = None
     worker_call_attempted = service_read_attempted = False
     uncertainty = []
+    if sensor_state_request is not None:
+        _require(type(cleanup_timeout_seconds) in (int, float) and 0 < cleanup_timeout_seconds <= 5,
+                 "invalid sensor observation cleanup reserve")
+        sensor_state_request.preflight(deployment=deployment, service_configuration=service_configuration,
+                                      config=config, protected_root=protected_root, deadline=deadline-cleanup_timeout_seconds)
     try:
         with lifecycle.hold_native_pi_services(deployment=service_runtime,
                 configuration=service_configuration, binding=binding,
@@ -183,6 +192,8 @@ def run_native_pi_service_bootstrap(cas, context, *, profile, grant, protected_r
                 cleanup_timeout_seconds=cleanup_timeout_seconds,
                 **({"provider_credential": provider_credential} if enabled else {})) as services:
             services.guard(deadline=services.operation_deadline)
+            if sensor_state_request is not None:
+                services.capture_sensor_state(sensor_state_request, deadline=services.operation_deadline)
             worker_call_attempted = True
             try:
                 worker = native.run_native_pi_worker(cas, context, profile=profile, grant=approved,

@@ -250,8 +250,14 @@ class _Inputs:
         _require(not self.cleanup_uncertainty, "COORDINATOR_INPUT_CLEANUP_UNCONFIRMED")
 
 
-def _plan(value, host_pin, plan_path):
-    _exact(value, _PLAN_FIELDS)
+def _plan(value, host_pin, plan_path, *, allow_sensor_state=False):
+    selected = type(value) is dict and "sensor_state_observation" in value
+    _exact(value, _PLAN_FIELDS | ({"sensor_state_observation"} if allow_sensor_state and selected else set()))
+    if selected:
+        from . import pi_core_sensor_state_entry as sensor_state
+        _require(value["mode"] == "UNAVAILABLE" and value["provider"] is None,
+                 "COORDINATOR_SENSOR_CAPTURE_WITH_PROVIDER_REFUSED")
+        sensor_state.validate_section(value[sensor_state.FIELD])
     _require(value["schema"] == SCHEMA and value["mode"] in {"UNAVAILABLE", "PROTECTED"} and
              value["host_profile_digest"] == host_pin, "COORDINATOR_PLAN_BINDING")
     _path(value["cas_root"])
@@ -263,6 +269,11 @@ def _plan(value, host_pin, plan_path):
         _pin(item)
     refs = [_reference(value[name]) for name in ("context", "deployment", "launch")]
     service = _configuration_section(value["service_configuration"])
+    if selected:
+        _require("carrier" in service, "COORDINATOR_SENSOR_CAPTURE_REQUIRES_PROTECTED_CONFIGURATION")
+        storage = value["sensor_state_observation"]["storage"]
+        _require(service["carrier"]["device"] not in (storage["device"], *storage["backing_devices"]),
+                 "COORDINATOR_SENSOR_STORAGE_ALIASES_CONFIGURATION")
     refs.extend(service[key] for key in ("manifest", "configurations"))
     for name, fields in (
         ("service_runtime", {"deployment_path", "receipt_digest", "manifest", "runtime_binding"}),
@@ -348,7 +359,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
             source_loader, host_custody, deadline)
         path, pin = _path(str(plan_path)), _pin(expected_plan_digest)
         inputs = _Inputs(deadline)
-        plan = _plan(inputs.read(path, pin, _PLAN_LIMIT), host_pin, path)
+        plan = _plan(inputs.read(path, pin, _PLAN_LIMIT), host_pin, path, allow_sensor_state=True)
         observation["plan_digest"] = pin
         phase = "PREPARED_INPUTS"
         context, deployment = inputs.ref(plan["context"]), inputs.ref(plan["deployment"])
@@ -395,7 +406,12 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                 provider["provider_approval"] = stack.enter_context(approvals.hold_provider_approval(
                     root_config, intent=intent, deadline=deadline))
             inputs.guard()
-            _custody(source_loader, host_custody, deadline)
+            _, rows, host_snapshot = _custody(source_loader, host_custody, deadline)
+            if "sensor_state_observation" in plan:
+                from . import pi_core_sensor_state_entry as sensor_state
+                provider["sensor_state_request"] = sensor_state.from_held_plan(
+                    inputs, path, plan, pin, host_pin, rows, source_loader.source_digests, host_snapshot)
+                observation["source_before"] = rows
             phase = "MANAGED_CALL"
             observation["managed_call_attempted"] = True
             try:

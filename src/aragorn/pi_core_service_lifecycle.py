@@ -885,6 +885,48 @@ class PiServiceLifecycle:
     def guard(self, *, deadline=None):
         self.channels.guard(deadline=self._bounded(deadline))
 
+    def capture_sensor_state(self, request, *, deadline):
+        """One separately requested read of this lifetime's authenticated sensor, before Pi dispatch."""
+        from .pi_core_sensor_state_entry import SensorStateRequest
+        _require(type(request) is SensorStateRequest and self.provider_credential is None and
+                 not getattr(self, "_sensor_state_attempted", False), "sensor capture unavailable or already attempted")
+        self._sensor_state_attempted = True
+        sensor = self.services["sensor"]
+
+        def guard(*, deadline):
+            bounded = self._bounded(deadline)
+            self._ownership(bounded)
+            _require(type(sensor) is _Service and self.services["sensor"] is sensor and sensor.role == "sensor"
+                     and sensor.started and not sensor.stop_attempted and not sensor.terminal and
+                     sensor.pidfd >= 0 and not self.channels.requests_retired and
+                     self.channels._connections[ROLES.index("sensor")] is sensor.connection and
+                     self.identities["sensor"] == {"uid": sensor.uid, "gid": sensor.gid},
+                     "no owned live sensor channel")
+            _generation(sensor, bounded)
+            transport.validate_worker_pidfd(sensor.pidfd, sensor.pid)  # Generic local pidfd association, no new fd.
+            transport.require_peer_live(sensor.connection, (sensor.pid, sensor.uid, sensor.gid), sensor.pidfd, bounded)
+            startup = self._observation["trusted_source_startup"]["sensor"]
+            p = startup["process"]
+            _require(startup["status"] == "AUTHENTICATED_TRUSTED_SOURCE_STARTUP" and
+                     (p["pid"], p["start_ticks"], p["uid"], p["gid"], p["invocation_id"], p["cgroup"],
+                      p["unit_properties_digest"]) == (sensor.pid, sensor.start_ticks, sensor.uid, sensor.gid,
+                         sensor.invocation, sensor.plan.profile.cgroup, sensor.immutable_digest),
+                     "sensor generation differs from authenticated startup")
+            return dict(role="sensor", unit=_UNITS["sensor"], pid=sensor.pid, uid=sensor.uid,
+                        gid=sensor.gid, start_ticks=sensor.start_ticks, invocation_id=sensor.invocation)
+
+        identity = guard(deadline=deadline)
+        try:
+            result = request.acquire(identity=identity, guard=guard, deadline=deadline)
+        except BaseException as exc:
+            retained = getattr(exc, "pi_sensor_state_receipt", None)
+            if retained is not None:
+                self._observation["sensor_state_observation"] = retained
+            raise
+        self._observation["sensor_state_observation"] = result
+        _require(result["status"] == "RETAINED_SENSOR_STATE_ONLY", "retained sensor observation is inconsistent")
+        self.guard(deadline=deadline)
+
     def _stop(self, service):
         if not service.start_attempted: return
         _require(service.started and service.pidfd >= 0 and service.invocation and service.immutable_digest and

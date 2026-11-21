@@ -498,6 +498,30 @@ def _public_observation(observation):
         report["managed_cleanup_complete"] = all(type(managed.get(owner)) is dict and
             type(managed[owner].get("cleanup")) is dict and
             managed[owner]["cleanup"].get("status") == "VERIFIED_OWNED_CLEANUP" for owner in ("worker", "services"))
+        services = managed.get("services")
+        if type(services) is dict and "sensor_state_observation" in services:
+            s = services["sensor_state_observation"]
+            _require(type(s) is dict and set(s) == {"status", "attempt_id", "capture_digest", "receipt_digest",
+                     "sensor_health_verified", "activation_authorized", "phase3_exit_eligible"} and
+                     s["status"] in ("RETAINED_SENSOR_STATE_ONLY", "RETAINED_SENSOR_STATE_INCONSISTENT") and
+                     type(s["attempt_id"]) is str and re.fullmatch("[0-9a-f]{32}", s["attempt_id"]) and
+                     int(s["attempt_id"], 16) and all(type(s[k]) is str and _PIN.fullmatch(s[k]) and int(s[k][7:],16)
+                     for k in ("receipt_digest", "capture_digest")) and s["receipt_digest"] != s["capture_digest"]
+                     and all(s[k] is False for k in ("activation_authorized", "phase3_exit_eligible", "sensor_health_verified")),
+                     "invalid sensor observation receipt")
+            report["sensor_state_observation"] = {k: s[k] for k in ("status", "capture_digest", "receipt_digest")}
+            startups = services.get("trusted_source_startup")
+            startup = startups.get("sensor") if type(startups) is dict else None
+            p = startup.get("process") if type(startup) is dict else None
+            _require(type(p) is dict and startup.get("status") == "AUTHENTICATED_TRUSTED_SOURCE_STARTUP" and
+                     p.get("cgroup") == "/system.slice/aragorn-pi-sensor.service" and
+                     all(type(p.get(k)) is int and 0 < p[k] < (1 << (64 if k == "start_ticks" else 31))
+                         for k in ("pid", "uid", "gid", "start_ticks")) and type(p.get("invocation_id")) is str and
+                     re.fullmatch("[0-9a-f]{32}", p["invocation_id"]) and int(p["invocation_id"], 16),
+                     "sensor observation lacks authenticated service generation")
+            identity = {k: p[k] for k in ("pid", "uid", "gid", "start_ticks", "invocation_id")}
+            identity.update(role="sensor", unit="aragorn-pi-sensor.service")
+            report["sensor_state_observation"]["sensor_identity_digest"] = _digest(_canonical(identity))
     _require(len(_canonical(report)) <= 256 * 1024, "coordinator report exceeds bound")
     return report
 

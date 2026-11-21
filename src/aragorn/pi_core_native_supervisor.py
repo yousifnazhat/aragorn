@@ -273,6 +273,33 @@ class _Owned:
     request_dispatch_active: bool = False
     provider_attempted: bool = False
     provider_dispatch_active: bool = False
+    socket_directory_record: dict | None = None
+    socket_directory_owners: tuple | None = None
+
+
+_SOCKET_INCOMPLETE = "INCOMPLETE_OR_UNVERIFIED_LIFETIME"
+_SOCKET_MATCHED = "MATCHED_MANAGER_MEMBERSHIP_ONLY"
+
+
+def _begin_socket_directories(owned, request_dispatch, provider_dispatch, *, deadline):
+    from .pi_core_owned_socket_directories import capture_owned_socket_directories
+    from .pi_core_restricted_profile import PROFILE_SCHEMA
+    plan = owned.plan
+    _require(type(owned) is _Owned and not owned.start_attempted and not owned.started and owned.pidfd == -1 and
+             owned.socket_directory_record is None and plan.source_observation.get("schema") == PROFILE_SCHEMA and
+             canonical_digest(plan.source_observation) == plan.source_observation_digest and
+             request_dispatch is not None and provider_dispatch is not None and
+             request_dispatch is getattr(owned, "_pi_request_dispatch", None) and
+             provider_dispatch is getattr(owned, "_pi_provider_dispatch", None),
+             "invalid pre-start socket directory custody")
+    # Latch before any acquisition. A failed or incomplete edge cannot be retried.
+    owned.socket_directory_owners = (request_dispatch, provider_dispatch)
+    owned.socket_directory_record = dict(schema="aragorn/pi-core-manager-socket-membership/v1",
+        status=_SOCKET_INCOMPLETE, deployment_digest=plan.prepared.deployment_digest,
+        source_profile_digest=plan.source_observation_digest, immutable_launch_digest=None,
+        worker=None, clock=None, gate_stop_seq=None, before_start=None, stopped=None)
+    owned.socket_directory_record["before_start"] = capture_owned_socket_directories(owned, request_dispatch, provider_dispatch,
+                                                                                    deadline=deadline)
 
 
 def _missing(parent: int, name: str) -> bool:
@@ -577,7 +604,7 @@ def _close_handles(owned: _Owned) -> None:
 
 def _native_observation(plan, owned, observation, identity_publication,
         request_observation, provider_observation, source_observation, failure, cleanup, status):
-    return {
+    value = {
         "schema": "aragorn/pi-core-native-supervisor-result/v1",
         "authority": "BOOTSTRAP_AND_OWNED_CLEANUP_ONLY_NOT_EFFECT_RUN_OR_PHASE3_QUALIFICATION",
         "status": status,
@@ -592,6 +619,15 @@ def _native_observation(plan, owned, observation, identity_publication,
         "request_channel": request_observation, "provider_channel": provider_observation,
         "source_observation": source_observation, "failure": failure, "cleanup": cleanup,
     }
+    if getattr(owned, "socket_directory_record", None) is not None:
+        record = dict(owned.socket_directory_record)
+        if (failure is not None or status != "BOOTSTRAP_COMPLETE" or type(cleanup) is not dict or
+                cleanup.get("status") != "VERIFIED_OWNED_CLEANUP" or owned.source_observer_closed is not True or
+                type(request_observation) is not dict or request_observation.get("cleanup") != "VERIFIED_OWNED_REQUEST_CLEANUP" or
+                type(provider_observation) is not dict or provider_observation.get("cleanup") != "VERIFIED_OWNED_PROVIDER_CLEANUP"):
+            record["status"] = _SOCKET_INCOMPLETE
+        value["owned_socket_directories"] = record
+    return value
 
 
 def _retain_native_failure(error, value, *, stage, terminal, owned, missing_metadata=False):
@@ -610,6 +646,8 @@ def _retain_native_failure(error, value, *, stage, terminal, owned, missing_meta
             raw = canonical_json(item)
             _require(len(raw) <= 4 * 1024 * 1024, "native observation field exceeds report bound")
             retained[key] = json.loads(raw)
+            if key == "owned_socket_directories" and type(retained[key]) is dict:
+                retained[key]["status"] = _SOCKET_INCOMPLETE
         except BaseException:
             retained[key] = None
             uncertainty.append(key)
@@ -830,6 +868,7 @@ def run_native_pi_worker(
             provider_stack = ExitStack()
             request_dispatch = None
             provider_dispatch = None
+            socket_membership_required = False
             request_close_attempted = False
             provider_close_attempted = False
             provider_observation = {"status": "PENDING" if provider_enabled else "NOT_REQUESTED"}
@@ -913,6 +952,10 @@ def run_native_pi_worker(
                     provider_dispatch = provider_stack.enter_context(hold_native_pi_provider_dispatch(
                         owned, provider_channels, grant=grant, protected_root=protected_root,
                         deadline=operation_deadline, cleanup_deadline=deadline))
+                    from .pi_core_restricted_profile import PROFILE_SCHEMA
+                    socket_membership_required = plan.source_observation.get("schema") == PROFILE_SCHEMA
+                    if socket_membership_required:
+                        _begin_socket_directories(owned, request_dispatch, provider_dispatch, deadline=operation_deadline)
                 owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
                 _require(owned.unit_absence_observed, "Pi unit appeared before exclusive start")
                 owned.start_attempted = True
@@ -931,6 +974,10 @@ def run_native_pi_worker(
                         _require(type(observer) is PiSourceObserver and observer._owned is owned,
                                  "source acquisition did not return owned observer custody")
                         owned.source_observer = observer
+                        if socket_membership_required:
+                            _require(type(owned.socket_directory_record) is dict and
+                                     owned.socket_directory_record["status"] == _SOCKET_MATCHED,
+                                     "protected stopped-gate socket directory custody is incomplete")
                     except BaseException as exc:
                         observer = getattr(exc, "observer", None)
                         if observer is not None:

@@ -760,6 +760,8 @@ class _NodeSession:
         capture_only = capture is not None
         try:
             _arm(self)
+            if type(self.owned) is base.native._Owned and self.owned.socket_directory_record is not None:
+                _finish_socket_directories(self)
             if capture_only:
                 from .pi_core_stopped_mask_capture import StoppedMaskCapture, capture_stopped_masks
                 _require(type(capture) is StoppedMaskCapture, "NODE_CAPTURE_ONLY_CUSTODY")
@@ -836,6 +838,63 @@ class _NodeSession:
                 self.observer._fail(error)
             except base.PiSourceObserverError:
                 pass
+
+
+def _finish_socket_directories(session):
+    """Two manager membership edges, not a Pi lookup, source event or health result."""
+    from .pi_core_owned_socket_directories import capture_owned_socket_directories, verify_owned_socket_directories
+    owned, observer = session.owned, session.observer
+    record = owned.socket_directory_record
+    _require(type(session) is _NodeSession and session.profile["schema"] == restricted.PROFILE_SCHEMA and
+             session._mask_capture is None and type(record) is dict and record["before_start"] is not None and
+             record["gate_stop_seq"] is None and record["stopped"] is None and
+             record["status"] == base.native._SOCKET_INCOMPLETE, "NODE_SOCKET_MEMBERSHIP_MODE")
+    expected = dict(pid=owned.pid, start_ticks=owned.start_ticks, uid=owned.plan.worker_uid,
+                    gid=owned.plan.worker_gid, cgroup=owned.plan.profile.cgroup,
+                    unit=owned.plan.unit_name, invocation_id=owned.invocation)
+    request, provider = owned.socket_directory_owners
+
+    def guard():
+        session._budget(session.operation_deadline)
+        _require(threading.get_native_id() == observer._thread and observer._attached and
+                 not observer._executed and not session.gate_release_seen and not session.stopping and
+                 session.failure is None and owned.started and not owned.exit_observed and
+                 request is getattr(owned, "_pi_request_dispatch", None) and
+                 provider is getattr(owned, "_pi_provider_dispatch", None) and
+                 observer._owned is owned and observer._worker == expected and
+                 observer._bindings["profile_digest"] == record["source_profile_digest"] and
+                 observer._bindings["deployment_digest"] == record["deployment_digest"] and
+                 observer._pins[:6] == (owned.plan, owned.pid, owned.pidfd, owned.start_ticks, owned.invocation,
+                                          owned.immutable_digest) and
+                 not session.pending_events and session.tasks.keys() == {owned.pid} and
+                 session._inventory() == [owned.pid], "NODE_SOCKET_MEMBERSHIP_CUSTODY")
+        base.process.require_live_pidfd(observer._pidfd)
+        base.process.require_live_pidfd(owned.pidfd)
+        task = session.tasks[owned.pid]
+        seq = task["stop_seq"]
+        _require(task["stopped"] is True and task["joined"] is True and task["start_ticks"] == owned.start_ticks and
+                 task["stop_event"] == 128 and type(seq) is int and 1 <= seq <= len(observer._events),
+                 "NODE_SOCKET_MEMBERSHIP_INITIAL_STOP")
+        stop = observer._events[seq - 1]
+        _require(stop["kind"] == "STOP" and stop["seq"] == seq and stop["event"] == 128 and
+                 stop["pid"] == owned.pid and stop["start_ticks"] == owned.start_ticks and stop["op"] == "NONE",
+                 "NODE_SOCKET_MEMBERSHIP_STOP_RECORD")
+        return seq
+
+    seq = guard()  # _arm has just authenticated the unit, executable and stopped task.
+    record.update(worker=dict(expected), clock=dict(observer._clock), gate_stop_seq=seq,
+                  immutable_launch_digest=owned.immutable_digest)
+    record["stopped"] = capture_owned_socket_directories(owned, request, provider, deadline=session.operation_deadline)
+    _require(guard() == seq, "NODE_SOCKET_MEMBERSHIP_STOP_CHANGED")
+    verify_owned_socket_directories(record["before_start"], record["stopped"],
+                                    worker_uid=expected["uid"], worker_gid=expected["gid"])
+    first, stopped = record["before_start"], record["stopped"]
+    _require(observer._clock == {"clock_id": "CLOCK_BOOTTIME", "boot_id": stopped["boot_id"],
+                                 "time_namespace_inode": stopped["time_namespace_inode"]} and
+             first["closed_boottime_ns"] <= observer._events[seq - 1]["boottime_ns"] <= stopped["opened_boottime_ns"],
+             "NODE_SOCKET_MEMBERSHIP_CLOCK_ORDER")
+    session._budget(session.operation_deadline)
+    record["status"] = base.native._SOCKET_MATCHED
 
 
 def _arm(session):

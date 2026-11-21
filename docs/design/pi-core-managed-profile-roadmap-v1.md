@@ -114,6 +114,9 @@ receipt. It creates no new witness and grants no storage or launch authority.
 the protected coordinator to that observer. Before starting the stopped gate,
 it rechecks the separate one-use release against the original claim. This
 is an offline implementation; B60 does not contain the new coordinator.
+[B63](../phase3/coordinator/pi-core-protected-capture-payload-batch-63.md) now
+packages the caller and verifies all changed guest payload files without
+rebuilding the bundle or boot media. The common deployment is still not installed.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [protected capture caller packaged, batch 63](pi-core-protected-capture-payload-batch-63.md).**
+Use the cumulative B41-to-B62 changed files and updated host profile; the
+worker bundle, source plan, and helper input bytes did not change. Do not
+boot B44 as a substitute for the not-yet-assembled split worker and storage deployment.
+
 **D2 — [protected stopped-worker capture caller, batch 62](pi-core-protected-mask-capture-batch-62.md).**
 The wrapper now has a dedicated capture-only route. It requires the installed
 trusted sources and a separately held, one-use release; the operator can

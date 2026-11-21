@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [candidate worker filesystem, batch 86](pi-core-candidate-worker-filesystem-batch-86.md).**
+Use the signed successor archive pin rather than rebuilding B53 or B83.
+The artifact changes only the fixed-view gate, not state, launch authority
+or the availability of actual worker observations.
+
 **D2 — [stopped worker and spent-release comparison, batch 85](pi-core-owned-worker-spine-batch-85.md).**
 Use the strict option only with the original v2 public report, independently
 nominated records and B71 private receipt. Do not splice its capture-only

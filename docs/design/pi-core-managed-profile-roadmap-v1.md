@@ -186,6 +186,9 @@ read-only sensor. It does not prove either Pi's view or a shared capture interva
 compares the stopped worker's read-only root, admitted cwd and inherited handles
 with its exact capture, owner and spent release. No managed-worker start,
 socket access, process-relative link observation or storage admission follows.
+[B86](../phase3/coordinator/pi-core-candidate-worker-filesystem-batch-86.md)
+places the new fixed-view gate in the otherwise unchanged complete offline
+worker archive. It is not an installed or launch-approved view.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

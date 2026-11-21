@@ -646,7 +646,7 @@ def run_native_pi_stopped_mask_capture(
     cas: CAS, context: Mapping, *, profile: process.RuntimeProcessProfile, grant: Mapping,
     protected_root: Path, runtime_conformance_digest: str, deployment: Mapping,
     revoked_context_ids: Collection[str], now_unix: int, deadline: float,
-    config: PiConfinedLaunchConfig, capture, cleanup_timeout_seconds: float = 5.0,
+    config: PiConfinedLaunchConfig, capture, cleanup_timeout_seconds: float = 5.0, _before_start=None,
 ) -> dict:
     """Trusted, separately authorized capture only. Never accept a PID, bootstrap or resume Pi."""
     from . import pi_core_restricted_profile as restricted
@@ -654,7 +654,8 @@ def run_native_pi_stopped_mask_capture(
     from .pi_core_source_observer import PiSourceObserver
     from .pi_core_stopped_mask_capture import StoppedMaskCapture
     now = time.monotonic()
-    _require(type(capture) is StoppedMaskCapture and type(config) is PiConfinedLaunchConfig
+    _require((_before_start is None or callable(_before_start))
+             and type(capture) is StoppedMaskCapture and type(config) is PiConfinedLaunchConfig
              and config.native_request is True and config.provider_route_digest is None
              and type(config.source_observation) is dict
              and config.source_observation.get("schema") == restricted.PROFILE_SCHEMA,
@@ -693,6 +694,9 @@ def run_native_pi_stopped_mask_capture(
                 _prepare_resources(owned)
                 owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
                 _require(owned.unit_absence_observed, "capture unit appeared before exclusive start")
+                if _before_start is not None:
+                    _before_start()
+                    _remaining(operation_deadline)
                 owned.start_attempted = True
                 code, _ = _command(plan.systemd_run_argv, operation_deadline)
                 _require(code == 0, "one-shot stopped capture start failed")

@@ -616,6 +616,7 @@
       "inputs": [
         "packaging/pi-core/coordinator.py",
         "scripts/build_pi_core_linux.py",
+        "scripts/pi_core_configuration_delivery_layout.py",
         "scripts/prepare_pi_core_coordinator_host.py",
         "scripts/prepare_pi_core_os_root.py",
         "scripts/verify_pi_core_installed_bundle_readback.py",
@@ -748,6 +749,7 @@
         "src/aragorn/vendor_reports.py",
         "src/aragorn/zip_inventory.py",
         "tests/fixtures/pi_core_b36_gate_receipt.json",
+        "tests/test_pi_core_configuration_delivery_layout.py",
         "tests/test_pi_core_confined_launch.py",
         "tests/test_pi_core_coordinator_entry.py",
         "tests/test_pi_core_join_mask_receipts.py",
@@ -755,6 +757,7 @@
         "tests/test_pi_core_mask_custody.py",
         "tests/test_pi_core_sensor_state_entry.py",
         "tests/test_pi_core_service_channels.py",
+        "tests/test_pi_core_service_configuration.py",
         "tests/test_pi_core_service_entry.py",
         "tests/test_pi_core_state_admission.py",
         "tests/test_pi_core_state_exposure.py",

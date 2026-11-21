@@ -33,8 +33,12 @@ def _owned_join(archive, pins, nomination, binding, spine, worker_raw, capture_p
     from aragorn.oci_worker_protocol import canonical_digest
     from aragorn.pi_core_coordinator_entry import _launch
     from aragorn.pi_core_node_source_observer import validate_node_profile
+    from aragorn.pi_core_service_configuration import PiServiceConfigurationError, validate_service_configurations
+    from aragorn.pi_core_service_entry import PiServiceEntryError
     from aragorn.pi_core_state_admission import _dev, _keys, _pin, _uint, _uuid
     from aragorn.pi_core_state_mounts import direct_mount_inventory
+    from aragorn.runtime_action_broker import RuntimeActionBrokerError
+    from aragorn.runtime_action_observation_publisher import RuntimeActionObservationPublisherError
     from scripts.prepare_pi_core_coordinator_host import host_contract
     from scripts.verify_pi_core_installed_bundle_readback import SPINE_V2_WRAPPER_PIN, _document
 
@@ -90,6 +94,28 @@ def _owned_join(archive, pins, nomination, binding, spine, worker_raw, capture_p
     _same([profile["schema"],cfg.source_observation_digest,canonical_digest(profile),cfg.worker_uid,cfg.worker_gid],
           [fixed.PROFILE_SCHEMA,binding["profile"],binding["profile"],binding["worker"]["uid"],binding["worker"]["gid"]],
           "different worker source profile or process principal")
+    # Matching two filesystem observations is not enough: the observed cwd must
+    # also be the version selected by the independently pinned service configuration.
+    configs = _document(archive, configuration_pin, 1 << 20)
+    try:
+        # Checks all role identities, grants and profile digests without consulting a clock.
+        checked = validate_service_configurations(configs)
+    except (PiServiceConfigurationError, PiServiceEntryError,
+            RuntimeActionBrokerError, RuntimeActionObservationPublisherError) as exc:
+        raise ValueError("invalid protected service configurations") from exc
+    capability = checked["action"]["capability_grant"]
+    process = checked["sensor"]["observation_binding"]["runtime_profile"]
+    _same(checked["action"]["identities"]["worker"], {k:binding["worker"][k] for k in ("uid", "gid")},
+          "different configured worker principal")
+    # The verified B71 version basename is <context-id hex>-<manifest hex>;
+    # the separate plan pin names the context document, not its internal ID.
+    manifest_pin = "sha256:" + Path(spine["admitted_path"]).name.split("-")[1]
+    _same([capability["install_context_digest"], capability["source_manifest_digest"],
+           process["runtime_digest"], process["executable_digest"], process["cgroup"], process["skill_path"]],
+          [plan["context"]["digest"], manifest_pin,
+           fixed.RUNTIME_DIGEST, profile["pins"]["node_digest"],
+           "/system.slice/" + binding["unit"], spine["admitted_path"] + "/SKILL.md"],
+          "configured grant, worker runtime, unit or admitted working directory differs")
     host = _document(archive,host_pin,2<<20)
     files = host_contract._profile(host)
     # The v1 wrapper never published authority pins. A self-consistent

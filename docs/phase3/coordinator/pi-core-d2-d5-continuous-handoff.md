@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [stopped cwd and original service configuration, batch 88](pi-core-authorized-worker-cwd-batch-88.md).**
+Strict capture-only replay needs the original role configurations selecting
+that exact admitted version, not just two archives agreeing on a directory.
+
 **D2 — [stopped-worker socket bind, batch 87](pi-core-stopped-socket-mounts-batch-87.md).**
 The restricted startup checks the named objects through the stopped worker's
 root before release. This is an in-memory refusal check; it does not add a

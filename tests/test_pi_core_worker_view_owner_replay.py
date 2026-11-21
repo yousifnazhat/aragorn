@@ -8,10 +8,12 @@ from unittest.mock import patch
 
 from aragorn import pi_core_mask_capture_entry as entry, pi_core_mask_capture_release as release
 from aragorn import pi_core_restricted_profile as restricted
+from aragorn.cas import CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from scripts.prepare_pi_core_coordinator_host import host_contract
 from scripts.verify_pi_core_joined_mask_receipts import verify_joined_masks
 from test_pi_core_coordinator_entry import launch_document
+from test_pi_core_configuration_delivery_layout import fixture_configurations
 from test_pi_core_sensor_state_entry import protected_plan
 import test_pi_core_worker_walk_evidence as original
 
@@ -58,7 +60,30 @@ class OwnedWorkerViewReplay(unittest.TestCase):
         self.plan.update(schema=entry.SPINE_PLAN, capture=dict(store=self.evidence+'/cas',
             receipt_directory=self.evidence+'/receipts', volume_device='253:7', backing_devices=['259:0'], fs_type='ext4'))
         self.plan['deployment']['digest'] = self.b.capture['deployment']
-        self.plan['service_configuration']['configurations']['digest'] = self.b.capture['configuration']
+        self.configuration_pin(self.put(self.configurations()))
+
+    def configurations(self, **profile_changes):
+        # The existing delivery fixture produces matching protected grants and
+        # profile digests, including when testing another otherwise-valid version.
+        profile = dict(skill_path=original.PATH + '/SKILL.md', cgroup='/system.slice/aragorn-pi-' + 'd'*32 + '.service')
+        configs = fixture_configurations(**(profile | profile_changes))
+        worker = self.b.head['subjects']['pi']
+        for doc in configs.values():
+            doc['identities']['worker'] = {k:worker[k] for k in ('uid','gid')}
+        for role in ('action','sensor'):
+            configs[role]['capability_grant'].update(
+                source_manifest_digest='sha256:' + original.PATH.rsplit('-',1)[1],
+                install_context_digest=self.plan['context']['digest'])
+        return configs
+
+    def configuration_pin(self, pin):
+        # Pin both archives and the protected plan; stale outer hashes must not
+        # mask a semantic mismatch in the independently selected configuration.
+        profile = json.loads(self.b.reader.read(self.b.profile))
+        self.b.profile = self.b.put(profile | {'configuration':pin})
+        self.b.capture.update(profile=self.b.profile, configuration=pin)
+        self.b.head['profile'] = self.b.profile
+        self.plan['service_configuration']['configurations']['digest'] = pin
 
     def put(self, doc, *, stdout=False):
         # Original wrapper stdout has one LF. Protected input members do not.
@@ -171,3 +196,54 @@ class OwnedWorkerViewReplay(unittest.TestCase):
         self.h.outer.walk['fds']['0']['dev'] = self.b.capture['mapping']['device']
         with self.assertRaises(ValueError):
             verify_joined_masks(**self.assemble(self.hold()))
+
+    def test_valid_configuration_for_another_admitted_version_or_unit_cannot_join(self):
+        retained = self.hold()
+        other_version = original.PATH.replace('/'+'a'*64+'-', '/'+'c'*64+'-') + '/SKILL.md'
+        self.assertNotEqual(other_version, original.PATH + '/SKILL.md')
+        for change in ({'skill_path':other_version}, {'cgroup':'/system.slice/aragorn-pi-' + 'f'*32 + '.service'}):
+            with self.subTest(change=change):
+                self.configuration_pin(self.put(self.configurations(**change)))
+                with self.assertRaisesRegex(ValueError, 'configured grant, worker runtime, unit or admitted working directory differs'):
+                    verify_joined_masks(**self.assemble(retained))
+
+    def test_configuration_with_substituted_principal_grant_runtime_or_node_refuses(self):
+        retained = self.hold()
+        def other_worker(roles):
+            for doc in roles.values():
+                doc['identities']['worker']['uid'] += 1
+        def other_grant(roles):
+            roles['sensor']['capability_grant']['operation_digest'] = canonical_digest('different operation')
+        def split_identity(roles):
+            roles['sensor']['identities']['worker']['gid'] += 1
+        for label, config, edit, refusal in (('principal',self.configurations(),other_worker,'different configured worker principal'),
+                ('split principal',self.configurations(),split_identity,'configur|identit'),
+                ('split grant',self.configurations(),other_grant,'configur|grant'),
+                ('runtime',self.configurations(runtime_digest=canonical_digest('another runtime')),None,'configured grant, worker runtime'),
+                ('executable',self.configurations(executable_digest=canonical_digest('another Node')),None,'configured grant, worker runtime')):
+            with self.subTest(label=label):
+                if edit:
+                    edit(config)
+                self.configuration_pin(self.put(config))
+                with self.assertRaisesRegex(ValueError, refusal):
+                    verify_joined_masks(**self.assemble(retained))
+
+    def test_agreeing_configuration_pins_without_original_bytes_refuse(self):
+        missing = canonical_digest('not in the evidence archive')
+        self.configuration_pin(missing)
+        with self.assertRaises(CASError) as failure:
+            verify_joined_masks(**self.assemble(self.hold()))
+        cause = failure.exception.__cause__
+        self.assertIsInstance(cause, FileNotFoundError)
+        self.assertIn(cause.filename, (missing[7:9], missing[9:]))
+
+    def test_matching_action_and_sensor_grants_cannot_substitute_the_context_or_manifest(self):
+        retained = self.hold()
+        for field in ('install_context_digest','source_manifest_digest'):
+            with self.subTest(field=field):
+                configs = self.configurations()
+                for role in ('action','sensor'):
+                    configs[role]['capability_grant'][field] = canonical_digest('another trusted-looking pin')
+                self.configuration_pin(self.put(configs))
+                with self.assertRaisesRegex(ValueError, 'configured grant, worker runtime'):
+                    verify_joined_masks(**self.assemble(retained))

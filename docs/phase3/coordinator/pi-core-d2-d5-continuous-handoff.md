@@ -8,10 +8,15 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [protected host payload changes and worker source plan, batch 60](pi-core-mask-host-successor-batch-60.md).**
+The B59 code and helper now have a read-back host payload delta, ARM64
+interpreter inputs and a matching worker source plan. The compatibility disk
+was not rebuilt or changed. The existing root wrapper still has no dispatch
+for this capture. No installed state or operational authority follows.
+
 **D2 — [stopped-worker capture and local custody, batch 59](pi-core-stopped-mask-observer-batch-59.md).**
 The capture-only supervisor calls the observer before the gate resumes and retains
-the records independently of Pi. No capture has run. Next, pin the successor
-observer and helper dependency closure for the protected deployment, then join
+the records independently of Pi. No capture has run. Join
 the complete worker walk and externally controlled current witness to the
 [B58 reader](pi-core-mask-witness-batch-58.md). Local replay cannot create that
 witness. Keep the [approved masks](pi-core-worker-mask-decision.md), B49 null and live gates closed.

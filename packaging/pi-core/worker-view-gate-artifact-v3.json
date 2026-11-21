@@ -1,0 +1,16 @@
+{
+  "schema": "aragorn/pi-core-worker-view-gate-checkpoint/v1",
+  "output": ".aragorn/pi-core-build/gate-batch-82",
+  "source_sha256": "90156fce7c6eb95d30426567f8182a5273d00d7a579156b2e1c01243a98b9ab0",
+  "toolchain_digest": "sha256:63d0b9fd2cb3a62aab22acd262230196d300fd861abedb4fd688ccb8c407ec69",
+  "recipe_sha256": "b236b3778d938f4f0ddfe4a03891a236c010376164a22bdc4d60d61634048306",
+  "files": {
+    "source-gate": "ffc723e70a72421226b554d7e0407680f9e2a41262ddd7c1456bacd923073d78",
+    "gate.o": "e3587270bfdfdcab48488177daf76751ddd900cade1a026c8f287ae75a98bbfb",
+    "build-receipt.json": "6e5f9c8d95c639b0e57ac564e4996999ccd149f0d093333e523c9205e73befef",
+    "provenance.json": "07dd538fc6142d86c16a30ec3d05164e20823162c54228645881ea3c9d40a999",
+    "commands.json": "2d951aba1ab67c9421c375c073997407406ce21e840780db830b828ffaed1126"
+  },
+  "runtime_executed": false,
+  "phase3_exit_eligible": false
+}

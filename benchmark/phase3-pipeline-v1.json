@@ -2,6 +2,60 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-pre-exec-view-gate-readback-offline",
+      "description": "B82 original pinned source, build recipe, receipt, object, static ELF and host command records; readback only, no compiler or guest.",
+      "tests": [
+        "test_pi_core_worker_view_gate_readback"
+      ],
+      "inputs": [
+        "packaging/pi-core/source-gate-toolchain-v3.json",
+        "packaging/pi-core/source-gate-view-v3.c",
+        "packaging/pi-core/worker-view-gate-artifact-v3.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/build_pi_core_source_gate.py",
+        "tests/test_pi_core_worker_view_gate_compile.py",
+        "tests/test_pi_core_worker_view_gate_readback.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "pi-core-pre-exec-view-gate-contract-offline",
+      "description": "B82: only new fixed-view gate source, release recipe and ELF rejection branches using inert local fixtures; no compiler or guest.",
+      "tests": [
+        "test_pi_core_worker_view_gate"
+      ],
+      "inputs": [
+        "packaging/pi-core/source-gate-toolchain-v2.json",
+        "packaging/pi-core/source-gate-toolchain-v3.json",
+        "packaging/pi-core/source-gate-view-v3.c",
+        "scripts/build_pi_core_linux.py",
+        "scripts/build_pi_core_source_gate.py",
+        "tests/test_pi_core_source_gate_build.py",
+        "tests/test_pi_core_worker_view_gate.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 90
+    },
+    {
+      "id": "pi-core-pre-exec-view-gate-build-offline",
+      "description": "B82: cross-compile and link the new fixed-view Linux ARM64 gate once in a fresh directory; inspect bytes only. No guest execution.",
+      "tests": [
+        "test_pi_core_worker_view_gate_compile"
+      ],
+      "inputs": [
+        "packaging/pi-core/source-gate-toolchain-v3.json",
+        "packaging/pi-core/source-gate-view-v3.c",
+        "scripts/build_pi_core_linux.py",
+        "scripts/build_pi_core_source_gate.py",
+        "tests/test_pi_core_worker_view_gate_compile.py"
+      ],
+      "needs": [
+        "pi-core-pre-exec-view-gate-contract-offline"
+      ],
+      "timeout_seconds": 90
+    },
+    {
       "id": "pi-core-owned-socket-membership-offline",
       "description": "B81: only fixed manager-owned socket identities, complete names and bounded custody; inert handles.",
       "tests": [

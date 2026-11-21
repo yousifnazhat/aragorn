@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [fixed pre-execution worker probes, batch 82](pi-core-pre-exec-view-gate-batch-82.md).**
+Keep the B36 gate and its receipts unchanged. B82 is an offline successor for
+the actual-task half of the proof, not an installed gate or a passing result.
+The existing source observer refuses these new pre-exec calls. Do not widen
+its general syscall rules or accept a worker-supplied pass.
+
 **D2 — [manager-side socket membership, batch 81](pi-core-manager-socket-membership-batch-81.md).**
 The protected provider startup samples its two owned socket directories
 before unit start and at the first authenticated worker stop. This is only

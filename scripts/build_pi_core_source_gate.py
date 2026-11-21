@@ -34,6 +34,19 @@ RESTRICTED_TOOLCHAIN_PIN = "sha256:7fdaa9b7d5f80903b5f758458bca4457f4e8b8d025c8f
 RESTRICTED_GATE = "/opt/aragorn/pi-runtime/observer/source-gate"
 RESTRICTED_ARGV = ("/opt/aragorn/pi-runtime/node/bin/node", "--disallow-code-generation-from-strings",
                    "/opt/aragorn/pi-runtime/pi-core/entrypoint.js")
+VIEW_SCHEMA = "aragorn/pi-core-source-gate-toolchain/v3"
+VIEW_RECEIPT = "aragorn/pi-core-source-gate-build/v3"
+VIEW_RECORD = "aragorn/pi-core-pre-exec-fixed-view/v1"  # protocol identifier, not a worker-generated report
+VIEW_SOURCE = "source-gate-view-v3.c"
+VIEW_SOURCE_SHA = "90156fce7c6eb95d30426567f8182a5273d00d7a579156b2e1c01243a98b9ab0"
+VIEW_TOOLCHAIN_PIN = "sha256:63d0b9fd2cb3a62aab22acd262230196d300fd861abedb4fd688ccb8c407ec69"
+VIEW_RECIPE_SHA = "b236b3778d938f4f0ddfe4a03891a236c010376164a22bdc4d60d61634048306"
+VIEW_LITERALS = frozenset({
+    "/run/aragorn-pi-bootstrap/requests", "/run/aragorn-pi-bootstrap/requests/request.sock",
+    "/run/aragorn-pi-bootstrap/provider", "/run/aragorn-pi-bootstrap/provider/provider.sock",
+    "/proc/self", "/proc/thread-self", "/proc/self/fd", "/dev/fd",
+    "/dev/stdin", "/dev/stdout", "/dev/stderr",
+})
 PROFILE = "clang-rust-lld-gnu/v1"
 ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
 MAX_LOG = 1024 * 1024
@@ -75,14 +88,20 @@ def load_toolchain(root, path, digest):
     require("sha256:" + sha256(raw) == digest, "toolchain manifest pin differs")
     value = json.loads(raw)
     restricted = type(value) is dict and value.get("schema") == RESTRICTED_SCHEMA
+    view = type(value) is dict and value.get("schema") == VIEW_SCHEMA
     fields = {"schema", "target", "command_profile", "source_sha256", "compiler", "linker", "linker_library"}
     if restricted:
         fields |= {"gate_path", "node_argv"}
         require(digest == RESTRICTED_TOOLCHAIN_PIN and value.get("gate_path") == RESTRICTED_GATE and
                 value.get("node_argv") == list(RESTRICTED_ARGV) and value.get("source_sha256") == RESTRICTED_SOURCE_SHA,
                 "restricted gate requires its fixed toolchain, original source and complete argv")
+    if view:
+        fields |= {"gate_path", "node_argv", "view_record"}
+        require(digest == VIEW_TOOLCHAIN_PIN and value.get("gate_path") == RESTRICTED_GATE and
+                value.get("node_argv") == list(RESTRICTED_ARGV) and value.get("source_sha256") == VIEW_SOURCE_SHA
+                and value.get("view_record") == VIEW_RECORD, "fixed-view gate requires its original pinned profile")
     require(type(value) is dict and set(value) == fields and
-        raw in (canonical(value), canonical(value) + b"\n") and value["schema"] in (SCHEMA, RESTRICTED_SCHEMA) and
+        raw in (canonical(value), canonical(value) + b"\n") and value["schema"] in (SCHEMA, RESTRICTED_SCHEMA, VIEW_SCHEMA) and
         value["target"] == "linux-arm64-static" and value["command_profile"] == PROFILE,
         "toolchain manifest is not the fixed reviewed contract")
     compiler, linker = _tool(value["compiler"]), _tool(value["linker"])
@@ -90,7 +109,8 @@ def load_toolchain(root, path, digest):
     require(len(linker.parents) >= 4 and linker.name == "rust-lld" and linker.parent.name == "bin" and
             linker.parents[1].name == "aarch64-apple-darwin" and linker.parents[2].name == "rustlib" and
             library == linker.parents[3] / "libLLVM.dylib", "pinned linker library is not the reviewed adjacent runtime")
-    source = regular_bytes(root / shared.PACKAGE / (RESTRICTED_SOURCE if restricted else "source-gate.c"), 65536)
+    name = VIEW_SOURCE if view else RESTRICTED_SOURCE if restricted else "source-gate.c"
+    source = regular_bytes(root / shared.PACKAGE / name, 65536)
     require(sha256(source) == _pin(value["source_sha256"]), "reviewed source gate bytes differ")
     return value, source, compiler, linker
 
@@ -128,12 +148,41 @@ def restricted_gate_input(root, binary, receipt_path, receipt_digest):
             sha256(elf) == receipt["elf_sha256"] and
             receipt["compiler_sha256"] == "1220c0afafa12a6ae599d097ee7cf8b87c6b4d8e3fbb9783cee6b319a80683ba",
             "restricted gate source, compiler or ELF differs")
+    _check_gate_image(elf)
+    return elf, {**receipt, "receipt_digest": receipt_digest}
+
+
+def view_gate_input(root, binary, receipt_path, receipt_digest):
+    """Validate one pinned fixed-view build, not a syscall, access or launch observation."""
+    raw = regular_bytes(receipt_path, 16384)
+    require(type(receipt_digest) is str and "sha256:" + sha256(raw) == receipt_digest,
+            "fixed-view receipt pin differs")
+    receipt = json.loads(raw)
+    require(type(receipt) is dict and set(receipt) == {"schema", "target", "source_sha256", "elf_sha256",
+            "compiler_sha256", "build_command_sha256", "runtime_executed", "node_argv", "view_record",
+            "gate_path", "toolchain_digest"} and raw == canonical(receipt) + b"\n" and
+            receipt["schema"] == VIEW_RECEIPT and receipt["target"] == "linux-arm64-static" and
+            receipt["runtime_executed"] is False and receipt["view_record"] == VIEW_RECORD and
+            receipt["node_argv"] == list(RESTRICTED_ARGV) and receipt["gate_path"] == RESTRICTED_GATE and
+            receipt["toolchain_digest"] == VIEW_TOOLCHAIN_PIN and receipt["build_command_sha256"] == VIEW_RECIPE_SHA,
+            "fixed-view receipt, toolchain, recipe or immutable argv differs")
+    source = regular_bytes(root / shared.PACKAGE / VIEW_SOURCE, 65536)
+    elf = regular_bytes(binary, 1024 * 1024)
+    require(sha256(source) == receipt["source_sha256"] == VIEW_SOURCE_SHA and sha256(elf) == receipt["elf_sha256"]
+            and receipt["compiler_sha256"] == "1220c0afafa12a6ae599d097ee7cf8b87c6b4d8e3fbb9783cee6b319a80683ba",
+            "fixed-view source, compiler or ELF differs")
+    _check_gate_image(elf, VIEW_LITERALS)
+    return elf, {**receipt, "receipt_digest": receipt_digest}
+
+
+def _check_gate_image(elf, extra_literals=()):
     shared.require_static_arm64_elf(elf)
     require(struct.unpack_from("<H", elf, 16)[0] == 2, "restricted gate must be a fixed executable")
     entry, offset = struct.unpack_from("<QQ", elf, 24)
     size, count = struct.unpack_from("<HH", elf, 54)
     executable_entry, literals = False, set()
-    required_literals = {RESTRICTED_GATE, *RESTRICTED_ARGV, "HOME=/nonexistent", "PATH=/opt/aragorn/pi-runtime/node/bin"}
+    required_literals = {RESTRICTED_GATE, *RESTRICTED_ARGV, "HOME=/nonexistent", "PATH=/opt/aragorn/pi-runtime/node/bin",
+                         *extra_literals}
     for index in range(count):
         kind, flags, start, address, _, file_size, memory_size = struct.unpack_from("<IIQQQQQ", elf, offset + index * size)
         require(kind not in (2, 3), "restricted gate has a dynamic section or interpreter")
@@ -146,7 +195,6 @@ def restricted_gate_input(root, binary, receipt_path, receipt_digest):
             region = elf[start:start + file_size]
             literals.update(text for text in required_literals if text.encode("ascii") + b"\0" in region)
     require(executable_entry and required_literals == literals, "restricted gate lacks executable entry or pinned literals")
-    return elf, {**receipt, "receipt_digest": receipt_digest}
 
 
 def _remaining(deadline):
@@ -226,17 +274,23 @@ def build(root, output, toolchain_manifest, toolchain_digest, *, timeout_seconds
             "gate build output must be a new unlinked named directory in .aragorn/pi-core-build")
     manifest, source, compiler, linker = load_toolchain(root, toolchain_manifest, toolchain_digest)
     restricted = manifest["schema"] == RESTRICTED_SCHEMA
+    view = manifest["schema"] == VIEW_SCHEMA
     if restricted:
         require(output == root / ".aragorn/pi-core-build/gate-batch-36", "restricted gate output differs")
-    source_name = RESTRICTED_SOURCE if restricted else "source-gate.c"
+    if view:
+        require(output == root / ".aragorn/pi-core-build/gate-batch-82", "fixed-view gate output differs")
+    source_name = VIEW_SOURCE if view else RESTRICTED_SOURCE if restricted else "source-gate.c"
     inputs = (compiler, linker, Path(manifest["linker_library"]["path"]),
               root / shared.PACKAGE / source_name, Path(toolchain_manifest))
     identities = _identities(inputs)
     _remaining(operation_deadline)
     recipe = {"profile": PROFILE, "argv": commands(compiler, linker, output), "environment": ENV,
               "working_directory": str(output), "toolchain_digest": toolchain_digest}
-    if restricted:
+    if restricted or view:
         recipe.update(source=source_name, gate_path=RESTRICTED_GATE, node_argv=list(RESTRICTED_ARGV))
+    if view:
+        recipe["view_record"] = VIEW_RECORD
+        require(sha256(canonical(recipe)) == VIEW_RECIPE_SHA, "fixed-view build recipe differs before compilation")
     records = []
     output.mkdir(parents=True, exist_ok=False)
     try:
@@ -262,13 +316,17 @@ def build(root, output, toolchain_manifest, toolchain_digest, *, timeout_seconds
             "runtime_executed": False}
         if restricted:
             receipt.update(schema=RESTRICTED_RECEIPT, node_argv=list(RESTRICTED_ARGV))
+        elif view:
+            receipt.update(schema=VIEW_RECEIPT, node_argv=list(RESTRICTED_ARGV), gate_path=RESTRICTED_GATE,
+                           view_record=VIEW_RECORD, toolchain_digest=toolchain_digest)
         candidate = _json(output / "candidate-receipt.json", receipt)
         receipt_digest = "sha256:" + sha256(candidate)
-        reader = restricted_gate_input if restricted else shared.source_gate_input
+        reader = view_gate_input if view else restricted_gate_input if restricted else shared.source_gate_input
         reader(root, output / "source-gate", output / "candidate-receipt.json", receipt_digest)
         _remaining(operation_deadline)
         (output / "source-gate").chmod(0o555)
-        provenance = {"schema": "aragorn/pi-core-source-gate-provenance/v2" if restricted else "aragorn/pi-core-source-gate-provenance/v1",
+        provenance = {"schema": ("aragorn/pi-core-source-gate-provenance/v3" if view else
+            "aragorn/pi-core-source-gate-provenance/v2" if restricted else "aragorn/pi-core-source-gate-provenance/v1"),
             "status": "COMPILED_STATIC_GATE_NOT_EXECUTED", "toolchain_digest": toolchain_digest,
             "toolchain": manifest, "input_identities": identities, "recipe": recipe, "commands": records,
             "artifacts": {"gate.o": {"sha256": sha256(obj), "bytes": len(obj)},

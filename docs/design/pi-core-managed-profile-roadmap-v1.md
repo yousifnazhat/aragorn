@@ -174,6 +174,9 @@ writer and device attachment still need their own evidence.
 connects the manager's fixed socket-directory observations to the useful-path
 startup and its independent reader. Worker lookup, listing denial and
 task-relative link evidence are still required.
+[B82](../phase3/coordinator/pi-core-pre-exec-view-gate-batch-82.md) prepares
+a separate worker gate for those fixed lookups. Its receipt cannot substitute
+for the older gate's, and neither build establishes worker behavior.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

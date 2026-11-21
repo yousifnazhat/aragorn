@@ -157,6 +157,11 @@ cloned filesystem from the original asset.
 [B75](../phase3/coordinator/pi-core-observed-storage-guest-batch-75.md) stages
 the updated manager and services in one pinned guest payload; it does not
 establish installed identity or an observed mask.
+[B78](../phase3/coordinator/pi-core-direct-state-mapping-batch-78.md) connects
+the mounted state filesystem to its active encryption target and sole kernel
+backing device in offline replay. The V1 design is a single directly attached
+LUKS2 volume with an on-device header. Proving the physical attachment, header
+used at unlock, exclusive writer and fresh recovery head is still required.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

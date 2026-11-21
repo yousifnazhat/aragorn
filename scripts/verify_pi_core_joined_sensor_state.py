@@ -24,10 +24,10 @@ def _object(archive, pin, limit, *, stdout_line=False):
 
 def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin, plan_pin, owner_pin,
                               store, receipt_directory, capture_pin, receipt_pin, require_same_manager=False,
-                              require_filesystem_uuid=False):
+                              require_filesystem_uuid=False, require_direct_crypt_mapping=False):
     from aragorn.pi_core_sensor_state_custody import RECEIPTS, STORE, replay_sensor_observation, sensor_evidence_mount
     _need(type(archive) is CAS and archive.read_only is True and type(require_same_manager) is bool
-          and type(require_filesystem_uuid) is bool,
+          and type(require_filesystem_uuid) is bool and type(require_direct_crypt_mapping) is bool,
           "read-only independent evidence store required")
     paths = (archive.root, store, receipt_directory)
     identities = _separate(paths)
@@ -57,8 +57,11 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     _same(owner["wrapper_cleanup"], dict(host="CLOSED", source_loader="CLOSED"), "wrapper cleanup held")
     c = plan["sensor_state_observation"]
     has_uuid = type(c) is dict and "filesystem_uuid" in c
-    _keys(c, ("attempt_id", "storage", "clock", "store", "receipt_directory") + (("filesystem_uuid",) if has_uuid else ()))
+    direct = type(c) is dict and "state_volume_layout" in c
+    _keys(c, ("attempt_id", "storage", "clock", "store", "receipt_directory") + (("filesystem_uuid",) if has_uuid else ())
+          + (("state_volume_layout",) if direct else ()))
     _need(not require_filesystem_uuid or has_uuid, "filesystem UUID observation required; historical protected plan")
+    _need(not require_direct_crypt_mapping or direct, "direct crypt mapping observation required; historical protected plan")
     uuid_args = {}
     if has_uuid:
         # This value comes from the independently pinned profile and role archive,
@@ -66,6 +69,11 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
         uuid_value = _uuid(c["filesystem_uuid"])
         _same(uuid_value, capture["volume"]["filesystem_uuid"], "filesystem UUID differs from independent admission")
         uuid_args["expected_filesystem_uuid"] = uuid_value
+    if direct:
+        _need(c["state_volume_layout"] == "DIRECT_LUKS2_INLINE_HEADER_V1" and has_uuid and
+              capture["mapping"]["type"] == "dm-crypt" and len(capture["mapping"]["backing_devices"]) == 1,
+              "direct crypt mapping requires the approved layout, filesystem UUID and one independent data device")
+        uuid_args["require_direct_crypt_mapping"] = True
     _same([c["store"], c["receipt_directory"]], [str(STORE), str(RECEIPTS)], "foreign guest evidence destinations")
     config = plan["service_configuration"]
     _keys(config, ("deployment_path", "receipt_digest", "manifest", "configurations", "carrier"))
@@ -91,8 +99,8 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     _same(observed, dict(status="RETAINED_SENSOR_STATE_ONLY", capture_digest=capture_pin, receipt_digest=receipt_pin,
                          sensor_identity_digest=canonical_digest(identity)), "owner generation or consistent sensor receipt differs")
     view = r["view"]
-    _need(view["schema"] == ("aragorn/pi-core-sensor-state-view/v2" if has_uuid else
-                             "aragorn/pi-core-sensor-state-view/v1"), "filesystem UUID plan and sensor view version disagree")
+    version = 3 if direct else 2 if has_uuid else 1
+    _need(view["schema"] == f"aragorn/pi-core-sensor-state-view/v{version}", "filesystem UUID plan and sensor view version disagree")
     for key in ("host_before", "host_after"):
         host = owner[key]
         _need(host["schema"] == "aragorn/pi-core-coordinator-host-observation/v1" and
@@ -106,6 +114,12 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
                                   **uuid_args)
     _need(not has_uuid or finding.get("state_filesystem_uuid_matched") is True,
           "filesystem UUID has no verified raw observation")
+    if direct:
+        _need(finding.get("active_dm_crypt_single_backing_matched") is True,
+              "direct crypt mapping has no verified kernel observation")
+        _same([finding["observed_mapping_device"], [finding["observed_sole_kernel_dependency"]]],
+              [capture["mapping"]["device"], capture["mapping"]["backing_devices"]],
+              "observed active mapping or kernel dependency differs from independent admission")
     guest_evidence = sensor_evidence_mount(raw["manager"], raw["sensor"], c["storage"])
     _need(guest_evidence.device != carrier["device"], "evidence medium aliases the approved configuration carrier")
     # Bound local parsing effort, not the original guest observation interval.
@@ -129,7 +143,14 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     manager_same = matched("manager")
     _need(not require_same_manager or manager_same, "independent manager generation or mounts differ")
     _need(_separate(paths) == identities, "evidence directory changed")
-    return {**admitted, "capture_binding": capture_pin, "local_receipt": receipt_pin, "plan": plan_pin, "owner": owner_pin,
+    # The external archive binds expected storage and the private raw observation
+    # corroborates the active target/dependency. Neither proves the LUKS header
+    # location, unlock operation, physical asset, fencing, or installed code identity.
+    mapping = dict(active_dm_crypt_single_backing_matched=True, observed_mapping_device=finding["observed_mapping_device"],
+        observed_sole_kernel_dependency=finding["observed_sole_kernel_dependency"], encryption_uuid_measured=False,
+        inline_luks2_header_verified=False, physical_backing_identity_verified=False, authenticated_unlock_verified=False,
+        external_attachment_verified=False, exclusive_writer_verified=False) if direct else {}
+    return {**admitted, **mapping, "capture_binding": capture_pin, "local_receipt": receipt_pin, "plan": plan_pin, "owner": owner_pin,
             "sensor_read_only_bind_matched": True, "independent_state_source_roots_matched": True,
             "guest_evidence_mount_topology_matched": True,
             "manager_configuration_carrier_mount_matched": True, "sensor_configuration_file_mount_matched": True,
@@ -150,6 +171,8 @@ def main(argv=None):
     parser.add_argument("--require-same-manager", action="store_true")
     parser.add_argument("--require-filesystem-uuid", action="store_true",
                         help="require both measured filesystem UUID replies, the protected plan, and independent admission to agree")
+    parser.add_argument("--require-direct-crypt-mapping", action="store_true",
+                        help="require a v3 observation of the active dm-crypt target and its sole kernel dependency; not header proof")
     args = vars(parser.parse_args(argv))
     try:
         args["archive"] = CAS(args["archive"], read_only=True)

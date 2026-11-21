@@ -15,9 +15,11 @@ from .pi_core_state_admission import _dev, _keys, _need, _pin, _same, _uint, _uu
 
 
 FIELD = "sensor_state_observation"
+DIRECT_LAYOUT = "DIRECT_LUKS2_INLINE_HEADER_V1"
 _SEAL = object()
 _SOURCES = ("pi_core_sensor_state_entry", "pi_core_sensor_state_observer",
             "pi_core_sensor_state_custody", "pi_core_sensor_state_evidence")
+_DM_SOURCES = ("pi_core_state_dm_mapping",)
 
 
 def validate_section(value):
@@ -25,6 +27,11 @@ def validate_section(value):
     if type(value) is dict and "filesystem_uuid" in value:
         _uuid(value["filesystem_uuid"])
         fields += ("filesystem_uuid",)
+    direct = type(value) is dict and "state_volume_layout" in value
+    if direct:
+        _need(value["state_volume_layout"] == DIRECT_LAYOUT and "filesystem_uuid" in value,
+              "direct crypt mapping observation requires an explicit layout and a filesystem UUID")
+        fields += ("state_volume_layout",)
     _keys(value, fields)
     _need(value["store"] == str(custody.STORE) and value["receipt_directory"] == str(custody.RECEIPTS),
           "fixed private sensor evidence destinations required")
@@ -42,6 +49,13 @@ def validate_section(value):
     backing = st["backing_devices"]
     _need(type(backing) is list and 1 <= len(backing) <= 16 and len({_dev(x) for x in backing}) == len(backing)
           and dev not in backing and st["fs_type"] in ("ext4", "xfs"), "invalid sensor storage binding")
+    _need(not direct or len(backing) == 1, "direct crypt mapping requires one distinct planned backing device")
+    if direct:
+        # _plan validates this section before taking its final verified-loader
+        # snapshot. Importing definitions is inert; no device is opened here.
+        from . import pi_core_state_dm_mapping
+        _need(callable(pi_core_state_dm_mapping.capture_dm_mapping) and
+              callable(pi_core_state_dm_mapping.verify_dm_mapping), "direct crypt mapping implementation missing")
     return value
 
 
@@ -55,12 +69,13 @@ def from_held_plan(inputs, path, plan, plan_digest, host_digest, records, source
     inputs.guard()
     _need(type(host_observation) is dict and host_observation.get("host_profile_digest") == host_digest and
           _uint(host_observation.get("pid"), high=1 << 31) == os.getpid(), "sensor manager differs from held host")
-    for name in _SOURCES:
+    section = validate_section(plan[FIELD])
+    direct = "state_volume_layout" in section
+    for name in _SOURCES + (_DM_SOURCES if direct else ()):
         p = "opt/aragorn/src/aragorn/" + name + ".py"
         pin = _pin(source_digests.get(p))
         _need(sum(row == {"module": "aragorn." + name, "path": p, "digest": pin} for row in records) == 1,
               "sensor observation implementation not consumed from held host")
-    section = validate_section(plan[FIELD])
     config = _configuration_section(plan["service_configuration"])
     _need("carrier" in config and config["carrier"]["device"] not in
           (section["storage"]["device"], *section["storage"]["backing_devices"]),
@@ -70,19 +85,22 @@ def from_held_plan(inputs, path, plan, plan_digest, host_digest, records, source
                    launch_digest=_pin(plan["launch"]["digest"]),
                    configuration_digest=_pin(plan["service_configuration"]["configurations"]["digest"]))
     return SensorStateRequest(_SEAL, inputs, canonical_json(binding), host_observation["pid"],
-                              config["carrier"]["device"], section.get("filesystem_uuid"))
+                              config["carrier"]["device"], section.get("filesystem_uuid"), direct)
 
 
 class SensorStateRequest:
     """Thread- and deadline-bound single-use read request; not a service principal."""
     __slots__ = ("_seal", "_inputs", "_raw", "_thread", "_state", "_deadline", "_roots", "_manager_pid",
-                 "_config_device", "_filesystem_uuid")
+                 "_config_device", "_filesystem_uuid", "_direct")
 
-    def __init__(self, seal, inputs, raw, manager_pid, config_device, filesystem_uuid=None):
+    def __init__(self, seal, inputs, raw, manager_pid, config_device, filesystem_uuid=None, direct=False):
         _need(seal is _SEAL, "protected sensor plan required")
         self._seal, self._inputs, self._raw, self._manager_pid = seal, inputs, raw, manager_pid
         self._config_device = _dev(config_device)
         self._filesystem_uuid = None if filesystem_uuid is None else _uuid(filesystem_uuid)
+        _need(type(direct) is bool and (not direct or self._filesystem_uuid is not None),
+              "direct crypt mapping observation requires protected filesystem UUID")
+        self._direct = direct
         self._thread, self._state, self._roots, self._deadline = threading.get_ident(), "new", (), None
 
     def _enter(self, state):
@@ -123,7 +141,8 @@ class SensorStateRequest:
         binding = json.loads(self._raw)
         uuid_check = self._filesystem_uuid is not None
         view, manager, sensor = observer.capture_sensor_state(identity=identity, guard=guard, deadline=deadline,
-            **({"uuid_storage": binding["storage"]} if uuid_check else {}))
+            **({"uuid_storage": binding["storage"]} if uuid_check else {}),
+            **({"observe_dm_mapping": True} if self._direct else {}))
         _same(guard(deadline=deadline), identity, "sensor generation changed after observation")
         _need(type(manager) is bytes and type(sensor) is bytes and 0 < len(manager) <= 1 << 20
               and 0 < len(sensor) <= 1 << 20 and type(view) is dict, "incomplete original sensor observation")
@@ -133,7 +152,12 @@ class SensorStateRequest:
         ok = True
         try:
             replay = evidence.verify_sensor_state(view, manager, sensor, identity=identity, storage=binding["storage"],
-                expected_filesystem_uuid=self._filesystem_uuid)
+                expected_filesystem_uuid=self._filesystem_uuid, **({"require_direct_crypt_mapping": True} if self._direct else {}))
+            if self._direct:
+                _need(view.get("schema") == "aragorn/pi-core-sensor-state-view/v3" and
+                      replay.get("active_dm_crypt_single_backing_matched") is True and
+                      replay.get("state_filesystem_uuid_matched") is True,
+                      "missing directly observed crypt mapping or mounted filesystem UUID")
             _need(replay["sensor_read_only_bind_matched"] is True and replay["manager"]["pid"] == self._manager_pid,
                   "sensor state or manager differs from the held invocation")
             _same(replay["clock"], binding["clock"], "sensor observation clock differs from approved plan")

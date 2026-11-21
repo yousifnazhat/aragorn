@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [direct encrypted-state mapping, batch 78](pi-core-direct-state-mapping-batch-78.md).**
+The managed V1 layout is a single directly attached LUKS2 device with its
+header on that device. A protected caller and separate reader now compare
+the mounted filesystem with the active kernel encryption target and sole
+backing device. This is not a header, unlock, attachment or fence receipt.
+
 **D3 — [action boundary evidence, batch 77](pi-core-action-current-boundary-batch-77.md).**
 The managed handoff retains the final guard's original source trace and
 distinguishes a recorded local send return from receipt or effect. Independent

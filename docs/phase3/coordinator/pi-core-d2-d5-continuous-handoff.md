@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [common guest payload, batch 75](pi-core-observed-storage-guest-batch-75.md).**
+The retained successor stages the signed stopped-worker and service-state
+observers together. Preparation did not boot a guest or collect mask evidence.
+
 **D2 — [mounted filesystem UUID, batch 74](pi-core-mounted-state-uuid-batch-74.md).**
 A future protected plan may require two kernel reads on the same held state
 directory, joined to the independent volume profile. The backing asset, encryption

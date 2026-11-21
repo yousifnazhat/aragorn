@@ -26,19 +26,23 @@ def _git(args, request=b""):
            "GIT_ALLOW_PROTOCOL": "", "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
     return subprocess.run(["/usr/bin/git", "--no-replace-objects", "--no-pager",
                            "-c", "protocol.allow=never", "-c", "core.hooksPath=/dev/null",
-                           "-c", "gpg.ssh.program=/usr/bin/ssh-keygen", *args], cwd=ROOT, env=env,
+                           "-c", "gpg.format=ssh", "-c", "gpg.ssh.program=/usr/bin/ssh-keygen",
+                           "-c", "gpg.program=/usr/bin/false", "-c", "gpg.x509.program=/usr/bin/false",
+                           *args], cwd=ROOT, env=env,
                           input=request, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                           timeout=20, check=True).stdout
 
 
-def _objects(expected):
+def _objects(expected, *, revision=REVISION, tree=TREE):
+    image.require(all(type(v) is str and re.fullmatch("[0-9a-f]{40}", v) for v in (revision, tree)),
+                  "invalid signed source identity")
     paths = sorted(expected)
     image.require(0 < len(paths) <= image.MAX_SOURCE_FILES and all(_NAME.fullmatch(p) for p in paths),
                   "invalid signed code path selection")
-    signed = _git(["log", "-1", "--no-notes", "--no-show-signature", "--format=%H%n%T%n%G?%n%GF", REVISION])
-    image.require(signed.splitlines() == [REVISION.encode(), TREE.encode(), b"G", SIGNER.encode()],
+    signed = _git(["log", "-1", "--no-notes", "--no-show-signature", "--format=%H%n%T%n%G?%n%GF", revision])
+    image.require(signed.splitlines() == [revision.encode(), tree.encode(), b"G", SIGNER.encode()],
                   "source commit, tree or approved signature differs")
-    raw = _git(["ls-tree", "-z", "-l", TREE, "--", *paths])
+    raw = _git(["ls-tree", "-z", "-l", tree, "--", *paths])
     image.require(raw.endswith(b"\0") and len(raw) <= len(paths) * 1024, "unexpected source tree response")
     listing = {}
     for line in raw[:-1].split(b"\0"):
@@ -76,11 +80,16 @@ def _prior(raw, digest):
 
 def prepare(b65_host_profile_raw, b65_manifest_raw, b65_binding_raw):
     """Return full host code, service code (including rendered wrappers), and public source identities."""
-    review = previous._document(REVIEW, REVIEW_PIN)
-    image.require((review["signed_revision"], review["signed_tree"]) == (REVISION, TREE), "wrong catalog revision")
-    profile = _prior(b65_host_profile_raw, review["prior_host_profile_digest"])
-    prior = _prior(b65_manifest_raw, review["prior_service_manifest_digest"])
-    binding = _prior(b65_binding_raw, review["prior_service_binding_digest"])
+    return _prepare(b65_host_profile_raw, b65_manifest_raw, b65_binding_raw, review_path=REVIEW,
+                    review_pin=REVIEW_PIN, revision=REVISION, tree=TREE)
+
+
+def _prepare(host_raw, manifest_raw, binding_raw, *, review_path, review_pin, revision, tree):
+    review = previous._document(review_path, review_pin)
+    image.require((review["signed_revision"], review["signed_tree"]) == (revision, tree), "wrong catalog revision")
+    profile = _prior(host_raw, review["prior_host_profile_digest"])
+    prior = _prior(manifest_raw, review["prior_service_manifest_digest"])
+    binding = _prior(binding_raw, review["prior_service_binding_digest"])
     old_host = {r["path"]: r for r in profile["files"]
                 if r["path"] == host.WRAPPER or r["path"].startswith(host.PREFIX + "aragorn/")}
     image.require(all(old_host.get(p) != row and p == row["path"] for p, row in review["host_changes"].items()),
@@ -101,7 +110,7 @@ def prepare(b65_host_profile_raw, b65_manifest_raw, b65_binding_raw):
     for name, digest in inventory.items():
         image.require(expected.setdefault("src/" + name, digest) == digest, "host and service source pins disagree")
     expected.update({WRAPPERS + "/" + name: v for name, v in review["template_digests"].items()})
-    blobs = _objects(expected)
+    blobs = _objects(expected, revision=revision, tree=tree)
     host_code = {p: blobs[q] for p, q in repo.items()}
     image.require(all(len(host_code[p]) == r["size"] for p, r in rows.items()), "host source size differs")
     host._project_imports(host_code)
@@ -122,6 +131,6 @@ def prepare(b65_host_profile_raw, b65_manifest_raw, b65_binding_raw):
     service_code.update({"opt/aragorn/bin/" + p: v for p, v in wrappers.items()})
     meta = {k: review[k] for k in ("host_rows_digest", "host_count", "service_inventory_digest", "service_count",
                                     "rendered_wrapper_digests", "unsupported_import_sites_digest")}
-    meta.update(source_revision=REVISION, source_tree=TREE, source_signer=SIGNER,
+    meta.update(source_revision=revision, source_tree=tree, source_signer=SIGNER,
                 host_delta_count=len(review["host_changes"]), service_delta_count=len(review["service_changes"]))
     return host_code, service_code, meta

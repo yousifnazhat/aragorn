@@ -6,6 +6,7 @@ installed identities, or access to a live device.
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import re
 import subprocess
 
 
@@ -55,12 +56,14 @@ def _git(*args, request=b""):
                           stderr=subprocess.PIPE, timeout=30, check=True).stdout
 
 
-def _blobs(names):
-    identity = _git("log", "-1", "--no-notes", "--no-show-signature", "--format=%H%n%T%n%G?%n%GF", REVISION)
-    if identity.splitlines() != [REVISION.encode(), TREE.encode(), b"G", SIGNER.encode()]:
+def _blobs(names, *, revision=REVISION, tree=TREE):
+    if not all(type(v) is str and re.fullmatch("[0-9a-f]{40}", v) for v in (revision, tree)):
+        raise ValueError("invalid signed source identity")
+    identity = _git("log", "-1", "--no-notes", "--no-show-signature", "--format=%H%n%T%n%G?%n%GF", revision)
+    if identity.splitlines() != [revision.encode(), tree.encode(), b"G", SIGNER.encode()]:
         raise ValueError("wrong signed source commit, tree or signer")
     order = sorted(names)
-    request = "".join(TREE + ":" + n + "\n" for n in order).encode("ascii")
+    request = "".join(tree + ":" + n + "\n" for n in order).encode("ascii")
     out, at, result = _git("cat-file", "--batch", request=request), 0, {}
     for name in order:
         end = out.index(b"\n", at)
@@ -77,20 +80,22 @@ def _blobs(names):
     return result
 
 
-def derive():
-    base = retained(RETAINED / "payload.json", B65_PAYLOAD)
+def project(*, directory, predecessor, host_additions, service_additions, revision, tree):
+    """Project changed metadata only; the caller provides independently frozen predecessor and source pins."""
+    base = retained(directory / "payload.json", predecessor)
     entries = {r["path"]: r for r in base["entries"]}
+    original = entries.copy()
     def doc(name):
-        return retained(RETAINED / "root" / name[1:], entries[name]["sha256"])
+        return retained(directory / "root" / name[1:], entries[name]["sha256"])
     host, manifest, binding, receipt = map(doc, (HOST, MANIFEST, BINDING, RECEIPT))
     roles = ("action", "provider", "sensor")
     hosts = {r["path"]: r for r in host["files"]}
     files = {r["path"]: r for r in manifest["files"]}
-    services = {p.removeprefix(IMPORT) for p in binding["source_digests"]} | set(ADDED)
-    coordinators = {p.removeprefix("/" + IMPORT) for p in hosts if p.startswith("/" + IMPORT)} | set(ADDED)
+    services = {p.removeprefix(IMPORT) for p in binding["source_digests"]} | set(service_additions)
+    coordinators = {p.removeprefix("/" + IMPORT) for p in hosts if p.startswith("/" + IMPORT)} | set(host_additions)
     templates = {r: "packaging/pi-core/services-v2/" + r + ".py" for r in roles}
     sources = _blobs({"src/" + n for n in coordinators | services} | set(templates.values()) |
-                     {"packaging/pi-core/coordinator.py"})
+                     {"packaging/pi-core/coordinator.py"}, revision=revision, tree=tree)
     def file_row(name, raw, mode):
         entries[name] = dict(path=name, type="file", uid=0, gid=0, mode=mode, size=len(raw), sha256=sha(raw))
     for name, raw in [(WRAPPER, sources["packaging/pi-core/coordinator.py"]),
@@ -117,9 +122,15 @@ def derive():
     for name, content in ((HOST, host), (MANIFEST, manifest), (BINDING, binding), (RECEIPT, receipt)):
         file_row(name, encode(content), entries[name]["mode"])
     base["entries"] = [entries[n] for n in sorted(entries)]
-    return dict(schema="aragorn/pi-core-managed-payload/v1", payload_sha256=sha(encode(base)),
+    pins = dict(schema="aragorn/pi-core-managed-payload/v1", payload_sha256=sha(encode(base)),
                 host_profile_sha256=sha(encode(host)), manifest_sha256=sha(encode(manifest)),
                 binding_sha256=sha(encode(binding)), layout_receipt_sha256=sha(encode(receipt)))
+    return pins, original, entries
+
+
+def derive():
+    return project(directory=RETAINED, predecessor=B65_PAYLOAD, host_additions=ADDED, service_additions=ADDED,
+                   revision=REVISION, tree=TREE)[0]
 
 
 if __name__ == "__main__":

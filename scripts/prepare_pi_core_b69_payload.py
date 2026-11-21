@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from typing import NamedTuple
 
 from scripts import prepare_pi_core_b69_sources as sources
 from scripts import prepare_pi_core_service_successor as prior
@@ -62,28 +63,48 @@ def _sync_directory(path):
         os.close(fd)
 
 
+class _Successor(NamedTuple):
+    # Internal fixed checkpoint values, never derived from the input or caller flags.
+    predecessor: str
+    base: Path
+    out: Path
+    base_outcome: str
+    base_payload: str
+    revision: str
+    tree: str
+    review: Path
+    review_sha256: str
+    counts: tuple
+
+
 def prepare():
-    require(not os.path.lexists(OUT), "output already present; no adoption, overwrite or retry")
-    b65 = json.loads(image.read(BASE / "outcome.json", BASE_OUTCOME, 16384))
-    require(b65["payload_sha256"] == BASE_PAYLOAD, "foreign B65 payload")
-    base = json.loads(image.read(BASE / "payload.json", BASE_PAYLOAD, 2 << 20))
+    spec = _Successor("b65", BASE, OUT, BASE_OUTCOME, BASE_PAYLOAD, REVISION, TREE,
+                      REVIEW, REVIEW_SHA256, (1764, 806, 793, 20, 4))
+    return _prepare_successor(spec, sources.prepare)
+
+
+def _prepare_successor(spec, project):
+    require(not os.path.lexists(spec.out), "output already present; no adoption, overwrite or retry")
+    previous = json.loads(image.read(spec.base / "outcome.json", spec.base_outcome, 16384))
+    require(previous["payload_sha256"] == spec.base_payload, "foreign predecessor payload")
+    base = json.loads(image.read(spec.base / "payload.json", spec.base_payload, 2 << 20))
     require(base["schema"] == split.SCHEMA, "incorrect guest format")
     old = split._index(base["entries"])
 
     def retained(p):
         row = old[p]
-        buf = prior._retained(BASE / "root", p[1:], row)
-        require(_file(p, buf, row["mode"]) == row, "retained bytes do not match B65")
+        buf = prior._retained(spec.base / "root", p[1:], row)
+        require(_file(p, buf, row["mode"]) == row, "retained bytes do not match predecessor")
         return buf
 
     host, manifest, binding = (retained(p) for p in (image.PROFILE, _M, _B))
-    old_section = b65["service_runtime"]
+    old_section = previous["service_runtime"]
     require(old_section == dict(deployment_path=prior.DEPLOY, receipt_digest=prior._pin(retained(_R)),
                                 manifest=dict(path=_M, digest=prior._pin(manifest)),
                                 runtime_binding=dict(path=_B, digest=prior._pin(binding))),
-            "B65 service caller refs differ")
-    hcode, scode, evidence = sources.prepare(host, manifest, binding)
-    require(evidence["source_revision"] == REVISION and evidence["source_tree"] == TREE,
+            "predecessor service caller refs differ")
+    hcode, scode, evidence = project(host, manifest, binding)
+    require(evidence["source_revision"] == spec.revision and evidence["source_tree"] == spec.tree,
             "unreviewed source tree")
     profile = _profile(host, hcode)
     updated, docs = prior.service_inputs(json.loads(manifest), json.loads(binding), scode)
@@ -114,9 +135,10 @@ def prepare():
     pins = dict(schema="aragorn/pi-core-managed-payload/v1", payload_sha256=sha256(encoded),
                 host_profile_sha256=sha256(profile), manifest_sha256=sha256(docs[_M]),
                 binding_sha256=sha256(docs[_B]), layout_receipt_sha256=sha256(docs[_R]))
-    require(json.loads(image.read(REVIEW, REVIEW_SHA256, 8192)) == pins, "independent assembly pins differ")
+    require(json.loads(image.read(spec.review, spec.review_sha256, 8192)) == pins, "independent assembly pins differ")
+    origin = {spec.predecessor + "_outcome_sha256": spec.base_outcome, spec.predecessor + "_payload_sha256": spec.base_payload}
     result = dict(**{k:v for k,v in pins.items() if k != "schema"}, schema="aragorn/pi-core-managed-guest-inputs/v1",
-                  b65_outcome_sha256=BASE_OUTCOME, b65_payload_sha256=BASE_PAYLOAD, entries=len(rows),
+                  **origin, entries=len(rows),
                   changed_files=len(changes), added_files=len(added), host_files=len(json.loads(profile)["files"]),
                   service_files=len(updated["files"]), source_evidence=evidence,
                   service_runtime=dict(deployment_path=prior.DEPLOY, receipt_digest=prior._pin(docs[_R]),
@@ -125,30 +147,31 @@ def prepare():
                   image_assembled=False, installed_identity_verified=False, activation_performed=False,
                   phase3_exit_eligible=False)
     require((result["entries"], result["host_files"], result["service_files"], result["changed_files"],
-             result["added_files"]) == (1764, 806, 793, 20, 4), "independent assembly counts differ")
-    parent = OUT.parent
+             result["added_files"]) == spec.counts, "independent assembly counts differ")
+    out = spec.out
+    parent = out.parent
     require(parent.resolve(strict=True) == parent and parent.stat().st_uid == os.geteuid()
             and not parent.stat().st_mode & 0o022, "unsafe private staging parent")
-    OUT.mkdir(mode=0o700)
-    root = OUT / "root"
+    out.mkdir(mode=0o700)
+    root = out / "root"
     split._stage(root, payload, lambda row: overrides[row["path"]] if row["path"] in changes else
-                prior._retained(BASE / "root", row["path"][1:], row))
+                prior._retained(spec.base / "root", row["path"][1:], row))
     # _stage hash-reads every emitted file and verifies namespaces/modes. Sync the directory
     # entries as well, before exposing any completion marker; never adopt partial attempts.
     for r in reversed(payload["entries"]):
         if r["type"] == "dir":
             _sync_directory(root / r["path"][1:])
     _sync_directory(root)
-    image.new(OUT / "payload.json", encoded)
-    require(image.read(OUT / "payload.json", pins["payload_sha256"], 2 << 20) == encoded, "payload readback differs")
+    image.new(out / "payload.json", encoded)
+    require(image.read(out / "payload.json", pins["payload_sha256"], 2 << 20) == encoded, "payload readback differs")
     outcome = canonical(result)
-    image.new(OUT / "pending.json", outcome)
-    require(image.read(OUT / "pending.json", sha256(outcome), 65536) == outcome and
-            set(os.listdir(OUT)) == {"root","payload.json","pending.json"}, "incomplete staged metadata")
-    _sync_directory(OUT)
-    os.link(OUT / "pending.json", OUT / "outcome.json", follow_symlinks=False)
-    (OUT / "pending.json").unlink()
-    _sync_directory(OUT)
+    image.new(out / "pending.json", outcome)
+    require(image.read(out / "pending.json", sha256(outcome), 65536) == outcome and
+            set(os.listdir(out)) == {"root","payload.json","pending.json"}, "incomplete staged metadata")
+    _sync_directory(out)
+    os.link(out / "pending.json", out / "outcome.json", follow_symlinks=False)
+    (out / "pending.json").unlink()
+    _sync_directory(out)
     _sync_directory(parent)
-    require(image.read(OUT / "outcome.json", sha256(outcome), 65536) == outcome, "outcome readback differs")
+    require(image.read(out / "outcome.json", sha256(outcome), 65536) == outcome, "outcome readback differs")
     return result

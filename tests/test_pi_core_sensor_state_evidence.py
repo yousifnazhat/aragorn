@@ -93,7 +93,7 @@ _CONFIG_SENSOR = (b"9 1 7:7 /installed/root/etc/aragorn/pi-sensor-service.json /
 
 
 class _JoinedSensorFixture(unittest.TestCase):
-    def setUp(self, *, change_streams=None, prepare_observation=None):
+    def setUp(self, *, change_streams=None, prepare_observation=None, prepare_plan=None):
         self.outer, self.local = outer.MaskArchiveTests(), local.MaskCustodyTests()
         for f in (self.outer, self.local):
             self.addCleanup(f.doCleanups)
@@ -126,9 +126,12 @@ class _JoinedSensorFixture(unittest.TestCase):
                             clock=self.v["clock"], storage=storage))
         if prepare_observation is not None:
             prepare_observation(self.plan["sensor_state_observation"], self.v, b.capture["volume"])
+        if prepare_plan is not None:
+            prepare_plan(self)
         plan = b.put(canonical_json(self.plan))
         record = dict(schema="aragorn/pi-core-sensor-state-record/v1", view=self.v, identity=ident,
-                      attempt_id="a"*32, host_profile_digest=digest(b"host"), launch_digest=digest(b"launch"),
+                      attempt_id="a"*32, host_profile_digest=self.plan["host_profile_digest"],
+                      launch_digest=self.plan["launch"]["digest"],
                       deployment_digest=b.capture["deployment"], plan_digest=plan,
                       configuration_digest=b.capture["configuration"], clock=self.v["clock"], storage=storage,
                       manager_mountinfo_digest=digest(manager), sensor_mountinfo_digest=digest(sensor))
@@ -142,7 +145,7 @@ class _JoinedSensorFixture(unittest.TestCase):
                                 root=self.local.receipts)
         generation = {k: ident[k] for k in ("pid", "start_ticks", "uid", "gid", "invocation_id")}
         host = dict(schema="aragorn/pi-core-coordinator-host-observation/v1", pid=self.v["manager"]["pid"],
-                    authority="PINNED_HOST_TCB_ONLY_NOT_CONSUMED_CODE_OR_PHASE3", host_profile_digest=digest(b"host"),
+                    authority="PINNED_HOST_TCB_ONLY_NOT_CONSUMED_CODE_OR_PHASE3", host_profile_digest=self.plan["host_profile_digest"],
                     python_executable="/opt/aragorn-cpython/bin/python3.12", files=806, phase3_exit_eligible=False)
         self.owner = dict(schema="aragorn/pi-core-coordinator-observation/v1", managed_call_attempted=True,
                           host_before=host, host_after=host.copy(), owned_inputs_closed=True, phase3_exit_eligible=False,

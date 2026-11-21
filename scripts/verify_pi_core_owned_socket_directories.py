@@ -25,14 +25,18 @@ from scripts.prepare_pi_core_coordinator_host import host_contract
 from scripts.verify_pi_core_installed_bundle_readback import _document
 
 
-_MODULES = {"aragorn.pi_core_coordinator_entry", "aragorn.pi_core_managed_bootstrap",
-            "aragorn.pi_core_native_supervisor", "aragorn.pi_core_node_source_observer",
-            "aragorn.pi_core_source_observer", "aragorn.pi_core_owned_socket_directories"}
+_ENTRY_MODULES = frozenset({"aragorn.pi_core_coordinator_entry"})
+_MODULES = _ENTRY_MODULES | {"aragorn.pi_core_managed_bootstrap", "aragorn.pi_core_native_supervisor",
+                            "aragorn.pi_core_node_source_observer", "aragorn.pi_core_source_observer",
+                            "aragorn.pi_core_owned_socket_directories"}
 
 
-def _custody(owner, profile, profile_pin):
+def _custody(owner, profile, profile_pin, *, required_before=_ENTRY_MODULES, required_after=_MODULES):
+    """Check both loader snapshots against the caller's pinned host profile; perform no acquisition."""
+    _need(canonical_digest(profile) == _pin(profile_pin), "different protected host profile bytes")
     files = host_contract._profile(profile)
     host = owner["host_before"]
+    _keys(host, ("schema", "authority", "host_profile_digest", "pid", "python_executable", "files", "phase3_exit_eligible"))
     _same(host, owner["host_after"], "manager host identity changed")
     _need(host["schema"] == "aragorn/pi-core-coordinator-host-observation/v1" and
           host["authority"] == "PINNED_HOST_TCB_ONLY_NOT_CONSUMED_CODE_OR_PHASE3" and
@@ -46,15 +50,18 @@ def _custody(owner, profile, profile_pin):
     _need(type(first) is list and type(last) is list and 0 < len(first) <= len(last) <= 512,
           "missing protected source custody")
     _same(first, last[:len(first)], "source loader did not preserve its initial observations")
-    seen = set()
-    for row in last:
+    _need(all(type(required) in (set, frozenset) and required and required <= src.keys()
+              for required in (required_before, required_after)), "invalid required source inventory")
+    seen, initial = set(), set()
+    for index, row in enumerate(last):
         _keys(row, ("module", "path", "digest"))
         name = row["module"]
         _need(type(name) is str and name in src and name not in seen and
               (row["path"], _pin(row["digest"])) == src[name][:2], "invalid consumed source")
         seen.add(name)
-    _need(_MODULES <= seen and any(r["module"] == "aragorn.pi_core_coordinator_entry" for r in first),
-          "manager did not retain consumed source for the socket observation")
+        if index < len(first):
+            initial.add(name)
+    _need(required_before <= initial and required_after <= seen, "manager did not retain required consumed source")
     return {name:src[name][1] for name in seen}
 
 

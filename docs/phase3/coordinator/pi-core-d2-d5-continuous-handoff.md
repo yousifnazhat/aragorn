@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [strict current volume/sensor replay, batch 84](pi-core-current-volume-sensor-replay-batch-84.md).**
+Use the strict option when matching admission to protected sensor evidence:
+the same directory observed by a replacement sensor is insufficient.
+This is an offline reader; Pi's lookup and process-link evidence is still missing.
+
 **D2 — [stage the fixed-view runtime candidate, batch 83](pi-core-worker-view-runtime-batch-83.md).**
 Use the retained Node, JavaScript and package metadata with the separately
 pinned B82 gate. Do not rebuild either predecessor or use B36 launch

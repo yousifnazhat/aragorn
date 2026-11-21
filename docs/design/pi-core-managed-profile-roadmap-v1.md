@@ -179,6 +179,9 @@ a separate worker gate for those fixed lookups. Its receipt cannot substitute
 for the older gate's, and neither build establishes worker behavior.
 [B83](../phase3/coordinator/pi-core-worker-view-runtime-batch-83.md) stages
 the four-file candidate without changing the accepted launch profiles.
+[B84](../phase3/coordinator/pi-core-current-volume-sensor-replay-batch-84.md)
+adds strict offline comparison of the current volume, original manager and
+read-only sensor. It does not prove either Pi's view or a shared capture interval.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

@@ -177,6 +177,8 @@ task-relative link evidence are still required.
 [B82](../phase3/coordinator/pi-core-pre-exec-view-gate-batch-82.md) prepares
 a separate worker gate for those fixed lookups. Its receipt cannot substitute
 for the older gate's, and neither build establishes worker behavior.
+[B83](../phase3/coordinator/pi-core-worker-view-runtime-batch-83.md) stages
+the four-file candidate without changing the accepted launch profiles.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

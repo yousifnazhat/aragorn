@@ -28,7 +28,7 @@ RUNNER = "scripts/phase3_pipeline.py"
 _LIMIT = 32 * 1024 * 1024
 _LOG_LIMIT = 4 * 1024 * 1024
 # A bounded reserve lets reviewed registry additions reuse unchanged runner fingerprints.
-_MAX_STAGES = 320
+_MAX_STAGES = 384
 _PREFLIGHT_CODE = "import time; time.sleep(1)"
 _FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 _LIMITATIONS = [

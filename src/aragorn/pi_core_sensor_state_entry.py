@@ -20,6 +20,7 @@ _SEAL = object()
 _SOURCES = ("pi_core_sensor_state_entry", "pi_core_sensor_state_observer",
             "pi_core_sensor_state_custody", "pi_core_sensor_state_evidence")
 _DM_SOURCES = ("pi_core_state_dm_mapping",)
+_LEAF_SOURCES = ("pi_core_state_backing_leaf",)
 
 
 def validate_section(value):
@@ -32,6 +33,10 @@ def validate_section(value):
         _need(value["state_volume_layout"] == DIRECT_LAYOUT and "filesystem_uuid" in value,
               "direct crypt mapping observation requires an explicit layout and a filesystem UUID")
         fields += ("state_volume_layout",)
+    leaf = type(value) is dict and "observe_backing_leaf" in value
+    if leaf:
+        _need(direct and value["observe_backing_leaf"] is True, "backing leaf observation requires explicit direct layout")
+        fields += ("observe_backing_leaf",)
     _keys(value, fields)
     _need(value["store"] == str(custody.STORE) and value["receipt_directory"] == str(custody.RECEIPTS),
           "fixed private sensor evidence destinations required")
@@ -56,6 +61,10 @@ def validate_section(value):
         from . import pi_core_state_dm_mapping
         _need(callable(pi_core_state_dm_mapping.capture_dm_mapping) and
               callable(pi_core_state_dm_mapping.verify_dm_mapping), "direct crypt mapping implementation missing")
+    if leaf:
+        from . import pi_core_state_backing_leaf
+        _need(callable(pi_core_state_backing_leaf.capture_backing_leaf) and
+              callable(pi_core_state_backing_leaf.verify_backing_leaf), "backing leaf implementation missing")
     return value
 
 
@@ -71,7 +80,8 @@ def from_held_plan(inputs, path, plan, plan_digest, host_digest, records, source
           _uint(host_observation.get("pid"), high=1 << 31) == os.getpid(), "sensor manager differs from held host")
     section = validate_section(plan[FIELD])
     direct = "state_volume_layout" in section
-    for name in _SOURCES + (_DM_SOURCES if direct else ()):
+    leaf = section.get("observe_backing_leaf") is True
+    for name in _SOURCES + (_DM_SOURCES if direct else ()) + (_LEAF_SOURCES if leaf else ()):
         p = "opt/aragorn/src/aragorn/" + name + ".py"
         pin = _pin(source_digests.get(p))
         _need(sum(row == {"module": "aragorn." + name, "path": p, "digest": pin} for row in records) == 1,
@@ -85,21 +95,23 @@ def from_held_plan(inputs, path, plan, plan_digest, host_digest, records, source
                    launch_digest=_pin(plan["launch"]["digest"]),
                    configuration_digest=_pin(plan["service_configuration"]["configurations"]["digest"]))
     return SensorStateRequest(_SEAL, inputs, canonical_json(binding), host_observation["pid"],
-                              config["carrier"]["device"], section.get("filesystem_uuid"), direct)
+                              config["carrier"]["device"], section.get("filesystem_uuid"), direct, leaf)
 
 
 class SensorStateRequest:
     """Thread- and deadline-bound single-use read request; not a service principal."""
     __slots__ = ("_seal", "_inputs", "_raw", "_thread", "_state", "_deadline", "_roots", "_manager_pid",
-                 "_config_device", "_filesystem_uuid", "_direct")
+                 "_config_device", "_filesystem_uuid", "_direct", "_leaf")
 
-    def __init__(self, seal, inputs, raw, manager_pid, config_device, filesystem_uuid=None, direct=False):
+    def __init__(self, seal, inputs, raw, manager_pid, config_device, filesystem_uuid=None, direct=False, leaf=False):
         _need(seal is _SEAL, "protected sensor plan required")
         self._seal, self._inputs, self._raw, self._manager_pid = seal, inputs, raw, manager_pid
         self._config_device = _dev(config_device)
         self._filesystem_uuid = None if filesystem_uuid is None else _uuid(filesystem_uuid)
         _need(type(direct) is bool and (not direct or self._filesystem_uuid is not None),
               "direct crypt mapping observation requires protected filesystem UUID")
+        _need(type(leaf) is bool and (not leaf or direct), "backing leaf requires direct crypt mapping")
+        self._leaf = leaf
         self._direct = direct
         self._thread, self._state, self._roots, self._deadline = threading.get_ident(), "new", (), None
 
@@ -142,7 +154,8 @@ class SensorStateRequest:
         uuid_check = self._filesystem_uuid is not None
         view, manager, sensor = observer.capture_sensor_state(identity=identity, guard=guard, deadline=deadline,
             **({"uuid_storage": binding["storage"]} if uuid_check else {}),
-            **({"observe_dm_mapping": True} if self._direct else {}))
+            **({"observe_dm_mapping": True} if self._direct else {}),
+            **({"observe_backing_leaf": True} if self._leaf else {}))
         _same(guard(deadline=deadline), identity, "sensor generation changed after observation")
         _need(type(manager) is bytes and type(sensor) is bytes and 0 < len(manager) <= 1 << 20
               and 0 < len(sensor) <= 1 << 20 and type(view) is dict, "incomplete original sensor observation")
@@ -152,12 +165,18 @@ class SensorStateRequest:
         ok = True
         try:
             replay = evidence.verify_sensor_state(view, manager, sensor, identity=identity, storage=binding["storage"],
-                expected_filesystem_uuid=self._filesystem_uuid, **({"require_direct_crypt_mapping": True} if self._direct else {}))
+                expected_filesystem_uuid=self._filesystem_uuid, **({"require_direct_crypt_mapping": True} if self._direct else {}),
+                **({"require_backing_leaf": True} if self._leaf else {}))
             if self._direct:
-                _need(view.get("schema") == "aragorn/pi-core-sensor-state-view/v3" and
+                version = 4 if self._leaf else 3
+                _need(view.get("schema") == f"aragorn/pi-core-sensor-state-view/v{version}" and
                       replay.get("active_dm_crypt_single_backing_matched") is True and
                       replay.get("state_filesystem_uuid_matched") is True,
                       "missing directly observed crypt mapping or mounted filesystem UUID")
+            if self._leaf:
+                _need(replay.get("kernel_whole_disk_leaf_matched") is True,
+                      "missing whole-disk leaf observation for the mapping dependency")
+                _uint(replay.get("observed_backing_diskseq"))
             _need(replay["sensor_read_only_bind_matched"] is True and replay["manager"]["pid"] == self._manager_pid,
                   "sensor state or manager differs from the held invocation")
             _same(replay["clock"], binding["clock"], "sensor observation clock differs from approved plan")

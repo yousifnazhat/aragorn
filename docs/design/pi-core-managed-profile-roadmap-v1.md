@@ -162,6 +162,10 @@ the mounted state filesystem to its active encryption target and sole kernel
 backing device in offline replay. The V1 design is a single directly attached
 LUKS2 volume with an on-device header. Proving the physical attachment, header
 used at unlock, exclusive writer and fresh recovery head is still required.
+[B79](../phase3/coordinator/pi-core-state-backing-leaf-batch-79.md) additionally
+checks that the dependency is a whole disk with no lower block devices reported
+by the guest kernel. Neither a disk sequence number nor an empty dependency
+list distinguishes a physical attachment from a virtual or remote backend.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

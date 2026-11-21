@@ -15,6 +15,7 @@ UNIT = "aragorn-pi-sensor.service"
 VIEW = "aragorn/pi-core-sensor-state-view/v1"
 UUID_VIEW = "aragorn/pi-core-sensor-state-view/v2"
 DM_VIEW = "aragorn/pi-core-sensor-state-view/v3"
+LEAF_VIEW = "aragorn/pi-core-sensor-state-view/v4"
 _IDENTITY = ("role", "unit", "pid", "start_ticks", "uid", "gid", "invocation_id")
 
 
@@ -58,18 +59,26 @@ def verify_dm_mapping(record, *, expected_device, expected_backing_device):
     return verify(record, expected_device=expected_device, expected_backing_device=expected_backing_device)
 
 
+def verify_backing_leaf(record, *, expected_backing_device):
+    from .pi_core_state_backing_leaf import verify_backing_leaf as verify
+    return verify(record, expected_backing_device=expected_backing_device)
+
+
 def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, expected_filesystem_uuid=None,
-                        require_direct_crypt_mapping=False):
+                        require_direct_crypt_mapping=False, require_backing_leaf=False):
     """Validate actual observer projections against the caller's protected service generation and mapping."""
     has_uuid = expected_filesystem_uuid is not None
     _need(type(require_direct_crypt_mapping) is bool and (not require_direct_crypt_mapping or has_uuid),
           "direct crypt mapping requires an approved mounted filesystem UUID")
+    _need(type(require_backing_leaf) is bool and (not require_backing_leaf or require_direct_crypt_mapping),
+          "backing-leaf replay requires the direct crypt mapping")
     fields = ("schema", "identity", "manager", "sensor", "clock", "sensor_cgroup", "opened_boottime_ns",
               "closed_boottime_ns", "manager_state", "sensor_targets", "manager_mountinfo_digest", "sensor_mountinfo_digest")
     _keys(view, fields + (("filesystem_uuid_observation",) if has_uuid else ()) +
-          (("dm_mapping_observation",) if require_direct_crypt_mapping else ()))
-    _need(view["schema"] == (DM_VIEW if require_direct_crypt_mapping else UUID_VIEW if has_uuid else VIEW)
-          and view["sensor_cgroup"] == "0::/system.slice/" + UNIT + "\n",
+          (("dm_mapping_observation",) if require_direct_crypt_mapping else ()) +
+          (("backing_leaf_observation",) if require_backing_leaf else ()))
+    want_schema = LEAF_VIEW if require_backing_leaf else DM_VIEW if require_direct_crypt_mapping else UUID_VIEW if has_uuid else VIEW
+    _need(view["schema"] == want_schema and view["sensor_cgroup"] == "0::/system.slice/" + UNIT + "\n",
           "unknown sensor record or incorrect unified cgroup")
     _validate_identity(identity)
     _same(view["identity"], identity, "sensor lifecycle generation differs")
@@ -131,4 +140,27 @@ def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, exp
         result.update(active_dm_crypt_single_backing_matched=True, observed_mapping_device=verified["device"],
                       observed_sole_kernel_dependency=verified["backing_devices"][0], encryption_uuid_measured=False,
                       inline_luks2_header_verified=False, physical_backing_identity_verified=False)
+        if require_backing_leaf:
+            edges = view["backing_leaf_observation"]
+            _keys(edges, ("before", "after"))
+            leaves = {edge: verify_backing_leaf(edges[edge], expected_backing_device=mappings[edge]["backing_devices"][0])
+                      for edge in ("before", "after")}
+            # The raw manager mount inventory is already digest-bound to this view.
+            # Never accept a stable leaf record imported from another sysfs mount.
+            rows = direct_mount_inventory(manager_raw)
+            sysfs = rows.get("/sys")
+            _need(sysfs is not None and sysfs.filesystem == b"sysfs" and sysfs.root == "/"
+                  and sysfs.parent == rows["/"].mount_id, "missing direct manager sysfs mount")
+            index = "/sys/dev/block/" + verified["backing_devices"][0]
+            _need(not any(p in ("/sys/dev", "/sys/dev/block", "/sys/devices", index) or p.startswith(index + "/")
+                          for p in rows), "overmount on the backing-device sysfs index")
+            for record in edges.values():
+                for bound in ("before", "after"):
+                    sample = record[bound]
+                    _same([sample["sysfs_mount_id"], sample["sysfs_device"]], [sysfs.mount_id, sysfs.device],
+                          "backing leaf is not from the manager's recorded sysfs mount")
+            _same(edges["before"], edges["after"], "original backing-leaf evidence changed between bounds")
+            _same(leaves["before"], leaves["after"], "decoded backing leaf changed between bounds")
+            result.update(kernel_whole_disk_leaf_matched=True, observed_backing_diskseq=_uint(leaves["before"]["diskseq"]),
+                          physical_attachment_verified=False, authenticated_unlock_verified=False)
     return result

@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [whole-disk backing observation, batch 79](pi-core-state-backing-leaf-batch-79.md).**
+V4 joins the same disk incarnation and its sysfs mount to the approved
+dm-crypt mapping. Partitions and visible stacked block devices do not pass.
+The disk contents, original unlock, external attachment and writer remain unproven.
+
 **D2 — [direct encrypted-state mapping, batch 78](pi-core-direct-state-mapping-batch-78.md).**
 The managed V1 layout is a single directly attached LUKS2 device with its
 header on that device. A protected caller and separate reader now compare

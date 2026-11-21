@@ -20,6 +20,7 @@ from .pi_core_state_mounts import ACTION, ANCHOR, PROVIDER, verify_mounts
 SCHEMA = "aragorn/pi-core-sensor-state-view/v1"
 UUID_SCHEMA = "aragorn/pi-core-sensor-state-view/v2"
 DM_SCHEMA = "aragorn/pi-core-sensor-state-view/v3"
+LEAF_SCHEMA = "aragorn/pi-core-sensor-state-view/v4"
 _FS_IOC_GETFSUUID = 0x80111500  # ARM64 Linux _IOR(0x15, 0, struct fsuuid2)
 _STATE_MAGIC = {"ext4": 0xef53, "xfs": 0x58465342}
 _UNIT = "aragorn-pi-sensor.service"
@@ -139,7 +140,13 @@ def capture_dm_mapping(expected_device, expected_backing_device, *, deadline):
     return capture(expected_device, expected_backing_device, deadline=deadline)
 
 
-def _edge(stack, subjects, mroot, sroot, held, roles, mount, deadline, uuid_storage=None, observe_dm_mapping=False):
+def capture_backing_leaf(expected_backing_device, *, deadline):
+    from .pi_core_state_backing_leaf import capture_backing_leaf as capture
+    return capture(expected_backing_device, deadline=deadline)
+
+
+def _edge(stack, subjects, mroot, sroot, held, roles, mount, deadline, uuid_storage=None, observe_dm_mapping=False,
+          observe_backing_leaf=False, *, opening_dependency=None):
     # Compare fresh component walks to all the original descriptors, not just
     # a pathname string or a fresh inode from an independently resolved root.
     manager = kernel._manager_state_stats(held[0])
@@ -160,11 +167,29 @@ def _edge(stack, subjects, mroot, sroot, held, roles, mount, deadline, uuid_stor
             _same(measured, manager[ANCHOR], "mapping anchor changed before capture")
             _need(measured["dev"] == uuid_storage["device"] and measured["rdev"] == "0:0",
                   "mapping source differs from the mounted state directory")
+            # At the closing edge, sample the opening mapping's decoded dependency
+            # *before* the final mapping query. Both sysfs samples are inside the
+            # original B78 bracket; no third device-mapper inquiry is needed.
+            if observe_backing_leaf and opening_dependency is not None:
+                leaf = capture_backing_leaf(opening_dependency, deadline=deadline)
+                kernel._check(deadline)
             mapping = capture_dm_mapping(measured["dev"], uuid_storage["backing_devices"][0], deadline=deadline)
             kernel._check(deadline)
             _need(type(mapping) is dict, "missing raw device-mapper observation")
-            _same(kernel._stat(anchor, owner=True), measured, "mapping anchor changed during capture")
             result = (*result, mapping)
+            if observe_backing_leaf:
+                from .pi_core_state_dm_mapping import verify_dm_mapping
+                decoded = verify_dm_mapping(mapping, expected_device=measured["dev"],
+                                            expected_backing_device=uuid_storage["backing_devices"][0])
+                dependency, = decoded["backing_devices"]
+                if opening_dependency is None:
+                    leaf = capture_backing_leaf(dependency, deadline=deadline)
+                else:
+                    _same(dependency, opening_dependency, "backing device changed during leaf observations")
+                kernel._check(deadline)
+                _need(type(leaf) is dict, "missing raw backing-leaf observation")
+                result = (*result, leaf, dependency)
+            _same(kernel._stat(anchor, owner=True), measured, "mapping anchor changed during capture")
         fresh_anchor = kernel._manager_state_fds(stack, mroot)[ANCHOR]
         _same(kernel._stat(fresh_anchor, owner=True), manager[ANCHOR], "named UUID anchor changed during observation")
         _need(_streams(roles, mount, deadline) == raw, "mount streams changed during UUID observation")
@@ -191,12 +216,15 @@ def _streams(roles, mount, deadline):
     return raw
 
 
-def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observe_dm_mapping=False):
+def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observe_dm_mapping=False,
+                         observe_backing_leaf=False):
     """The protected caller supplies a live pidfd/InvocationID guard; the sensor cannot nominate itself."""
     expected = _identity(identity)
     storage = None if uuid_storage is None else _uuid_storage(uuid_storage)
     _need(type(observe_dm_mapping) is bool and (not observe_dm_mapping or
           (storage is not None and len(storage["backing_devices"]) == 1)), "one approved state backing device required")
+    _need(type(observe_backing_leaf) is bool and (not observe_backing_leaf or observe_dm_mapping),
+          "backing-leaf observation requires the direct crypt mapping")
     kernel._check(deadline)
     kernel._platform()
     kernel._generation(expected["pid"], expected["start_ticks"])
@@ -209,9 +237,11 @@ def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observ
         first, mroot, sroot = _subjects(stack, *args)
         held = kernel._manager_state_fds(stack, mroot), _action_fds(stack, sroot)
         with ExitStack() as edge:
-            before = _edge(edge, first, mroot, sroot, held, roles, mount, deadline, storage, observe_dm_mapping)
+            before = _edge(edge, first, mroot, sroot, held, roles, mount, deadline, storage, observe_dm_mapping,
+                           observe_backing_leaf)
         with ExitStack() as edge:
-            after = _edge(edge, *_subjects(edge, *args), held, roles, mount, deadline, storage, observe_dm_mapping)
+            after = _edge(edge, *_subjects(edge, *args), held, roles, mount, deadline, storage, observe_dm_mapping,
+                          observe_backing_leaf, opening_dependency=before[7] if observe_backing_leaf else None)
         _need(before == after, "sensor state, namespace, identities, or mount streams changed")
         end = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
         _need(start > 0 and 0 < end - start <= 5_000_000_000, "sensor capture outside observation window")
@@ -230,6 +260,9 @@ def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observ
         if observe_dm_mapping:
             _same(before[5], after[5], "device-mapper metadata changed between captures")
             view.update(schema=DM_SCHEMA, dm_mapping_observation={"before": before[5], "after": after[5]})
+        if observe_backing_leaf:
+            _same(before[6], after[6], "kernel backing leaf changed between captures")
+            view.update(schema=LEAF_SCHEMA, backing_leaf_observation={"before": before[6], "after": after[6]})
     kernel._check(deadline)
     return view, raw["manager"], raw["sensor"]
 
@@ -239,11 +272,13 @@ def hold_sensor_mount_guard(*, identity, view, manager_raw, sensor_raw, guard, d
     """Sample the owned namespaces at each publication boundary. Not continuous monitoring."""
     expected = _identity(identity)
     _same(view["identity"], expected, "foreign sensor capture owner")
-    has_dm = view["schema"] == DM_SCHEMA
-    _need(view["schema"] in (SCHEMA, UUID_SCHEMA, DM_SCHEMA) and
-          ("filesystem_uuid_observation" in view) == (view["schema"] in (UUID_SCHEMA, DM_SCHEMA)) and
-          ("dm_mapping_observation" in view) == (view["schema"] == DM_SCHEMA), "foreign sensor observation")
-    if view["schema"] in (UUID_SCHEMA, DM_SCHEMA):
+    schema = view["schema"]
+    has_dm, has_leaf = schema in (DM_SCHEMA, LEAF_SCHEMA), schema == LEAF_SCHEMA
+    _need(schema in (SCHEMA, UUID_SCHEMA, DM_SCHEMA, LEAF_SCHEMA) and
+          ("filesystem_uuid_observation" in view) == (schema != SCHEMA) and
+          ("dm_mapping_observation" in view) == has_dm and
+          ("backing_leaf_observation" in view) == has_leaf, "foreign sensor observation")
+    if schema != SCHEMA:
         u = view["filesystem_uuid_observation"]
         _keys(u, ("before", "after"))
         _need(type(u["before"]) is str and re.fullmatch("[0-9a-f]{34}", u["before"])
@@ -253,6 +288,11 @@ def hold_sensor_mount_guard(*, identity, view, manager_raw, sensor_raw, guard, d
         _keys(edges, ("before", "after"))
         _need(type(edges["before"]) is dict, "missing mapping observations")
         _same(edges["before"], edges["after"], "unstable device-mapper observation")
+    if has_leaf:
+        edges = view["backing_leaf_observation"]
+        _keys(edges, ("before", "after"))
+        _need(type(edges["before"]) is dict, "missing kernel backing-leaf observations")
+        _same(edges["before"], edges["after"], "unstable kernel backing leaf")
     raw = {"manager": manager_raw, "sensor": sensor_raw}
     for role, data in raw.items():
         _need(type(data) is bytes and 0 < len(data) <= 1 << 20 and data.endswith(b"\n")

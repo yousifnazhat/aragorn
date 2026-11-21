@@ -1,0 +1,8 @@
+{
+  "schema": "aragorn/pi-core-managed-payload/v1",
+  "payload_sha256": "efc1b36a0a033992805cb60cbca14e3bfe5d4f21fb5e58c9d3ee80c0b1bb3a24",
+  "host_profile_sha256": "f8dc164c7feb59fe326597fdfc10b2526d373e685f50e3be83dfae756311edbd",
+  "manifest_sha256": "f9a3aa3408bccd594a8cc1a0c80000f01eefa243789d49379e7f0e5e2f9f73e4",
+  "binding_sha256": "242d3aa1eda96eec5bc88f2107a019305ce5a4765318b78c344748905cace610",
+  "layout_receipt_sha256": "13c6218c968c7d4ebe7bd91ab709e3aca30452f5f30885934e82c1495fc40043"
+}

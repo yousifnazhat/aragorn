@@ -134,6 +134,9 @@ and compares them with the independent archive. No guest evidence was acquired.
 the configuration disk to its three protected readers. Each checks the approved
 bytes and guest device before use. Neither an actual attachment nor isolation
 from Pi has been demonstrated.
+[B69](../phase3/coordinator/pi-core-managed-guest-inventory-batch-69.md) places
+those reviewed sources in both the manager and the service runtime, with a
+single pinned guest payload. Installed observation remains outstanding.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

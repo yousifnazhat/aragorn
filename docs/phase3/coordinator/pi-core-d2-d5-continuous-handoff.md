@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [updated manager and service inventories, batch 94](pi-core-managed-inventories-batch-94.md).**
+Use the four retained B94 documents and the signed B93 source donor for the next
+common guest. They include the direct-volume readers and stopped-worker socket
+checks. They do not authorize the changed observer under the old worker plan.
+
 **D2 — [recorded action and terminal grant replay, batch 93](pi-core-retained-action-replay-batch-93.md).**
 Use the original closed native action owner, linked private index, control
 records and B77 send boundaries. No outcome here establishes physical effect.

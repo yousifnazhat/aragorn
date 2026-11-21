@@ -285,7 +285,10 @@ class NativeActionEvidenceTests(unittest.TestCase):
 
     def complete(self, owner):
         owner.retain("REQUEST_CONTEXT", self.context)
-        owner.complete(done=self.done, sensor_done=self.sensor_done, result=self.result)
+        # These B31 tests start at the authenticated terminal packets and exercise the
+        # locked broker readback. B77 exercises the real preceding CHECK/CURRENT path.
+        with mock.patch.object(owner, "_finish_current_sends"):
+            owner.complete(done=self.done, sensor_done=self.sensor_done, result=self.result)
 
     def run_owner(self):
         with subject.hold_native_action_evidence(self.custody) as owner:

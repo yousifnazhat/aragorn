@@ -36,7 +36,7 @@ class ActionFixture(fixtures.Fixture):
 
 class ActionEvidenceStoreTests(ActionFixture):
     def test_exact_action_schema_kinds_and_ordered_private_references(self):
-        kinds = ("REQUEST_FRAME", "REQUEST_CONTEXT", "CHECK", "CURRENT_ATTEMPT", "ACTION_DONE",
+        kinds = ("REQUEST_FRAME", "REQUEST_CONTEXT", "CHECK", "CURRENT_ATTEMPT", "CURRENT_SEND_SUMMARY", "ACTION_DONE",
                  "SENSOR_DONE", "ACTION_RESULT", "CONTROL_READBACK", "FAILURE")
         self.assertEqual(subject._ACTION_KINDS, frozenset(kinds))
         with self.hold() as owner:

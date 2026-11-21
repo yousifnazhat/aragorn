@@ -164,6 +164,9 @@ been run or qualified by this change.
 connects protected installed-tree measurement to the public install/update
 report and an independent offline comparison. Worker consumption and installed
 evidence remain separate requirements.
+[D3 batch 77](../phase3/coordinator/pi-core-action-current-boundary-batch-77.md)
+connects the broker action check to its retained source trace and local send
+return. It does not establish overall sensor health, sink results or timing.
 [D4 batch 57](../phase3/coordinator/pi-core-serial-measurements-batch-57.md)
 rejects overlapping reported decision/task windows across the managed campaign;
 there is still no freeze or measured campaign.

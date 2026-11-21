@@ -179,7 +179,7 @@ class PiNativeRequestCustody:
         _require(observer is self._source_observer and
                  type(observer) is PiSourceObserver and observer._owned is owned,
                  "native request requires its exact held source observer")
-        observer.guard_source_health(activation=self._activation, deadline=self._deadline)
+        return observer.guard_source_health(activation=self._activation, deadline=self._deadline)
 
     def retire_requests(self):
         """Called only after both authenticated terminal results have joined."""

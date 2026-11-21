@@ -240,6 +240,15 @@ defines where action/provider state persists outside Pi, how fresh installs
 differ from restarts, and why a restored backup cannot revive grant authority.
 It is a successor design, not a change to the compatibility-boot profile.
 
+For V1 the operator approved **one directly attached LUKS2 state volume, with
+its header on that same device**. Refuse detached headers, stacked or multiple
+backings, and unknown layouts. A mounted filesystem UUID and a single active
+kernel encryption target are necessary observations, not proof that this
+device supplied the header at unlock. Require independent attachment identity,
+same-device header and unlock evidence, exclusive writer and a current external
+recovery head before admitting state. This choice does not nominate storage,
+provide a key or authorize activation.
+
 Admission denial/error/incomplete closure prevents launch. Missing identity,
 expired authority, stale policy, unknown/lost health and revocation prevent new
 protected effects. Denial-only behavior is insufficient for product usefulness.

@@ -7,13 +7,14 @@ from .pi_core_manager_state_view import _object, verify_manager_state
 from .pi_core_configuration_carrier import _mounts as carrier_mounts
 from .pi_core_state_admission import _dev, _keys, _need, _pin, _same, _uint, _uuid
 from .pi_core_state_masks import _subject
-from .pi_core_state_mounts import ACTION, direct_mount_inventory, verify_mounts
+from .pi_core_state_mounts import ACTION, ANCHOR, direct_mount_inventory, verify_mounts
 from .pi_core_stopped_mask_view import _check
 
 
 UNIT = "aragorn-pi-sensor.service"
 VIEW = "aragorn/pi-core-sensor-state-view/v1"
 UUID_VIEW = "aragorn/pi-core-sensor-state-view/v2"
+DM_VIEW = "aragorn/pi-core-sensor-state-view/v3"
 _IDENTITY = ("role", "unit", "pid", "start_ticks", "uid", "gid", "invocation_id")
 
 
@@ -52,13 +53,22 @@ def validate_sensor_configuration_mounts(manager_raw, sensor_raw, device, *, dea
     _check(deadline)
 
 
-def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, expected_filesystem_uuid=None):
+def verify_dm_mapping(record, *, expected_device, expected_backing_device):
+    from .pi_core_state_dm_mapping import verify_dm_mapping as verify
+    return verify(record, expected_device=expected_device, expected_backing_device=expected_backing_device)
+
+
+def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, expected_filesystem_uuid=None,
+                        require_direct_crypt_mapping=False):
     """Validate actual observer projections against the caller's protected service generation and mapping."""
     has_uuid = expected_filesystem_uuid is not None
+    _need(type(require_direct_crypt_mapping) is bool and (not require_direct_crypt_mapping or has_uuid),
+          "direct crypt mapping requires an approved mounted filesystem UUID")
     fields = ("schema", "identity", "manager", "sensor", "clock", "sensor_cgroup", "opened_boottime_ns",
               "closed_boottime_ns", "manager_state", "sensor_targets", "manager_mountinfo_digest", "sensor_mountinfo_digest")
-    _keys(view, fields + (("filesystem_uuid_observation",) if has_uuid else ()))
-    _need(view["schema"] == (UUID_VIEW if has_uuid else VIEW)
+    _keys(view, fields + (("filesystem_uuid_observation",) if has_uuid else ()) +
+          (("dm_mapping_observation",) if require_direct_crypt_mapping else ()))
+    _need(view["schema"] == (DM_VIEW if require_direct_crypt_mapping else UUID_VIEW if has_uuid else VIEW)
           and view["sensor_cgroup"] == "0::/system.slice/" + UNIT + "\n",
           "unknown sensor record or incorrect unified cgroup")
     _validate_identity(identity)
@@ -96,9 +106,29 @@ def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, exp
         want = (b"\x10" + UUID(_uuid(expected_filesystem_uuid)).bytes).hex()
         _same(view["filesystem_uuid_observation"], {"before": want, "after": want},
               "mounted state filesystem UUID does not match approved identity at both bounds")
-    return dict(status="consistent-offline-records-only", manager=manager, sensor=sensor, clock=clock,
+    result = dict(status="consistent-offline-records-only", manager=manager, sensor=sensor, clock=clock,
                 source_roots=source_roots, manager_targets=manager_targets,
                 sensor_targets={ACTION: dict(source_roots[ACTION], mount_id=sensor_id)},
                 sensor_read_only_bind_matched=True, state_filesystem_uuid_matched=has_uuid,
                 installed_isolation_verified=False, sensor_health_verified=False,
                 activation_authorized=False, recovery_authorized=False, phase3_exit_eligible=False)
+    if require_direct_crypt_mapping:
+        back = storage["backing_devices"]
+        _need(type(back) is list and len(back) == 1 and _dev(back[0]) != _dev(storage["device"]),
+              "mapping requires a single distinct approved backing device")
+        raw_edges = view["dm_mapping_observation"]
+        _keys(raw_edges, ("before", "after"))
+        mappings = {}
+        for edge in ("before", "after"):
+            # verify_manager_state already established the exact mount ID, type and fixed path.
+            anchor = view["manager_state"][edge]["sources"][ANCHOR]
+            _same([anchor["dev"], anchor["rdev"]], [storage["device"], "0:0"],
+                  "mapping device is not the independently observed state anchor")
+            mappings[edge] = verify_dm_mapping(raw_edges[edge], expected_device=anchor["dev"], expected_backing_device=back[0])
+        _same(raw_edges["before"], raw_edges["after"], "original mapping records changed between bounds")
+        _same(mappings["before"], mappings["after"], "verified mapping changed between bounds")
+        verified = mappings["before"]
+        result.update(active_dm_crypt_single_backing_matched=True, observed_mapping_device=verified["device"],
+                      observed_sole_kernel_dependency=verified["backing_devices"][0], encryption_uuid_measured=False,
+                      inline_luks2_header_verified=False, physical_backing_identity_verified=False)
+    return result

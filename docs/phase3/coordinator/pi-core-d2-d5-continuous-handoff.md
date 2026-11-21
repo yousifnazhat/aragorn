@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [join a full admission archive to the stopped observer's receipt, batch 61](pi-core-joined-mask-receipts-batch-61.md).**
+The read-only bridge requires all five expected pins. It checks original
+mountinfo, the mask proof and the device view across both inputs. It does
+not produce a missing head or witness. The protected acquisition of the
+complete walk and roles, release and independent custody still have to happen.
+
 **D2 — [protected host payload changes and worker source plan, batch 60](pi-core-mask-host-successor-batch-60.md).**
 The B59 code and helper now have a read-back host payload delta, ARM64
 interpreter inputs and a matching worker source plan. The compatibility disk

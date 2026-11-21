@@ -228,7 +228,7 @@ def capture_owned_socket_directories(owned, request_dispatch, provider_dispatch,
         return first
 
 
-def _worker_socket_sample(stack, role, mount, owned, stopped, dispatchers, deadline):
+def _worker_socket_sample(stack, role, mount, owned, stopped, dispatchers, bootstrap_pin, deadline):
     # _frame follows only verified kernel magic links, holds this generation's
     # root and namespaces, and requires one stopped task with confined credentials.
     worker, context, root, _ = kernel._frame(stack, role, mount, deadline, kind="worker", ticks=owned.start_ticks)
@@ -253,6 +253,13 @@ def _worker_socket_sample(stack, role, mount, owned, stopped, dispatchers, deadl
               "worker endpoint projection changed, writable, or overmounted")
 
     same(base, base_obj, stopped["bootstrap"]["object"])
+    # The supervisor pinned the named socket at creation, not its sockfs listener inode.
+    sock = kernel._pin(stack, base, "bootstrap.sock")
+    bootstrap = _project(sock, bootstrap_pin, endpoint=True)
+    _meta(bootstrap, stat.S_IFSOCK | 0o660, worker["gid"])
+    _need((bootstrap["dev"], bootstrap["mnt_id"]) == (base_obj["dev"], view_mount) and
+          os.fstatvfs(sock).f_flag & os.ST_RDONLY and all(bootstrap["ino"] != row["endpoint"]["object"]["ino"]
+          for row in stopped["directories"].values()), "worker bootstrap endpoint aliased, writable, or overmounted")
     for (key, (dirname, filename)), dispatch in zip(_ROLES.items(), dispatchers):
         expected = stopped["directories"][key]
         directory = kernel._pin(stack, base, dirname, directory=True)
@@ -286,11 +293,13 @@ def require_stopped_worker_socket_view(owned, stopped, *, deadline):
         return owner, worker, owned.pidfd, owned.immutable_digest, recv["gate_stop_seq"]
 
     first = guard()
+    bootstrap_pin = owned.socket_identity
+    _need(type(bootstrap_pin) is tuple and bootstrap_pin, "missing original named bootstrap socket identity")
     with ExitStack() as held:
         proc, mount = kernel._proc(held)
         role = kernel._role(held, proc, owned.pid, mount)
-        args = (role, mount, owned, stopped, owned.socket_directory_owners, deadline)
+        args = (role, mount, owned, stopped, owned.socket_directory_owners, bootstrap_pin, deadline)
         before = _worker_socket_sample(held, *args)
         with ExitStack() as end:
             _need(_worker_socket_sample(end, *args) == before, "worker root, credentials, namespace or mount changed")
-        _need(guard() == first, "stopped worker or dispatch ownership changed")
+        _need(guard() == first and owned.socket_identity == bootstrap_pin, "stopped worker or dispatch ownership changed")

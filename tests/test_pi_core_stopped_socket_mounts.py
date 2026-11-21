@@ -12,9 +12,10 @@ from tests.test_pi_core_owned_socket_directories import Kernel, sample_socket_ed
 
 _ROOT = "/"
 _BOOT = "/run/aragorn-pi-bootstrap"
+_BOOT_SOCKET = _BOOT + "/bootstrap.sock"
 _REQ = _BOOT + "/requests"
 _PROV = _BOOT + "/provider"
-_LEAVES = {_REQ + "/request.sock", _PROV + "/provider.sock"}
+_LEAVES = {_BOOT_SOCKET, _REQ + "/request.sock", _PROV + "/provider.sock"}
 
 
 class StoppedView:
@@ -24,6 +25,8 @@ class StoppedView:
     def __init__(self):
         k = self.manager = Kernel()
         owned = self.owned = k.own
+        k.objs[7] = dict(k.objs[5], ino=405)
+        owned.socket_identity = sockets.broker._file_identity(k.stat(7))
         owned.started = owned.start_attempted = True
         owned.pid, owned.pidfd, owned.start_ticks = 73, 18, 1173
         owned.invocation, owned.immutable_digest = "b" * 32, "sha256:" + "c" * 64
@@ -45,6 +48,7 @@ class StoppedView:
         self.rows = {_ROOT:dict(k.objs[1], ino=191, mnt_id=502, dev="8:1"),
                      "/run":dict(k.objs[1], ino=390, mnt_id=502, dev="8:1"),
                      _BOOT:dict(k.objs[2], mnt_id=504), _REQ:dict(k.objs[3], mnt_id=504),
+                     _BOOT_SOCKET:dict(k.objs[7], mnt_id=504),
                      _PROV:dict(k.objs[4], mnt_id=504),
                      _REQ + "/request.sock":dict(k.objs[5], mnt_id=504),
                      _PROV + "/provider.sock":dict(k.objs[6], mnt_id=504)}
@@ -148,7 +152,7 @@ class StoppedSocketMountTests(unittest.TestCase):
         self.assertEqual(len(set(fixture.closed)), len(fixture.closed))
 
     def test_substitution_of_a_named_directory_or_a_leaf_refuses_and_releases_handles(self):
-        for path in (_REQ,_PROV,_REQ+"/request.sock",_PROV+"/provider.sock"):
+        for path in (_REQ,_PROV,*sorted(_LEAVES)):
             f = StoppedView()
             f.rows[path]["ino"] += 10
             with self.subTest(path=path), self.assertRaisesRegex(ValueError,"descriptor differs"):
@@ -162,7 +166,7 @@ class StoppedSocketMountTests(unittest.TestCase):
             with self.subTest(writable=path), self.assertRaisesRegex(ValueError,"writable, or overmounted"):
                 f.run()
             self.assertEqual(f.handles,{})
-        for path in (_REQ, _PROV+"/provider.sock"):
+        for path in (_REQ, _PROV+"/provider.sock", _BOOT_SOCKET):
             f = StoppedView()
             f.rows[path]["mnt_id"] += 1  # Same dev/inode alone is not enough for a new bind.
             with self.subTest(overmount=path), self.assertRaisesRegex(ValueError,"writable, or overmounted"):
@@ -170,7 +174,7 @@ class StoppedSocketMountTests(unittest.TestCase):
             self.assertEqual(f.handles,{})
 
     def test_symlinked_ordinary_components_and_same_name_replacement_at_second_edge_fail(self):
-        for path in ("/run",_BOOT,_REQ,_PROV+"/provider.sock"):
+        for path in ("/run",_BOOT,_REQ,_PROV+"/provider.sock",_BOOT_SOCKET):
             f = StoppedView()
             f.links.add(path)
             with self.subTest(link=path), self.assertRaises((ValueError,NotADirectoryError)):
@@ -185,6 +189,30 @@ class StoppedSocketMountTests(unittest.TestCase):
             f.run()
         self.assertEqual(f.frames,2)
         self.assertEqual(f.handles,{})
+
+    def test_bootstrap_vfs_name_must_be_a_distinct_protected_socket_even_when_pinned(self):
+        for changes in ({"ino":402}, {"ino":404}, {"nlink":2}, {"gid":0},
+                        {"mode": stat.S_IFSOCK | 0o666}, {"mode": stat.S_IFREG | 0o660}):
+            f = StoppedView()
+            f.manager.objs[7].update(changes)
+            f.owned.socket_identity = sockets.broker._file_identity(f.manager.stat(7))
+            f.rows[_BOOT_SOCKET] = dict(f.manager.objs[7], mnt_id=504)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                f.run()
+            self.assertFalse(f.handles)
+
+    def test_replacing_both_bootstrap_name_and_original_owner_pin_mid_read_refuses(self):
+        f = StoppedView()
+        def replace(n):
+            if n == 2:
+                f.manager.objs[7]["ino"] += 100
+                f.owned.socket_identity = sockets.broker._file_identity(f.manager.stat(7))
+                f.rows[_BOOT_SOCKET] = dict(f.manager.objs[7], mnt_id=504)
+        f.on_frame = replace
+        with self.assertRaises(ValueError):
+            f.run()
+        self.assertEqual(f.frames, 2)
+        self.assertFalse(f.handles)
 
     def test_match_must_belong_to_original_stop_and_same_worker_root_at_both_edges(self):
         f = StoppedView()

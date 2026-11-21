@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [bootstrap endpoint in the stopped worker's mount, batch 92](pi-core-worker-bootstrap-endpoint-batch-92.md).**
+Verify the supervisor's named socket, not just its parent or the two role
+sockets. This startup guard does not grant access or export new evidence.
+
 **D2 — [read-only state sensor and original role assignment, batch 91](pi-core-configured-sensor-role-batch-91.md).**
 Strict volume replay requires the original service configuration and its
 installation context, not two archives agreeing on the wrong role.

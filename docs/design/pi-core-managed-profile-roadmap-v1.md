@@ -110,6 +110,10 @@ root invocation, installed view, complete evidence and external freshness are no
 [B61](../phase3/coordinator/pi-core-joined-mask-receipts-batch-61.md) cross-checks an
 independently supplied complete B58 archive against the original B59 local
 receipt. It creates no new witness and grants no storage or launch authority.
+[B62](../phase3/coordinator/pi-core-protected-mask-capture-batch-62.md) connects
+the protected coordinator to that observer. Before starting the stopped gate,
+it rechecks the separate one-use release against the original claim. This
+is an offline implementation; B60 does not contain the new coordinator.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

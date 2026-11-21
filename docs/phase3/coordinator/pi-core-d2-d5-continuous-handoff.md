@@ -8,6 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [protected stopped-worker capture caller, batch 62](pi-core-protected-mask-capture-batch-62.md).**
+The wrapper now has a dedicated capture-only route. It requires the installed
+trusted sources and a separately held, one-use release; the operator can
+withdraw it before the final start check. No release was issued or used.
+Pin this wrapper and its changed Python closure in a new offline payload.
+Do not overwrite B60 or treat local receipt retention as an off-host witness.
+
 **D2 — [join a full admission archive to the stopped observer's receipt, batch 61](pi-core-joined-mask-receipts-batch-61.md).**
 The read-only bridge requires all five expected pins. It checks original
 mountinfo, the mask proof and the device view across both inputs. It does

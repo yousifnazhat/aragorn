@@ -809,10 +809,47 @@ def _public_broker_base_install(observation, *, provider=False, initial_policy=F
     return report
 
 
+def _public_mask_capture(value):
+    report = {"schema": "aragorn/pi-core-mask-capture-report/v1", "entry_status": "NOT_RETURNED",
+              "capture_attempted": False, "claim_confirmed": False, "owned_inputs_closed": False,
+              "cleanup_verified": False, "mask_consistent": None, "capture_digest": None,
+              "receipt_digest": None, "activation_authorized": False, "phase3_exit_eligible": False}
+    if value is None:
+        return report
+    fields = set(report) - {"schema", "entry_status"}
+    _require(type(value) is dict and set(value) == fields | {"schema", "status"}
+             and value["schema"] == "aragorn/pi-core-mask-capture-entry/v1"
+             and value["status"] in ("REFUSED", "CLEANUP_HOLD", "CAPTURE_RETAINED_ONLY",
+                                     "CAPTURE_RETAINED_INCONSISTENT")
+             and value["activation_authorized"] is False and value["phase3_exit_eligible"] is False
+             and all(type(value[k]) is bool for k in ("capture_attempted", "claim_confirmed",
+                                                      "owned_inputs_closed", "cleanup_verified")),
+             "invalid capture observation")
+    pins = (value["capture_digest"], value["receipt_digest"])
+    retained = value["status"].startswith("CAPTURE_RETAINED_")
+    if retained or (value["status"] == "CLEANUP_HOLD" and pins != (None, None)):
+        _require(all(type(p) is str and _PIN.fullmatch(p) and int(p[7:], 16) for p in pins)
+                 and pins[0] != pins[1] and type(value["mask_consistent"]) is bool,
+                 "invalid capture pins")
+    else:
+        _require(all(value[k] is None for k in ("capture_digest", "receipt_digest", "mask_consistent")),
+                 "unverified capture pins")
+    if retained:
+        _require(all(value[k] for k in ("capture_attempted", "claim_confirmed", "owned_inputs_closed", "cleanup_verified"))
+                 and value["mask_consistent"] is (value["status"] == "CAPTURE_RETAINED_ONLY"),
+                 "unverified capture result")
+    report.update({k: value[k] for k in fields}, entry_status=value["status"])
+    if not retained:
+        report.update(capture_digest=None, receipt_digest=None, mask_consistent=None)
+    return report
+
+
 def main():
     host = loader = None
     result, observation, phase = 126, None, "PREFLIGHT"
     entry_invoked = False
+    capture = sys.argv[1:2] == ["--capture-stopped-masks"]
+    capture_returned = None
     prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-inventories"
     install = len(sys.argv) > 1 and sys.argv[1] == "--install-bundle"
     broker_prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-broker-control"
@@ -820,15 +857,23 @@ def main():
     initial_policy = len(sys.argv) > 1 and sys.argv[1] == "--initialize-provider-policy"
     base_install = initial_policy or provider_base or (len(sys.argv) > 1 and sys.argv[1] == "--install-broker-base")
     base_success = _PROVIDER_POLICY_OK if initial_policy else _PROVIDER_BASE_OK if provider_base else _ACTION_BASE_OK
-    public = (_public_broker_preparation if broker_prepare else _public_install if install else
+    public = (_public_mask_capture if capture else _public_broker_preparation if broker_prepare else _public_install if install else
               _public_preparation if prepare else _public_observation)
     if base_install:
         public = lambda value: _public_broker_base_install(value, provider=provider_base, initial_policy=initial_policy)
     attempt_field = "base_installation_attempted" if base_install else "installation_attempted" if install else "preparation_attempted" if prepare or broker_prepare else "managed_call_attempted"
-    args = sys.argv[2:] if prepare or install or broker_prepare or base_install else sys.argv[1:]
+    if capture:
+        attempt_field = "capture_attempted"
+    args = sys.argv[2:] if capture or prepare or install or broker_prepare or base_install else sys.argv[1:]
     cleanup = {"source_loader": "NOT_ACQUIRED", "host": "NOT_ACQUIRED"}
     try:
         _flags()
+        if capture:
+            _require(len(args) == 6 and all(type(p) is str and _PIN.fullmatch(p) and int(p[7:], 16)
+                     for p in (args[1], args[3], args[4])) and len({args[1], args[3], args[4]}) == 3,
+                     "capture requires distinct host, plan and release pins")
+            release_digest = args[4]
+            args = args[:4] + args[5:]
         _require(len(args) == 5 and type(args[4]) is str and args[4].isascii() and
                  args[4].isdecimal() and 0 < int(args[4]) < 2**63, "fixed coordinator arguments required")
         profile_path, plan_path = _path(args[0]), _path(args[2])
@@ -844,7 +889,9 @@ def main():
         phase = "SOURCE_BOOTSTRAP"
         cleanup["source_loader"] = "NOT_RETURNED_CLEANUP_UNVERIFIED"
         loader = _bootstrap(host)
-        if broker_prepare or base_install:
+        if capture:
+            from aragorn.pi_core_mask_capture_entry import run
+        elif broker_prepare or base_install:
             from aragorn.pi_core_broker_preparation_entry import run
         elif install:
             from aragorn.pi_core_bundle_install_entry import run
@@ -855,13 +902,17 @@ def main():
         host.guard()
         phase = "ENTRY_CALL"
         entry_invoked = True
-        mode = ({"initialize_provider_policy": True} if initial_policy else {"install_provider_base": True}
+        mode = ({"release_digest": release_digest} if capture else
+                {"initialize_provider_policy": True} if initial_policy else {"install_provider_base": True}
                 if provider_base else {"install_base": True} if base_install else {})
         observation = run(plan_path, args[3], deadline_ns=deadline_ns, source_loader=loader, host_custody=host, **mode)
         phase = "POST_CALL_CUSTODY"
         host.guard()
         report = public(observation)
-        if base_install:
+        if capture:
+            capture_returned = report
+            result = 0 if report["entry_status"] == "CAPTURE_RETAINED_ONLY" else 126
+        elif base_install:
             result = 0 if report["entry_status"] == base_success else 126
         elif broker_prepare:
             result = 0 if report["entry_status"] == "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED" else 126
@@ -877,7 +928,7 @@ def main():
             report["managed_status"] == "BOOTSTRAP_COMPLETE" and report["managed_cleanup_complete"] else 126)
     except BaseException as error:
         if type(error) is PiCoordinatorHostAcquisitionError:
-            cleanup["host"] = error.host_cleanup_status
+            cleanup["host"] = "CLEANUP_HOLD" if capture else error.host_cleanup_status
         if observation is None:
             observation = getattr(error, "observation", None)
         result = 126
@@ -900,12 +951,25 @@ def main():
         attempted = observation.get(attempt_field) if type(observation) is dict else None
         report[attempt_field] = attempted if type(attempted) is bool else None if entry_invoked else False
         phase, result = "REPORT_REFUSED", 126
-    report.update(status=(base_success if base_install else
+    if capture:
+        # A digest is publishable only after *normal* entry return, post-call host guard
+        # and both outer closes. An exception can carry an apparent successful observation.
+        retained = (capture_returned is not None and report == capture_returned and phase == "POST_CALL_CUSTODY"
+                    and all(state == "CLOSED" for state in cleanup.values())
+                    and report["entry_status"] in ("CAPTURE_RETAINED_ONLY", "CAPTURE_RETAINED_INCONSISTENT"))
+        if not retained:
+            result = 126
+            if report["entry_status"].startswith("CAPTURE_RETAINED_") or phase == "WRAPPER_CLEANUP":
+                report["entry_status"] = "CLEANUP_HOLD"
+            report.update(capture_digest=None, receipt_digest=None, mask_consistent=None, cleanup_verified=False)
+        status = report["entry_status"] if retained else "REFUSED_OR_CLEANUP_HOLD"
+    else:
+        status = (base_success if base_install else
                   "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED" if broker_prepare else
                   "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED" if install else
                   "INVENTORIES_PREPARED_NOT_QUALIFIED" if prepare else
-                  "MANAGED_BOOTSTRAP_RETURNED_NOT_QUALIFIED") if result == 0 else "REFUSED_OR_CLEANUP_HOLD",
-                  wrapper_stage=phase, wrapper_cleanup=cleanup, entry_call_attempted=entry_invoked)
+                  "MANAGED_BOOTSTRAP_RETURNED_NOT_QUALIFIED") if result == 0 else "REFUSED_OR_CLEANUP_HOLD"
+    report.update(status=status, wrapper_stage=phase, wrapper_cleanup=cleanup, entry_call_attempted=entry_invoked)
     if prepare and result != 0:
         report.update(artifacts=None, artifact_digests=None)
     print(_canonical(report).decode("ascii"))

@@ -49,8 +49,8 @@ class PipelineCapacityTests(unittest.TestCase):
             json.dumps({"schema": "aragorn/phase3-pipeline/v1", "stages": stages})
         )
 
-    def test_291_stages_are_accepted_in_dependency_order_without_execution(self):
-        stages = self.stages(291)
+    def test_292_stages_are_accepted_in_dependency_order_without_execution(self):
+        stages = self.stages(292)
         self.write_registry(stages)
         index, ordered = pipeline.load_registry(self.root)
         expected = [stage["id"] for stage in stages]
@@ -58,13 +58,13 @@ class PipelineCapacityTests(unittest.TestCase):
         self.assertEqual(ordered, expected)
         self.assertFalse((self.root / ".aragorn").exists())
 
-    def test_292_stages_are_refused_without_execution(self):
-        self.write_registry(self.stages(292))
+    def test_293_stages_are_refused_without_execution(self):
+        self.write_registry(self.stages(293))
         with self.assertRaisesRegex(pipeline.PipelineError, "invalid stage inventory"):
             pipeline.load_registry(self.root)
 
     def test_duplicate_stage_at_expanded_capacity_is_refused(self):
-        stages = self.stages(291)
+        stages = self.stages(292)
         stages[-1]["id"] = stages[0]["id"]
         self.write_registry(stages)
         with self.assertRaisesRegex(
@@ -73,7 +73,7 @@ class PipelineCapacityTests(unittest.TestCase):
             pipeline.load_registry(self.root)
 
     def test_dependency_cycle_at_expanded_capacity_is_refused(self):
-        stages = self.stages(291)
+        stages = self.stages(292)
         stages[0]["needs"] = [stages[-1]["id"]]
         self.write_registry(stages)
         with self.assertRaisesRegex(pipeline.PipelineError, "dependency cycle"):

@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [split guest payload, batch 64](pi-core-split-guest-payload-batch-64.md).**
+The image assembler now has one complete host/worker input tree including
+the five empty protected destinations. Reuse it. Next join the protected
+service image/configuration and the separate storage topology before rebuilding
+the media. The tree has not been installed or mounted.
+
 **D2 — [protected capture caller packaged, batch 63](pi-core-protected-capture-payload-batch-63.md).**
 Use the cumulative B41-to-B62 changed files and updated host profile; the
 worker bundle, source plan, and helper input bytes did not change. Do not

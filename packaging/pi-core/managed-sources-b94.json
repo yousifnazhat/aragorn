@@ -1,0 +1,115 @@
+{
+  "schema": "aragorn/pi-core-managed-source-successor/v1",
+  "signed_revision": "0aa14e486199b33b84e03bf62ae46c6ca790feaf",
+  "signed_tree": "82435c0e59ed43d6170ebc6d891241e7c7bacee6",
+  "prior_host_profile_digest": "sha256:33e26ff2934733f75614d379a810f188d4b9b01f16c9f7e036368b7623ba7d7c",
+  "prior_service_manifest_digest": "sha256:7e74b1096e2b1f4faeba4c6b4db76b11dc6e90421a5c96c593d2faa6e786d55f",
+  "prior_service_binding_digest": "sha256:e552608746e862534e64071ce68baefbd24f6612c3bea041cde44b188a3ddb45",
+  "host_changes": {
+    "/opt/aragorn/bin/coordinator.py": {
+      "path": "/opt/aragorn/bin/coordinator.py",
+      "size": 63371,
+      "digest": "sha256:0333694744366d04d060431db3ef47f766d09150d26a1cec4fe6554b43f22eb5"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_action_evidence.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_action_evidence.py",
+      "size": 28477,
+      "digest": "sha256:14bfce513fe7c8aa9b0f75376a28cb5f6133ab55ea393ce48d6192439efbf01b"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_mask_capture_entry.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_mask_capture_entry.py",
+      "size": 14041,
+      "digest": "sha256:8b438621b7b0871bf1bd1b0cb791f144e7650723d66b6ae453608bee2d5ee8dc"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_native_request.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_native_request.py",
+      "size": 28012,
+      "digest": "sha256:07456da0eff6ddbcc8c08faf66ec7b48290125b9f06f19910465b886b0a697c0"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_native_supervisor.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_native_supervisor.py",
+      "size": 62581,
+      "digest": "sha256:faa76923b484b4f7c5832ff1fcdf3ae808194974b978aea2dce554ff9f40f524"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_node_source_observer.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_node_source_observer.py",
+      "size": 59309,
+      "digest": "sha256:82851dcea5299a9455574694ee00f62a2e2d1647744a80fdafb7524ac6736dcd"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_owned_socket_directories.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_owned_socket_directories.py",
+      "size": 18253,
+      "digest": "sha256:b1dc4e8cbe8b63d1f6ec367960f9123aa18506bf1751761a74b56c9162581061"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_provider_evidence.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_provider_evidence.py",
+      "size": 19555,
+      "digest": "sha256:4023722e94ee2b3d5d98fe2e6a7e596e54325234dc1d152b9760fa0d361af2c9"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_request_handoff.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_request_handoff.py",
+      "size": 26750,
+      "digest": "sha256:03e0ef0c1f3d947b8726e08b779e5cbdbfa74f218ecd9011b92c7eba104e4aca"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_sensor_state_entry.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_sensor_state_entry.py",
+      "size": 15400,
+      "digest": "sha256:b28c62481ebf1e2e4b3a62a0a3c5a942bb0af31b04c2188b9ddc52256891f978"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_sensor_state_evidence.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_sensor_state_evidence.py",
+      "size": 13182,
+      "digest": "sha256:197d4dd64e003fe94901d29a92a0b11e077c4aa64aefacf59d1e8169612b95c8"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_sensor_state_observer.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_sensor_state_observer.py",
+      "size": 21567,
+      "digest": "sha256:bfe24f25a1756afe01077d251b7204a13070b441c321b3e7736e2d16dafe6bb0"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_state_backing_leaf.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_state_backing_leaf.py",
+      "size": 9886,
+      "digest": "sha256:78cd227fa50a6e21b8003f70cbc79202e2dcedf39dcb69cbbea2e1e0ca3dfb2c"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_state_dm_mapping.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_state_dm_mapping.py",
+      "size": 9241,
+      "digest": "sha256:87c662913f488161537378b112c5ca8a53fe8a6ade9257be7a4b15c6d0c7e202"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_state_luks_headers.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_state_luks_headers.py",
+      "size": 12051,
+      "digest": "sha256:804147d2de617cbca3f810e694bda021212e8de671976ebb2d5823643371461a"
+    }
+  },
+  "service_changes": {
+    "aragorn/pi_core_action_evidence.py": "sha256:14bfce513fe7c8aa9b0f75376a28cb5f6133ab55ea393ce48d6192439efbf01b",
+    "aragorn/pi_core_native_request.py": "sha256:07456da0eff6ddbcc8c08faf66ec7b48290125b9f06f19910465b886b0a697c0",
+    "aragorn/pi_core_native_supervisor.py": "sha256:faa76923b484b4f7c5832ff1fcdf3ae808194974b978aea2dce554ff9f40f524",
+    "aragorn/pi_core_node_source_observer.py": "sha256:82851dcea5299a9455574694ee00f62a2e2d1647744a80fdafb7524ac6736dcd",
+    "aragorn/pi_core_owned_socket_directories.py": "sha256:b1dc4e8cbe8b63d1f6ec367960f9123aa18506bf1751761a74b56c9162581061",
+    "aragorn/pi_core_provider_evidence.py": "sha256:4023722e94ee2b3d5d98fe2e6a7e596e54325234dc1d152b9760fa0d361af2c9",
+    "aragorn/pi_core_request_handoff.py": "sha256:03e0ef0c1f3d947b8726e08b779e5cbdbfa74f218ecd9011b92c7eba104e4aca",
+    "aragorn/pi_core_sensor_state_entry.py": "sha256:b28c62481ebf1e2e4b3a62a0a3c5a942bb0af31b04c2188b9ddc52256891f978",
+    "aragorn/pi_core_sensor_state_evidence.py": "sha256:197d4dd64e003fe94901d29a92a0b11e077c4aa64aefacf59d1e8169612b95c8",
+    "aragorn/pi_core_sensor_state_observer.py": "sha256:bfe24f25a1756afe01077d251b7204a13070b441c321b3e7736e2d16dafe6bb0",
+    "aragorn/pi_core_state_backing_leaf.py": "sha256:78cd227fa50a6e21b8003f70cbc79202e2dcedf39dcb69cbbea2e1e0ca3dfb2c",
+    "aragorn/pi_core_state_dm_mapping.py": "sha256:87c662913f488161537378b112c5ca8a53fe8a6ade9257be7a4b15c6d0c7e202",
+    "aragorn/pi_core_state_luks_headers.py": "sha256:804147d2de617cbca3f810e694bda021212e8de671976ebb2d5823643371461a"
+  },
+  "host_rows_digest": "sha256:cc7165ebc304ae2e190d7c167929e6fac48cbfd10d6d261cf127bfe8805a7102",
+  "service_inventory_digest": "sha256:083aebf7286aa464caaff349cca7e86fcaa0a6f193b4ced23f675588c158f2e0",
+  "template_digests": {
+    "action.py": "sha256:7b1bf1cd9555a0cc850f8b35414e009040f61c8c4731b93b200eb2fda58aa5ec",
+    "provider.py": "sha256:47bd48d3888841c8748deea9af365c2bd48a1d1365b05c62c33df97113ad877a",
+    "sensor.py": "sha256:d5b49c2ee852ea9ce5142391455043e50f4952d08b3f52dbd79febe30ab4ab9e"
+  },
+  "rendered_wrapper_digests": {
+    "action.py": "sha256:e787b5833fd337af522d75a3d89668697b22ed7c93845c747bef969ea964ffbe",
+    "provider.py": "sha256:c62bf5a9d316c4d5ae678d1d97238ba0af7c866b7f402b50db309926f601a84c",
+    "sensor.py": "sha256:9789cdc0cdf0a02765c64ba10f3d69b4f8e9cf6fee26d133801577245f290890"
+  },
+  "unsupported_import_sites_digest": "sha256:32cecf0e20c5ea831a3973e256815c7a730cb2811b4acf5f55ee3adddb63a7cd",
+  "host_count": 127,
+  "service_count": 118
+}

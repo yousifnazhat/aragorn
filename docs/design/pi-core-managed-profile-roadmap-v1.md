@@ -166,6 +166,10 @@ used at unlock, exclusive writer and fresh recovery head is still required.
 checks that the dependency is a whole disk with no lower block devices reported
 by the guest kernel. Neither a disk sequence number nor an empty dependency
 list distinguishes a physical attachment from a virtual or remote backend.
+[B80](../phase3/coordinator/pi-core-state-header-observation-batch-80.md)
+binds both on-device LUKS2 metadata copies to this disk, approved byte digests
+and the independently nominated encryption UUID. The original unlock, external
+writer and device attachment still need their own evidence.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

@@ -21,6 +21,7 @@ _SOURCES = ("pi_core_sensor_state_entry", "pi_core_sensor_state_observer",
             "pi_core_sensor_state_custody", "pi_core_sensor_state_evidence")
 _DM_SOURCES = ("pi_core_state_dm_mapping",)
 _LEAF_SOURCES = ("pi_core_state_backing_leaf",)
+_HEADER_SOURCES = ("pi_core_state_luks_headers",)
 
 
 def validate_section(value):
@@ -37,6 +38,10 @@ def validate_section(value):
     if leaf:
         _need(direct and value["observe_backing_leaf"] is True, "backing leaf observation requires explicit direct layout")
         fields += ("observe_backing_leaf",)
+    headers = type(value) is dict and "luks_header_profile" in value
+    if headers:
+        _need(leaf, "inline LUKS2 metadata observation requires an explicit whole-disk leaf")
+        fields += ("luks_header_profile",)
     _keys(value, fields)
     _need(value["store"] == str(custody.STORE) and value["receipt_directory"] == str(custody.RECEIPTS),
           "fixed private sensor evidence destinations required")
@@ -65,6 +70,11 @@ def validate_section(value):
         from . import pi_core_state_backing_leaf
         _need(callable(pi_core_state_backing_leaf.capture_backing_leaf) and
               callable(pi_core_state_backing_leaf.verify_backing_leaf), "backing leaf implementation missing")
+    if headers:
+        from .pi_core_state_luks_headers import validate_header_profile
+        profile = value["luks_header_profile"]
+        validate_header_profile(profile)
+        _need(profile["encryption_uuid"] != value["filesystem_uuid"], "LUKS2 and filesystem UUIDs must differ")
     return value
 
 
@@ -81,7 +91,8 @@ def from_held_plan(inputs, path, plan, plan_digest, host_digest, records, source
     section = validate_section(plan[FIELD])
     direct = "state_volume_layout" in section
     leaf = section.get("observe_backing_leaf") is True
-    for name in _SOURCES + (_DM_SOURCES if direct else ()) + (_LEAF_SOURCES if leaf else ()):
+    headers = "luks_header_profile" in section
+    for name in _SOURCES + (_DM_SOURCES if direct else ()) + (_LEAF_SOURCES if leaf else ()) + (_HEADER_SOURCES if headers else ()):
         p = "opt/aragorn/src/aragorn/" + name + ".py"
         pin = _pin(source_digests.get(p))
         _need(sum(row == {"module": "aragorn." + name, "path": p, "digest": pin} for row in records) == 1,
@@ -95,15 +106,17 @@ def from_held_plan(inputs, path, plan, plan_digest, host_digest, records, source
                    launch_digest=_pin(plan["launch"]["digest"]),
                    configuration_digest=_pin(plan["service_configuration"]["configurations"]["digest"]))
     return SensorStateRequest(_SEAL, inputs, canonical_json(binding), host_observation["pid"],
-                              config["carrier"]["device"], section.get("filesystem_uuid"), direct, leaf)
+                              config["carrier"]["device"], section.get("filesystem_uuid"), direct, leaf,
+                              section.get("luks_header_profile"))
 
 
 class SensorStateRequest:
     """Thread- and deadline-bound single-use read request; not a service principal."""
     __slots__ = ("_seal", "_inputs", "_raw", "_thread", "_state", "_deadline", "_roots", "_manager_pid",
-                 "_config_device", "_filesystem_uuid", "_direct", "_leaf")
+                 "_config_device", "_filesystem_uuid", "_direct", "_leaf", "_header_profile_raw")
 
-    def __init__(self, seal, inputs, raw, manager_pid, config_device, filesystem_uuid=None, direct=False, leaf=False):
+    def __init__(self, seal, inputs, raw, manager_pid, config_device, filesystem_uuid=None, direct=False, leaf=False,
+                 luks_header_profile=None):
         _need(seal is _SEAL, "protected sensor plan required")
         self._seal, self._inputs, self._raw, self._manager_pid = seal, inputs, raw, manager_pid
         self._config_device = _dev(config_device)
@@ -113,6 +126,9 @@ class SensorStateRequest:
         _need(type(leaf) is bool and (not leaf or direct), "backing leaf requires direct crypt mapping")
         self._leaf = leaf
         self._direct = direct
+        _need(luks_header_profile is None or leaf, "LUKS2 metadata requires the protected whole-disk leaf")
+        # Keep the validated plan expectation independent of mutable acquisition inputs.
+        self._header_profile_raw = None if luks_header_profile is None else canonical_json(luks_header_profile)
         self._thread, self._state, self._roots, self._deadline = threading.get_ident(), "new", (), None
 
     def _enter(self, state):
@@ -152,10 +168,12 @@ class SensorStateRequest:
         _need(deadline == self._deadline, "sensor observation deadline changed")
         binding = json.loads(self._raw)
         uuid_check = self._filesystem_uuid is not None
+        headers = self._header_profile_raw is not None
         view, manager, sensor = observer.capture_sensor_state(identity=identity, guard=guard, deadline=deadline,
             **({"uuid_storage": binding["storage"]} if uuid_check else {}),
             **({"observe_dm_mapping": True} if self._direct else {}),
-            **({"observe_backing_leaf": True} if self._leaf else {}))
+            **({"observe_backing_leaf": True} if self._leaf else {}),
+            **({"luks_header_profile": json.loads(self._header_profile_raw)} if headers else {}))
         _same(guard(deadline=deadline), identity, "sensor generation changed after observation")
         _need(type(manager) is bytes and type(sensor) is bytes and 0 < len(manager) <= 1 << 20
               and 0 < len(sensor) <= 1 << 20 and type(view) is dict, "incomplete original sensor observation")
@@ -164,11 +182,13 @@ class SensorStateRequest:
                       sensor_mountinfo_digest="sha256:" + hashlib.sha256(sensor).hexdigest())
         ok = True
         try:
+            header_args = {"luks_header_profile": json.loads(self._header_profile_raw)} if headers else {}
+            expected_encryption_uuid = header_args["luks_header_profile"]["encryption_uuid"] if headers else None
             replay = evidence.verify_sensor_state(view, manager, sensor, identity=identity, storage=binding["storage"],
                 expected_filesystem_uuid=self._filesystem_uuid, **({"require_direct_crypt_mapping": True} if self._direct else {}),
-                **({"require_backing_leaf": True} if self._leaf else {}))
+                **({"require_backing_leaf": True} if self._leaf else {}), **header_args)
             if self._direct:
-                version = 4 if self._leaf else 3
+                version = 5 if headers else 4 if self._leaf else 3
                 _need(view.get("schema") == f"aragorn/pi-core-sensor-state-view/v{version}" and
                       replay.get("active_dm_crypt_single_backing_matched") is True and
                       replay.get("state_filesystem_uuid_matched") is True,
@@ -177,6 +197,11 @@ class SensorStateRequest:
                 _need(replay.get("kernel_whole_disk_leaf_matched") is True,
                       "missing whole-disk leaf observation for the mapping dependency")
                 _uint(replay.get("observed_backing_diskseq"))
+            if headers:
+                _need(all(replay.get(k) is True for k in ("current_inline_luks2_metadata_matched",
+                      "encryption_uuid_measured", "inline_luks2_header_verified")) and
+                      replay.get("observed_encryption_uuid") == expected_encryption_uuid,
+                      "current inline LUKS2 metadata differs from the protected expectation")
             _need(replay["sensor_read_only_bind_matched"] is True and replay["manager"]["pid"] == self._manager_pid,
                   "sensor state or manager differs from the held invocation")
             _same(replay["clock"], binding["clock"], "sensor observation clock differs from approved plan")

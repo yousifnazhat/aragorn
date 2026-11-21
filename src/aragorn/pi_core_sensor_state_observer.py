@@ -21,6 +21,7 @@ SCHEMA = "aragorn/pi-core-sensor-state-view/v1"
 UUID_SCHEMA = "aragorn/pi-core-sensor-state-view/v2"
 DM_SCHEMA = "aragorn/pi-core-sensor-state-view/v3"
 LEAF_SCHEMA = "aragorn/pi-core-sensor-state-view/v4"
+LUKS_SCHEMA = "aragorn/pi-core-sensor-state-view/v5"
 _FS_IOC_GETFSUUID = 0x80111500  # ARM64 Linux _IOR(0x15, 0, struct fsuuid2)
 _STATE_MAGIC = {"ext4": 0xef53, "xfs": 0x58465342}
 _UNIT = "aragorn-pi-sensor.service"
@@ -145,6 +146,11 @@ def capture_backing_leaf(expected_backing_device, *, deadline):
     return capture(expected_backing_device, deadline=deadline)
 
 
+def capture_luks_headers(expected_device, expected_diskseq, profile, *, deadline):
+    from .pi_core_state_luks_headers import capture_luks_headers as capture
+    return capture(expected_device, expected_diskseq, profile, deadline=deadline)
+
+
 def _edge(stack, subjects, mroot, sroot, held, roles, mount, deadline, uuid_storage=None, observe_dm_mapping=False,
           observe_backing_leaf=False, *, opening_dependency=None):
     # Compare fresh component walks to all the original descriptors, not just
@@ -217,7 +223,7 @@ def _streams(roles, mount, deadline):
 
 
 def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observe_dm_mapping=False,
-                         observe_backing_leaf=False):
+                         observe_backing_leaf=False, luks_header_profile=None):
     """The protected caller supplies a live pidfd/InvocationID guard; the sensor cannot nominate itself."""
     expected = _identity(identity)
     storage = None if uuid_storage is None else _uuid_storage(uuid_storage)
@@ -225,6 +231,11 @@ def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observ
           (storage is not None and len(storage["backing_devices"]) == 1)), "one approved state backing device required")
     _need(type(observe_backing_leaf) is bool and (not observe_backing_leaf or observe_dm_mapping),
           "backing-leaf observation requires the direct crypt mapping")
+    if luks_header_profile is not None:
+        _need(observe_backing_leaf and type(luks_header_profile) is dict,
+              "pinned LUKS header observation requires the backing-leaf profile")
+        from .pi_core_state_luks_headers import validate_header_profile, verify_luks_headers
+        header_profile = validate_header_profile(luks_header_profile)
     kernel._check(deadline)
     kernel._platform()
     kernel._generation(expected["pid"], expected["start_ticks"])
@@ -239,6 +250,20 @@ def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observ
         with ExitStack() as edge:
             before = _edge(edge, first, mroot, sroot, held, roles, mount, deadline, storage, observe_dm_mapping,
                            observe_backing_leaf)
+        if luks_header_profile is not None:
+            # This is an original, single acquisition, inside both independent
+            # leaf/mapping samples. No device name or diskseq is taken on trust.
+            from .pi_core_state_backing_leaf import verify_backing_leaf
+            leaf = verify_backing_leaf(before[6], expected_backing_device=before[7])
+            diskseq = _uint(leaf["diskseq"])
+            _need(before[4] != "10" + header_profile["encryption_uuid"].replace("-", ""),
+                  "filesystem UUID cannot double as the LUKS header identity")
+            kernel._check(deadline)
+            header = capture_luks_headers(leaf["device"], diskseq, header_profile, deadline=deadline)
+            kernel._check(deadline)
+            # Admit only the sanitized wire shape before producing a retainable view.
+            verify_luks_headers(header, expected_device=leaf["device"], expected_diskseq=diskseq, profile=header_profile)
+            kernel._check(deadline)
         with ExitStack() as edge:
             after = _edge(edge, *_subjects(edge, *args), held, roles, mount, deadline, storage, observe_dm_mapping,
                           observe_backing_leaf, opening_dependency=before[7] if observe_backing_leaf else None)
@@ -263,6 +288,8 @@ def capture_sensor_state(*, identity, guard, deadline, uuid_storage=None, observ
         if observe_backing_leaf:
             _same(before[6], after[6], "kernel backing leaf changed between captures")
             view.update(schema=LEAF_SCHEMA, backing_leaf_observation={"before": before[6], "after": after[6]})
+        if luks_header_profile is not None:
+            view.update(schema=LUKS_SCHEMA, luks_header_observation=header)
     kernel._check(deadline)
     return view, raw["manager"], raw["sensor"]
 
@@ -273,11 +300,15 @@ def hold_sensor_mount_guard(*, identity, view, manager_raw, sensor_raw, guard, d
     expected = _identity(identity)
     _same(view["identity"], expected, "foreign sensor capture owner")
     schema = view["schema"]
-    has_dm, has_leaf = schema in (DM_SCHEMA, LEAF_SCHEMA), schema == LEAF_SCHEMA
-    _need(schema in (SCHEMA, UUID_SCHEMA, DM_SCHEMA, LEAF_SCHEMA) and
+    has_leaf, has_header = schema in (LEAF_SCHEMA, LUKS_SCHEMA), schema == LUKS_SCHEMA
+    has_dm = schema == DM_SCHEMA or has_leaf
+    _need(schema in (SCHEMA, UUID_SCHEMA, DM_SCHEMA, LEAF_SCHEMA, LUKS_SCHEMA) and
           ("filesystem_uuid_observation" in view) == (schema != SCHEMA) and
           ("dm_mapping_observation" in view) == has_dm and
-          ("backing_leaf_observation" in view) == has_leaf, "foreign sensor observation")
+          ("backing_leaf_observation" in view) == has_leaf and
+          ("luks_header_observation" in view) == has_header, "foreign sensor observation")
+    if has_header:
+        _need(type(view["luks_header_observation"]) is dict, "missing pinned LUKS metadata observation")
     if schema != SCHEMA:
         u = view["filesystem_uuid_observation"]
         _keys(u, ("before", "after"))

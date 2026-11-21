@@ -32,6 +32,15 @@ def _device(value):
     return value
 
 
+def _matches_visible_mount(record, devices_by_id):
+    # An inherited /dev/null can come from outside Pi's namespace. A known
+    # mount ID, however, cannot identify two different filesystem devices.
+    mid = record["mnt_id"]
+    if mid in devices_by_id:
+        return record["dev"] == devices_by_id[mid]
+    return stat.S_ISCHR(record["mode"]) and record["rdev"] == "1:3"
+
+
 def _name(s):
     return (type(s) is str and 0 < len(s) <= 255 and s not in {".", ".."} and "/" not in s
             and all(32 <= ord(c) < 127 for c in s))
@@ -105,6 +114,7 @@ def _verify_pi_exposure(evidence, *, verified_masks, device, backing_devices, pi
     _fields(fds, "0", "1", "2")
     for record in fds.values():
         _need(checked_stat(record)[0] == stat.S_IFCHR and record["rdev"] == "1:3", "stdio not /dev/null")
+        _need(_matches_visible_mount(record, by_id), "stdio device differs from its visible mount")
 
     def pinned_directory(record, expected):
         kind, obj = checked_stat(record)
@@ -173,8 +183,7 @@ def _verify_pi_exposure(evidence, *, verified_masks, device, backing_devices, pi
             _fields(member, "stat", "resolved")
             target_kind, target = checked_stat(member["resolved"])
             _need(target_kind != stat.S_IFLNK, "link resolution incomplete")
-            _need(by_id.get(target[2]) == target[0] or
-                  (target_kind == stat.S_IFCHR and member["resolved"]["rdev"] == "1:3"),
+            _need(_matches_visible_mount(member["resolved"], by_id),
                   "link resolves outside worker namespace")
             if target_kind == stat.S_IFDIR:
                 dir_links.add(target)

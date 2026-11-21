@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [stopped-worker receipt consistency, batch 72](pi-core-worker-null-mount-check-batch-72.md).**
+Replay refuses a null handle whose mount ID and filesystem device contradict
+the saved worker mount table. No installed observation or change to B49.
+
 **D2 — [stopped worker's handles, batch 71](pi-core-stopped-worker-handles-batch-71.md).**
 The new protected release covers the actual task, root, prepared version
 directory and three standard handles. The full worker-visible directory walk is

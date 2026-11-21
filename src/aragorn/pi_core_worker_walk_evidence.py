@@ -3,7 +3,7 @@ import re
 import stat
 
 from .pi_core_state_admission import _keys, _need, _same, _uint
-from .pi_core_state_exposure import _device
+from .pi_core_state_exposure import _device, _matches_visible_mount
 from .pi_core_state_masks import _binding, _mount, _stat, _subject
 
 
@@ -55,12 +55,14 @@ def verify_worker_spine(spine, *, binding, view, namespace, worker_mounts):
     _same(held["named_cwd"], held["cwd"], "named installed bundle is not the stopped process cwd")
     _same(held["root"], view["worker_root"], "root differs from independently held mask view")
     _keys(held["fds"], ("0", "1", "2"))
+    devices_by_id = dict(namespace.values())  # From the verified original worker mountinfo.
     for row in held["fds"].values():
         _keys(row, ("dev", "rdev", "mode", "ino", "mnt_id"))
         _uint(row["ino"])
         _uint(row["mnt_id"])
         _need(stat.S_ISCHR(_uint(row["mode"], high=1 << 16)) and row["rdev"] == "1:3"
               and _device(row["dev"]) not in forbidden, "stdio is not a safe null device")
+        _need(_matches_visible_mount(row, devices_by_id), "stdio device differs from its visible mount")
     # stdio can be inherited from the service manager's /dev. Do not demand
     # private-/dev inode or mount equality, and do not synthesize a tree here.
     return {k: spine[k] for k in ("before", "after", "admitted_path")} | {

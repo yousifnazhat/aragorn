@@ -305,8 +305,6 @@ def _broker_control_snapshot(configs, deadline, *, require_available):
                      broker._directory_identity(os.lstat(entry.EFFECT_ROOT / leaf)) ==
                      tuple(record["root_identities"][leaf]), "broker root changed")
         _remaining(deadline)
-        record["status"] = "AVAILABLE_READBACK" if require_available else "PREINSTALLED_CONTROLS_ONLY"
-        return record
     except BaseException as exc:
         failure = exc
         raise
@@ -328,6 +326,17 @@ def _broker_control_snapshot(configs, deadline, *, require_available):
             error = PiServiceLifecycleError("readiness handle cleanup uncertain")
             error.pi_broker_control_snapshot = record
             raise error from cleanup
+    # Do not use a grant that expired while the observation's handles were closing.
+    try:
+        if require_available:
+            grants._require_live_grant(grant, int(time.time()))
+        _remaining(deadline)
+    except BaseException as exc:
+        try: exc.pi_broker_control_snapshot = record
+        except BaseException: pass  # Preserve cancellation even if attachment fails.
+        raise
+    record["status"] = "AVAILABLE_READBACK" if require_available else "PREINSTALLED_CONTROLS_ONLY"
+    return record
 
 
 def _control_cleanup_hold(held, snapshot):

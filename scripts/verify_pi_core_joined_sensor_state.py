@@ -9,7 +9,7 @@ from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.pi_core_configuration_carrier import ROOT as CARRIER_ROOT, validate_carrier
 from aragorn.pi_core_sensor_state_evidence import validate_sensor_configuration_mounts, verify_sensor_state
-from aragorn.pi_core_state_admission import _doc, _keys, _need, _pin, _same, _uuid, verify_state_archive_v2
+from aragorn.pi_core_state_admission import _doc, _keys, _need, _pin, _same, _uint, _uuid, verify_state_archive_v2
 from aragorn.pi_core_state_mounts import ACTION
 from scripts.verify_pi_core_joined_mask_receipts import _separate
 
@@ -24,10 +24,10 @@ def _object(archive, pin, limit, *, stdout_line=False):
 
 def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin, plan_pin, owner_pin,
                               store, receipt_directory, capture_pin, receipt_pin, require_same_manager=False,
-                              require_filesystem_uuid=False, require_direct_crypt_mapping=False):
+                              require_filesystem_uuid=False, require_direct_crypt_mapping=False, require_backing_leaf=False):
     from aragorn.pi_core_sensor_state_custody import RECEIPTS, STORE, replay_sensor_observation, sensor_evidence_mount
     _need(type(archive) is CAS and archive.read_only is True and type(require_same_manager) is bool
-          and type(require_filesystem_uuid) is bool and type(require_direct_crypt_mapping) is bool,
+          and type(require_filesystem_uuid) is bool and type(require_direct_crypt_mapping) is bool and type(require_backing_leaf) is bool,
           "read-only independent evidence store required")
     paths = (archive.root, store, receipt_directory)
     identities = _separate(paths)
@@ -58,10 +58,14 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     c = plan["sensor_state_observation"]
     has_uuid = type(c) is dict and "filesystem_uuid" in c
     direct = type(c) is dict and "state_volume_layout" in c
+    leaf = type(c) is dict and "observe_backing_leaf" in c
     _keys(c, ("attempt_id", "storage", "clock", "store", "receipt_directory") + (("filesystem_uuid",) if has_uuid else ())
-          + (("state_volume_layout",) if direct else ()))
+          + (("state_volume_layout",) if direct else ()) + (("observe_backing_leaf",) if leaf else ()))
     _need(not require_filesystem_uuid or has_uuid, "filesystem UUID observation required; historical protected plan")
     _need(not require_direct_crypt_mapping or direct, "direct crypt mapping observation required; historical protected plan")
+    _need(not require_backing_leaf or leaf, "backing leaf observation required; historical protected plan")
+    _need(not leaf or (c["observe_backing_leaf"] is True and direct and has_uuid),
+          "backing leaf observation requires explicit direct crypt mapping and filesystem UUID")
     uuid_args = {}
     if has_uuid:
         # This value comes from the independently pinned profile and role archive,
@@ -74,6 +78,8 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
               capture["mapping"]["type"] == "dm-crypt" and len(capture["mapping"]["backing_devices"]) == 1,
               "direct crypt mapping requires the approved layout, filesystem UUID and one independent data device")
         uuid_args["require_direct_crypt_mapping"] = True
+    if leaf:
+        uuid_args["require_backing_leaf"] = True
     _same([c["store"], c["receipt_directory"]], [str(STORE), str(RECEIPTS)], "foreign guest evidence destinations")
     config = plan["service_configuration"]
     _keys(config, ("deployment_path", "receipt_digest", "manifest", "configurations", "carrier"))
@@ -99,7 +105,7 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     _same(observed, dict(status="RETAINED_SENSOR_STATE_ONLY", capture_digest=capture_pin, receipt_digest=receipt_pin,
                          sensor_identity_digest=canonical_digest(identity)), "owner generation or consistent sensor receipt differs")
     view = r["view"]
-    version = 3 if direct else 2 if has_uuid else 1
+    version = 4 if leaf else 3 if direct else 2 if has_uuid else 1
     _need(view["schema"] == f"aragorn/pi-core-sensor-state-view/v{version}", "filesystem UUID plan and sensor view version disagree")
     for key in ("host_before", "host_after"):
         host = owner[key]
@@ -114,6 +120,11 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
                                   **uuid_args)
     _need(not has_uuid or finding.get("state_filesystem_uuid_matched") is True,
           "filesystem UUID has no verified raw observation")
+    leaf_finding = {}
+    if leaf:
+        _need(finding.get("kernel_whole_disk_leaf_matched") is True, "no verified kernel whole-disk leaf observation")
+        leaf_finding = dict(kernel_whole_disk_leaf_matched=True,
+                            observed_backing_diskseq=_uint(finding.get("observed_backing_diskseq")))
     if direct:
         _need(finding.get("active_dm_crypt_single_backing_matched") is True,
               "direct crypt mapping has no verified kernel observation")
@@ -150,7 +161,7 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
         observed_sole_kernel_dependency=finding["observed_sole_kernel_dependency"], encryption_uuid_measured=False,
         inline_luks2_header_verified=False, physical_backing_identity_verified=False, authenticated_unlock_verified=False,
         external_attachment_verified=False, exclusive_writer_verified=False) if direct else {}
-    return {**admitted, **mapping, "capture_binding": capture_pin, "local_receipt": receipt_pin, "plan": plan_pin, "owner": owner_pin,
+    return {**admitted, **mapping, **leaf_finding, "capture_binding": capture_pin, "local_receipt": receipt_pin, "plan": plan_pin, "owner": owner_pin,
             "sensor_read_only_bind_matched": True, "independent_state_source_roots_matched": True,
             "guest_evidence_mount_topology_matched": True,
             "manager_configuration_carrier_mount_matched": True, "sensor_configuration_file_mount_matched": True,
@@ -172,7 +183,9 @@ def main(argv=None):
     parser.add_argument("--require-filesystem-uuid", action="store_true",
                         help="require both measured filesystem UUID replies, the protected plan, and independent admission to agree")
     parser.add_argument("--require-direct-crypt-mapping", action="store_true",
-                        help="require a v3 observation of the active dm-crypt target and its sole kernel dependency; not header proof")
+                        help="require the active dm-crypt target and its sole kernel dependency; not header proof")
+    parser.add_argument("--require-backing-leaf", action="store_true",
+                        help="require a v4 kernel whole-disk leaf observation; not proof of physical or exclusive attachment")
     args = vars(parser.parse_args(argv))
     try:
         args["archive"] = CAS(args["archive"], read_only=True)

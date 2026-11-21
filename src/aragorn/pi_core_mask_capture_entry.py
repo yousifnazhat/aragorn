@@ -99,6 +99,7 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
                receipt_digest=None, activation_authorized=False, phase3_exit_eligible=False)
     inputs, failure = None, None
     claim_started, opening, leaving, body_failure = False, False, False, None
+    configuration_close_uncertain = False
     try:
         entry._require(os.getuid() == os.geteuid() == os.getgid() == os.getegid() == 0, "MASK_ROOT_REQUIRED")
         deadline = entry._deadline(deadline_ns)
@@ -183,15 +184,17 @@ def run(plan_path, expected_plan_digest, *, release_digest, deadline_ns, source_
         leaving = False
     except BaseException as exc:
         failure = exc
-        obs["status"] = "CLEANUP_HOLD" if opening or claim_started or (leaving and exc is not body_failure) else "REFUSED"
+        configuration_close_uncertain = opening or (leaving and exc is not body_failure)
+        obs["status"] = "CLEANUP_HOLD" if configuration_close_uncertain or claim_started else "REFUSED"
+        obs["cleanup_verified"] = False
     finally:
         if inputs is not None:
             try:
                 inputs.close()
-                obs["owned_inputs_closed"] = True
+                obs["owned_inputs_closed"] = not configuration_close_uncertain
             except BaseException as exc:
                 failure = failure or exc
-                obs["status"] = "CLEANUP_HOLD"
+                obs.update(status="CLEANUP_HOLD", cleanup_verified=False)
     if failure is not None:
         error = entry.PiCoordinatorEntryError("MASK_CAPTURE_REFUSED_OR_CLEANUP_HOLD")
         error.observation = obs

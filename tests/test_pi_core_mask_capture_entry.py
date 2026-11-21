@@ -226,12 +226,15 @@ class EntryTests(unittest.TestCase):
         self.unwind_failure = True
         result = self.refusal()
         self.assertEqual((result["status"], result["receipt_digest"]), ("CLEANUP_HOLD", pin(302)))
+        self.assertFalse(result["cleanup_verified"])
+        self.assertFalse(result["owned_inputs_closed"])
         self.inputs.close.assert_called_once()
 
     def test_unknown_configuration_acquisition_cannot_claim_clean_refusal(self):
         self.hold.side_effect = OSError("private acquisition")
         result = self.refusal()
         self.assertEqual(result["status"], "CLEANUP_HOLD")
+        self.assertFalse(result["owned_inputs_closed"])
         self.claim.assert_not_called()
 
     def test_owned_handle_close_failure_never_reports_success(self):

@@ -1,6 +1,7 @@
 """Replay a root observer's two-ended manager/sensor measurement; never open a process or device."""
 import hashlib
 import re
+from uuid import UUID
 
 from .pi_core_manager_state_view import _object, verify_manager_state
 from .pi_core_configuration_carrier import _mounts as carrier_mounts
@@ -12,6 +13,7 @@ from .pi_core_stopped_mask_view import _check
 
 UNIT = "aragorn-pi-sensor.service"
 VIEW = "aragorn/pi-core-sensor-state-view/v1"
+UUID_VIEW = "aragorn/pi-core-sensor-state-view/v2"
 _IDENTITY = ("role", "unit", "pid", "start_ticks", "uid", "gid", "invocation_id")
 
 
@@ -50,12 +52,14 @@ def validate_sensor_configuration_mounts(manager_raw, sensor_raw, device, *, dea
     _check(deadline)
 
 
-def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage):
+def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, expected_filesystem_uuid=None):
     """Validate actual observer projections against the caller's protected service generation and mapping."""
-    _keys(view, ("schema", "identity", "manager", "sensor", "clock", "sensor_cgroup", "opened_boottime_ns",
-                 "closed_boottime_ns", "manager_state", "sensor_targets", "manager_mountinfo_digest",
-                 "sensor_mountinfo_digest"))
-    _need(view["schema"] == VIEW and view["sensor_cgroup"] == "0::/system.slice/" + UNIT + "\n",
+    has_uuid = expected_filesystem_uuid is not None
+    fields = ("schema", "identity", "manager", "sensor", "clock", "sensor_cgroup", "opened_boottime_ns",
+              "closed_boottime_ns", "manager_state", "sensor_targets", "manager_mountinfo_digest", "sensor_mountinfo_digest")
+    _keys(view, fields + (("filesystem_uuid_observation",) if has_uuid else ()))
+    _need(view["schema"] == (UUID_VIEW if has_uuid else VIEW)
+          and view["sensor_cgroup"] == "0::/system.slice/" + UNIT + "\n",
           "unknown sensor record or incorrect unified cgroup")
     _validate_identity(identity)
     _same(view["identity"], identity, "sensor lifecycle generation differs")
@@ -87,8 +91,14 @@ def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage):
         measured = _object(row[ACTION], ACTION, storage["device"], sensor_id)
         _same(measured, source_roots[ACTION], "sensor target is not the manager's backing directory")
     _same(frames["before"], frames["after"], "sensor target changed during observation")
+    if has_uuid:
+        # fsuuid2: one length byte followed by the raw filesystem identifier.
+        want = (b"\x10" + UUID(_uuid(expected_filesystem_uuid)).bytes).hex()
+        _same(view["filesystem_uuid_observation"], {"before": want, "after": want},
+              "mounted state filesystem UUID does not match approved identity at both bounds")
     return dict(status="consistent-offline-records-only", manager=manager, sensor=sensor, clock=clock,
                 source_roots=source_roots, manager_targets=manager_targets,
                 sensor_targets={ACTION: dict(source_roots[ACTION], mount_id=sensor_id)},
-                sensor_read_only_bind_matched=True, installed_isolation_verified=False, sensor_health_verified=False,
+                sensor_read_only_bind_matched=True, state_filesystem_uuid_matched=has_uuid,
+                installed_isolation_verified=False, sensor_health_verified=False,
                 activation_authorized=False, recovery_authorized=False, phase3_exit_eligible=False)

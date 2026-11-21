@@ -9,7 +9,7 @@ from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.pi_core_configuration_carrier import ROOT as CARRIER_ROOT, validate_carrier
 from aragorn.pi_core_sensor_state_evidence import validate_sensor_configuration_mounts, verify_sensor_state
-from aragorn.pi_core_state_admission import _doc, _keys, _need, _pin, _same, verify_state_archive_v2
+from aragorn.pi_core_state_admission import _doc, _keys, _need, _pin, _same, _uuid, verify_state_archive_v2
 from aragorn.pi_core_state_mounts import ACTION
 from scripts.verify_pi_core_joined_mask_receipts import _separate
 
@@ -23,9 +23,11 @@ def _object(archive, pin, limit, *, stdout_line=False):
 
 
 def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin, plan_pin, owner_pin,
-                              store, receipt_directory, capture_pin, receipt_pin, require_same_manager=False):
+                              store, receipt_directory, capture_pin, receipt_pin, require_same_manager=False,
+                              require_filesystem_uuid=False):
     from aragorn.pi_core_sensor_state_custody import RECEIPTS, STORE, replay_sensor_observation, sensor_evidence_mount
-    _need(type(archive) is CAS and archive.read_only is True and type(require_same_manager) is bool,
+    _need(type(archive) is CAS and archive.read_only is True and type(require_same_manager) is bool
+          and type(require_filesystem_uuid) is bool,
           "read-only independent evidence store required")
     paths = (archive.root, store, receipt_directory)
     identities = _separate(paths)
@@ -54,7 +56,16 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     _pin(owner["managed_result_digest"])
     _same(owner["wrapper_cleanup"], dict(host="CLOSED", source_loader="CLOSED"), "wrapper cleanup held")
     c = plan["sensor_state_observation"]
-    _keys(c, ("attempt_id", "storage", "clock", "store", "receipt_directory"))
+    has_uuid = type(c) is dict and "filesystem_uuid" in c
+    _keys(c, ("attempt_id", "storage", "clock", "store", "receipt_directory") + (("filesystem_uuid",) if has_uuid else ()))
+    _need(not require_filesystem_uuid or has_uuid, "filesystem UUID observation required; historical protected plan")
+    uuid_args = {}
+    if has_uuid:
+        # This value comes from the independently pinned profile and role archive,
+        # not from the raw ioctl replies or the protected capture plan alone.
+        uuid_value = _uuid(c["filesystem_uuid"])
+        _same(uuid_value, capture["volume"]["filesystem_uuid"], "filesystem UUID differs from independent admission")
+        uuid_args["expected_filesystem_uuid"] = uuid_value
     _same([c["store"], c["receipt_directory"]], [str(STORE), str(RECEIPTS)], "foreign guest evidence destinations")
     config = plan["service_configuration"]
     _keys(config, ("deployment_path", "receipt_digest", "manifest", "configurations", "carrier"))
@@ -80,6 +91,8 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     _same(observed, dict(status="RETAINED_SENSOR_STATE_ONLY", capture_digest=capture_pin, receipt_digest=receipt_pin,
                          sensor_identity_digest=canonical_digest(identity)), "owner generation or consistent sensor receipt differs")
     view = r["view"]
+    _need(view["schema"] == ("aragorn/pi-core-sensor-state-view/v2" if has_uuid else
+                             "aragorn/pi-core-sensor-state-view/v1"), "filesystem UUID plan and sensor view version disagree")
     for key in ("host_before", "host_after"):
         host = owner[key]
         _need(host["schema"] == "aragorn/pi-core-coordinator-host-observation/v1" and
@@ -89,7 +102,10 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
               "manager is not the owner of this host profile")
     for field in ("manager_mountinfo_digest", "sensor_mountinfo_digest", "clock"):
         _same(r[field], view[field], "retained sensor record and view disagree")
-    finding = verify_sensor_state(view, raw["manager"], raw["sensor"], identity=identity, storage=c["storage"])
+    finding = verify_sensor_state(view, raw["manager"], raw["sensor"], identity=identity, storage=c["storage"],
+                                  **uuid_args)
+    _need(not has_uuid or finding.get("state_filesystem_uuid_matched") is True,
+          "filesystem UUID has no verified raw observation")
     guest_evidence = sensor_evidence_mount(raw["manager"], raw["sensor"], c["storage"])
     _need(guest_evidence.device != carrier["device"], "evidence medium aliases the approved configuration carrier")
     # Bound local parsing effort, not the original guest observation interval.
@@ -117,6 +133,7 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
             "sensor_read_only_bind_matched": True, "independent_state_source_roots_matched": True,
             "guest_evidence_mount_topology_matched": True,
             "manager_configuration_carrier_mount_matched": True, "sensor_configuration_file_mount_matched": True,
+            "state_filesystem_uuid_matched": has_uuid,
             "configuration_image_bytes_verified_by_replay": False,
             "owner_sensor_generation_matched": True, "archive_sensor_subject_and_mount_bytes_matched": matched("sensor"),
             "archive_manager_subject_and_mount_bytes_matched": manager_same, "sensor_health_verified": False,
@@ -131,6 +148,8 @@ def main(argv=None):
     for name in ("profile-pin", "latest-pin", "witness-pin", "plan-pin", "owner-pin", "capture-pin", "receipt-pin"):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--require-same-manager", action="store_true")
+    parser.add_argument("--require-filesystem-uuid", action="store_true",
+                        help="require both measured filesystem UUID replies, the protected plan, and independent admission to agree")
     args = vars(parser.parse_args(argv))
     try:
         args["archive"] = CAS(args["archive"], read_only=True)

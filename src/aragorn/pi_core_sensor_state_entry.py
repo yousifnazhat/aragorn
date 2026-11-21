@@ -21,7 +21,11 @@ _SOURCES = ("pi_core_sensor_state_entry", "pi_core_sensor_state_observer",
 
 
 def validate_section(value):
-    _keys(value, ("store", "receipt_directory", "attempt_id", "clock", "storage"))
+    fields = ("store", "receipt_directory", "attempt_id", "clock", "storage")
+    if type(value) is dict and "filesystem_uuid" in value:
+        _uuid(value["filesystem_uuid"])
+        fields += ("filesystem_uuid",)
+    _keys(value, fields)
     _need(value["store"] == str(custody.STORE) and value["receipt_directory"] == str(custody.RECEIPTS),
           "fixed private sensor evidence destinations required")
     attempt = value["attempt_id"]
@@ -65,17 +69,20 @@ def from_held_plan(inputs, path, plan, plan_digest, host_digest, records, source
                    host_profile_digest=host_digest, plan_digest=plan_digest, deployment_digest=_pin(plan["deployment"]["digest"]),
                    launch_digest=_pin(plan["launch"]["digest"]),
                    configuration_digest=_pin(plan["service_configuration"]["configurations"]["digest"]))
-    return SensorStateRequest(_SEAL, inputs, canonical_json(binding), host_observation["pid"], config["carrier"]["device"])
+    return SensorStateRequest(_SEAL, inputs, canonical_json(binding), host_observation["pid"],
+                              config["carrier"]["device"], section.get("filesystem_uuid"))
 
 
 class SensorStateRequest:
     """Thread- and deadline-bound single-use read request; not a service principal."""
-    __slots__ = ("_seal", "_inputs", "_raw", "_thread", "_state", "_deadline", "_roots", "_manager_pid", "_config_device")
+    __slots__ = ("_seal", "_inputs", "_raw", "_thread", "_state", "_deadline", "_roots", "_manager_pid",
+                 "_config_device", "_filesystem_uuid")
 
-    def __init__(self, seal, inputs, raw, manager_pid, config_device):
+    def __init__(self, seal, inputs, raw, manager_pid, config_device, filesystem_uuid=None):
         _need(seal is _SEAL, "protected sensor plan required")
         self._seal, self._inputs, self._raw, self._manager_pid = seal, inputs, raw, manager_pid
         self._config_device = _dev(config_device)
+        self._filesystem_uuid = None if filesystem_uuid is None else _uuid(filesystem_uuid)
         self._thread, self._state, self._roots, self._deadline = threading.get_ident(), "new", (), None
 
     def _enter(self, state):
@@ -114,7 +121,9 @@ class SensorStateRequest:
         self._enter("prepared")
         _need(deadline == self._deadline, "sensor observation deadline changed")
         binding = json.loads(self._raw)
-        view, manager, sensor = observer.capture_sensor_state(identity=identity, guard=guard, deadline=deadline)
+        uuid_check = self._filesystem_uuid is not None
+        view, manager, sensor = observer.capture_sensor_state(identity=identity, guard=guard, deadline=deadline,
+            **({"uuid_storage": binding["storage"]} if uuid_check else {}))
         _same(guard(deadline=deadline), identity, "sensor generation changed after observation")
         _need(type(manager) is bytes and type(sensor) is bytes and 0 < len(manager) <= 1 << 20
               and 0 < len(sensor) <= 1 << 20 and type(view) is dict, "incomplete original sensor observation")
@@ -123,7 +132,8 @@ class SensorStateRequest:
                       sensor_mountinfo_digest="sha256:" + hashlib.sha256(sensor).hexdigest())
         ok = True
         try:
-            replay = evidence.verify_sensor_state(view, manager, sensor, identity=identity, storage=binding["storage"])
+            replay = evidence.verify_sensor_state(view, manager, sensor, identity=identity, storage=binding["storage"],
+                expected_filesystem_uuid=self._filesystem_uuid)
             _need(replay["sensor_read_only_bind_matched"] is True and replay["manager"]["pid"] == self._manager_pid,
                   "sensor state or manager differs from the held invocation")
             _same(replay["clock"], binding["clock"], "sensor observation clock differs from approved plan")

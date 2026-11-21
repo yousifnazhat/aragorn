@@ -93,7 +93,7 @@ _CONFIG_SENSOR = (b"9 1 7:7 /installed/root/etc/aragorn/pi-sensor-service.json /
 
 
 class _JoinedSensorFixture(unittest.TestCase):
-    def setUp(self, *, change_streams=None):
+    def setUp(self, *, change_streams=None, prepare_observation=None):
         self.outer, self.local = outer.MaskArchiveTests(), local.MaskCustodyTests()
         for f in (self.outer, self.local):
             self.addCleanup(f.doCleanups)
@@ -124,6 +124,8 @@ class _JoinedSensorFixture(unittest.TestCase):
                          sensor_state_observation=dict(store="/run/aragorn-sensor-state-evidence/cas",
                             receipt_directory="/run/aragorn-sensor-state-evidence/receipts", attempt_id="a"*32,
                             clock=self.v["clock"], storage=storage))
+        if prepare_observation is not None:
+            prepare_observation(self.plan["sensor_state_observation"], self.v, b.capture["volume"])
         plan = b.put(canonical_json(self.plan))
         record = dict(schema="aragorn/pi-core-sensor-state-record/v1", view=self.v, identity=ident,
                       attempt_id="a"*32, host_profile_digest=digest(b"host"), launch_digest=digest(b"launch"),
@@ -160,7 +162,7 @@ class _JoinedSensorFixture(unittest.TestCase):
         self.args = dict(archive=b.reader, plan_pin=plan, capture_pin=pins["record"], receipt_pin=receipt_pin,
                          store=self.local.store, receipt_directory=self.local.receipts)
 
-    def check(self, *, public_changes=None, **options):
+    def replay_args(self, *, public_changes=None):
         a, b, c = self.outer.pins()
         wrapper = runpy.run_path(str(Path(__file__).resolve().parents[1] / "packaging/pi-core/coordinator.py"))
         with patch("os.getpid", return_value=self.v["manager"]["pid"]):
@@ -169,8 +171,10 @@ class _JoinedSensorFixture(unittest.TestCase):
                       wrapper_cleanup=dict(host="CLOSED", source_loader="CLOSED"), entry_call_attempted=True)
         report.update(public_changes or {})
         stdout = wrapper["_canonical"](report) + b"\n"
-        return verify_joined_sensor_state(**self.args, profile_pin=a, latest_pin=b, witness_pin=c,
-                                          owner_pin=self.b.put(stdout), **options)
+        return dict(self.args, profile_pin=a, latest_pin=b, witness_pin=c, owner_pin=self.b.put(stdout))
+
+    def check(self, *, public_changes=None, **options):
+        return verify_joined_sensor_state(**self.replay_args(public_changes=public_changes), **options)
 
 
 class SeparateSensorArchives(_JoinedSensorFixture):

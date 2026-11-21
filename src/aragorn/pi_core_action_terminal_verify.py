@@ -12,7 +12,7 @@ from . import runtime_action_worker as worker
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .pi_core_source_observation_verify import _fields, _require, _same, _uint
 from .runtime_active_skill_lineage import VERIFIED_LINEAGE_AUTHORITY, VERIFIED_LINEAGE_SCHEMA
-from .runtime_capability_grant import parse_runtime_capability_grant
+from .runtime_capability_grant import _MEASURED_BINDINGS, parse_runtime_capability_grant
 
 
 def _verify_action_terminal(*, values, expected_activation, expected_request, expected_broker_nonce,
@@ -113,8 +113,23 @@ def _verify_action_terminal(*, values, expected_activation, expected_request, ex
     _same(receipt["runtime_attribution"], measured, "ACTION_TERMINAL_RECEIPT_PRINCIPAL")
     _same(receipt["broker_result"], result["broker_result"], "ACTION_TERMINAL_RECEIPT_RESULT")
     _same(recovery._result_record(state["claim"], receipt), state["result"], "ACTION_TERMINAL_RECOVERY")
-    _require(state["claim"]["profile_claim"]["request_digest"] == canonical_digest(done["envelope"]["request"]),
-             "ACTION_TERMINAL_CLAIM")
+    claim, lease = state["claim"]["profile_claim"], state["claim"]["lease"]
+    envelope = done["envelope"]
+    projected = envelope["request"]
+    _require(claim["request_digest"] == canonical_digest(projected) and
+             claim["envelope_digest"] == canonical_digest(envelope), "ACTION_TERMINAL_CLAIM")
+    # The grant binds the policy and operation; the issued lease binds the measured path and payload.
+    _same(claim["profile_pending"]["measured_action"], {"schema": "aragorn/measured-runtime-action/v1",
+          **{k: projected[k] for k in _MEASURED_BINDINGS}}, "ACTION_TERMINAL_MEASURED_REQUEST")
+    grant_keys = ("runtime_profile_digest", "runtime_digest", "active_skill_digest", "sensor_digest",
+                  "policy_digest", "policy_version", "operation_digest")
+    _same({k: lease[k] for k in grant_keys}, {k: grant[k] for k in grant_keys}, "ACTION_TERMINAL_LEASE_GRANT")
+    # Compare recorded Unix times to one another, never to the replay clock.
+    _require(grant["issued_at_unix"] <= projected["issued_at_unix"] <= lease["issued_at_unix"]
+             <= claim["claimed_at_unix"] < lease["expires_at_unix"] == projected["expires_at_unix"]
+             <= grant["expires_at_unix"] and
+             lease["expires_at_unix"] - lease["issued_at_unix"] <= grants._MAX_LEASE_LIFETIME_SECONDS,
+             "ACTION_TERMINAL_LEASE_WINDOW")
     receipt_pin = canonical_digest(receipt)
     row("JOINED", receipt_digest=receipt_pin, state_digest=canonical_digest(state))
     _same(owner["readback"], dict(schema=schema, status="JOINED", read_only=True, grant_digest=pin,

@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [public pilot provider/action correspondence, batch 99](pi-core-pilot-provider-action-batch-99.md).**
+Replay the two original nominations and the reviewer's public oracle without
+recapture. Agreement names the proposed and requested action, not its effect.
+
 **D2 — [spent lease and terminal action replay, batch 98](pi-core-recorded-action-lease-batch-98.md).**
 The B93 reader compares the recorded lease and action using the existing
 originals. No new capture, live authority or physical-output claim.

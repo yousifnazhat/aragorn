@@ -146,6 +146,9 @@ measurement and independent replay of the stopped task's actual root, admitted
 working directory and descriptors. Completing the worker-visible tree requires
 a [decision](../phase3/coordinator/pi-core-worker-visible-tree-decision.md);
 the lookup rules and worker permissions have not been changed.
+[B72](../phase3/coordinator/pi-core-worker-null-mount-check-batch-72.md)
+checks the device of a stopped worker's null handle against its recorded mount ID;
+it does not establish the rest of the worker's view.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

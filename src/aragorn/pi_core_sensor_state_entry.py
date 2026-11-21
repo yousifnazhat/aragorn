@@ -127,6 +127,7 @@ class SensorStateRequest:
             _need(replay["sensor_read_only_bind_matched"] is True and replay["manager"]["pid"] == self._manager_pid,
                   "sensor state or manager differs from the held invocation")
             _same(replay["clock"], binding["clock"], "sensor observation clock differs from approved plan")
+            evidence.validate_sensor_configuration_mounts(manager, sensor, self._config_device, deadline=deadline)
         except ValueError:
             ok = False  # A complete negative is admissible for private retention, never for dispatch.
         raw = canonical_json(record)

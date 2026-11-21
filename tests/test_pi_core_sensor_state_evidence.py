@@ -86,8 +86,14 @@ class SemanticSensorState(unittest.TestCase):
                 verify_sensor_state(v, m, altered, identity=identity, storage=storage)
 
 
-class SeparateSensorArchives(unittest.TestCase):
-    def setUp(self):
+_CONFIG_MANAGER = (b"8 2 7:7 / /run/aragorn-pi-config ro,nosuid,nodev,noexec "
+                   b"- squashfs /dev/loop7 ro\n")
+_CONFIG_SENSOR = (b"9 1 7:7 /installed/root/etc/aragorn/pi-sensor-service.json /etc/aragorn/pi-sensor-service.json "
+                  b"ro,nosuid,nodev,noexec - squashfs /dev/loop7 ro\n")
+
+
+class _JoinedSensorFixture(unittest.TestCase):
+    def setUp(self, *, change_streams=None):
         self.outer, self.local = outer.MaskArchiveTests(), local.MaskCustodyTests()
         for f in (self.outer, self.local):
             self.addCleanup(f.doCleanups)
@@ -95,9 +101,16 @@ class SeparateSensorArchives(unittest.TestCase):
         self.b = b = self.outer.base
         self.v, manager, sensor, ident, storage = fixture()
         manager += (b"6 2 8:77 / /run/aragorn-sensor-state-evidence rw,nodev,nosuid,noexec "
-                    b"- ext4 /dev/nvme7n1 rw\n")
-        b.capture["roles"]["manager"]["mountinfo"] = b.put(manager)
-        self.v["manager_mountinfo_digest"] = digest(manager)
+                    b"- ext4 /dev/nvme7n1 rw\n7 1 0:51 / /dev rw,nosuid - devtmpfs devtmpfs rw\n")
+        manager += _CONFIG_MANAGER
+        sensor += _CONFIG_SENSOR
+        if change_streams is not None:
+            updated = change_streams(manager, sensor)
+            self.assertNotEqual(updated, (manager, sensor))
+            manager, sensor = updated
+        for role, raw in (("manager", manager), ("sensor", sensor)):
+            b.capture["roles"][role]["mountinfo"] = b.put(raw)
+            self.v[role + "_mountinfo_digest"] = digest(raw)
         self.identity = ident
         self.plan = dict(schema="aragorn/pi-core-coordinator-plan/v1", mode="UNAVAILABLE", provider=None,
                          host_profile_digest=digest(b"host"),
@@ -159,12 +172,16 @@ class SeparateSensorArchives(unittest.TestCase):
         return verify_joined_sensor_state(**self.args, profile_pin=a, latest_pin=b, witness_pin=c,
                                           owner_pin=self.b.put(stdout), **options)
 
+
+class SeparateSensorArchives(_JoinedSensorFixture):
     def test_owner_and_separately_admitted_role_match_without_promoting_timing_or_health(self):
         result = self.check(require_same_manager=True)
         for k in ("owner_sensor_generation_matched", "archive_sensor_subject_and_mount_bytes_matched",
                   "archive_manager_subject_and_mount_bytes_matched", "independent_state_source_roots_matched",
-                  "guest_evidence_mount_topology_matched"):
+                  "guest_evidence_mount_topology_matched", "manager_configuration_carrier_mount_matched",
+                  "sensor_configuration_file_mount_matched"):
             self.assertIs(result[k], True)
+        self.assertIs(result["configuration_image_bytes_verified_by_replay"], False)
         self.assertFalse(result["same_capture_interval_verified"] or result["external_freshness_verified"]
                          or result["phase3_exit_eligible"] or result["sensor_health_verified"])
 
@@ -198,3 +215,42 @@ class SeparateSensorArchives(unittest.TestCase):
             b.capture["roles"][role]["targets"][ACTION]["ino"] += 1_000
         with self.assertRaisesRegex(ValueError, "state source directories differ"):
             self.check()
+
+
+class CarrierArchiveJoins(unittest.TestCase):
+    def refuse(self, change):
+        fixture = _JoinedSensorFixture()
+        try:
+            fixture.setUp(change_streams=change)
+            # Original bytes, independent archive, local receipt and actual wrapper
+            # export agree. Refusal must not depend on an out-of-date digest.
+            with self.assertRaises(ValueError):
+                fixture.check()
+        finally:
+            fixture.doCleanups()
+
+    def test_missing_manager_carrier_or_sensor_projection_cannot_join(self):
+        for role in ("manager", "sensor"):
+            with self.subTest(role=role):
+                self.refuse(lambda m, s: (m.replace(_CONFIG_MANAGER, b""), s) if role == "manager"
+                            else (m, s.replace(_CONFIG_SENSOR, b"")))
+
+    def test_wrong_device_source_or_config_object_refuses_even_when_archives_agree(self):
+        for role, old, new in (("manager", b"7:7", b"7:8"), ("sensor", b"7:7", b"7:8"),
+                               ("sensor", b"/dev/loop7", b"/dev/loop8"),
+                               ("sensor", b"/installed/root/etc/aragorn/pi-sensor-service.json",
+                                b"/installed/root/etc/aragorn/pi-action-service.json")):
+            with self.subTest(role=role, old=old):
+                self.refuse(lambda m, s: (m.replace(_CONFIG_MANAGER, _CONFIG_MANAGER.replace(old, new)), s)
+                            if role == "manager" else (m, s.replace(_CONFIG_SENSOR, _CONFIG_SENSOR.replace(old, new))))
+
+    def test_extra_carrier_alias_or_writable_projection_refuses(self):
+        for role, row in (("manager", _CONFIG_MANAGER), ("sensor", _CONFIG_SENSOR)):
+            for kind in ("alias", "writable"):
+                if kind == "alias":
+                    changed = row + b"10 1 7:7 / /alternate-config ro,nosuid,nodev,noexec - squashfs /dev/loop7 ro\n"
+                else:
+                    changed = row.replace(b" ro,nosuid", b" rw,nosuid")
+                with self.subTest(role=role, kind=kind):
+                    self.refuse(lambda m, s: (m.replace(row, changed), s) if role == "manager"
+                                else (m, s.replace(row, changed)))

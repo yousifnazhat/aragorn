@@ -196,6 +196,31 @@ class SensorEntryTests(TestCase):
         writer.assert_called_once()
         topo.assert_called_once()
 
+    def test_carrier_check_uses_held_device_and_original_deadline_before_reporting_success(self):
+        ident, clock = identity(), section()["clock"]
+        wire = (b"manager observation\n", b"sensor observation\n")
+        for error, expected in ((None, "RETAINED_SENSOR_STATE_ONLY"),
+                                (ValueError("wrong mounted file"), "RETAINED_SENSOR_STATE_INCONSISTENT")):
+            req = sensor.SensorStateRequest(sensor._SEAL, mock.Mock(),
+                canonical_json(dict(storage=section()["storage"], attempt_id=section()["attempt_id"], clock=clock)),
+                100, "8:4")
+            req._state, req._deadline = "prepared", 60.
+            with (
+                self.subTest(expected=expected),
+                mock.patch.object(sensor.observer, "capture_sensor_state", return_value=({}, *wire)) as capture,
+                mock.patch.object(sensor.evidence, "verify_sensor_state", return_value=dict(
+                    sensor_read_only_bind_matched=True, manager=dict(pid=100), clock=clock)),
+                mock.patch.object(sensor.evidence, "validate_sensor_configuration_mounts", side_effect=error) as check,
+                mock.patch.object(sensor.observer, "hold_sensor_mount_guard", return_value=nullcontext(mock.Mock())),
+                mock.patch.object(sensor.custody, "retain_sensor_observation", return_value=plans.pin("9")) as retain,
+            ):
+                result = req.acquire(identity=ident, guard=lambda **kw: ident, deadline=60.)
+                self.assertEqual(result["status"], expected)
+                check.assert_called_once_with(*wire, "8:4", deadline=60.)
+                capture.assert_called_once()
+                self.assertEqual((retain.call_args.kwargs["manager_raw"], retain.call_args.kwargs["sensor_raw"]), wire)
+                self.assertIs(result["activation_authorized"], False)
+
     def test_public_projection_uses_authenticated_generation_and_only_discloses_pins(self):
         path=Path(__file__).resolve().parents[1]/"packaging/pi-core/coordinator.py"
         spec=importlib.util.spec_from_file_location("sensor_public_wrapper",path)

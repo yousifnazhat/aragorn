@@ -1,0 +1,72 @@
+{
+  "schema": "aragorn/pi-core-managed-source-successor/v1",
+  "signed_revision": "0910f1d1c5710cb7730002ac5d974803e14e2431",
+  "signed_tree": "e45cb0c200f3ba9c1201c2b301a371a892f3d15e",
+  "prior_host_profile_digest": "sha256:31457b9d0f3bd75693f4ca80bd59705c1e402976c02604c30462a8dcf51d1683",
+  "prior_service_manifest_digest": "sha256:241e54fad4ee738851c3693ec5f6b62bf5edcf20da977df09b1c12313f299b41",
+  "prior_service_binding_digest": "sha256:f230797b5cf63274b1e0b2ef0791189dbb90f08b1004a4fc117924c570922296",
+  "host_changes": {
+    "/opt/aragorn/src/aragorn/pi_core_broker_preparation_entry.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_broker_preparation_entry.py",
+      "size": 20899,
+      "digest": "sha256:182656f96fc63a6344a80d940f7bcd940c698cc43725c2c56a6f7c4d2e76d988"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_configuration_carrier.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_configuration_carrier.py",
+      "size": 13362,
+      "digest": "sha256:d17b81da04943b5b176cd7d4ac0d21ad77fe1728c551fddb677ffee1bea1695a"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_coordinator_entry.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_coordinator_entry.py",
+      "size": 23325,
+      "digest": "sha256:c067872679a0f31a2692e0344d1e6ac839fb0323dc3c173bdca786777e0cd231"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_manager_state_view.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_manager_state_view.py",
+      "size": 3939,
+      "digest": "sha256:dabbda08b503fd66cc664e22e66caa91d47405ed7e494256945e9fa5434dd1b4"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_mask_capture_entry.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_mask_capture_entry.py",
+      "size": 12766,
+      "digest": "sha256:2db93fb91e4ba93ad1d217d413fa939b02f058bb0178731e4dc17c9e112c3671"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_service_configuration.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_service_configuration.py",
+      "size": 29688,
+      "digest": "sha256:6909502a4963b210ab27d04b664fb1fcf0f396378bf32646567ddd9623c99524"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_stopped_mask_capture.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_stopped_mask_capture.py",
+      "size": 15091,
+      "digest": "sha256:113ed47c940721f34fb36d7d33c19bcfd675f99f681a8bc4d58b4f60c56695f5"
+    },
+    "/opt/aragorn/src/aragorn/pi_core_stopped_mask_view.py": {
+      "path": "/opt/aragorn/src/aragorn/pi_core_stopped_mask_view.py",
+      "size": 20954,
+      "digest": "sha256:b1ebb65f20d045e17f7a32acb00a8fa2ff5a7e893a820a8afdc2f547af58d7a6"
+    }
+  },
+  "host_rows_digest": "sha256:16bf96ab1dfc544d06904bd68dcd0fd61ab9b226ed6cb4c629df65bc312535e6",
+  "service_changes": {
+    "aragorn/pi_core_configuration_carrier.py": "sha256:d17b81da04943b5b176cd7d4ac0d21ad77fe1728c551fddb677ffee1bea1695a",
+    "aragorn/pi_core_manager_state_view.py": "sha256:dabbda08b503fd66cc664e22e66caa91d47405ed7e494256945e9fa5434dd1b4",
+    "aragorn/pi_core_service_configuration.py": "sha256:6909502a4963b210ab27d04b664fb1fcf0f396378bf32646567ddd9623c99524",
+    "aragorn/pi_core_stopped_mask_capture.py": "sha256:113ed47c940721f34fb36d7d33c19bcfd675f99f681a8bc4d58b4f60c56695f5",
+    "aragorn/pi_core_stopped_mask_view.py": "sha256:b1ebb65f20d045e17f7a32acb00a8fa2ff5a7e893a820a8afdc2f547af58d7a6"
+  },
+  "service_inventory_digest": "sha256:dc2e7219d92cd58df4c87e4b942d2652660c13e57900a28e2ccdc16451c224b5",
+  "template_digests": {
+    "action.py": "sha256:7b1bf1cd9555a0cc850f8b35414e009040f61c8c4731b93b200eb2fda58aa5ec",
+    "provider.py": "sha256:47bd48d3888841c8748deea9af365c2bd48a1d1365b05c62c33df97113ad877a",
+    "sensor.py": "sha256:d5b49c2ee852ea9ce5142391455043e50f4952d08b3f52dbd79febe30ab4ab9e"
+  },
+  "rendered_wrapper_digests": {
+    "action.py": "sha256:8f4f2b06a49c6b7d71e57d1e67fe14af9ce28e60c03c029e7ae5cbfcc367338d",
+    "provider.py": "sha256:9009013c0e3207370521774dcea42968dcce5c09b82a6fb6741f256e1188ba94",
+    "sensor.py": "sha256:989e697f60da658919d6abf6705adf241698fa67f875aec4795b85bad99ae2ad"
+  },
+  "unsupported_import_sites_digest": "sha256:32cecf0e20c5ea831a3973e256815c7a730cb2811b4acf5f55ee3adddb63a7cd",
+  "host_count": 117,
+  "service_count": 105
+}

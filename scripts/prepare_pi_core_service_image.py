@@ -201,7 +201,7 @@ def _module_path(name, inventory):
     return candidates[0]
 
 
-def source_closure(source_root, expected, stdlib):
+def source_closure(source_root, expected, stdlib, *, reader=None):
     """Parse all local imports, including lazy functions; never import them."""
     require(type(expected) is dict and 0 < len(expected) <= MAX_SOURCE_FILES, "invalid expected source inventory")
     require(all(type(name) is str and name.startswith("aragorn/") and name.endswith(".py") for name in expected), "invalid source inventory member")
@@ -214,7 +214,10 @@ def source_closure(source_root, expected, stdlib):
         path = _module_path(module, expected)
         if path in selected:
             continue
-        raw = _input(source_root, path, expected[path])
+        raw = (_input if reader is None else reader)(source_root, path, expected[path])
+        if reader is not None:
+            require(type(raw) is bytes and 0 < len(raw) <= MAX_SOURCE_FILE and pin(raw) == expected[path],
+                    "alternate source bytes disagree with inventory")
         require(sum(len(value) for value in selected.values()) + len(raw) <= MAX_SOURCE_BYTES, "source closure exceeds byte bound")
         selected[path] = raw
         try:
@@ -295,11 +298,14 @@ def source_closure(source_root, expected, stdlib):
     return selected, sorted(imports), sorted(unsupported, key=lambda row: (row["path"], row["line"]))
 
 
-def _wrappers(root, expected, source_inventory=None):
+def _wrappers(root, expected, source_inventory=None, *, reader=None):
     require(type(expected) is dict and set(expected) == {role + ".py" for role in ROLES}, "fixed wrapper inventory differs")
     result = {}
     for name, digest in sorted(expected.items()):
-        raw = _input(root, name, digest)
+        raw = (_input if reader is None else reader)(root, name, digest)
+        if reader is not None:
+            require(type(raw) is bytes and 0 < len(raw) <= MAX_SOURCE_FILE and pin(raw) == digest,
+                    "alternate wrapper bytes disagree with inventory")
         if SOURCE_PIN_MARKER in raw:
             require(raw.count(SOURCE_PIN_MARKER) == 1 and source_inventory is not None and
                     SOURCE_LOADER in source_inventory, "verified wrapper requires the source loader inventory")

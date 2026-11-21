@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [common guest inventory, batch 69](pi-core-managed-guest-inventory-batch-69.md).**
+Use the joint successor for the manager and service code; the worker, gate and
+interpreter were carried forward. This is a staged set of files, not a boot
+disk or installed observation. Do not attach B68 data to the B44 compatibility
+guest or use B69 as an approval, current grant or sensor-health record.
+
 **D2 — [configuration disk checked before use, batch 68](pi-core-configuration-carrier-batch-68.md).**
 The protected coordinator, broker preparation and stopped-worker capture now bind
 the installed configuration to an exact read-only device and image. Its disk

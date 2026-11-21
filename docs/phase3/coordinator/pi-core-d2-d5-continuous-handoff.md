@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [recorded action and terminal grant replay, batch 93](pi-core-retained-action-replay-batch-93.md).**
+Use the original closed native action owner, linked private index, control
+records and B77 send boundaries. No outcome here establishes physical effect.
+
 **D2 — [bootstrap endpoint in the stopped worker's mount, batch 92](pi-core-worker-bootstrap-endpoint-batch-92.md).**
 Verify the supervisor's named socket, not just its parent or the two role
 sockets. This startup guard does not grant access or export new evidence.

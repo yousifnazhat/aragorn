@@ -215,6 +215,12 @@ connect/send and redirects as applicable; endpoint allowlisting alone is not
 complete data authorization. This reuses existing action-specific enforcement,
 not a new generic proxy framework.
 
+Pi must not gain directory-read permission to make the observer's job easier.
+For the two [fixed socket directories and process-relative links](../phase3/coordinator/pi-core-worker-visible-tree-decision.md),
+separately verify manager membership, the worker's actual lookup rights and
+its own link targets as applicable. No unreadable or unexplained path is
+implicitly exempt, and manager observations alone cannot release protected work.
+
 ### Model access and data handling
 
 Provider access is a protected egress path, not a control-plane exemption. Keep

@@ -8,6 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [manager-side socket membership, batch 81](pi-core-manager-socket-membership-batch-81.md).**
+The protected provider startup samples its two owned socket directories
+before unit start and at the first authenticated worker stop. This is only
+the manager's half of the approved exception. Obtain separate actual-worker
+lookup and process-link evidence; do not relax confinement or print private
+managed results. Digest-only stdout cannot serve as the replay input.
+
 **D2 — [current LUKS2 metadata, batch 80](pi-core-state-header-observation-batch-80.md).**
 The v5 reader compares both checksummed on-device metadata areas with
 independently nominated bytes on the B79 disk incarnation. This is not
@@ -54,8 +61,8 @@ the saved worker mount table. No installed observation or change to B49.
 **D2 — [stopped worker's handles, batch 71](pi-core-stopped-worker-handles-batch-71.md).**
 The new protected release covers the actual task, root, prepared version
 directory and three standard handles. The full worker-visible directory walk is
-still mandatory. Before changing permissions or the evidence format, resolve
-the [socket-directory and proc-view decision](pi-core-worker-visible-tree-decision.md).
+still mandatory, with only the explicitly approved and independently proved
+exceptions in the [socket-directory and proc-view decision](pi-core-worker-visible-tree-decision.md).
 
 **D2 — [observe the sensor's service-state mount, batch 70](pi-core-sensor-state-observation-batch-70.md).**
 The managed startup can sample the sensor it already owns before dispatching Pi.

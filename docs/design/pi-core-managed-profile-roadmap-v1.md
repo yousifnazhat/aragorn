@@ -143,9 +143,9 @@ stable mismatch without dispatching the worker. B69 does not contain this code;
 service health, independent storage custody and Pi isolation remain unproven.
 [B71](../phase3/coordinator/pi-core-stopped-worker-handles-batch-71.md) adds
 measurement and independent replay of the stopped task's actual root, admitted
-working directory and descriptors. Completing the worker-visible tree requires
-a [decision](../phase3/coordinator/pi-core-worker-visible-tree-decision.md);
-the lookup rules and worker permissions have not been changed.
+working directory and descriptors. The [approved exception proof](../phase3/coordinator/pi-core-worker-visible-tree-decision.md)
+keeps the two socket directories non-listable and requires actual worker
+lookup and process-relative link evidence. Worker permissions do not change.
 [B72](../phase3/coordinator/pi-core-worker-null-mount-check-batch-72.md)
 checks the device of a stopped worker's null handle against its recorded mount ID;
 it does not establish the rest of the worker's view.
@@ -170,6 +170,10 @@ list distinguishes a physical attachment from a virtual or remote backend.
 binds both on-device LUKS2 metadata copies to this disk, approved byte digests
 and the independently nominated encryption UUID. The original unlock, external
 writer and device attachment still need their own evidence.
+[B81](../phase3/coordinator/pi-core-manager-socket-membership-batch-81.md)
+connects the manager's fixed socket-directory observations to the useful-path
+startup and its independent reader. Worker lookup, listing denial and
+task-relative link evidence are still required.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

@@ -1,6 +1,7 @@
-# D2 decision needed: what counts as evidence in Pi's protected filesystem view?
+# D2 decision: what counts as evidence in Pi's protected filesystem view?
 
-**Status: proposed, not approved.** The four named device masks approved in
+**Status: approved for offline engineering; no exception has qualified.**
+Keep confinement and verify the exceptions. The four named device masks approved in
 [B58](pi-core-worker-mask-decision.md) are not a general exception for
 unreadable directories or Linux process links. The following is a source
 compatibility finding; no guest was started.
@@ -35,20 +36,18 @@ does not represent an ordinary link resolving to an unlisted internal mount,
 nor arbitrary permission errors. The installed link inventory, options and
 return values are not known. Do not invent any of them or skip `/proc` or `/sys`.
 
-**Recommended: preserve permissions and design a versioned proof.** Keep B58
-and its guarantees unchanged. For the two fixed service directories, design
-a proof combining the authenticated manager's complete directory membership
-and socket identities with independent evidence of the worker's precise
-lookup rights. For fixed process-relative links, bind each special result to
-the actual task, root, namespace and descriptor generation. Define how the
-independent reader checks each case; reject every unexplained path or change.
-Do not call a structural proof a successful Pi directory listing. Approval
-would authorize offline design and implementation only, not qualification of
-the resulting profile or an exception for the rest of the filesystem.
+**Approved proof.** Keep B58 and its existing format unchanged. Under
+`/run/aragorn-pi-bootstrap`, only `requests/request.sock` and
+`provider/provider.sock` are in scope. Do not widen the 0711 directories.
+Require both sides: the authenticated manager's complete membership and
+socket identities, and separate evidence that the actual confined worker
+can look up the expected objects but cannot list their parents. Neither side
+can stand in for the other. This does not establish socket readiness.
 
-**Alternative: keep the literal walk and redesign the worker view.** Expose
-only the named socket endpoints and construct a worker view whose required
-paths can all be verified under the existing rules. Re-assess the runtime's
-proc/sys dependencies and the launcher before choosing this alternative.
-Merely setting group-read on the socket directories cannot settle the kernel
-link issue. Neither choice authorizes a VM, spending, or changing B49.
+For process-relative links, prove each fixed result for the actual task,
+root, namespace and, where relevant, descriptor generation; resolving
+`/proc/self`, `/proc/thread-self` or `/dev/fd` as the observer is not a
+substitute. Reject unexplained paths, aliases, permission errors or changes.
+Do not drop a directory from the walk, infer an empty listing, or admit
+state on manager evidence alone. No host, storage, key, spending, B49
+change, pilot or qualification run is authorized by this decision.

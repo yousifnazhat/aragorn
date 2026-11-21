@@ -1,7 +1,7 @@
-"""Manager-side, read-only membership of two existing, held Pi endpoint directories.
+"""Read-only custody of two existing, held Pi endpoint directories.
 
-No connections, opens of socket endpoints, casts of worker /proc objects,
-credential changes, or conclusions about Pi's lookup or listing behavior.
+The stopped-worker guard compares fixed names as the manager, not as Pi.
+No connection, credential change, or conclusion about Pi's lookup or listing behavior.
 """
 from contextlib import ExitStack
 import math
@@ -226,3 +226,71 @@ def capture_owned_socket_directories(owned, request_dispatch, provider_dispatch,
                      closed_boottime_ns=_tick())
         _edge_valid(first, uid, gid)
         return first
+
+
+def _worker_socket_sample(stack, role, mount, owned, stopped, dispatchers, deadline):
+    # _frame follows only verified kernel magic links, holds this generation's
+    # root and namespaces, and requires one stopped task with confined credentials.
+    worker, context, root, _ = kernel._frame(stack, role, mount, deadline, kind="worker", ticks=owned.start_ticks)
+    _need((worker["pid"], worker["uid"], worker["gid"]) == (owned.pid, owned.plan.worker_uid, owned.plan.worker_gid)
+          and worker["mount_namespace"] != stopped["manager"]["mount_namespace"], "not the stopped worker's private view")
+    _need(kernel._read(role[1], "cgroup", 8192, mount, deadline) == ("0::" + owned.plan.profile.cgroup + "\n").encode("ascii"),
+          "different worker cgroup")
+    # Ordinary names are metadata-only O_PATH|O_NOFOLLOW; every intermediate
+    # component is also O_DIRECTORY. Never enumerate the worker's directory.
+    run = kernel._pin(stack, root, "run", directory=True)
+    base = kernel._pin(stack, run, "aragorn-pi-bootstrap", directory=True)
+    base_obj = _project(base, owned.directory_identity)
+    view_mount = base_obj["mnt_id"]
+    _need(kernel._filesystem(base) == kernel._TMPFS and
+          view_mount not in (kernel._stat(run, owner=True)["mnt_id"], stopped["bootstrap"]["object"]["mnt_id"]),
+          "missing separate worker bootstrap bind")
+
+    def same(fd, obj, expected):
+        # A read-only bind has its own mount ID. All other recorded metadata,
+        # including the underlying dentry inode, must match the original owner.
+        _need(obj == {**expected, "mnt_id": view_mount} and os.fstatvfs(fd).f_flag & os.ST_RDONLY,
+              "worker endpoint projection changed, writable, or overmounted")
+
+    same(base, base_obj, stopped["bootstrap"]["object"])
+    for (key, (dirname, filename)), dispatch in zip(_ROLES.items(), dispatchers):
+        expected = stopped["directories"][key]
+        directory = kernel._pin(stack, base, dirname, directory=True)
+        same(directory, _project(directory, dispatch.directory_identity), expected["object"])
+        leaf = kernel._pin(stack, directory, filename)
+        same(leaf, _project(leaf, dispatch.socket_identity, endpoint=True), expected["endpoint"]["object"])
+    return context, view_mount
+
+
+def require_stopped_worker_socket_view(owned, stopped, *, deadline):
+    """Refuse a foreign/writable projection before the held worker resumes; emit no evidence or permission."""
+    kernel._platform()
+
+    def guard():
+        kernel._check(deadline)
+        _need(type(owned) is native._Owned and owned.started is True and owned.exit_observed is False and
+              _num(owned.pidfd, 0, 1 << 31) and type(owned.socket_directory_owners) is tuple and
+              len(owned.socket_directory_owners) == 2, "no original stopped worker or socket owners")
+        kernel._generation(owned.pid, owned.start_ticks)
+        recv = owned.socket_directory_record
+        owner = _owners(owned, *owned.socket_directory_owners, deadline)
+        _edge_valid(stopped, *owner[:2])
+        worker = dict(pid=owned.pid, start_ticks=owned.start_ticks, uid=owned.plan.worker_uid, gid=owned.plan.worker_gid,
+                      cgroup=owned.plan.profile.cgroup, unit=owned.plan.unit_name, invocation_id=owned.invocation)
+        _need(type(recv) is dict and recv.get("stopped") is stopped and recv.get("status") == native._SOCKET_INCOMPLETE
+              and _num(recv.get("gate_stop_seq"), 1) and recv.get("worker") == worker and
+              recv.get("immutable_launch_digest") == owned.immutable_digest and
+              recv.get("clock") == dict(boot_id=stopped["boot_id"], clock_id="CLOCK_BOOTTIME",
+                                        time_namespace_inode=stopped["time_namespace_inode"]), "different worker or stopped manager edge")
+        native.process.require_live_pidfd(owned.pidfd)
+        return owner, worker, owned.pidfd, owned.immutable_digest, recv["gate_stop_seq"]
+
+    first = guard()
+    with ExitStack() as held:
+        proc, mount = kernel._proc(held)
+        role = kernel._role(held, proc, owned.pid, mount)
+        args = (role, mount, owned, stopped, owned.socket_directory_owners, deadline)
+        before = _worker_socket_sample(held, *args)
+        with ExitStack() as end:
+            _need(_worker_socket_sample(end, *args) == before, "worker root, credentials, namespace or mount changed")
+        _need(guard() == first, "stopped worker or dispatch ownership changed")

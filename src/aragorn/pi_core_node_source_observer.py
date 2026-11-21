@@ -841,8 +841,10 @@ class _NodeSession:
 
 
 def _finish_socket_directories(session):
-    """Two manager membership edges, not a Pi lookup, source event or health result."""
-    from .pi_core_owned_socket_directories import capture_owned_socket_directories, verify_owned_socket_directories
+    """Check the stopped task's named binds; the retained edges still describe only the manager."""
+    from .pi_core_owned_socket_directories import (
+        capture_owned_socket_directories, require_stopped_worker_socket_view, verify_owned_socket_directories,
+    )
     owned, observer = session.owned, session.observer
     record = owned.socket_directory_record
     _require(type(session) is _NodeSession and session.profile["schema"] == restricted.PROFILE_SCHEMA and
@@ -893,7 +895,8 @@ def _finish_socket_directories(session):
                                  "time_namespace_inode": stopped["time_namespace_inode"]} and
              first["closed_boottime_ns"] <= observer._events[seq - 1]["boottime_ns"] <= stopped["opened_boottime_ns"],
              "NODE_SOCKET_MEMBERSHIP_CLOCK_ORDER")
-    session._budget(session.operation_deadline)
+    require_stopped_worker_socket_view(owned, stopped, deadline=session.operation_deadline)
+    _require(guard() == seq, "NODE_SOCKET_MEMBERSHIP_STOP_CHANGED")
     record["status"] = base.native._SOCKET_MATCHED
 
 

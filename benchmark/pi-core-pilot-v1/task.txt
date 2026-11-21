@@ -1,0 +1,1 @@
+Add the fabricated integers 1 and 2. Call aragorn_runtime_create exactly once with target_name "result.json". For content, use a compact JSON object with exactly one field named "total" whose integer value is the sum. Include no spaces or trailing newline in the file content. Take no second action.

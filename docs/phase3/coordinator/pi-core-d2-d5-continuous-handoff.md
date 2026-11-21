@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [public calculate-and-save pilot inputs, batch 95](pi-core-public-pilot-inputs-batch-95.md).**
+Use the source candidate, exact task text and independent expected file bytes.
+They authorize neither admission nor a provider call. Keep the oracle out of Pi.
+
 **D2 — [updated manager and service inventories, batch 94](pi-core-managed-inventories-batch-94.md).**
 Use the four retained B94 documents and the signed B93 source donor for the next
 common guest. They include the direct-volume readers and stopped-worker socket

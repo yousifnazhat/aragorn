@@ -358,12 +358,12 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
             identity._lineage_matches(active, activation, profile, protected_install_root)
 
             def guard():
-                if native_custody is not None:
-                    native_custody.guard()
+                capture = native_custody.guard() if native_custody is not None else None
                 identity._remaining(deadline, activation)
                 _require(identity.read_activation(activation_path) == activation and
                          identity._measured(worker_connection, worker_fd, profile, activation, deadline) == measured,
                          "protected Pi request identity changed")
+                return capture
 
             phase = "REQUEST_FRAME"
             if action_evidence is None:
@@ -446,10 +446,18 @@ def handle_pi_request_connection(worker_connection, broker_connection, *, activa
                     action_evidence.retain("CHECK", document)
                 _require(document == expected and sequence <= 16, "broker request check sequence differs")
                 guard()
+                current = {**expected, "kind": "CURRENT"}
                 if action_evidence is not None:
-                    action_evidence.retain("CURRENT_ATTEMPT", {**expected, "kind": "CURRENT"})
-                    guard()
-                _send(broker_connection, {**expected, "kind": "CURRENT"}, deadline, **mode)
+                    phase = "CURRENT_PREPARATION"
+                    action_evidence.prepare_current(document, current, guard)
+                    phase = "CURRENT_FINAL_CHECK"
+                    action_evidence.before_current_send(current)
+                    phase = "CURRENT_SEND"
+                _send(broker_connection, current, deadline, **mode)
+                if action_evidence is not None:
+                    # Normal return is local submission only, never proof of receipt or effect.
+                    phase = "CURRENT_SEND_RETURNED"
+                    action_evidence.current_send_returned(current)
     except BaseException as exc:
         if action_evidence is not None:
             try:

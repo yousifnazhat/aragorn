@@ -40,7 +40,7 @@ def task(**changes):
     return value
 
 
-def build_inert_node_source_capture():
+def build_inert_node_source_capture(*, challenges=1):
     """Use producer transitions with an inert kernel, never a live tracee.
 
     The caller stores blobs in its own CAS and supplies that CAS to the separate
@@ -122,18 +122,31 @@ def build_inert_node_source_capture():
         ])
         session._wait_one(71)
         session._handle(session.pending_events.pop(0), 2.0)
-        issued = base._tick()
-        challenge = dict(nonce="c" * 64, issued_ns=issued, deadline_ns=issued + base.CHALLENGE_NS)
-        pending.append(("NONE", None, None, None, None, 128, 5))
-        session._challenge(**challenge)
-        record = session._snapshot()
+        assert type(challenges) is int and 1 <= challenges <= 16
+        prefixes = []
+        for index in range(challenges):
+            if index:
+                # Space for the previous inert caller's retained, send and return marks.
+                for _ in range(10):
+                    base._tick()
+            issued = base._tick()
+            challenge = dict(nonce="c" * 64 if not index else f"{index:064x}",
+                             issued_ns=issued, deadline_ns=issued + base.CHALLENGE_NS)
+            pending.append(("NONE", None, None, None, None, 128, 5))
+            session._challenge(**challenge)
+            record = session._snapshot()
+            if challenges > 1:
+                prefixes.append(copy.deepcopy(record))
     arguments = dict(expected_bindings=copy.deepcopy(value._bindings), expected_worker=copy.deepcopy(value._worker),
                      expected_clock=copy.deepcopy(value._clock), expected_gate_identity=gate_meta,
                      expected_profile_raw=profile_raw, source_inventory_raw=source_raw, loader_inventory_raw=loader_raw,
                      expected_root_peer=(9000, 0, 0), expected_root_endpoints=("/run/aragorn/request.sock",),
                      expected_challenge=challenge, boundary_boottime_ns=record["events"][-1]["boottime_ns"] + 1)
-    return dict(record=record, arguments=arguments,
-                blobs=[source_bytes, loader_bytes, source_raw, loader_raw, profile_raw])
+    result = dict(record=record, arguments=arguments,
+                  blobs=[source_bytes, loader_bytes, source_raw, loader_raw, profile_raw])
+    if challenges > 1:
+        result["prefixes"] = prefixes
+    return result
 
 
 class NodeAcquisitionTests(unittest.TestCase):

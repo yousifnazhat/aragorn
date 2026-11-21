@@ -11,9 +11,11 @@ import fcntl
 import json
 import os
 import stat
+import time
 
 from . import pi_core_identity_handoff as channel
 from . import pi_core_provider_evidence as storage
+from . import pi_core_provider_observation as observation
 from . import pi_core_request_handoff as handoff
 from . import pi_core_request_recovery as recovery
 from . import pi_core_sensor_channel as sensor
@@ -27,7 +29,7 @@ from .oci_worker_protocol import canonical_digest, canonical_json
 SCHEMA = "aragorn/pi-core-native-action-evidence/v1"
 AUTHORITY = "RETAINED_ACTION_RECORDS_ONLY_NOT_EFFECT_TIMING_HEALTH_OR_PHASE3"
 _SEAL = object()
-_KINDS = frozenset({"REQUEST_FRAME", "REQUEST_CONTEXT", "CHECK", "CURRENT_ATTEMPT",
+_KINDS = frozenset({"REQUEST_FRAME", "REQUEST_CONTEXT", "CHECK",
     "ACTION_DONE", "SENSOR_DONE", "ACTION_RESULT", "CONTROL_READBACK", "FAILURE"})
 
 
@@ -44,6 +46,14 @@ def _copy(value):
     return json.loads(canonical_json(value))
 
 
+def _boottime_ns():
+    return time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+
+
+def _time_namespace_inode():
+    return os.stat("/proc/thread-self/ns/time").st_ino
+
+
 class PiNativeActionEvidence:
     """Fixed factory-owned custody; ordinary records are never authority."""
 
@@ -56,6 +66,10 @@ class PiNativeActionEvidence:
         self._done_digest = None
         self._context = None
         self._complete_attempted = False
+        self._current_rows, self._current_nonces = [], set()
+        self._check_digest = self._current_packet = self._source_capture = self._boundary = None
+        self._send_phase, self._summary_attempted = "READY", False
+        self._store_write_failed = False
         self._record = {"schema": SCHEMA, "authority": AUTHORITY, "status": "PREPARING",
             "activation_digest": None, "grant_digest": None, "configuration_digest": None,
             "retained_evidence": None, "readback": None, "receipt_join_verified": False,
@@ -148,11 +162,18 @@ class PiNativeActionEvidence:
             _require(self._done_digest is None, "ACTION_EVIDENCE_DONE_ALREADY_RETAINED")
         if kind == "REQUEST_CONTEXT":
             _require(self._context is None, "ACTION_EVIDENCE_CONTEXT_ALREADY_RETAINED")
-        try:
-            result = self._store.retain(kind, value)
-        except BaseException:
-            self._mark("RETAIN", "STORAGE_RETENTION_UNCONFIRMED", hold=True)
-            raise
+        if kind == "CHECK":
+            _require(not self._failed and not self._summary_attempted and self._check_digest is None
+                     and self._done_digest is None and self._send_phase in ("READY", "RETURNED")
+                     and len(self._current_rows) < 16,
+                     "ACTION_EVIDENCE_CHECK_ALREADY_BOUND")
+        if kind == "FAILURE" and self._current_rows and not self._summary_attempted:
+            # Prefix evidence only: null send times are unknown; failure never reissues an attempt.
+            self._summary_attempted = True
+            value = {**value, "current_send_summary": self._current_summary()}
+        result = self._retain_raw(kind, value)
+        if kind == "CHECK":
+            self._check_digest = result["digest"]
         if kind == "ACTION_DONE":
             self._done_digest = canonical_digest(value)
         if kind == "REQUEST_CONTEXT":
@@ -160,6 +181,121 @@ class PiNativeActionEvidence:
         if kind == "FAILURE":
             self._failed = True
         return result
+
+    def _retain_raw(self, kind, value):
+        # The store validates its own held FDs. Do not add a worker challenge in this boundary.
+        _require(not self._store_write_failed, "ACTION_EVIDENCE_PRIOR_RETENTION_UNCONFIRMED")
+        try:
+            return self._store.retain(kind, value)
+        except BaseException:
+            self._store_write_failed = True
+            self._mark("RETAIN", "STORAGE_RETENTION_UNCONFIRMED", hold=True)
+            raise
+
+    def prepare_current(self, check, current, guard):
+        try:
+            self._guard()
+            context = self._context
+            _require(not self._failed and not self._summary_attempted and self._store is not None and
+                     self._send_phase in ("READY", "RETURNED") and type(context) is dict and
+                     self._check_digest is not None, "ACTION_EVIDENCE_CURRENT_NOT_EXPECTED")
+            self._send_phase = "PREPARING"
+            offer, challenge = context["offer_intent"], context["challenge"]
+            packet = _copy(current)
+            for value in (offer, challenge, check, packet):
+                handoff._validate_packet(value, terminal_ack=True)
+            expected = {key: offer[key] for key in ("nonce", "activation_digest", "request_digest", "deadline_ns")}
+            seq = len(self._current_rows) + 1
+            _require(offer["kind"] == "OFFER" and challenge["kind"] == "CHALLENGE" and
+                     challenge["nonce"] == offer["nonce"] and offer["activation"] == context["activation"] == self._activation
+                     and offer["activation_digest"] == self._record["activation_digest"] and
+                     offer["worker_request"] == context["request"] and offer["request_digest"] == canonical_digest(context["request"])
+                     and offer["deadline_ns"] <= int(self._deadline * 1_000_000_000) and
+                     seq <= 16 and canonical_digest(check) == self._check_digest and
+                     check == handoff._packet("CHECK", **expected, sequence=seq, terminal_ack=True) and
+                     packet == {**check, "kind": "CURRENT"}, "ACTION_EVIDENCE_CHECK_OR_CURRENT_DIFFERS")
+            # This is the native caller's final, authenticated guard. Use its original returned
+            # prefix instead of asking for another challenge or looking up a latest snapshot.
+            capture = _copy(guard())
+            boundary = observation.validate_provider_source_capture(capture, self._activation,
+                                                                     boundary_boottime_ns=_boottime_ns())
+            nonce = boundary["challenge"]["nonce"]
+            _require(nonce not in self._current_nonces and boundary["clock"]["time_namespace_inode"] == _time_namespace_inode(),
+                     "ACTION_EVIDENCE_CURRENT_CHALLENGE_OR_CLOCK_DIFFERS")
+            prior = self._source_capture
+            if prior is not None:
+                _require(capture["events"][:len(prior["events"])] == prior["events"] and
+                         len(capture["events"]) > len(prior["events"]) and
+                         all(capture[k] == prior[k] for k in prior if k not in ("events", "accounting")) and
+                         self._current_rows[-1]["send_returned_boottime_ns"] <= boundary["challenge"]["issued_ns"],
+                         "ACTION_EVIDENCE_CURRENT_PREFIX_REPLACED")
+            attempt = dict(schema="aragorn/pi-core-action-current-attempt/v2",
+                           activation_digest=self._record["activation_digest"], check_digest=self._check_digest,
+                           sequence=seq, current=packet, source_capture=capture, boundary=boundary)
+            ref = self._retain_raw("CURRENT_ATTEMPT", attempt)
+            _require(ref["kind"] == "CURRENT_ATTEMPT" and ref["digest"] == canonical_digest(attempt),
+                     "ACTION_EVIDENCE_CURRENT_RETENTION_DIFFERS")
+            self._current_rows.append(dict(sequence=seq, attempt_digest=ref["digest"],
+                                           before_send_boottime_ns=None, send_returned_boottime_ns=None))
+            self._current_nonces.add(nonce)
+            self._source_capture, self._boundary, self._current_packet = capture, boundary, packet
+            self._check_digest, self._send_phase = None, "PREPARED"
+        except BaseException:
+            self._failed = True
+            raise
+
+    def _send_guard(self, packet, phase):
+        _require(type(self) is PiNativeActionEvidence and self._seal is _SEAL and self._active and
+                 not self._closed and not self._failed and self._send_phase == phase and
+                 type(packet) is dict and canonical_digest(packet) == canonical_digest(self._current_packet) and
+                 self._boundary["clock"]["time_namespace_inode"] == _time_namespace_inode(),
+                 "ACTION_EVIDENCE_CURRENT_STATE_OR_CLOCK_DIFFERS")
+
+    def before_current_send(self, current):
+        try:
+            self._send_guard(current, "PREPARED")
+            self._send_phase = "CHECKING"
+            edge = observation.validate_provider_source_capture(self._source_capture, self._activation,
+                                                                boundary_boottime_ns=_boottime_ns())
+            _require(edge["challenge"] == self._boundary["challenge"] and edge["clock"] == self._boundary["clock"]
+                     and edge["boundary_boottime_ns"] >= self._boundary["boundary_boottime_ns"],
+                     "ACTION_EVIDENCE_RETAINED_BOUNDARY_CHANGED")
+            channel.validate_deadline(self._deadline)
+            _require(time.monotonic_ns() < min(current["deadline_ns"], self._activation["expires_at_monotonic_ns"]),
+                     "ACTION_EVIDENCE_CURRENT_OPERATION_EXPIRED")
+            # Parsing and durable writes consume the same freshness budget; never refresh on failure.
+            tick = _boottime_ns()
+            _require(edge["boundary_boottime_ns"] <= tick and
+                     tick - self._source_capture["events"][-1]["boottime_ns"] <= 200_000_000,
+                     "ACTION_EVIDENCE_CURRENT_STALE_BEFORE_SEND")
+            self._current_rows[-1]["before_send_boottime_ns"] = tick
+            self._send_phase = "SENDING"
+        except BaseException:
+            self._failed = True
+            raise
+
+    def current_send_returned(self, current):
+        try:
+            tick = _boottime_ns()
+            self._send_guard(current, "SENDING")
+            _require(tick >= self._current_rows[-1]["before_send_boottime_ns"], "ACTION_EVIDENCE_CURRENT_CLOCK_REGRESSED")
+            self._current_rows[-1]["send_returned_boottime_ns"] = tick
+            self._send_phase = "RETURNED"
+        except BaseException:
+            self._failed = True
+            raise
+
+    def _current_summary(self):
+        return dict(schema="aragorn/pi-core-action-current-sends/v1", activation_digest=self._record["activation_digest"],
+                    rows=_copy(self._current_rows))
+
+    def _finish_current_sends(self):
+        _require(not self._failed and not self._summary_attempted and self._check_digest is None and
+                 self._send_phase == "RETURNED" and 1 <= len(self._current_rows) <= 16 and
+                 all(row["send_returned_boottime_ns"] is not None for row in self._current_rows),
+                 "ACTION_EVIDENCE_CURRENT_OUTCOMES_INCOMPLETE")
+        self._summary_attempted = True
+        self._retain_raw("CURRENT_SEND_SUMMARY", self._current_summary())
 
     def complete(self, *, done, sensor_done, result):
         self._guard()
@@ -194,6 +330,7 @@ class PiNativeActionEvidence:
                      sensor_done["broker_result_digest"] == canonical_digest(result["broker_result"]) and
                      done["request_digest"] == sensor_done["request_digest"] == result["request_digest"],
                      "ACTION_EVIDENCE_TERMINAL_BINDINGS_DIFFER")
+            self._finish_current_sends()
             self._readback(done, result)
             self._guard()
             self._record["receipt_join_verified"] = True

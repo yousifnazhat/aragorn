@@ -75,6 +75,19 @@ class HandoffTests(terminal_fixtures.RootTests):
             "retain", autospec=True, side_effect=retain))
         self.complete = self.stack.enter_context(mock.patch.object(evidence.PiNativeActionEvidence,
             "complete", autospec=True, side_effect=complete))
+        # Transport-only test double; real source-capture validation/receipt bytes
+        # and the two send timestamps are covered together in B77's guard tests.
+        def prepare(owner, check, current, guard):
+            self.assertEqual(check, self.retained("CHECK")[-1])
+            guard()
+            self.records.append(("CURRENT_PREPARED", copy.deepcopy(current)))
+            self.events.append("current_prepare")
+        self.stack.enter_context(mock.patch.object(evidence.PiNativeActionEvidence, "prepare_current", autospec=True,
+            side_effect=prepare))
+        self.stack.enter_context(mock.patch.object(evidence.PiNativeActionEvidence, "before_current_send", autospec=True,
+            side_effect=lambda *_: self.events.append("current_before_send")))
+        self.stack.enter_context(mock.patch.object(evidence.PiNativeActionEvidence, "current_send_returned", autospec=True,
+            side_effect=lambda *_: self.events.append("current_returned")))
 
     def handle(self, **changes):
         return super().handle(**{"action_evidence": self.evidence, **changes})
@@ -173,8 +186,8 @@ class HandoffTests(terminal_fixtures.RootTests):
     def test_context_check_current_attempt_precede_actual_sends(self):
         self.handle()
         for left, right in (("retain:REQUEST_CONTEXT", "OFFER"),
-                            ("retain:CHECK", "retain:CURRENT_ATTEMPT"),
-                            ("retain:CURRENT_ATTEMPT", "CURRENT")):
+                            ("retain:CHECK", "current_prepare"), ("current_prepare", "current_before_send"),
+                            ("current_before_send", "CURRENT"), ("CURRENT", "current_returned")):
             self.assertLess(self.events.index(left), self.events.index(right))
         context = self.retained("REQUEST_CONTEXT")[0]
         self.assertEqual(context["request"], handoff_fixtures.request())
@@ -183,7 +196,7 @@ class HandoffTests(terminal_fixtures.RootTests):
         self.assertEqual(context["lineage"], {"fixture": "lineage"})
         self.assertEqual(context["grant"], {})
         self.assertEqual(context["offer_intent"], self.send.call_args_list[0].args[1])
-        self.assertEqual(self.retained("CURRENT_ATTEMPT")[0], self.send.call_args_list[1].args[1])
+        self.assertEqual(self.retained("CURRENT_PREPARED")[0], self.send.call_args_list[1].args[1])
 
     def test_context_storage_failure_prevents_offer_and_ack(self):
         original = self.retain.side_effect
@@ -199,7 +212,7 @@ class HandoffTests(terminal_fixtures.RootTests):
         self.packet_list[1][0]["sequence"] = 2
         self.assertEqual(self.handle()["status"], "INDETERMINATE")
         self.assertEqual(self.retained("CHECK")[0]["sequence"], 2)
-        self.assertEqual(self.retained("CURRENT_ATTEMPT"), [])
+        self.assertEqual(self.retained("CURRENT_PREPARED"), [])
         self.assert_no_release()
 
     def test_uncertain_current_send_keeps_attempt_without_retry(self):
@@ -209,7 +222,8 @@ class HandoffTests(terminal_fixtures.RootTests):
             if document["kind"] == "CURRENT": raise OSError("uncertain send")
         self.send.side_effect = send
         self.assertEqual(self.handle()["status"], "INDETERMINATE")
-        self.assertEqual(len(self.retained("CURRENT_ATTEMPT")), 1)
+        self.assertEqual(len(self.retained("CURRENT_PREPARED")), 1)
+        self.assertNotIn("current_returned", self.events)
         self.assertEqual(self.events.count("CURRENT"), 1)
         self.assert_no_release()
 

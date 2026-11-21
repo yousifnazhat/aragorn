@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [action boundary evidence, batch 77](pi-core-action-current-boundary-batch-77.md).**
+The managed handoff retains the final guard's original source trace and
+distinguishes a recorded local send return from receipt or effect. Independent
+offline replay needs the exact index, acquired inputs and operator-held pins.
+
 **D3 — [installed bundle readback, batch 76](pi-core-installed-bundle-readback-batch-76.md).**
 The public install/update report now carries the measured tree on a clean
 return. The offline reader compares it with the approved retained bytes.

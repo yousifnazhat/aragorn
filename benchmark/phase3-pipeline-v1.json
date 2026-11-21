@@ -2,6 +2,37 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-public-pilot-admission-closure-offline",
+      "description": "Derive and replay the local Markdown admission graph from the two original B95 public objects in a separate one-use developer store. No new inventory, analyzer, policy decision, install or execution.",
+      "tests": [
+        "test_pi_core_public_pilot_admission_closure"
+      ],
+      "inputs": [
+        "benchmark/pi-core-pilot-v1/review.json",
+        "src/aragorn/__init__.py",
+        "src/aragorn/acquire.py",
+        "src/aragorn/admission_artifact_graph.py",
+        "src/aragorn/analyze.py",
+        "src/aragorn/artifact_closure.py",
+        "src/aragorn/benchmark.py",
+        "src/aragorn/benchmark_handoff_v2.py",
+        "src/aragorn/benchmark_protocol_v2.py",
+        "src/aragorn/benchmark_semantic_closure_v2.py",
+        "src/aragorn/cas.py",
+        "src/aragorn/github_acquire.py",
+        "src/aragorn/github_expand.py",
+        "src/aragorn/github_expansion_proof.py",
+        "src/aragorn/github_git_protocol.py",
+        "src/aragorn/github_quarantine_receipt.py",
+        "src/aragorn/github_source_proof.py",
+        "src/aragorn/oci_worker_protocol.py",
+        "src/aragorn/vendor_reports.py",
+        "tests/test_pi_core_public_pilot_admission_closure.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 90
+    },
+    {
       "id": "pi-core-strict-worker-devices-offline",
       "description": "Replay inert worker records for exact standard-descriptor link identity, unknown filesystem devices and strict reader selection; preserve historical evidence. No process, disk or guest is inspected.",
       "tests": [

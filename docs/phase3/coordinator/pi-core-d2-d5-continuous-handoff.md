@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [stopped-worker socket bind, batch 87](pi-core-stopped-socket-mounts-batch-87.md).**
+The restricted startup checks the named objects through the stopped worker's
+root before release. This is an in-memory refusal check; it does not add a
+Pi-side access result, change private recording scope, or authorize B86 launch.
+
 **D2 — [candidate worker filesystem, batch 86](pi-core-candidate-worker-filesystem-batch-86.md).**
 Use the signed successor archive pin rather than rebuilding B53 or B83.
 The artifact changes only the fixed-view gate, not state, launch authority

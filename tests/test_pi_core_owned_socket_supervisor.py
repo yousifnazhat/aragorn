@@ -30,6 +30,7 @@ class OwnerMembershipTests(TestCase):
             opened_boottime_ns=n, closed_boottime_ns=n+1) for n in (10, 30)]
         self.capture = self.patch(sockets, "capture_owned_socket_directories", side_effect=[self.first, self.second])
         self.verify = self.patch(sockets, "verify_owned_socket_directories")
+        self.worker_view = self.patch(sockets, "require_stopped_worker_socket_view")
         self.pidfd = self.patch(node.base.process, "require_live_pidfd")
 
     def patch(self, obj, name, **kw):
@@ -68,7 +69,8 @@ class OwnerMembershipTests(TestCase):
         node._finish_socket_directories(s)
         self.assertEqual(self.capture.call_args_list, [mock.call(self.owned,self.request,self.provider,deadline=90)]*2)
         self.verify.assert_called_once_with(self.first,self.second,worker_uid=501,worker_gid=502)
-        self.assertEqual(self.pidfd.call_args_list, [mock.call(71),mock.call(17)]*2)
+        self.worker_view.assert_called_once_with(self.owned, self.second, deadline=90)
+        self.assertEqual(self.pidfd.call_args_list, [mock.call(71),mock.call(17)]*3)
         self.owned.source_observer_closed = True
         result = self.report()
         r = result["owned_socket_directories"]
@@ -111,6 +113,26 @@ class OwnerMembershipTests(TestCase):
             node._finish_socket_directories(s)
         self.assertIs(self.owned.socket_directory_record["stopped"], self.second)
         self.assertEqual(self.owned.socket_directory_record["status"],native._SOCKET_INCOMPLETE)
+        self.worker_view.assert_not_called()
+
+    def test_wrong_worker_bind_prevents_release_without_recapturing_or_discarding_manager_edges(self):
+        self.begin()
+        self.worker_view.side_effect = ValueError("different worker socket")
+        with self.assertRaisesRegex(ValueError, "worker socket"):
+            node._finish_socket_directories(self.armed())
+        record = self.owned.socket_directory_record
+        self.assertEqual(record["status"], native._SOCKET_INCOMPLETE)
+        self.assertIs(record["before_start"], self.first)
+        self.assertIs(record["stopped"], self.second)
+        self.assertEqual(self.capture.call_count, 2)
+
+    def test_lost_stop_during_worker_view_refuses_before_matching(self):
+        self.begin()
+        s = self.armed()
+        self.worker_view.side_effect = lambda *args, **kw: s.tasks[15].update(stopped=False)
+        with self.assertRaisesRegex(node.base.PiSourceObserverError, "INITIAL_STOP"):
+            node._finish_socket_directories(s)
+        self.assertEqual(self.owned.socket_directory_record["status"], native._SOCKET_INCOMPLETE)
 
     def test_later_outer_cleanup_failure_retains_bytes_without_positive_status(self):
         self.begin()

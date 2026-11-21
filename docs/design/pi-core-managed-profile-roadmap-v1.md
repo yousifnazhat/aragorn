@@ -160,6 +160,10 @@ establish installed identity or an observed mask.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.
+[D3 batch 76](../phase3/coordinator/pi-core-installed-bundle-readback-batch-76.md)
+connects protected installed-tree measurement to the public install/update
+report and an independent offline comparison. Worker consumption and installed
+evidence remain separate requirements.
 [D4 batch 57](../phase3/coordinator/pi-core-serial-measurements-batch-57.md)
 rejects overlapping reported decision/task windows across the managed campaign;
 there is still no freeze or measured campaign.

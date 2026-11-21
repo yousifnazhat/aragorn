@@ -671,15 +671,16 @@ def _public_preparation(observation):
 
 def _public_install(observation):
     report = _public_observation(observation)
-    report.update(schema="aragorn/pi-core-bundle-install-report/v1",
+    report.update(schema="aragorn/pi-core-bundle-install-report/v2",
         authority="PROTECTED_MATERIALIZATION_ONLY_NOT_ACTIVATION_OR_PHASE3",
         context_digest=None, installation_attempted=False, owned_destination_closed=False,
         publication_state="NOT_ATTEMPTED", transaction_digest=None, recovery_digest=None,
-        input_cleanup_uncertainty_digest=None)
+        input_cleanup_uncertainty_digest=None, observed_tree_digest=None)
     if observation is None:
         return report
     _require(observation.get("schema") == "aragorn/pi-core-bundle-install-result/v1" and
-             observation.get("authority") == report["authority"] and
+             observation.get("authority") == report["authority"] and report["entry_status"] in
+             {"INSTALLED_NOT_ACTIVATED_OR_QUALIFIED", "REFUSED", "REFUSED_OR_INDETERMINATE", "CLEANUP_HOLD"} and
              observation.get("managed_result") is None and report["managed_call_attempted"] is False,
              "installation cannot carry managed authority")
     for name in ("installation_attempted", "owned_destination_closed"):
@@ -707,14 +708,26 @@ def _public_install(observation):
     raw = _canonical(uncertainty)
     _require(len(raw) <= 256 * 1024, "input cleanup uncertainty exceeds bound")
     report["input_cleanup_uncertainty_digest"] = _digest(raw)
-    if report["entry_status"] == "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED":
-        _require(report["installation_attempted"] and report["owned_inputs_closed"] and
-                 report["owned_destination_closed"] and not uncertainty and
-                 state == "PUBLISHER_RETURNED" and report["transaction_digest"] is not None and
-                 report["recovery_digest"] is None and pin is not None,
-                 "installation success lacks complete owned custody")
     _require(len(_canonical(report)) <= 256 * 1024, "installation report exceeds bound")
     return report
+
+
+def _install_tree_pin(observation, report, host_pin, plan_pin):
+    """Read only on normal entry return. A publication receipt is not its measured readback."""
+    measured = observation.get("observed_tree_digest")
+    _require(report["installation_attempted"] and report["owned_inputs_closed"] and
+             report["owned_destination_closed"] and observation["input_cleanup_uncertainty"] == [] and
+             report["entry_failure_stage"] is None and report["publication_state"] == "PUBLISHER_RETURNED" and
+             report["transaction_digest"] is not None and report["recovery_digest"] is None and
+             report["plan_digest"] == plan_pin and report["host_before"] is not None and
+             report["host_before"] == report["host_after"] and
+             report["host_after"]["host_profile_digest"] == host_pin and
+             report["source_before"] and report["source_after"] and
+             report["source_after"][:len(report["source_before"])] == report["source_before"] and
+             all(type(p) is str and _PIN.fullmatch(p) and int(p[7:], 16)
+                 for p in (host_pin, plan_pin, report["context_digest"], report["deployment_digest"], measured)) and
+             observation["transaction"].get("tree_digest") == measured, "installation lacks a held measured tree")
+    return measured
 
 
 def _public_broker_preparation(observation):
@@ -873,7 +886,7 @@ def main():
     result, observation, phase = 126, None, "PREFLIGHT"
     entry_invoked = False
     capture = sys.argv[1:2] == ["--capture-stopped-masks"]
-    capture_returned = None
+    capture_returned = install_returned = None
     prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-inventories"
     install = len(sys.argv) > 1 and sys.argv[1] == "--install-bundle"
     broker_prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-broker-control"
@@ -941,7 +954,11 @@ def main():
         elif broker_prepare:
             result = 0 if report["entry_status"] == "BROKER_PREPARED_NOT_ACTIVATED_OR_QUALIFIED" else 126
         elif install:
-            result = 0 if report["entry_status"] == "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED" else 126
+            if report["entry_status"] == "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED":
+                phase = "REPORT_REFUSED"
+                measured = _install_tree_pin(observation, report, args[1], args[3])
+                install_returned = (report, measured)
+                phase, result = "POST_CALL_CUSTODY", 0
         elif prepare:
             result = (0 if report["entry_status"] == "INVENTORIES_PREPARED_NOT_QUALIFIED" and
                 report["preparation_attempted"] and report["owned_inputs_closed"] and
@@ -970,11 +987,30 @@ def main():
         report = public(observation)
         if observation is None and entry_invoked:
             report[attempt_field] = None
+            if install:
+                report["publication_state"] = "UNKNOWN"
     except BaseException:
         report = public(None)
         attempted = observation.get(attempt_field) if type(observation) is dict else None
         report[attempt_field] = attempted if type(attempted) is bool else None if entry_invoked else False
+        if install and report[attempt_field] is not False:
+            report["publication_state"] = "UNKNOWN"
         phase, result = "REPORT_REFUSED", 126
+    if install:
+        # Exception-carried observations may describe effects, but never establish
+        # this measurement. Retain safe publication metadata if any later guard fails.
+        if (result == 0 and install_returned is not None and report == install_returned[0] and
+                observation.get("observed_tree_digest") == install_returned[1] and phase == "POST_CALL_CUSTODY" and
+                all(state == "CLOSED" for state in cleanup.values()) and time.monotonic_ns() < deadline_ns):
+            report["observed_tree_digest"] = install_returned[1]
+        else:
+            result = 126
+            if install_returned is not None and report != install_returned[0]:
+                # Do not adopt replacement effect records or lose the validated
+                # original merely because the post-cleanup projection changed.
+                report = dict(install_returned[0])
+            if report["entry_status"] == "INSTALLED_NOT_ACTIVATED_OR_QUALIFIED":
+                report["entry_status"] = "CLEANUP_HOLD"
     if capture:
         # A digest is publishable only after *normal* entry return, post-call host guard
         # and both outer closes. An exception can carry an apparent successful observation.

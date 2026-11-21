@@ -98,8 +98,11 @@ and Pi exposure records. Actual acquisition, current independent custody and
 guest enforcement remain unproven.
 The [worker mask decision](../phase3/coordinator/pi-core-worker-mask-decision.md)
 selects unchanged confinement and a [v2 offline reader](../phase3/coordinator/pi-core-mask-witness-batch-58.md).
-Do not remove protections or treat access failures as empty directories. Acquire
-current, independently anchored evidence before relying on the proposed view.
+The [B59 capture-only observer](../phase3/coordinator/pi-core-stopped-mask-observer-batch-59.md)
+connects that comparison to a stopped worker generation and keeps the exact
+mask records outside Pi. It is source wiring, not an installed capture, a
+complete worker walk, or an independently held latest head. Do not remove
+protections or treat access failures as empty directories.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

@@ -128,6 +128,8 @@ class _NodeSession:
         self.stopping = False
         self.drain_failure = None
         self.latest_health_observation = None
+        self._mask_capture = None
+        self._mask_receipt = None
         self.closed = threading.Event()
         self.lock = threading.Lock()
 
@@ -752,14 +754,24 @@ class _NodeSession:
 
     def _main(self):
         self.observer._thread = threading.get_native_id()
+        # Latch the mode on the tracer thread before acquiring the gate. A
+        # refusal, partial retention or timeout must never select normal pumping.
+        capture = self._mask_capture
+        capture_only = capture is not None
         try:
             _arm(self)
+            if capture_only:
+                from .pi_core_stopped_mask_capture import StoppedMaskCapture, capture_stopped_masks
+                _require(type(capture) is StoppedMaskCapture, "NODE_CAPTURE_ONLY_CUSTODY")
+                self._mask_receipt = capture_stopped_masks(self, capture, deadline=self.operation_deadline)
+                _require(type(self._mask_receipt) is dict, "NODE_CAPTURE_ONLY_RECEIPT")
         except BaseException as error:
             self._refuse(error)
         self.ready.set()
         while True:
             try:
-                if self.failure is not None and (not self.stopping or self.drain_failure is not None):
+                if ((capture_only and not self.stopping) or
+                    (self.failure is not None and (not self.stopping or self.drain_failure is not None))):
                     item = self.commands.get(timeout=0.1)
                 else:
                     item = self.commands.get_nowait()
@@ -785,7 +797,7 @@ class _NodeSession:
                             self.closed.set()
                             return
                         elif kind == "health":
-                            _require(self.failure is None and not self.stopping, "NODE_OBSERVER_REFUSED")
+                            _require(not capture_only and self.failure is None and not self.stopping, "NODE_OBSERVER_REFUSED")
                             self._barrier(deadline)
                             self.observer.guard_source_health(activation=payload, deadline=deadline)
                             self.latest_health_observation = self._snapshot()
@@ -800,7 +812,8 @@ class _NodeSession:
                     finally:
                         done.set()
             try:
-                if self.drain_failure is None and (self.failure is None or self.stopping):
+                if (self.drain_failure is None and (self.failure is None or self.stopping)
+                        and (not capture_only or self.stopping)):
                     with self.lock:
                         self._budget()
                         progress = self._drain(self.cleanup_deadline) if self.stopping else self._pump(self.operation_deadline)
@@ -918,10 +931,22 @@ def _arm(session):
 
 
 def start_node_observer(owned, profile, *, operation_deadline, cleanup_deadline):
+    return _start_node_session(owned, profile, operation_deadline, cleanup_deadline, None)
+
+
+def _start_stopped_mask_observer(owned, profile, *, operation_deadline, cleanup_deadline, capture):
+    from .pi_core_stopped_mask_capture import StoppedMaskCapture
+    _require(type(capture) is StoppedMaskCapture and type(profile) is dict
+             and profile.get("schema") == restricted.PROFILE_SCHEMA, "NODE_CAPTURE_ONLY_PROFILE")
+    return _start_node_session(owned, profile, operation_deadline, cleanup_deadline, capture)
+
+
+def _start_node_session(owned, profile, operation_deadline, cleanup_deadline, capture):
     _require(type(operation_deadline) in (int,float) and type(cleanup_deadline) in (int,float) and
              math.isfinite(operation_deadline) and math.isfinite(cleanup_deadline) and
              time.monotonic()<operation_deadline<cleanup_deadline,"NODE_START_DEADLINE")
     session=_NodeSession(owned,profile,operation_deadline,cleanup_deadline)
+    session._mask_capture = capture
     session.thread.start()
     if not session.ready.wait(max(0,operation_deadline-time.monotonic())):
         raise base.PiSourceObserverError("NODE_ARM_TIMEOUT", session.observer)

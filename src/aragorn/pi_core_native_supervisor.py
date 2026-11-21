@@ -629,6 +629,125 @@ def _retain_native_failure(error, value, *, stage, terminal, owned, missing_meta
         pass
 
 
+def _separate_capture_destinations(destinations, config, protected_root):
+    trees = (config.root_directory, config.runtime_directory, protected_root,
+             config.activation_directory, _BOOTSTRAP)
+    # The protected plan/preflight must separately check actual on-disk path
+    # custody. Do not follow symlinks here or quietly normalise '..'.
+    _require(all(isinstance(path, Path) and path.is_absolute() and path.anchor == "/"
+                 and path != Path("/") and ".." not in path.parts for path in (*destinations, *trees)),
+             "capture separation requires absolute canonical paths")
+    _require(all(not dest.is_relative_to(tree) and not tree.is_relative_to(dest)
+                 for dest in destinations for tree in trees),
+             "capture destination overlaps worker, runtime or provisioning tree")
+
+
+def run_native_pi_stopped_mask_capture(
+    cas: CAS, context: Mapping, *, profile: process.RuntimeProcessProfile, grant: Mapping,
+    protected_root: Path, runtime_conformance_digest: str, deployment: Mapping,
+    revoked_context_ids: Collection[str], now_unix: int, deadline: float,
+    config: PiConfinedLaunchConfig, capture, cleanup_timeout_seconds: float = 5.0,
+) -> dict:
+    """Trusted, separately authorized capture only. Never accept a PID, bootstrap or resume Pi."""
+    from . import pi_core_restricted_profile as restricted
+    from .pi_core_node_source_observer import _start_stopped_mask_observer
+    from .pi_core_source_observer import PiSourceObserver
+    from .pi_core_stopped_mask_capture import StoppedMaskCapture
+    now = time.monotonic()
+    _require(type(capture) is StoppedMaskCapture and type(config) is PiConfinedLaunchConfig
+             and config.native_request is True and config.provider_route_digest is None
+             and type(config.source_observation) is dict
+             and config.source_observation.get("schema") == restricted.PROFILE_SCHEMA,
+             "capture requires its protected custody and restricted provider-unavailable gate")
+    _require(type(deadline) in (int, float) and math.isfinite(deadline) and now < deadline <= now + 30
+             and type(cleanup_timeout_seconds) in (int, float) and math.isfinite(cleanup_timeout_seconds)
+             and 0 < cleanup_timeout_seconds <= 5 and deadline - cleanup_timeout_seconds > now,
+             "capture cannot reserve cleanup within original deadline")
+    operation_deadline = deadline - cleanup_timeout_seconds
+    result = {"schema": "aragorn/pi-core-stopped-mask-supervisor/v1",
+              "authority": "RETAINED_CAPTURE_ONLY_NOT_GATE_DENIAL_STORAGE_ADMISSION_OR_PHASE3_QUALIFICATION",
+              "status": "REFUSED", "unit": None, "invocation_id": None, "pid": None,
+              "start_time_ticks": None, "retention": None, "failure": None, "cleanup": None}
+    _prerequisites(operation_deadline)
+    try:
+        with hold_confined_pi_launch_plan(cas, context, profile=profile, grant=grant,
+                protected_root=protected_root, runtime_conformance_digest=runtime_conformance_digest,
+                deployment=deployment, revoked_context_ids=revoked_context_ids, now_unix=now_unix,
+                deadline=operation_deadline, config=config) as plan:
+            _require(type(plan) is PiConfinedLaunchPlan and plan.worker_uid == config.worker_uid
+                     and plan.worker_gid == config.worker_gid and plan.start_bytes == _start(config, plan.prepared)
+                     and type(plan.source_observation) is dict
+                     and plan.source_observation.get("schema") == restricted.PROFILE_SCHEMA
+                     and canonical_digest(plan.source_observation) == plan.source_observation_digest,
+                     "held capture plan differs from its protected gate and source profile")
+            _separate_capture_destinations((capture.store, capture.receipt_directory), config, protected_root)
+            capture.preflight(deployment_digest=plan.prepared.deployment_digest,
+                              profile_digest=plan.source_observation_digest, deadline=operation_deadline)
+            owned = _Owned(plan)
+            result["unit"] = plan.unit_name
+            try:
+                owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
+                _require(owned.unit_absence_observed, "fresh capture unit already exists")
+                # Keep the pinned unit's required mountpoint, but never accept a
+                # connection, publish an activation or prepare a dispatch service.
+                _prepare_resources(owned)
+                owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
+                _require(owned.unit_absence_observed, "capture unit appeared before exclusive start")
+                owned.start_attempted = True
+                code, _ = _command(plan.systemd_run_argv, operation_deadline)
+                _require(code == 0, "one-shot stopped capture start failed")
+                owned.started = True
+                _capture_unit(owned, operation_deadline)
+                result.update(invocation_id=owned.invocation, pid=owned.pid, start_time_ticks=owned.start_ticks)
+                try:
+                    observer = _start_stopped_mask_observer(owned, plan.source_observation, capture=capture,
+                        operation_deadline=operation_deadline, cleanup_deadline=deadline)
+                except BaseException as error:
+                    observer = getattr(error, "observer", None)
+                    if observer is not None:
+                        _require(type(observer) is PiSourceObserver and observer._owned is owned,
+                                 "failed capture lost stopped-gate ownership")
+                        owned.source_observer = observer
+                    raise
+                _require(type(observer) is PiSourceObserver and observer._owned is owned,
+                         "capture lost stopped-gate ownership")
+                owned.source_observer = observer
+                session = observer._node_session
+                _require(session._mask_capture is capture and type(session._mask_receipt) is dict,
+                         "stopped capture did not retain a receipt")
+                result["retention"] = json.loads(canonical_json(session._mask_receipt))
+                _require(type(result["retention"].get("mask_consistent")) is bool,
+                         "stopped capture receipt lacks a mask finding")
+            except Exception as error:
+                result["failure"] = f"{type(error).__name__}: {str(error)[:512]}"
+            finally:
+                try:
+                    result["cleanup"] = _cleanup(owned, deadline, cleanup_timeout_seconds)
+                except BaseException as error:
+                    result["cleanup"] = {"status": "CLEANUP_HOLD", "reason": "worker cleanup raised: " + type(error).__name__}
+                    raise
+                finally:
+                    try:
+                        _close_handles(owned)
+                    except Exception as error:
+                        result["cleanup"].update(status="CLEANUP_HOLD", reason="owned handle close failed: " + str(error)[:256])
+            if result["cleanup"]["status"] != "VERIFIED_OWNED_CLEANUP":
+                result["status"] = "CLEANUP_HOLD"
+            elif result["retention"] is not None and result["failure"] is None:
+                result["status"] = ("CAPTURE_RETAINED_ONLY" if result["retention"]["mask_consistent"]
+                                    else "CAPTURE_RETAINED_INCONSISTENT")
+        return result
+    except BaseException as error:
+        result["status"] = "CLEANUP_HOLD"
+        # Preserve the original exception/cancellation; scope release may be
+        # indeterminate even if the inner worker owner already retired.
+        try:
+            error.pi_stopped_mask_observation = json.loads(canonical_json(result))
+        except BaseException:
+            pass
+        raise
+
+
 def run_native_pi_worker(
     cas: CAS, context: Mapping, *, profile: process.RuntimeProcessProfile, grant: Mapping,
     protected_root: Path, runtime_conformance_digest: str, deployment: Mapping,

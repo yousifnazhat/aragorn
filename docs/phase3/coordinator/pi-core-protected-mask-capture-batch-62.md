@@ -35,6 +35,13 @@ Only two affected pipeline stages ran, both passing on their first invocation:
 | `pi-core-protected-mask-capture-offline` | 39 | `5070664729b7a326dde7d0d1155a8051fc14aca40c2113a73a46222629a4f227` |
 | `pipeline-capacity` (292 slots) | 4 | `0cfaf26e60d806d5138b3f998efcbcd43b3aecda4484ca24ccda96587cbd9306` |
 
+Follow-up to signed source `1659a80` / signed merge `830a83d`: if opening
+or closing the held service configuration has an uncertain outcome, the entry
+itself now reports that input closure and cleanup were not verified. The
+outer wrapper already withheld both evidence pins. Only the changed capture
+stage ran (39 passed; `203bb3dcf16d82bf1012fce0edc7ad9b04ed44983ebf2f44c55f521dedf5f9c0`).
+The unchanged capacity check and all historical stages were left alone.
+
 1. **D2:** pin the updated protected caller and its sources in a successor;
    acquire the full worker walk, role observations and independent current
    witness on a separately approved deployment. Installed identity, sensor

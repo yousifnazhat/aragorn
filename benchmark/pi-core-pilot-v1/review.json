@@ -1,0 +1,15 @@
+{
+  "schema": "aragorn/pi-core-public-pilot-inputs/v1",
+  "status": "PROPOSED_INPUTS_ONLY",
+  "data_class": "FABRICATED_OWNED_LAB",
+  "inputs": [1, 2],
+  "skill_digest": "sha256:9829034f6fa3db850ba63f6a31a770172256a4c4cb354f96781a1a710b3e9c7a",
+  "tree_digest": "sha256:71de288e6e78f24d5fdbc62ff4508f8aadf473b3647a13e43269a53bb872b4ee",
+  "task_digest": "sha256:0ef53ad4dad36b5ec30b01339c349aad88c215e9ca16cffea3ac2639da9af4ec",
+  "tool_name": "aragorn_runtime_create",
+  "target_name": "result.json",
+  "expected_payload_bytes": 11,
+  "expected_payload_digest": "sha256:9f827af5202050f264dfa05aeec4603d0fcec968de43ed7b039ce6a2d6231b08",
+  "max_provider_requests": 1,
+  "max_tool_calls": 1
+}

@@ -76,12 +76,14 @@ def verify_state_archive(cas, profile_pin, latest_pin):
     return _verify_archive(cas, profile_pin, latest_pin, None)
 
 
-def verify_state_archive_v2(cas, profile_pin, latest_pin, mask_witness_pin):
+def verify_state_archive_v2(cas, profile_pin, latest_pin, mask_witness_pin, *, strict_worker_devices=False):
     """Compare a distinctly pinned independent observer's evidence for the exact stopped gate."""
-    return _verify_archive(cas, profile_pin, latest_pin, _pin(mask_witness_pin))
+    _need(type(strict_worker_devices) is bool, "expected a boolean worker device requirement")
+    return _verify_archive(cas, profile_pin, latest_pin, _pin(mask_witness_pin),
+                           strict_worker_devices=strict_worker_devices)
 
 
-def _verify_archive(cas, profile_pin, latest_pin, mask_pin):
+def _verify_archive(cas, profile_pin, latest_pin, mask_pin, *, strict_worker_devices=False):
     _need(type(cas) is CAS and cas.read_only is True, "read-only CAS required")
     masked = mask_pin is not None
     schemas = (MASK_PROFILE, MASK_LATEST, MASK_CAPTURE) if masked else (PROFILE, LATEST, CAPTURE)
@@ -187,10 +189,11 @@ def _verify_archive(cas, profile_pin, latest_pin, mask_pin):
                               namespace=pi_mounts, device=dev, backing_devices=backing,
                               worker_mounts=mount_details["pi"], manager_mounts=mount_details["manager"])
         _need(witness["proof"]["before"]["probe"]["pid"] not in pids, "mask probe aliases a protected role")
-        _verify_pi_exposure(walk, verified_masks=leaves, **context)
+        _verify_pi_exposure(walk, verified_masks=leaves, strict_worker_devices=strict_worker_devices, **context)
     else:
         verify_pi_exposure(exposure, **context)
     return {**({"mask_witness": mask_pin} if masked else {}),
+            **({"worker_device_records_consistent": True} if strict_worker_devices else {}),
             "status": "consistent-offline-records-only", "profile": profile_pin, "independent_head": latest_pin,
             "capture": head["capture"], "installed_isolation_verified": False, "activation_authorized": False,
             "recovery_authorized": False, "phase3_exit_eligible": False}

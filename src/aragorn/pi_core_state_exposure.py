@@ -10,6 +10,7 @@ import stat
 _RESERVED = {"/run/aragorn-pilot-state", "/var/lib/aragorn-runtime-action", "/var/lib/aragorn-runtime-provider"}
 _MASK_DIRS = frozenset({"/dev/pts", "/dev/shm", "/dev/hugepages"})
 _PTMX = "/dev/ptmx"
+_STDIO_LINKS = {"/dev/stdin": "0", "/dev/stdout": "1", "/dev/stderr": "2"}
 
 
 def _need(condition, reason):
@@ -62,12 +63,16 @@ def verify_pi_exposure(evidence, *, device, backing_devices, pid, start_ticks, m
 
 
 def _verify_pi_exposure(evidence, *, verified_masks, device, backing_devices, pid, start_ticks,
-                        mount_namespace, worker_root, admitted_cwd, namespace):
+                        mount_namespace, worker_root, admitted_cwd, namespace, strict_worker_devices=False):
     """Shared walk. Only the successor verifier supplies independently corroborated leaves."""
     _need(isinstance(backing_devices, (tuple, list, set, frozenset)) and
           0 < len(backing_devices) <= 64, "physical backing identities required")
     forbidden = {_device(device), *(_device(d) for d in backing_devices)}
     _need("0:0" not in forbidden, "missing device binding")
+    if strict_worker_devices:
+        # An unknown filesystem identity cannot exclude service state. This is
+        # st_dev only; st_rdev remains zero for objects that are not devices.
+        forbidden.add("0:0")
     _need(all(_uint(x) for x in (pid, start_ticks, mount_namespace)), "invalid process binding")
     for expected in (worker_root, admitted_cwd):
         _fields(expected, "dev", "ino")
@@ -90,7 +95,7 @@ def _verify_pi_exposure(evidence, *, verified_masks, device, backing_devices, pi
         _need(_uint(mode, 0o177777) and _uint(record["ino"]) and _uint(record["mnt_id"]), "invalid stat metadata")
         kind = stat.S_IFMT(mode)
         dev, rdev = _device(record["dev"]), _device(record["rdev"])
-        _need(dev not in forbidden, "object on state volume")
+        _need(dev not in forbidden, "object on state volume or missing device binding")
         # The confined profile exposes no block devices, including aliases for a whole-disk parent.
         _need(kind != stat.S_IFBLK, "block device visible")
         _need(kind in (stat.S_IFREG, stat.S_IFDIR, stat.S_IFLNK, stat.S_IFCHR, stat.S_IFIFO, stat.S_IFSOCK)
@@ -143,6 +148,9 @@ def _verify_pi_exposure(evidence, *, verified_masks, device, backing_devices, pi
         _need(not path.startswith(masked_children), "descendant of denied mount")
         _need(type(member) is dict and "stat" in member, "missing namespace metadata")
         kind, obj = checked_stat(member["stat"])
+        stdio_fd = _STDIO_LINKS.get(path) if strict_worker_devices else None
+        if stdio_fd is not None:
+            _need(kind == stat.S_IFLNK, "standard descriptor path is not a link")
         mount = path
         while mount not in namespace:
             mount = mount.rpartition("/")[0] or "/"
@@ -183,6 +191,10 @@ def _verify_pi_exposure(evidence, *, verified_masks, device, backing_devices, pi
             _fields(member, "stat", "resolved")
             target_kind, target = checked_stat(member["resolved"])
             _need(target_kind != stat.S_IFLNK, "link resolution incomplete")
+            if stdio_fd is not None:
+                _need(member["resolved"] == fds[stdio_fd], "standard link differs from held descriptor")
+            elif strict_worker_devices:
+                _need(target[2] in by_id, "link resolves outside worker namespace")
             _need(_matches_visible_mount(member["resolved"], by_id),
                   "link resolves outside worker namespace")
             if target_kind == stat.S_IFDIR:

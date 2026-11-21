@@ -160,7 +160,8 @@ def verify_joined_masks(*, archive, profile_pin, latest_pin, witness_pin, store,
     _need(type(archive) is CAS and archive.read_only is True, "admission CAS must already be read-only")
     paths = (archive.root, store, receipt_directory)
     roots = _separate(paths)
-    admitted = verify_state_archive_v2(archive, profile_pin, latest_pin, witness_pin)
+    admitted = verify_state_archive_v2(archive, profile_pin, latest_pin, witness_pin,
+                                       strict_worker_devices=require_owned_worker_spine)
     local = replay_mask_observation(store=store, receipt_directory=receipt_directory,
                                     capture_digest=capture_pin, receipt_digest=receipt_pin)
     binding, view, proof = (json.loads(local[key]) for key in ("bindings", "vantage", "proof"))

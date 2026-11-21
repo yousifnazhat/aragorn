@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [strict worker filesystem and standard-descriptor comparison, batch 96](pi-core-strict-worker-devices-batch-96.md).**
+The current-volume and owned-worker readers reject unknown filesystem devices
+and unrelated links to inherited null handles. Matching records are not proof
+of a lookup by Pi. Keep both socket directories non-listable.
+
 **D2 — [public calculate-and-save pilot inputs, batch 95](pi-core-public-pilot-inputs-batch-95.md).**
 Use the source candidate, exact task text and independent expected file bytes.
 They authorize neither admission nor a provider call. Keep the oracle out of Pi.

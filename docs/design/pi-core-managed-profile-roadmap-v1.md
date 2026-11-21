@@ -120,6 +120,9 @@ rebuilding the bundle or boot media. The common deployment is still not installe
 [B64](../phase3/coordinator/pi-core-split-guest-payload-batch-64.md) composes a
 full host/worker payload with the OS and runtime in their real, separate launch
 locations. Empty service, admission and capture placeholders provide no authority.
+[B65](../phase3/coordinator/pi-core-service-successor-batch-65.md) adds the
+updated 791-file protected service runtime to that same payload, with the
+coordinator's exact input references. Services have not run.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

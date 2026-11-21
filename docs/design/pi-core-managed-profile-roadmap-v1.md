@@ -137,6 +137,10 @@ from Pi has been demonstrated.
 [B69](../phase3/coordinator/pi-core-managed-guest-inventory-batch-69.md) places
 those reviewed sources in both the manager and the service runtime, with a
 single pinned guest payload. Installed observation remains outstanding.
+[B70](../phase3/coordinator/pi-core-sensor-state-observation-batch-70.md) connects
+the owned sensor's mount observation to protected startup. It can retain a
+stable mismatch without dispatching the worker. B69 does not contain this code;
+service health, independent storage custody and Pi isolation remain unproven.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

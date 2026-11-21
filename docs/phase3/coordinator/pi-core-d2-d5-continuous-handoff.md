@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [observe the sensor's service-state mount, batch 70](pi-core-sensor-state-observation-batch-70.md).**
+The managed startup can sample the sensor it already owns before dispatching Pi.
+Use the separately pinned owner report, plan and admission archive to replay a
+positive finding. This is a source change after the B69 payload, not an installed
+observation. A local receipt is neither an external witness nor proof of health.
+
 **D2 — [common guest inventory, batch 69](pi-core-managed-guest-inventory-batch-69.md).**
 Use the joint successor for the manager and service code; the worker, gate and
 interpreter were carried forward. This is a staged set of files, not a boot

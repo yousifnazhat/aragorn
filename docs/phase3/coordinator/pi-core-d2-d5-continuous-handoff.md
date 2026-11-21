@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D4 — [managed exit requires original measurement receipts, batch 89](pi-core-required-measurement-replay-batch-89.md).**
+An otherwise passing aggregate must reproduce from the nominated collection.
+No collection was authorized and no verifier inventory was frozen by this change.
+
 **D2 — [stopped cwd and original service configuration, batch 88](pi-core-authorized-worker-cwd-batch-88.md).**
 Strict capture-only replay needs the original role configurations selecting
 that exact admitted version, not just two archives agreeing on a directory.

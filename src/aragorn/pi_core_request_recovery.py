@@ -150,20 +150,26 @@ def _hold_terminal_receipt(control_fd, config, state):
             raise error from cleanup
 
 
-def _under_role_lock(config, deadline, operation, mutation_attempted, uncertain):
+def _under_role_lock(config, grant, deadline, operation, mutation_attempted, uncertain):
     """Keep the callback's original error if the frozen lock's finally also fails."""
-    primary = None
+    primary = result = None
 
     def guarded(control_fd):
-        nonlocal primary
+        nonlocal primary, result
         try:
-            return operation(control_fd)
+            result = operation(control_fd)
         except BaseException as error:
             primary = error
             raise
 
     try:
         profile._with_profile_lock(config.broker, deadline, guarded)
+        snapshot = json.loads(canonical_json(result))
+        # Publication and lock cleanup can outlast either original clock window.
+        if snapshot["status"] == "AVAILABLE":
+            grants._require_live_grant(grant, int(time.time()))
+        _remaining(deadline)
+        return snapshot
     except BaseException as outer:
         # The frozen lock normally re-raises the callback exception or wraps
         # its OSError/ValueError directly. A different failure is independent.
@@ -180,11 +186,10 @@ def recover_pi_runtime_capability_grant(config, *, deadline_monotonic):
     """Reconcile one exact receipt; missing/ambiguous evidence stays held."""
     grant = _configuration(config, deadline_monotonic)
     digest = canonical_digest(grant)
-    result = None
     mutation_attempted = False
 
     def recover(control_fd):
-        nonlocal result, mutation_attempted
+        nonlocal mutation_attempted
         _remaining(deadline_monotonic)
         _journal_clear(control_fd, config)
         state = grants._load_state(control_fd, config, digest)
@@ -224,10 +229,10 @@ def recover_pi_runtime_capability_grant(config, *, deadline_monotonic):
                 grants._discard_exact_profile_pending(control_fd, config, state["claim"]["profile_claim"])
             result = state
         _remaining(deadline_monotonic)
+        return result
 
-    _under_role_lock(config, deadline_monotonic, recover, lambda: mutation_attempted,
-                     "Pi grant recovery publication or cleanup is uncertain")
-    return json.loads(canonical_json(result))
+    return _under_role_lock(config, grant, deadline_monotonic, recover, lambda: mutation_attempted,
+                            "Pi grant recovery publication or cleanup is uncertain")
 
 
 def initialize_pi_runtime_capability_grant(config, *, now_unix=None, deadline_monotonic):
@@ -242,7 +247,6 @@ def initialize_pi_runtime_capability_grant(config, *, now_unix=None, deadline_mo
     available = {"schema": "aragorn/runtime-capability-grant-state/v1",
         "authority": "BROKER_DURABLE_GRANT_STATE_ONLY_NOT_RUN_CONFORMANCE_AUTHORITY",
         "grant_digest": digest, "status": "AVAILABLE", "claim": None, "result": None}
-    result = None
     mutation_attempted = False
 
     def live():
@@ -253,7 +257,7 @@ def initialize_pi_runtime_capability_grant(config, *, now_unix=None, deadline_mo
             grants._require_live_grant(grant, fixed_now)
 
     def initialize(control_fd):
-        nonlocal result, mutation_attempted
+        nonlocal mutation_attempted
         _remaining(deadline_monotonic)
         _journal_clear(control_fd, config)
         now = int(time.time()) if fixed_now is None else fixed_now
@@ -272,7 +276,7 @@ def initialize_pi_runtime_capability_grant(config, *, now_unix=None, deadline_mo
                 mutation_attempted = True
                 grants._publish_state(control_fd, config, result)
             _remaining(deadline_monotonic)
-            return
+            return result
         if current["grant_digest"] != digest:
             # Receipt validity and absence of pending work are established
             # before any immutable archive or replacement state publication.
@@ -325,7 +329,7 @@ def initialize_pi_runtime_capability_grant(config, *, now_unix=None, deadline_mo
             _terminal_receipt(control_fd, config, current)
             result = current
         _remaining(deadline_monotonic)
+        return result
 
-    _under_role_lock(config, deadline_monotonic, initialize, lambda: mutation_attempted,
-                     "Pi grant initialization/archive or cleanup is uncertain")
-    return json.loads(canonical_json(result))
+    return _under_role_lock(config, grant, deadline_monotonic, initialize, lambda: mutation_attempted,
+                            "Pi grant initialization/archive or cleanup is uncertain")

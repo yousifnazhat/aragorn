@@ -154,6 +154,9 @@ the manager's configuration mount to the sensor's file before dispatch and in re
 [B74](../phase3/coordinator/pi-core-mounted-state-uuid-batch-74.md) adds a
 plan-bound measurement of the mounted state filesystem UUID. It cannot tell a
 cloned filesystem from the original asset.
+[B75](../phase3/coordinator/pi-core-observed-storage-guest-batch-75.md) stages
+the updated manager and services in one pinned guest payload; it does not
+establish installed identity or an observed mask.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

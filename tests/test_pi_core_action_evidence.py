@@ -63,7 +63,7 @@ class InertStore:
 
 
 class NativeActionEvidenceTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self, *, tool_call_digest="sha256:" + "c" * 64, tree_digest="sha256:" + "d" * 64):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(mock.patch.object(linecache, "getlines", return_value=[]))
@@ -77,8 +77,10 @@ class NativeActionEvidenceTests(unittest.TestCase):
         operation = canonical_digest({"schema": "aragorn/runtime-file-operation/v1", "operation": "create"})
         self.grant["operation_digest"] = operation
         request = submission["envelope"]["request"]
-        request.update(session_id="a" * 32, run_id="a" * 32, tool_call_id="sha256:" + "c" * 64,
-            operation_digest=operation, payload_digest="sha256:" + hashlib.sha256(b"payload").hexdigest())
+        effect = submission["envelope"]["effect"]
+        payload = base64.b64decode(effect["payload_base64"], validate=True)
+        request.update(session_id="a" * 32, run_id="a" * 32, tool_call_id=tool_call_digest,
+            operation_digest=operation, payload_digest="sha256:" + hashlib.sha256(payload).hexdigest())
         for name in ("session_id", "run_id", "tool_call_id", "operation_digest", "payload_digest"):
             submission["measured_action"][name] = request[name]
         submission["request_digest"] = canonical_digest(request)
@@ -96,13 +98,13 @@ class NativeActionEvidenceTests(unittest.TestCase):
                 "runtime_digest", "executable_digest", "active_skill_digest")},
             "source_manifest_digest": self.grant["source_manifest_digest"],
             "install_context_digest": self.grant["install_context_digest"],
-            "policy_digest": self.grant["policy_digest"], "tree_digest": "sha256:" + "d" * 64,
+            "policy_digest": self.grant["policy_digest"], "tree_digest": tree_digest,
             "active_record_digest": "sha256:" + "e" * 64, "deployment_digest": "sha256:" + "f" * 64,
             "boot_id": "11111111-2222-3333-4444-555555555555", "expires_at_monotonic_ns": 1001_000_000_000}
         self.request = {"schema": "aragorn/runtime-action-worker-request/v1",
             "authority": "GATEWAY_REQUEST_ONLY_NOT_EFFECT_AUTHORITY", "session_id": "a" * 32,
-            "run_id": "a" * 32, "tool_call_digest": request["tool_call_id"], "target_name": "result.txt",
-            "payload_base64": "cGF5bG9hZA=="}
+            "run_id": "a" * 32, "tool_call_digest": request["tool_call_id"], "target_name": effect["target_name"],
+            "payload_base64": effect["payload_base64"]}
         self.binding = worker.RuntimeActionWorkerBinding(self.grant["runtime_digest"], self.grant["active_skill_digest"],
             self.grant["policy_digest"], self.grant["policy_version"])
         self.configs = {"action": {"identities": {"action": {"uid": 2201, "gid": 2202}},

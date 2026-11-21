@@ -3,6 +3,7 @@ import base64
 from copy import deepcopy
 from hashlib import sha256
 import json
+from pathlib import Path
 from unittest import TestCase, TestSuite
 from unittest.mock import patch
 
@@ -25,11 +26,31 @@ class PilotActionReplay(TestCase):
         self.readonly = CAS(self.node.cas.root, read_only=True)
         self.sources = boundary.args["source_expectations"]
 
-    def original(self, outcome="created"):
+    def original(self, outcome="created", *, public_pilot_call_id=None, public_pilot_policy_digest=None):
         fixture = actions.NativeActionEvidenceTests()
         grant, submission = actions.fixtures._grant(), actions.fixtures._submission()
         worker, pins = self.sources["expected_worker"], self.sources["expected_bindings"]
         configs = configurations()
+        donor_options = {}
+        if public_pilot_call_id is not None:
+            review = json.loads((Path(__file__).resolve().parents[1] /
+                                 "benchmark/pi-core-pilot-v1/review.json").read_bytes())
+            payload = canonical_json({"total":sum(review["inputs"])})
+            self.assertEqual((len(payload), "sha256:" + sha256(payload).hexdigest()),
+                             (review["expected_payload_bytes"], review["expected_payload_digest"]))
+            grant.update(source_manifest_digest="sha256:e6de9001bdd41e7908d0b9097798d1ab8ae13037c4ad1a7dbceb4cea985ad77f",
+                         active_skill_digest=review["skill_digest"])
+            submission["envelope"]["effect"].update(target_name=review["target_name"],
+                                                    payload_base64=base64.b64encode(payload).decode("ascii"))
+            submission["runtime_attribution"]["active_skill_digest"] = grant["active_skill_digest"]
+            if public_pilot_policy_digest is not None:
+                grant["policy_digest"] = submission["envelope"]["request"]["policy_digest"] = public_pilot_policy_digest
+            for row in (submission["envelope"]["request"], submission["measured_action"]):
+                row["active_skill_digest"] = grant["active_skill_digest"]
+            donor_options.update(tool_call_digest="sha256:"+sha256(public_pilot_call_id.encode("utf-8")).hexdigest(),
+                                 tree_digest=review["tree_digest"])
+        else:
+            self.assertIsNone(public_pilot_policy_digest, "a public pilot policy needs the selected call ID")
         process_profile = configs["sensor"]["observation_binding"]["runtime_profile"]
         version = ".aragorn-versions/example/" + "9"*64 + "-" + grant["source_manifest_digest"][7:]
         process_profile.update(runtime_digest=pins["runtime_digest"], executable_digest=pins["node_digest"],
@@ -45,7 +66,7 @@ class PilotActionReplay(TestCase):
         try:
             with patch.object(actions.fixtures, "_grant", return_value=grant), \
                     patch.object(actions.fixtures, "_submission", return_value=submission):
-                fixture.setUp()
+                fixture.setUp(**donor_options)
             a = fixture.activation
             a.update(boot_id=self.sources["expected_clock"]["boot_id"], deployment_digest=pins["deployment_digest"])
             fixture.custody._activation = deepcopy(a)

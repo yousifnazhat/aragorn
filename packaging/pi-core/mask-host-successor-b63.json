@@ -1,0 +1,10 @@
+{
+  "schema": "aragorn/pi-core-protected-capture-host-inputs/v1",
+  "source_revision": "95b8c5f08725beb2bef11667eee87e8c3edaed87",
+  "files": {
+    "coordinator-host.json": "31457b9d0f3bd75693f4ca80bd59705c1e402976c02604c30462a8dcf51d1683",
+    "payload.json": "d69898df43855ded0b94a440addb1306afdb829876e90b464f192b2194240796",
+    "helper-inputs.json": "d2ad83195f13cb1f1f78e2c15d8c4497b517b734257bdeb311425a94248ed758",
+    "worker-source-plan.json": "2f61a4a6bb4f4dc6f5554435fe3825a3390990af759e9cb9826bf18fcaea90ec"
+  }
+}

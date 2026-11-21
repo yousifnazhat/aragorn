@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2/D3 — [replay admission evidence for a reported install, batch 100](pi-core-install-admission-replay-batch-100.md).**
+The optional B76 mode re-derives the historical decision and checks the
+original plan's revocations. It does not select a pilot policy or authorize a start.
+
 **D2 — [public pilot provider/action correspondence, batch 99](pi-core-pilot-provider-action-batch-99.md).**
 Replay the two original nominations and the reviewer's public oracle without
 recapture. Agreement names the proposed and requested action, not its effect.

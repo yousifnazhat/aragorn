@@ -107,6 +107,9 @@ protections or treat access failures as empty directories.
 changed host payload and matching worker source plan without changing the B44
 disk. The helper's interpreter and selected dependency bytes are pinned; the
 root invocation, installed view, complete evidence and external freshness are not established.
+[B61](../phase3/coordinator/pi-core-joined-mask-receipts-batch-61.md) cross-checks an
+independently supplied complete B58 archive against the original B59 local
+receipt. It creates no new witness and grants no storage or launch authority.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

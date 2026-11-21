@@ -10,11 +10,12 @@ No credentials, service units, runtime bytes, retries or repairs are introduced.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import json
 import os
 from pathlib import Path
 
+from . import pi_core_configuration_carrier as carrier_media
 from . import pi_core_os_provision as provision
 from . import pi_core_provider_provision as public_inputs
 from . import pi_core_service_entry as entry
@@ -30,6 +31,7 @@ STATUS = "PROVISIONED_SERVICE_CONFIGURATION_NOT_STARTED_OR_SERVICE_READY"
 AUTHORITY = "HELD_SERVICE_CONFIGURATION_BYTES_NOT_PROCESS_OR_REQUEST_AUTHORITY"
 _SEAL = object()
 _PROVIDER_SEAL = object()
+_NO_CARRIER = object()
 
 
 class PiServiceConfigurationError(provision.PiOsProvisionError):
@@ -43,6 +45,84 @@ def _require(condition, reason):
 
 def _copy(value):
     return json.loads(canonical_json(value))
+
+
+def configuration_carrier(deployment_path, carrier=_NO_CARRIER):
+    """The read-only delivery mount cannot fall back to ordinary path custody."""
+    custody._path(deployment_path)
+    _require(deployment_path.anchor == "/", "ambiguous configuration root")
+    if deployment_path.is_relative_to(carrier_media.ROOT):
+        _require(deployment_path == carrier_media.ROOT / "installed" and carrier is not _NO_CARRIER,
+                 "dedicated configuration carrier and exact installed root required")
+        carrier_media.validate_carrier(carrier)
+        return _copy(carrier)
+    _require(carrier is _NO_CARRIER, "carrier not permitted for this configuration root")
+    return None
+
+
+@contextmanager
+def _carrier_member(media, parent, name, mode, deadline, *, directory):
+    """Hold the actual non-followed leaf, not just its containing filesystem."""
+    fd = os.open(name, provision._DIRECTORY if directory else provision._FILE, dir_fd=parent)
+    try:
+        media.require_member(fd, deadline=deadline)
+        provision._owner(fd, mode, directory=directory)
+        ident = provision._identity(os.fstat(fd))
+        _require(ident == provision._identity(os.stat(name, dir_fd=parent, follow_symlinks=False)),
+                 "configuration carrier member changed at open")
+        yield fd
+        media.require_member(fd, deadline=deadline)
+        _require(ident == provision._identity(os.fstat(fd)) ==
+                 provision._identity(os.stat(name, dir_fd=parent, follow_symlinks=False)),
+                 "configuration carrier member changed during read")
+    finally:
+        provision._close_all([fd])
+
+
+def _carrier_bytes(media, parent, name, mode, limit, deadline):
+    with _carrier_member(media, parent, name, mode, deadline, directory=False) as fd:
+        size = os.fstat(fd).st_size
+        _require(0 < size <= limit, "configuration carrier member exceeds its fixed limit")
+        raw = bytearray()
+        while len(raw) <= size:
+            provision._deadline(deadline)
+            chunk = os.read(fd, min(65536, size + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+        _require(len(raw) == size, "incomplete configuration carrier bytes")
+        return bytes(raw)
+
+
+def _carrier_documents(media, manifest_digest, configs_digest, deadline):
+    root = media.root_fd
+    # The carrier exports an O_PATH pin. Directory enumeration needs a new
+    # readable directory fd rooted at that pin, not an ambient path lookup.
+    with _carrier_member(media, root, ".", 0o700, deadline, directory=True) as scan:
+        custody._exact_names(scan, {"inputs", "installed"}, deadline)
+    with _carrier_member(media, root, "inputs", 0o700, deadline, directory=True) as refs:
+        custody._exact_names(refs, {"manifest.json", "configurations.json"}, deadline)
+        result = []
+        for name, digest, limit in (("manifest.json", manifest_digest, 64 * 1024),
+                                    ("configurations.json", configs_digest, len(ROLES) * entry.MAX_CONFIG + 64)):
+            raw = _carrier_bytes(media, refs, name, 0o400, limit, deadline)
+            value = entry.broker._parse_canonical_document(raw, "protected configuration carrier reference")
+            _require(canonical_digest(value) == digest, "configuration carrier reference pin differs")
+            result.append(value)
+        return result
+
+
+def _carrier_tree(media, root, configs, deadline):
+    # Unlike a path-only inventory, each directory and each read descriptor is
+    # on the held mount, including when another mount happens to share st_dev.
+    custody._exact_names(root, {"etc"}, deadline)
+    with _carrier_member(media, root, "etc", 0o555, deadline, directory=True) as etc:
+        custody._exact_names(etc, {"aragorn"}, deadline)
+        with _carrier_member(media, etc, "aragorn", 0o555, deadline, directory=True) as directory:
+            custody._exact_names(directory, {Path(p).name for p in PATHS.values()}, deadline)
+            for role, path in PATHS.items():
+                _require(_carrier_bytes(media, directory, Path(path).name, 0o444, entry.MAX_CONFIG, deadline)
+                         == canonical_json(configs[role]), "configuration carrier installed bytes differ")
 
 
 def validate_service_configurations(configurations):
@@ -163,9 +243,10 @@ class PiServiceConfiguration:
     """Active custody of fixed installed public bytes, not request authority."""
 
     __slots__ = ("_seal", "_path", "_chain", "_identities", "_root_fd", "_receipt_fd", "_root_identity",
-                 "_receipt_identity", "_manifest", "_configurations", "_receipt", "_deadline", "_active", "_observation")
+                 "_receipt_identity", "_manifest", "_configurations", "_receipt", "_deadline", "_active", "_observation",
+                 "_carrier")
 
-    def __init__(self, seal, path, chain, root_fd, receipt_fd, manifest, configurations, receipt, deadline):
+    def __init__(self, seal, path, chain, root_fd, receipt_fd, manifest, configurations, receipt, deadline, carrier=None):
         _require(seal is _SEAL, "service configuration requires verified installed custody")
         self._seal, self._path, self._chain = seal, path, chain
         self._identities = [(provision._identity if index == len(chain) - 1 else custody._directory_identity)(os.fstat(fd))
@@ -173,7 +254,7 @@ class PiServiceConfiguration:
         self._root_fd, self._receipt_fd = root_fd, receipt_fd
         self._root_identity, self._receipt_identity = provision._identity(os.fstat(root_fd)), provision._identity(os.fstat(receipt_fd))
         self._manifest, self._configurations, self._receipt = _copy(manifest), _copy(configurations), _copy(receipt)
-        self._deadline, self._active = deadline, True
+        self._deadline, self._active, self._carrier = deadline, True, carrier
         self._observation = {"schema": "aragorn/pi-core-held-service-configuration/v1", "authority": AUTHORITY,
             "configuration_closure_digest": receipt["configuration_closure_digest"],
             "configurations_digest": receipt["configurations_digest"], "receipt_digest": canonical_digest(receipt),
@@ -185,6 +266,8 @@ class PiServiceConfiguration:
                  getattr(self, "_active", False), "service configuration custody is inactive or was not minted")
         provision._require_root()
         provision._deadline(self._deadline)
+        if self._carrier is not None:
+            self._carrier.require_member(self._root_fd, deadline=self._deadline)
 
     @property
     def root(self):
@@ -221,6 +304,10 @@ class PiServiceConfiguration:
         bounded = self._deadline if deadline is None else deadline
         provision._deadline(bounded)
         _require(bounded <= self._deadline, "configuration guard cannot extend its held deadline")
+        if self._carrier is not None:
+            self._carrier.guard(deadline=bounded, directory_fd=self._root_fd)
+            self._carrier.require_member(self._receipt_fd, deadline=bounded)
+            self._carrier.require_member(self._chain[-1], deadline=bounded)
         custody._chain_guard(self._path, self._chain, self._identities, bounded)
         deployment = self._chain[-1]
         provision._owner(deployment, 0o755, directory=True)
@@ -235,7 +322,10 @@ class PiServiceConfiguration:
         os.lseek(self._receipt_fd, 0, os.SEEK_SET)
         _require(os.read(self._receipt_fd, len(raw) + 1) == raw, "held configuration receipt bytes changed")
         provision._deadline(bounded)
-        custody._tree(self._root_fd, self._manifest, bounded, protected=True)
+        if self._carrier is None:
+            custody._tree(self._root_fd, self._manifest, bounded, protected=True)
+        else:
+            _carrier_tree(self._carrier, self._root_fd, self._configurations, bounded)
         custody._chain_guard(self._path, self._chain, self._identities, bounded)
         for fd, name, expected in ((self._root_fd, "root", self._root_identity),
                                     (self._receipt_fd, RECEIPT, self._receipt_identity)):
@@ -245,14 +335,39 @@ class PiServiceConfiguration:
 
 
 @contextmanager
-def hold_pi_service_configuration(deployment_path, *, receipt_digest, manifest, manifest_digest,
-                                  configurations, configurations_digest, deadline):
+def hold_pi_service_configuration(deployment_path, *, receipt_digest, manifest_digest,
+                                  configurations_digest, deadline, manifest=None, configurations=None,
+                                  carrier=_NO_CARRIER):
     """Mint held custody only from actual installed bytes and independent pins.
 
     The root descriptor is borrowed. Exact tree/name/receipt checks run at entry,
     every explicit guard and successful exit. Close uncertainty remains a hold;
     no close retry or cleanup of partial installed artifacts is performed.
     """
+    pin = configuration_carrier(deployment_path, carrier)
+    if pin is not None:
+        provision._require_root()
+        provision._deadline(deadline)
+        _require(all(type(d) is str and provision._DIGEST.fullmatch(d) for d in
+                     (manifest_digest, configurations_digest, receipt_digest)),
+                 "independent configuration document and receipt pins required")
+    scope = nullcontext(None) if pin is None else carrier_media.hold_configuration_carrier(pin, deadline=deadline)
+    with scope as medium:
+        _require((medium is None) == (pin is None), "configuration carrier custody is missing")
+        if medium is not None:
+            installed_manifest, installed_configs = _carrier_documents(medium, manifest_digest, configurations_digest, deadline)
+            for supplied, read in ((manifest, installed_manifest), (configurations, installed_configs)):
+                _require(supplied is None or canonical_json(supplied) == canonical_json(read),
+                         "supplied configuration differs from protected carrier")
+            manifest, configurations = installed_manifest, installed_configs
+        with _hold_installed_configuration(deployment_path, receipt_digest, manifest, manifest_digest,
+                                           configurations, configurations_digest, deadline, medium) as held:
+            yield held
+
+
+@contextmanager
+def _hold_installed_configuration(deployment_path, receipt_digest, manifest, manifest_digest, configurations,
+                                  configurations_digest, deadline, medium):
     fds, held = [], None
     try:
         provision._require_root()
@@ -263,17 +378,27 @@ def hold_pi_service_configuration(deployment_path, *, receipt_digest, manifest, 
         chain = custody._open_chain(deployment_path, deadline)
         fds.extend(chain)
         deployment = chain[-1]
+        if medium is not None:
+            _require(provision._identity(os.fstat(chain[-2])) == provision._identity(os.fstat(medium.root_fd)),
+                     "installed configuration is not a child of held carrier")
+            medium.require_member(deployment, deadline=deadline)
         provision._owner(deployment, 0o755, directory=True)
         custody._exact_names(deployment, {"root", RECEIPT}, deadline)
         root = os.open("root", provision._DIRECTORY, dir_fd=deployment)
         fds.append(root)
+        if medium is not None:
+            medium.require_member(root, deadline=deadline)
+            provision._owner(root, 0o755, directory=True)
         descriptor = os.open(RECEIPT, provision._FILE, dir_fd=deployment)
         fds.append(descriptor)
+        if medium is not None:
+            medium.require_member(descriptor, deadline=deadline)
         provision._owner(descriptor, 0o444, directory=False)
         expected = _receipt(deployment_path / "root", manifest_digest, configs, configurations_digest)
         _require(canonical_digest(expected) == receipt_digest and os.fstat(descriptor).st_size == len(canonical_json(expected)),
                  "installed configuration receipt disagrees with independent pins")
-        held = PiServiceConfiguration(_SEAL, deployment_path, chain, root, descriptor, pinned, configs, expected, deadline)
+        held = PiServiceConfiguration(_SEAL, deployment_path, chain, root, descriptor, pinned, configs, expected,
+                                      deadline, medium)
         held.guard()
         yield held
         held.guard()

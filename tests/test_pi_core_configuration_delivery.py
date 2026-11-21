@@ -1,13 +1,17 @@
-"""Data-only B66 delivery: never mounts the test image or invokes guest code."""
+"""Data-only configuration delivery: never mounts the test disk or invokes guest code."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import stat
+import struct
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from aragorn import pi_core_configuration_carrier as guest
 from scripts import prepare_pi_core_configuration_delivery as delivery
 from scripts.pi_core_configuration_delivery_layout import layout
 from tests.test_pi_core_configuration_delivery_layout import fixture_configurations
@@ -31,15 +35,60 @@ class ConfigurationDeliveryTests(unittest.TestCase):
         with patch.object(delivery.time, "time", return_value=100):
             reported = delivery.prepare(self.config, self.pin, self.out)
         image = self.out / "config.squashfs"
+        disk = self.out / "config.raw"
         outcome = self.out / "outcome.json"
         self.assertEqual(json.loads(outcome.read_bytes()), reported)
+        self.assertEqual(reported["schema"], "aragorn/pi-core-private-configuration-carrier/v2")
         self.assertEqual(reported["service_configuration"], section)
-        self.assertEqual(reported["image_sha256"], hashlib.sha256(image.read_bytes()).hexdigest())
-        self.assertEqual(image.read_bytes()[:4], b"hsqs")
-        self.assertEqual({p.name for p in self.out.iterdir()}, {image.name, outcome.name})
-        self.assertTrue(all(stat.S_IMODE(p.stat().st_mode) == 0o400 for p in (image, outcome)))
+        logical, raw = image.read_bytes(), disk.read_bytes()
+        self.assertEqual((reported["image_sha256"], reported["image_bytes"]),
+                         (hashlib.sha256(logical).hexdigest(), len(logical)))
+        self.assertEqual(logical[:4], b"hsqs")
+        self.assertEqual(int.from_bytes(logical[40:48], "little"), len(logical))
+        self.assertEqual(raw, logical + b"\x00" * (-len(logical) % 1024))
+        self.assertEqual((reported["disk_sha256"], reported["disk_bytes"], reported["sector_bytes"]),
+                         (hashlib.sha256(raw).hexdigest(), len(raw), 512))
+        self.assertEqual({p.name for p in self.out.iterdir()}, {image.name, disk.name, outcome.name})
+        self.assertTrue(all(stat.S_IMODE(p.stat().st_mode) == 0o400 for p in (image, disk, outcome)))
         self.assertTrue(all(reported[key] is False for key in ("mount_authorized", "current_grant_authority",
                                                               "installed_identity_verified", "phase3_exit_eligible")))
+        # The actual writer's one decoded file is also consumed by the guest byte
+        # verifier. Only its block ioctls are modeled; pread reads the real output.
+        with disk.open("rb") as data:
+            def geometry(fd, request, buf):
+                self.assertEqual(fd, data.fileno())
+                return {0x125e: struct.pack("=i", 1), 0x1268: struct.pack("=i", 512),
+                        0x80081272: struct.pack("=Q", os.fstat(fd).st_size)}[request]
+            with patch.object(guest.fcntl, "ioctl", side_effect=geometry):
+                guest._verify_bytes(data.fileno(), {k: reported[k] for k in ("image_sha256", "image_bytes")},
+                                    time.monotonic() + 10)
+
+    def test_aligned_and_unaligned_images_produce_only_complete_filesystem_device_blocks(self):
+        for length, padded in ((512, 1024), (1024, 1024), (1025, 2048)):
+            logical = b"x" * length
+            dest = self.base / str(length)
+            with self.subTest(length=length), patch.object(delivery, "_make_image", return_value=logical), \
+                    patch.object(delivery.image, "decoder", return_value={}), \
+                    patch.object(delivery.time, "time", return_value=100):
+                reported = delivery.prepare(self.config, self.pin, dest)
+                self.assertEqual((dest / "config.raw").read_bytes(), logical + bytes(padded - length))
+                self.assertEqual((reported["image_bytes"], reported["disk_bytes"]), (length, padded))
+
+    def test_changed_disk_bytes_or_padding_withhold_publication(self):
+        logical = b"x" * 1025
+        write = delivery._write
+        for name, damaged in (("content", b"y" + logical[1:] + bytes(1023)),
+                              ("tail", logical + bytes(1022) + b"\x01"),
+                              ("only-sector-rounded", logical + bytes(511)), ("extra-sector", logical + bytes(1535))):
+            def damage(parent, filename, raw):
+                write(parent, filename, damaged if filename == "config.raw" else raw)
+            dest = self.base / name
+            with self.subTest(kind=name), patch.object(delivery, "_make_image", return_value=logical), \
+                    patch.object(delivery, "_write", side_effect=damage), \
+                    patch.object(delivery.image, "decoder", return_value={}), \
+                    patch.object(delivery.time, "time", return_value=100), self.assertRaisesRegex(RuntimeError, "disk"):
+                delivery.prepare(self.config, self.pin, dest)
+            self.assertFalse((dest / "outcome.json").exists())
 
     def test_grant_expiring_before_publication_withholds_the_outcome(self):
         # Isolate the publication boundary. The verified media path is exercised above.

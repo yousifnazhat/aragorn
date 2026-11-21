@@ -1,4 +1,8 @@
-"""Build and independently inspect a private configuration SquashFS without mounting it."""
+"""Prepare private configuration-only SquashFS and standalone raw media, without mounting either.
+
+The output does not nominate or approve a device and cannot be added to the
+pinned B44 boot configuration. Attachment requires separate approval.
+"""
 import argparse
 from contextlib import contextmanager
 import io
@@ -20,6 +24,10 @@ from scripts.build_pi_core_linux import canonical, regular_bytes, require, sha25
 TOOL_LOCK = "768aa84188abbf43d85771152a01721cafcc98a72cf3d9630ceb384ef9e03325"
 CONFIG_LIMIT = 2 << 20
 MEDIA_LIMIT = 12 << 20
+SECTOR_BYTES = 512
+# The retained kernel has CONFIG_SQUASHFS_4K_DEVBLK_SIZE disabled: SquashFS
+# reads in at least 1 KiB filesystem-device blocks even on a 512-byte-sector disk.
+SQUASHFS_DEV_BLOCK = 1024
 _INTERMEDIATES = {"input.pseudo", "readback.pseudo", "config.squashfs"}
 _FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_DIRECTORY
 
@@ -139,6 +147,25 @@ def _write(parent, name, raw):
         os.fsync(out.fileno())
 
 
+def _verify_disk(logical, raw):
+    """Compare the complete stored disk to the logical bytes already inspected by the exporter."""
+    require(type(logical) is bytes and 0 < len(logical) <= MEDIA_LIMIT and type(raw) is bytes,
+            "invalid configuration image or disk")
+    blocks = (len(logical) + SQUASHFS_DEV_BLOCK - 1) // SQUASHFS_DEV_BLOCK
+    require(len(raw) == blocks * SQUASHFS_DEV_BLOCK and raw.startswith(logical) and not any(raw[len(logical):]),
+            "configuration disk size, logical bytes or zero padding differ")
+    return dict(disk_sha256=sha256(raw), disk_bytes=len(raw), sector_bytes=SECTOR_BYTES)
+
+
+def _read_output(path, maximum):
+    s = path.lstat()
+    require(stat.S_ISREG(s.st_mode) and s.st_nlink == 1 and s.st_uid == os.geteuid()
+            and stat.S_IMODE(s.st_mode) == 0o400, "unexpected private output identity")
+    data = regular_bytes(path, maximum)
+    require(_file(s) == _file(path.lstat()), "private output changed during readback")
+    return data, _file(s)
+
+
 @contextmanager
 def _work(out, out_fd):
     os.mkdir("work", mode=0o700, dir_fd=out_fd)
@@ -188,19 +215,27 @@ def prepare(config_path, expected_digest, out):
             require(delivery.layout(raw, expected_digest, int(time.time())) == (members, section),
                     "configuration no longer current")
         with _work(out, fd) as work:
-            disk = _make_image(work, members, env)
-        result = dict(schema="aragorn/pi-core-private-configuration-carrier/v1", configurations_digest=expected_digest,
-                      image_sha256=sha256(disk), image_bytes=len(disk), service_configuration=section,
+            logical = _make_image(work, members, env)
+        release()
+        _write(out, "config.squashfs", logical)
+        _write(out, "config.raw", logical + bytes(-len(logical) % SQUASHFS_DEV_BLOCK))
+        held = {}
+        image_raw, held["config.squashfs"] = _read_output(out / "config.squashfs", MEDIA_LIMIT)
+        require(image_raw == logical, "private media readback differs")
+        disk_raw, held["config.raw"] = _read_output(out / "config.raw", MEDIA_LIMIT)
+        disk = _verify_disk(logical, disk_raw)
+        result = dict(schema="aragorn/pi-core-private-configuration-carrier/v2", configurations_digest=expected_digest,
+                      image_sha256=sha256(logical), image_bytes=len(logical), service_configuration=section, **disk,
                       mount_target=delivery.ROOT_PATH, current_grant_authority=False,
                       mount_authorized=False, installed_identity_verified=False, phase3_exit_eligible=False)
-        release()
-        _write(out, "config.squashfs", disk)
         _write(out, "pending.json", canonical(result))
-        require(regular_bytes(out / "config.squashfs", MEDIA_LIMIT) == disk, "private media readback differs")
-        require(regular_bytes(out / "pending.json", 16384) == canonical(result), "private outcome readback differs")
-        require(set(os.listdir(fd)) == {"config.squashfs", "pending.json"}, "unexpected output files")
+        pending_raw, held["pending.json"] = _read_output(out / "pending.json", 16384)
+        require(pending_raw == canonical(result), "private outcome readback differs")
         os.fsync(fd)
         release()
+        require(set(os.listdir(fd)) == held.keys() and all(
+            _file(os.stat(name, dir_fd=fd, follow_symlinks=False)) == ident for name, ident in held.items()),
+            "output identity changed before publication")
         # No-replace publication; an interrupted attempt with a pending marker
         # is not complete and must never be adopted or retried automatically.
         os.link("pending.json", "outcome.json", src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
@@ -222,7 +257,7 @@ def main():
     except Exception:
         print("Private configuration carrier refused or incomplete; preserve the attempt.", file=sys.stderr)
         return 1
-    print("Private offline carrier prepared; not mounted or authorized.")
+    print("Private standalone data disk prepared; no device nominated or attachment authorized.")
     return 0
 
 

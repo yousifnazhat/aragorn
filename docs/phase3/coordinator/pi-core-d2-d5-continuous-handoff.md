@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [configuration disk checked before use, batch 68](pi-core-configuration-carrier-batch-68.md).**
+The protected coordinator, broker preparation and stopped-worker capture now bind
+the installed configuration to an exact read-only device and image. Its disk
+is separate from B44. No attachment or installed readback has taken place;
+the next deployment must pin the new sources and independently verify Pi's view.
+
 **D2 — [manager state identity at the stopped gate, batch 67](pi-core-manager-state-observation-batch-67.md).**
 New receipts measure the manager's backing directories and their service bind
 targets. Require the versioned cross-archive comparison for that claim. B65

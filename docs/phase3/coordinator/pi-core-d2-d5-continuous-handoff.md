@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [current LUKS2 metadata, batch 80](pi-core-state-header-observation-batch-80.md).**
+The v5 reader compares both checksummed on-device metadata areas with
+independently nominated bytes on the B79 disk incarnation. This is not
+original-unlock, writer-fence or physical-attachment evidence.
+
 **D2 — [whole-disk backing observation, batch 79](pi-core-state-backing-leaf-batch-79.md).**
 V4 joins the same disk incarnation and its sysfs mount to the approved
 dm-crypt mapping. Partitions and visible stacked block devices do not pass.

@@ -16,6 +16,7 @@ VIEW = "aragorn/pi-core-sensor-state-view/v1"
 UUID_VIEW = "aragorn/pi-core-sensor-state-view/v2"
 DM_VIEW = "aragorn/pi-core-sensor-state-view/v3"
 LEAF_VIEW = "aragorn/pi-core-sensor-state-view/v4"
+LUKS_VIEW = "aragorn/pi-core-sensor-state-view/v5"
 _IDENTITY = ("role", "unit", "pid", "start_ticks", "uid", "gid", "invocation_id")
 
 
@@ -64,20 +65,35 @@ def verify_backing_leaf(record, *, expected_backing_device):
     return verify(record, expected_backing_device=expected_backing_device)
 
 
+def verify_luks_headers(record, *, expected_device, expected_diskseq, profile):
+    from .pi_core_state_luks_headers import verify_luks_headers as verify
+    return verify(record, expected_device=expected_device, expected_diskseq=expected_diskseq, profile=profile)
+
+
 def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, expected_filesystem_uuid=None,
-                        require_direct_crypt_mapping=False, require_backing_leaf=False):
+                        require_direct_crypt_mapping=False, require_backing_leaf=False, luks_header_profile=None):
     """Validate actual observer projections against the caller's protected service generation and mapping."""
     has_uuid = expected_filesystem_uuid is not None
     _need(type(require_direct_crypt_mapping) is bool and (not require_direct_crypt_mapping or has_uuid),
           "direct crypt mapping requires an approved mounted filesystem UUID")
     _need(type(require_backing_leaf) is bool and (not require_backing_leaf or require_direct_crypt_mapping),
           "backing-leaf replay requires the direct crypt mapping")
+    has_header = luks_header_profile is not None
+    if has_header:
+        _need(require_backing_leaf and type(luks_header_profile) is dict,
+              "LUKS metadata replay requires a pinned profile and both backing-leaf bounds")
+        from .pi_core_state_luks_headers import validate_header_profile
+        profile = validate_header_profile(luks_header_profile)
+        _need(profile["encryption_uuid"] != expected_filesystem_uuid,
+              "filesystem UUID cannot double as the LUKS header identity")
     fields = ("schema", "identity", "manager", "sensor", "clock", "sensor_cgroup", "opened_boottime_ns",
               "closed_boottime_ns", "manager_state", "sensor_targets", "manager_mountinfo_digest", "sensor_mountinfo_digest")
     _keys(view, fields + (("filesystem_uuid_observation",) if has_uuid else ()) +
           (("dm_mapping_observation",) if require_direct_crypt_mapping else ()) +
-          (("backing_leaf_observation",) if require_backing_leaf else ()))
-    want_schema = LEAF_VIEW if require_backing_leaf else DM_VIEW if require_direct_crypt_mapping else UUID_VIEW if has_uuid else VIEW
+          (("backing_leaf_observation",) if require_backing_leaf else ()) +
+          (("luks_header_observation",) if has_header else ()))
+    want_schema = (LUKS_VIEW if has_header else LEAF_VIEW if require_backing_leaf else
+                   DM_VIEW if require_direct_crypt_mapping else UUID_VIEW if has_uuid else VIEW)
     _need(view["schema"] == want_schema and view["sensor_cgroup"] == "0::/system.slice/" + UNIT + "\n",
           "unknown sensor record or incorrect unified cgroup")
     _validate_identity(identity)
@@ -163,4 +179,22 @@ def verify_sensor_state(view, manager_raw, sensor_raw, *, identity, storage, exp
             _same(leaves["before"], leaves["after"], "decoded backing leaf changed between bounds")
             result.update(kernel_whole_disk_leaf_matched=True, observed_backing_diskseq=_uint(leaves["before"]["diskseq"]),
                           physical_attachment_verified=False, authenticated_unlock_verified=False)
+            if has_header:
+                record = view["luks_header_observation"]
+                header = verify_luks_headers(record, expected_device=leaves["before"]["device"],
+                                             expected_diskseq=result["observed_backing_diskseq"], profile=profile)
+                devfs = rows.get("/dev")
+                node_path = "/dev/" + profile["device_basename"]
+                _need(devfs is not None and devfs.filesystem == b"devtmpfs" and devfs.root == "/" and
+                      devfs.parent == rows["/"].mount_id and not any(p == node_path or p.startswith(node_path + "/")
+                                                                   for p in rows),
+                      "no direct manager devtmpfs path for the LUKS metadata device")
+                node = record["node"]
+                _same([node["mount_id"], node["devtmpfs_device"], node["device"]],
+                      [devfs.mount_id, devfs.device, leaves["before"]["device"]],
+                      "LUKS metadata device differs from the recorded manager devtmpfs and backing leaf")
+                _same([header["encryption_uuid"], header["metadata_area_bytes"]],
+                      [profile["encryption_uuid"], profile["metadata_area_bytes"]], "LUKS metadata differs from profile")
+                result.update(current_inline_luks2_metadata_matched=True, inline_luks2_header_verified=True,
+                              encryption_uuid_measured=True, observed_encryption_uuid=header["encryption_uuid"])
     return result

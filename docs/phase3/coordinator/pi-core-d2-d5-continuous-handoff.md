@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [installed bundle readback, batch 76](pi-core-installed-bundle-readback-batch-76.md).**
+The public install/update report now carries the measured tree on a clean
+return. The offline reader compares it with the approved retained bytes.
+This wrapper postdates B75; there is no installed result or qualification.
+
 **D2 — [common guest payload, batch 75](pi-core-observed-storage-guest-batch-75.md).**
 The retained successor stages the signed stopped-worker and service-state
 observers together. Preparation did not boot a guest or collect mask evidence.

@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [manager state identity at the stopped gate, batch 67](pi-core-manager-state-observation-batch-67.md).**
+New receipts measure the manager's backing directories and their service bind
+targets. Require the versioned cross-archive comparison for that claim. B65
+does not contain this successor observer. Configuration attachment, external
+volume identity and actual installed observations are still missing.
+
 **D2 — [late service configuration delivery, batch 66](pi-core-configuration-delivery-batch-66.md).**
 Reuse the protected B65 payload unchanged. An externally approved, current
 configuration can be packaged separately and read back as a read-only image.

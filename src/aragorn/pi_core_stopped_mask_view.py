@@ -17,8 +17,10 @@ import sys
 import threading
 import time
 
+from .pi_core_state_mounts import ACTION, ANCHOR, PROVIDER
 
-SCHEMA = "aragorn/pi-core-stopped-mask-view/v1"
+
+SCHEMA = "aragorn/pi-core-stopped-mask-view/v2"
 _NAMES = frozenset(("pts", "hugepages", "shm", "ptmx"))
 _SOURCE = ("run", "systemd", "inaccessible", "dir")
 _CAPS = dict(CapEff="cap_effective", CapPrm="cap_permitted", CapInh="cap_inheritable",
@@ -256,6 +258,23 @@ def _source(stack, root, *, readable):
     return root
 
 
+def _manager_state_fds(stack, root):
+    """Hold the fixed source and bind-target walks; ordinary path components are never followed."""
+    fds = {"/": root}
+    for path in (ANCHOR, ANCHOR + ACTION, ANCHOR + PROVIDER, ACTION, PROVIDER):
+        parent = "/"
+        for part in path[1:].split("/"):
+            child = parent.rstrip("/") + "/" + part
+            if child not in fds:
+                fds[child] = _pin(stack, fds[parent], part, directory=True)
+            parent = child
+    return fds
+
+
+def _manager_state_stats(fds):
+    return {path: _stat(fd, owner=True) for path, fd in fds.items()}
+
+
 class _View:
     @property
     def worker(self):
@@ -287,6 +306,7 @@ class _View:
         self.dev_fd = _pin(stack, self.root_fd, "dev", directory=True)
         _require(_filesystem(self.dev_fd) == _TMPFS, "worker private /dev is not tmpfs")
         self._source_fd = _source(stack, self._manager_root, readable=True)
+        self._state_fds = _manager_state_fds(stack, self._manager_root)
         self._first = self._sample()
 
     def _guard(self):
@@ -320,6 +340,9 @@ class _View:
             _, manager_ctx, fresh_manager_root, _ = _frame(s, self._roles["manager"], self._mount, self._deadline,
                                                           kind="manager", ticks=self.manager["start_ticks"])
             _require(manager_ctx == self._manager_context, "manager context changed")
+            state = _manager_state_stats(self._state_fds)
+            _require(state == _manager_state_stats(_manager_state_fds(s, fresh_manager_root)),
+                     "held and named manager state paths differ")
             source = _stat(self._source_fd, True)
             named = _stat(_source(s, fresh_manager_root, readable=False), True)
             _require(source == named and source["mode"] == stat.S_IFDIR and source["uid"] == source["gid"] == 0,
@@ -350,7 +373,7 @@ class _View:
             mounts["manager"] = caller_raw
             self._caller_context(self._caller_ticks)
         _check(self._deadline)
-        return dict(root=ctx["root"], dev=dev, source=source, named=named, entries=entries,
+        return dict(root=ctx["root"], dev=dev, source=source, named=named, entries=entries, state=state,
                     dev_names=names, leaves=leaves, mounts=mounts)
 
     def finish(self):
@@ -359,6 +382,11 @@ class _View:
             before, after = self._first, self._sample()
             _require(before == after, "observed roots, mounts, names or backing changed")
             result = dict(schema=SCHEMA, worker=self.worker.copy(), manager=self.manager.copy(),
+                          manager_state={edge: dict(sources={ANCHOR: s["state"][ANCHOR],
+                                                             ACTION: s["state"][ANCHOR + ACTION],
+                                                             PROVIDER: s["state"][ANCHOR + PROVIDER]},
+                                                    targets={p: s["state"][p] for p in (ACTION, PROVIDER)})
+                                         for edge, s in (("before", before), ("after", after))},
                           source=dict(path="/" + "/".join(_SOURCE), fd=self._source_fd,
                                       before=before["source"], after=after["source"], path_before=before["named"],
                                       path_after=after["named"], entries_before=before["entries"], entries_after=after["entries"]),

@@ -1,13 +1,16 @@
-"""B61 joins two separately held fixture archives. No worker or namespace is opened."""
+"""Join separately held fixture archives. No worker or namespace is opened."""
+from contextlib import redirect_stderr
 from copy import deepcopy
 import hashlib
+from io import StringIO
 import unittest
 from unittest.mock import patch
 
 from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_json
 from aragorn.pi_core_mask_probe import _PROGRAM
-from scripts.verify_pi_core_joined_mask_receipts import verify_joined_masks
+from aragorn.pi_core_state_mounts import ACTION, ANCHOR, PROVIDER
+from scripts.verify_pi_core_joined_mask_receipts import main, verify_joined_masks
 import test_pi_core_mask_custody as local
 import test_pi_core_state_mask_archive as outer
 
@@ -62,6 +65,56 @@ class JoinedMasks(unittest.TestCase):
         profile, latest, witness = self.outer.pins(**kwargs)
         return dict(archive=self.base.reader, profile_pin=profile, latest_pin=latest, witness_pin=witness)
 
+    def manager_view(self, parts):
+        roots = self.base.capture["source_roots"]
+        targets = self.base.capture["roles"]["manager"]["targets"]
+        anchor_mount = targets[ANCHOR]["mount_id"]
+        frame = dict(sources={p: dict(roots[p], rdev="0:0", mnt_id=anchor_mount)
+                              for p in (ANCHOR, ACTION, PROVIDER)},
+                     targets={p: dict(roots[p], rdev="0:0", mnt_id=targets[p]["mount_id"])
+                              for p in (ACTION, PROVIDER)})
+        parts["bindings"]["schema"] = "aragorn/pi-core-stopped-mask-binding/v2"
+        parts["vantage"].update(schema="aragorn/pi-core-stopped-mask-view/v2",
+                                manager_state=dict(before=frame, after=deepcopy(frame)))
+
+    def test_manager_state_compares_both_archives_without_authorizing_or_promoting_a_capture(self):
+        args = self.keys() | self.retain(self.manager_view)
+        result = verify_joined_masks(**args, require_manager_state=True)
+        self.assertIs(result["manager_state_roots_and_targets_matched"], True)
+        self.assertEqual(result["status"], "consistent-offline-records-only")
+        for key in ("external_freshness_verified", "same_capture_interval_verified", "recovery_authorized",
+                    "activation_authorized", "installed_isolation_verified", "phase3_exit_eligible"):
+            self.assertIs(result[key], False)
+
+    def test_manager_state_requirement_refuses_legacy_receipts_at_cli(self):
+        args = self.keys() | self.retain()
+        options = [value for k, v in args.items() for value in
+                   ("--" + k.replace("_", "-"), str(v.root if k == "archive" else v))]
+        with redirect_stderr(StringIO()) as error:
+            self.assertEqual(main([*options, "--require-manager-state"]), 2)
+        self.assertIn("manager-state evidence required", error.getvalue())
+
+    def test_resealed_v2_manager_source_and_alias_with_different_inode_cannot_join(self):
+        def other_objects(parts):
+            self.manager_view(parts)
+            for frame in parts["vantage"]["manager_state"].values():
+                for side in ("sources", "targets"):
+                    frame[side][ACTION]["ino"] += 1000
+        args = self.keys() | self.retain(other_objects)
+        # The local source and its bind agree. Even compatibility mode cannot ignore a v2 disagreement.
+        with self.assertRaisesRegex(ValueError, "different manager-state source roots"):
+            verify_joined_masks(**args)
+
+    def test_resealed_outer_state_with_a_different_root_cannot_join_local_manager_observation(self):
+        local_args = self.retain(self.manager_view)
+        source = self.base.capture["source_roots"][PROVIDER]
+        source["ino"] += 1000
+        for entry in self.base.capture["roles"].values():
+            if PROVIDER in entry["targets"]:
+                entry["targets"][PROVIDER]["ino"] = source["ino"]
+        with self.assertRaisesRegex(ValueError, "different manager-state source roots"):
+            verify_joined_masks(**self.keys(), **local_args, require_manager_state=True)
+
     def test_separate_matching_archives_are_joined_without_writing_or_granting_authority(self):
         args = self.keys() | self.retain()
         with patch.object(CAS, "put", side_effect=AssertionError("offline verifier wrote a blob")), \
@@ -73,7 +126,8 @@ class JoinedMasks(unittest.TestCase):
                             ("mask_witness", "witness_pin"), ("independent_head", "latest_pin")):
             self.assertEqual(report[result], args[key])
         for key in ("installed_isolation_verified", "activation_authorized", "recovery_authorized",
-                    "phase3_exit_eligible", "same_capture_interval_verified", "external_freshness_verified"):
+                    "phase3_exit_eligible", "same_capture_interval_verified", "external_freshness_verified",
+                    "manager_state_roots_and_targets_matched"):
             self.assertIs(report[key], False)
 
     def test_resealed_boot_deployment_storage_and_subject_from_another_capture_refuse(self):

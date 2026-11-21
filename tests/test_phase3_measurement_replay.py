@@ -53,14 +53,16 @@ class RetainedReceiptDocuments:
     """Build inert CAS records, never call an executor, collector or verifier."""
 
     def populate(self, *, windows=None, collector_digest="sha256:" + "1" * 64,
-                 collection_authority="SYNTHETIC_UNIT_FIXTURE_NOT_RUNTIME_EVIDENCE"):
+                 collection_authority="SYNTHETIC_UNIT_FIXTURE_NOT_RUNTIME_EVIDENCE",
+                 verify_receipt=synthetic_receipt_verifier, task_observation=None):
         attempt_schedule = self.schedule["attempt_schedule"]
         ids = attempt_schedule["attempt_ids"]
+        verifier_path = Path(sys.modules[verify_receipt.__module__].__file__).absolute()
         self.source_pins = {
             "execute": "sha256:" + "d" * 64,
             "identity_reader": "sha256:" + "e" * 64,
             "verify": "sha256:"
-            + hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            + hashlib.sha256(verifier_path.read_bytes()).hexdigest(),
         }
         self.commitment = {
             "schema": "aragorn/phase3-measurement-collection-commitment/v1",
@@ -69,10 +71,10 @@ class RetainedReceiptDocuments:
             "deployment": self.deployment,
             "sources": {
                 "verify": {
-                    "module": __name__,
-                    "function": "synthetic_receipt_verifier",
-                    "path": str(Path(__file__).absolute()),
-                    "bytes": Path(__file__).stat().st_size,
+                    "module": verify_receipt.__module__,
+                    "function": verify_receipt.__name__,
+                    "path": str(verifier_path),
+                    "bytes": verifier_path.stat().st_size,
                     "digest": self.source_pins["verify"],
                 },
                 **{
@@ -157,7 +159,8 @@ class RetainedReceiptDocuments:
                 )
             else:
                 boundaries = {"TASK_ACCEPTED": start, "TASK_COMPLETED": end}
-                observation = {"completed_pair": base["pair_id"], "mode": base["mode"]}
+                observation = ({"completed_pair": base["pair_id"], "mode": base["mode"]}
+                               if task_observation is None else task_observation(request))
                 semantics = {"completed": True}
                 self.evidence[base["mode"] + "_samples"].append(
                     {
@@ -214,7 +217,7 @@ class RetainedReceiptDocuments:
             ],
             "expected_collector_digest": self.commitment["collector_digest"],
             "expected_source_pins": self.source_pins,
-            "verify": synthetic_receipt_verifier,
+            "verify": verify_receipt,
         }
 
     def put(self, value):

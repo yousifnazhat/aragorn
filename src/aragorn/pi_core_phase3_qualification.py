@@ -9,15 +9,23 @@ consumer is provided, and absent D2/D3 evidence cannot qualify this profile.
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .cas import CAS
+from . import (
+    native_phase3_workload_json_sum_contract as task_contract,
+    native_phase3_workload_json_sum_verify as json_sum,
+    native_phase3_workload_line_count_verify as line_count,
+    native_phase3_workload_sha256_verify as sha256_task,
+    oci_worker_protocol as protocol,
+)
 from .oci_worker_protocol import canonical_json
 from .phase3_deployment import resolve_phase3_deployment_identity
 from .phase3_exit_gate_manifest import load_phase3_exit_gate_manifest_bytes
@@ -43,6 +51,11 @@ _DOCUMENT_LIMIT = 64 * 1024 - 1
 _SOURCE_LIMIT = 1024 * 1024
 _EVIDENCE_LIMIT = 16 * 1024 * 1024
 _COLLECTION_AUTHORITY = "LOCAL_ADAPTER_MEASUREMENTS_AND_ARITHMETIC_ONLY_NOT_SOURCE_SEMANTIC_OR_PHASE3_QUALIFICATION"
+TASK_OUTPUT_SOURCE_MODULES = (
+    "pi_core_phase3_qualification", "native_phase3_workload_json_sum_verify",
+    "native_phase3_workload_line_count_verify", "native_phase3_workload_sha256_verify",
+    "native_phase3_workload_json_sum_contract", "oci_worker_protocol",
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +68,7 @@ class ManagedMeasurementReceipts:
     replay_source_digest: str
     source_pins: dict[str, str]
     verify_receipt: Callable[[bytes, dict, dict], dict]
+    task_verifier_bundle_digest: str | None = None
 
 
 def _require(condition: bool, reason: str) -> None:
@@ -102,6 +116,7 @@ def _receipt_inputs(request):
     selected = ManagedMeasurementReceipts(
         _pin(request.collection_digest), _pin(request.commitment_digest), _pin(request.collector_digest),
         _pin(request.replay_source_digest), {k: _pin(v) for k, v in request.source_pins.items()}, request.verify_receipt,
+        None if request.task_verifier_bundle_digest is None else _pin(request.task_verifier_bundle_digest),
     )
     replay = Phase3SemanticVerifier(replay_phase3_measurement_collection, selected.replay_source_digest)
     _verify_source(replay)
@@ -109,7 +124,66 @@ def _receipt_inputs(request):
     return selected, replay
 
 
-def _receipt_linkage(cas, selected, replay, result, schedule, qualified_pin):
+def _task_source_bundle(cas, pin):
+    _require(pin is not None, "independently frozen task verifier bundle required")
+    bundle = _document(_blob(cas, pin, _DOCUMENT_LIMIT))
+    _require(set(bundle) == {"schema", "sources"} and bundle["schema"] == "aragorn/pi-core-task-output-verifiers/v1"
+             and type(bundle["sources"]) is dict and set(bundle["sources"]) == set(TASK_OUTPUT_SOURCE_MODULES),
+             "managed task verifier source inventory differs")
+    # Evidence nominates bytes only. It cannot supply a pathname, import, function or dispatch policy.
+    fixed = (
+        (("verify_managed_copy_output", verify_managed_copy_output),),
+        (("verify", json_sum.verify),), (("verify", line_count.verify),), (("verify", sha256_task.verify),),
+        (("validate_request", task_contract.validate_request), ("validate_boundaries", task_contract.validate_boundaries)),
+        (("canonical_json", protocol.canonical_json), ("canonical_digest", protocol.canonical_digest)),
+    )
+    for module_name, functions in zip(TASK_OUTPUT_SOURCE_MODULES, fixed, strict=True):
+        digest = _pin(bundle["sources"][module_name])
+        cas.verify(digest, max_bytes=_SOURCE_LIMIT)
+        expected_path = Path(__file__).absolute().with_name(module_name + ".py")
+        for name, fn in functions:
+            _require(inspect.isfunction(fn) and fn.__module__ == f"{__package__}.{module_name}"
+                     and fn.__name__ == name and Path(inspect.getsourcefile(fn) or "").absolute() == expected_path,
+                     "task output verifier is not the fixed package function")
+            _verify_source(Phase3SemanticVerifier(fn, digest))
+    _require(canonical_json is protocol.canonical_json and all(
+        module.validate_request is task_contract.validate_request and module.validate_boundaries is task_contract.validate_boundaries
+        and module.canonical_json is protocol.canonical_json and module.canonical_digest is protocol.canonical_digest
+        for module in (json_sum, line_count, sha256_task)), "fixed task verifier helper bindings differ")
+    return {"BENIGN_JSON_SUM": json_sum.verify, "BENIGN_LINE_COUNT": line_count.verify, "BENIGN_SHA256": sha256_task.verify}
+
+
+def verify_managed_copy_output(raw, request, boundaries, descriptor):
+    """Reject inconsistent copy declarations. This does not observe any file or execution mode."""
+    task_contract.validate_request(request)
+    task_contract.validate_boundaries(boundaries)
+    receipt = _document(raw)
+    obs = receipt.get("observation")
+    _require(type(obs) is dict and set(obs) == {"task", "result", "retained_file"}, "copy observation differs")
+    retained = obs["retained_file"]
+    _require(type(retained) is dict and set(retained) == {"basename", "directory_identity", "fixture_digest", "identity"}
+             and retained["basename"] == descriptor["output"]["copy_target"], "copy retention declaration differs")
+    _pin(retained["fixture_digest"])
+    directory, inode = retained["directory_identity"], retained["identity"]
+    keys = {"device", "inode", "mode", "uid", "gid"}
+    _require(type(directory) is dict and set(directory) == keys and type(inode) is dict
+             and set(inode) == keys | {"nlink", "size", "mtime_ns", "ctime_ns"}
+             and all(type(v) is int and v >= 0 for item in (directory, inode) for v in item.values())
+             and directory["inode"] > 0 and inode["inode"] > 0 and directory["mode"] == 0o700 and inode["mode"] == 0o600
+             and inode["device"] == directory["device"] and inode["inode"] != directory["inode"]
+             and inode["uid"] == directory["uid"] and inode["gid"] == directory["gid"]
+             and inode["nlink"] == 1 and inode["size"] == descriptor["input"]["bytes"],
+             "copy retained file identity declaration differs")
+    output = descriptor["output"]["expected"]
+    expected_result = dict(schema="aragorn/phase3-reference-task-result/v1", authority="FIXED_LAB_TASK_OUTPUT_NOT_MEASUREMENT",
+                           template_id=descriptor["template_id"], input_digest=request["input_digest"], output=output,
+                           output_digest=_digest(canonical_json(output)), paired_measurement_eligible=False, phase3_exit_eligible=False)
+    _require(raw == canonical_json(dict(schema="aragorn/phase3-local-measurement-receipt/v1",
+             request_digest=_digest(canonical_json(request)), deployment_digest=request["deployment_digest"], boundaries=boundaries,
+             observation=dict(task=descriptor, result=expected_result, retained_file=retained))), "fixed copy output differs")
+
+
+def _receipt_linkage(cas, selected, replay, result, schedule, qualified_pin, campaign):
     _require(selected is not None and replay is not None, "managed qualification requires independent measurement receipts")
     raw = _blob(cas, selected.collection_digest, 1 << 20)
     collection = json.loads(raw)
@@ -120,6 +194,26 @@ def _receipt_linkage(cas, selected, replay, result, schedule, qualified_pin):
     _require(collection.get("evidence_digest") == numeric["input_digest"] == qualified_pin
              and collection.get("commitment_digest") == selected.commitment_digest,
              "collection does not commit to the qualified metrics and nominated commitment")
+    leaves = _task_source_bundle(cas, selected.task_verifier_bundle_digest)
+    descriptors = {task: _document(_blob(cas, pin, _DOCUMENT_LIMIT)) for task, pin in campaign["task_descriptors"].items()}
+    fixed_counts = Counter()
+
+    def check_task(raw, request, boundaries):
+        # _campaign bound the schedule and these four descriptors to the independently nominated
+        # reference source and equal input bytes; the task's own template_id never selects its verifier.
+        task = campaign["pair_tasks"][request["pair_id"]]
+        descriptor = descriptors[task]
+        _require(request["task_digest"] == campaign["task_descriptors"][task]
+                 and request["input_digest"] == descriptor["input"]["digest"], "task output schedule binding differs")
+        if task == "BENIGN_COPY_READBACK":
+            verify_managed_copy_output(raw, request, boundaries, descriptor)
+        else:
+            actual = leaves[task](raw, request, boundaries)
+            _require(canonical_json(actual) == canonical_json(dict(receipt_digest=_digest(raw),
+                     request_digest=_digest(canonical_json(request)), deployment_digest=request["deployment_digest"],
+                     semantics={"completed": True})), "fixed task output is not the independently expected result")
+        fixed_counts[task] += 1
+
     _verify_source(replay)
     report = replay.verify(
         evidence_cas=cas, expected_collection_digest=selected.collection_digest,
@@ -127,9 +221,11 @@ def _receipt_linkage(cas, selected, replay, result, schedule, qualified_pin):
         expected_measurement_schedule_digest=result["measurement_schedule_digest"],
         expected_metrics_implementation_digest=result["metrics_implementation_digest"],
         expected_collector_digest=selected.collector_digest, expected_source_pins=dict(selected.source_pins),
-        verify=selected.verify_receipt,
+        verify=selected.verify_receipt, validate_task_output=check_task,
     )
     _verify_source(replay)
+    _task_source_bundle(cas, selected.task_verifier_bundle_digest)
+    _require(fixed_counts == {task: 50 for task in descriptors}, "incomplete fixed task output inventory")
     bindings = dict(collection_digest=selected.collection_digest, commitment_digest=selected.commitment_digest,
                     collector_digest=selected.collector_digest, evidence_digest=qualified_pin,
                     deployment_identity_digest=result["deployment_identity_digest"],
@@ -145,7 +241,11 @@ def _receipt_linkage(cas, selected, replay, result, schedule, qualified_pin):
                                                                        quantitative_thresholds_qualified=False)),
              "independent measurement replay differs from the qualified collection")
     return {**bindings, "replay_source_digest": selected.replay_source_digest,
-            "source_pins": dict(selected.source_pins), "counts": counts}
+            "source_pins": dict(selected.source_pins), "counts": counts,
+            "task_verifier_bundle_digest": selected.task_verifier_bundle_digest,
+            "fixed_task_output_counts": dict(fixed_counts),
+            "copy_sink_independently_verified_by_fixed_output_check": False,
+            "execution_mode_verified_by_fixed_output_check": False}
 
 
 def _inventory(raw, pin, deployment_pin, manifest, cas):
@@ -324,7 +424,7 @@ def qualify_pi_core_phase3_exit(
     _surface_evidence(surface_raw, inventory_pin, deployment_pin, surface_ids, evidence_cas)
     campaign_pin = _pin(expected_campaign_contract_digest)
     campaign_raw = _blob(evidence_cas, campaign_pin, _DOCUMENT_LIMIT)
-    _campaign(campaign_raw, inventory_pin, deployment_pin, manifest, measurement_schedule, reference_source_pin, evidence_cas)
+    campaign = _campaign(campaign_raw, inventory_pin, deployment_pin, manifest, measurement_schedule, reference_source_pin, evidence_cas)
     # Establish core joins before any semantic callback, including the separate
     # surface consumer. The shared composer rechecks these after its callbacks.
     resolve_phase3_deployment_identity(deployment_raw, expected_digest=deployment_pin, evidence_cas=evidence_cas)
@@ -401,7 +501,7 @@ def qualify_pi_core_phase3_exit(
         _require(all(end <= next_start for (_, end), (next_start, _) in zip(windows, windows[1:])),
                  "managed attempt and task measurement windows overlap")
         linkage = _receipt_linkage(CAS(evidence_cas.root, read_only=True), selected_receipts, replay,
-                                   result, measurement_schedule, qualified_pin)
+                                   result, measurement_schedule, qualified_pin, campaign)
         # Replay rechecks its own receipt inventory, deployment artifacts and metrics code after its
         # final receipt callback. Recheck the requirement inputs and consumers it does not own.
         for key in required:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import unittest
+from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
 from io import BytesIO
@@ -16,7 +17,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aragorn import pi_core_phase3_qualification as subject
-from aragorn.cas import CASError
+from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.phase3_deployment import Phase3DeploymentError
 from aragorn.phase3_exit_gate_manifest import Phase3ExitGateManifestError
@@ -202,17 +203,41 @@ class PiCorePhase3QualificationTests(unittest.TestCase):
     def test_complete_synthetic_contract_composes_without_claiming_other_profiles(self):
         receipts = self.arguments['measurement_receipts'] = prepare_receipts(self)
         original_pins = dict(receipts.source_pins)
-        with patch(__name__ + '._MUTATE_AT_SURFACE', receipts.source_pins):
+        collection = json.loads(self.cas.read(receipts.collection_digest))
+        task_pins = {entry['receipt_digest'] for entry in collection['provenance']
+                     if entry['request']['kind'] == 'task'}
+        reads, readbacks = Counter(), Counter()
+        cas_read, cas_verify = CAS.read, CAS.verify
+
+        def recording(method, counts):
+            def checked(cas, digest, **kw):
+                if digest in task_pins:
+                    self.assertTrue(cas.read_only)
+                    counts[digest] += 1
+                return method(cas, digest, **kw)
+            return checked
+
+        with patch(__name__ + '._MUTATE_AT_SURFACE', receipts.source_pins), \
+             patch.object(CAS, 'read', recording(cas_read, reads)), \
+             patch.object(CAS, 'verify', recording(cas_verify, readbacks)), \
+             patch.object(CAS, 'put', side_effect=AssertionError('replay may not replace or write evidence')):
             result = self.qualify()
+        self.assertEqual(len(task_pins), 200)
+        self.assertEqual(reads, Counter({pin: 1 for pin in task_pins}))
+        self.assertEqual(set(readbacks), task_pins)
         self.assertNotEqual(receipts.source_pins, original_pins)
         linkage = result['measurement_receipt_linkage']
-        for key in ('collection_digest','commitment_digest','collector_digest','replay_source_digest'):
+        for key in ('collection_digest','commitment_digest','collector_digest','replay_source_digest',
+                    'task_verifier_bundle_digest'):
             self.assertEqual(linkage[key], getattr(receipts, key))
         self.assertEqual(linkage['source_pins'], original_pins)
         self.assertEqual(linkage['evidence_digest'], self.arguments['evidence_by_requirement'][_METRICS])
         self.assertEqual(linkage['measurement_schedule_digest'], self.arguments['expected_measurement_schedule_digest'])
         self.assertEqual(linkage['deployment_identity_digest'], self.arguments['expected_deployment_digest'])
         self.assertEqual(linkage['counts'], {'attempts':100, 'baseline_samples':100, 'instrumented_samples':100})
+        self.assertEqual(linkage['fixed_task_output_counts'], {task: 50 for task in self.manifest['pairs']})
+        self.assertIs(linkage['copy_sink_independently_verified_by_fixed_output_check'], False)
+        self.assertIs(linkage['execution_mode_verified_by_fixed_output_check'], False)
         self.assertEqual([r['attempt_id'] for r in replay_calls if r['kind'] == 'attempt'],
                          self.arguments['measurement_schedule']['attempt_schedule']['attempt_ids'])
         self.assertEqual([(r['pair_id'],r['mode']) for r in replay_calls if r['kind'] == 'task'],
@@ -561,6 +586,96 @@ class PiCorePhase3QualificationTests(unittest.TestCase):
         with self.assertRaisesRegex(Phase3MeasurementReplayError, 'raw metrics differ from replayed receipt evidence'):
             self.qualify()
         self.assertEqual(len(replay_calls), 300)
+
+    def _original_task(self, collection, template):
+        """Select by the frozen campaign, never by the receipt's template claim."""
+        entry = next(row for row in collection['provenance']
+                     if row['request']['kind'] == 'task'
+                     and self.campaign['pair_tasks'][row['request']['pair_id']] == template)
+        return entry, json.loads(self.cas.read(entry['receipt_digest']))
+
+    def _reseal_task(self, selection, collection, entry, receipt):
+        """Update the temporary original-format provenance but keep the same passing aggregate."""
+        old = json.loads(self.cas.read(entry['verified_observation_digest']))
+        self.assertEqual(old['semantics'], {'completed': True})
+        entry['receipt_digest'] = self.put(receipt)
+        entry['verified_observation_digest'] = self.put(old | {'receipt_digest': entry['receipt_digest']})
+        self.assertEqual(collection['evidence_digest'], self.arguments['evidence_by_requirement'][_METRICS])
+        self.arguments['measurement_receipts'] = replace(selection, collection_digest=self.put(collection))
+
+    def test_same_input_cannot_substitute_sha_for_the_scheduled_line_count(self):
+        selection = prepare_receipts(self)
+        collection = json.loads(self.cas.read(selection.collection_digest))
+        entry, original = self._original_task(collection, 'BENIGN_LINE_COUNT')
+        other, sha = self._original_task(collection, 'BENIGN_SHA256')
+        self.assertEqual(entry['request']['input_digest'], other['request']['input_digest'])
+        self.assertNotEqual(entry['request']['task_digest'], other['request']['task_digest'])
+        original['observation'] = sha['observation']
+        self._reseal_task(selection, collection, entry, original)
+        with self.assertRaisesRegex(ValueError, 'LINE_COUNT_RECEIPT_BINDING_OR_OUTPUT'):
+            self.qualify()
+        self.assertNotIn(entry['request'], replay_calls)
+
+    def test_resealed_wrong_sum_refuses_despite_generic_completion_and_unchanged_metrics(self):
+        selection = prepare_receipts(self)
+        collection = json.loads(self.cas.read(selection.collection_digest))
+        entry, receipt = self._original_task(collection, 'BENIGN_JSON_SUM')
+        result = receipt['observation']['result']
+        result['output'] = {'sum': 29}
+        result['output_digest'] = canonical_digest(result['output'])
+        self._reseal_task(selection, collection, entry, receipt)
+        generic = selection.verify_receipt(canonical_json(receipt), entry['request'], receipt['boundaries'])
+        self.assertEqual(generic, json.loads(self.cas.read(entry['verified_observation_digest'])))
+        replay_calls.clear()
+        with self.assertRaisesRegex(ValueError, 'JSON_SUM_RECEIPT_BINDING_OR_OUTPUT'):
+            self.qualify()
+        self.assertNotIn(entry['request'], replay_calls)
+
+    def test_copy_metadata_or_wrong_readback_result_cannot_stand_in_for_fixed_output(self):
+        selection = prepare_receipts(self)
+        for mutation, reason in (('missing file metadata', 'copy observation differs'),
+                                 ('wrong target', 'copy retention declaration differs'),
+                                 ('directory alias', 'copy retained file identity declaration differs'),
+                                 ('other filesystem', 'copy retained file identity declaration differs'),
+                                 ('wrong readback', 'fixed copy output differs')):
+            with self.subTest(mutation=mutation):
+                collection = json.loads(self.cas.read(selection.collection_digest))
+                entry, receipt = self._original_task(collection, 'BENIGN_COPY_READBACK')
+                observation = receipt['observation']
+                if mutation == 'missing file metadata':
+                    observation.pop('retained_file')
+                elif mutation == 'wrong target':
+                    observation['retained_file']['basename'] = 'different.txt'
+                elif mutation in ('directory alias', 'other filesystem'):
+                    file = observation['retained_file']
+                    key = 'inode' if mutation == 'directory alias' else 'device'
+                    file['identity'][key] = file['directory_identity'][key] + int(key == 'device')
+                else:
+                    result = observation['result']
+                    result['output']['readback_equal'] = False
+                    result['output_digest'] = canonical_digest(result['output'])
+                self._reseal_task(selection, collection, entry, receipt)
+                with self.assertRaisesRegex(Phase3ExitQualificationError, reason):
+                    self.qualify()
+
+    def test_missing_or_substituted_fixed_output_verifier_source_refuses(self):
+        selection = prepare_receipts(self)
+        original = json.loads(self.cas.read(selection.task_verifier_bundle_digest))
+        source = 'native_phase3_workload_line_count_verify'
+        for change, reason in (('absent policy', 'independently frozen task verifier bundle required'),
+                               ('missing', 'managed task verifier source inventory differs'),
+                               ('other retained bytes', 'verifier source differs from its frozen pin')):
+            with self.subTest(change=change):
+                candidate = deepcopy(original)
+                if change == 'missing':
+                    del candidate['sources'][source]
+                elif change == 'other retained bytes':
+                    candidate['sources'][source] = self.put({'different': 'verifier source'})
+                pin = None if change == 'absent policy' else self.put(candidate)
+                self.arguments['measurement_receipts'] = replace(selection, task_verifier_bundle_digest=pin)
+                with self.assertRaisesRegex(Phase3ExitQualificationError, reason):
+                    self.qualify()
+                self.assertEqual(replay_calls, [])
 
     def test_failed_prerequisite_skips_receipt_reads_and_yields_no_receipt_finding(self):
         receipts = prepare_receipts(self)

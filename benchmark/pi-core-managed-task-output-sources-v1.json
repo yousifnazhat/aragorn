@@ -1,0 +1,11 @@
+{
+  "schema": "aragorn/pi-core-task-output-verifiers/v1",
+  "sources": {
+    "native_phase3_workload_json_sum_contract": "sha256:88de68114779ba751c0270d5c355559a5822548dba696be50de9fec7bf32ae43",
+    "native_phase3_workload_json_sum_verify": "sha256:73105084c3b68d0b735dede8c5e5b489be760636ab85452d30fae52abb55a875",
+    "native_phase3_workload_line_count_verify": "sha256:b8a549585ae37d05b4eed6474dd41239b5710f73a05c2ce404ada6ead760a906",
+    "native_phase3_workload_sha256_verify": "sha256:6e4789fa11b7e3dcfea23ebf0e789da142287f4e64107a2adfa39a137050775a",
+    "oci_worker_protocol": "sha256:0af6b5fc1fa6b4a3a4b4ec6fd514c2edc475cf339cda01cf9a1b66d3a6e81c2b",
+    "pi_core_phase3_qualification": "sha256:26ebf94daa68b301f65591a1d65ada7cf7dd56c758587bae077f7076fe1501c7"
+  }
+}

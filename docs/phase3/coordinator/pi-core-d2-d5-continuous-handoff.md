@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3/D4 — [scheduled reference outputs and execution-carrier decision, batch 90](pi-core-managed-task-output-batch-90.md).**
+One-pass replay checks the four fixed task outcomes. Choose the real paired
+execution path and copy fixture before provisioning; the managed worker has
+no Python and the existing copy guard requires a real Docker cgroup.
+
 **D4 — [managed exit requires original measurement receipts, batch 89](pi-core-required-measurement-replay-batch-89.md).**
 An otherwise passing aggregate must reproduce from the nominated collection.
 No collection was authorized and no verifier inventory was frozen by this change.

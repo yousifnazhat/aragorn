@@ -206,7 +206,19 @@ def verify_joined_sensor_state(*, archive, profile_pin, latest_pin, witness_pin,
     if require_current_volume_and_sensor:
         _need(manager_same and sensor_same and finding.get("sensor_read_only_bind_matched") is True,
               "independent manager or read-only sensor generation, mount table or targets differ")
-        strict["current_volume_and_sensor_records_matched"] = True
+        from aragorn.pi_core_service_configuration import validate_service_configurations
+        # Matching capture pins don't establish that the protected configuration issued these principals.
+        configs = _object(archive, capture["configuration"], 1 << 20)
+        try:
+            action = validate_service_configurations(configs)["action"]
+        except RuntimeError as exc:
+            raise ValueError("invalid protected service configurations") from exc
+        principals = {role: {k: head["subjects"]["pi" if role == "worker" else role][k] for k in ("uid", "gid")}
+                      for role in ("worker", "action", "sensor", "provider")}
+        _same(action["identities"], principals, "configured role principals differ from independent admission")
+        _same(action["capability_grant"]["install_context_digest"], plan["context"]["digest"],
+              "configured grant differs from the protected installation context")
+        strict.update(current_volume_and_sensor_records_matched=True, configured_role_principals_matched=True)
     _need(_separate(paths) == identities, "evidence directory changed")
     # The external archive binds expected storage and the private raw observation
     # corroborates the active target/dependency. Only v5 also corroborates the
@@ -247,7 +259,7 @@ def main(argv=None):
     parser.add_argument("--require-inline-luks-headers", action="store_true",
                         help="require both current checksummed inline LUKS2 metadata copies and pins, not original unlock provenance")
     parser.add_argument("--require-current-volume-and-sensor", action="store_true",
-                        help="require v5 volume and read-only sensor records for the same manager and sensor generations; not unlock or qualification")
+                        help="require v5 volume and read-only sensor records for the same manager and sensor generations and configured principals; not unlock or qualification")
     args = vars(parser.parse_args(argv))
     try:
         args["archive"] = CAS(args["archive"], read_only=True)

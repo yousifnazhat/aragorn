@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import unittest
 
+from aragorn.cas import CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.pi_core_state_mounts import ACTION
 from scripts.prepare_pi_core_coordinator_host import host_contract
@@ -13,6 +14,7 @@ from scripts import verify_pi_core_joined_sensor_state as replay
 import test_pi_core_coordinator_entry as plans
 import test_pi_core_sensor_luks_headers as b80
 import test_pi_core_sensor_state_evidence as archived
+from test_pi_core_service_configuration import configurations
 
 
 _MODULES = ("pi_core_coordinator_entry", "pi_core_managed_bootstrap", "pi_core_service_lifecycle",
@@ -21,11 +23,25 @@ _MODULES = ("pi_core_coordinator_entry", "pi_core_managed_bootstrap", "pi_core_s
             "pi_core_state_backing_leaf", "pi_core_state_luks_headers")
 
 
-def complete_plan(f):
+def complete_plan(f, *, change_configs=None, retain_configs=True):
     # Populate and pin a complete donor plan *before* the original managed
     # capture and public report are sealed by the existing inert fixture.
     complete, _ = plans.prepared()
     complete["service_configuration"] = f.plan["service_configuration"]
+    b = f.b
+    configs = configurations()
+    for doc in configs.values():
+        for role in doc["identities"]:
+            subject = b.head["subjects"]["pi" if role == "worker" else role]
+            doc["identities"][role] = {key:subject[key] for key in ("uid","gid")}
+        if "capability_grant" in doc:
+            doc["capability_grant"]["install_context_digest"] = complete["context"]["digest"]
+    if change_configs is not None:
+        change_configs(configs)
+    pin = b.put(canonical_json(configs)) if retain_configs else canonical_digest(configs)
+    complete["service_configuration"]["configurations"]["digest"] = b.capture["configuration"] = pin
+    profile = json.loads(b.reader.read(b.profile))
+    b.profile = b.head["profile"] = b.capture["profile"] = b.put(profile | {"configuration":pin})
     for role in ("deployment", "launch"):
         complete[role]["digest"] = f.plan[role]["digest"]
     complete["sensor_state_observation"] = f.plan["sensor_state_observation"]
@@ -45,15 +61,46 @@ def complete_plan(f):
 
 
 class CurrentVolumeAndSensorReplay(unittest.TestCase):
-    def archive(self, *, view=b80.add_headers, change_sensor=lambda s:s):
+    def archive(self, *, view=b80.add_headers, change_sensor=lambda s:s, **config_options):
         f = archived._JoinedSensorFixture()
         self.addCleanup(f.doCleanups)
-        f.setUp(prepare_observation=view, prepare_plan=complete_plan,
+        f.setUp(prepare_observation=view, prepare_plan=lambda f:complete_plan(f, **config_options),
                 change_streams=lambda m,s:(m+b80.b79.SYSFS_MOUNT,change_sensor(s)))
         f.owner.update(source_before=deepcopy(f.b84_rows),source_after=deepcopy(f.b84_rows))
         for frame in (f.owner["host_before"],f.owner["host_after"]):
             frame.update(python_executable=f.b84_profile["python_executable"],files=len(f.b84_profile["files"]))
         return f
+
+    def test_agreeing_pins_do_not_replace_original_protected_configuration(self):
+        f = self.archive(retain_configs=False)
+        historical = f.check()
+        self.assertIs(historical["archive_sensor_subject_and_mount_bytes_matched"], True)
+        self.assertIs(historical.get("configured_role_principals_matched", False), False)
+        pin = f.plan["service_configuration"]["configurations"]["digest"]
+        with self.assertRaises(CASError) as failure:
+            f.check(require_current_volume_and_sensor=True)
+        self.assertIsInstance(failure.exception.__cause__, FileNotFoundError)
+        self.assertTrue(pin in str(failure.exception) or
+                        "digest prefix " + pin[7:9] in str(failure.exception))
+
+    def test_agreeing_archives_cannot_authorize_a_different_configured_principal(self):
+        for role in ("sensor","worker","provider","action"):
+            def changed(configs):
+                for doc in configs.values():
+                    doc["identities"][role]["gid"] += 1000
+            with self.subTest(role=role):
+                f = self.archive(change_configs=changed)
+                self.assertIs(f.check()["archive_sensor_subject_and_mount_bytes_matched"], True)
+                with self.assertRaisesRegex(ValueError, "configured role principals differ"):
+                    f.check(require_current_volume_and_sensor=True)
+
+    def test_matching_action_and_sensor_grants_must_name_the_planned_context(self):
+        def changed(configs):
+            for role in ("action","sensor"):
+                configs[role]["capability_grant"]["install_context_digest"] = canonical_digest("other context")
+        f = self.archive(change_configs=changed)
+        with self.assertRaisesRegex(ValueError, "configured grant differs"):
+            f.check(require_current_volume_and_sensor=True)
 
     def test_exact_v5_archive_cli_reports_current_join_and_not_health_or_unlock(self):
         f = self.archive()
@@ -63,7 +110,8 @@ class CurrentVolumeAndSensorReplay(unittest.TestCase):
         with redirect_stdout(StringIO()) as out, redirect_stderr(StringIO()) as errors:
             self.assertEqual(replay.main([*flags,"--require-current-volume-and-sensor"]),0,errors.getvalue())
         finding = json.loads(out.getvalue())
-        for key in ("current_volume_and_sensor_records_matched","archive_sensor_subject_and_mount_bytes_matched",
+        for key in ("current_volume_and_sensor_records_matched","configured_role_principals_matched",
+                    "archive_sensor_subject_and_mount_bytes_matched",
                     "archive_manager_subject_and_mount_bytes_matched","sensor_read_only_bind_matched",
                     "kernel_whole_disk_leaf_matched","current_inline_luks2_metadata_matched"):
             self.assertIs(finding[key],True,key)

@@ -123,6 +123,10 @@ locations. Empty service, admission and capture placeholders provide no authorit
 [B65](../phase3/coordinator/pi-core-service-successor-batch-65.md) adds the
 updated 791-file protected service runtime to that same payload, with the
 coordinator's exact input references. Services have not run.
+[B66](../phase3/coordinator/pi-core-configuration-delivery-batch-66.md)
+prepares a separate read-only image for an externally approved, short-lived
+service configuration. The guest need not be rebuilt for a new grant. Its
+manager-only attachment and actual guest readback are not demonstrated.
 [D3 batch 56](../phase3/coordinator/pi-core-portable-copy-batch-56.md) makes the
 copy/readback observation portable after fixture removal. No managed pair has
 been run or qualified by this change.

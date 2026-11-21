@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [late service configuration delivery, batch 66](pi-core-configuration-delivery-batch-66.md).**
+Reuse the protected B65 payload unchanged. An externally approved, current
+configuration can be packaged separately and read back as a read-only image.
+No real configuration or grant was provided. Next connect protected storage
+and configuration attachment/readback; do not treat the test image as a release.
+
 **D2 — [protected service runtime packaged, batch 65](pi-core-service-successor-batch-65.md).**
 Use B65's full host/worker/service tree and exact `service_runtime` plan
 section. No late-bound grant, service configuration, storage nomination or

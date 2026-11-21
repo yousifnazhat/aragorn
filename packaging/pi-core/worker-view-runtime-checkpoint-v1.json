@@ -1,0 +1,12 @@
+{
+  "schema": "aragorn/pi-core-worker-view-runtime-checkpoint/v1",
+  "output": ".aragorn/pi-core-build/worker-view-runtime-b83",
+  "files": {
+    "candidate-receipt.json": "d2b6a670350b742383f016cba56ca044fbd53023daf6409804407b7eef335c4a",
+    "manifest.json": "41b89bfa2dd4178f08b2955454a0126f02fa59df5fd72165823d55fc79f40ed1"
+  },
+  "candidate_tree_digest": "sha256:dd724c97afcbfbcf2d3ecd24322d693099f066fd4ea6d5c81115ba9d8cc425dd",
+  "launch_authorized": false,
+  "target_executed": false,
+  "phase3_exit_eligible": false
+}

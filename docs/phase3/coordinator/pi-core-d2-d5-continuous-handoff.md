@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [stage the fixed-view runtime candidate, batch 83](pi-core-worker-view-runtime-batch-83.md).**
+Use the retained Node, JavaScript and package metadata with the separately
+pinned B82 gate. Do not rebuild either predecessor or use B36 launch
+authority for this candidate.
+
 **D2 — [fixed pre-execution worker probes, batch 82](pi-core-pre-exec-view-gate-batch-82.md).**
 Keep the B36 gate and its receipts unchanged. B82 is an offline successor for
 the actual-task half of the proof, not an installed gate or a passing result.

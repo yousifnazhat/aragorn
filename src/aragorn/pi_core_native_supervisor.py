@@ -656,6 +656,7 @@ def run_native_pi_stopped_mask_capture(
     now = time.monotonic()
     _require((_before_start is None or callable(_before_start))
              and type(capture) is StoppedMaskCapture and type(config) is PiConfinedLaunchConfig
+             and (not capture.worker_spine or _before_start is not None)
              and config.native_request is True and config.provider_route_digest is None
              and type(config.source_observation) is dict
              and config.source_observation.get("schema") == restricted.PROFILE_SCHEMA,
@@ -695,7 +696,10 @@ def run_native_pi_stopped_mask_capture(
                 owned.unit_absence_observed = _absent(_unit_state(plan.unit_name, operation_deadline))
                 _require(owned.unit_absence_observed, "capture unit appeared before exclusive start")
                 if _before_start is not None:
-                    _before_start()
+                    proof = _before_start()
+                    if capture.worker_spine:
+                        from .pi_core_mask_capture_release import require_handle_start
+                        require_handle_start(proof, capture, deadline)
                     _remaining(operation_deadline)
                 owned.start_attempted = True
                 code, _ = _command(plan.systemd_run_argv, operation_deadline)
@@ -722,6 +726,8 @@ def run_native_pi_stopped_mask_capture(
                 result["retention"] = json.loads(canonical_json(session._mask_receipt))
                 _require(type(result["retention"].get("mask_consistent")) is bool,
                          "stopped capture receipt lacks a mask finding")
+                _require(("worker_spine_digest" in result["retention"]) == capture.worker_spine,
+                         "stopped capture receipt differs from the released scope")
             except Exception as error:
                 result["failure"] = f"{type(error).__name__}: {str(error)[:512]}"
             finally:

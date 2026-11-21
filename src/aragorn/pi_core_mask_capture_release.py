@@ -17,6 +17,8 @@ from .pi_core_state_mounts import verify_mounts
 RELEASE_PATH = Path("/etc/aragorn/approvals/stopped-mask-release.json")
 CLAIM_ROOT = Path("/var/lib/aragorn-capture-claims")
 SCOPE = "ONE_STOPPED_WORKER_MASK_CAPTURE_NO_PROVIDER_NO_ACTIVATION"
+SPINE_SCOPE = "ONE_STOPPED_WORKER_MASK_AND_PROCESS_HANDLES_CAPTURE_NO_PROVIDER_NO_ACTIVATION"
+_CONFIRMED = object()
 _WINDOW_NS = 300_000_000_000
 
 
@@ -137,7 +139,8 @@ def claim_capture_release(inputs, *, release_digest, plan_digest, host_profile_d
           and int(capture.attempt_id, 16), "invalid capture attempt")
     view._platform()
     doc = inputs.read(RELEASE_PATH, release_digest, 8192)
-    expected = dict(schema="aragorn/pi-core-stopped-mask-release/v1", scope=SCOPE, plan_digest=plan_digest,
+    _need(type(capture.worker_spine) is bool, "invalid capture selection")
+    expected = dict(schema="aragorn/pi-core-stopped-mask-release/v1", scope=SPINE_SCOPE if capture.worker_spine else SCOPE, plan_digest=plan_digest,
                     host_profile_digest=host_profile_digest, deployment_digest=_pin(capture.deployment_digest),
                     attempt_id=capture.attempt_id, max_starts=1)
     _keys(doc, (*expected, "boot_id", "claim_directory", "not_before_unix_ns", "expires_unix_ns"))
@@ -175,3 +178,12 @@ def guard_capture_start(inputs, *, release_digest, claim_digest, capture, deadli
         _need(len(held) == 1 and os.pread(held[0]["fd"], 8193, 0) == held[0]["raw"],
               "held capture release withdrawn or changed")
         _read_claim(fd, name, raw, identity)
+    if capture.worker_spine:
+        _need(doc["scope"] == SPINE_SCOPE, "release does not cover stopped-worker handle observation")
+        return (_CONFIRMED, capture, cutoff)
+
+
+def require_handle_start(proof, capture, deadline):
+    # The request itself is single-use; the old mask-only callback returned None.
+    _need(type(proof) is tuple and len(proof) == 3 and proof[0] is _CONFIRMED and
+          proof[1] is capture and proof[2] == deadline, "no confirmed release for these worker handles")

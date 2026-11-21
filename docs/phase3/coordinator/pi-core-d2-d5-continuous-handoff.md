@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [admission dependency record for the public pilot candidate, batch 97](pi-core-public-candidate-closure-batch-97.md).**
+Reuse the original manifest, retained local Markdown graph and independent
+verifier pin when preparing a policy decision. Do not regenerate the source
+inventory or interpret graph closure as an ALLOW.
+
 **D2 — [strict worker filesystem and standard-descriptor comparison, batch 96](pi-core-strict-worker-devices-batch-96.md).**
 The current-volume and owned-worker readers reject unknown filesystem devices
 and unrelated links to inherited null handles. Matching records are not proof

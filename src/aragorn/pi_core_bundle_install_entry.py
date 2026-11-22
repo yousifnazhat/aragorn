@@ -21,7 +21,7 @@ from . import runtime_active_skill_lineage as lineage
 from .artifact_closure import load_verified_retained_manifest
 from .cas import CAS
 from .oci_worker_protocol import canonical_digest, canonical_json
-from .pi_core_bundle_launch import _DEPLOYMENT_FIELDS
+from .pi_core_bundle_launch import _DEPLOYMENT_FIELDS, load_pi_core_policy_manifest
 from .protected_install_context import verify_protected_install_context_v2
 
 SCHEMA = "aragorn/pi-core-bundle-install-plan/v1"
@@ -294,8 +294,8 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
         for value in deployment.values():
             coordinator._pin(value)
         coordinator._require(type(context) is dict and context.get("operation") in {"install", "update"} and
-            (plan["predecessor_cas_root"] is not None) == (context["operation"] == "update") and
-            context.get("policy_digest") == deployment["policy"], "BUNDLE_INSTALL_CONTEXT_BINDING")
+            (plan["predecessor_cas_root"] is not None) == (context["operation"] == "update"),
+            "BUNDLE_INSTALL_CONTEXT_BINDING")
         config = coordinator._launch(document, "PROTECTED" if document.get("provider_route_digest") else "UNAVAILABLE")
         revoked_ids = _revocations(revoked)
         phase = "HELD_INPUTS"
@@ -311,6 +311,9 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
             inputs.hold_directory(path)
             stores.append(CAS(path, read_only=True))
         cas, predecessor = stores
+        policies = load_pi_core_policy_manifest(cas, deployment["policy"])
+        coordinator._require(context.get("policy_digest") == policies["admission_policy_digest"],
+                             "BUNDLE_INSTALL_CONTEXT_BINDING")
         roots, runtime_digest = _installed_views(inputs, config, deployment)
         destination = _Destination(inputs, context.get("destination"))
         destination.acquire()

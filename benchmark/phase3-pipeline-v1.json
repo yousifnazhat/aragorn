@@ -465,6 +465,7 @@
         "src/aragorn/oci_worker_protocol.py",
         "src/aragorn/phase0_candidate.py",
         "src/aragorn/phase2_scenario_contract.py",
+        "src/aragorn/phase3_deployment.py",
         "src/aragorn/phase3_exit_gate_manifest.py",
         "src/aragorn/pi_core_action_boundary_verify.py",
         "src/aragorn/pi_core_action_evidence.py",
@@ -615,6 +616,7 @@
         "src/aragorn/oci_worker_protocol.py",
         "src/aragorn/phase0_candidate.py",
         "src/aragorn/phase2_scenario_contract.py",
+        "src/aragorn/phase3_deployment.py",
         "src/aragorn/phase3_exit_gate_manifest.py",
         "src/aragorn/pi_core_action_boundary_verify.py",
         "src/aragorn/pi_core_action_evidence.py",
@@ -1255,6 +1257,7 @@
         "src/aragorn/oci_worker_protocol.py",
         "src/aragorn/phase0_candidate.py",
         "src/aragorn/phase2_scenario_contract.py",
+        "src/aragorn/phase3_deployment.py",
         "src/aragorn/phase3_exit_gate_manifest.py",
         "src/aragorn/pi_core_action_boundary_verify.py",
         "src/aragorn/pi_core_action_evidence.py",
@@ -12713,6 +12716,7 @@
         "src/aragorn/runtime_process_profile.py",
         "src/aragorn/vendor_reports.py",
         "src/aragorn/zip_inventory.py",
+        "tests/pi_core_policy_fixtures.py",
         "tests/test_pi_core_bundle_install_entry.py",
         "tests/test_pi_core_bundle_install_postpublication.py"
       ],
@@ -12723,7 +12727,8 @@
       "id": "pi-core-bundle-install-entry-offline",
       "description": "New managed install/update fixed caller with inert protected-view edges and owned temporary CAS/publisher/Pi-consumer compositions; no host install, live operation or qualification",
       "tests": [
-        "test_pi_core_bundle_install_entry"
+        "test_pi_core_bundle_install_entry",
+        "test_pi_core_policy_manifest"
       ],
       "inputs": [
         "src/aragorn/__init__.py",
@@ -12827,7 +12832,9 @@
         "src/aragorn/runtime_process_profile.py",
         "src/aragorn/vendor_reports.py",
         "src/aragorn/zip_inventory.py",
-        "tests/test_pi_core_bundle_install_entry.py"
+        "tests/pi_core_policy_fixtures.py",
+        "tests/test_pi_core_bundle_install_entry.py",
+        "tests/test_pi_core_policy_manifest.py"
       ],
       "needs": [],
       "timeout_seconds": 120
@@ -28624,6 +28631,7 @@
         "src/aragorn/runtime_process_profile.py",
         "src/aragorn/vendor_reports.py",
         "src/aragorn/zip_inventory.py",
+        "tests/pi_core_policy_fixtures.py",
         "tests/test_pi_core_launch_identity.py"
       ],
       "needs": [],

@@ -66,6 +66,8 @@ class InstalledReadback(unittest.TestCase):
         def digest(raw):
             return "sha256:" + hashlib.sha256(raw).hexdigest()
         cls.snap = [dict(module=n, path=p, digest=digest(code(p))) for n, p in zip(names, paths)]
+        # The producer is stubbed; identify the retained B76 entry even after a successor edits it.
+        cls.snap[-1]["digest"] = reader.ENTRY_PIN
         python, std = "/usr/bin/python3.12", "/usr/lib/python3.12"
         expected = {Path("/" + p): code(p) for p in paths}
         for path in (Path(python), *cls.wrapper._TOOLS):
@@ -75,6 +77,7 @@ class InstalledReadback(unittest.TestCase):
         cls.host_profile = dict(schema="aragorn/pi-core-coordinator-host/v1", target="linux-arm64-cpython312",
             python_executable=python, wrapper_path=str(cls.wrapper._WRAPPER), stdlib_roots=[std], sys_path=[std],
             absent_sys_path=[], files=[dict(path=str(p), digest=digest(expected[p]), size=len(expected[p])) for p in sorted(expected)])
+        next(row for row in cls.host_profile["files"] if row["path"] == reader.ENTRY)["digest"] = reader.ENTRY_PIN
         cls.wrapper._profile(cls.host_profile)  # Same format as a real prepared host; never open a named path.
         cls.host_pin = cls.document(cls.host_profile)
         cls.host = dict(schema="aragorn/pi-core-coordinator-host-observation/v1",
@@ -94,17 +97,19 @@ class InstalledReadback(unittest.TestCase):
                         owner_pin=cls.put(raw))
 
     @classmethod
-    def stdout(cls, plan, context):
+    def stdout(cls, plan, context, *, host=None, snap=None):
         s = cls.wrapper
+        host = cls.host if host is None else host
+        snap = cls.snap if snap is None else snap
         raw = StringIO()
         plan_pin = canonical_digest(plan)
-        argv = [str(s._WRAPPER), "--install-bundle", "/owned/host", cls.host_pin, "/owned/plan", plan_pin,
+        argv = [str(s._WRAPPER), "--install-bundle", "/owned/host", host["host_profile_digest"], "/owned/plan", plan_pin,
                 str(time.monotonic_ns() + 10_000_000_000)]
         obs = dict(schema="aragorn/pi-core-bundle-install-result/v1", authority="PROTECTED_MATERIALIZATION_ONLY_NOT_ACTIVATION_OR_PHASE3",
             status="INSTALLED_NOT_ACTIVATED_OR_QUALIFIED", phase3_exit_eligible=False, failure_stage=None,
             managed_call_attempted=False, managed_result=None, owned_inputs_closed=True, owned_destination_closed=True,
             plan_digest=plan_pin, deployment_digest=plan["deployment"]["digest"], context_digest=canonical_digest(context),
-            host_before=cls.host, host_after=cls.host, source_before=cls.snap, source_after=cls.snap,
+            host_before=host, host_after=host, source_before=snap, source_after=snap,
             installation_attempted=True, publication_state="PUBLISHER_RETURNED", input_cleanup_uncertainty=[],
             transaction=dict(schema="aragorn/protected-install-transaction/v1", tree_digest=cls.tree),
             recovery=None, observed_tree_digest=cls.tree)

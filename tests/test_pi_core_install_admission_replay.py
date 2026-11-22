@@ -1,5 +1,6 @@
 """Semantic replay of inert admission inputs, not analyzer execution, B95 evidence or install authority."""
 from contextlib import redirect_stderr, redirect_stdout
+import hashlib
 from io import StringIO
 import json
 from unittest import TestCase
@@ -10,6 +11,7 @@ from aragorn.analyzer_receipt import retain_analyzer_run
 from aragorn.cas import CASError
 from aragorn.decision_receipt import DecisionReceiptError, retain_decision_v3
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
+from scripts import verify_pi_core_installed_bundle_readback as reader
 from scripts.verify_pi_core_installed_bundle_readback import main, verify_installed_bundle_readback
 from tests import test_pi_core_installed_bundle_readback as materialization
 
@@ -45,8 +47,25 @@ class InstallAdmissionReplay(TestCase):
                 artifact_graph_verifier_digest=cls.graph_verifier)
             cls.decisions[missing] = (policy, pin)
         cls.clean_revocations = f.document(dict(schema="aragorn/protected-install-revocations/v1", context_ids=[]))
+        cls.runtime_policy = f.document(dict(schema="aragorn/runtime-action-policy/v1", id="test-only",
+            version=1, default="BLOCK", sensor_digest=canonical_digest("sensor"),
+            revocation_source_digest=canonical_digest("revocation source"), allow=[]))
 
-    def nomination(self, *, missing_required=False, forge_allow=False, context_changes=None, revocations=None):
+    def managed_host(self):
+        f = self.f
+        rows = {r["path"]: r for r in f.host_profile["files"]}
+        sources = {"/" + r["path"]: r for r in f.snap}
+        for path in (reader.ENTRY, reader.POLICY_MANIFEST_HELPER):
+            source = (materialization.SOURCE.parents[2] / path.removeprefix("/opt/aragorn/")).read_bytes()
+            digest = "sha256:" + hashlib.sha256(source).hexdigest()
+            rows[path] = dict(path=path, digest=digest, size=len(source))
+            module = "aragorn." + path.split("/")[-1].removesuffix(".py")
+            sources[path] = dict(module=module, path=path[1:], digest=digest)
+        host_pin = f.document(f.host_profile | dict(files=[rows[k] for k in sorted(rows)]))
+        return f.host | dict(host_profile_digest=host_pin, files=len(rows)), list(sources.values())
+
+    def nomination(self, *, missing_required=False, forge_allow=False, context_changes=None, revocations=None,
+                   managed=False, policy_members=None, legacy_pin=False, omit_helper=False):
         f = self.f
         policy_pin, pin = self.decisions[missing_required]
         decision = json.loads(f.archive.read(pin))
@@ -58,10 +77,19 @@ class InstallAdmissionReplay(TestCase):
             analyzer_run_receipt_digests=[self.receipt], analyzer_verifier_digest=self.analyzer_verifier,
             artifact_graph_verifier_digest=self.graph_verifier) | (context_changes or {})
         context_pin = f.document(context)
-        plan = f.plan | dict(context=f.plan["context"] | dict(digest=context_pin),
-            deployment=f.plan["deployment"] | dict(digest=f.document(f.deployment | dict(policy=policy_pin))),
+        host, snap, deployment_policy = f.host, f.snap, policy_pin
+        if managed:
+            host, snap = self.managed_host()
+            if omit_helper:
+                snap = [r for r in snap if "/" + r["path"] != reader.POLICY_MANIFEST_HELPER]
+            if not legacy_pin:
+                deployment_policy = f.document(dict(schema="aragorn/pi-core-policy-manifest/v1",
+                    admission_policy_digest=policy_pin, runtime_action_policy_digest=self.runtime_policy) |
+                    (policy_members or {}))
+        plan = f.plan | dict(host_profile_digest=host["host_profile_digest"], context=f.plan["context"] | dict(digest=context_pin),
+            deployment=f.plan["deployment"] | dict(digest=f.document(f.deployment | dict(policy=deployment_policy))),
             revocations=f.plan["revocations"] | dict(digest=revocations or self.clean_revocations))
-        status, raw = f.stdout(plan, context)
+        status, raw = f.stdout(plan, context, host=host, snap=snap)
         self.assertEqual(status, 0)
         return dict(owner_pin=f.put(raw), plan_pin=f.document(plan), context_pin=context_pin, manifest_pin=f.manifest)
 
@@ -79,6 +107,33 @@ class InstallAdmissionReplay(TestCase):
         base = verify_installed_bundle_readback(self.f.archive, **pins)
         self.assertIs(base["decision_or_revocation_replayed"], False)
         self.assertNotIn("retained_decision_verdict", base)
+        self.assertNotIn("policy_manifest_digest", report)
+
+    def test_managed_replay_validates_two_original_documents_and_replays_only_admission(self):
+        pins = self.nomination(managed=True)
+        report = verify_installed_bundle_readback(self.f.archive, **pins, replay_admission=True)
+        self.assertEqual(report["schema"], "aragorn/pi-core-installed-bundle-admission-finding/v2")
+        self.assertEqual(report["admission_policy_digest"], self.decisions[False][0])
+        self.assertEqual(report["runtime_action_policy_digest"], self.runtime_policy)
+        self.assertEqual(report["policy_manifest_digest"], canonical_digest(dict(schema="aragorn/pi-core-policy-manifest/v1",
+            admission_policy_digest=self.decisions[False][0], runtime_action_policy_digest=self.runtime_policy)))
+        self.assertEqual(report["retained_decision_verdict"], "ALLOW")
+        self.assertFalse(report["activation_authorized"])
+        self.assertFalse(report["phase3_exit_eligible"])
+
+    def test_managed_replay_refuses_mixed_roles_missing_bytes_legacy_pin_and_missing_source(self):
+        admission = self.decisions[False][0]
+        variants = ((dict(policy_members=dict(admission_policy_digest=self.runtime_policy,
+                                             runtime_action_policy_digest=admission)), "policy manifest"),
+                    (dict(policy_members=dict(runtime_action_policy_digest=canonical_digest("absent runtime policy"))),
+                     "policy manifest"),
+                    (dict(legacy_pin=True), "policy manifest"),
+                    (dict(context_changes=dict(policy_digest=self.runtime_policy)), "approved install context differs"),
+                    (dict(omit_helper=True), "missing protected install source"))
+        for changes, reason in variants:
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, reason):
+                verify_installed_bundle_readback(self.f.archive, **self.nomination(managed=True, **changes),
+                                                 replay_admission=True)
 
     def test_real_nonallow_and_resealed_allow_refuse(self):
         for forged, why in ((False, "does not allow"), (True, "does not match replayed evidence")):

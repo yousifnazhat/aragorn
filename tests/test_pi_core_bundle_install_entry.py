@@ -16,9 +16,10 @@ from aragorn import pi_core_bundle_install_entry as subject
 from aragorn import pi_core_bundle_launch as bundle
 from aragorn import runtime_active_skill_lineage_v2 as lineage_v2
 from aragorn.acquire import ingest_local
-from aragorn.cas import CAS
+from aragorn.cas import CAS, CASError
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.runtime_process_profile import runtime_process_profile
+from tests.pi_core_policy_fixtures import policy_documents, store_policy_manifest
 
 
 def pin(char="a"):
@@ -31,10 +32,11 @@ def fixture():
         path = "/var/lib/pi/prepared/" + name + ".json"
         documents[path] = value
         return {"path": path, "digest": canonical_digest(value)}
-    context = {"operation": "install", "policy_digest": pin("4"),
+    _, policy = policy_documents()
+    context = {"operation": "install", "policy_digest": policy["admission_policy_digest"],
         "destination": {"root_device": 1, "root_inode": 2, "target_name": "pi"}}
     deployment = {name: pin() for name in subject._DEPLOYMENT_FIELDS}
-    deployment.update(policy=pin("4"), runtime_commit_or_image=pin("5"))
+    deployment.update(policy=canonical_digest(policy), runtime_commit_or_image=pin("5"))
     plan = dict(schema=subject.SCHEMA, host_profile_digest=pin("c"),
         context=ref("context", context), candidate_cas_root="/var/lib/pi/candidate",
         predecessor_cas_root=None, deployment=ref("deployment", deployment),
@@ -65,7 +67,15 @@ class InstallEntryTests(unittest.TestCase):
             return copy.deepcopy(document)
         self.inputs.ref.side_effect = read_ref
         self.enterContext(mock.patch.object(subject.coordinator, "_Inputs", return_value=self.inputs))
-        self.cas = self.enterContext(mock.patch.object(subject, "CAS", return_value=object()))
+        policy_rows, _ = policy_documents()
+        def read_policy(digest, *, max_bytes):
+            if digest not in policy_rows:
+                raise CASError("unretained fixture input")
+            raw = canonical_json(policy_rows[digest])
+            self.assertLessEqual(len(raw), max_bytes)
+            return raw
+        self.cas = self.enterContext(mock.patch.object(subject, "CAS", return_value=mock.Mock()))
+        self.cas.return_value.read.side_effect = read_policy
         self.launch = self.enterContext(mock.patch.object(subject.coordinator, "_launch", return_value=object()))
         self.views = self.enterContext(mock.patch.object(subject, "_installed_views", return_value=((51, 52), pin("5"))))
         self.readonly = self.enterContext(mock.patch.object(subject.inventory, "_directory"))
@@ -469,7 +479,8 @@ class ExistingPublisherConsumerTests(unittest.TestCase):
         self.plan["candidate_cas_root"] = str(self.root / "cas")
         self.plan["runtime_conformance_digest"] = pin("8")
         self.deployment = self.documents[self.plan["deployment"]["path"]]
-        self.deployment.update(runtime_commit_or_image=pin("7"), policy=pin("c"))
+        self.policy = store_policy_manifest(self.cas)
+        self.deployment.update(runtime_commit_or_image=pin("7"), policy=canonical_digest(self.policy))
         self.plan["deployment"]["digest"] = canonical_digest(self.deployment)
         self.enterContext(mock.patch.object(subject, "_DESTINATION", self.protected))
         self.enterContext(mock.patch.object(subject, "_custody", return_value=(pin("c"), [], {})))
@@ -554,7 +565,7 @@ class ExistingPublisherConsumerTests(unittest.TestCase):
             "status": "active", "expires_at_unix": 1200, "operation": "update" if previous else "install",
             "expected_active": {"context_id": previous["context_id"], "manifest_digest": previous["manifest_digest"]} if previous else None,
             "decision_digest": pin("2"), "manifest_digest": manifest_digest, "artifact_graph_digest": pin("3"),
-            "policy_digest": pin("c"), "analyzer_run_receipt_digests": [pin("4")], "analyzer_verifier_digest": pin("5"),
+            "policy_digest": self.policy["admission_policy_digest"], "analyzer_run_receipt_digests": [pin("4")], "analyzer_verifier_digest": pin("5"),
             "artifact_graph_verifier_digest": pin("6"), "target_runtime_digest": pin("7"), "runtime_conformance_digest": pin("8"),
             "destination": {"root_device": state.st_dev, "root_inode": state.st_ino, "target_name": "pi"}}
         self.documents[self.plan["context"]["path"]] = context
@@ -574,7 +585,8 @@ class ExistingPublisherConsumerTests(unittest.TestCase):
         # This test-only input represents separately supplied existing start
         # authority; the install entry never returns or issues a grant.
         grant = {"active_skill_digest": "sha256:" + hashlib.sha256(content).hexdigest(),
-            "install_context_digest": canonical_digest(context), "source_manifest_digest": context["manifest_digest"]}
+            "install_context_digest": canonical_digest(context), "source_manifest_digest": context["manifest_digest"],
+            "policy_digest": self.policy["runtime_action_policy_digest"]}
         return bundle.hold_prepared_pi_bundle(CAS(self.root / "cas", read_only=True), context,
             profile=profile, grant=grant, protected_root=self.protected, runtime_conformance_digest=pin("8"),
             deployment=self.deployment, revoked_context_ids=(), now_unix=1000, deadline=125.0)
@@ -585,7 +597,23 @@ class ExistingPublisherConsumerTests(unittest.TestCase):
         with self.prepare(self.context, b"# Admitted first capability\n") as prepared:
             self.assertEqual(prepared.system_prompt, "# Admitted first capability\n")
             self.assertEqual(prepared.context_digest, result["transaction"]["context_digest"])
+            self.assertEqual(prepared.deployment_digest, result["deployment_digest"])
+            self.assertEqual(prepared.policy_digest, self.policy["runtime_action_policy_digest"])
+            self.assertNotEqual(prepared.policy_digest, self.context["policy_digest"])
+        self.decision.assert_called()
+        for call in self.decision.call_args_list:
+            self.assertEqual(call.kwargs["expected_policy_digest"], self.policy["admission_policy_digest"])
         self.assertFalse(prepared._lease.active)
+
+    def test_bare_admission_pin_refuses_before_install_or_launch(self):
+        self.deployment["policy"] = self.policy["admission_policy_digest"]
+        self.plan["deployment"]["digest"] = canonical_digest(self.deployment)
+        with self.assertRaises(subject.PiBundleInstallEntryError) as error:
+            self.install()
+        self.assertFalse(error.exception.observation["installation_attempted"])
+        with self.assertRaises(bundle.PiBundleLaunchError), self.prepare(self.context, b"# Admitted first capability\n"):
+            self.fail("bare admission policy must not prepare")
+        self.decision.assert_not_called()
 
     def test_update_rejects_stale_start_authority_and_preserves_predecessor(self):
         first = self.install()

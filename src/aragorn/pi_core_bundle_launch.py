@@ -21,12 +21,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import runtime_active_skill_lineage as lineage_base
+from .admission_decision import parse_policy
 from .artifact_closure import load_verified_retained_manifest
-from .cas import CAS
+from .cas import CAS, CASError
 from .materialization import verify_materialized_source_tree
 from .oci_worker_protocol import canonical_digest, canonical_json
 from .protected_install_context import verify_protected_install_context_v2
-from .runtime_action_broker import _peer_credentials, _read_owned_bytes_at, _require_digest
+from .runtime_action_broker import (
+    RuntimeActionBrokerError, _parse_canonical_document, _peer_credentials,
+    _read_owned_bytes_at, _require_digest,
+)
+from .runtime_action_decision import _policy as parse_runtime_policy
 from .runtime_active_skill_lineage_v2 import hold_runtime_active_skill_lineage
 from .runtime_process_profile import (
     PROFILE_AUTHORITY, PROFILE_SCHEMA, RuntimeProcessProfile,
@@ -39,10 +44,28 @@ _DEPLOYMENT_FIELDS = {
     "os_profile", "policy", "aragorn_version",
 }
 _MAX_LIFETIME_NS = 30_000_000_000
+_POLICY_MANIFEST_SCHEMA = "aragorn/pi-core-policy-manifest/v1"
 
 
 class PiBundleLaunchError(ValueError):
     """Preparation or binding failed; no automatic retry is permitted."""
+
+
+def load_pi_core_policy_manifest(cas: CAS, expected_digest: str) -> dict:
+    """Resolve both original policy documents under an independently selected pin."""
+    admission_key, runtime_key = "admission_policy_digest", "runtime_action_policy_digest"
+    try:
+        manifest = _parse_canonical_document(cas.read(expected_digest, max_bytes=1024), "Pi policy manifest")
+        if (manifest.keys() != {"schema", admission_key, runtime_key} or
+                manifest["schema"] != _POLICY_MANIFEST_SCHEMA or manifest[admission_key] == manifest[runtime_key]):
+            raise PiBundleLaunchError("Pi policy manifest requires separate role-bound policies")
+        parse_policy(_parse_canonical_document(
+            cas.read(manifest[admission_key], max_bytes=1 << 20), "Pi admission policy"))
+        parse_runtime_policy(_parse_canonical_document(
+            cas.read(manifest[runtime_key], max_bytes=1 << 20), "Pi runtime action policy"))
+    except (CASError, RuntimeActionBrokerError, ValueError) as exc:
+        raise PiBundleLaunchError("Pi deployment policy manifest is invalid") from exc
+    return manifest
 
 
 @dataclass(slots=True)
@@ -116,8 +139,11 @@ def hold_prepared_pi_bundle(
     context = json.loads(canonical_json(context))
     grant = json.loads(canonical_json(grant))
     revoked_context_ids = tuple(revoked_context_ids)
-    if context.get("policy_digest") != pins["policy"]:
+    policies = load_pi_core_policy_manifest(cas, pins["policy"])
+    if context.get("policy_digest") != policies["admission_policy_digest"]:
         raise PiBundleLaunchError("Pi admission policy is not deployment-bound")
+    if grant.get("policy_digest") != policies["runtime_action_policy_digest"]:
+        raise PiBundleLaunchError("Pi runtime action grant is not deployment-bound")
     root_fd = -1
     lease = _Lease()
     try:
@@ -198,7 +224,8 @@ def hold_prepared_pi_bundle(
             prepared = PreparedPiBundle(
                 secrets.token_hex(16), system_prompt, tuple(members), verified.context_digest,
                 verified.manifest_digest, lineage["tree_digest"], lineage["active_record_digest"],
-                grant["active_skill_digest"], canonical_digest(pins), pins["policy"], expires, profile.digest,
+                grant["active_skill_digest"], canonical_digest(pins), policies["runtime_action_policy_digest"],
+                expires, profile.digest,
                 profile.runtime_digest, profile.executable_digest, profile.skill_path, lease,
             )
             yield prepared

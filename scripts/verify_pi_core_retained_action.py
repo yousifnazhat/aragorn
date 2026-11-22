@@ -6,8 +6,10 @@ from pathlib import Path
 import sys
 
 from aragorn.cas import CAS, CASError
+from aragorn.phase3_deployment import build_phase3_deployment_identity
 from aragorn.pi_core_action_boundary_verify import _MAX_RECORD, _SOURCE_ARGS
 from aragorn.pi_core_action_index_verify import verify_retained_action
+from aragorn.pi_core_bundle_launch import load_pi_core_policy_manifest
 from aragorn.pi_core_source_observation_verify import _document, _fields, _pin, _require
 from aragorn.runtime_action_worker import _worker_request
 
@@ -32,7 +34,8 @@ def _public_pilot_inputs(activation, worker_request):
     return pinned("candidate/SKILL.md", review["skill_digest"]), pinned("task.txt", review["task_digest"])
 
 
-def replay(archive, nomination_digest, *, provider_archive=None, provider_nomination_digest=None):
+def replay(archive, nomination_digest, *, provider_archive=None, provider_nomination_digest=None,
+           expected_deployment_digest=None):
     _require(type(archive) is CAS and archive.read_only is True, "ACTION_REPLAY_READ_ONLY_CAS")
     _require((provider_archive is None) == (provider_nomination_digest is None), "PILOT_BOTH_PROVIDER_INPUTS_REQUIRED")
 
@@ -49,6 +52,20 @@ def replay(archive, nomination_digest, *, provider_archive=None, provider_nomina
     for field in ("expected_profile_raw", "source_inventory_raw", "loader_inventory_raw"):
         sources[field] = read(sources[field], _MAX_RECORD)
     activation = _document(read(nomination["activation_digest"], 64 << 10))
+    managed = {}
+    if expected_deployment_digest is not None:
+        _require(activation["deployment_digest"] == _pin(expected_deployment_digest),
+                 "ACTION_REPLAY_MANAGED_DEPLOYMENT")
+        deployment = _document(read(expected_deployment_digest, 4096))
+        build_phase3_deployment_identity(deployment)
+        policies = load_pi_core_policy_manifest(archive, deployment["policy"])
+        # Terminal replay below already joins the configured grant and exact
+        # action request to the activation's runtime policy.
+        _require(deployment["runtime_commit_or_image"] == activation["runtime_digest"] and
+                 policies["runtime_action_policy_digest"] == activation["policy_digest"],
+                 "ACTION_REPLAY_MANAGED_RUNTIME_POLICY")
+        managed = dict(deployment_digest=expected_deployment_digest, policy_manifest_digest=deployment["policy"],
+                       runtime_action_policy_digest=policies["runtime_action_policy_digest"])
     worker_request = _document(read(nomination["request_digest"], 1 << 20))
     result = verify_retained_action(evidence_cas=archive, expected_owner_digest=nomination["owner_digest"],
         expected_index_digest=nomination["index_digest"], expected_grant_digest=nomination["grant_digest"],
@@ -65,13 +82,15 @@ def replay(archive, nomination_digest, *, provider_archive=None, provider_nomina
                                          worker_request=worker_request, skill_bytes=skill, task_bytes=task)
         result.update(match, provider_nomination_digest=provider_nomination_digest, recorded_public_pilot_inputs_matched=True,
                       provider_peer_authentication_verified=False, provider_delivery_verified=False)
-    return {**result, "nomination_digest": nomination_digest}
+    return {**result, **managed, "nomination_digest": nomination_digest}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", help="existing private read-only CAS")
     parser.add_argument("nomination_digest", help="independently held pin; never select it from the submitted index")
+    parser.add_argument("--expected-deployment-digest",
+                        help="independently held managed deployment pin; required for a two-policy finding")
     parser.add_argument("--pilot-provider-archive", help="existing read-only B27 export for the fixed public pilot")
     parser.add_argument("--pilot-provider-nomination", help="independently held provider nomination digest")
     args = parser.parse_args(argv)
@@ -80,7 +99,8 @@ def main(argv=None):
     try:
         result = replay(CAS(args.archive, read_only=True), args.nomination_digest,
                         provider_archive=CAS(args.pilot_provider_archive, read_only=True) if args.pilot_provider_archive is not None else None,
-                        provider_nomination_digest=args.pilot_provider_nomination)
+                        provider_nomination_digest=args.pilot_provider_nomination,
+                        expected_deployment_digest=args.expected_deployment_digest)
     except (CASError, ValueError, OSError, KeyError, IndexError, TypeError, RuntimeError, OverflowError):
         print("Retained action replay refused. Preserve the original records; no effect was retried.", file=sys.stderr)
         return 2

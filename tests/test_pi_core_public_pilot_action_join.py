@@ -34,7 +34,16 @@ def _public_records(action):
     policy["allow"][0].update(runtime_digest=action.sources["expected_bindings"]["runtime_digest"],
         active_skill_digest=review["skill_digest"], path_digest=canonical_digest(route),
         payload_digest=canonical_digest(request["payload"]))
-    policy_pin = canonical_digest(policy)
+    policy_pin = action.put(canonical_json(policy))
+    admission_pin = action.put(canonical_json(dict(schema="aragorn/policy/v1", id="inert-pilot",
+        version=1, required_analyzers=["inert-scanner"], hard_deny_reason_codes=[], review_severities=["high"])))
+    manifest_pin = action.put(canonical_json(dict(schema="aragorn/pi-core-policy-manifest/v1",
+        admission_policy_digest=admission_pin, runtime_action_policy_digest=policy_pin)))
+    bindings = action.sources["expected_bindings"]
+    deployment = {k: canonical_digest(k) for k in ("adapter", "configuration", "worker", "os_profile", "aragorn_version")}
+    deployment.update(policy=manifest_pin, runtime_commit_or_image=bindings["runtime_digest"])
+    deployment_pin = action.put(canonical_json(deployment))
+    bindings["deployment_digest"] = action.node.record["bindings"]["deployment_digest"] = deployment_pin
     action.original(public_pilot_call_id=CALL, public_pilot_policy_digest=policy_pin)
     public_bytes = cli._public_pilot_inputs(action.activation, action.request)
     action.assertEqual(public_bytes, (skill, task))
@@ -83,7 +92,7 @@ def _public_records(action):
     nomination = dict(schema="aragorn/pi-core-pilot-provider-nomination/v1", index_digest=action.put(raw),
         activation_digest=activation_pin, request_digest=canonical_digest(request), route_digest=canonical_digest(route),
         profile_digest=canonical_digest(packet["profile"]), nonce=packet["nonce"], deadline_ns=packet["deadline_ns"])
-    return action.put(canonical_json(nomination)), nomination, public_bytes
+    return action.put(canonical_json(nomination)), nomination, public_bytes, deployment_pin
 
 
 class PublicPilotActionJoin(TestCase):
@@ -93,7 +102,7 @@ class PublicPilotActionJoin(TestCase):
         cls.action = pilot.PilotActionReplay()
         cls.addClassCleanup(cls.action.doCleanups)
         cls.action.setUp()
-        cls.provider_pin, cls.nomination, cls.public = _public_records(cls.action)
+        cls.provider_pin, cls.nomination, cls.public, cls.deployment_pin = _public_records(cls.action)
         cls.action_pin = cls.action.put(canonical_json(cls.action.nomination()))
 
     def test_b27_tool_and_b93_worker_match_b95_without_claiming_network_or_effect(self):
@@ -102,10 +111,33 @@ class PublicPilotActionJoin(TestCase):
                             provider_nomination_digest=self.provider_pin)
         self.assertIs(report["recorded_tool_call_matches_worker_request"], True)
         self.assertIs(report["recorded_public_pilot_inputs_matched"], True)
+        self.assertNotIn("policy_manifest_digest", report)
         self.assertEqual(report["provider_index_digest"], self.nomination["index_digest"])
         for key in ("provider_peer_authentication_verified", "provider_delivery_verified", "effect_verified",
                     "timing_verified", "sensor_health_verified", "phase3_qualified"):
             self.assertIs(report[key], False)
+
+    def test_nominated_deployment_joins_distinct_policy_bytes_to_both_recorded_actions(self):
+        a = self.action
+        report = cli.replay(a.readonly, self.action_pin, provider_archive=a.readonly,
+                            provider_nomination_digest=self.provider_pin, expected_deployment_digest=self.deployment_pin)
+        self.assertEqual(report["deployment_digest"], self.deployment_pin)
+        self.assertEqual(report["policy_manifest_digest"], json.loads(a.readonly.read(self.deployment_pin))["policy"])
+        self.assertEqual(report["runtime_action_policy_digest"], a.activation["policy_digest"])
+        self.assertIs(report["recorded_tool_call_matches_worker_request"], True)
+        self.assertIs(report["effect_verified"], False)
+
+    def test_nominated_deployment_and_runtime_policy_cannot_be_selected_by_the_record(self):
+        a = self.action
+        deployment = json.loads(a.readonly.read(self.deployment_pin))
+        other = a.put(canonical_json(deployment | {"worker": canonical_digest("other worker")}))
+        with self.assertRaisesRegex(ValueError, "ACTION_REPLAY_MANAGED_DEPLOYMENT"):
+            cli.replay(a.readonly, self.action_pin, expected_deployment_digest=other)
+        manifest = json.loads(a.readonly.read(deployment["policy"]))
+        forged_activation = a.put(canonical_json(a.activation | {"policy_digest": manifest["admission_policy_digest"]}))
+        nomination = a.put(canonical_json(a.nomination() | {"activation_digest": forged_activation}))
+        with self.assertRaisesRegex(ValueError, "ACTION_REPLAY_MANAGED_RUNTIME_POLICY"):
+            cli.replay(a.readonly, nomination, expected_deployment_digest=self.deployment_pin)
 
     def test_wrong_original_task_or_worker_tool_call_refuses(self):
         a = self.action

@@ -34,6 +34,7 @@ from aragorn.runtime_action_worker import (
     _worker_result,
 )
 from aragorn.runtime_process_profile import runtime_process_profile
+from tests.pi_core_policy_fixtures import store_policy_manifest
 
 
 def _digest(character: str) -> str:
@@ -486,6 +487,7 @@ decision-receipt dependency mocked; no old TestCase is imported or rerun.
         self.addCleanup(self.stack.close)
         self.root = Path(self.temporary.name).resolve()
         self.cas = CAS(self.root / "cas")
+        self.policy = store_policy_manifest(self.cas)
         self.source = self.root / "source"
         self.source.mkdir()
         self.skill_raw = b"# Admitted Pi capability\nUse only the provided request tool.\n"
@@ -504,7 +506,7 @@ decision-receipt dependency mocked; no old TestCase is imported or rerun.
             "context_id": _digest("1"), "status": "active",
             "expires_at_unix": 120, "operation": "install", "expected_active": None,
             "decision_digest": _digest("2"), "manifest_digest": self.manifest_digest,
-            "artifact_graph_digest": _digest("3"), "policy_digest": _digest("c"),
+            "artifact_graph_digest": _digest("3"), "policy_digest": self.policy["admission_policy_digest"],
             "analyzer_run_receipt_digests": [_digest("4")],
             "analyzer_verifier_digest": _digest("5"),
             "artifact_graph_verifier_digest": _digest("6"),
@@ -553,13 +555,14 @@ decision-receipt dependency mocked; no old TestCase is imported or rerun.
             "active_skill_digest": "sha256:" + hashlib.sha256(self.skill_raw).hexdigest(),
             "install_context_digest": self.context_digest,
             "source_manifest_digest": self.manifest_digest,
+            "policy_digest": self.policy["runtime_action_policy_digest"],
         }
         self.deployment = {name: _digest("d") for name in (
             "runtime_commit_or_image", "adapter", "configuration", "worker",
             "os_profile", "policy", "aragorn_version",
         )}
         self.deployment["runtime_commit_or_image"] = self.profile.runtime_digest
-        self.deployment["policy"] = self.context["policy_digest"]
+        self.deployment["policy"] = canonical_digest(self.policy)
         self.activation_directory = self.root / "activations"
         self.activation_directory.mkdir(mode=0o700)
         self.now = 100
@@ -668,6 +671,13 @@ decision-receipt dependency mocked; no old TestCase is imported or rerun.
                 self.fail("unbound deployment must not prepare")
             self.deployment[name] = previous
 
+    def test_wrong_grant_policy_refuses_before_admission_verification(self) -> None:
+        for policy in (self.policy["admission_policy_digest"], canonical_digest(self.policy)):
+            self.grant["policy_digest"] = policy
+            with self.subTest(policy=policy), self.assertRaises(launch.PiBundleLaunchError), self.prepare():
+                self.fail("grant must bind exactly the runtime-action policy")
+        self.decision.assert_not_called()
+
     def test_incomplete_deployment_dimensions_refuse(self) -> None:
         del self.deployment["adapter"]
         with self.assertRaisesRegex(ValueError, "incomplete"), self.prepare():
@@ -737,6 +747,7 @@ decision-receipt dependency mocked; no old TestCase is imported or rerun.
             self.assertEqual(result["run_id"], prepared.activation_id)
             self.assertEqual(result["source_manifest_digest"], self.manifest_digest)
             self.assertEqual(result["deployment_digest"], canonical_digest(self.deployment))
+            self.assertEqual(result["policy_digest"], self.policy["runtime_action_policy_digest"])
             with self.assertRaises(OSError):
                 os.fstat(pidfd)
 

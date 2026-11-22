@@ -15,6 +15,7 @@ from aragorn.decision_receipt import verify_decision_v3
 from aragorn.oci_worker_protocol import canonical_digest, canonical_json
 from aragorn.phase3_deployment import build_phase3_deployment_identity
 from aragorn.pi_core_bundle_install_entry import _plan, _revocations, _supported_bundle
+from aragorn.pi_core_bundle_launch import load_pi_core_policy_manifest
 from aragorn.pi_core_service_source import _inventory
 from aragorn import protected_install_context as admission
 from aragorn.runtime_action_broker import _parse_canonical_document
@@ -29,6 +30,9 @@ WRAPPER_PIN = "sha256:9466bbe553b557a710a9d7ee2e2164a4fbf0e4f8a1442d4683ea2e8516
 SPINE_V2_WRAPPER_PIN = "sha256:0333694744366d04d060431db3ef47f766d09150d26a1cec4fe6554b43f22eb5"
 ENTRY = "/opt/aragorn/src/aragorn/pi_core_bundle_install_entry.py"
 ENTRY_PIN = "sha256:d74ff1cb8c0b8626ad388eacd6255ad640fa00896b2d86eae2848d533da00564"
+POLICY_MANIFEST_ENTRY_PIN = "sha256:d2f29fd1d3c7590d437009e293112ff1ff9f985510bfa89d287d3ecb9cc3f0ca"
+POLICY_MANIFEST_HELPER = "/opt/aragorn/src/aragorn/pi_core_bundle_launch.py"
+POLICY_MANIFEST_HELPER_PIN = "sha256:05106571ede5cb0f6ed141caa5145a6cb6ab7d07ff089b3a6abcb61f83055ef3"
 
 
 def _need(ok, reason):
@@ -55,7 +59,12 @@ def _custody(owner, profile, profile_pin):
     # and limits. It constructs Path values but performs no guest filesystem operation.
     files = {str(p): _pin(row["digest"]) for p, row in host_contract._profile(profile).items()}
     _need(files.get(WRAPPER) in (WRAPPER_PIN, SPINE_V2_WRAPPER_PIN), "unreviewed wrapper")
-    _need(files.get(ENTRY) == ENTRY_PIN, "unreviewed materialization readback entry")
+    entry_pin = files.get(ENTRY)
+    _need(entry_pin in (ENTRY_PIN, POLICY_MANIFEST_ENTRY_PIN), "unreviewed materialization readback entry")
+    managed_policy = entry_pin == POLICY_MANIFEST_ENTRY_PIN
+    if managed_policy:
+        _need(files.get(POLICY_MANIFEST_HELPER) == POLICY_MANIFEST_HELPER_PIN,
+              "unreviewed managed policy reader")
     sources = _inventory({k[1:]: v for k, v in files.items() if k.startswith("/opt/aragorn/src/aragorn/")})
     before, after = owner["host_before"], owner["host_after"]
     _need(canonical_json(before) == canonical_json(after) and type(before) is dict and
@@ -75,8 +84,11 @@ def _custody(owner, profile, profile_pin):
         _need(name not in seen and name in sources and set(row) == {"module", "path", "digest"} and
               sources[name][:2] == (row["path"], row["digest"]), "module differs from protected source inventory")
         seen.add(name)
-    _need({"aragorn", "aragorn.pi_core_coordinator_entry", "aragorn.pi_core_bundle_install_entry"} <=
-          {r["module"] for r in initial}, "missing protected install source")
+    required = {"aragorn", "aragorn.pi_core_coordinator_entry", "aragorn.pi_core_bundle_install_entry"}
+    if managed_policy:
+        required.add("aragorn.pi_core_bundle_launch")
+    _need(required <= {r["module"] for r in initial}, "missing protected install source")
+    return managed_policy
 
 
 def _historical_context(context):
@@ -126,9 +138,13 @@ def verify_installed_bundle_readback(archive, *, owner_pin, plan_pin, context_pi
     _plan(plan, host_pin)  # Pure validation; never open the guest paths named by this plan.
     _need(owner["plan_digest"] == plan_pin and owner["context_digest"] == plan["context"]["digest"] == context_pin
           and owner["deployment_digest"] == plan["deployment"]["digest"], "plan/context/deployment binding differs")
-    _custody(owner, _document(archive, host_pin, 2 << 20), host_pin)
+    managed_policy = _custody(owner, _document(archive, host_pin, 2 << 20), host_pin)
     deployment = _document(archive, plan["deployment"]["digest"], 2 << 20)
     build_phase3_deployment_identity(deployment)
+    policy_pin = deployment["policy"]
+    if managed_policy:
+        policy_manifest = load_pi_core_policy_manifest(archive, policy_pin)
+        policy_pin = policy_manifest["admission_policy_digest"]
     context = _document(archive, context_pin, 2 << 20)
     _historical_context(context)
     operation = context["operation"]
@@ -136,7 +152,7 @@ def verify_installed_bundle_readback(archive, *, owner_pin, plan_pin, context_pi
           and context["status"] == "active" and operation in ("install", "update") and
           (operation == "update") == (plan["predecessor_cas_root"] is not None) and
           context["target_runtime_digest"] == deployment["runtime_commit_or_image"] and
-          context["policy_digest"] == deployment["policy"] and context["runtime_conformance_digest"] == plan["runtime_conformance_digest"]
+          context["policy_digest"] == policy_pin and context["runtime_conformance_digest"] == plan["runtime_conformance_digest"]
           and context["manifest_digest"] == manifest_pin, "approved install context differs")
     previous = context["expected_active"]
     if operation == "update":
@@ -163,7 +179,7 @@ def verify_installed_bundle_readback(archive, *, owner_pin, plan_pin, context_pi
         receipt, gateway = admission._context_github_trust_digests(context)
         decision = verify_decision_v3(archive, context["decision_digest"],
             expected_manifest_digest=manifest_pin, expected_artifact_graph_digest=context["artifact_graph_digest"],
-            expected_policy_digest=deployment["policy"],
+            expected_policy_digest=policy_pin,
             expected_analyzer_run_receipt_digests=context["analyzer_run_receipt_digests"],
             expected_analyzer_verifier_digest=context["analyzer_verifier_digest"],
             expected_artifact_graph_verifier_digest=context["artifact_graph_verifier_digest"],
@@ -174,6 +190,10 @@ def verify_installed_bundle_readback(archive, *, owner_pin, plan_pin, context_pi
                        retained_decision_verdict="ALLOW", decision_digest=context["decision_digest"],
                        revocations_digest=revocations_pin, context_absent_from_pinned_revocations=True,
                        decision_or_revocation_replayed=True, current_context_validity_verified=False)
+    if managed_policy:
+        finding.update(schema=finding["schema"].removesuffix("/v1") + "/v2",
+                       policy_manifest_digest=deployment["policy"], admission_policy_digest=policy_pin,
+                       runtime_action_policy_digest=policy_manifest["runtime_action_policy_digest"])
     return finding
 
 

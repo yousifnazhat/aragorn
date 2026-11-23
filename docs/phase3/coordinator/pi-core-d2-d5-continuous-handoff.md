@@ -8,10 +8,15 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [exact B105 worker and observer binding, batch 106](pi-core-worker-observer-binding-batch-106.md).**
+B106 retains the canonical v2 source plan with only the Node observer digest
+updated. It binds the offline worker projection and both manager/service
+observer copies, not installed identities or launch authority. B49 stays null.
+
 **D2 — [common offline successor and evidence input pins, batch 105](pi-core-common-successor-batch-105.md).**
 B105 joins the retained B75 layout with B104 source inventories. The candidate
-and reader inputs are pinned; the worker/observer binding, actual deployment
-and original install/action nominations remain open. Preserve B49 and all live holds.
+and reader inputs are pinned; the actual deployment and original install/action
+nominations remain open. Preserve B49 and all live holds.
 
 **D2 — [protected-source pins and exact install/action replay, batch 104](pi-core-installed-action-join-batch-104.md).**
 The four offline successor inventories are retained. The joined reader checks

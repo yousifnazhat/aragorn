@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [common offline successor and evidence input pins, batch 105](pi-core-common-successor-batch-105.md).**
+B105 joins the retained B75 layout with B104 source inventories. The candidate
+and reader inputs are pinned; the worker/observer binding, actual deployment
+and original install/action nominations remain open. Preserve B49 and all live holds.
+
 **D2 — [protected-source pins and exact install/action replay, batch 104](pi-core-installed-action-join-batch-104.md).**
 The four offline successor inventories are retained. The joined reader checks
 the nominated install transaction against the recorded activation and protected

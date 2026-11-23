@@ -8,11 +8,15 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [protected-source pins and exact install/action replay, batch 104](pi-core-installed-action-join-batch-104.md).**
+The four offline successor inventories are retained. The joined reader checks
+the nominated install transaction against the recorded activation and protected
+version; it has not replayed a live successor action. Preserve B94 and B49.
+
 **D2 — [two-policy deployment binding implemented offline, batch 103](pi-core-policy-manifest-batch-103.md).**
 The approved managed manifest resolves the conflicting policy identities
-documented in [batch 102](pi-core-policy-binding-decision-batch-102.md). Re-pin
-the changed sources in the next inventory and join the exact install context
-and bytes to recorded action evidence. No prior acceptance gate changed.
+documented in [batch 102](pi-core-policy-binding-decision-batch-102.md).
+No prior acceptance gate changed.
 
 **D2 — [grant freshness after lock release, batch 101](pi-core-grant-return-deadlines-batch-101.md).**
 The broker and manager's readback no longer return a stale positive result

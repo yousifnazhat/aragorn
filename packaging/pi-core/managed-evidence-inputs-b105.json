@@ -1,0 +1,46 @@
+{
+  "schema": "aragorn/pi-core-b105-evidence-inputs/v1",
+  "authority": "OFFLINE_INPUT_PINS_ONLY_NOT_DEPLOYMENT_OR_PILOT_AUTHORITY",
+  "payload": {
+    "outcome.json": "sha256:c9c53a68840e9a3d4d4be3f0fc731a0fc83235ad550288ba5fafab30bdbf3798",
+    "payload.json": "sha256:b60330aef3582e9d52ed59001b0bd16d6d973549b0d18812934c8f53e739c81f"
+  },
+  "protected_inventories": {
+    "coordinator-host.json": "sha256:70d6998fc0b50512cb0583261fd1ca633a3aedef24ca68fa0db73b2b0a20ae87",
+    "manifest.json": "sha256:deef4f046aaff76a486e327f75e98e8b9ef4a4daa5d4ecbaed8620edc97f69c0",
+    "runtime-binding.json": "sha256:76fd1f597cc65b9bc98a30d2d470bb27938f92253aff0b1df6770db9bf2dd240",
+    "service-runtime-receipt.json": "sha256:d7bb0b594df97eb7ba53e3bac535308e33da3b4ca2feff99a97fde17ecc927b0"
+  },
+  "worker_payload_rows": {
+    "/opt/aragorn/src/aragorn/pi_core_node_source_observer.py": "sha256:82851dcea5299a9455574694ee00f62a2e2d1647744a80fdafb7524ac6736dcd",
+    "/opt/aragorn/src/aragorn/pi_core_source_observer.py": "sha256:ee9c6fad39901275fa17d2908c265e7ac4715bfa4a3608499e12cde60dc093cb",
+    "/var/lib/aragorn/pi-runtime/node/bin/node": "sha256:b4855de8c4781130b722ceaec9718fed77cca3eed2e5cfc5455e267c0b9ee3b0",
+    "/var/lib/aragorn/pi-runtime/observer/source-gate": "sha256:7bbb6d6ad10732747f8145abc51b9732598bb0e926acd82f14196469ec316620"
+  },
+  "candidate": {
+    "artifact_graph_digest": "sha256:c773c261e45868ceea221d8ce63db28cbed0a23278da540b25a6532a91067299",
+    "graph_verifier_digest": "sha256:05c70d81f1fac7c32ef455397079f9b73d80dfe4dc24d7427ce587f21001af85",
+    "manifest_digest": "sha256:e6de9001bdd41e7908d0b9097798d1ab8ae13037c4ad1a7dbceb4cea985ad77f",
+    "review_digest": "sha256:1afcab1a853579fa6956dcd76d00fa432bb397236ba0853be652fda7f7f64a1e",
+    "skill_digest": "sha256:9829034f6fa3db850ba63f6a31a770172256a4c4cb354f96781a1a710b3e9c7a",
+    "task_digest": "sha256:0ef53ad4dad36b5ec30b01339c349aad88c215e9ca16cffea3ac2639da9af4ec",
+    "tree_digest": "sha256:71de288e6e78f24d5fdbc62ff4508f8aadf473b3647a13e43269a53bb872b4ee"
+  },
+  "evidence_readers": {
+    "scripts/verify_pi_core_install_action_join.py": "sha256:e20ba7d79e1f2e6dd94fd6b9569ed895b1aec05716ece827b2197ea5d20c5a47",
+    "scripts/verify_pi_core_installed_bundle_readback.py": "sha256:e610db459f36eb21f36782243fb6efac1c622a441e31c8ed9b3000ccb4e7b9f4",
+    "scripts/verify_pi_core_pilot_provider_records.py": "sha256:7ea260012d59eb686a32228d4b6347853657658b06c65b917fa63cc635893ea0",
+    "scripts/verify_pi_core_retained_action.py": "sha256:b0a6289461371fe3a35340f400fc1fbcef2988cefc7ae73a901a8dd4894ce87b"
+  },
+  "held_nominations": {
+    "action_nomination_pin": null,
+    "context_pin": null,
+    "deployment_digest": null,
+    "owner_pin": null,
+    "pilot_approval": null,
+    "plan_pin": null,
+    "policy_manifest_digest": null
+  },
+  "activation_authorized": false,
+  "phase3_exit_eligible": false
+}

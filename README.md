@@ -49,8 +49,40 @@ checks the received bytes, then publishes them without replacing a file or
 symlink. The destination is never mounted in the guest. Use an existing,
 trusted parent directory outside the read-only source mounts.
 
-This demonstrates one local file policy for one pinned Python example. It does
-not run Pi, protect other Mac apps, or qualify the managed Phase 3 deployment.
+### Review and approve a local capability
+
+The default run uses the reviewed inventory pin for the bundled example. To
+approve your own copy, start with a directory that contains **only** a regular
+UTF-8 `worker.py` (up to 32 KiB). This example must speak the same two-request
+protocol as [the bundled worker](examples/local-quickstart/capability/worker.py);
+this is not a general Python application runner.
+
+```sh
+cp -R examples/local-quickstart/capability "$HOME/aragorn-capability"
+./scripts/local_quickstart_colima.sh --inventory "$HOME/aragorn-capability"
+```
+
+Inventory **does not run the worker**. It prints a JSON record containing the
+exact source text for review, file metadata, and Aragorn's `tree_digest`.
+If you approve what you read, copy that digest into a separate run:
+
+```sh
+./scripts/local_quickstart_colima.sh --capability "$HOME/aragorn-capability" \
+  --approve-tree 'sha256:PASTE_THE_REVIEWED_DIGEST_HERE'
+```
+
+The launcher takes a fresh inventory and refuses a changed tree **before
+starting the worker**. It executes the bytes retained by that inventory, never
+a later read of the source path. Editing the source or changing its executable
+bit requires a new review. Inventory is not approval: don't pipe a freshly
+calculated digest straight into a run. You can add `--output NEW_FILE` to an
+approved run; it cannot point inside the capability directory.
+
+This demonstrates one local file policy. The coordinator verifies the allowed
+bytes and the forbidden file's absence; for custom code, a direct-write error
+is the worker's report. Approval identifies source, not its safety or the
+behavior of all code in memory. This does not run Pi, protect other Mac apps,
+or qualify the managed Phase 3 deployment.
 
 **Architecture decision, 2026-11-02:** the first controlled-environment target is
 the approved [Pi-core managed capability profile](docs/design/pi-core-managed-capability-sdd-v1.md):

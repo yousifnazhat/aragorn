@@ -2,6 +2,46 @@
 
 **Agent Runtime Admission, Governance, Observation, Response, and Neutralization**
 
+## Local quickstart: allow one file, block another
+
+On a Mac with Colima, run a small Linux worker that adds 1 and 2. Its only
+grant is to create `result.json` with the approved content. You don't need a
+cloud account, API key, model, or Python installation on your Mac.
+
+**Prerequisites:** Git, the Docker CLI, a running default Colima Docker profile,
+and a trusted local copy of the Linux image `python:3.12-slim-bookworm` in that
+profile. If the image is missing, load a trusted offline export with
+`docker --context colima image load -i /path/to/python-image.tar`.
+The launcher never pulls an image or starts or reconfigures Colima. Put the clone
+in a directory Colima can read (normally under your home directory).
+
+From an existing **local** clone containing this quickstart, run:
+
+```sh
+git clone --branch main /path/to/aragorn "$HOME/aragorn-demo"
+cd "$HOME/aragorn-demo"
+./scripts/local_quickstart_colima.sh
+```
+
+On success you'll see both observations:
+
+```text
+ALLOW result.json — verified bytes: {"total":3}
+BLOCK forbidden.json — outside grant; direct Linux write: EACCES; verified absent
+```
+
+The launcher creates one network-disabled container with a read-only checkout
+and a temporary output directory **inside** the container. A trusted coordinator
+checks the bundled worker's source digest and runs it unprivileged. The first
+request goes through Aragorn's create-only file routine. The coordinator denies
+the second filename; the worker then tries that same write directly and Linux
+refuses it. Outside the worker, Aragorn's output reader checks the exact result
+bytes, and the coordinator checks that the directory contains only `result.json`.
+The output disappears with the container; nothing is written into the clone.
+
+This demonstrates one local file policy for one pinned Python example. It does
+not run Pi, protect other Mac apps, or qualify the managed Phase 3 deployment.
+
 **Architecture decision, 2026-11-02:** the first controlled-environment target is
 the approved [Pi-core managed capability profile](docs/design/pi-core-managed-capability-sdd-v1.md):
 Pi is an unprivileged agent engine; Aragorn retains admission, policy, isolation,

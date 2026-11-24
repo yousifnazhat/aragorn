@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [host-only retention successor, batch 111](pi-core-host-retention-successor-batch-111.md).**
+The B110 host wrapper and both private-retention modules are now pinned in one
+staged layout. B109 service and worker identities are unchanged. Use the B111
+host-profile digest for future host inputs, not as a deployment or release.
+No media, boot, private release, or useful pilot has been produced.
+
 **D2 — [private pilot-output custody and offline replay, batch 110](pi-core-private-output-custody-batch-110.md).**
 The new host route can retain the original B109 reader record without exposing
 it in stdout. Offline replay matched that record to the original action and

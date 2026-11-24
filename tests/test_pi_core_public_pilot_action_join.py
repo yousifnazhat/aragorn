@@ -16,7 +16,7 @@ INPUTS = Path(__file__).resolve().parents[1] / "benchmark/pi-core-pilot-v1"
 CALL = "call-b99-inert-1"
 
 
-def _public_records(action):
+def _public_records(action, *, output_path_digest=None):
     review = json.loads((INPUTS / "review.json").read_bytes())
     skill = (INPUTS / "candidate/SKILL.md").read_bytes()
     task = (INPUTS / "task.txt").read_bytes()
@@ -34,6 +34,11 @@ def _public_records(action):
     policy["allow"][0].update(runtime_digest=action.sources["expected_bindings"]["runtime_digest"],
         active_skill_digest=review["skill_digest"], path_digest=canonical_digest(route),
         payload_digest=canonical_digest(request["payload"]))
+    if output_path_digest is not None:
+        policy["allow"].append({**policy["allow"][0], "operation_digest":canonical_digest(
+            dict(schema="aragorn/runtime-file-operation/v1", operation="create")),
+            "path_digest":output_path_digest, "payload_digest":review["expected_payload_digest"]})
+        policy["allow"].sort(key=canonical_json)
     policy_pin = action.put(canonical_json(policy))
     admission_pin = action.put(canonical_json(dict(schema="aragorn/policy/v1", id="inert-pilot",
         version=1, required_analyzers=["inert-scanner"], hard_deny_reason_codes=[], review_severities=["high"])))

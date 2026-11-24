@@ -1,0 +1,70 @@
+{
+  "schema": "aragorn/pi-core-isolated-boot-request/v1",
+  "status": "draft-not-authority",
+  "catalog_target": {
+    "provider": "AWS EC2",
+    "region": "us-east-1",
+    "tenancy": "unshared-dedicated-host",
+    "instance_type": "mac-m4.metal",
+    "host_arch": "arm64",
+    "macos": "27.2.1",
+    "macos_ami_release": "2026.11.18",
+    "minimum_host_allocation_hours": 24,
+    "guest_backend": "Apple Virtualization.framework"
+  },
+  "private_bindings_required": {
+    "account_and_exclusive_host_reservation": null,
+    "zone_ami_id_and_verified_publisher": null,
+    "asset_owner_and_window_utc": null,
+    "all_in_usd_cap_and_release_owner": null,
+    "exact_host_sdk_firmware_and_signed_runner": null,
+    "fixture_id_private_store_and_evidence_destination": null,
+    "approved_kek_db_dbx_baseline_and_revocations": null,
+    "observer_and_cleanup_authority": null
+  },
+  "guest": {
+    "platform": "generic-arm64-efi",
+    "cpu_count": 2,
+    "memory_bytes": 4294967296,
+    "nvme_controllers": 1,
+    "raw_disks": 1,
+    "disk_bytes": 3595017728,
+    "disk_sha256": "aae016bd1b7ef412e619bd82adc6cb9b436349fe9bfe48a0a0ba091e8b646cec",
+    "attachment_read_only": true,
+    "expected_disk_and_partition_read_only": true,
+    "expected_logical_sector_bytes": 512,
+    "network_devices": 0,
+    "host_shares": 0,
+    "sockets": 0,
+    "other_boot_media": 0,
+    "writable_overlays": 0,
+    "serial_output_only": 1,
+    "guest_serial_input": false
+  },
+  "firmware": {
+    "new_private_store_only": true,
+    "raw_uki_sha256": "7c5d6d5ed501780c352416c0b71f07d0a6d57aa0aa30d0f4fdb3ed6680d766f8",
+    "allow_image_authenticode_sha256": "b4cf97d568d0d060c7a308f287ccb65f0bb122391707c57080ded396e52339a7",
+    "proposed_esl_sha256": "517294dfd51f6788a7bdc63e3afd2eecdbe918fe12e8ab4cd6d68be273bc5aa4",
+    "proposed_pk": "Apple-managed guest Platform Key",
+    "broad_default_allow_signatures": false,
+    "preserve_approved_revocations": true
+  },
+  "proposed_limits_after_separate_approvals": {
+    "boot_attempts": 1,
+    "boot_watchdog_seconds": 180,
+    "graceful_stop_seconds": 15,
+    "force_stop_wait_seconds": 15,
+    "serial_evidence_max_bytes": 8388608,
+    "automatic_retries": 0
+  },
+  "authority_now": {
+    "allocate_host": false,
+    "transfer_media": false,
+    "create_variable_store": false,
+    "enroll": false,
+    "boot": false,
+    "pilot": false,
+    "qualify": false
+  }
+}

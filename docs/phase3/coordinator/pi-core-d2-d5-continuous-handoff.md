@@ -8,6 +8,14 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [B112 host runner, firmware proposal and serial replay, batch 113](pi-core-b112-host-binding-batch-113.md).**
+The held ARM64 host runner now binds the B112 disk, EFI allowlist proposal and
+bounded recorder. The replay reader distinguishes a pre-target host refusal from
+a content-only serial comparison. Neither amounts to an observed boot. B49's
+four operational bindings remain missing. No enrolled store, one-shot issue or
+useful pilot exists; do not use the frozen B44/B50 artifacts or rerun the B112
+disk readback to clear these holds.
+
 **D2 — [B111 on independently checked ARM64 media, batch 112](pi-core-successor-media-batch-112.md).**
 One 3,595,017,728-byte disk now contains the B111 host, unchanged B109 service
 files and retained worker. Offline readback matched the whole 182,229-path root

@@ -1,0 +1,26 @@
+{
+  "approval_commit": null,
+  "authenticode_sha256": "b4cf97d568d0d060c7a308f287ccb65f0bb122391707c57080ded396e52339a7",
+  "boot_authorized": false,
+  "cdhash": "5462f0b7f1035db8c694534b41a70c1ac16a6fc8",
+  "directory": "build-a2b96f55a4729455cf0082725963c802cf802edc232d185f35f0a3f028e6f122",
+  "disk_bytes": 3595017728,
+  "disk_sha256": "aae016bd1b7ef412e619bd82adc6cb9b436349fe9bfe48a0a0ba091e8b646cec",
+  "entitlements": {
+    "com.apple.security.virtualization": true
+  },
+  "esl_sha256": "517294dfd51f6788a7bdc63e3afd2eecdbe918fe12e8ab4cd6d68be273bc5aa4",
+  "firmware_proposal_sha256": "af7197021a39f2dc7d96ecaa5a47f0c346a0fa6e0d0eb56e413d7b4b3b760d9c",
+  "identifier": "org.aragorn.pi-core.b113.host-owner",
+  "inputs_sha256": "a2b96f55a4729455cf0082725963c802cf802edc232d185f35f0a3f028e6f122",
+  "macho_uuid_hex": "21955f1a95c93ec3b14cb1fd432e200b",
+  "media_pins_sha256": "fac725f23b8a1d694ba89054859710786649693c53d23a9c19a01794938877f7",
+  "release_sha256": "e6541061dec3fb5086aa7a5d5e6515a259795908d46db51b503443e6de3efa30",
+  "request_sha256": "b765a437ea55e54c18e2418c7e084f0bd195361b9fc7537cf755a812087c436a",
+  "runner_bytes": 142784,
+  "runner_sha256": "a209e62302def49a64e2f47bbc309c4f19a7a4a90bb259ee8063a8a70dac714b",
+  "schema": "aragorn/b113-held-owner/v1",
+  "serial_recorder_sha256": "210561eb3c0718fe3e7b46db804ce844ab5d4229b6833ad7cb6a54ace7f5533b",
+  "signing": "ad-hoc-local-integrity",
+  "uki_sha256": "7c5d6d5ed501780c352416c0b71f07d0a6d57aa0aa30d0f4fdb3ed6680d766f8"
+}

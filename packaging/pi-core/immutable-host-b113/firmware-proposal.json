@@ -1,0 +1,29 @@
+{
+  "schema": "aragorn/b113-detached-firmware-proposal/v1",
+  "status": "inert-proposal-only",
+  "media_catalog_sha256": "fac725f23b8a1d694ba89054859710786649693c53d23a9c19a01794938877f7",
+  "request_template_sha256": "6f6914e8bf0d0ca7819e1913d97bf7931824ae81695dc36e2f64fac86001762a",
+  "boot_request_sha256": "b765a437ea55e54c18e2418c7e084f0bd195361b9fc7537cf755a812087c436a",
+  "disk_bytes": 3595017728,
+  "disk_sha256": "aae016bd1b7ef412e619bd82adc6cb9b436349fe9bfe48a0a0ba091e8b646cec",
+  "uki_bytes": 25274880,
+  "uki_sha256": "7c5d6d5ed501780c352416c0b71f07d0a6d57aa0aa30d0f4fdb3ed6680d766f8",
+  "authenticode_sha256": "b4cf97d568d0d060c7a308f287ccb65f0bb122391707c57080ded396e52339a7",
+  "signature_type": "c1c41626-504c-4092-aca9-41f936934328",
+  "signature_owner": "8c440a88-a3da-5b7e-b369-9287006c9e91",
+  "esl_bytes": 76,
+  "esl_sha256": "517294dfd51f6788a7bdc63e3afd2eecdbe918fe12e8ab4cd6d68be273bc5aa4",
+  "proposed_pk": "Apple-managed guest Platform Key",
+  "db_allow_sha256": [
+    "b4cf97d568d0d060c7a308f287ccb65f0bb122391707c57080ded396e52339a7"
+  ],
+  "preserve_approved_revocations": true,
+  "broad_default_allow_signatures": false,
+  "private_store_identity": null,
+  "private_store_sha256": null,
+  "approved_policy_sha256": null,
+  "enrollment_observed": false,
+  "boot_authorized": false,
+  "boot_observed": false,
+  "phase3_exit_eligible": false
+}

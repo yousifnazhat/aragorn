@@ -449,7 +449,7 @@ def _public_observation(observation):
     report["entry_status"] = status
     stage = observation.get("failure_stage")
     _require(stage is None or stage in {"PREFLIGHT", "PREPARED_INPUTS", "HELD_INPUTS", "MANAGED_CALL",
-        "POST_CALL_CUSTODY", "HOLDER_CLEANUP", "INPUT_CLEANUP", "INVENTORY_PREPARATION",
+        "POST_CALL_CUSTODY", "HOLDER_CLEANUP", "INPUT_CLEANUP", "PRIVATE_RETENTION", "INVENTORY_PREPARATION",
         "INSTALLATION", "DESTINATION_CLEANUP", "PREPARATION_CALL", "BASE_INSTALLATION"},
         "invalid coordinator failure stage")
     report["entry_failure_stage"] = stage
@@ -894,6 +894,8 @@ def main():
     result, observation, phase = 126, None, "PREFLIGHT"
     entry_invoked = False
     capture = sys.argv[1:2] == ["--capture-stopped-masks"]
+    private_output = sys.argv[1:2] == ["--retain-pilot-output"]
+    private_error = ()
     capture_returned = install_returned = None
     prepare = len(sys.argv) > 1 and sys.argv[1] == "--prepare-inventories"
     install = len(sys.argv) > 1 and sys.argv[1] == "--install-bundle"
@@ -909,14 +911,14 @@ def main():
     attempt_field = "base_installation_attempted" if base_install else "installation_attempted" if install else "preparation_attempted" if prepare or broker_prepare else "managed_call_attempted"
     if capture:
         attempt_field = "capture_attempted"
-    args = sys.argv[2:] if capture or prepare or install or broker_prepare or base_install else sys.argv[1:]
+    args = sys.argv[2:] if capture or private_output or prepare or install or broker_prepare or base_install else sys.argv[1:]
     cleanup = {"source_loader": "NOT_ACQUIRED", "host": "NOT_ACQUIRED"}
     try:
         _flags()
-        if capture:
+        if capture or private_output:
             _require(len(args) == 6 and all(type(p) is str and _PIN.fullmatch(p) and int(p[7:], 16)
                      for p in (args[1], args[3], args[4])) and len({args[1], args[3], args[4]}) == 3,
-                     "capture requires distinct host, plan and release pins")
+                     "capture or private output requires distinct host, plan and release pins")
             release_digest = args[4]
             args = args[:4] + args[5:]
         _require(len(args) == 5 and type(args[4]) is str and args[4].isascii() and
@@ -936,6 +938,9 @@ def main():
         loader = _bootstrap(host)
         if capture:
             from aragorn.pi_core_mask_capture_entry import run
+        elif private_output:
+            from aragorn.pi_core_coordinator_entry import PiCoordinatorEntryError as private_error
+            from aragorn.pi_core_pilot_retention_entry import run
         elif broker_prepare or base_install:
             from aragorn.pi_core_broker_preparation_entry import run
         elif install:
@@ -947,7 +952,7 @@ def main():
         host.guard()
         phase = "ENTRY_CALL"
         entry_invoked = True
-        mode = ({"release_digest": release_digest} if capture else
+        mode = ({"release_digest": release_digest} if capture or private_output else
                 {"initialize_provider_policy": True} if initial_policy else {"install_provider_base": True}
                 if provider_base else {"install_base": True} if base_install else {})
         observation = run(plan_path, args[3], deadline_ns=deadline_ns, source_loader=loader, host_custody=host, **mode)
@@ -982,7 +987,7 @@ def main():
     except BaseException as error:
         if type(error) is PiCoordinatorHostAcquisitionError:
             cleanup["host"] = "CLEANUP_HOLD" if capture else error.host_cleanup_status
-        if observation is None:
+        if observation is None and (not private_output or isinstance(error, private_error)):
             observation = getattr(error, "observation", None)
         result = 126
     finally:

@@ -20,6 +20,7 @@ import shlex
 import socket
 import stat
 import subprocess
+import sys
 import time
 from collections.abc import Collection, Mapping
 from contextlib import ExitStack
@@ -275,6 +276,7 @@ class _Owned:
     provider_dispatch_active: bool = False
     socket_directory_record: dict | None = None
     socket_directory_owners: tuple | None = None
+    pilot_output_observation: dict | None = None
 
 
 _SOCKET_INCOMPLETE = "INCOMPLETE_OR_UNVERIFIED_LIFETIME"
@@ -627,6 +629,8 @@ def _native_observation(plan, owned, observation, identity_publication,
                 type(provider_observation) is not dict or provider_observation.get("cleanup") != "VERIFIED_OWNED_PROVIDER_CLEANUP"):
             record["status"] = _SOCKET_INCOMPLETE
         value["owned_socket_directories"] = record
+    if getattr(owned, "pilot_output_observation", None) is not None:
+        value["pilot_output_observation"] = owned.pilot_output_observation
     return value
 
 
@@ -804,7 +808,7 @@ def run_native_pi_worker(
     identity_relay_connection: socket.socket | None = None,
     expected_identity_relay_peer: tuple[int, int, int] | None = None,
     request_channels=None,
-    provider_channels=None,
+    provider_channels=None, pilot_output=None,
 ) -> dict:
     """Run one bootstrap and owned cleanup within the original <=30s deadline.
 
@@ -839,6 +843,11 @@ def run_native_pi_worker(
                  request_channels is provider_channels.services.request_channels and
                  getattr(config, "source_observation", None) is not None,
                  "protected provider requires the same service lease and observed native worker")
+    if pilot_output is not None:
+        from .pi_core_pilot_output_observer import PilotOutputRequest
+        _require(type(pilot_output) is PilotOutputRequest and provider_enabled and
+                 request_channels.service_custody is provider_channels.services,
+                 "pilot output requires protected provider and managed action custody")
     _require((identity_relay_connection is None) == (expected_identity_relay_peer is None),
              "identity channel and exact relay peer must be supplied together")
     if expected_identity_relay_peer is not None:
@@ -866,6 +875,9 @@ def run_native_pi_worker(
             identity_stack = ExitStack()
             request_stack = ExitStack()
             provider_stack = ExitStack()
+            output_stack = ExitStack()
+            output_after = output_result = output_deadline = activation_pin = None
+            output_close_failed = False
             request_dispatch = None
             provider_dispatch = None
             socket_membership_required = False
@@ -899,15 +911,68 @@ def run_native_pi_worker(
                     if provider_dispatch is not None:
                         provider_observation = provider_dispatch.observation
 
+            def close_output():
+                nonlocal output_close_failed
+                try:
+                    output_stack.close()  # ExitStack removes a callback even if close raises.
+                except BaseException:
+                    output_close_failed = True
+                    raise
+
+            def read_pilot_result(connection, limit):
+                # Save the exact shortened bootstrap deadline, not the outer cleanup budget.
+                nonlocal output_result, output_deadline
+                _require(output_after is not None and output_deadline is None and limit <= operation_deadline,
+                         "pilot output was not armed for this exchange")
+                output_deadline = limit
+                output_result = request_dispatch.read_bootstrap_result(connection, limit)
+                return output_result
+
             def before_release():
+                if pilot_output is not None:
+                    # The exchange has now validated the worker result. A worker statement
+                    # alone cannot trigger readback: the same managed dispatch must have
+                    # a joined, terminal create from the actual action and sensor services.
+                    _require(type(output_result) is dict and output_result["status"] == "WORKER_COMPLETED"
+                             and output_result["activation_id"] == plan.prepared.activation_id and
+                             output_result["worker"]["provider_calls"] == output_result["worker"]["tool_calls"] == 1
+                             and output_result["worker"]["transcript_complete"] is True,
+                             "pilot worker did not complete one calculate-and-save action")
+                    _remaining(output_deadline)
+                    request = request_dispatch.observation
+                    worker_result = request.get("worker_result")
+                    evidence = request.get("action_evidence")
+                    _require(request.get("status") == "REQUEST_RETURNED" and request.get("request_attempted") is True and
+                             request["action_evidence_uncertainty"] is None and type(worker_result) is dict and
+                             worker_result["status"] == "COMPLETED" and type(worker_result["broker_result"]) is dict and
+                             (worker_result["broker_result"]["verdict"], worker_result["broker_result"]["effect_status"],
+                              worker_result["broker_result"]["target_name"]) == ("ALLOW", "CREATED", "result.json") and
+                             type(evidence) is dict and evidence["schema"] == "aragorn/pi-core-native-action-evidence/v1" and
+                             evidence["authority"] == "RETAINED_ACTION_RECORDS_ONLY_NOT_EFFECT_TIMING_HEALTH_OR_PHASE3" and
+                             evidence["status"] == "CLOSED" and evidence["receipt_join_verified"] is True and
+                             evidence["owned_handles_closed"] is True and evidence["cleanup_uncertainty"] == [] and
+                             evidence["phase3_exit_eligible"] is False and evidence["activation_digest"] == activation_pin,
+                             "pilot requires the joined managed create for this activation")
+                    _remaining(output_deadline)
+                    record = output_after()  # never called from a cleanup or recovery path
+                    _remaining(output_deadline)
+                    owned.pilot_output_observation = record
+                    close_output()
                 # Descriptor/result and listener cleanup must precede RELEASE.
                 close_request_dispatch()
                 close_provider_dispatch()
                 revoke_identity()
 
             def register_identity(document):
-                nonlocal identity_publication
+                nonlocal identity_publication, output_after, activation_pin
                 _capture_activation(owned, document)
+                if pilot_output is not None:
+                    _require(output_after is None and document["activation_id"] == plan.prepared.activation_id,
+                             "pilot output activation differs from protected START")
+                    activation_pin = canonical_digest(document)
+                    output_after = output_stack.enter_context(
+                        pilot_output.hold(activation=document, plan=plan, deadline=operation_deadline))
+                    _remaining(operation_deadline)
                 if identity_relay_connection is None:
                     return
 
@@ -993,10 +1058,32 @@ def run_native_pi_worker(
                 if identity_relay_connection is not None or request_channels is not None:
                     exchange_options["on_before_release"] = before_release
                 if request_dispatch is not None:
-                    exchange_options["read_result"] = request_dispatch.read_bootstrap_result
+                    exchange_options["read_result"] = (request_dispatch.read_bootstrap_result if pilot_output is None
+                                                       else read_pilot_result)
                 if provider_dispatch is not None:
                     exchange_options["provider_dispatch"] = provider_dispatch
-                observation = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
+                if pilot_output is None:
+                    observation = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
+                else:
+                    try:
+                        exchanged = exchange_prepared_pi_bootstrap(plan, owned.connection, **exchange_options)
+                        _require(owned.pilot_output_observation is not None, "pilot output exchange incomplete")
+                        observation = exchanged
+                    except BaseException as exc:
+                        # Enter or read can lose a descriptor before the outer ExitStack
+                        # has acquired it. Never retry a close on a possibly reused fd.
+                        if getattr(exc, "pilot_output_close_uncertain", False) is True:
+                            output_close_failed = True
+                        raise
+                    finally:
+                        # Cancellation and early refusal only close; never sample or retry.
+                        primary = sys.exception()
+                        try:
+                            close_output()
+                        except BaseException:
+                            if primary is None:
+                                raise
+                            primary.add_note("PILOT_OUTPUT_CLOSE_UNCONFIRMED")
             except Exception as exc:
                 if request_channels is not None and isinstance(exc, PiNativeRequestError) and hasattr(exc, "observation"):
                     request_observation = dict(exc.observation)
@@ -1019,6 +1106,8 @@ def run_native_pi_worker(
                     failure = failure or f"{type(exc).__name__}: {str(exc)[:512]}"
                 stage = "WORKER_CLEANUP"
                 cleanup = _cleanup(owned, deadline, cleanup_timeout_seconds)
+                if output_close_failed:
+                    cleanup.update(status="CLEANUP_HOLD", pilot_output_close_unconfirmed=True)
                 stage = "HANDLE_CLEANUP"
                 try:
                     _close_handles(owned)
@@ -1040,6 +1129,7 @@ def run_native_pi_worker(
                 provider_observation.get("cleanup") == "CLEANUP_HOLD" or
                 identity_publication["status"] == "HOLD_UNCONFIRMED" else
                 "BOOTSTRAP_COMPLETE" if observation is not None and
+                (pilot_output is None or (failure is None and owned.pilot_output_observation is not None)) and
                 identity_publication["status"] in {"NOT_REQUESTED", "REVOKED"} else "REFUSED")
             value = _native_observation(plan, owned, observation, identity_publication,
                 request_observation, provider_observation, source_observation, failure, cleanup, status)

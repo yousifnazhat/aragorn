@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [protected calculate-and-save caller, batch 108](pi-core-protected-output-caller-batch-108.md).**
+The native caller brackets the B107 read between authenticated activation and
+release: absence before START, exact output after the same terminal create and
+before cleanup. Tested offline only. Re-pin the changed host sources next;
+independent retention, installed evidence and pilot authorization remain open.
+
 **D2 — [independent calculate-and-save output readback, batch 107](pi-core-calculate-save-output-batch-107.md).**
 The read-only sink observer and managed replay compare the actual file bytes in
 an inert fixture to the recorded action, provider proposal and exact create rule.

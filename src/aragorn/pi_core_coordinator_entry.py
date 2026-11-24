@@ -141,6 +141,7 @@ class _Inputs:
     def __init__(self, deadline):
         self.deadline, self.rows, self.total = deadline, [], 0
         self.directories = []
+        self.pilot_directory = None
         self.closed = False
         self.cleanup_uncertainty = []
 
@@ -226,9 +227,31 @@ class _Inputs:
         finally:
             self._close_pending(list(reversed(chain)))
 
+    def hold_pilot_directory(self, descriptor, principal):
+        """Hold the action-owned sink, not the provider's approval/control root."""
+        _require(self.pilot_directory is None, "COORDINATOR_PILOT_DIRECTORY_ALREADY_HELD")
+        self.guard()
+        path = managed.entry.EFFECT_ROOT / "protected"
+        uid, gid = principal["uid"], principal["gid"]
+        expected = (descriptor["root_device"], descriptor["root_inode"], stat.S_IFDIR | 0o710, uid, gid)
+        try:
+            fd = broker._open_protected_directory(path, uid, "pilot output")
+        except BaseException:
+            # No fd was returned; acquisition's internal close may have failed.
+            self.cleanup_uncertainty.append({"scope": "ANCESTRY_ACQUISITION", "path": str(path)})
+            raise
+        self.pilot_directory = (path, fd, expected)
+        self.guard()
+        return fd
+
     def guard(self):
         _require(not self.closed and not self.cleanup_uncertainty and time.monotonic() < self.deadline,
                  "COORDINATOR_INPUT_CUSTODY_EXPIRED")
+        if self.pilot_directory is not None:
+            path, fd, expected = self.pilot_directory
+            broker._require_protected_ancestry(path.parent, expected[3])
+            _require(not os.get_inheritable(fd) and broker._directory_identity(os.fstat(fd)) ==
+                     expected == broker._directory_identity(os.lstat(path)), "COORDINATOR_PILOT_DIRECTORY_CHANGED")
         for path, chain, identities in self.directories:
             runtime._chain_guard(path, chain, identities, self.deadline)
         for row in self.rows:
@@ -242,6 +265,9 @@ class _Inputs:
         _require(not self.closed, "COORDINATOR_INPUT_CLOSE_ALREADY_ATTEMPTED")
         self.closed = True
         pending = [fd for _, chain, _ in reversed(self.directories) for fd in reversed(chain)]
+        if self.pilot_directory is not None:
+            pending.insert(0, self.pilot_directory[1])
+            self.pilot_directory = None
         self.directories.clear()
         for row in reversed(self.rows):
             pending += [row["fd"], *reversed(row["chain"])]
@@ -250,9 +276,19 @@ class _Inputs:
         _require(not self.cleanup_uncertainty, "COORDINATOR_INPUT_CLEANUP_UNCONFIRMED")
 
 
-def _plan(value, host_pin, plan_path, *, allow_sensor_state=False):
+def _plan(value, host_pin, plan_path, *, allow_sensor_state=False, allow_pilot_output=False):
     selected = type(value) is dict and "sensor_state_observation" in value
-    _exact(value, _PLAN_FIELDS | ({"sensor_state_observation"} if allow_sensor_state and selected else set()))
+    output = type(value) is dict and "pilot_output" in value
+    _exact(value, _PLAN_FIELDS | ({"sensor_state_observation"} if allow_sensor_state and selected else set())
+           | ({"pilot_output"} if allow_pilot_output and output else set()))
+    if output:
+        from .pi_core_pilot_output_observer import validate_descriptor
+        _require(not selected and value["mode"] == "PROTECTED" and type(value["provider"]) is dict,
+                 "COORDINATOR_PILOT_OUTPUT_NEEDS_PROVIDER")
+        section = value["pilot_output"]
+        _exact(section, {"reader_source_digest", "path_descriptor"})
+        _pin(section["reader_source_digest"])
+        validate_descriptor(section["path_descriptor"])
     if selected:
         from . import pi_core_sensor_state_entry as sensor_state
         _require(value["mode"] == "UNAVAILABLE" and value["provider"] is None,
@@ -295,6 +331,15 @@ def _plan(value, host_pin, plan_path, *, allow_sensor_state=False):
         _require(secret != plan_path and all(_path(ref["path"]) != secret for ref in refs),
                  "COORDINATOR_CREDENTIAL_IS_NOT_A_DOCUMENT")
     return value
+
+
+def _pilot_reader_source(section, rows, sources):
+    module = "aragorn.pi_core_pilot_output_observer"
+    path = "opt/aragorn/src/aragorn/pi_core_pilot_output_observer.py"
+    expected = {"module": module, "path": path, "digest": section["reader_source_digest"]}
+    _require(sources.get(path) == expected["digest"] and
+             [r for r in rows if type(r) is dict and (r.get("module") == module or r.get("path") == path)] == [expected],
+             "COORDINATOR_PILOT_READER_NOT_CONSUMED")
 
 
 def _launch(document, mode):
@@ -359,7 +404,7 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
             source_loader, host_custody, deadline)
         path, pin = _path(str(plan_path)), _pin(expected_plan_digest)
         inputs = _Inputs(deadline)
-        plan = _plan(inputs.read(path, pin, _PLAN_LIMIT), host_pin, path, allow_sensor_state=True)
+        plan = _plan(inputs.read(path, pin, _PLAN_LIMIT), host_pin, path, allow_sensor_state=True, allow_pilot_output=True)
         observation["plan_digest"] = pin
         phase = "PREPARED_INPUTS"
         context, deployment = inputs.ref(plan["context"]), inputs.ref(plan["deployment"])
@@ -401,6 +446,13 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
                     row.get("path") == publisher_path and row.get("digest") == publisher_pin
                     for row in consumed) == 1, "COORDINATOR_PROVIDER_PUBLISHER_NOT_CONSUMED")
                 observation["source_before"] = consumed
+                if "pilot_output" in plan:
+                    from .pi_core_pilot_output_observer import PilotOutputRequest
+                    section = plan["pilot_output"]
+                    _pilot_reader_source(section, consumed, source_loader.source_digests)
+                    descriptor = section["path_descriptor"]
+                    fd = inputs.hold_pilot_directory(descriptor, configs["action"]["identities"]["action"])
+                    provider["pilot_output"] = PilotOutputRequest(fd, descriptor)
                 provider["provider_credential"] = stack.enter_context(credentials.hold_provider_credential(
                     _path(plan["provider"]["credential_source"]), provider_inputs=held_provider, deadline=deadline))
                 provider["provider_approval"] = stack.enter_context(approvals.hold_provider_approval(
@@ -433,6 +485,8 @@ def run(plan_path, expected_plan_digest, *, deadline_ns, source_loader, host_cus
             after_pin, observation["source_after"], observation["host_after"] = _custody(
                 source_loader, host_custody, deadline)
             _require(after_pin == host_pin, "COORDINATOR_HOST_PROFILE_CHANGED")
+            if "pilot_output" in plan:
+                _pilot_reader_source(plan["pilot_output"], observation["source_after"], source_loader.source_digests)
             phase = "HOLDER_CLEANUP"
         returned_status = observation["managed_result"]["status"]
         observation["status"] = ("MANAGED_CALL_RETURNED_NOT_QUALIFIED" if returned_status == "BOOTSTRAP_COMPLETE"

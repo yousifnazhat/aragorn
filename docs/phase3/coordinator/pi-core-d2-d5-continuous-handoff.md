@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [independent calculate-and-save output readback, batch 107](pi-core-calculate-save-output-batch-107.md).**
+The read-only sink observer and managed replay compare the actual file bytes in
+an inert fixture to the recorded action, provider proposal and exact create rule.
+No installed reader handoff, authorized pilot, exclusive-writer or cleanup proof;
+B49 stays null.
+
 **D2 — [exact B105 worker and observer binding, batch 106](pi-core-worker-observer-binding-batch-106.md).**
 B106 retains the canonical v2 source plan with only the Node observer digest
 updated. It binds the offline worker projection and both manager/service

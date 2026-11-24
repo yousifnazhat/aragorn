@@ -6,6 +6,21 @@ die() { printf 'quickstart: %s\n' "$*" >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || die "This launcher targets macOS with Colima."
 command -v docker >/dev/null || die "The Docker CLI is required."
 repo=$(cd -P -- "$(dirname -- "$0")/.." && pwd -P)
+export_leaf=
+guest_args=()
+if (( $# )); then
+    [[ $# == 2 && $1 == --output && -n $2 && $2 != */ ]] || die "Usage: $0 [--output NEW_FILE]"
+    export_leaf=${2##*/}
+    [[ $export_leaf != . && $export_leaf != .. ]] || die "Choose a new file, not a directory."
+    # Keep cwd on the chosen directory through publication, including if its
+    # original pathname is renamed. Never pass this path in the Docker argv.
+    parent=.
+    if [[ $2 == */* ]]; then parent=${2%/*}; fi
+    cd -P -- "${parent:-/}" || die "Output directory does not exist."
+    case "$PWD/" in "$repo/src/"*|"$repo/examples/local-quickstart/"*) die "Choose an output outside the two read-only source mounts.";; esac
+    [[ ! -e "./$export_leaf" && ! -L "./$export_leaf" ]] || die "Output already exists; refusing to overwrite."
+    guest_args=(--emit-result)
+fi
 [[ "$repo" != *,* ]] || die "Use a clone path without commas for Docker bind mounts."
 [[ -d "$repo/src/aragorn" && -f "$repo/examples/local-quickstart/coordinator.py" ]] ||
     die "Run this script from a complete Aragorn checkout."
@@ -45,6 +60,10 @@ cleanup() {
             status=1
         fi
     fi
+    if [[ $status == 0 && -n "$export_leaf" ]]; then
+        /usr/bin/perl "$repo/scripts/local_quickstart_publish.pl" "$scratch/result" "./$export_leaf" || status=1
+        if [[ $status == 0 ]]; then printf 'Verified result saved: %s/%s\n' "$PWD" "$export_leaf"; fi
+    fi
     rm -rf -- "$scratch"
     exit "$status"
 }
@@ -60,12 +79,19 @@ image=$("${engine[@]}" image inspect --format '{{.Id}}' "$tag" 2>/dev/null) ||
     die "No cached $tag image. Load a trusted offline image archive into local Colima with: docker --host unix://$socket load -i /path/to/image.tar"
 [[ "$image" =~ ^sha256:[0-9a-f]{64}$ ]] || die "Could not resolve $tag to an immutable local image ID."
 printf 'Local Colima quickstart | image %s\n' "$image"
-started=1
-"${engine[@]}" run --rm --cidfile "$scratch/cid" --label "$key=$token" \
+run_guest() {
+    "${engine[@]}" run --rm --cidfile "$scratch/cid" --label "$key=$token" \
     --pull=never --network=none --read-only --cap-drop=ALL --cap-add=SETUID --cap-add=SETGID \
     --security-opt=no-new-privileges --user 0:0 --cpus=1 --memory=128m --memory-swap=128m \
     --pids-limit=32 --stop-timeout=3 --ipc=none --log-driver=none \
     --tmpfs /fixture:rw,nosuid,nodev,noexec,size=2m,mode=0755 \
     --mount "type=bind,source=$repo/src,target=/opt/aragorn/src,readonly" \
     --mount "type=bind,source=$repo/examples/local-quickstart,target=/opt/aragorn/example,readonly" \
-    --entrypoint /usr/local/bin/python3 "$image" -I -B -S /opt/aragorn/example/coordinator.py
+    --entrypoint /usr/local/bin/python3 "$image" -I -B -S /opt/aragorn/example/coordinator.py "$@"
+}
+started=1
+if [[ -n "$export_leaf" ]]; then
+    run_guest "${guest_args[@]}" >"$scratch/result"
+else
+    run_guest
+fi

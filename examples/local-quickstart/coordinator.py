@@ -106,8 +106,13 @@ def main():
             os.close(stage_fd)
     finally:
         os.close(out_fd)
-    print("ALLOW result.json — verified bytes:", bytes.fromhex(observation["payload_hex"]).decode("ascii"))
-    print("BLOCK forbidden.json — outside grant; direct Linux write: EACCES; verified absent")
+    raw = bytes.fromhex(observation["payload_hex"])
+    emit_result = sys.argv[1:] == ["--emit-result"]
+    log = sys.stderr if emit_result else sys.stdout
+    print("ALLOW result.json — verified bytes:", raw.decode("ascii"), file=log)
+    print("BLOCK forbidden.json — outside grant; direct Linux write: EACCES; verified absent", file=log)
+    if emit_result:
+        sys.stdout.buffer.write(raw)
 
 
 def timeout(signum, frame):

@@ -37,7 +37,17 @@ request goes through Aragorn's create-only file routine. The coordinator denies
 the second filename; the worker then tries that same write directly and Linux
 refuses it. Outside the worker, Aragorn's output reader checks the exact result
 bytes, and the coordinator checks that the directory contains only `result.json`.
-The output disappears with the container; nothing is written into the clone.
+By default the output disappears with the container; nothing is written into the clone.
+To keep the independently verified bytes on your Mac, choose a **new** file:
+
+```sh
+./scripts/local_quickstart_colima.sh --output "$HOME/aragorn-result.json"
+```
+
+The Mac launcher waits for successful execution and confirmed container cleanup,
+checks the received bytes, then publishes them without replacing a file or
+symlink. The destination is never mounted in the guest. Use an existing,
+trusted parent directory outside the read-only source mounts.
 
 This demonstrates one local file policy for one pinned Python example. It does
 not run Pi, protect other Mac apps, or qualify the managed Phase 3 deployment.

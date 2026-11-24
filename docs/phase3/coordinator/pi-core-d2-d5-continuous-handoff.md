@@ -8,6 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [B112 compatibility boot decision packet, batch 115](pi-core-b112-compatibility-boot-approval-packet-batch-115.md).**
+The candidate and decision sequence are ready for private review, not execution.
+B49 still lacks the host nomination, budget/window, evidence destination and
+cleanup owner. B113 has zero attempts and the B114 seal is unapproved. No slot,
+spend, enrollment or boot; no earlier candidate's authority carries forward.
+Keep this hold until the missing decisions are made privately.
+
 **D2 — [B112 one-time release builder and issued replay, batch 114](pi-core-b112-single-use-release-batch-114.md).**
 The B112 builder can consume a separately approved singleton; the checked-in
 seal is unapproved, B113 still has zero slots, and there is no issued executable

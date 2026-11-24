@@ -2,6 +2,93 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-b113-boot-replay-offline",
+      "description": "Check independently authenticated B112/B113 media, compound recorder/owner bindings and held replay dispositions using inert records only. No VM, capture, historical replay or acceptance.",
+      "tests": [
+        "test_pi_core_b113_replay"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b112/media-output.json",
+        "packaging/pi-core/immutable-host-b113/boot-request.json",
+        "packaging/pi-core/immutable-host-b113/firmware-proposal.json",
+        "packaging/pi-core/immutable-host-b113/owner-release.json",
+        "packaging/pi-core/immutable-host-b113/runner-output.json",
+        "packaging/pi-core/immutable-host-b45/serial-recorder.m",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_observable_serial.py",
+        "scripts/pi_core_host_evidence_export.py",
+        "scripts/pi_core_host_watchdog.py",
+        "scripts/pi_core_owner_archive.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/verify_pi_core_b113_boot_evidence.py",
+        "scripts/verify_pi_core_owner_records.py",
+        "scripts/verify_pi_core_owner_watchdog.py",
+        "tests/test_pi_core_b113_replay.py",
+        "tests/test_pi_core_owner_records.py",
+        "tests/test_pi_core_owner_watchdog_records.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "pi-core-b113-held-owner-offline",
+      "description": "Inspect the signed held B113 owner and its embedded B112 media and release; validate the exact compiled recorder and supervised start bindings without executing any target binary.",
+      "tests": [
+        "test_pi_core_b113_owner"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b112/media-output.json",
+        "packaging/pi-core/immutable-host-b113/boot-request.json",
+        "packaging/pi-core/immutable-host-b113/firmware-proposal.json",
+        "packaging/pi-core/immutable-host-b113/owner-release.json",
+        "packaging/pi-core/immutable-host-b113/runner-output.json",
+        "packaging/pi-core/immutable-host-b45/host-runner.m",
+        "packaging/pi-core/immutable-host-b45/runner.entitlements.plist",
+        "packaging/pi-core/immutable-host-b45/serial-recorder.h",
+        "packaging/pi-core/immutable-host-b45/serial-recorder.m",
+        "packaging/pi-core/immutable-host-b46/vm-stop.h",
+        "packaging/pi-core/immutable-host-b46/vm-stop.m",
+        "packaging/pi-core/immutable-host-b47/vm-owner.h",
+        "packaging/pi-core/immutable-host-b47/vm-owner.m",
+        "packaging/pi-core/immutable-host-b50/owner-runner.m",
+        "packaging/pi-core/immutable-host-b50/single-use.h",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_b113_owner.py",
+        "scripts/prepare_pi_core_bound_host_runner.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/verify_pi_core_host_binding.py",
+        "tests/test_pi_core_b113_owner.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "pi-core-b113-firmware-proposal-offline",
+      "description": "Compare the B112-only boot proposal to the denied predecessor request, media pins and retained detached EFI signature list. No disk decompression, firmware store or VM operations.",
+      "tests": [
+        "test_pi_core_b113_firmware"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b112/media-output.json",
+        "packaging/pi-core/immutable-host-b113/boot-request.json",
+        "packaging/pi-core/immutable-host-b113/firmware-proposal.json",
+        "packaging/pi-core/immutable-host-b44/boot-request.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_b113_firmware.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "tests/test_pi_core_b113_firmware.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 45
+    },
+    {
       "id": "pi-core-b112-media-readback-offline",
       "description": "Read the new B112 raw disk once as data; compare the complete B111-over-B41 root, B44 kernel and policy-only initramfs change, GPT/EFI and detached trust proposal against pinned inputs. No mounts, boot, enrollment or target execution.",
       "tests": [

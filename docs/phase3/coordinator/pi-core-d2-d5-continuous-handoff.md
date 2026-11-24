@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [common caller/reader successor, batch 109](pi-core-common-output-successor-batch-109.md).**
+The staged host and protected services now use the same four signed B108 modules.
+The B106 worker content remains unchanged; neither its B105 receipt nor the B105
+evidence catalog is a B109 installation record. Next: bind independent private
+retention for the raw output observation. B49 and the pilot remain unapproved.
+
 **D2 — [protected calculate-and-save caller, batch 108](pi-core-protected-output-caller-batch-108.md).**
 The native caller brackets the B107 read between authenticated activation and
 release: absence before START, exact output after the same terminal create and

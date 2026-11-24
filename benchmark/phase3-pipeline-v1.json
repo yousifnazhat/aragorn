@@ -2,6 +2,54 @@
   "schema": "aragorn/phase3-pipeline/v1",
   "stages": [
     {
+      "id": "pi-core-b112-media-readback-offline",
+      "description": "Read the new B112 raw disk once as data; compare the complete B111-over-B41 root, B44 kernel and policy-only initramfs change, GPT/EFI and detached trust proposal against pinned inputs. No mounts, boot, enrollment or target execution.",
+      "tests": [
+        "test_pi_core_b112_media"
+      ],
+      "inputs": [
+        "packaging/pi-core/immutable-host-b112/media-output.json",
+        "packaging/pi-core/immutable-host-b41/image-inputs.json",
+        "packaging/pi-core/immutable-host-b44/media-output.json",
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_b112_media.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py",
+        "scripts/prepare_pi_core_host_build_tools.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/prepare_pi_core_immutable_boot.py",
+        "scripts/prepare_pi_core_immutable_host_layout.py",
+        "scripts/prepare_pi_core_immutable_image.py",
+        "scripts/prepare_pi_core_observable_guest.py",
+        "scripts/prepare_pi_core_restricted_host_sources.py",
+        "scripts/verify_pi_core_b112_media.py",
+        "tests/test_pi_core_b112_media.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 1200
+    },
+    {
+      "id": "pi-core-b112-media-guards-offline",
+      "description": "Reject changed B112 logical-root commitments, boot-policy and release substitutions offline, with no decompression, media generation or VM operations.",
+      "tests": [
+        "test_pi_core_b112_media_guards"
+      ],
+      "inputs": [
+        "scripts/build_pi_core_linux.py",
+        "scripts/inspect_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_disk.py",
+        "scripts/prepare_pi_core_guest_firmware_trust.py",
+        "scripts/prepare_pi_core_host_build_tools.py",
+        "scripts/prepare_pi_core_host_sysroot.py",
+        "scripts/prepare_pi_core_immutable_image.py",
+        "scripts/verify_pi_core_b112_media.py",
+        "tests/test_pi_core_b112_media_guards.py"
+      ],
+      "needs": [],
+      "timeout_seconds": 90
+    },
+    {
       "id": "pi-core-b111-host-successor-offline",
       "description": "Read the single staged B111 successor; match the signed retention wrapper and its two host-only modules, preserve B109 service and worker content, and refuse substituted or occupied inputs. No execution of donor code, media build or activation.",
       "tests": [

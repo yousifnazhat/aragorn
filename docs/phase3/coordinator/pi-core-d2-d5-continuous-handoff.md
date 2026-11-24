@@ -8,6 +8,15 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [B112 one-time release builder and issued replay, batch 114](pi-core-b112-single-use-release-batch-114.md).**
+The B112 builder can consume a separately approved singleton; the checked-in
+seal is unapproved, B113 still has zero slots, and there is no issued executable
+or live evidence. Historical replay requires both signed commits, private code
+and release custody, independent pre-attempt bindings and the original archive.
+The outstanding operational decision is B49: host, budget/window, evidence
+destination and cleanup owner, followed by separate enrollment and boot authority.
+Do not rebuild B113, repeat B112 disk readback or use B50's release as a substitute.
+
 **D2 — [B112 host runner, firmware proposal and serial replay, batch 113](pi-core-b112-host-binding-batch-113.md).**
 The held ARM64 host runner now binds the B112 disk, EFI allowlist proposal and
 bounded recorder. The replay reader distinguishes a pre-target host refusal from

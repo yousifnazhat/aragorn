@@ -1,20 +1,26 @@
 """One offline local capability, not the managed Pi deployment or a service."""
+import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
 import secrets
 import signal
+import stat
 import subprocess
 import sys
 
 sys.path.insert(0, "/opt/aragorn/src")
+sys.path.insert(0, str(Path(__file__).parent))
+from aragorn.cas import CAS
 from aragorn.oci_worker_protocol import canonical_json
 from aragorn.pi_core_pilot_output_observer import hold_pilot_output
 from aragorn.runtime_action_broker import _atomic_create
+from local_approval import approved_worker, inventory_worker, retained_source
 
 
-WORKER_SHA256 = "fb43597bfeef51cb28eb66766fc4f4df6ad7d03eb9de160bc69718d6baa6a195"
+BUNDLED_TREE = "sha256:02c169f40a214110b3df8a8cda945746fd520a8233cca55d809193d3303c3d78"
+CAPABILITY_DIR = Path("/root/aragorn-capability")
 RESULT_SHA256 = "9f827af5202050f264dfa05aeec4603d0fcec968de43ed7b039ce6a2d6231b08"
 ROOT = Path("/fixture")
 OUTPUT = ROOT / "out"
@@ -51,7 +57,7 @@ def exercise(worker_bytes, out_fd, stage_fd):
     # supplementary group, or writable checkout is handed to the worker.
     proc = subprocess.Popen(
         [sys.executable, "-I", "-B", "-S", "-c", worker_bytes],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd="/", env={},
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd="/", env={},
         user=65534, group=65534, extra_groups=[], close_fds=True,
     )
     try:
@@ -78,11 +84,29 @@ def exercise(worker_bytes, out_fd, stage_fd):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--inventory", action="store_true")
+    mode.add_argument("--approve-tree")
+    parser.add_argument("--emit-result", action="store_true")
+    args = parser.parse_args()
+    require(not (args.inventory and args.emit_result), "inventory cannot export a result")
     require(sys.platform == "linux" and os.geteuid() == 0 and os.path.ismount(ROOT),
             "use the Colima launcher with its private fixture mount")
-    worker = Path(__file__).with_name("worker.py").read_bytes()
-    require(hashlib.sha256(worker).hexdigest() == WORKER_SHA256, "unreviewed worker bytes; refusing")
     require(not os.listdir(ROOT), "fixture is not fresh")
+    cas = CAS(ROOT / "cas")
+    if args.inventory:
+        manifest = inventory_worker(CAPABILITY_DIR, cas)
+        source = retained_source(manifest, cas).decode("utf-8")
+        # Escape control characters: reviewed source is data, not terminal output.
+        print(json.dumps(dict(tree_digest=manifest["tree_digest"], files=manifest["files"],
+                              worker_source=source), ensure_ascii=True))
+        return
+    pin = args.approve_tree if args.approve_tree is not None else BUNDLED_TREE
+    worker = approved_worker(CAPABILITY_DIR, cas, pin)
+    parent = CAPABILITY_DIR.parent.lstat()
+    require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0 and not (parent.st_mode & 0o077),
+            "live capability input must not be traversable by the worker")
     OUTPUT.mkdir(mode=0o755)
     STAGING.mkdir(mode=0o700)
     # Ensure search access: direct EACCES must be a denial of creation, not
@@ -107,10 +131,12 @@ def main():
     finally:
         os.close(out_fd)
     raw = bytes.fromhex(observation["payload_hex"])
-    emit_result = sys.argv[1:] == ["--emit-result"]
+    emit_result = args.emit_result
     log = sys.stderr if emit_result else sys.stdout
     print("ALLOW result.json — verified bytes:", raw.decode("ascii"), file=log)
-    print("BLOCK forbidden.json — outside grant; direct Linux write: EACCES; verified absent", file=log)
+    denial = ("direct Linux write: EACCES" if pin == BUNDLED_TREE
+              else "worker reported EACCES")
+    print(f"BLOCK forbidden.json — outside grant; {denial}; verified absent", file=log)
     if emit_result:
         sys.stdout.buffer.write(raw)
 

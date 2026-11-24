@@ -1,0 +1,13 @@
+{
+  "schema": "aragorn/b114-private-build-seal/v1",
+  "purpose": "prepare-one-b112-compatibility-owner-only",
+  "candidate": {
+    "media": "fac725f23b8a1d694ba89054859710786649693c53d23a9c19a01794938877f7",
+    "runner": "bedfbfb5f8a71dd74c55ce00e5dd1e2a6f09db1a0c00e9b362cae5a552b8dbd0",
+    "release": "3c94d1af28930b8d9bdc9f7fc539a03d3d186b40d52e6ce49fb3e6592d71598b",
+    "recorder": "210561eb3c0718fe3e7b46db804ce844ab5d4229b6833ad7cb6a54ace7f5533b",
+    "request": "b765a437ea55e54c18e2418c7e084f0bd195361b9fc7537cf755a812087c436a",
+    "proposal": "af7197021a39f2dc7d96ecaa5a47f0c346a0fa6e0d0eb56e413d7b4b3b760d9c"
+  },
+  "approved": null
+}

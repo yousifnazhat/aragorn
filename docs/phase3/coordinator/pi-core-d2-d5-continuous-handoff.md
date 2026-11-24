@@ -8,6 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [B111 on independently checked ARM64 media, batch 112](pi-core-successor-media-batch-112.md).**
+One 3,595,017,728-byte disk now contains the B111 host, unchanged B109 service
+files and retained worker. Offline readback matched the whole 182,229-path root
+and its new EFI boot policy. Next: bind the host runner, firmware proposal,
+serial recorder and replay verifier to these exact media pins. B49 stays null;
+media identity is not permission to enroll or boot, nor evidence of a useful pilot.
+
 **D2 — [host-only retention successor, batch 111](pi-core-host-retention-successor-batch-111.md).**
 The B110 host wrapper and both private-retention modules are now pinned in one
 staged layout. B109 service and worker identities are unchanged. Use the B111

@@ -8,6 +8,13 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [private pilot-output custody and offline replay, batch 110](pi-core-private-output-custody-batch-110.md).**
+The new host route can retain the original B109 reader record without exposing
+it in stdout. Offline replay matched that record to the original action and
+provider fixtures after the fixture output was removed. Next: pin the updated
+host wrapper and two custody modules in a host successor. B109 was not changed
+or installed, B49 remains unbound, and no pilot or provider call was made.
+
 **D2 — [common caller/reader successor, batch 109](pi-core-common-output-successor-batch-109.md).**
 The staged host and protected services now use the same four signed B108 modules.
 The B106 worker content remains unchanged; neither its B105 receipt nor the B105

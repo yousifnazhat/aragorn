@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [B111 plan-bound pilot-output replay](pi-core-b111-planned-output-replay.md).**
+The private-output reader can compare the original B111 plan bytes to the same recorded
+create and output, including the admitted context and sink. No pilot or release was issued.
+
 **D4 — [recorded admission in the managed qualifier](pi-core-recorded-admission-replay.md).**
 The managed composer can now cross-check the install transaction and recorded action against all seven
 deployment bindings for MP1/ADM-01. Agreement leaves consumed-source identity NOT_TESTED.

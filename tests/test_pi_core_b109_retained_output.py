@@ -16,7 +16,7 @@ from tests import test_pi_core_mask_custody as temporary, test_pi_core_public_pi
 
 class B109RetainedOutput(TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, *, plan_for=None, release_pin=None):
         # Only substitute outer host ancestry and developer uid/gid as in the
         # existing custody fixture. These files are not a deployment or a pilot.
         private = temporary.MaskCustodyTests()
@@ -39,8 +39,9 @@ class B109RetainedOutput(TestCase):
             action = donor.put(canonical_json(donor.nomination()))
         activation = donor.activation["activation_id"]
         common = dict(store=private.store, receipt_directory=private.receipts, attempt_id="c" * 32,
-                      deployment_digest=deployment, plan_digest=canonical_digest("inert-plan"),
-                      release_digest=canonical_digest("inert-release"), expected_path_digest=path_pin)
+                      deployment_digest=deployment, plan_digest=(plan_for(donor, descriptor, deployment)
+                          if plan_for is not None else canonical_digest("inert-plan")),
+                      release_digest=release_pin or canonical_digest("inert-release"), expected_path_digest=path_pin)
         nominated = dict(expected_roots=private.roots, deadline=time.monotonic() + 15)
         verifier.custody.preflight(**common, **nominated)
         fd = os.open(sink, os.O_RDONLY | os.O_DIRECTORY)

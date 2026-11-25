@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D2 — [B111 install report to original action](pi-core-b111-installed-action.md).**
+Use the B111-specific reader for the exact successor profile; independently nominate both
+the action and its terminal receipt. A match is recorded correspondence only.
+
 **D2 — [B111 plan-bound pilot-output replay](pi-core-b111-planned-output-replay.md).**
 The private-output reader can compare the original B111 plan bytes to the same recorded
 create and output, including the admitted context and sink. No pilot or release was issued.

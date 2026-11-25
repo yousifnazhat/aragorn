@@ -7,8 +7,19 @@ die() { printf 'quickstart: %s\n' "$*" >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || die "This launcher targets macOS with Colima."
 command -v docker >/dev/null || die "The Docker CLI is required."
 repo=$(cd -P -- "$(dirname -- "$0")/.." && pwd -P)
-usage() { die "Usage: $0 [--output NEW_FILE] [--capability DIR --approve-tree sha256:HEX] | --inventory DIR"; }
+usage() { die "Usage: $0 [--sum A B] [--output NEW_FILE] [--capability DIR --approve-tree sha256:HEX] | --inventory DIR"; }
+int32_decimal() {
+    local LC_ALL=C digits value
+    [[ $1 =~ ^[+-]?[0-9]{1,10}$ ]] || return 1
+    # Only bounded validated digits enter arithmetic. Force decimal, not octal.
+    digits=${1#[-+]}
+    value=$((10#$digits))
+    if [[ $1 == -* ]]; then value=$((-value)); fi
+    (( value >= -2147483648 && value <= 2147483647 )) || return 1
+    printf '%d' "$value"
+}
 cap= inventory= approval= output=
+sum_set=0; sum_a=1; sum_b=2
 while (( $# )); do
     (( $# >= 2 )) && [[ -n $2 ]] || usage
     case "$1" in
@@ -16,12 +27,17 @@ while (( $# )); do
         --capability) [[ -z $cap ]] || usage; cap=$2 ;;
         --approve-tree) [[ -z $approval ]] || usage; approval=$2 ;;
         --output) [[ -z $output ]] || usage; output=$2 ;;
+        --sum)
+            [[ $sum_set == 0 && $# -ge 3 ]] || usage
+            sum_a=$(int32_decimal "$2") && sum_b=$(int32_decimal "$3") ||
+                die "--sum requires two signed 32-bit decimal integers (1–10 digits each)."
+            sum_set=1; shift 3; continue ;;
         *) usage ;;
     esac
     shift 2
 done
 if [[ -n $inventory ]]; then
-    [[ -z $cap && -z $approval && -z $output ]] || usage
+    [[ -z $cap && -z $approval && -z $output && $sum_set == 0 ]] || usage
     cap=$inventory
     set -- --inventory
 elif [[ -n $cap || -n $approval ]]; then
@@ -30,6 +46,7 @@ elif [[ -n $cap || -n $approval ]]; then
 else
     cap="$repo/examples/local-quickstart/capability"
 fi
+if [[ $sum_set == 1 ]]; then set -- "$@" --sum "$sum_a" "$sum_b"; fi
 safe_mount_path() {
     # Docker --mount is a CSV argument. Reject ambiguous separators/quoting.
     [[ $1 != *,* && $1 != *'"'* && $1 != *$'\n'* && $1 != *$'\r'* ]]
@@ -123,7 +140,7 @@ cleanup() {
         fi
     fi
     if [[ $status == 0 && -n "$export_leaf" ]]; then
-        /usr/bin/perl "$repo/scripts/local_quickstart_publish.pl" "$scratch/result" "./$export_leaf" || status=1
+        /usr/bin/perl "$repo/scripts/local_quickstart_publish.pl" "$scratch/result" "./$export_leaf" "$sum_a" "$sum_b" || status=1
         if [[ $status == 0 ]]; then printf 'Verified result saved: %s/%s\n' "$PWD" "$export_leaf"; fi
     fi
     rm -rf -- "$scratch"

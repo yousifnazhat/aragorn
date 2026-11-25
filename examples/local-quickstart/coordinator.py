@@ -1,6 +1,5 @@
 """One offline local capability, not the managed Pi deployment or a service."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,15 +12,16 @@ import sys
 sys.path.insert(0, "/opt/aragorn/src")
 sys.path.insert(0, str(Path(__file__).parent))
 from aragorn.cas import CAS
+from aragorn.local_quickstart_sum_observer import hold_sum_output
 from aragorn.oci_worker_protocol import canonical_json
 from aragorn.pi_core_pilot_output_observer import hold_pilot_output
 from aragorn.runtime_action_broker import _atomic_create
 from local_approval import approved_worker, inventory_worker, retained_source
 
 
-BUNDLED_TREE = "sha256:02c169f40a214110b3df8a8cda945746fd520a8233cca55d809193d3303c3d78"
+# Reviewed source tree, NOT calculated from the current mount at startup.
+BUNDLED_TREE = "sha256:c3a61be90f2b094dd0edf9598f07ff40b9a86854f2ca12650aafd2628a97f8c9"
 CAPABILITY_DIR = Path("/root/aragorn-capability")
-RESULT_SHA256 = "9f827af5202050f264dfa05aeec4603d0fcec968de43ed7b039ce6a2d6231b08"
 ROOT = Path("/fixture")
 OUTPUT = ROOT / "out"
 STAGING = ROOT / "staging"
@@ -32,14 +32,14 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def mediate(request, out_fd, stage_fd, *, spent):
+def mediate(request, out_fd, stage_fd, *, spent, expected):
     """Local grant: one create of one exact leaf and reviewed content; no retries."""
     if type(request) is not dict or set(request) != {"op", "target", "value"}:
         return "BLOCK", "invalid request"
     if request["op"] != "create" or request["target"] != "result.json":
         return "BLOCK", "outside grant"
     raw = canonical_json(request["value"])
-    if spent or hashlib.sha256(raw).hexdigest() != RESULT_SHA256:
+    if spent or raw != expected:
         return "BLOCK", "spent grant or unexpected content"
     # Never pass a caller-controlled pathname to the filesystem primitive.
     require(_atomic_create(stage_fd, out_fd, "result.json", raw), "create did not complete")
@@ -52,20 +52,23 @@ def bounded_line(stream):
     return line[:-1]
 
 
-def exercise(worker_bytes, out_fd, stage_fd):
+def exercise(worker_bytes, out_fd, stage_fd, operands):
     # Execute the exact bytes that were checked. No directory fd, credential,
     # supplementary group, or writable checkout is handed to the worker.
+    a, b = (1, 2) if operands is None else operands
+    expected_bytes = canonical_json({"total": a + b})
+    data_args = [] if operands is None else [str(a), str(b)]
     proc = subprocess.Popen(
-        [sys.executable, "-I", "-B", "-S", "-c", worker_bytes],
+        [sys.executable, "-I", "-B", "-S", "-c", worker_bytes, *data_args],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd="/", env={},
         user=65534, group=65534, extra_groups=[], close_fds=True,
     )
     try:
         spent = False
-        for target, expected in (("result.json", "ALLOW"), ("forbidden.json", "BLOCK")):
+        for target, expected_verdict in (("result.json", "ALLOW"), ("forbidden.json", "BLOCK")):
             request = json.loads(bounded_line(proc.stdout))
-            verdict, reason = mediate(request, out_fd, stage_fd, spent=spent)
-            require(request["target"] == target and verdict == expected, "unexpected request or decision")
+            verdict, reason = mediate(request, out_fd, stage_fd, spent=spent, expected=expected_bytes)
+            require(request["target"] == target and verdict == expected_verdict, "unexpected request or decision")
             if verdict == "ALLOW":
                 spent = True
             else:
@@ -83,14 +86,26 @@ def exercise(worker_bytes, out_fd, stage_fd):
         proc.stdout.close()
 
 
+def wire_int32(text):
+    # The Mac launcher normalizes user input. Accept only that numeric wire form.
+    if len(text) <= 11 and text.isascii() and text.removeprefix("-").isdecimal():
+        value = int(text, 10)
+        if str(value) == text and -(2**31) <= value < 2**31:
+            return value
+    raise argparse.ArgumentTypeError("expected a canonical signed 32-bit integer")
+
+
 def main():
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--inventory", action="store_true")
     mode.add_argument("--approve-tree")
+    parser.add_argument("--sum", nargs=2, type=wire_int32, metavar=("A", "B"))
     parser.add_argument("--emit-result", action="store_true")
     args = parser.parse_args()
-    require(not (args.inventory and args.emit_result), "inventory cannot export a result")
+    require(not (args.inventory and (args.emit_result or args.sum is not None)),
+            "inventory does not run calculations or export results")
+    operands = None if args.sum is None else tuple(args.sum)
     require(sys.platform == "linux" and os.geteuid() == 0 and os.path.ismount(ROOT),
             "use the Colima launcher with its private fixture mount")
     require(not os.listdir(ROOT), "fixture is not fresh")
@@ -120,9 +135,11 @@ def main():
         stage_fd = os.open(STAGING, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             require(not os.listdir(out_fd), "output directory was not empty")
-            with hold_pilot_output(out_fd, descriptor, expected_activation_id=secrets.token_hex(16)) as after:
-                exercise(worker, out_fd, stage_fd)
-                observation = after()
+            observer = (hold_pilot_output(out_fd, descriptor, expected_activation_id=secrets.token_hex(16))
+                        if operands is None else hold_sum_output(out_fd, operands))
+            with observer as after:
+                exercise(worker, out_fd, stage_fd, operands)
+                raw = bytes.fromhex(after()["payload_hex"]) if operands is None else after()
             # Exact directory entry inventory also rejects a dangling symlink.
             require(os.listdir(out_fd) == ["result.json"] and not os.listdir(stage_fd),
                     "unexpected output or staging residue")
@@ -130,7 +147,6 @@ def main():
             os.close(stage_fd)
     finally:
         os.close(out_fd)
-    raw = bytes.fromhex(observation["payload_hex"])
     emit_result = args.emit_result
     log = sys.stderr if emit_result else sys.stdout
     print("ALLOW result.json — verified bytes:", raw.decode("ascii"), file=log)

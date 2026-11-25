@@ -16,6 +16,11 @@ the action and its terminal receipt. A match is recorded correspondence only.
 The private-output reader can compare the original B111 plan bytes to the same recorded
 create and output, including the admitted context and sink. No pilot or release was issued.
 
+**D3 — [fixed task service through Pi in both modes](pi-core-fixed-task-service.md).**
+The B90 carrier decision is settled. The pinned Pi tool, fixed service, independent copy
+reader and collector boundaries are connected offline. Installed mode evidence, socket
+custody, durable claims and cleanup on the common guest are still required.
+
 **D4 — [recorded admission in the managed qualifier](pi-core-recorded-admission-replay.md).**
 The managed composer can now cross-check the install transaction and recorded action against all seven
 deployment bindings for MP1/ADM-01. Agreement leaves consumed-source identity NOT_TESTED.

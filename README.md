@@ -4,8 +4,9 @@
 
 ## Local quickstart: allow one file, block another
 
-On a Mac with Colima, run a small Linux worker that adds 1 and 2. Its only
-grant is to create `result.json` with the approved content. You don't need a
+On a Mac with Colima, run a small Linux worker that adds two integers (1 and 2
+by default). Its only grant is to create `result.json` with the approved
+content. You don't need a
 cloud account, API key, model, or Python installation on your Mac.
 
 **Prerequisites:** Git, the Docker CLI, a running default Colima Docker profile,
@@ -38,16 +39,25 @@ the second filename; the worker then tries that same write directly and Linux
 refuses it. Outside the worker, Aragorn's output reader checks the exact result
 bytes, and the coordinator checks that the directory contains only `result.json`.
 By default the output disappears with the container; nothing is written into the clone.
-To keep the independently verified bytes on your Mac, choose a **new** file:
+To add your own numbers and keep the verified bytes on your Mac, choose a **new** file:
 
 ```sh
-./scripts/local_quickstart_colima.sh --output "$HOME/aragorn-result.json"
+./scripts/local_quickstart_colima.sh --sum 8 13 --output "$HOME/aragorn-sum.json"
 ```
 
-The Mac launcher waits for successful execution and confirmed container cleanup,
-checks the received bytes, then publishes them without replacing a file or
-symlink. The destination is never mounted in the guest. Use an existing,
-trusted parent directory outside the read-only source mounts.
+This saves exactly `{"total":21}` without a trailing newline. Each operand is
+a signed 32-bit decimal integer (−2147483648 through 2147483647; use ASCII
+digits and an optional `+` or `-` sign, at most ten digits). The **sum** need
+not fit in 32 bits. Changing the numbers does not change the worker or its grant.
+Omit `--output` to see the result without saving it, or omit `--sum` to keep
+the original 1 + 2 example.
+
+The trusted reader verifies the actual guest file against the original operands.
+After successful execution and confirmed container cleanup, the Mac launcher
+independently adds the input numbers and compares the exact bytes before
+publishing them. It never replaces a file or symlink. The destination is never
+mounted in the guest. Use an existing, trusted parent directory outside the
+read-only source mounts.
 
 ### Review and approve a local capability
 
@@ -55,7 +65,9 @@ The default run uses the reviewed inventory pin for the bundled example. To
 approve your own copy, start with a directory that contains **only** a regular
 UTF-8 `worker.py` (up to 32 KiB). This example must speak the same two-request
 protocol as [the bundled worker](examples/local-quickstart/capability/worker.py);
-this is not a general Python application runner.
+this is not a general Python application runner. With `--sum`, the worker
+receives the two normalized decimal values as separate arguments (not Python
+code). Without `--sum`, it receives no extra arguments.
 
 ```sh
 cp -R examples/local-quickstart/capability "$HOME/aragorn-capability"

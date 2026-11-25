@@ -10,11 +10,13 @@ import unittest
 LAUNCHER = Path(__file__).resolve().parents[1] / "scripts/local_quickstart_colima.sh"
 SHIM = """#!/bin/bash
 set -eu
+touch "$HOME/docker-invoked"
 while [[ "$1" == --host || "$1" == --config ]]; do shift 2; done
 case "$1" in
   version) echo 'test';;
   image) printf 'sha256:%064d\\n' 1;;
   run)
+    printf '%s\\n' "$@" >"$HOME/guest-arguments"
     # An output filename or its parent must never be passed into the container.
     for arg in "$@"; do
       [[ "$arg" != *"$DEST_PARENT"* ]] || exit 70
@@ -51,11 +53,11 @@ class TestLocalQuickstartOutput(unittest.TestCase):
             path.write_text(source)
             path.chmod(0o700)
 
-    def launch(self, scenario="success", payload='{"total":3}'):
+    def launch(self, scenario="success", payload='{"total":3}', extra=()):
         env = dict(os.environ, HOME=str(self.home), TMPDIR=str(self.home),
                    PATH=f"{self.home}:{os.environ['PATH']}", DEST=str(self.out),
                    DEST_PARENT=str(self.out.parent), PAYLOAD=payload, SCENARIO=scenario)
-        return subprocess.run([LAUNCHER, "--output", self.out], env=env, capture_output=True,
+        return subprocess.run([LAUNCHER, "--output", self.out, *extra], env=env, capture_output=True,
                               timeout=10)
 
     def test_exports_verified_bytes_only_after_cleanup(self):
@@ -88,3 +90,32 @@ class TestLocalQuickstartOutput(unittest.TestCase):
     def test_concurrent_destination_creation_is_not_overwritten(self):
         self.assertNotEqual(self.launch("race").returncode, 0)
         self.assertEqual(self.out.read_bytes(), b"other writer")
+
+    def test_mac_independently_accepts_exact_sum_from_original_operands(self):
+        for a, b, total in (("+0008", "0013", 21), ("-2147483648", "-2147483648", -4294967296),
+                            ("2147483647", "2147483647", 4294967294)):
+            with self.subTest(a=a, b=b):
+                payload = '{"total":%d}' % total
+                result = self.launch(payload=payload, extra=("--sum", a, b))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.out.read_bytes(), payload.encode())
+                arguments = (self.home / "guest-arguments").read_text().splitlines()
+                pos = arguments.index("--sum")
+                self.assertEqual(arguments[pos + 1:pos + 3], [str(int(a)), str(int(b))])
+                self.out.unlink()
+
+    def test_mac_refuses_wrong_or_noncanonical_sum_bytes(self):
+        for payload in ('{"total":3}', '{"total":21}\n'):
+            with self.subTest(payload=payload):
+                result = self.launch(payload=payload, extra=("--sum", "8", "13"))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"unexpected observed result", result.stderr)
+                self.assertFalse(os.path.lexists(self.out))
+
+    def test_invalid_sum_refused_before_contacting_docker(self):
+        for args in (("--sum", "2147483648", "0"), ("--sum", "-2147483649", "0"),
+                     ("--sum", "1+2", "0"), ("--sum", "８", "0"), ("--sum", "1"),
+                     ("--sum", "1", "2", "--sum", "3", "4")):
+            with self.subTest(args=args):
+                self.assertNotEqual(self.launch(extra=args).returncode, 0)
+                self.assertFalse((self.home / "docker-invoked").exists())

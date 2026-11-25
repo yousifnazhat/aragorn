@@ -8,6 +8,10 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D4 — [recorded admission in the managed qualifier](pi-core-recorded-admission-replay.md).**
+The managed composer can now cross-check the install transaction and recorded action against all seven
+deployment bindings for MP1/ADM-01. Agreement leaves consumed-source identity NOT_TESTED.
+
 **D2 — [B112 compatibility boot decision packet, batch 115](pi-core-b112-compatibility-boot-approval-packet-batch-115.md).**
 The candidate and decision sequence are ready for private review, not execution.
 B49 still lacks the host nomination, budget/window, evidence destination and

@@ -15,6 +15,7 @@ from .pi_core_state_mounts import direct_mount_inventory
 from .pi_core_task_owner_copy import _same_description, check_source_fd, resolve_service_copy
 from .pi_core_task_owner_health import guard_task_health
 from .pi_core_task_owner_roles import hold_stopped_roles
+from .pi_core_task_static_source import bind_task_source_observer
 
 
 RELEASE = Path("/etc/aragorn/approvals/fixed-task-owner.json")
@@ -53,11 +54,18 @@ def _send_release(*args, **kwargs):
 
 
 class _Task:
-    def __init__(self, scope, ticket, nomination, deadline, roles, custody, service_listener):
+    def __init__(self, scope, ticket, nomination, deadline, roles, custody, service_listener, source_binding):
         self._scope, self._t, self._n, self._deadline = scope,ticket,nomination,deadline
         self._roles, self._custody = roles,custody
         self._listener = service_listener
+        self._source_binding = source_binding
         self._phase, self._directory = "CLAIMED", None
+
+    @property
+    def source_binding(self):
+        _need(self._phase == "CLAIMED","task source binding outside claimed lifetime")
+        self._custody()
+        return self._source_binding
 
     def guard(self):
         """Use for the release and the service's repeated authenticated OBSERVE requests."""
@@ -65,6 +73,7 @@ class _Task:
         try:
             self._custody()
             self._roles.guard(stopped=False)
+            self._source_binding.require_active(self._source)
             guard_task_health(self._t,source_observer=self._source,activation=self._activation,
                               worker=self._roles.record["worker"],deadline=self._deadline)
             return self._t["environment_digest"]
@@ -152,10 +161,13 @@ def hold_task_owner(*, inputs, release_pin, ticket, nomination, publish):
             ledger._window(doc,deadline)
         authority()
         roles.guard(stopped=True)
-        spent, _ = scope.enter_context(_prepared_attempt_claim(store,claim))
+        spent, claim_raw = scope.enter_context(_prepared_attempt_claim(store,claim))
         def custody():
             authority()
             spent()
+        custody()
+        roles.guard(stopped=True)
+        source_binding = scope.enter_context(bind_task_source_observer(roles,claim_raw=claim_raw,deadline=deadline))
         custody()
         roles.guard(stopped=True)
         # Only the manager's held task namespace supplies this one-shot publisher.
@@ -165,7 +177,7 @@ def hold_task_owner(*, inputs, release_pin, ticket, nomination, publish):
             channel_guard()
         joined()
         roles.guard(stopped=True)
-        handle = _Task(scope,t,n,deadline,roles,joined,listeners["service.sock"])
+        handle = _Task(scope,t,n,deadline,roles,joined,listeners["service.sock"],source_binding)
         try:
             yield handle
         finally:

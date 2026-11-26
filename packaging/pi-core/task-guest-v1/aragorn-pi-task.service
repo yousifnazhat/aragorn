@@ -1,0 +1,36 @@
+[Unit]
+Description=Aragorn one-shot fixed task service for an owned measurement
+StartLimitBurst=1
+StartLimitIntervalSec=1
+
+[Service]
+Type=exec
+User=aragorn-pi-task
+Group=aragorn-pi-task
+DynamicUser=yes
+ExecStart=/opt/aragorn-cpython/bin/python3.12 -I -S -B /opt/aragorn/bin/pi-fixed-task.py
+Restart=no
+RuntimeMaxSec=30s
+TimeoutStopSec=1s
+KillMode=control-group
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+PrivateDevices=yes
+PrivateNetwork=yes
+PrivateMounts=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+TemporaryFileSystem=/run:ro
+BindReadOnlyPaths=/run/aragorn-pi-task-owner
+BindReadOnlyPaths=/opt/aragorn/fixed-task/src:/opt/aragorn/src

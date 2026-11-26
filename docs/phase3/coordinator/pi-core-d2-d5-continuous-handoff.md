@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [one task claim for both stopped roles](pi-core-fixed-task-owner-claim.md).**
+The root owner spends the pair/mode slot before publishing channels and checks fresh health
+and the service-side copy descriptor before dispatch. The instrumented sensor still reports
+unknown upstream loss. This is a checked refusal boundary, not an installed or measured pair.
+
 **D3 — [packaged task service and private guest channels](pi-core-task-guest-package.md).**
 Use the additive common guest payload, not the B112 boot disk, for the task service
 and its two stopped roles. The units are disabled by construction. No launch, claim,

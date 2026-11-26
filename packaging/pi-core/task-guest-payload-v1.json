@@ -1,0 +1,19 @@
+{
+  "activated": false,
+  "added_paths": 157,
+  "base_entries": 1791,
+  "base_payload_sha256": "ea17bce82e6044ac29fef1d1e893d347272cff2054298f26ed1c10c487360fa0",
+  "booted": false,
+  "delta_sha256": "69552046488c260242b1dc346998304fd316d8b9dce14bc6de156f1ea6a26bfe",
+  "entries": 1948,
+  "payload_sha256": "57284c68ac3785e694cbc06dde9b3c5449df7d552f6316e6d6474e4d296ce3dc",
+  "phase3_exit_eligible": false,
+  "schema": "aragorn/pi-core-fixed-task-package/v1",
+  "service_code": {
+    "interpreter_digest": "sha256:7863a4d5e03fde7791c7f8c2c304cf3522f435e19745364ad18a6b7a0458af57",
+    "unit_digest": "sha256:cc97083bb2cdf56caf4a1b611eb1f7a20a02734908e7bb6fe42b912e945ae69b",
+    "wrapper_digest": "sha256:0dff78497a4d00f7844053e45b43e769c61c87bc4688e43ba72afff2927a45ca"
+  },
+  "service_sources_sha256": "cd651617efaf72586660d33866a3c5f10d5f86d9ee83ad50c06025f7aac9e23e",
+  "worker_build_sha256": "b4c9e04a9076375bfdc7514a2378096f52601c6933e9f79fdf99301477ef43b1"
+}

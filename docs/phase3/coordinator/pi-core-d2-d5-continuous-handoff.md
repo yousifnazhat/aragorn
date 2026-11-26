@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [packaged task service and private guest channels](pi-core-task-guest-package.md).**
+Use the additive common guest payload, not the B112 boot disk, for the task service
+and its two stopped roles. The units are disabled by construction. No launch, claim,
+observed sensor health or qualification transfers with the package.
+
 **D2 — [B111 install report to original action](pi-core-b111-installed-action.md).**
 Use the B111-specific reader for the exact successor profile; independently nominate both
 the action and its terminal receipt. A match is recorded correspondence only.

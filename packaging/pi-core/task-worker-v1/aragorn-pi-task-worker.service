@@ -1,0 +1,54 @@
+[Unit]
+Description=Aragorn fixed Pi task worker (requires protected coordinator and pre-exec observer)
+# Socket ownership is published only after DynamicUser allocation and the first gate stop.
+AssertPathIsDirectory=/run/aragorn-pi-task-view/tasks
+
+[Service]
+Type=exec
+ExecStart=/opt/aragorn/pi-runtime/observer/source-gate /opt/aragorn/pi-runtime/node/bin/node --disallow-code-generation-from-strings /opt/aragorn/pi-runtime/pi-core/entrypoint.js
+DynamicUser=yes
+User=aragorn-pi-task-worker
+Group=aragorn-pi-task-worker
+SupplementaryGroups=
+RootDirectory=/var/lib/aragorn/pi-os
+WorkingDirectory=/
+BindLogSockets=no
+BindReadOnlyPaths=/var/lib/aragorn/pi-task-runtime:/opt/aragorn/pi-runtime
+BindReadOnlyPaths=/run/aragorn-pi-task-view:/run/aragorn-pi-bootstrap
+InaccessiblePaths=-/dev/shm -/dev/hugepages -/dev/pts
+Restart=no
+KillMode=control-group
+KillSignal=SIGKILL
+SendSIGKILL=yes
+Delegate=no
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+PrivateDevices=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictNamespaces=yes
+TasksMax=64
+MemoryMax=1G
+RuntimeMaxSec=30
+TimeoutStopSec=5
+StandardInput=null
+StandardOutput=null
+StandardError=null

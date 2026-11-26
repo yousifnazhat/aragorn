@@ -8,6 +8,11 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [source observer bound to the packaged static worker](pi-core-static-task-source-binding.md).**
+The task owner supplies its spent claim and original role handles to the native observer intake.
+The resulting stopped-worker binding is not an attached tracer, consumed-source record or healthy sensor.
+Next is distinguishing the two gate stops under custody before enabling the static trace path.
+
 **D3 — [one task claim for both stopped roles](pi-core-fixed-task-owner-claim.md).**
 The root owner spends the pair/mode slot before publishing channels and checks fresh health
 and the service-side copy descriptor before dispatch. The instrumented sensor still reports

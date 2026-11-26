@@ -112,10 +112,11 @@ def _observe_held(ticket, n, worker_id, deadline):
         # Hash each immutable worker input once; keep the underlying FDs alive
         # across the claim. The worker is chrooted: systemd reads its fragment
         # from PID 1's view, not from the worker's root.
-        paths = {}
+        paths, metadata = {}, {}
         for path,(pin,bound) in _WORKER_PINS.items():
             fd = paths[path] = _view(held, 1 if path == WORKER_UNIT else worker, path)
-            _need(sources._hash(fd,deadline,bound)[0] == pin, "substituted fixed-task worker package")
+            digest, metadata[path] = sources._hash(fd,deadline,bound)
+            _need(digest == pin, "substituted fixed-task worker package")
         service_exe = _view(held,service,binding._PYTHON)
         with ExitStack() as tmp:
             same_code = binding._service_code(tmp, service, pfds["service"], mount, deadline)
@@ -160,6 +161,8 @@ def _observe_held(ticket, n, worker_id, deadline):
                     binding.native.process.require_live_pidfd(fd)
                 validate_deadline(deadline)
                 return result
+        # Lend only this generation's already-open descriptors to the observer intake.
+        read.observer_fds = handles["worker"], pfds["worker"], mount, paths, metadata
         yield read
 
 

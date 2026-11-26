@@ -34,6 +34,8 @@ class TaskOwnerTests(TestCase):
         self.real_measure = owner.task.measure_via_pi
         self.dispatch = self.enterContext(mock.patch.object(owner.task, "measure_via_pi", return_value=b"verified receipt"))
         self.source, self.activation = object(), object()
+        self.intake = mock.Mock(observer=self.source)
+        self.bind = self.enterContext(mock.patch.object(owner,"bind_task_source_observer",return_value=nullcontext(self.intake)))
 
     def nominate(self):
         t = self.ticket
@@ -97,6 +99,19 @@ class TaskOwnerTests(TestCase):
         self.dispatch.assert_not_called()
         with self.assertRaisesRegex(ValueError, "already claimed"):
             with self.claim(): self.fail("retry")
+
+    def test_only_the_observer_of_the_original_spent_claim_can_reach_health(self):
+        with self.claim() as held:
+            self.assertIs(held.source_binding,self.intake)
+            self.assertIs(self.bind.call_args.args[0],self.held)
+            record, = self.store.root.rglob("*.json")
+            self.assertEqual(self.bind.call_args.kwargs["claim_raw"],record.read_bytes())
+            self.intake.require_active.side_effect = ValueError("observer of a different generation")
+            with self.assertRaisesRegex(ValueError,"different generation"):
+                self.handoff(held)
+            self.intake.require_active.assert_called_once_with(self.source)
+            self.health.assert_not_called()
+            self.sender.assert_not_called()
 
     def test_health_is_rechecked_after_collector_mark_before_first_manager_byte(self):
         self.dispatch.side_effect = self.real_measure

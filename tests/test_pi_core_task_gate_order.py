@@ -1,6 +1,7 @@
 """Actual order guard and stop reader, using inert proc data and local file descriptors."""
 import threading
 import os
+import json
 import signal
 from types import SimpleNamespace
 from unittest import TestCase, mock
@@ -8,6 +9,7 @@ from unittest import TestCase, mock
 from aragorn import pi_core_task_gate_order as order, pi_core_task_static_source as static
 from aragorn import pi_core_task_owner_roles as roles
 from aragorn.pi_core_task_owner import _Task
+from aragorn.pi_core_node_source_observer import _NodeSession
 from aragorn.oci_worker_protocol import canonical_digest
 from tests import test_pi_core_task_gate_stop_reader as fixtures
 from tests import test_pi_core_task_observer_binding as bindings
@@ -32,7 +34,11 @@ class GateOrderTests(TestCase):
     def armed(self):
         # Only model pre-exec tracer ownership. No syscall, thread or worker is started.
         self.o._attached, self.o._state = True, "HELD"
-        self.o._node_session = SimpleNamespace(owned=self.f.worker,observer=self.o,thread=threading.current_thread())
+        s = self.o._node_session = object.__new__(_NodeSession)
+        s.owned,s.observer,s.thread = self.f.worker,self.o,threading.current_thread()
+        pid = self.f.worker.worker["pid"]
+        s.tasks = {pid:dict(joined=True,stopped=True,start_ticks=self.f.worker.worker["start_ticks"])}
+        s.stopping,s.pending_events = False,[]
 
     def complete(self):
         g = self.first()
@@ -163,6 +169,24 @@ class GateOrderTests(TestCase):
         self.assertFalse(self.o._executed)  # Not an executed/healthy source-observer latch.
         with self.assertRaises(ValueError): task.observe_node_exec(self.o)
         with self.assertRaises(ValueError): g.require_node_observed(self.o)
+
+    def test_original_session_wait_returns_detached_replay_inputs_after_matching_consume(self):
+        _,task,_,event,_,auth = self.node_transition()
+        s = self.o._node_session
+        pid = event.si_pid
+        s.tasks[pid]["stopped"] = False
+        with mock.patch.object(os,"waitpid",return_value=(pid,(event.si_status << 8) | 0x7f)), \
+             mock.patch.object(static.source,"_tick",return_value=444):
+            self.assertTrue(s._wait_one(pid))
+        first = task.entry_replay_records(self.o)
+        binding,authorization,observed,transition = (json.loads(first[k]) for k in ("binding","authorization","exec","transition"))
+        self.assertEqual(binding,self.intake._record)
+        self.assertEqual(authorization,auth)
+        self.assertEqual(transition["exec_digest"],canonical_digest(observed))
+        self.assertEqual(transition["stop_digest"],canonical_digest(s.pending_events[-1]))
+        self.assertEqual(observed["authorization_digest"],canonical_digest(auth))
+        first.clear()
+        self.assertEqual(len(task.entry_replay_records(self.o)),4)
 
     def test_substituted_node_argv_or_worker_generation_cannot_reach_release(self):
         for field in ("substituted_exe","argv","start_ticks","invocation_id"):

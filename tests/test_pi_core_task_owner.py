@@ -102,7 +102,7 @@ class TaskOwnerTests(TestCase):
         with self.assertRaisesRegex(ValueError, "already claimed"):
             with self.claim(): self.fail("retry")
 
-    def test_gate_brackets_publication_and_absent_authorization_blocks_release(self):
+    def test_gate_brackets_publication_and_authorization_alone_cannot_release(self):
         events = []
         def first(intake, *, deadline):
             self.assertIs(intake,self.intake)
@@ -113,15 +113,33 @@ class TaskOwnerTests(TestCase):
         self.order.side_effect = first
         self.publish.side_effect = lambda *_: (events.append("publish") or self.publish.return_value)
         self.stops.published.side_effect = lambda: events.append("published")
-        self.stops.require_authorized.side_effect = ValueError("no ordered stops")
+        self.stops.require_node_observed.side_effect = ValueError("Node exec not observed")
         with self.claim() as held:
             self.assertEqual(events,["first","publish","published"])
-            with self.assertRaisesRegex(ValueError,"no ordered stops"): self.handoff(held)
-            self.stops.require_authorized.assert_called_once_with(self.source)
+            held.observe_final_gate_stop()
+            held.authorize_node_transition(self.source)
+            self.stops.authorize.assert_called_once_with(self.source)
+            with self.assertRaisesRegex(ValueError,"Node exec not observed"): self.handoff(held)
+            self.stops.require_node_observed.assert_called_once_with(self.source)
             self.intake.require_active.assert_not_called()
             self.health.assert_not_called()
             self.sender.assert_not_called()
         self.stops.close.assert_called()
+
+    def test_node_observation_loses_custody_before_returning_receipt(self):
+        with self.claim() as held:
+            held.observe_final_gate_stop()
+            held.authorize_node_transition(self.source)
+            def replaced(_):
+                self.channels.side_effect = ValueError("channel replaced at exec")
+                return {"receipt":"must not escape"}
+            self.stops.observe_node_exec.side_effect = replaced
+            with self.assertRaisesRegex(ValueError,"channel replaced at exec"): held.observe_node_exec(self.source)
+            self.stops.observe_node_exec.assert_called_once_with(self.source)
+            self.stops.close.assert_called()
+            with self.assertRaises(ValueError): self.handoff(held)
+            self.health.assert_not_called()
+            self.sender.assert_not_called()
 
     def test_pre_exec_readback_checks_original_channel_custody_before_returning(self):
         with self.claim() as held:

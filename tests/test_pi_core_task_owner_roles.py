@@ -1,6 +1,7 @@
 """Held task generations. All role, unit and kernel observations are inert fixtures."""
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
+from io import BytesIO
 import json
 from pathlib import Path
 from unittest import TestCase, mock
@@ -135,9 +136,9 @@ class OwnerRolesTests(TestCase):
             patch(binding.native.process,"require_live_pidfd",poll)
             patch(roles.kernel,"_role",lambda _,root,pid,m:(pid,pid))
             patch(roles.kernel,"_magic",lambda _,pid,*args:exe[pid])
-            patch(roles.kernel,"_proc_child",lambda _,pid,*args:pid)
+            patch(roles.kernel,"_proc_child",lambda _,pid,name,*args:BytesIO(argv[pid]) if name=="cmdline" else pid)
             patch(roles,"_same_file",lambda a,b:a==b)
-            patch(roles.os,"read",lambda pid,limit:argv[pid][:limit])
+            patch(roles.os,"read",BytesIO.read)
             patch(roles,"_view",lambda _,pid,path:path)
             patch(roles.sources,"_hash",lambda path,*args:(pins[path],{}))
             patch(binding,"_service_code",lambda *args:code)

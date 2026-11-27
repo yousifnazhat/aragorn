@@ -91,6 +91,8 @@ def _executable(stack, pfd, mount, candidates, deadline):
     cmd = kernel._proc_child(stack,pfd,"cmdline",os.O_RDONLY,mount)
     raw = os.read(cmd, max(len(argv) for _,argv in candidates)+1)
     _need(any(_same_file(fd, exe) and raw == argv for fd,argv in candidates), "unexpected role executable or arguments")
+    _need(not os.read(cmd,1), "trailing role arguments")
+    return raw
 
 
 @contextmanager

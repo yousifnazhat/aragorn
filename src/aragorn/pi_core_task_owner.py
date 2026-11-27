@@ -87,12 +87,15 @@ class _Task:
     def authorize_node_transition(self, observer):
         return self._gate_step(self._gates.authorize,observer)
 
+    def observe_node_exec(self, observer):
+        return self._gate_step(self._gates.observe_node_exec,observer)
+
     def guard(self):
         """Use for the release and the service's repeated authenticated OBSERVE requests."""
         _need(self._phase in ("RELEASING","RELEASED","MEASURING","RETAINED"),"task owner not active")
         try:
             self._custody()
-            self._gates.require_authorized(self._source)
+            self._gates.require_node_observed(self._source)
             self._roles.guard(stopped=False)
             self._source_binding.require_active(self._source)
             guard_task_health(self._t,source_observer=self._source,activation=self._activation,

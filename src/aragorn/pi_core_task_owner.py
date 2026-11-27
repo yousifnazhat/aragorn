@@ -12,6 +12,7 @@ from .pi_core_coordinator_entry import _Inputs
 from .pi_core_identity_handoff import validate_deadline
 from .pi_core_state_admission import _keys, _need, _pin, _same
 from .pi_core_state_mounts import direct_mount_inventory
+from .pi_core_task_gate_order import GateStops
 from .pi_core_task_owner_copy import _same_description, check_source_fd, resolve_service_copy
 from .pi_core_task_owner_health import guard_task_health
 from .pi_core_task_owner_roles import hold_stopped_roles
@@ -54,11 +55,12 @@ def _send_release(*args, **kwargs):
 
 
 class _Task:
-    def __init__(self, scope, ticket, nomination, deadline, roles, custody, service_listener, source_binding):
+    def __init__(self, scope, ticket, nomination, deadline, roles, custody, service_listener, source_binding, gates):
         self._scope, self._t, self._n, self._deadline = scope,ticket,nomination,deadline
         self._roles, self._custody = roles,custody
         self._listener = service_listener
         self._source_binding = source_binding
+        self._gates = gates
         self._phase, self._directory = "CLAIMED", None
 
     @property
@@ -67,11 +69,30 @@ class _Task:
         self._custody()
         return self._source_binding
 
+    def _gate_step(self, step, *args):
+        _need(self._phase == "CLAIMED","task gate outside claimed lifetime")
+        try:
+            self._custody()
+            result = step(*args)
+            self._custody()
+            return result
+        except BaseException:
+            self._phase = "FAILED"
+            self._gates.close()
+            raise
+
+    def observe_final_gate_stop(self):
+        self._gate_step(self._gates.final)
+
+    def authorize_node_transition(self, observer):
+        return self._gate_step(self._gates.authorize,observer)
+
     def guard(self):
         """Use for the release and the service's repeated authenticated OBSERVE requests."""
         _need(self._phase in ("RELEASING","RELEASED","MEASURING","RETAINED"),"task owner not active")
         try:
             self._custody()
+            self._gates.require_authorized(self._source)
             self._roles.guard(stopped=False)
             self._source_binding.require_active(self._source)
             guard_task_health(self._t,source_observer=self._source,activation=self._activation,
@@ -170,6 +191,8 @@ def hold_task_owner(*, inputs, release_pin, ticket, nomination, publish):
         source_binding = scope.enter_context(bind_task_source_observer(roles,claim_raw=claim_raw,deadline=deadline))
         custody()
         roles.guard(stopped=True)
+        gates = GateStops(source_binding,deadline=deadline)
+        scope.callback(gates.close)
         # Only the manager's held task namespace supplies this one-shot publisher.
         listeners, channel_guard = publish(t["pi_peer"][2],t["service_peer"][2])
         def joined():
@@ -177,7 +200,9 @@ def hold_task_owner(*, inputs, release_pin, ticket, nomination, publish):
             channel_guard()
         joined()
         roles.guard(stopped=True)
-        handle = _Task(scope,t,n,deadline,roles,joined,listeners["service.sock"],source_binding)
+        gates.published()
+        joined()
+        handle = _Task(scope,t,n,deadline,roles,joined,listeners["service.sock"],source_binding,gates)
         try:
             yield handle
         finally:

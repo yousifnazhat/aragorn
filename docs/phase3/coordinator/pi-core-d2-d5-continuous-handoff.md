@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [ordered stops on the packaged static gate](pi-core-static-gate-stops.md).**
+The task owner now distinguishes the first stop from the final pre-Node stop on its original
+worker. Service release requires that order and a fresh final-stop read by the same worker's
+tracer. No tracer or worker was started. Next: connect that boundary to the static worker's
+actual exec-stop, source reads and retirement; keep the instrumented-health hold.
+
 **D3 — [source observer bound to the packaged static worker](pi-core-static-task-source-binding.md).**
 The task owner supplies its spent claim and original role handles to the native observer intake.
 The resulting stopped-worker binding is not an attached tracer, consumed-source record or healthy sensor.

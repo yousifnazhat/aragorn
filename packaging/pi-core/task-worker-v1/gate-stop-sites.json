@@ -1,0 +1,10 @@
+{
+  "schema": "aragorn/fixed-task-gate-stop-sites/v1",
+  "gate_sha256": "2a54fd7f91e1349ceecad3ac27ec6d111230c1913f4030ae91a67fa4210cab7a",
+  "rx_segment": {"offset": 836, "vaddr": 2163524, "size": 2064, "align": 65536},
+  "first_return_pc": 2164004,
+  "fixed_view_call_pc": 2164012,
+  "fixed_view_entry": 2164084,
+  "final_return_pc": 2164044,
+  "execve_svc_pc": 2164076
+}

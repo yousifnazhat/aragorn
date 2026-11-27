@@ -9,7 +9,7 @@ from .pi_core_state_admission import _keys, _need, _same
 from .pi_core_worker_identity import validate_activation
 
 
-def guard_task_health(ticket, *, source_observer, activation, worker, deadline):
+def guard_task_health(ticket, *, source_observer, activation, worker, deadline, custody=None):
     """Require a fresh live challenge for this claimed worker; return its original evidence.
 
     The caller supplies the stopped-role record and separately guards the observed
@@ -34,7 +34,9 @@ def guard_task_health(ticket, *, source_observer, activation, worker, deadline):
     _same(capture["worker"], worker | {"cgroup":a["cgroup"]}, "health belongs to another worker invocation")
     _same(boundary["clock"], ticket["clock"], "health belongs to another boot or time namespace")
     _need(issued <= boundary["challenge"]["issued_ns"], "replayed source challenge")
-    # Validation itself consumes freshness; use the same 200 ms maximum as the source reader.
+    if custody is not None:
+        custody()
+    # Custody readback also consumes freshness. Do not extend the source reader's window.
     _need(0 <= source._tick() - capture["events"][-1]["boottime_ns"] <= 200_000_000 and
           time.monotonic_ns() < a["expires_at_monotonic_ns"], "task health expired during validation")
     validate_deadline(deadline)

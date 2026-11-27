@@ -51,6 +51,21 @@ class TaskHealthTests(unittest.TestCase):
             with self.subTest(times=times), self.assertRaises((ValueError, RuntimeError)):
                 self.check(record, **times)
 
+    def test_custody_read_cannot_extend_health_freshness(self):
+        now = self.last["issued_ns"]
+        def observed(*args, **kwargs):
+            nonlocal now
+            now = self.last["boottime_ns"]
+            return self.capture
+        def acknowledge():
+            nonlocal now
+            now = self.last["boottime_ns"]+200_000_001
+        with patch.object(source,"_tick",side_effect=lambda:now), \
+                patch.object(source.PiSourceObserver,"guard_source_health",side_effect=observed), \
+                self.assertRaisesRegex(ValueError,"expired during validation"):
+            health.guard_task_health(self.ticket,source_observer=self.observer,activation=self.activation,
+                worker=self.worker,deadline=time.monotonic()+2,custody=acknowledge)
+
     def test_foreign_stopped_generation_clock_or_deployment_refuses(self):
         for mapping, key, value in ((self.worker,"start_ticks",self.worker["start_ticks"]+1),
                                     (self.worker,"invocation_id","b"*32),

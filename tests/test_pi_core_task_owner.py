@@ -39,6 +39,9 @@ class TaskOwnerTests(TestCase):
         self.order = self.enterContext(mock.patch.object(owner,"GateStops",autospec=True))
         self.stops = self.order.return_value
         self.install = self.enterContext(mock.patch.object(owner,"install_task_exec_handler",create=True))
+        self.factory = self.enterContext(mock.patch.object(owner,"StaticTracerLifetime",create=True))
+        self.life = self.factory.return_value
+        self.life.require_active.side_effect = self.intake.require_active
 
     def nominate(self):
         t = self.ticket
@@ -67,6 +70,22 @@ class TaskOwnerTests(TestCase):
 
     def measure(self, held):
         return held.measure(self.ticket["request"], lambda _:1, pi=object(), witness=object(), retain=lambda _:None)
+
+    def test_original_lifetime_is_revoked_on_custody_loss_before_service_handoff(self):
+        with self.claim() as held:
+            self.factory.assert_called_once_with(self.intake,deadline=self.inputs.deadline)
+            self.assertIs(held.bind_static_tracer(),self.life.bind.return_value)
+            held.observe_final_gate_stop()
+            held.authorize_node_transition(self.source)
+            self.life.require_traced.assert_called_once_with(self.source)
+            self.life.require_active.side_effect = ValueError("original tracer changed")
+            with self.assertRaisesRegex(ValueError,"original tracer changed"):
+                self.handoff(held)
+            self.life.require_active.side_effect = None
+            with self.assertRaises(ValueError): self.handoff(held)
+        self.life.retire.assert_called()
+        self.health.assert_not_called()
+        self.sender.assert_not_called()
 
     def test_stopped_roles_written_to_one_permanent_slot_before_release(self):
         with self.claim() as held:
@@ -180,6 +199,51 @@ class TaskOwnerTests(TestCase):
             self.intake.require_active.assert_called_once_with(self.source)
             self.health.assert_not_called()
             self.sender.assert_not_called()
+
+    def test_retention_uses_owned_observation_and_prevents_release_during_terminal_check(self):
+        destination = dict(store=self.store.root,receipt_directory=self.store.root/"receipts",
+                           expected_roots=[{"ino":9},{"ino":8}])
+        receipt,terminal = canonical_digest("private raw"),canonical_digest("private terminal")
+        self.life.binding_digest = canonical_digest("binding")
+        self.source = self.intake.observer = mock.Mock()
+        self.source.observation = {"schema":"original snapshot"}
+        self.stops.replay_records.return_value = {"binding":canonical_json("binding")}
+        self.install.return_value.consumed.return_value = {"schema":"bound exec"}
+        self.held.record["worker"]["cgroup"] = "/system.slice/aragorn-pi-task-worker.service"
+        expected = dict(expected_bindings={"deployment_digest":self.ticket["request"]["deployment_digest"]},
+                        expected_clock=self.ticket["clock"],expected_worker=self.held.record["worker"])
+        with self.claim() as held, mock.patch.object(owner,"retain_task_trace",create=True,return_value=receipt) as keep, \
+                mock.patch.object(owner,"seal_retired_trace",create=True) as seal:
+            held.bind_static_tracer()
+            held.authorize_node_transition(self.source)
+            def retain(**fields):
+                fields["guard"]()
+                with self.assertRaises(ValueError): self.handoff(held)
+                return receipt
+            keep.side_effect = retain
+            pin = held.retain_entry_trace(self.source,**destination,replay_inputs=expected)
+            self.assertEqual(pin,receipt)
+            self.assertEqual(keep.call_args.kwargs["observation_raw"],canonical_json(self.source.observation))
+            def terminal_check(**fields):
+                self.assertIs(fields["lifetime"],self.life)
+                self.assertEqual(fields["receipt_digest"],pin)
+                with self.assertRaises(ValueError): self.handoff(held)
+                return terminal
+            seal.side_effect = terminal_check
+            self.assertEqual(held.retire_entry_trace(),terminal)
+            with self.assertRaises(ValueError): held.retire_entry_trace()
+            self.sender.assert_not_called()
+        self.life.retire.assert_called()
+
+    def test_custody_loss_during_health_prevents_the_first_service_byte(self):
+        self.life.require_active.side_effect = [None,ValueError("tracer changed during health")]
+        self.health.side_effect = lambda *args, **kwargs:kwargs["custody"]()
+        with self.claim() as held:
+            with self.assertRaisesRegex(ValueError,"changed during health"):
+                self.handoff(held)
+            with self.assertRaises(ValueError): self.handoff(held)
+        self.health.assert_called_once()
+        self.sender.assert_not_called()
 
     def test_health_is_rechecked_after_collector_mark_before_first_manager_byte(self):
         self.dispatch.side_effect = self.real_measure

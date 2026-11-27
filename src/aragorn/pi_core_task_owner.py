@@ -3,6 +3,7 @@ from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 import os
 from pathlib import Path
+from threading import Lock
 
 from . import pi_core_mask_capture_release as ledger, pi_core_task_guest_binding as guest, pi_core_task_service as task
 from .cas import CAS
@@ -16,8 +17,11 @@ from .pi_core_task_gate_order import GateStops
 from .pi_core_task_exec_event import install_task_exec_handler
 from .pi_core_task_owner_copy import _same_description, check_source_fd, resolve_service_copy
 from .pi_core_task_owner_health import guard_task_health
-from .pi_core_task_owner_roles import hold_stopped_roles
+from .pi_core_task_owner_roles import WORKER, hold_stopped_roles
 from .pi_core_task_static_source import bind_task_source_observer
+from .pi_core_task_tracer_lifetime import StaticTracerLifetime
+from .pi_core_task_trace_store import retain_task_trace
+from .pi_core_task_retired_trace import seal_retired_trace
 
 
 RELEASE = Path("/etc/aragorn/approvals/fixed-task-owner.json")
@@ -56,14 +60,23 @@ def _send_release(*args, **kwargs):
 
 
 class _Task:
-    def __init__(self, scope, ticket, nomination, deadline, roles, custody, service_listener, source_binding, gates):
+    def __init__(self, scope, ticket, nomination, deadline, roles, custody, service_listener, source_binding, gates, lifetime):
         self._scope, self._t, self._n, self._deadline = scope,ticket,nomination,deadline
         self._roles, self._custody = roles,custody
         self._listener = service_listener
         self._source_binding = source_binding
         self._gates = gates
+        self._lifetime, self._archive = lifetime, None
+        self._phase_lock = Lock()
         self._exec_handler = None
         self._phase, self._directory = "CLAIMED", None
+
+    def _move(self, allowed, dest):
+        with self._phase_lock:
+            old = self._phase
+            _need(old in allowed,"task owner operation unavailable or already spent")
+            self._phase = dest
+            return old
 
     @property
     def source_binding(self):
@@ -79,15 +92,18 @@ class _Task:
             self._custody()
             return result
         except BaseException:
-            self._phase = "FAILED"
-            self._gates.close()
+            self.refuse_node_exec()
             raise
+
+    def bind_static_tracer(self):
+        return self._gate_step(self._lifetime.bind)
 
     def observe_final_gate_stop(self):
         self._gate_step(self._gates.final)
 
     def authorize_node_transition(self, observer):
         def authorize():
+            self._lifetime.require_traced(observer)
             proof = self._gates.authorize(observer)
             self._exec_handler = install_task_exec_handler(self,observer)
             return proof
@@ -97,13 +113,15 @@ class _Task:
         return self._gate_step(self._gates.observe_node_exec,observer)
 
     def refuse_node_exec(self):
+        with self._phase_lock:
+            if self._phase != "CLOSED":
+                self._phase = "FAILED"
         self._gates.close()
-        if self._phase != "CLOSED":
-            self._phase = "FAILED"
+        self._lifetime.retire()
 
     def entry_replay_records(self, observer):
         """Return detached originals for private retention, not an active health receipt."""
-        _need(self._phase in ("CLAIMED","RELEASED","RETAINED"),"task evidence outside held lifetime")
+        _need(self._phase in ("CLAIMED","RELEASED","RETAINED","ARCHIVING"),"task evidence outside held lifetime")
         try:
             self._custody()
             _need(self._exec_handler is not None,"static exec handler not installed")
@@ -115,6 +133,52 @@ class _Task:
             self.refuse_node_exec()
             raise
 
+    def retain_entry_trace(self, observer, *, store, receipt_directory, expected_roots, replay_inputs):
+        prior = self._move(("CLAIMED","RELEASED","RETAINED"),"ARCHIVING")
+        try:
+            _need(self._archive is None,"entry trace already retained")
+            destination = dict(store=store,receipt_directory=receipt_directory,expected_roots=deepcopy(expected_roots))
+            def active():
+                _need(self._phase=="ARCHIVING","trace publication lost custody")
+                self._custody()
+                self._lifetime.require_active(observer)
+            active()
+            _same([replay_inputs["expected_worker"],replay_inputs["expected_clock"],
+                   replay_inputs["expected_bindings"]["deployment_digest"]],
+                  [self._roles.record["worker"]|{"cgroup":"/system.slice/"+WORKER},self._t["clock"],
+                   self._t["request"]["deployment_digest"]],"different fixed-task replay nomination")
+            records = self.entry_replay_records(observer)
+            binding = self._lifetime.binding_digest
+            _need(ledger.custody._digest(records["binding"])==binding,"different original tracer binding")
+            raw = canonical_json(observer.observation)
+            receipt = retain_task_trace(**destination,records=records,observation_raw=raw,
+                deadline=self._deadline,guard=active,replay_inputs=replay_inputs)
+            active()
+            self._archive = (destination,binding,receipt)
+            self._move(("ARCHIVING",),prior)
+            return receipt
+        except BaseException:
+            self.refuse_node_exec()
+            raise
+
+    def retire_entry_trace(self):
+        _need(self._archive is not None,"verified private trace required before retirement")
+        self._move(("CLAIMED","RELEASED","RETAINED"),"RETIRING")
+        try:
+            self._gates.close()
+            self._custody()
+            destination,binding,receipt = self._archive
+            pin = seal_retired_trace(**destination,binding_digest=binding,receipt_digest=receipt,
+                                     lifetime=self._lifetime,deadline=self._deadline)
+            self._custody()
+            self._move(("RETIRING",),"RETIRED")
+            return pin
+        except BaseException:
+            self.refuse_node_exec()
+            raise
+        finally:
+            self._lifetime.retire()
+
     def guard(self):
         """Use for the release and the service's repeated authenticated OBSERVE requests."""
         _need(self._phase in ("RELEASING","RELEASED","MEASURING","RETAINED"),"task owner not active")
@@ -124,17 +188,19 @@ class _Task:
             _need(self._exec_handler is not None,"static exec handler not installed")
             self._exec_handler.consumed(self._source)
             self._roles.guard(stopped=False)
-            self._source_binding.require_active(self._source)
+            self._lifetime.require_active(self._source)
+            def custody():
+                self._lifetime.require_active(self._source)
+                self._custody()
             guard_task_health(self._t,source_observer=self._source,activation=self._activation,
-                              worker=self._roles.record["worker"],deadline=self._deadline)
+                              worker=self._roles.record["worker"],deadline=self._deadline,custody=custody)
             return self._t["environment_digest"]
         except BaseException:
-            self._phase = "FAILED"
+            self.refuse_node_exec()
             raise
 
     def release(self, *, control, directory_fd, source_observer, activation):
-        _need(self._phase == "CLAIMED","task release unavailable or already spent")
-        self._phase = "RELEASING"
+        self._move(("CLAIMED",),"RELEASING")
         try:
             self._source, self._activation = source_observer, deepcopy(activation)
             self.guard()
@@ -146,14 +212,13 @@ class _Task:
             _send_release(control,ticket=self._t,ticket_pin=canonical_digest(self._t),nomination=self._n,
                 nomination_pin=self._t["environment_digest"],service_listener=self._listener,
                 copy_directory_fd=self._directory,deadline=self._deadline,guard=self.guard)
-            self._phase = "RELEASED"
+            self._move(("RELEASING",),"RELEASED")
         except BaseException:
-            self._phase = "FAILED"
+            self.refuse_node_exec()
             raise
 
     def measure(self, request, mark, *, pi, witness, retain):
-        _need(self._phase == "RELEASED","task dispatch unavailable or already spent")
-        self._phase = "MEASURING"
+        self._move(("RELEASED",),"MEASURING")
         try:
             self.guard()
             observer = None
@@ -175,10 +240,10 @@ class _Task:
                 return stamp
             receipt = task.measure_via_pi(request,boundary,ticket=self._t,ticket_pin=canonical_digest(self._t),pi=pi,
                 witness=witness,guard=self.guard,deadline=self._deadline,retain=retain,copy_observation=observer)
-            self._phase = "RETAINED"
+            self._move(("MEASURING",),"RETAINED")
             return receipt
         except BaseException:
-            self._phase = "FAILED"
+            self.refuse_node_exec()
             raise
 
 
@@ -221,6 +286,8 @@ def hold_task_owner(*, inputs, release_pin, ticket, nomination, publish):
         source_binding = scope.enter_context(bind_task_source_observer(roles,claim_raw=claim_raw,deadline=deadline))
         custody()
         roles.guard(stopped=True)
+        lifetime = StaticTracerLifetime(source_binding,deadline=deadline)
+        scope.callback(lifetime.retire)
         gates = GateStops(source_binding,deadline=deadline)
         scope.callback(gates.close)
         # Only the manager's held task namespace supplies this one-shot publisher.
@@ -232,8 +299,9 @@ def hold_task_owner(*, inputs, release_pin, ticket, nomination, publish):
         roles.guard(stopped=True)
         gates.published()
         joined()
-        handle = _Task(scope,t,n,deadline,roles,joined,listeners["service.sock"],source_binding,gates)
+        handle = _Task(scope,t,n,deadline,roles,joined,listeners["service.sock"],source_binding,gates,lifetime)
         try:
             yield handle
         finally:
-            handle._phase = "CLOSED"
+            with handle._phase_lock:
+                handle._phase = "CLOSED"

@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [static tracer custody, retirement and private replay](pi-core-static-tracer-retirement.md).**
+The owner now distinguishes a bound session, a terminal worker observation, and a verified
+private trace. Release still requires fresh custody and worker health. Original descriptors
+are not needed for subsequent evidence replay. Checked offline only; acquiring the Node
+reads, challenge and loss evidence on that worker is the next open step.
+
 **D3 — [check exec before consumption; replay full task entrypoint reads](pi-core-static-entry-replay.md).**
 The static owner's authorized wait handler checks its pending exec before consuming it and binds
 the original consumed stop to the receipt. Independent replay requires complete read coverage of

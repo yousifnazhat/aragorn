@@ -52,6 +52,9 @@ class _StaticWorker:
         return self.guard(phase="node-stop",deadline=deadline)
 
     def guard(self, *, phase, deadline):
+        return self._guard(phase=phase,deadline=deadline,tracer_tid=threading.get_native_id())
+
+    def _guard(self, *, phase, deadline, tracer_tid):
         def custody():
             validate_deadline(deadline)
             _need(self._read is not None and self._holder._read is self._read and
@@ -60,7 +63,7 @@ class _StaticWorker:
         custody()
         _need(phase in ("stopped","traced-gate","node","node-stop"), "unknown observer phase")
         worker, clock = self.worker, self.clock
-        pid, tid = worker["pid"], threading.get_native_id()
+        pid, tid = worker["pid"], tracer_tid
         is_node = phase in ("node","node-stop")
         path = str(roles.sources.NODE_PATH if is_node else roles.sources.GATE_PATH)
         argv = roles._NODE_ARGV if is_node else roles._GATE_ARGV

@@ -9,6 +9,7 @@ from unittest import TestCase, mock
 from aragorn import pi_core_task_gate_order as order, pi_core_task_static_source as static
 from aragorn import pi_core_task_owner_roles as roles
 from aragorn.pi_core_task_owner import _Task
+from aragorn import pi_core_task_tracer_lifetime as lifetime
 from aragorn.pi_core_node_source_observer import _NodeSession
 from aragorn.oci_worker_protocol import canonical_digest
 from tests import test_pi_core_task_gate_stop_reader as fixtures
@@ -51,7 +52,7 @@ class GateOrderTests(TestCase):
     def test_first_then_final_and_fresh_tracer_readback_authorize_exact_node_once(self):
         g = self.first()
         g.published()
-        held = _Task(None,{},None,self.f.until,None,lambda:None,None,self.intake,g)
+        held = _Task(None,{},None,self.f.until,None,lambda:None,None,self.intake,g,mock.Mock())
         self.final_site()
         held.observe_final_gate_stop()
         self.armed()
@@ -137,9 +138,19 @@ class GateOrderTests(TestCase):
             self.f.syscall if name=="syscall" else self.f.maps if name=="maps" else read(fd,name,*args)))
         self.intake = static._Intake(worker,{"ticket_digest":canonical_digest("original ticket")},self.f.until)
         self.o = self.intake.observer
-        g = self.complete()
+        self.enterContext(mock.patch.object(lifetime,"_same_description",side_effect=lambda pid,a,b:
+            pid==os.getpid() and os.path.samestat(os.fstat(a),os.fstat(b))))
+        life = lifetime.StaticTracerLifetime(self.intake,deadline=self.f.until)
+        self.addCleanup(life.retire)
+        g = self.first()
+        g.published()
+        task = _Task(None,{},None,self.f.until,None,lambda:None,None,self.intake,g,life)
+        self.final_site()
+        task.observe_final_gate_stop()
+        session = task.bind_static_tracer()
+        self.assertIs(session.observer,self.o)
         b.state,b.tracer = "t",threading.get_native_id()
-        kernel = self.o._kernel = object.__new__(static.source._Kernel)
+        kernel = object.__new__(static.source._Kernel)
         kernel.message = mock.Mock(return_value=worker.worker["pid"])
         bound = self.intake._record
         pin = bound["files"][str(roles.sources.NODE_PATH)]
@@ -151,8 +162,8 @@ class GateOrderTests(TestCase):
         wait = mock.Mock(return_value=siginfo)
         self.enterContext(mock.patch.multiple(os,create=True,waitid=wait,P_PIDFD=3,WNOWAIT=0x01000000,
                                               WNOHANG=1,WSTOPPED=2,CLD_TRAPPED=4))
-        task = _Task(None,{},None,self.f.until,None,lambda:None,None,self.intake,g)
-        authorization = task.authorize_node_transition(self.o)
+        with mock.patch.object(lifetime,"_Kernel",return_value=kernel):
+            authorization = task.authorize_node_transition(self.o)
         b.exe,b.argv = str(roles.sources.NODE_PATH),roles._NODE_ARGV
         return g,task,identity,siginfo,wait,authorization
 

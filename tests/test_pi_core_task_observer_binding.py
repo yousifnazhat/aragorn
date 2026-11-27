@@ -28,10 +28,12 @@ class StaticWorkerBindingTests(TestCase):
             return f.fileno()
         self.pidfd,self.proc = file("pidfd"),file("proc")
         self.paths = {p:file(str(i)) for i,p in enumerate(roles._WORKER_PINS)}
+        self.cmd = file("cmdline")
         self.metadata = {p:roles.sources._file_identity(os.fstat(fd)) for p,fd in self.paths.items()}
         self.read.observer_fds = self.pidfd,self.proc,44,self.paths,self.metadata
         self.peer = self.worker.copy()
         self.tracer,self.state,self.exe,self.argv = 0,"T",str(roles.sources.GATE_PATH),roles._GATE_ARGV
+        self.threads = 1
         self.cg = ("0::/system.slice/"+roles.WORKER+"\n").encode()
         def show(*_):
             row=roles.binding._active(roles.WORKER,self.peer["pid"],self.peer["invocation_id"],roles.WORKER_UNIT)
@@ -39,11 +41,14 @@ class StaticWorkerBindingTests(TestCase):
         def raw(proc,name,*_):
             if name=="cgroup": return self.cg
             w = self.peer
-            stat,status=subject(w["pid"],w["uid"],w["gid"],w["start_ticks"],self.state,tracer=self.tracer)
+            stat,status=subject(w["pid"],w["uid"],w["gid"],w["start_ticks"],self.state,self.threads,self.tracer)
             return stat if name=="stat" else status
-        def check_exe(stack, proc, mid, candidates, deadline):
-            if not any(os.path.samestat(os.fstat(self.paths[self.exe]),os.fstat(fd)) and self.argv==argv
-                       for fd,argv in candidates): raise ValueError("unexpected executable or arguments")
+        def cmdline(_stack, _proc, name, *_):
+            self.assertEqual(name,"cmdline")
+            os.ftruncate(self.cmd,0)
+            os.pwrite(self.cmd,self.argv,0)
+            os.lseek(self.cmd,0,os.SEEK_SET)
+            return self.cmd
         def patch(o,k,fn):
             self.enterContext(mock.patch.object(o,k,fn))
         patch(roles.kernel,"_platform",lambda:None)
@@ -54,7 +59,8 @@ class StaticWorkerBindingTests(TestCase):
         patch(roles.sensor,"_boot_id",lambda *_:self.clock["boot_id"])
         patch(roles.sensor,"_namespace",lambda *_:self.clock["time_namespace_inode"])
         patch(roles,"_view",lambda _s,_pid,p:self.paths[p])
-        patch(roles,"_executable",check_exe)
+        patch(roles.kernel,"_magic",lambda _stack,_proc,name,*_: self.paths[self.exe] if name=="exe" else self.fail(name))
+        patch(roles.kernel,"_proc_child",cmdline)
         patch(roles.sources,"_protected_file",lambda fd,_:roles.sources._file_identity(os.fstat(fd)))
         self.real_live = binding._live
         self.live = mock.Mock()
@@ -111,6 +117,27 @@ class StaticWorkerBindingTests(TestCase):
             for wrong in (b"Pid:\t504\n", b"Pid:\t502\nPid:\t502\n", b"NSpid:\t502\n"):
                 read.return_value = wrong
                 with self.assertRaisesRegex(ValueError,"borrowed pidfd"): self.real_live(22,502,90,44,self.until)
+
+    def test_only_original_singleton_node_identity_argv_and_generation_are_observed(self):
+        with self.hold() as worker:
+            node = str(roles.sources.NODE_PATH)
+            self.exe,self.argv,self.state,self.tracer = node,roles._NODE_ARGV,"t",roles.threading.get_native_id()
+            record = worker.read_node_stop(deadline=self.until)
+            self.assertEqual(record,dict(worker=worker.worker,clock=worker.clock,tracer_tid=self.tracer,
+                node_identity=self.metadata[node],node_digest=roles._WORKER_PINS[node][0],node_argv_hex=self.argv.hex()))
+            for key,changed in (("exe",str(roles.sources.GATE_PATH)),("argv",self.argv+b"extra\0"),
+                                ("argv",self.argv[:-1]),("threads",2),("state","S"),("tracer",self.tracer+1)):
+                with self.subTest(key=key),mock.patch.object(self,key,changed),self.assertRaises(ValueError):
+                    worker.read_node_stop(deadline=self.until)
+            for changed in (dict(start_ticks=970),dict(invocation_id="f"*32)):
+                with self.subTest(generation=changed),mock.patch.dict(self.peer,changed),self.assertRaises(ValueError):
+                    worker.read_node_stop(deadline=self.until)
+            # A short first read can look exactly right even when more argv bytes remain.
+            self.argv += b"unexpected\0"
+            read = os.read
+            with mock.patch.object(os,"read",side_effect=lambda fd,n:read(fd,min(n,len(roles._NODE_ARGV)))), \
+                    self.assertRaisesRegex(ValueError,"trailing role arguments"):
+                worker.read_node_stop(deadline=self.until)
 
     def test_wrong_kernel_clock_or_owner_closing_during_read_cannot_match(self):
         with self.hold() as worker:

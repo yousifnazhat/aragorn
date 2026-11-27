@@ -47,6 +47,10 @@ class _StaticWorker:
     def clock(self):
         return dict(self._record["clock"])
 
+    def read_node_stop(self, *, deadline):
+        """Observe Node identity in tracing-stop, not the event that caused the stop."""
+        return self.guard(phase="node-stop",deadline=deadline)
+
     def guard(self, *, phase, deadline):
         def custody():
             validate_deadline(deadline)
@@ -54,11 +58,12 @@ class _StaticWorker:
                   self._holder._owner[0] == os.getpid() and os.geteuid() == os.getegid() == 0 and
                   deadline <= self._deadline, "closed, transferred, or expired static observer binding")
         custody()
-        _need(phase in ("stopped","traced-gate","node"), "unknown observer phase")
+        _need(phase in ("stopped","traced-gate","node","node-stop"), "unknown observer phase")
         worker, clock = self.worker, self.clock
         pid, tid = worker["pid"], threading.get_native_id()
-        path = str(roles.sources.NODE_PATH if phase=="node" else roles.sources.GATE_PATH)
-        argv = roles._NODE_ARGV if phase=="node" else roles._GATE_ARGV
+        is_node = phase in ("node","node-stop")
+        path = str(roles.sources.NODE_PATH if is_node else roles.sources.GATE_PATH)
+        argv = roles._NODE_ARGV if is_node else roles._GATE_ARGV
         with ExitStack() as stack:
             root, mount = roles.kernel._proc(stack)
             _need(mount == self._mount, "different procfs mount")
@@ -75,9 +80,9 @@ class _StaticWorker:
                 if phase != "stopped":
                     _need(re.search(rb"^TracerPid:[ \t]+"+str(tid).encode()+rb"$",status,re.M),
                           "current observer does not trace this worker")
-                    if phase == "traced-gate":
+                    if phase in ("traced-gate","node-stop"):
                         _,_,states,threads,_ = roles.kernel._parse_subject(stat,status,pid)
-                        _need(states == ("t","t") and threads == 1, "not the stopped traced singleton gate")
+                        _need(states == ("t","t") and threads == 1, "not a stopped traced singleton")
             generation()
             roles._bound_unit(roles.WORKER,pid,worker["invocation_id"],
                 roles.kernel._read(self._proc,"cgroup",8192,mount,deadline),roles.binding._unit_show(roles.WORKER,deadline))
@@ -88,10 +93,15 @@ class _StaticWorker:
                 named = roles._view(stack,1 if p==roles.WORKER_UNIT else pid,p)
                 _need(roles._same_file(named,fd) and self._metadata[p] ==
                       roles.sources._protected_file(fd,roles._WORKER_PINS[p][1]), "packaged static code changed")
-            roles._executable(stack,self._proc,mount,[(self.files[path],argv)],deadline)
+            observed = roles._executable(stack,self._proc,mount,[(self.files[path],argv)],deadline)
             generation()
             _live(self.pidfd,pid,manager,mount,deadline)
             custody()
+            if phase == "node-stop":
+                identity = roles.sources._file_identity(os.fstat(self.files[path]))
+                _need(identity == self._metadata[path], "Node executable changed during stop readback")
+                return dict(worker=worker,clock=clock,tracer_tid=tid,node_identity=identity,
+                            node_digest=roles._WORKER_PINS[path][0],node_argv_hex=observed.hex())
 
 
 @contextmanager

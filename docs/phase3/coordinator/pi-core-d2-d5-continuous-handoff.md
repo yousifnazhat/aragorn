@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [observe the pinned Node exec-stop before task release](pi-core-static-task-node-exec.md).**
+Final-gate authorization alone no longer permits service release. The original tracer must
+observe the pending Node exec event, exact executable, argv and worker generation. This
+was checked offline. Next: call this boundary before the static tracer consumes that event,
+then independently account for reads of the pinned entrypoint; do not infer health from exec.
+
 **D3 — [ordered stops on the packaged static gate](pi-core-static-gate-stops.md).**
 The task owner now distinguishes the first stop from the final pre-Node stop on its original
 worker. Service release requires that order and a fresh final-stop read by the same worker's

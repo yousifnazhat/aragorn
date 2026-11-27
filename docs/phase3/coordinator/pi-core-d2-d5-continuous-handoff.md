@@ -8,6 +8,12 @@ decision. A single continuous campaign does not bypass the pilot/final-run gates
 
 ## 1. Verified starting point and sources of truth
 
+**D3 — [check exec before consumption; replay full task entrypoint reads](pi-core-static-entry-replay.md).**
+The static owner's authorized wait handler checks its pending exec before consuming it and binds
+the original consumed stop to the receipt. Independent replay requires complete read coverage of
+the same pinned file on the same worker. No guest trace was acquired. Next: connect the static
+session lifecycle and private capture/retirement path; keep the existing health and pilot holds.
+
 **D3 — [observe the pinned Node exec-stop before task release](pi-core-static-task-node-exec.md).**
 Final-gate authorization alone no longer permits service release. The original tracer must
 observe the pending Node exec event, exact executable, argv and worker generation. This

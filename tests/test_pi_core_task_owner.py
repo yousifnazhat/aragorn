@@ -38,6 +38,7 @@ class TaskOwnerTests(TestCase):
         self.bind = self.enterContext(mock.patch.object(owner,"bind_task_source_observer",return_value=nullcontext(self.intake)))
         self.order = self.enterContext(mock.patch.object(owner,"GateStops",autospec=True))
         self.stops = self.order.return_value
+        self.install = self.enterContext(mock.patch.object(owner,"install_task_exec_handler",create=True))
 
     def nominate(self):
         t = self.ticket
@@ -59,6 +60,8 @@ class TaskOwnerTests(TestCase):
                                     ticket=self.ticket, nomination=self.nom, publish=self.publish)
 
     def handoff(self, held, fd=None):
+        if held._phase == "CLAIMED" and held._exec_handler is None:
+            held.authorize_node_transition(self.source)
         held.release(control=object(), source_observer=self.source,
                      activation=self.activation, directory_fd=fd)
 
@@ -125,6 +128,18 @@ class TaskOwnerTests(TestCase):
             self.health.assert_not_called()
             self.sender.assert_not_called()
         self.stops.close.assert_called()
+
+    def test_passive_observation_without_consumption_cannot_release_or_export(self):
+        with self.claim() as held:
+            held.authorize_node_transition(self.source)
+            self.install.assert_called_once_with(held,self.source)
+            held.observe_node_exec(self.source)
+            self.install.return_value.consumed.side_effect = ValueError("exec not consumed")
+            with self.assertRaisesRegex(ValueError,"exec not consumed"):
+                held.entry_replay_records(self.source)
+            with self.assertRaises(ValueError): self.handoff(held)
+            self.health.assert_not_called()
+            self.sender.assert_not_called()
 
     def test_node_observation_loses_custody_before_returning_receipt(self):
         with self.claim() as held:

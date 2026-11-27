@@ -5,7 +5,7 @@ import os
 import signal
 import threading
 
-from .oci_worker_protocol import canonical_digest
+from .oci_worker_protocol import canonical_digest, canonical_json
 from .pi_core_identity_handoff import validate_deadline
 from .pi_core_source_observer import GATE_PATH, NODE_PATH, _Kernel
 from .pi_core_state_admission import _need, _same
@@ -79,6 +79,7 @@ class GateStops:
                          **deepcopy(self._rows))
             self._session, self._thread, self._kernel = observer._node_session,threading.current_thread(),observer._kernel
             self._authorization_digest = canonical_digest(proof)
+            self._authorization_raw = canonical_json(proof)
         return proof
 
     def _require_held(self, observer):
@@ -121,12 +122,18 @@ class GateStops:
             former = self._kernel.message(event["pid"])
             _need(former==event["pid"] and self._peek_exec()==event,"Node exec-stop changed or came from another thread")
             self._require_held(observer)
-            return dict(schema="aragorn/static-task-node-exec/v1",authorization_digest=self._authorization_digest,
-                        wait=event | {"former_tid":former},node=deepcopy(row))
+            proof = dict(schema="aragorn/static-task-node-exec/v1",authorization_digest=self._authorization_digest,
+                         wait=event | {"former_tid":former},node=deepcopy(row))
+            self._exec_raw = canonical_json(proof)
+            return proof
 
     def require_node_observed(self, observer):
         _need(self._state=="NODE_OBSERVED","Node exec-stop has not been observed")
         self._require_held(observer)
+
+    def replay_records(self, observer):
+        self.require_node_observed(observer)
+        return {"binding":canonical_json(self._bound),"authorization":self._authorization_raw,"exec":self._exec_raw}
 
     def close(self):
         self._closed = True

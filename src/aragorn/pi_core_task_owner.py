@@ -6,13 +6,14 @@ from pathlib import Path
 
 from . import pi_core_mask_capture_release as ledger, pi_core_task_guest_binding as guest, pi_core_task_service as task
 from .cas import CAS
-from .oci_worker_protocol import canonical_digest
+from .oci_worker_protocol import canonical_digest, canonical_json
 from .phase3_measurement_collector import _prepared_attempt_claim
 from .pi_core_coordinator_entry import _Inputs
 from .pi_core_identity_handoff import validate_deadline
 from .pi_core_state_admission import _keys, _need, _pin, _same
 from .pi_core_state_mounts import direct_mount_inventory
 from .pi_core_task_gate_order import GateStops
+from .pi_core_task_exec_event import install_task_exec_handler
 from .pi_core_task_owner_copy import _same_description, check_source_fd, resolve_service_copy
 from .pi_core_task_owner_health import guard_task_health
 from .pi_core_task_owner_roles import hold_stopped_roles
@@ -61,6 +62,7 @@ class _Task:
         self._listener = service_listener
         self._source_binding = source_binding
         self._gates = gates
+        self._exec_handler = None
         self._phase, self._directory = "CLAIMED", None
 
     @property
@@ -85,10 +87,33 @@ class _Task:
         self._gate_step(self._gates.final)
 
     def authorize_node_transition(self, observer):
-        return self._gate_step(self._gates.authorize,observer)
+        def authorize():
+            proof = self._gates.authorize(observer)
+            self._exec_handler = install_task_exec_handler(self,observer)
+            return proof
+        return self._gate_step(authorize)
 
     def observe_node_exec(self, observer):
         return self._gate_step(self._gates.observe_node_exec,observer)
+
+    def refuse_node_exec(self):
+        self._gates.close()
+        if self._phase != "CLOSED":
+            self._phase = "FAILED"
+
+    def entry_replay_records(self, observer):
+        """Return detached originals for private retention, not an active health receipt."""
+        _need(self._phase in ("CLAIMED","RELEASED","RETAINED"),"task evidence outside held lifetime")
+        try:
+            self._custody()
+            _need(self._exec_handler is not None,"static exec handler not installed")
+            link = self._exec_handler.consumed(observer)
+            records = self._gates.replay_records(observer)
+            self._custody()
+            return records | {"transition":canonical_json(link)}
+        except BaseException:
+            self.refuse_node_exec()
+            raise
 
     def guard(self):
         """Use for the release and the service's repeated authenticated OBSERVE requests."""
@@ -96,6 +121,8 @@ class _Task:
         try:
             self._custody()
             self._gates.require_node_observed(self._source)
+            _need(self._exec_handler is not None,"static exec handler not installed")
+            self._exec_handler.consumed(self._source)
             self._roles.guard(stopped=False)
             self._source_binding.require_active(self._source)
             guard_task_health(self._t,source_observer=self._source,activation=self._activation,

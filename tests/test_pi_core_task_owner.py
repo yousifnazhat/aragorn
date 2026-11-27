@@ -36,6 +36,8 @@ class TaskOwnerTests(TestCase):
         self.source, self.activation = object(), object()
         self.intake = mock.Mock(observer=self.source)
         self.bind = self.enterContext(mock.patch.object(owner,"bind_task_source_observer",return_value=nullcontext(self.intake)))
+        self.order = self.enterContext(mock.patch.object(owner,"GateStops",autospec=True))
+        self.stops = self.order.return_value
 
     def nominate(self):
         t = self.ticket
@@ -99,6 +101,39 @@ class TaskOwnerTests(TestCase):
         self.dispatch.assert_not_called()
         with self.assertRaisesRegex(ValueError, "already claimed"):
             with self.claim(): self.fail("retry")
+
+    def test_gate_brackets_publication_and_absent_authorization_blocks_release(self):
+        events = []
+        def first(intake, *, deadline):
+            self.assertIs(intake,self.intake)
+            self.assertEqual(deadline,self.inputs.deadline)
+            self.assertEqual(len(list(self.store.root.rglob("*.json"))),1)
+            events.append("first")
+            return self.stops
+        self.order.side_effect = first
+        self.publish.side_effect = lambda *_: (events.append("publish") or self.publish.return_value)
+        self.stops.published.side_effect = lambda: events.append("published")
+        self.stops.require_authorized.side_effect = ValueError("no ordered stops")
+        with self.claim() as held:
+            self.assertEqual(events,["first","publish","published"])
+            with self.assertRaisesRegex(ValueError,"no ordered stops"): self.handoff(held)
+            self.stops.require_authorized.assert_called_once_with(self.source)
+            self.intake.require_active.assert_not_called()
+            self.health.assert_not_called()
+            self.sender.assert_not_called()
+        self.stops.close.assert_called()
+
+    def test_pre_exec_readback_checks_original_channel_custody_before_returning(self):
+        with self.claim() as held:
+            held.observe_final_gate_stop()
+            self.stops.final.assert_called_once_with()
+            self.stops.authorize.side_effect = lambda _: setattr(self.channels,"side_effect",ValueError("channel replaced"))
+            with self.assertRaisesRegex(ValueError,"channel replaced"):
+                held.authorize_node_transition(self.source)
+            self.stops.authorize.assert_called_once_with(self.source)
+            self.stops.close.assert_called()
+            with self.assertRaises(ValueError): self.handoff(held)
+            self.sender.assert_not_called()
 
     def test_only_the_observer_of_the_original_spent_claim_can_reach_health(self):
         with self.claim() as held:
